@@ -27,22 +27,24 @@ dotnet test FS.GG.Coordination.sln --no-build --no-restore -c Release
 ```
 
 Outcome: restore succeeded from the supported read feed; build succeeded with
-zero warnings and zero errors. The retained follow-up suite has 29 passing test
-executions after adding the explicit unauthorized-consumer mutation.
+zero warnings and zero errors. The retained follow-up suite has 30 passing test
+executions after adding the explicit unauthorized-consumer and `NuGet.Config`
+source mutations.
 
 ## Retained test evidence
 
 - `test-results/unit.trx`: 7 passed, 0 failed, 0 skipped; SHA-256
   `169687fc2d1660b23065dd717316c4ff667260a7d43896a3e495db947b45c086`.
-- `test-results/architecture.trx`: 22 passed, 0 failed, 0 skipped; SHA-256
-  `440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967`.
+- `test-results/architecture.trx`: 23 passed, 0 failed, 0 skipped; SHA-256
+  `819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f`.
 - `dotnet fsi eng/verify-dependencies.fsx -- --root .` returned
   `DEPENDENCY_POLICY_OK projects=6`.
 
 The positive manifest test reads the actual restored package. Independent
 mutations prove rejection of an altered manifest digest/profile, malformed
 manifest, non-exact pin, unauthorized package consumer, source-project
-reference, checkout-relative package source, and copied producer machinery.
+reference, checkout-relative MSBuild or `NuGet.Config` package source, and
+copied producer machinery.
 Earlier GS2-01.3 negative controls remain
 green as part of the same architecture run.
 

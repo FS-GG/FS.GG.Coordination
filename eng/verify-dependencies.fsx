@@ -353,6 +353,32 @@ let repositoryPackageSourceViolations =
     |> Seq.map (fun value -> violation "repository" value "checkout-relative-package-source-forbidden")
     |> Seq.toList
 
+let nugetConfigPackageSourceViolations =
+    Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+    |> Seq.filter (fun path ->
+        Path.GetFileName(path).Equals("NuGet.Config", StringComparison.OrdinalIgnoreCase)
+        && not (path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}")))
+    |> Seq.collect (fun path ->
+        let document = XDocument.Load path
+        document.Descendants()
+        |> Seq.filter (fun element -> element.Name.LocalName.Equals("packageSources", StringComparison.OrdinalIgnoreCase))
+        |> Seq.collect _.Elements()
+        |> Seq.filter (fun element -> element.Name.LocalName.Equals("add", StringComparison.OrdinalIgnoreCase))
+        |> Seq.choose (fun element ->
+            element.Attributes()
+            |> Seq.tryFind (fun attribute -> attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase))
+            |> Option.map _.Value))
+    |> Seq.map _.Trim()
+    |> Seq.filter (String.IsNullOrWhiteSpace >> not)
+    |> Seq.filter (fun value ->
+        not (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        && not (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
+    |> Seq.distinct
+    |> Seq.map (fun value -> violation "repository" value "checkout-relative-package-source-forbidden")
+    |> Seq.toList
+
 let missingViolations =
     Set.difference required names
     |> Seq.map (fun name -> violation name "missing" "required-project-missing")
@@ -367,6 +393,7 @@ let violations =
     [ yield! centralPinViolations
       yield! producerCopyViolations
       yield! repositoryPackageSourceViolations
+      yield! nugetConfigPackageSourceViolations
       yield! missingViolations
       yield! unknownViolations
       for project in projects do

@@ -126,6 +126,32 @@ let ``checkout relative package source is independently rejected`` () =
             Assert.Contains("rule=checkout-relative-package-source-forbidden", error))
 
 [<Fact>]
+let ``NuGet config checkout relative package source is independently rejected`` () =
+    withRepositoryMutation
+        (fun root ->
+            let config =
+                XDocument(
+                    XElement(
+                        XName.Get "configuration",
+                        XElement(
+                            XName.Get "packageSources",
+                            XElement(XName.Get "clear"),
+                            XElement(
+                                XName.Get "add",
+                                XAttribute(XName.Get "key", "checkout"),
+                                XAttribute(XName.Get "value", "../FS.GG.SDD/artifacts/packages")
+                            )
+                        )
+                    )
+                )
+            config.Save(Path.Combine(root, "NuGet.Config")))
+        (fun root ->
+            let exitCode, _, error = runVerifier root
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("dependency=../FS.GG.SDD/artifacts/packages", error)
+            Assert.Contains("rule=checkout-relative-package-source-forbidden", error))
+
+[<Fact>]
 let ``local producer machinery copy is independently rejected`` () =
     withRepositoryMutation
         (fun root ->

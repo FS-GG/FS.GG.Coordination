@@ -47,13 +47,16 @@ The dependency verifier rejects:
 - a non-exact or missing central pin;
 - consumption from any production project other than `Qualification.Contracts`;
 - a local version override or a missing package-path property;
-- an FS.GG.SDD source-project reference or checkout-relative restore source;
+- an FS.GG.SDD source-project reference or checkout-relative restore source in
+  MSBuild properties or case-insensitive repository `NuGet.Config`
+  `<packageSources>` entries;
 - local `.qnt`, Quint compiler/profile/source/replay files, the Q1 identity
   manifest, or the packaged LMT source layout.
 
 Architecture tests create isolated mutations for the exact pin, source-project
-reference, checkout-relative feed, and copied producer machinery. Unit tests
-mutate the manifest digest and profile identity. The positive test reads the
+reference, checkout-relative MSBuild feed, checkout-relative `NuGet.Config`
+feed, and copied producer machinery. Unit tests mutate the manifest digest and
+profile identity. The positive test reads the
 manifest from the actual restored package rather than a repository fixture.
 
 This unit does not add a Quint extractor, profile definition, compiled-contract
