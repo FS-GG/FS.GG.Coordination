@@ -1,5 +1,7 @@
 open System
+open System.Diagnostics
 open System.IO
+open System.Text.Json
 open System.Xml.Linq
 
 let private projectName (path: string) = Path.GetFileNameWithoutExtension path
@@ -25,6 +27,59 @@ let private sdkValues (document: XDocument) =
               yield! attributeValue "Sdk" element |> Option.toList
               if element.Name.LocalName = "Sdk" then
                   yield! attributeValue "Name" element |> Option.toList ]
+
+type private EvaluatedProject =
+    { OutputType: string
+      ProjectReferences: string list
+      RuntimeReferences: string list }
+
+let private evaluateProject (path: string) =
+    let startInfo = ProcessStartInfo("dotnet")
+    startInfo.ArgumentList.Add("msbuild")
+    startInfo.ArgumentList.Add(path)
+    startInfo.ArgumentList.Add("-nologo")
+    startInfo.ArgumentList.Add("-verbosity:quiet")
+    startInfo.ArgumentList.Add("-getProperty:OutputType")
+    startInfo.ArgumentList.Add("-getItem:ProjectReference,PackageReference,Reference,FrameworkReference")
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+
+    use childProcess = Process.Start startInfo
+    let outputTask = childProcess.StandardOutput.ReadToEndAsync()
+    let errorTask = childProcess.StandardError.ReadToEndAsync()
+    childProcess.WaitForExit()
+    let output = outputTask.Result
+    let error = errorTask.Result.Trim()
+
+    if childProcess.ExitCode <> 0 then
+        Error(if String.IsNullOrWhiteSpace error then "dotnet-msbuild-evaluation-failed" else error)
+    else
+        try
+            use result = JsonDocument.Parse output
+            let properties = result.RootElement.GetProperty("Properties")
+            let items = result.RootElement.GetProperty("Items")
+
+            let itemValues (name: string) (property: string) =
+                items.GetProperty(name).EnumerateArray()
+                |> Seq.choose (fun item ->
+                    let mutable value = Unchecked.defaultof<JsonElement>
+
+                    if item.TryGetProperty(property, &value) then
+                        value.GetString() |> Option.ofObj
+                    else
+                        None)
+                |> Seq.toList
+
+            Ok
+                { OutputType = properties.GetProperty("OutputType").GetString() |> Option.ofObj |> Option.defaultValue ""
+                  ProjectReferences = itemValues "ProjectReference" "FullPath"
+                  RuntimeReferences =
+                    [ yield! itemValues "PackageReference" "Identity"
+                      yield! itemValues "Reference" "Identity"
+                      yield! itemValues "FrameworkReference" "Identity" ] }
+        with exceptionValue ->
+            Error $"invalid-msbuild-evaluation-json:{exceptionValue.Message}"
 
 let private allowedDependencies =
     Map.ofList
@@ -55,15 +110,21 @@ let private violation project dependency rule =
 let private inspectProject (path: string) =
     let name = projectName path
     let document = XDocument.Load path
+    let evaluated = evaluateProject path
 
     let edgeViolations =
-        valuesNamed "ProjectReference" document
+        [ yield!
+              valuesNamed "ProjectReference" document
+              |> List.map (fun reference ->
+                  reference.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar)
+                  |> fun relativePath -> Path.Combine(Path.GetDirectoryName path, relativePath)
+                  |> normalizePath)
+          match evaluated with
+          | Ok project -> yield! project.ProjectReferences |> List.map normalizePath
+          | Error _ -> () ]
+        |> List.distinct
         |> List.choose (fun reference ->
-            let dependency =
-                reference.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar)
-                |> fun relativePath -> Path.Combine(Path.GetDirectoryName path, relativePath)
-                |> normalizePath
-                |> projectName
+            let dependency = projectName reference
 
             match Map.tryFind name allowedDependencies with
             | None -> Some(violation name dependency "unknown-production-project")
@@ -76,7 +137,11 @@ let private inspectProject (path: string) =
             let referenceViolations =
                 [ yield! valuesNamed "PackageReference" document
                   yield! valuesNamed "Reference" document
-                  yield! valuesNamed "FrameworkReference" document ]
+                  yield! valuesNamed "FrameworkReference" document
+                  match evaluated with
+                  | Ok project -> yield! project.RuntimeReferences
+                  | Error _ -> () ]
+                |> List.distinct
                 |> List.filter (containsAny [ "GitHub"; "Octokit"; "AspNetCore"; "System.Net.Http"; "Extensions.Http"; "HttpClient" ])
                 |> List.map (fun dependency -> violation name dependency "transport-reference-in-pure-layer")
 
@@ -91,11 +156,21 @@ let private inspectProject (path: string) =
 
     let hostViolations =
         if name = "FS.GG.Coordination.App" then
-            let outputTypes = document.Descendants(XName.Get "OutputType") |> Seq.map _.Value |> Seq.toList
+            let outputTypes =
+                [ yield! document.Descendants(XName.Get "OutputType") |> Seq.map _.Value
+                  match evaluated with
+                  | Ok project -> yield project.OutputType
+                  | Error _ -> () ]
+                |> List.distinct
+
             let runtimeReferences =
                 [ yield! valuesNamed "PackageReference" document
                   yield! valuesNamed "Reference" document
-                  yield! valuesNamed "FrameworkReference" document ]
+                  yield! valuesNamed "FrameworkReference" document
+                  match evaluated with
+                  | Ok project -> yield! project.RuntimeReferences
+                  | Error _ -> () ]
+                |> List.distinct
 
             [ for sdk in sdkValues document do
                   if containsAny [ "Microsoft.NET.Sdk.Web"; "Microsoft.NET.Sdk.Razor"; "Microsoft.NET.Sdk.Worker" ] sdk then
@@ -110,7 +185,12 @@ let private inspectProject (path: string) =
         else
             []
 
-    edgeViolations @ transportViolations @ hostViolations
+    let evaluationViolations =
+        match evaluated with
+        | Ok _ -> []
+        | Error detail -> [ violation name detail "project-evaluation-failed" ]
+
+    evaluationViolations @ edgeViolations @ transportViolations @ hostViolations
 
 let private parseRoot (arguments: string array) =
     let args = arguments |> Array.filter ((<>) "--")

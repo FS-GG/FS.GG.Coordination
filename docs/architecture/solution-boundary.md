@@ -25,7 +25,9 @@ GitHub, HTTP, and ASP.NET references out of Protocol and Core across project, pa
 assembly, framework, root-SDK, child-SDK, and import-SDK declarations, and prevents App
 from becoming an executable or runtime-bound host. The App guard covers executable output
 types, hosting packages and references, and web, Razor, or worker SDKs declared on the root,
-child SDK elements, or imports. `FS.GG.Coordination.ArchitectureTests` runs
+child SDK elements, or imports. The policy queries each evaluated MSBuild project as well as its
+authored XML so ordinary imported props and targets cannot hide dependency edges or runtime bindings.
+`FS.GG.Coordination.ArchitectureTests` runs
 the policy against the real repository plus independent invalid project-edge,
 framework-reference, root-web-SDK, child-web-SDK, App-hosting, and App import-SDK fixtures. The `Boundary qualification`
 workflow invokes the locked restore, Release build, test suite, and dependency policy on
