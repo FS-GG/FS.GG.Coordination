@@ -34,7 +34,10 @@ an evaluation failure is itself a policy violation.
 `FS.GG.Coordination.ArchitectureTests` runs
 the policy against the real repository plus independent invalid project-edge,
 framework-reference, RestSharp-package, root-web-SDK, child-web-SDK, App-hosting,
-and App import-SDK fixtures. The `Boundary qualification`
+App import-SDK, and deterministic missing-import evaluation-failure fixtures. The
+evaluation fixture otherwise preserves the allowed project graph so it proves an
+unreadable evaluated project fails closed on `project-evaluation-failed` rather than
+being rejected first by another policy rule. The `Boundary qualification`
 workflow invokes the locked restore, Release build, test suite, and dependency policy on
 GitHub-hosted runners.
 

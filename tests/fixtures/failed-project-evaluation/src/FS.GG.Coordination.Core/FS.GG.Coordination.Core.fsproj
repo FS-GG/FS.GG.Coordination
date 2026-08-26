@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj" />
+  </ItemGroup>
+  <Import Project="Missing.props" />
+</Project>

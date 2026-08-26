@@ -65,6 +65,20 @@ let ``unapproved pure-core HTTP client package is independently rejected`` () =
         error
     )
 
+[<Fact>]
+let ``failed pure-core project evaluation is independently rejected`` () =
+    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/failed-project-evaluation")
+    let exitCode, _, error = runVerifier fixtureRoot
+
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core",
+        error
+    )
+    Assert.Contains("rule=project-evaluation-failed", error)
+    Assert.DoesNotContain("rule=project-edge-not-allowed", error)
+    Assert.DoesNotContain("rule=runtime-reference-not-allowed-in-pure-layer", error)
+
 [<Theory>]
 [<InlineData("forbidden-root-web-sdk")>]
 [<InlineData("forbidden-child-web-sdk")>]

@@ -11,7 +11,7 @@ sourceAnalysis: readiness/1-establish-solution-boundary/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/1-establish-solution-boundary/analysis.json
-    digest: 67fade2ed91213498f97b6a8dca6d2816a92c6c93500b8191556388969771315
+    digest: bae8121fcb9f20a1a3d9cbe2d1532d4213fc466b330fab8dcf78b5ac00ab968b
     schemaVersion: 1
   - label: checklist
     path: work/1-establish-solution-boundary/checklist.md
@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV002
     kind: verification
     subject:
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV003
     kind: verification
     subject:
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV004
     kind: verification
     subject:
@@ -135,13 +135,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV005
     kind: verification
     subject:
@@ -162,13 +162,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV006
     kind: verification
     subject:
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV007
     kind: verification
     subject:
@@ -216,13 +216,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV008
     kind: verification
     subject:
@@ -243,13 +243,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV009
     kind: verification
     subject:
@@ -270,13 +270,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV010
     kind: verification
     subject:
@@ -297,13 +297,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV011
     kind: verification
     subject:
@@ -324,13 +324,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV012
     kind: verification
     subject:
@@ -351,13 +351,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV013
     kind: verification
     subject:
@@ -378,13 +378,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV014
     kind: verification
     subject:
@@ -405,13 +405,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV015
     kind: verification
     subject:
@@ -432,13 +432,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
   - id: EV016
     kind: verification
     subject:
@@ -459,12 +459,12 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:7330643331791425bc21edd19529f5e444bbac07ef9c6295396fcca17bc612b2"
+      digest: "sha256:201446c28953c70d827db8ab5d3c4d8107a72b9ea771eb354c89667eeb50ce6b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 12
+      passed: 13
       failed: 0
       skipped: 0
-    notes: [The committed twelve-test architecture acceptance run covers the compiled boundary and dependency policy.]
+    notes: [The committed thirteen-test architecture acceptance run covers the compiled boundary and dependency policy.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
