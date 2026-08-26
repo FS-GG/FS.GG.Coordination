@@ -35,6 +35,14 @@
         "resolved": "3.1.5",
         "contentHash": "tKi7dSTwP4m5m9eXPM2Ime4Kn7xNf4x4zT9sdLO/G4hZVnQCRiMTWoSZqI/pYTVeI27oPPqHBKYI/DjJ9GsYgA=="
       },
+      "FS.GG.Contracts": {
+        "type": "Transitive",
+        "resolved": "7.5.2",
+        "contentHash": "1Y2r/C1ibQTY1pJP6RzJdsUrV2d2PccLm+mTrOg74Okz6RgxXmogYrLWqv7Cq7pm+IhVyXSiFsfVAytBVzJU4A==",
+        "dependencies": {
+          "FSharp.Core": "10.1.302"
+        }
+      },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
         "resolved": "18.8.1",
@@ -93,6 +101,11 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "YamlDotNet": {
+        "type": "Transitive",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
+      },
       "fs.gg.coordination.app": {
         "type": "Project",
         "dependencies": {
@@ -127,7 +140,19 @@
         "type": "Project",
         "dependencies": {
           "FS.GG.Coordination.Protocol": "[1.0.0, )",
+          "FS.GG.SDD.Artifacts": "[1.4.0, 1.4.0]",
           "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "FS.GG.SDD.Artifacts": {
+        "type": "CentralTransitive",
+        "requested": "[1.4.0, 1.4.0]",
+        "resolved": "1.4.0",
+        "contentHash": "4moNCZKpvO+UsGHGR3IPLAq4xvZm4qvKe9l0T2FJojwitQ4rffNeWyzWcJHRU3p3djsi2KGjak6quRTL2LZ/Fg==",
+        "dependencies": {
+          "FS.GG.Contracts": "7.5.2",
+          "FSharp.Core": "10.1.302",
+          "YamlDotNet": "18.1.0"
         }
       }
     }

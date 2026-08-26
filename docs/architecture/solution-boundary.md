@@ -31,6 +31,11 @@ types, hosting packages and references, and web, Razor, or worker SDKs declared 
 child SDK elements, or imports. The policy queries each evaluated MSBuild project as well as its
 authored XML so ordinary imported props and targets cannot hide dependency edges or runtime bindings;
 an evaluation failure is itself a policy violation.
+
+GS2-01.4 adds one deliberate package edge from `Qualification.Contracts` to the
+published `FS.GG.SDD.Artifacts` kernel. That edge is governed by
+[Published Quint kernel](published-quint-kernel.md): it is not permitted in any
+other production project and does not change the one-way project graph.
 `FS.GG.Coordination.ArchitectureTests` runs
 the policy against the real repository plus independent invalid project-edge,
 framework-reference, RestSharp-package, root-web-SDK, child-web-SDK, App-hosting,
@@ -43,7 +48,6 @@ GitHub-hosted runners.
 
 The following remain outside this unit:
 
-- FS.GG.SDD kernel binding (GS2-01.4)
 - bootstrap CI and evidence-manifest validation (GS2-01.5)
 - lifecycle command behavior and protocol semantics (GS2-02 and later)
 - any App listener, deployment identity, webhook registration, secret,

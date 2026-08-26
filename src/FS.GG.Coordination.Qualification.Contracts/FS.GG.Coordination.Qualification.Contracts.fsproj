@@ -9,4 +9,8 @@
     <ProjectReference Include="..\FS.GG.Coordination.Protocol\FS.GG.Coordination.Protocol.fsproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="FS.GG.SDD.Artifacts" GeneratePathProperty="true" />
+  </ItemGroup>
+
 </Project>

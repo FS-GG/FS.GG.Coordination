@@ -1,0 +1,503 @@
+schemaVersion: 1
+workId: 4-pin-published-quint-kernel
+stage: evidence
+status: evidenceReady
+sourceSpec: work/4-pin-published-quint-kernel/spec.md
+sourceClarifications: work/4-pin-published-quint-kernel/clarifications.md
+sourceChecklist: work/4-pin-published-quint-kernel/checklist.md
+sourcePlan: work/4-pin-published-quint-kernel/plan.md
+sourceTasks: work/4-pin-published-quint-kernel/tasks.yml
+sourceAnalysis: readiness/4-pin-published-quint-kernel/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/4-pin-published-quint-kernel/analysis.json
+    digest: 6453e4e04e91b29fbf20cf9b99df1126db7b8cfe8b508a5231847ee184a3602c
+    schemaVersion: 1
+  - label: checklist
+    path: work/4-pin-published-quint-kernel/checklist.md
+    digest: d7dfa1c22a958a3e1f36ec81430b7fcd48fdff1ebb94d233fc16406c9a53b16d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/4-pin-published-quint-kernel/clarifications.md
+    digest: 3f6eb440cb8440d0b92706d5d588f41c32c068b4832a564ee2a5f76c8b6cb134
+    schemaVersion: 1
+  - label: plan
+    path: work/4-pin-published-quint-kernel/plan.md
+    digest: 725f4a21abacd108015ef7b87d44277a3e8a0e01fe05bac969d2762fae5df10d
+    schemaVersion: 1
+  - label: spec
+    path: work/4-pin-published-quint-kernel/spec.md
+    digest: 0aae1e3da6b647d9b91ada3f617369d3933c0271275be1c498698039c5d811a8
+    schemaVersion: 1
+  - label: tasks
+    path: work/4-pin-published-quint-kernel/tasks.yml
+    digest: 3fe6e5cbfb7c1c762deacf0fb41573ae02297f0ba8fbb97d43aeb86fccb44c89
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV009]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV010]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV012]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV013]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV015]
+    artifacts: [eng/verify-dependencies.fsx, evidence/gs2-01-4/qualification-report.md, evidence/gs2-01-4/test-results/architecture.trx, evidence/gs2-01-4/test-results/unit.trx, src/FS.GG.Coordination.Qualification.Contracts/Library.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-4/qualification-report.md
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/unit.trx
+      - kind: testReport
+        path: evidence/gs2-01-4/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-4/test-results/architecture.trx
+      digest: "sha256:440ff8d9676d57b6d9d9cffdaebb92026f29e0d8826110474e4c83ebac368967"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

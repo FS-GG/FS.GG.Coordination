@@ -1,0 +1,186 @@
+schemaVersion: 1
+work:
+  id: 4-pin-published-quint-kernel
+  title: "Pin Published Quint Kernel"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/4-pin-published-quint-kernel/spec.md
+  sourceClarifications: work/4-pin-published-quint-kernel/clarifications.md
+  sourceChecklist: work/4-pin-published-quint-kernel/checklist.md
+  sourcePlan: work/4-pin-published-quint-kernel/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/4-pin-published-quint-kernel/spec.md
+    digest: 0aae1e3da6b647d9b91ada3f617369d3933c0271275be1c498698039c5d811a8
+    schemaVersion: 1
+  - label: clarifications
+    path: work/4-pin-published-quint-kernel/clarifications.md
+    digest: 3f6eb440cb8440d0b92706d5d588f41c32c068b4832a564ee2a5f76c8b6cb134
+    schemaVersion: 1
+  - label: checklist
+    path: work/4-pin-published-quint-kernel/checklist.md
+    digest: d7dfa1c22a958a3e1f36ec81430b7fcd48fdff1ebb94d233fc16406c9a53b16d
+    schemaVersion: 1
+  - label: plan
+    path: work/4-pin-published-quint-kernel/plan.md
+    digest: 725f4a21abacd108015ef7b87d44277a3e8a0e01fe05bac969d2762fae5df10d
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: crake-ce8f
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: crake-ce8f
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: crake-ce8f
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-002, FR-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: crake-ce8f
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-003, FR-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement clarification decision DEC-001
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement clarification decision DEC-002
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement clarification decision DEC-003
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-003]
+    sourceIds: [DEC-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement plan decision PD-001
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Implement plan decision PD-002
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Implement plan decision PD-003
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-002, DEC-002, DEC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Implement plan decision PD-004
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-003, DEC-003, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Update contract surface PC-001
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Record verification evidence VO-001
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV013]
+  - id: T014
+    title: Handle migration posture PM-001
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV014]
+  - id: T015
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: crake-ce8f
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-002]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV015]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 4-pin-published-quint-kernel."
