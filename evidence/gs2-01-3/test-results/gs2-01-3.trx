@@ -1,0 +1,106 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="877a0371-4cfa-40ae-9e0b-a943e1222a71" name="@6970fbbe8936 2026-08-26 23:15:23" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-26T23:15:23.2470453+02:00" queuing="2026-08-26T23:15:23.2470453+02:00" start="2026-08-26T23:15:21.5698332+02:00" finish="2026-08-26T23:15:44.4041409+02:00" />
+  <TestSettings name="default" id="35dcce42-a48f-4081-be61-a6bcec97fb6d">
+    <Deployment runDeploymentRoot="_6970fbbe8936_2026-08-26_23_15_23" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="91e1afb2-2889-4487-889c-733cbabfd61a" testId="d6ae166b-a8b1-f5fa-4a30-b9b1de26fbbc" testName="FS.GG.Coordination.ArchitectureTests.unapproved pure-core HTTP client package is independently rejected" computerName="6970fbbe8936" duration="00:00:02.4930400" startTime="2026-08-26T23:15:36.9317096+02:00" endTime="2026-08-26T23:15:39.4244480+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="91e1afb2-2889-4487-889c-733cbabfd61a" />
+    <UnitTestResult executionId="355d31c6-3827-46e7-bae0-5afa75c60516" testId="03a5139c-dc43-3bff-02b6-fba02bb69ff7" testName="FS.GG.Coordination.ArchitectureTests.forbidden pure-core edge is independently rejected" computerName="6970fbbe8936" duration="00:00:02.5191854" startTime="2026-08-26T23:15:34.4122470+02:00" endTime="2026-08-26T23:15:36.9312815+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="355d31c6-3827-46e7-bae0-5afa75c60516" />
+    <UnitTestResult executionId="32216118-3590-4505-8854-760acb79fbb4" testId="369aaaf7-6100-cca0-d7d3-9489a3cedab0" testName="FS.GG.Coordination.ArchitectureTests.production graph satisfies dependency policy" computerName="6970fbbe8936" duration="00:00:02.5023966" startTime="2026-08-26T23:15:24.3656104+02:00" endTime="2026-08-26T23:15:26.8678333+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="32216118-3590-4505-8854-760acb79fbb4" />
+    <UnitTestResult executionId="a52693e4-bb6c-4670-a865-f635a4b5ed19" testId="9de7f11e-acb9-b72d-c5db-067b1dc321c1" testName="FS.GG.Coordination.ArchitectureTests.failed pure-core project evaluation is independently rejected" computerName="6970fbbe8936" duration="00:00:02.4146677" startTime="2026-08-26T23:15:39.4248079+02:00" endTime="2026-08-26T23:15:41.8392156+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a52693e4-bb6c-4670-a865-f635a4b5ed19" />
+    <UnitTestResult executionId="59900e7c-fed6-42b8-a03b-81b1eb23bbb2" testId="8ef25723-4dac-3919-5e0f-c18f93881311" testName="FS.GG.Coordination.ArchitectureTests.forbidden pure-core web SDK forms are independently rejected(fixture: &quot;forbidden-child-web-sdk&quot;)" computerName="6970fbbe8936" duration="00:00:02.5413158" startTime="2026-08-26T23:15:29.3479781+02:00" endTime="2026-08-26T23:15:31.8889260+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="59900e7c-fed6-42b8-a03b-81b1eb23bbb2" />
+    <UnitTestResult executionId="836ebe26-2e25-40aa-afda-711528c8884f" testId="4b8e0eff-4423-fb7b-0eea-e39b6317718b" testName="FS.GG.Coordination.ArchitectureTests.forbidden pure-core framework reference is independently rejected" computerName="6970fbbe8936" duration="00:00:02.5306255" startTime="2026-08-26T23:15:41.8395496+02:00" endTime="2026-08-26T23:15:44.3699633+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="836ebe26-2e25-40aa-afda-711528c8884f" />
+    <UnitTestResult executionId="e7ffc9b9-4219-416a-abe4-c39bbe98c809" testId="2870acb4-160b-9e11-e416-e5436010812b" testName="FS.GG.Coordination.UnitTests.app boundary is inert" computerName="6970fbbe8936" duration="00:00:00.0001983" startTime="2026-08-26T23:15:21.8576851+02:00" endTime="2026-08-26T23:15:21.8576945+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e7ffc9b9-4219-416a-abe4-c39bbe98c809" />
+    <UnitTestResult executionId="57dee9c4-f92a-477f-831a-2b106f3db51c" testId="06ac4bcd-8fb4-2db7-c7ee-987452c7adc0" testName="FS.GG.Coordination.ArchitectureTests.forbidden pure-core web SDK forms are independently rejected(fixture: &quot;forbidden-root-web-sdk&quot;)" computerName="6970fbbe8936" duration="00:00:02.4795974" startTime="2026-08-26T23:15:26.8684033+02:00" endTime="2026-08-26T23:15:29.3474959+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="57dee9c4-f92a-477f-831a-2b106f3db51c" />
+    <UnitTestResult executionId="b0c53a04-2068-4efa-8ac6-15c21601b1e3" testId="31f7b495-515f-e349-8aae-4a6cb4716fc4" testName="FS.GG.Coordination.ArchitectureTests.forbidden App import SDK is independently rejected" computerName="6970fbbe8936" duration="00:00:02.5171834" startTime="2026-08-26T23:15:21.8467140+02:00" endTime="2026-08-26T23:15:24.3652878+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b0c53a04-2068-4efa-8ac6-15c21601b1e3" />
+    <UnitTestResult executionId="665a9363-66f3-4150-b9ec-adaa14add718" testId="4e05651c-df07-4f6f-4491-95bda60eb1d5" testName="FS.GG.Coordination.ArchitectureTests.forbidden App hosting and imported runtime binding forms are independently rejected" computerName="6970fbbe8936" duration="00:00:02.5229332" startTime="2026-08-26T23:15:31.8893182+02:00" endTime="2026-08-26T23:15:34.4119290+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="665a9363-66f3-4150-b9ec-adaa14add718" />
+    <UnitTestResult executionId="0a969b1b-8153-471f-baad-840a7a9fe294" testId="a4f26f2a-563a-a74d-b418-f0eeeec1455e" testName="FS.GG.Coordination.UnitTests.protocol boundary has a stable initial identity" computerName="6970fbbe8936" duration="00:00:00.0015893" startTime="2026-08-26T23:15:21.8572404+02:00" endTime="2026-08-26T23:15:21.8572645+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0a969b1b-8153-471f-baad-840a7a9fe294" />
+    <UnitTestResult executionId="c70019f9-112d-4168-b44c-10e25c7ae356" testId="5aa23e7c-1c28-415f-0942-24d62d9a51d2" testName="FS.GG.Coordination.UnitTests.pure core declares only allowed inward dependencies" computerName="6970fbbe8936" duration="00:00:00.0036536" startTime="2026-08-26T23:15:21.8576026+02:00" endTime="2026-08-26T23:15:21.8576202+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c70019f9-112d-4168-b44c-10e25c7ae356" />
+    <UnitTestResult executionId="40db3f7a-1597-4283-87ab-9cf09271c5e2" testId="d24328ed-de3f-ce56-f209-65fbe5538cb8" testName="FS.GG.Coordination.UnitTests.qualification contracts carry a typed result" computerName="6970fbbe8936" duration="00:00:00.0021692" startTime="2026-08-26T23:15:21.8460078+02:00" endTime="2026-08-26T23:15:21.8513944+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="40db3f7a-1597-4283-87ab-9cf09271c5e2" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.forbidden pure-core web SDK forms are independently rejected(fixture: &quot;forbidden-child-web-sdk&quot;)" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="8ef25723-4dac-3919-5e0f-c18f93881311">
+      <Execution id="59900e7c-fed6-42b8-a03b-81b1eb23bbb2" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="forbidden pure-core web SDK forms are independently rejected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.forbidden App hosting and imported runtime binding forms are independently rejected" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="4e05651c-df07-4f6f-4491-95bda60eb1d5">
+      <Execution id="665a9363-66f3-4150-b9ec-adaa14add718" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="forbidden App hosting and imported runtime binding forms are independently rejected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.production graph satisfies dependency policy" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="369aaaf7-6100-cca0-d7d3-9489a3cedab0">
+      <Execution id="32216118-3590-4505-8854-760acb79fbb4" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="production graph satisfies dependency policy" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.pure core declares only allowed inward dependencies" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="5aa23e7c-1c28-415f-0942-24d62d9a51d2">
+      <Execution id="c70019f9-112d-4168-b44c-10e25c7ae356" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="pure core declares only allowed inward dependencies" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.forbidden pure-core framework reference is independently rejected" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="4b8e0eff-4423-fb7b-0eea-e39b6317718b">
+      <Execution id="836ebe26-2e25-40aa-afda-711528c8884f" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="forbidden pure-core framework reference is independently rejected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.unapproved pure-core HTTP client package is independently rejected" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="d6ae166b-a8b1-f5fa-4a30-b9b1de26fbbc">
+      <Execution id="91e1afb2-2889-4487-889c-733cbabfd61a" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="unapproved pure-core HTTP client package is independently rejected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.forbidden pure-core web SDK forms are independently rejected(fixture: &quot;forbidden-root-web-sdk&quot;)" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="06ac4bcd-8fb4-2db7-c7ee-987452c7adc0">
+      <Execution id="57dee9c4-f92a-477f-831a-2b106f3db51c" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="forbidden pure-core web SDK forms are independently rejected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.qualification contracts carry a typed result" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="d24328ed-de3f-ce56-f209-65fbe5538cb8">
+      <Execution id="40db3f7a-1597-4283-87ab-9cf09271c5e2" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="qualification contracts carry a typed result" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.failed pure-core project evaluation is independently rejected" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="9de7f11e-acb9-b72d-c5db-067b1dc321c1">
+      <Execution id="a52693e4-bb6c-4670-a865-f635a4b5ed19" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="failed pure-core project evaluation is independently rejected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.forbidden App import SDK is independently rejected" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="31f7b495-515f-e349-8aae-4a6cb4716fc4">
+      <Execution id="b0c53a04-2068-4efa-8ac6-15c21601b1e3" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="forbidden App import SDK is independently rejected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.app boundary is inert" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="2870acb4-160b-9e11-e416-e5436010812b">
+      <Execution id="e7ffc9b9-4219-416a-abe4-c39bbe98c809" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="app boundary is inert" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.protocol boundary has a stable initial identity" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="a4f26f2a-563a-a74d-b418-f0eeeec1455e">
+      <Execution id="0a969b1b-8153-471f-baad-840a7a9fe294" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="protocol boundary has a stable initial identity" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.ArchitectureTests.forbidden pure-core edge is independently rejected" storage="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="03a5139c-dc43-3bff-02b6-fba02bb69ff7">
+      <Execution id="355d31c6-3827-46e7-bae0-5afa75c60516" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2013-repair-tern4715/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.ArchitectureTests" name="forbidden pure-core edge is independently rejected" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="d6ae166b-a8b1-f5fa-4a30-b9b1de26fbbc" executionId="91e1afb2-2889-4487-889c-733cbabfd61a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="03a5139c-dc43-3bff-02b6-fba02bb69ff7" executionId="355d31c6-3827-46e7-bae0-5afa75c60516" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="369aaaf7-6100-cca0-d7d3-9489a3cedab0" executionId="32216118-3590-4505-8854-760acb79fbb4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9de7f11e-acb9-b72d-c5db-067b1dc321c1" executionId="a52693e4-bb6c-4670-a865-f635a4b5ed19" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8ef25723-4dac-3919-5e0f-c18f93881311" executionId="59900e7c-fed6-42b8-a03b-81b1eb23bbb2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4b8e0eff-4423-fb7b-0eea-e39b6317718b" executionId="836ebe26-2e25-40aa-afda-711528c8884f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2870acb4-160b-9e11-e416-e5436010812b" executionId="e7ffc9b9-4219-416a-abe4-c39bbe98c809" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="06ac4bcd-8fb4-2db7-c7ee-987452c7adc0" executionId="57dee9c4-f92a-477f-831a-2b106f3db51c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="31f7b495-515f-e349-8aae-4a6cb4716fc4" executionId="b0c53a04-2068-4efa-8ac6-15c21601b1e3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4e05651c-df07-4f6f-4491-95bda60eb1d5" executionId="665a9363-66f3-4150-b9ec-adaa14add718" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a4f26f2a-563a-a74d-b418-f0eeeec1455e" executionId="0a969b1b-8153-471f-baad-840a7a9fe294" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5aa23e7c-1c28-415f-0942-24d62d9a51d2" executionId="c70019f9-112d-4168-b44c-10e25c7ae356" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d24328ed-de3f-ce56-f209-65fbe5538cb8" executionId="40db3f7a-1597-4283-87ab-9cf09271c5e2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="13" executed="13" passed="13" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.04]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.07]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.08]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:22.62]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

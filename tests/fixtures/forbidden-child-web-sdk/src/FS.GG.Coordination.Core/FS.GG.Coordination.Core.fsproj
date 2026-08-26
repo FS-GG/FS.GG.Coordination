@@ -1,0 +1,6 @@
+<Project>
+  <Sdk Name="Microsoft.NET.Sdk.Web" />
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj" />
+  </ItemGroup>
+</Project>

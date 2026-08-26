@@ -1,0 +1,196 @@
+schemaVersion: 1
+work:
+  id: 1-establish-solution-boundary
+  title: "Establish Solution Boundary"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/1-establish-solution-boundary/spec.md
+  sourceClarifications: work/1-establish-solution-boundary/clarifications.md
+  sourceChecklist: work/1-establish-solution-boundary/checklist.md
+  sourcePlan: work/1-establish-solution-boundary/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/1-establish-solution-boundary/spec.md
+    digest: 9d108dc973bda94eecea705c8858722c104b2c456a4793270afa29650c59251d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/1-establish-solution-boundary/clarifications.md
+    digest: 2e951037f1625173db672d24b38c058dbac816454e9f16b34b0aa14822de2393
+    schemaVersion: 1
+  - label: checklist
+    path: work/1-establish-solution-boundary/checklist.md
+    digest: b76b2c5c6cade99323d54c6f27b4d957bc4e5ced65128770dc0dc6d6f91d1538
+    schemaVersion: 1
+  - label: plan
+    path: work/1-establish-solution-boundary/plan.md
+    digest: 1eb59aad0ab2b5b1c921d13fcd2515eecdd44c6da634e2088c7baa9e5c575a5e
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: rook-a6f1
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: rook-a6f1
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: rook-a6f1
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: rook-a6f1
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement clarification decision DEC-001
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement clarification decision DEC-002
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement clarification decision DEC-003
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-003]
+    sourceIds: [DEC-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement clarification decision DEC-004
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-004]
+    sourceIds: [DEC-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Implement plan decision PD-001
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-001, DEC-003, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Implement plan decision PD-002
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Implement plan decision PD-003
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-004, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Implement plan decision PD-004
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-002, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Update contract surface PC-001
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV013]
+  - id: T014
+    title: Record verification evidence VO-001
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV014]
+  - id: T015
+    title: Handle migration posture PM-001
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV015]
+  - id: T016
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: rook-a6f1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV016]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 1-establish-solution-boundary."
