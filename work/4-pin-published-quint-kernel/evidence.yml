@@ -11,7 +11,7 @@ sourceAnalysis: readiness/4-pin-published-quint-kernel/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/4-pin-published-quint-kernel/analysis.json
-    digest: c528919393bb5175b6d838c9d7cf65a60551ccf444e3927c6c9bd075492cc157
+    digest: f3357358e60b82e177831d7aed47d00f165a5e61d1ea032ff2e9509b1e71ad6c
     schemaVersion: 1
   - label: checklist
     path: work/4-pin-published-quint-kernel/checklist.md
