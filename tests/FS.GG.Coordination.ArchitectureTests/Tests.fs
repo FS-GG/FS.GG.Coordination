@@ -68,7 +68,7 @@ let ``forbidden pure-core web SDK forms are independently rejected`` fixture =
     )
 
 [<Fact>]
-let ``forbidden App hosting forms are independently rejected`` () =
+let ``forbidden App hosting and imported runtime binding forms are independently rejected`` () =
     let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-app-hosting")
     let exitCode, _, error = runVerifier fixtureRoot
 
