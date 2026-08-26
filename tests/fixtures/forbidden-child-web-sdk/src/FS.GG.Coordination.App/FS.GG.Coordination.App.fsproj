@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj" />
+    <ProjectReference Include="../FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj" />
+    <ProjectReference Include="../FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj" />
+  </ItemGroup>
+</Project>
