@@ -42,3 +42,14 @@ let ``forbidden pure-core edge is independently rejected`` () =
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=FS.GG.Coordination.GitHub rule=project-edge-not-allowed",
         error
     )
+
+[<Fact>]
+let ``forbidden pure-core framework reference is independently rejected`` () =
+    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-framework-reference")
+    let exitCode, _, error = runVerifier fixtureRoot
+
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=Microsoft.AspNetCore.App rule=transport-reference-in-pure-layer",
+        error
+    )
