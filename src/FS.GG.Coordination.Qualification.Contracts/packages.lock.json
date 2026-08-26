@@ -2,11 +2,35 @@
   "version": 2,
   "dependencies": {
     "net10.0": {
+      "FS.GG.SDD.Artifacts": {
+        "type": "Direct",
+        "requested": "[1.4.0, 1.4.0]",
+        "resolved": "1.4.0",
+        "contentHash": "4moNCZKpvO+UsGHGR3IPLAq4xvZm4qvKe9l0T2FJojwitQ4rffNeWyzWcJHRU3p3djsi2KGjak6quRTL2LZ/Fg==",
+        "dependencies": {
+          "FS.GG.Contracts": "7.5.2",
+          "FSharp.Core": "10.1.302",
+          "YamlDotNet": "18.1.0"
+        }
+      },
       "FSharp.Core": {
         "type": "Direct",
         "requested": "[10.1.302, )",
         "resolved": "10.1.302",
         "contentHash": "bN7XMQrAQg1dyHScJ7FcsznERBkvm74LtIo1O6C5mUzgbDqSwNbDpb3+nBGaJAjDmtC/suK5Vx5pFysKY6Hm+Q=="
+      },
+      "FS.GG.Contracts": {
+        "type": "Transitive",
+        "resolved": "7.5.2",
+        "contentHash": "1Y2r/C1ibQTY1pJP6RzJdsUrV2d2PccLm+mTrOg74Okz6RgxXmogYrLWqv7Cq7pm+IhVyXSiFsfVAytBVzJU4A==",
+        "dependencies": {
+          "FSharp.Core": "10.1.302"
+        }
+      },
+      "YamlDotNet": {
+        "type": "Transitive",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       },
       "fs.gg.coordination.protocol": {
         "type": "Project",

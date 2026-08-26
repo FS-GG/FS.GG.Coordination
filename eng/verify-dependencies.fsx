@@ -15,6 +15,12 @@ let private valuesNamed (name: string) (document: XDocument) =
         if isNull includeAttribute then None else Some includeAttribute.Value)
     |> Seq.toList
 
+let private elementValuesNamed (name: string) (document: XDocument) =
+    document.Descendants(XName.Get name)
+    |> Seq.map (fun element -> element.Value.Trim())
+    |> Seq.filter (String.IsNullOrWhiteSpace >> not)
+    |> Seq.toList
+
 let private sdkValues (document: XDocument) =
     let attributeValue attributeName (element: XElement) =
         let attribute = element.Attribute(XName.Get attributeName)
@@ -28,9 +34,16 @@ let private sdkValues (document: XDocument) =
               if element.Name.LocalName = "Sdk" then
                   yield! attributeValue "Name" element |> Option.toList ]
 
+type private EvaluatedPackageReference =
+    { Identity: string
+      Version: string
+      VersionOverride: string
+      GeneratePathProperty: string }
+
 type private EvaluatedProject =
     { OutputType: string
       ProjectReferences: string list
+      PackageReferences: EvaluatedPackageReference list
       RuntimeReferences: string list }
 
 let private evaluateProject (path: string) =
@@ -71,11 +84,30 @@ let private evaluateProject (path: string) =
                         None)
                 |> Seq.toList
 
+            let itemValue (property: string) (item: JsonElement) =
+                let mutable value = Unchecked.defaultof<JsonElement>
+
+                if item.TryGetProperty(property, &value) then
+                    value.GetString() |> Option.ofObj |> Option.defaultValue ""
+                else
+                    ""
+
+            let packageReferences =
+                items.GetProperty("PackageReference").EnumerateArray()
+                |> Seq.map (fun item ->
+                    { Identity = itemValue "Identity" item
+                      Version = itemValue "Version" item
+                      VersionOverride = itemValue "VersionOverride" item
+                      GeneratePathProperty = itemValue "GeneratePathProperty" item })
+                |> Seq.filter (fun reference -> not (String.IsNullOrWhiteSpace reference.Identity))
+                |> Seq.toList
+
             Ok
                 { OutputType = properties.GetProperty("OutputType").GetString() |> Option.ofObj |> Option.defaultValue ""
                   ProjectReferences = itemValues "ProjectReference" "FullPath"
+                  PackageReferences = packageReferences
                   RuntimeReferences =
-                    [ yield! itemValues "PackageReference" "Identity"
+                    [ yield! packageReferences |> List.map _.Identity
                       yield! itemValues "Reference" "Identity"
                       yield! itemValues "FrameworkReference" "Identity" ] }
         with exceptionValue ->
@@ -115,6 +147,10 @@ let private inspectProject (path: string) =
     let document = XDocument.Load path
     let evaluated = evaluateProject path
 
+    let packageReferences =
+        document.Descendants(XName.Get "PackageReference")
+        |> Seq.toList
+
     let edgeViolations =
         [ yield!
               valuesNamed "ProjectReference" document
@@ -129,11 +165,68 @@ let private inspectProject (path: string) =
         |> List.choose (fun reference ->
             let dependency = projectName reference
 
-            match Map.tryFind name allowedDependencies with
-            | None -> Some(violation name dependency "unknown-production-project")
-            | Some allowed when not (Set.contains dependency allowed) ->
-                Some(violation name dependency "project-edge-not-allowed")
-            | Some _ -> None)
+            if dependency.StartsWith("FS.GG.SDD", StringComparison.OrdinalIgnoreCase) then
+                Some(violation name dependency "published-kernel-source-project-reference-forbidden")
+            else
+                match Map.tryFind name allowedDependencies with
+                | None -> Some(violation name dependency "unknown-production-project")
+                | Some allowed when not (Set.contains dependency allowed) ->
+                    Some(violation name dependency "project-edge-not-allowed")
+                | Some _ -> None)
+
+    let publishedKernelViolations =
+        let references =
+            packageReferences
+            |> List.filter (fun element ->
+                let includeAttribute = element.Attribute(XName.Get "Include")
+                not (isNull includeAttribute)
+                && includeAttribute.Value.Equals("FS.GG.SDD.Artifacts", StringComparison.OrdinalIgnoreCase))
+
+        let evaluatedReferences =
+            match evaluated with
+            | Ok project ->
+                project.PackageReferences
+                |> List.filter (fun reference ->
+                    reference.Identity.Equals("FS.GG.SDD.Artifacts", StringComparison.OrdinalIgnoreCase))
+            | Error _ -> []
+
+        let hasReference = not (List.isEmpty references) || not (List.isEmpty evaluatedReferences)
+
+        [ if name = "FS.GG.Coordination.Qualification.Contracts" && not hasReference then
+              yield violation name "FS.GG.SDD.Artifacts" "published-kernel-package-reference-required"
+
+          if name <> "FS.GG.Coordination.Qualification.Contracts" && hasReference then
+              yield violation name "FS.GG.SDD.Artifacts" "published-kernel-consumer-not-allowed"
+
+          for reference in references do
+              for attributeName in [ "Version"; "VersionOverride" ] do
+                  let attribute = reference.Attribute(XName.Get attributeName)
+                  if not (isNull attribute) then
+                      yield violation name attribute.Value "published-kernel-version-must-be-central"
+
+              if name = "FS.GG.Coordination.Qualification.Contracts" then
+                  let generatePath = reference.Attribute(XName.Get "GeneratePathProperty")
+                  if isNull generatePath || not (generatePath.Value.Equals("true", StringComparison.OrdinalIgnoreCase)) then
+                      yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required"
+
+          for reference in evaluatedReferences do
+              for value in [ reference.Version; reference.VersionOverride ] do
+                  if not (String.IsNullOrWhiteSpace value) then
+                      yield violation name value "published-kernel-version-must-be-central"
+
+              if name = "FS.GG.Coordination.Qualification.Contracts"
+                 && not (reference.GeneratePathProperty.Equals("true", StringComparison.OrdinalIgnoreCase)) then
+                  yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required" ]
+
+    let packageSourceViolations =
+        [ "RestoreSources"; "RestoreAdditionalProjectSources" ]
+        |> List.collect (fun property -> elementValuesNamed property document)
+        |> List.collect (fun value -> value.Split(';', StringSplitOptions.RemoveEmptyEntries) |> Array.toList)
+        |> List.map _.Trim()
+        |> List.filter (fun value ->
+            not (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            && not (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
+        |> List.map (fun value -> violation name value "checkout-relative-package-source-forbidden")
 
     let transportViolations =
         if name = "FS.GG.Coordination.Protocol" || name = "FS.GG.Coordination.Core" then
@@ -193,7 +286,7 @@ let private inspectProject (path: string) =
         | Ok _ -> []
         | Error detail -> [ violation name detail "project-evaluation-failed" ]
 
-    evaluationViolations @ edgeViolations @ transportViolations @ hostViolations
+    evaluationViolations @ edgeViolations @ publishedKernelViolations @ packageSourceViolations @ transportViolations @ hostViolations
 
 let private parseRoot (arguments: string array) =
     let args = arguments |> Array.filter ((<>) "--")
@@ -222,6 +315,105 @@ let projects =
 let names = projects |> List.map projectName |> Set.ofList
 let required = allowedDependencies |> Map.keys |> Set.ofSeq
 
+let centralPinViolations =
+    let path = Path.Combine(root, "Directory.Packages.local.props")
+    if not (File.Exists path) then
+        [ violation "repository" "FS.GG.SDD.Artifacts" "published-kernel-central-pin-missing" ]
+    else
+        let document = XDocument.Load path
+        let pins =
+            document.Descendants(XName.Get "PackageVersion")
+            |> Seq.choose (fun element ->
+                let includeAttribute = element.Attribute(XName.Get "Include")
+                let versionAttribute = element.Attribute(XName.Get "Version")
+                if isNull includeAttribute || isNull versionAttribute then None
+                elif includeAttribute.Value.Equals("FS.GG.SDD.Artifacts", StringComparison.OrdinalIgnoreCase) then
+                    Some versionAttribute.Value
+                else None)
+            |> Seq.toList
+
+        match pins with
+        | [ "[1.4.0]" ] -> []
+        | [] -> [ violation "repository" "FS.GG.SDD.Artifacts" "published-kernel-central-pin-missing" ]
+        | values -> [ violation "repository" (String.concat "," values) "published-kernel-central-pin-must-equal-1.4.0" ]
+
+let producerCopyViolations =
+    let forbiddenNames =
+        Set.ofList
+            [ "q1-identity-manifest.json"
+              "QuintCompiler.fs"
+              "QuintCompiler.fsi"
+              "QuintProfile.fs"
+              "QuintProfile.fsi"
+              "QuintSource.fs"
+              "QuintSource.fsi"
+              "QuintReplay.fs"
+              "QuintReplay.fsi" ]
+
+    Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+    |> Seq.filter (fun path ->
+        not (path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}docs{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}work{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}readiness{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}evidence{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}")))
+    |> Seq.choose (fun path ->
+        let fileName = Path.GetFileName path
+        if Path.GetExtension(path).Equals(".qnt", StringComparison.OrdinalIgnoreCase)
+           || Set.contains fileName forbiddenNames
+           || (fileName = "main.go" && path.Contains($"{Path.DirectorySeparatorChar}quint{Path.DirectorySeparatorChar}lmt{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)) then
+            Some(violation "repository" (Path.GetRelativePath(root, path)) "published-kernel-producer-copy-forbidden")
+        else None)
+    |> Seq.toList
+
+let repositoryPackageSourceViolations =
+    Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+    |> Seq.filter (fun path ->
+        not (path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+        && Set.contains (Path.GetExtension(path).ToLowerInvariant()) (Set.ofList [ ".props"; ".targets"; ".fsproj" ]))
+    |> Seq.collect (fun path ->
+        let document = XDocument.Load path
+        [ "RestoreSources"; "RestoreAdditionalProjectSources" ]
+        |> Seq.collect (fun property -> elementValuesNamed property document)
+        |> Seq.collect (fun value -> value.Split(';', StringSplitOptions.RemoveEmptyEntries)))
+    |> Seq.map _.Trim()
+    |> Seq.filter (fun value ->
+        not (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        && not (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
+    |> Seq.distinct
+    |> Seq.map (fun value -> violation "repository" value "checkout-relative-package-source-forbidden")
+    |> Seq.toList
+
+let nugetConfigPackageSourceViolations =
+    Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+    |> Seq.filter (fun path ->
+        Path.GetFileName(path).Equals("NuGet.Config", StringComparison.OrdinalIgnoreCase)
+        && not (path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+        && not (path.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}")))
+    |> Seq.collect (fun path ->
+        let document = XDocument.Load path
+        document.Descendants()
+        |> Seq.filter (fun element -> element.Name.LocalName.Equals("packageSources", StringComparison.OrdinalIgnoreCase))
+        |> Seq.collect _.Elements()
+        |> Seq.filter (fun element -> element.Name.LocalName.Equals("add", StringComparison.OrdinalIgnoreCase))
+        |> Seq.choose (fun element ->
+            element.Attributes()
+            |> Seq.tryFind (fun attribute -> attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase))
+            |> Option.map _.Value))
+    |> Seq.map _.Trim()
+    |> Seq.filter (String.IsNullOrWhiteSpace >> not)
+    |> Seq.filter (fun value ->
+        not (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        && not (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
+    |> Seq.distinct
+    |> Seq.map (fun value -> violation "repository" value "checkout-relative-package-source-forbidden")
+    |> Seq.toList
+
 let missingViolations =
     Set.difference required names
     |> Seq.map (fun name -> violation name "missing" "required-project-missing")
@@ -233,7 +425,11 @@ let unknownViolations =
     |> Seq.toList
 
 let violations =
-    [ yield! missingViolations
+    [ yield! centralPinViolations
+      yield! producerCopyViolations
+      yield! repositoryPackageSourceViolations
+      yield! nugetConfigPackageSourceViolations
+      yield! missingViolations
       yield! unknownViolations
       for project in projects do
           yield! inspectProject project ]
