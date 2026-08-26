@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj" />
+    <PackageReference Include="RestSharp" VersionOverride="112.1.0" />
+  </ItemGroup>
+</Project>

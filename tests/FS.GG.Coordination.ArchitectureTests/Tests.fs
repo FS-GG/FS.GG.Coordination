@@ -50,7 +50,18 @@ let ``forbidden pure-core framework reference is independently rejected`` () =
 
     Assert.NotEqual(0, exitCode)
     Assert.Contains(
-        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=Microsoft.AspNetCore.App rule=transport-reference-in-pure-layer",
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=Microsoft.AspNetCore.App rule=runtime-reference-not-allowed-in-pure-layer",
+        error
+    )
+
+[<Fact>]
+let ``unapproved pure-core HTTP client package is independently rejected`` () =
+    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-http-client-package")
+    let exitCode, _, error = runVerifier fixtureRoot
+
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=RestSharp rule=runtime-reference-not-allowed-in-pure-layer",
         error
     )
 

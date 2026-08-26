@@ -100,6 +100,9 @@ let private allowedDependencies =
           "FS.GG.Coordination.Qualification.Contracts",
           Set.singleton "FS.GG.Coordination.Protocol" ]
 
+let private allowedPureLayerRuntimeReferences =
+    Set.ofList [ "FSharp.Core"; "Microsoft.NETCore.App" ]
+
 let private containsAny (needles: string list) (value: string) =
     needles
     |> List.exists (fun needle -> value.Contains(needle, StringComparison.OrdinalIgnoreCase))
@@ -142,8 +145,8 @@ let private inspectProject (path: string) =
                   | Ok project -> yield! project.RuntimeReferences
                   | Error _ -> () ]
                 |> List.distinct
-                |> List.filter (containsAny [ "GitHub"; "Octokit"; "AspNetCore"; "System.Net.Http"; "Extensions.Http"; "HttpClient" ])
-                |> List.map (fun dependency -> violation name dependency "transport-reference-in-pure-layer")
+                |> List.filter (fun dependency -> not (Set.contains dependency allowedPureLayerRuntimeReferences))
+                |> List.map (fun dependency -> violation name dependency "runtime-reference-not-allowed-in-pure-layer")
 
             let sdkViolations =
                 sdkValues document
