@@ -13,6 +13,19 @@ let private valuesNamed (name: string) (document: XDocument) =
         if isNull includeAttribute then None else Some includeAttribute.Value)
     |> Seq.toList
 
+let private sdkValues (document: XDocument) =
+    let attributeValue attributeName (element: XElement) =
+        let attribute = element.Attribute(XName.Get attributeName)
+        if isNull attribute then None else Some attribute.Value
+
+    [ if not (isNull document.Root) then
+          yield! attributeValue "Sdk" document.Root |> Option.toList
+      if not (isNull document.Root) then
+          for element in document.Root.Descendants() do
+              yield! attributeValue "Sdk" element |> Option.toList
+              if element.Name.LocalName = "Sdk" then
+                  yield! attributeValue "Name" element |> Option.toList ]
+
 let private allowedDependencies =
     Map.ofList
         [ "FS.GG.Coordination.Protocol", Set.empty
@@ -60,11 +73,19 @@ let private inspectProject (path: string) =
 
     let transportViolations =
         if name = "FS.GG.Coordination.Protocol" || name = "FS.GG.Coordination.Core" then
-            [ yield! valuesNamed "PackageReference" document
-              yield! valuesNamed "Reference" document
-              yield! valuesNamed "FrameworkReference" document ]
-            |> List.filter (containsAny [ "GitHub"; "Octokit"; "Microsoft.AspNetCore.App"; "System.Net.Http"; "HttpClient" ])
-            |> List.map (fun dependency -> violation name dependency "transport-reference-in-pure-layer")
+            let referenceViolations =
+                [ yield! valuesNamed "PackageReference" document
+                  yield! valuesNamed "Reference" document
+                  yield! valuesNamed "FrameworkReference" document ]
+                |> List.filter (containsAny [ "GitHub"; "Octokit"; "AspNetCore"; "System.Net.Http"; "Extensions.Http"; "HttpClient" ])
+                |> List.map (fun dependency -> violation name dependency "transport-reference-in-pure-layer")
+
+            let sdkViolations =
+                sdkValues document
+                |> List.filter (containsAny [ "Microsoft.NET.Sdk.Web"; "Microsoft.NET.Sdk.Razor" ])
+                |> List.map (fun dependency -> violation name dependency "transport-sdk-in-pure-layer")
+
+            referenceViolations @ sdkViolations
         else
             []
 

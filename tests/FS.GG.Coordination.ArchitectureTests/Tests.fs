@@ -53,3 +53,16 @@ let ``forbidden pure-core framework reference is independently rejected`` () =
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=Microsoft.AspNetCore.App rule=transport-reference-in-pure-layer",
         error
     )
+
+[<Theory>]
+[<InlineData("forbidden-root-web-sdk")>]
+[<InlineData("forbidden-child-web-sdk")>]
+let ``forbidden pure-core web SDK forms are independently rejected`` fixture =
+    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures", fixture)
+    let exitCode, _, error = runVerifier fixtureRoot
+
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=Microsoft.NET.Sdk.Web rule=transport-sdk-in-pure-layer",
+        error
+    )
