@@ -55,9 +55,12 @@ The dependency verifier rejects:
 
 Architecture tests create isolated mutations for the exact pin, source-project
 reference, checkout-relative MSBuild feed, checkout-relative `NuGet.Config`
-feed, and copied producer machinery. Unit tests mutate the manifest digest and
-profile identity. The positive test reads the
-manifest from the actual restored package rather than a repository fixture.
+feed, imported effective package metadata, and copied producer machinery. The
+dependency gate evaluates the final `PackageReference` items so imported
+`Version`, `VersionOverride`, and `GeneratePathProperty` changes are covered.
+Unit tests mutate the manifest digest and profile identity. The positive test
+reads the manifest from the actual restored package rather than a repository
+fixture.
 
 This unit does not add a Quint extractor, profile definition, compiled-contract
 generator, ITF implementation, protocol semantics, GitHub mutation authority,

@@ -111,6 +111,33 @@ let ``published kernel package consumption outside qualification is independentl
             Assert.Contains("rule=published-kernel-consumer-not-allowed", error))
 
 [<Fact>]
+let ``imported published kernel metadata override is independently rejected`` () =
+    withRepositoryMutation
+        (fun root ->
+            let targets =
+                XDocument(
+                    XElement(
+                        XName.Get "Project",
+                        XElement(
+                            XName.Get "ItemGroup",
+                            XElement(
+                                XName.Get "PackageReference",
+                                XAttribute(XName.Get "Update", "FS.GG.SDD.Artifacts"),
+                                XAttribute(XName.Get "VersionOverride", "[1.4.0]"),
+                                XAttribute(XName.Get "GeneratePathProperty", "false")
+                            )
+                        )
+                    )
+                )
+
+            targets.Save(Path.Combine(root, "Directory.Build.targets")))
+        (fun root ->
+            let exitCode, _, error = runVerifier root
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("dependency=[1.4.0] rule=published-kernel-version-must-be-central", error)
+            Assert.Contains("rule=published-kernel-path-property-required", error))
+
+[<Fact>]
 let ``checkout relative package source is independently rejected`` () =
     withRepositoryMutation
         (fun root ->

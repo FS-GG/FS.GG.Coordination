@@ -34,9 +34,16 @@ let private sdkValues (document: XDocument) =
               if element.Name.LocalName = "Sdk" then
                   yield! attributeValue "Name" element |> Option.toList ]
 
+type private EvaluatedPackageReference =
+    { Identity: string
+      Version: string
+      VersionOverride: string
+      GeneratePathProperty: string }
+
 type private EvaluatedProject =
     { OutputType: string
       ProjectReferences: string list
+      PackageReferences: EvaluatedPackageReference list
       RuntimeReferences: string list }
 
 let private evaluateProject (path: string) =
@@ -77,11 +84,30 @@ let private evaluateProject (path: string) =
                         None)
                 |> Seq.toList
 
+            let itemValue (property: string) (item: JsonElement) =
+                let mutable value = Unchecked.defaultof<JsonElement>
+
+                if item.TryGetProperty(property, &value) then
+                    value.GetString() |> Option.ofObj |> Option.defaultValue ""
+                else
+                    ""
+
+            let packageReferences =
+                items.GetProperty("PackageReference").EnumerateArray()
+                |> Seq.map (fun item ->
+                    { Identity = itemValue "Identity" item
+                      Version = itemValue "Version" item
+                      VersionOverride = itemValue "VersionOverride" item
+                      GeneratePathProperty = itemValue "GeneratePathProperty" item })
+                |> Seq.filter (fun reference -> not (String.IsNullOrWhiteSpace reference.Identity))
+                |> Seq.toList
+
             Ok
                 { OutputType = properties.GetProperty("OutputType").GetString() |> Option.ofObj |> Option.defaultValue ""
                   ProjectReferences = itemValues "ProjectReference" "FullPath"
+                  PackageReferences = packageReferences
                   RuntimeReferences =
-                    [ yield! itemValues "PackageReference" "Identity"
+                    [ yield! packageReferences |> List.map _.Identity
                       yield! itemValues "Reference" "Identity"
                       yield! itemValues "FrameworkReference" "Identity" ] }
         with exceptionValue ->
@@ -159,9 +185,9 @@ let private inspectProject (path: string) =
         let evaluatedReferences =
             match evaluated with
             | Ok project ->
-                project.RuntimeReferences
-                |> List.filter (fun identity ->
-                    identity.Equals("FS.GG.SDD.Artifacts", StringComparison.OrdinalIgnoreCase))
+                project.PackageReferences
+                |> List.filter (fun reference ->
+                    reference.Identity.Equals("FS.GG.SDD.Artifacts", StringComparison.OrdinalIgnoreCase))
             | Error _ -> []
 
         let hasReference = not (List.isEmpty references) || not (List.isEmpty evaluatedReferences)
@@ -181,7 +207,16 @@ let private inspectProject (path: string) =
               if name = "FS.GG.Coordination.Qualification.Contracts" then
                   let generatePath = reference.Attribute(XName.Get "GeneratePathProperty")
                   if isNull generatePath || not (generatePath.Value.Equals("true", StringComparison.OrdinalIgnoreCase)) then
-                      yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required" ]
+                      yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required"
+
+          for reference in evaluatedReferences do
+              for value in [ reference.Version; reference.VersionOverride ] do
+                  if not (String.IsNullOrWhiteSpace value) then
+                      yield violation name value "published-kernel-version-must-be-central"
+
+              if name = "FS.GG.Coordination.Qualification.Contracts"
+                 && not (reference.GeneratePathProperty.Equals("true", StringComparison.OrdinalIgnoreCase)) then
+                  yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required" ]
 
     let packageSourceViolations =
         [ "RestoreSources"; "RestoreAdditionalProjectSources" ]

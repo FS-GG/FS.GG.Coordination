@@ -58,10 +58,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -89,10 +89,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -120,10 +120,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -151,10 +151,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -182,10 +182,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -213,10 +213,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -244,10 +244,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -275,10 +275,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -306,10 +306,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -337,10 +337,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -368,10 +368,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -399,10 +399,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -430,10 +430,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -461,10 +461,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]
@@ -492,10 +492,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-4/test-results/architecture.trx
-      digest: "sha256:819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f"
+      digest: "sha256:9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 23
+      passed: 24
       failed: 0
       skipped: 0
     notes: [Clean-cache locked restore, and independent mutation controls passed., package identity validation, zero-warning Release build]

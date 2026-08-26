@@ -1,6 +1,6 @@
 # GS2-01.4 qualification report
 
-Observed at `2026-08-26T22:55:38Z` from base
+Observed at `2026-08-26T23:29:00Z` from base
 `e970c56a895226b203ccbf6f922c1c3f1adbe3d6` plus the work-item tree.
 
 ## Published package
@@ -27,16 +27,16 @@ dotnet test FS.GG.Coordination.sln --no-build --no-restore -c Release
 ```
 
 Outcome: restore succeeded from the supported read feed; build succeeded with
-zero warnings and zero errors. The retained follow-up suite has 30 passing test
-executions after adding the explicit unauthorized-consumer and `NuGet.Config`
-source mutations.
+zero warnings and zero errors. The retained follow-up suite has 31 passing test
+executions after adding the explicit unauthorized-consumer, `NuGet.Config`
+source, and imported effective-package-metadata mutations.
 
 ## Retained test evidence
 
 - `test-results/unit.trx`: 7 passed, 0 failed, 0 skipped; SHA-256
-  `169687fc2d1660b23065dd717316c4ff667260a7d43896a3e495db947b45c086`.
-- `test-results/architecture.trx`: 23 passed, 0 failed, 0 skipped; SHA-256
-  `819ac62e3b007e170df6a93d2e78c8168eca3951f6cce5dc0e7a1c7e1f0ffc5f`.
+  `a57d18b27186dc451b1087b95cf669f76fa4663611d65135b6e4ffd05074a310`.
+- `test-results/architecture.trx`: 24 passed, 0 failed, 0 skipped; SHA-256
+  `9aba3cca77d13087a481dc913b2826a317a261f0758a776af4613bdfe4d10c81`.
 - `dotnet fsi eng/verify-dependencies.fsx -- --root .` returned
   `DEPENDENCY_POLICY_OK projects=6`.
 
@@ -44,7 +44,9 @@ The positive manifest test reads the actual restored package. Independent
 mutations prove rejection of an altered manifest digest/profile, malformed
 manifest, non-exact pin, unauthorized package consumer, source-project
 reference, checkout-relative MSBuild or `NuGet.Config` package source, and
-copied producer machinery.
+copied producer machinery. The dependency verifier reads evaluated
+`PackageReference` metadata, so an imported `Version`, `VersionOverride`, or
+disabled `GeneratePathProperty` cannot bypass the authored-project checks.
 Earlier GS2-01.3 negative controls remain
 green as part of the same architecture run.
 
