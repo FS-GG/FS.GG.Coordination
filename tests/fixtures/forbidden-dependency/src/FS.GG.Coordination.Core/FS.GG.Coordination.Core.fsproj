@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj" />
+  </ItemGroup>
+</Project>

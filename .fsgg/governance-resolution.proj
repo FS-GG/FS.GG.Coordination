@@ -1,0 +1,42 @@
+<!-- The generated-product route to the FS-GG org reference gate set (FS.GG.SDD#845,
+     answering FS-GG/FS.GG.Governance#385 AC3). OPTIONAL and OPT-IN: `fsgg-sdd init` seeds this
+     file, it does nothing until you run the verb below, and deleting it is a supported choice
+     that `fsgg-sdd doctor`/`upgrade` will not undo.
+
+     Adopt the org profile into this repository's `.fsgg/`:
+
+         cd .fsgg
+         dotnet restore governance-resolution.proj
+         dotnet msbuild governance-resolution.proj -t:FsggResolveReferenceGateSet
+
+     This writes `governance.yml`, `capabilities.yml`, `policy.yml`, `tooling.yml` and the
+     controlled-import contract files into `.fsgg/`. Add `-p:FsggReferenceGateSetOverwrite=false`
+     to refuse overwriting files you have since edited locally.
+
+     `FsggResolveReferenceGateSet` is defined by FS.GG.Governance, not by FS.GG.SDD — this file
+     only pins the package and points the destination at this repository's `.fsgg/`.
+
+     THIS IS DISTRIBUTION, NOT ENFORCEMENT. The org's inherited gate floor is embedded in the
+     Governance runtime and is read from no file (FS.GG.Governance ADR-0009 §Decision 1, preserved
+     by its docs/decisions/0011). Never resolving, or editing or deleting what you resolved,
+     changes what this product DECLARES; it cannot change what this product INHERITS.
+
+     FS.GG.SDD itself never reads these files to gate, route, or alter its output — it reports them
+     as optional `notEvaluated` compatibility facts whether they are present, absent, or partial.
+     See docs/adopting-governance.md.
+
+     RE-PINNING: edit the Version below deliberately, then re-run the verb. -->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <FsggReferenceGateSetDestination>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)'))</FsggReferenceGateSetDestination>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FS.GG.Governance.ReferenceGateSet" Version="1.6.0" />
+  </ItemGroup>
+
+</Project>
