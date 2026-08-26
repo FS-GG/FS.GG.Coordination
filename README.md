@@ -15,6 +15,10 @@ dotnet test FS.GG.Coordination.sln --no-build --no-restore
 dotnet fsi eng/verify-dependencies.fsx -- --root .
 ```
 
+The `Boundary qualification / boundary-qualification` hosted check executes the
+same locked restore, Release build, tests, and dependency policy for every pull
+request and push to `main`.
+
 No command, webhook listener, deployment, secret, subscription, or production
 mutation authority is enabled by this scaffold.
 Typed GitHub coordination substrate, qualification contracts, and fleet cutover tooling for FS-GG

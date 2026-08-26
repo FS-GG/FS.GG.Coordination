@@ -11,7 +11,7 @@ sourceAnalysis: readiness/1-establish-solution-boundary/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/1-establish-solution-boundary/analysis.json
-    digest: b61479331e44d8218eb3db072a73e1ce8683cb188da30cd9c00f8abba069b25d
+    digest: cb46b7a0c622eae5cea7e6fe62eb240907de2fabc960e90a5c1ca0befb129155
     schemaVersion: 1
   - label: checklist
     path: work/1-establish-solution-boundary/checklist.md
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-3/test-results/gs2-01-3.trx
-      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digest: "sha256:09cde292a46abb6bb86f930ec307bc0c89b39869ba1b9993f8363022e89bbd45"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 7
       failed: 0
       skipped: 0
     notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]

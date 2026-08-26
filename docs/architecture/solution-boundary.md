@@ -21,9 +21,11 @@ outward layer.
 
 `eng/verify-dependencies.fsx` is the executable policy. It reads project XML,
 requires the complete six-project production set, rejects undeclared edges, keeps
-GitHub and HTTP references out of Protocol and Core, and prevents App from becoming
-an executable or web-SDK host. `FS.GG.Coordination.ArchitectureTests` runs the
-policy against both the real repository and an intentionally invalid fixture.
+GitHub, HTTP, and ASP.NET framework references out of Protocol and Core, and prevents
+App from becoming an executable or web-SDK host. `FS.GG.Coordination.ArchitectureTests`
+runs the policy against the real repository plus independent invalid project-edge
+and framework-reference fixtures. The `Boundary qualification` workflow invokes the
+locked restore, Release build, test suite, and dependency policy on GitHub-hosted runners.
 
 The following remain outside this unit:
 

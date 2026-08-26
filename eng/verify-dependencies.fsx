@@ -61,8 +61,9 @@ let private inspectProject (path: string) =
     let transportViolations =
         if name = "FS.GG.Coordination.Protocol" || name = "FS.GG.Coordination.Core" then
             [ yield! valuesNamed "PackageReference" document
-              yield! valuesNamed "Reference" document ]
-            |> List.filter (containsAny [ "GitHub"; "Octokit"; "System.Net.Http"; "HttpClient" ])
+              yield! valuesNamed "Reference" document
+              yield! valuesNamed "FrameworkReference" document ]
+            |> List.filter (containsAny [ "GitHub"; "Octokit"; "Microsoft.AspNetCore.App"; "System.Net.Http"; "HttpClient" ])
             |> List.map (fun dependency -> violation name dependency "transport-reference-in-pure-layer")
         else
             []
