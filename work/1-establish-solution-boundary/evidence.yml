@@ -11,7 +11,7 @@ sourceAnalysis: readiness/1-establish-solution-boundary/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/1-establish-solution-boundary/analysis.json
-    digest: cce3ba679d17e33373475e829660fa699e1722a73e02835006c4d901c1151436
+    digest: b61479331e44d8218eb3db072a73e1ce8683cb188da30cd9c00f8abba069b25d
     schemaVersion: 1
   - label: checklist
     path: work/1-establish-solution-boundary/checklist.md
