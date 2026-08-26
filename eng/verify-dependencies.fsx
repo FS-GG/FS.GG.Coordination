@@ -91,18 +91,22 @@ let private inspectProject (path: string) =
 
     let hostViolations =
         if name = "FS.GG.Coordination.App" then
-            let root = document.Root
-            let sdk = if isNull root then "" else string (root.Attribute(XName.Get "Sdk"))
             let outputTypes = document.Descendants(XName.Get "OutputType") |> Seq.map _.Value |> Seq.toList
-            let packages = valuesNamed "PackageReference" document
+            let runtimeReferences =
+                [ yield! valuesNamed "PackageReference" document
+                  yield! valuesNamed "Reference" document
+                  yield! valuesNamed "FrameworkReference" document ]
 
-            [ if sdk.Contains("Web", StringComparison.OrdinalIgnoreCase) then
-                  violation name sdk "app-host-must-not-use-web-sdk"
-              if outputTypes |> List.exists (fun value -> value.Equals("Exe", StringComparison.OrdinalIgnoreCase)) then
-                  violation name "OutputType=Exe" "app-host-must-not-be-executable"
-              for package in packages do
-                  if containsAny [ "AspNet"; "Kestrel"; "Webhook" ] package then
-                      violation name package "app-host-runtime-binding-forbidden" ]
+            [ for sdk in sdkValues document do
+                  if containsAny [ "Microsoft.NET.Sdk.Web"; "Microsoft.NET.Sdk.Razor"; "Microsoft.NET.Sdk.Worker" ] sdk then
+                      violation name sdk "app-host-runtime-sdk-forbidden"
+              for outputType in outputTypes do
+                  if outputType.Equals("Exe", StringComparison.OrdinalIgnoreCase)
+                     || outputType.Equals("WinExe", StringComparison.OrdinalIgnoreCase) then
+                      violation name $"OutputType={outputType}" "app-host-must-not-be-executable"
+              for runtimeReference in runtimeReferences do
+                  if containsAny [ "AspNetCore"; "Kestrel"; "Webhook"; "Extensions.Hosting" ] runtimeReference then
+                      violation name runtimeReference "app-host-runtime-binding-forbidden" ]
         else
             []
 

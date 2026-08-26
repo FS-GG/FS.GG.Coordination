@@ -66,3 +66,37 @@ let ``forbidden pure-core web SDK forms are independently rejected`` fixture =
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=Microsoft.NET.Sdk.Web rule=transport-sdk-in-pure-layer",
         error
     )
+
+[<Fact>]
+let ``forbidden App hosting forms are independently rejected`` () =
+    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-app-hosting")
+    let exitCode, _, error = runVerifier fixtureRoot
+
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=Microsoft.NET.Sdk.Web rule=app-host-runtime-sdk-forbidden",
+        error
+    )
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=OutputType=Exe rule=app-host-must-not-be-executable",
+        error
+    )
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=Microsoft.Extensions.Hosting rule=app-host-runtime-binding-forbidden",
+        error
+    )
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=Microsoft.AspNetCore.App rule=app-host-runtime-binding-forbidden",
+        error
+    )
+
+[<Fact>]
+let ``forbidden App import SDK is independently rejected`` () =
+    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-app-import-web-sdk")
+    let exitCode, _, error = runVerifier fixtureRoot
+
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains(
+        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=Microsoft.NET.Sdk.Web rule=app-host-runtime-sdk-forbidden",
+        error
+    )
