@@ -1,0 +1,470 @@
+schemaVersion: 1
+workId: 1-establish-solution-boundary
+stage: evidence
+status: evidenceReady
+sourceSpec: work/1-establish-solution-boundary/spec.md
+sourceClarifications: work/1-establish-solution-boundary/clarifications.md
+sourceChecklist: work/1-establish-solution-boundary/checklist.md
+sourcePlan: work/1-establish-solution-boundary/plan.md
+sourceTasks: work/1-establish-solution-boundary/tasks.yml
+sourceAnalysis: readiness/1-establish-solution-boundary/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/1-establish-solution-boundary/analysis.json
+    digest: cce3ba679d17e33373475e829660fa699e1722a73e02835006c4d901c1151436
+    schemaVersion: 1
+  - label: checklist
+    path: work/1-establish-solution-boundary/checklist.md
+    digest: b76b2c5c6cade99323d54c6f27b4d957bc4e5ced65128770dc0dc6d6f91d1538
+    schemaVersion: 1
+  - label: clarifications
+    path: work/1-establish-solution-boundary/clarifications.md
+    digest: 2e951037f1625173db672d24b38c058dbac816454e9f16b34b0aa14822de2393
+    schemaVersion: 1
+  - label: plan
+    path: work/1-establish-solution-boundary/plan.md
+    digest: 1eb59aad0ab2b5b1c921d13fcd2515eecdd44c6da634e2088c7baa9e5c575a5e
+    schemaVersion: 1
+  - label: spec
+    path: work/1-establish-solution-boundary/spec.md
+    digest: 9d108dc973bda94eecea705c8858722c104b2c456a4793270afa29650c59251d
+    schemaVersion: 1
+  - label: tasks
+    path: work/1-establish-solution-boundary/tasks.yml
+    digest: b9ab5f0355e652000eddaf97c6fca7cc196e0e6d46862cba49759b252a9186ba
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV010]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV011]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV012]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV014]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [FS.GG.Coordination.sln, eng/verify-dependencies.fsx, tests/FS.GG.Coordination.ArchitectureTests/Tests.fs, tests/FS.GG.Coordination.UnitTests/Tests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/Tests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-3/test-results/gs2-01-3.trx
+      digest: "sha256:0b9cc3ea7050a617f6d31cab913a63324d67371a5193bf1b550b69de0ce04f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [The committed six-test acceptance run covers the compiled boundary and dependency policy.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
