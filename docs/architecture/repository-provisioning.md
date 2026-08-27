@@ -5,7 +5,8 @@ GS2-01.1 treats live GitHub responses as authority. The reviewed desired state i
 that may be applied. `verify.fsx` validates the compact post-state receipt before independent acceptance.
 
 The apply sequence is deliberately staged: merge CODEOWNERS and this contract, prove the public dependency
-graph, enable Dependabot alerts and supported repository security, select GitHub-owned Actions, create the signed immutable `v*` tag ruleset, and create the
+graph, attach organization code-security configuration 17, verify its full policy projection and CodeQL default setup,
+enable Dependabot alerts and supported repository security, select GitHub-owned Actions, create the signed immutable `v*` tag ruleset, and create the
 default-branch ruleset last. Every write is followed by an authoritative reread. A partial, forbidden, lost,
 or contradictory response stops the batch.
 
@@ -18,3 +19,12 @@ requires signed `v*` tags, and blocks their update or deletion.
 Organization Actions SHA enforcement is not a repository setting. A 403 from that organization endpoint is
 recorded as `unsupported`; it is never projected as enabled. This unit creates no environment, secret,
 runtime, webhook, release, tag, package, production subscription, or GS2-01.9 output.
+
+The repository `security_and_analysis` projection reports direct repository settings and can lag or omit an
+attached organization configuration's overlay. Configuration 17's repository association and organization
+configuration endpoints are authoritative for that overlay; the receipt also preserves the repository projection
+without using it to contradict or invent attached policy state. In the current organization entitlement, validity
+checks and non-provider secret patterns remain disabled in that effective repository projection even though
+configuration 17 requests them; both are explicitly recorded as license-unsupported. Dynamic timestamps are excluded
+from desired state. Configuration 17's separate generic-secrets field is `not_set` and is neither conflated with
+non-provider patterns nor claimed as an operational or unsupported control.

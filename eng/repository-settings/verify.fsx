@@ -79,8 +79,9 @@ let validate (desiredPath: string) (receiptPath: string) =
     let receipt = receiptDoc.RootElement
 
     exactProperties "RS-DESIRED-SHAPE"
-        [ "actions"; "checks"; "repository"; "rulesets"; "schema"; "security"; "teams"; "unsupported" ] desired
-    requireString "RS-DESIRED-SCHEMA" "schema" "fsgg.coordination.repository-settings-desired/1" desired
+        [ "actions"; "checks"; "codeSecurityConfiguration"; "codeqlDefaultSetup"; "repository"; "rulesets";
+          "schema"; "security"; "teams"; "unsupported" ] desired
+    requireString "RS-DESIRED-SCHEMA" "schema" "fsgg.coordination.repository-settings-desired/2" desired
     exactProperties "RS-DESIRED-ACTIONS-SHAPE"
         [ "allowedActions"; "canApprovePullRequestReviews"; "defaultWorkflowPermissions"; "enabled";
           "githubOwnedAllowed"; "patternsAllowed"; "verifiedAllowed" ] (desired.GetProperty("actions"))
@@ -88,8 +89,24 @@ let validate (desiredPath: string) (receiptPath: string) =
         [ "allowAutoMerge"; "allowMergeCommit"; "allowRebaseMerge"; "allowSquashMerge"; "defaultBranch";
           "deleteBranchOnMerge"; "hasIssues"; "hasProjects"; "hasWiki"; "id"; "nameWithOwner"; "nodeId"; "visibility" ]
         (desired.GetProperty("repository"))
+    exactProperties "RS-DESIRED-CODE-SECURITY-SHAPE"
+        [ "associationStatus"; "configuration" ] (desired.GetProperty("codeSecurityConfiguration"))
+    exactProperties "RS-DESIRED-CODE-SECURITY-CONFIGURATION-SHAPE"
+        [ "advancedSecurity"; "codeScanningDefaultSetup"; "codeScanningDefaultSetupOptions";
+          "codeScanningDelegatedAlertDismissal"; "dependabotAlerts"; "dependabotDelegatedAlertDismissal";
+          "dependabotSecurityUpdates"; "dependencyGraph"; "dependencyGraphAutosubmitAction";
+          "dependencyGraphAutosubmitLabeledRunners"; "enforcement"; "id"; "name";
+          "privateVulnerabilityReporting"; "secretScanning"; "secretScanningDelegatedAlertDismissal";
+          "secretScanningDelegatedBypass"; "secretScanningExtendedMetadata"; "secretScanningGenericSecrets";
+          "secretScanningNonProviderPatterns"; "secretScanningPushProtection"; "secretScanningValidityChecks";
+          "targetType" ]
+        (desired.GetProperty("codeSecurityConfiguration").GetProperty("configuration"))
+    exactProperties "RS-DESIRED-CODEQL-SHAPE"
+        [ "languages"; "querySuite"; "runnerLabel"; "runnerType"; "schedule"; "state"; "threatModel" ]
+        (desired.GetProperty("codeqlDefaultSetup"))
     exactProperties "RS-DESIRED-SECURITY-SHAPE"
-        [ "dependabotAlerts"; "dependabotSecurityUpdates"; "dependencyGraph"; "secretScanning"; "secretScanningNonProviderPatterns";
+        [ "dependabotAlerts"; "dependabotSecurityUpdates"; "dependencyGraph"; "privateVulnerabilityReporting";
+          "secretScanning"; "secretScanningExtendedMetadata"; "secretScanningNonProviderPatterns";
           "secretScanningPushProtection"; "secretScanningValidityChecks" ] (desired.GetProperty("security"))
     for check in desired.GetProperty("checks").EnumerateArray() do
         exactProperties "RS-DESIRED-CHECK-SHAPE" [ "context"; "integrationId" ] check
@@ -110,11 +127,12 @@ let validate (desiredPath: string) (receiptPath: string) =
     for unsupported in desired.GetProperty("unsupported").EnumerateArray() do
         exactProperties "RS-DESIRED-UNSUPPORTED-SHAPE" [ "httpStatus"; "status"; "surface" ] unsupported
     exactProperties "RS-RECEIPT-SHAPE"
-        [ "actions"; "checks"; "desiredSha256"; "digest"; "observedAt"; "operations"; "preStateSha256";
-          "repair"; "repository"; "rulesets"; "schema"; "security"; "teams"; "unsupported" ] receipt
-    requireString "RS-RECEIPT-SCHEMA" "schema" "fsgg.coordination.repository-settings-receipt/1" receipt
+        [ "actions"; "checks"; "codeSecurityConfiguration"; "codeqlDefaultSetup"; "desiredSha256"; "digest";
+          "observedAt"; "operations"; "preStateSha256"; "repair"; "repository"; "rulesets"; "schema";
+          "security"; "teams"; "unsupported" ] receipt
+    requireString "RS-RECEIPT-SCHEMA" "schema" "fsgg.coordination.repository-settings-receipt/2" receipt
 
-    for property in [ "actions"; "checks"; "repository"; "security"; "teams"; "unsupported" ] do
+    for property in [ "actions"; "checks"; "codeSecurityConfiguration"; "codeqlDefaultSetup"; "repository"; "security"; "teams"; "unsupported" ] do
         requireEqual "RS-STATE-MISMATCH" property (desired.GetProperty(property)) (receipt.GetProperty(property))
 
     let desiredRules = desired.GetProperty("rulesets").EnumerateArray() |> Seq.toArray
@@ -167,12 +185,17 @@ let validate (desiredPath: string) (receiptPath: string) =
 
     let requiredOps =
         [ "repository"; "teams"; "actions-permissions"; "selected-actions"; "security"; "dependabot-alerts";
-          "dependency-graph"; "main-ruleset"; "release-tag-ruleset" ] |> Set.ofList
+          "dependency-graph"; "code-security-association"; "code-security-configuration"; "codeql-default-setup";
+          "private-vulnerability-reporting"; "main-ruleset"; "release-tag-ruleset" ] |> Set.ofList
     if operationNames <> requiredOps then fail "RS-OPERATIONS" "authoritative response operation set must be exact"
     let staticOperations =
         [ "actions-permissions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions", 200)
+          "code-security-association", ("GET", "/orgs/FS-GG/code-security/configurations/17/repositories", 200)
+          "code-security-configuration", ("GET", "/repos/FS-GG/FS.GG.Coordination/code-security-configuration", 200)
+          "codeql-default-setup", ("GET", "/repos/FS-GG/FS.GG.Coordination/code-scanning/default-setup", 200)
           "dependabot-alerts", ("GET", "/repos/FS-GG/FS.GG.Coordination/vulnerability-alerts", 204)
           "dependency-graph", ("GET", "/repos/FS-GG/FS.GG.Coordination/dependency-graph/sbom", 200)
+          "private-vulnerability-reporting", ("GET", "/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting", 200)
           "repository", ("GET", "/repos/FS-GG/FS.GG.Coordination", 200)
           "security", ("GET", "/repos/FS-GG/FS.GG.Coordination", 200)
           "selected-actions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions/selected-actions", 200)
