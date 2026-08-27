@@ -159,7 +159,10 @@ let ``canonical Quint authority mutations fail closed`` () =
 
     let runMutation name mutate expectedCode =
         let clone = Path.Combine(tempRoot, name)
-        let cloneExit, _, cloneError = run "git" [ "clone"; "--shared"; "--quiet"; root; clone ]
+        let cloneExit, _, cloneError =
+            run
+                "git"
+                [ "-c"; "advice.detachedHead=false"; "clone"; "--shared"; "--quiet"; root; clone ]
         Assert.Equal(0, cloneExit)
         Assert.Equal("", cloneError)
         mutate clone
