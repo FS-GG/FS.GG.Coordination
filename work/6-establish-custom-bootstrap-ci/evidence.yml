@@ -11,7 +11,7 @@ sourceAnalysis: readiness/6-establish-custom-bootstrap-ci/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/6-establish-custom-bootstrap-ci/analysis.json
-    digest: cfb25549558d7aea4ac7f6595cd8ab4b59e761b3c0f75be6930e1f0a8e8b929a
+    digest: 2b3a1671ba5bb62f80a58546ca15fdf6ece3753bc935bb14b2a4e92742c17002
     schemaVersion: 1
   - label: checklist
     path: work/6-establish-custom-bootstrap-ci/checklist.md
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -486,10 +486,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -513,10 +513,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -540,10 +540,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -567,10 +567,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -594,10 +594,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -621,10 +621,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -648,10 +648,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -675,10 +675,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -702,10 +702,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -729,10 +729,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -756,10 +756,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -783,10 +783,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
@@ -810,10 +810,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/gs2-01-5/test-results/architecture.trx
-      digest: "sha256:2de526207e3f7979d29cbe4cc5df059bbf57e65266281571f21347fd21f20f05"
+      digest: "sha256:140d3f27c26bc17738399c87527abb7606aac276d41128e4e247bfb867df868b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 36
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]

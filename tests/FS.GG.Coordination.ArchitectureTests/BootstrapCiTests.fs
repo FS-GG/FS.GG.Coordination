@@ -116,9 +116,27 @@ let ``bootstrap workflow rejects mutable action references`` () =
             Assert.Contains("rule=workflow-action-pin", error))
 
 [<Fact>]
+let ``bootstrap workflow rejects checkout not bound to the evidence candidate`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          ref: ${{ github.event.pull_request.head.sha || github.sha }}\n", "")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-checkout-candidate", error))
+
+[<Fact>]
 let ``bootstrap workflow rejects authority expansion`` () =
     withWorkflowMutation
         (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("contents: read", "contents: write")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-authority-ceiling", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects runner context in job environment`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("/tmp/fsgg-${{ github.run_id }}-nuget-deterministic-build", "${{ runner.temp }}/nuget-deterministic-build")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)

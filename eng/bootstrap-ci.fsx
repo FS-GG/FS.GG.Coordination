@@ -119,6 +119,9 @@ let private inspectWorkflow root (contract: BootstrapContract) =
             |> Option.defaultValue []
         let usesPattern = Regex("uses:\\s*[^@\\s]+@(?<ref>[^\\s#]+)", RegexOptions.Compiled ||| RegexOptions.IgnoreCase)
         let actionRefs = usesPattern.Matches text |> Seq.cast<Match> |> Seq.map (fun matched -> matched.Groups["ref"].Value) |> Seq.toList
+        let checkoutCount = Regex.Matches(text, "uses:\\s*actions/checkout@", RegexOptions.IgnoreCase).Count
+        let candidateCheckoutCount =
+            Regex.Matches(text, "ref:\\s*\\$\\{\\{ github\\.event\\.pull_request\\.head\\.sha \\|\\| github\\.sha \\}\\}").Count
         let expectedJobNames = expectedJobs |> Set.toList |> String.concat ","
         let actualJobNames = actualJobs |> Set.toList |> String.concat ","
         [ if actualJobs <> expectedJobs then
@@ -134,6 +137,8 @@ let private inspectWorkflow root (contract: BootstrapContract) =
           for actionRef in actionRefs do
               if not (isSha actionRef) then
                   yield violation "workflow-action-pin" actionRef
+          if checkoutCount = 0 || candidateCheckoutCount <> checkoutCount then
+              yield violation "workflow-checkout-candidate" $"checkouts=%d{checkoutCount} exactCandidateRefs=%d{candidateCheckoutCount}"
           for token in contract.ForbiddenWorkflowTokens do
               if text.Contains(token, StringComparison.OrdinalIgnoreCase) then
                   yield violation "workflow-authority-ceiling" token

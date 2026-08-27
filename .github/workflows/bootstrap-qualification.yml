@@ -18,10 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      NUGET_PACKAGES: ${{ runner.temp }}/nuget-deterministic-build
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-deterministic-build
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -46,10 +48,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      NUGET_PACKAGES: ${{ runner.temp }}/nuget-compiler-and-tests
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-compiler-and-tests
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -74,10 +78,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      NUGET_PACKAGES: ${{ runner.temp }}/nuget-dependency-and-security
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-dependency-and-security
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -104,10 +110,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      NUGET_PACKAGES: ${{ runner.temp }}/nuget-package-install-smoke
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-package-install-smoke
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -133,10 +141,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      NUGET_PACKAGES: ${{ runner.temp }}/nuget-evidence-manifest
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-evidence-manifest
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
