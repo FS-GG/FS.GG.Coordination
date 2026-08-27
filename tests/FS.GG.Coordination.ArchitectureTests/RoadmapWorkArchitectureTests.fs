@@ -127,7 +127,7 @@ let ``manifest refuses an external untracked unit index before evidence creation
 
     try
         let cloneExit, _, cloneError =
-            run "git" [ "clone"; "--shared"; "--quiet"; root; clone ]
+            run "git" [ "-c"; "advice.detachedHead=false"; "clone"; "--shared"; "--quiet"; root; clone ]
 
         Assert.Equal(0, cloneExit)
         Assert.Equal("", cloneError)
