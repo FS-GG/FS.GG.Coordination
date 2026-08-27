@@ -95,7 +95,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(4, commands.Length)
+    Assert.Equal(5, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -111,9 +111,14 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
         |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-01.6")
 
     let contracts = selected.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
-    Assert.Equal(commands.Length, contracts.Length)
+    let selectedCommands =
+        commands
+        |> List.filter (fun command ->
+            contracts
+            |> List.exists (fun contract -> contract.GetProperty("id").GetString() = command.GetProperty("id").GetString()))
+    Assert.Equal(4, contracts.Length)
 
-    for command, contract in List.zip commands contracts do
+    for command, contract in List.zip selectedCommands contracts do
         Assert.Equal(command.GetProperty("id").GetString(), contract.GetProperty("id").GetString())
         Assert.Equal(command.GetProperty("qGate").GetString(), contract.GetProperty("qGate").GetString())
 
