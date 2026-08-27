@@ -1,0 +1,767 @@
+schemaVersion: 1
+workId: 26-canonical-quint-protocol
+stage: evidence
+status: evidenceReady
+sourceSpec: work/26-canonical-quint-protocol/spec.md
+sourceClarifications: work/26-canonical-quint-protocol/clarifications.md
+sourceChecklist: work/26-canonical-quint-protocol/checklist.md
+sourcePlan: work/26-canonical-quint-protocol/plan.md
+sourceTasks: work/26-canonical-quint-protocol/tasks.yml
+sourceAnalysis: readiness/26-canonical-quint-protocol/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/26-canonical-quint-protocol/analysis.json
+    digest: 93e50b21c4045eb83be0c8d103602668459f337c569eadc0eff204200c331eb9
+    schemaVersion: 1
+  - label: checklist
+    path: work/26-canonical-quint-protocol/checklist.md
+    digest: d13462ebf523dde9e5aed0a7f2f9c451b5967e226bed89798f30575a1389f255
+    schemaVersion: 1
+  - label: clarifications
+    path: work/26-canonical-quint-protocol/clarifications.md
+    digest: 204154fd7b95c310b6f26cd2aa640ccaeecc7af9af9e8e82b636261f20876b99
+    schemaVersion: 1
+  - label: plan
+    path: work/26-canonical-quint-protocol/plan.md
+    digest: 6a68d7409ddbb43fe55983df64e9752cb1036b1f22bff1e40b3f6f3b9b18ac34
+    schemaVersion: 1
+  - label: spec
+    path: work/26-canonical-quint-protocol/spec.md
+    digest: bfb402e7528b7cee6437b52092b987a003fe302da7c38344d9fa1a7a1f405273
+    schemaVersion: 1
+  - label: tasks
+    path: work/26-canonical-quint-protocol/tasks.yml
+    digest: 0cbf72f65b7f10af24356ef1a43e6d49fae8cba35791e7becd7beeacfc356fd1
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV013]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV014]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV015]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV016]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV017]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-006]
+    obligationRefs: [EV018]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003, PD-004]
+    obligationRefs: [EV019]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-007]
+    obligationRefs: [EV020]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-008]
+    obligationRefs: [EV021]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003, PD-004]
+    obligationRefs: [EV022]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006]
+    obligationRefs: [EV023]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV024]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV025]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-004]
+    obligationRefs: [EV026]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-008]
+    obligationRefs: [EV027]
+    artifacts: [artifacts/roadmap-work/GS2-02.1/gates.json, eng/validate-canonical-quint-protocol.fsx, src/FS.GG.Coordination.Protocol/Generated/contract.json, src/FS.GG.Coordination.Protocol/Protocol.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-1.trx
+      digest: "sha256:90f74435e7dc6ce6fb98542613c076183071b9bf1770915036fc29d10f83b8c0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate Q1 and pure Q2 gates passed; 141 architecture tests passed all mutation controls."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
