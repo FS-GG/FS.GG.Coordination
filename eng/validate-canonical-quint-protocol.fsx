@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "6a27deb32cbb096a273f5ac03f320667850d460a86fbfa6885fca44426dac14a"
+    "146f0f61ce01ddaac31b1ba06299dfcbf268edfa59599830bdc6ee0558c7089a"
 
 let expectedContract =
-    "581d45c6db8d302df5a2ea6413d4d2cf4107388617ef6f820c55bf4fbb4d4e1b"
+    "810b95a1df1b9bfc7ecdf469f1222e22234668c703d2ef4a05653b5ef8a3ed77"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -134,13 +134,13 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 80 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 101 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
     fail "RELATIONSHIPS" "wrong-cardinality"
 
-if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 12 then
+if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 14 then
     fail "ACTIONS" "wrong-cardinality"
 
 let trackedExit, trackedQnt, trackedError =
@@ -221,13 +221,13 @@ try
           "--root"
           scratch
           "--work"
-          "42-native-relation-algebra"
+          "46-protocol-streams"
           "--title"
-          "Implement native relation algebra"
+          "Implement protocol streams"
           "--agent"
-          "avocet-bdf8"
+          "swift-fee9"
           "--session"
-          "gs2-02-5-profile2"
+          "gs2-02-6-profile2"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -241,10 +241,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "42-native-relation-algebra" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "46-protocol-streams" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/42-native-relation-algebra")
+    let generatedRoot = Path.Combine(scratch, "readiness/46-protocol-streams")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -467,6 +467,48 @@ try
         environment
     |> ignore
 
+    requireGreen
+        "QUINT-PROTOCOL-STREAM-ORDERING-VERIFY"
+        scratch
+        quint
+        [ "verify"
+          qnt
+          "--main"
+          "CoordinationProtocol"
+          "--init"
+          "init"
+          "--step"
+          "step"
+          "--invariant"
+          "protocolEnvelopesAreValidAndOrdered"
+          "--max-steps"
+          "4"
+          "--verbosity"
+          "1" ]
+        environment
+    |> ignore
+
+    requireGreen
+        "QUINT-PROTOCOL-STREAM-RETENTION-VERIFY"
+        scratch
+        quint
+        [ "verify"
+          qnt
+          "--main"
+          "CoordinationProtocol"
+          "--init"
+          "init"
+          "--step"
+          "step"
+          "--invariant"
+          "durableProtocolCheckpointsArePreserved"
+          "--max-steps"
+          "4"
+          "--verbosity"
+          "1" ]
+        environment
+    |> ignore
+
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
     let originalQnt = File.ReadAllText qnt
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
@@ -507,8 +549,10 @@ try
         fail "NEGATIVE-CONTROL" ($"missing ITF; {redOutput}; {redError}")
 
     let lifecycleMutant = Path.Combine(scratch, "protocol-intent-follows-claim.qnt")
+
     let preservedIntent =
         "    humanIntentId' = humanIntentId,\n    authorizedHumanIntentId' = authorizedHumanIntentId,\n    lifecycleFacts' = facts,"
+
     let collapsedIntent =
         "    humanIntentId' = if (facts.claimPresent) \"INTENT-Ready\" else humanIntentId,\n    authorizedHumanIntentId' = authorizedHumanIntentId,\n    lifecycleFacts' = facts,"
 
@@ -516,7 +560,9 @@ try
         fail "LIFECYCLE-NEGATIVE-CONTROL" "intent-preservation fixture absent"
 
     File.WriteAllText(lifecycleMutant, originalQnt.Replace(preservedIntent, collapsedIntent))
-    let lifecycleCounterexample = Path.Combine(scratch, "counterexample-intent-follows-claim.itf.json")
+
+    let lifecycleCounterexample =
+        Path.Combine(scratch, "counterexample-intent-follows-claim.itf.json")
 
     let lifecycleRedExit, lifecycleRedOutput, lifecycleRedError =
         run
@@ -544,19 +590,23 @@ try
         fail "LIFECYCLE-NEGATIVE-CONTROL" "claim-to-intent collapse passed"
 
     if not (File.Exists lifecycleCounterexample) then
-        fail
-            "LIFECYCLE-NEGATIVE-CONTROL"
-            ($"missing ITF; {lifecycleRedOutput}; {lifecycleRedError}")
+        fail "LIFECYCLE-NEGATIVE-CONTROL" ($"missing ITF; {lifecycleRedOutput}; {lifecycleRedError}")
 
-    let replacementMutant = Path.Combine(scratch, "protocol-relation-whole-set-replacement.qnt")
-    let edgeLocalAdd = "    nativeRelationEdges' = nativeRelationEdges.union(Set(edge)),"
+    let replacementMutant =
+        Path.Combine(scratch, "protocol-relation-whole-set-replacement.qnt")
+
+    let edgeLocalAdd =
+        "    nativeRelationEdges' = nativeRelationEdges.union(Set(edge)),"
+
     let wholeSetReplacement = "    nativeRelationEdges' = Set(edge),"
 
     if not (originalQnt.Contains(edgeLocalAdd, StringComparison.Ordinal)) then
         fail "RELATION-NEGATIVE-CONTROL" "edge-local add fixture absent"
 
     File.WriteAllText(replacementMutant, originalQnt.Replace(edgeLocalAdd, wholeSetReplacement))
-    let replacementCounterexample = Path.Combine(scratch, "counterexample-relation-whole-set-replacement.itf.json")
+
+    let replacementCounterexample =
+        Path.Combine(scratch, "counterexample-relation-whole-set-replacement.itf.json")
 
     let replacementRedExit, replacementRedOutput, replacementRedError =
         run
@@ -590,8 +640,12 @@ try
 
     let selfEdgeMutant = Path.Combine(scratch, "protocol-relation-self-edge.qnt")
     let validRelationStep = "    addNativeRelation(parentChildEdge),"
-    let invalidRelationStep = "    addNativeRelation({ ...parentChildEdge, targetId: parentChildEdge.sourceId }),"
-    let relationGuard = "    nativeRelationEdgeIsValid(edge),\n    evidenceObserved' = evidenceObserved,"
+
+    let invalidRelationStep =
+        "    addNativeRelation({ ...parentChildEdge, targetId: parentChildEdge.sourceId }),"
+
+    let relationGuard =
+        "    nativeRelationEdgeIsValid(edge),\n    evidenceObserved' = evidenceObserved,"
 
     if not (originalQnt.Contains(validRelationStep, StringComparison.Ordinal)) then
         fail "RELATION-VALIDITY-NEGATIVE-CONTROL" "relation step fixture absent"
@@ -603,7 +657,9 @@ try
         originalQnt.Replace(relationGuard, "    evidenceObserved' = evidenceObserved,")
 
     File.WriteAllText(selfEdgeMutant, withoutRelationGuard.Replace(validRelationStep, invalidRelationStep))
-    let selfEdgeCounterexample = Path.Combine(scratch, "counterexample-relation-self-edge.itf.json")
+
+    let selfEdgeCounterexample =
+        Path.Combine(scratch, "counterexample-relation-self-edge.itf.json")
 
     let selfEdgeRedExit, selfEdgeRedOutput, selfEdgeRedError =
         run
@@ -631,9 +687,272 @@ try
         fail "RELATION-VALIDITY-NEGATIVE-CONTROL" "self edge passed"
 
     if not (File.Exists selfEdgeCounterexample) then
+        fail "RELATION-VALIDITY-NEGATIVE-CONTROL" ($"self edge missing ITF; {selfEdgeRedOutput}; {selfEdgeRedError}")
+
+    let orderingMutant = Path.Combine(scratch, "protocol-stream-ordering-gap.qnt")
+    let orderedAppendGuard = "      protocolAppendHasPredecessor(envelope, events),"
+    let gapStep = "    appendProtocolEnvelope(leaseEnvelope),"
+
+    let invalidGapStep =
+        "    appendProtocolEnvelope({ ...leaseEnvelope, sequence: 3 }),"
+
+    if not (originalQnt.Contains(orderedAppendGuard, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-ORDERING-NEGATIVE-CONTROL" "append ordering guard absent"
+
+    if not (originalQnt.Contains(gapStep, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-ORDERING-NEGATIVE-CONTROL" "gap step fixture absent"
+
+    File.WriteAllText(
+        orderingMutant,
+        originalQnt.Replace(orderedAppendGuard, "      true,").Replace(gapStep, invalidGapStep)
+    )
+
+    let orderingCounterexample =
+        Path.Combine(scratch, "counterexample-protocol-stream-ordering-gap.itf.json")
+
+    let orderingRedExit, orderingRedOutput, orderingRedError =
+        run
+            scratch
+            quint
+            [ "verify"
+              orderingMutant
+              "--main"
+              "CoordinationProtocol"
+              "--init"
+              "init"
+              "--step"
+              "step"
+              "--invariant"
+              "protocolEnvelopesAreValidAndOrdered"
+              "--max-steps"
+              "2"
+              "--out-itf"
+              orderingCounterexample
+              "--verbosity"
+              "1" ]
+            environment
+
+    if orderingRedExit = 0 then
+        fail "PROTOCOL-STREAM-ORDERING-NEGATIVE-CONTROL" "ordering gap passed"
+
+    if not (File.Exists orderingCounterexample) then
         fail
-            "RELATION-VALIDITY-NEGATIVE-CONTROL"
-            ($"self edge missing ITF; {selfEdgeRedOutput}; {selfEdgeRedError}")
+            "PROTOCOL-STREAM-ORDERING-NEGATIVE-CONTROL"
+            ($"ordering gap missing ITF; {orderingRedOutput}; {orderingRedError}")
+
+    let retentionMutant = Path.Combine(scratch, "protocol-stream-retention-relabel.qnt")
+
+    let appendAdmissionGuard =
+        "    protocolAppendIsValid(envelope, protocolStreamEvents),"
+
+    let validClaimRetention =
+        "    payloadKindId: \"PAYLOAD-Claim\", retentionClass: \"ephemeral\", durableCheckpoint: false,"
+
+    let relabeledClaimRetention =
+        "    payloadKindId: \"PAYLOAD-Claim\", retentionClass: \"durable\", durableCheckpoint: true,"
+
+    if not (originalQnt.Contains(appendAdmissionGuard, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-RETENTION-NEGATIVE-CONTROL" "append admission guard absent"
+
+    if not (originalQnt.Contains(validClaimRetention, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-RETENTION-NEGATIVE-CONTROL" "claim retention fixture absent"
+
+    File.WriteAllText(
+        retentionMutant,
+        originalQnt.Replace(appendAdmissionGuard, "    true,").Replace(validClaimRetention, relabeledClaimRetention)
+    )
+
+    let retentionCounterexample =
+        Path.Combine(scratch, "counterexample-protocol-stream-retention-relabel.itf.json")
+
+    let retentionRedExit, retentionRedOutput, retentionRedError =
+        run
+            scratch
+            quint
+            [ "verify"
+              retentionMutant
+              "--main"
+              "CoordinationProtocol"
+              "--init"
+              "init"
+              "--step"
+              "step"
+              "--invariant"
+              "protocolEnvelopesAreValidAndOrdered"
+              "--max-steps"
+              "1"
+              "--out-itf"
+              retentionCounterexample
+              "--verbosity"
+              "1" ]
+            environment
+
+    if retentionRedExit = 0 then
+        fail "PROTOCOL-STREAM-RETENTION-NEGATIVE-CONTROL" "retention relabel passed"
+
+    if not (File.Exists retentionCounterexample) then
+        fail
+            "PROTOCOL-STREAM-RETENTION-NEGATIVE-CONTROL"
+            ($"retention relabel missing ITF; {retentionRedOutput}; {retentionRedError}")
+
+    let checkpointMutant =
+        Path.Combine(scratch, "protocol-stream-durable-compaction.qnt")
+
+    let compactionGuard =
+        "    ephemeralEnvelopeMayBeCompacted(envelope, protocolStreamEvents),"
+
+    let compactEphemeralStep =
+        "    compactEphemeralProtocolEnvelope(operationLockEnvelope),"
+
+    let compactDurableStep =
+        "    compactEphemeralProtocolEnvelope(reviewCheckpointEnvelope),"
+
+    if not (originalQnt.Contains(compactionGuard, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-CHECKPOINT-NEGATIVE-CONTROL" "compaction guard absent"
+
+    File.WriteAllText(
+        checkpointMutant,
+        originalQnt.Replace(compactionGuard, "    true,").Replace(compactEphemeralStep, compactDurableStep)
+    )
+
+    let checkpointCounterexample =
+        Path.Combine(scratch, "counterexample-protocol-stream-durable-compaction.itf.json")
+
+    let checkpointRedExit, checkpointRedOutput, checkpointRedError =
+        run
+            scratch
+            quint
+            [ "verify"
+              checkpointMutant
+              "--main"
+              "CoordinationProtocol"
+              "--init"
+              "init"
+              "--step"
+              "step"
+              "--invariant"
+              "durableProtocolCheckpointsArePreserved"
+              "--max-steps"
+              "2"
+              "--out-itf"
+              checkpointCounterexample
+              "--verbosity"
+              "1" ]
+            environment
+
+    if checkpointRedExit = 0 then
+        fail "PROTOCOL-STREAM-CHECKPOINT-NEGATIVE-CONTROL" "durable checkpoint compaction passed"
+
+    if not (File.Exists checkpointCounterexample) then
+        fail
+            "PROTOCOL-STREAM-CHECKPOINT-NEGATIVE-CONTROL"
+            ($"durable checkpoint compaction missing ITF; {checkpointRedOutput}; {checkpointRedError}")
+
+    let unrelatedCheckpointMutant =
+        Path.Combine(scratch, "protocol-stream-unrelated-checkpoint.qnt")
+
+    let streamBoundCompaction =
+        "      checkpoint.streamKindId == envelope.streamKindId,\n"
+        + "      checkpoint.streamId == envelope.streamId,\n"
+        + "      checkpoint.subjectId == envelope.subjectId,\n"
+        + "      checkpoint.generation == envelope.generation,\n"
+        + "      checkpoint.sequence > envelope.sequence,\n"
+        + "      checkpoint.durableCheckpoint,\n"
+        + "      checkpoint.retentionClass == \"durable\","
+
+    let subjectOnlyCompaction =
+        "      checkpoint.subjectId == envelope.subjectId,\n"
+        + "      checkpoint.durableCheckpoint,\n"
+        + "      checkpoint.retentionClass == \"durable\","
+
+    if not (originalQnt.Contains(streamBoundCompaction, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-CAUSAL-COMPACTION-NEGATIVE-CONTROL" "stream-bound compaction fixture absent"
+
+    File.WriteAllText(
+        unrelatedCheckpointMutant,
+        originalQnt.Replace(streamBoundCompaction, subjectOnlyCompaction)
+    )
+
+    let unrelatedRedExit, unrelatedRedOutput, unrelatedRedError =
+        run
+            scratch
+            quint
+            [ "test"
+              unrelatedCheckpointMutant
+              "--main"
+              "CoordinationProtocolTests"
+              "--backend"
+              "rust"
+              "--match"
+              "^testUnrelatedCheckpointCannotCompactEphemeralHistory$"
+              "--verbosity"
+              "0" ]
+            []
+
+    if unrelatedRedExit = 0 then
+        fail "PROTOCOL-STREAM-CAUSAL-COMPACTION-NEGATIVE-CONTROL" "unrelated checkpoint authorized compaction"
+
+    if
+        not (
+            (unrelatedRedOutput + "\n" + unrelatedRedError)
+                .Contains("failed", StringComparison.OrdinalIgnoreCase)
+        )
+    then
+        fail
+            "PROTOCOL-STREAM-CAUSAL-COMPACTION-NEGATIVE-CONTROL"
+            ($"unrelated checkpoint mutant did not produce a failed test; {unrelatedRedOutput}; {unrelatedRedError}")
+
+    let unrelatedPredecessorMutant =
+        Path.Combine(scratch, "protocol-stream-unrelated-predecessor.qnt")
+
+    let streamBoundPredecessor =
+        "        checkpoint.streamKindId == envelope.streamKindId,\n"
+        + "        checkpoint.streamId == envelope.streamId,\n"
+        + "        checkpoint.subjectId == envelope.subjectId,\n"
+        + "        checkpoint.generation == envelope.generation,\n"
+        + "        checkpoint.sequence > envelope.sequence,\n"
+        + "        checkpoint.durableCheckpoint,"
+
+    let subjectOnlyPredecessor =
+        "        checkpoint.subjectId == envelope.subjectId,\n"
+        + "        checkpoint.durableCheckpoint,"
+
+    if not (originalQnt.Contains(streamBoundPredecessor, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-RETAINED-ORDERING-NEGATIVE-CONTROL" "stream-bound predecessor fixture absent"
+
+    File.WriteAllText(
+        unrelatedPredecessorMutant,
+        originalQnt.Replace(streamBoundPredecessor, subjectOnlyPredecessor)
+    )
+
+    let predecessorRedExit, predecessorRedOutput, predecessorRedError =
+        run
+            scratch
+            quint
+            [ "test"
+              unrelatedPredecessorMutant
+              "--main"
+              "CoordinationProtocolTests"
+              "--backend"
+              "rust"
+              "--match"
+              "^testUnrelatedCheckpointCannotExcuseMissingPredecessor$"
+              "--verbosity"
+              "0" ]
+            []
+
+    if predecessorRedExit = 0 then
+        fail "PROTOCOL-STREAM-RETAINED-ORDERING-NEGATIVE-CONTROL" "unrelated checkpoint excused a missing predecessor"
+
+    if
+        not (
+            (predecessorRedOutput + "\n" + predecessorRedError)
+                .Contains("failed", StringComparison.OrdinalIgnoreCase)
+        )
+    then
+        fail
+            "PROTOCOL-STREAM-RETAINED-ORDERING-NEGATIVE-CONTROL"
+            ($"unrelated predecessor mutant did not produce a failed test; {predecessorRedOutput}; {predecessorRedError}")
 
     let requireAuthorityRed name (observationMutation: string -> string) (sourceMutation: string -> string) =
         let mutated = Path.Combine(scratch, $"protocol-%s{name}.qnt")

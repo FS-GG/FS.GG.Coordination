@@ -9,8 +9,8 @@ the Coordination Project remains a visibility projection.
 
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
-path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.4,
-and the active GS2-02.5 frontier with stable IDs, owner,
+path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.5,
+and the active GS2-02.6 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -90,6 +90,18 @@ relation kind and endpoint direction remain distinct, and self edges fail closed
 observation failures retain the GS2-02.3 outcome algebra and cannot become proven absence;
 lifecycle intent remains independent. The unit stops before protocol streams and generalized
 mutation envelopes and grants no network or production write authority.
+
+GS2-02.6 reuses those exact command identities and adds closed stream and payload
+catalogues for claim/lease/touch-set, operation-lock/election, review, delivery, and
+operation receipts. Every envelope binds stable stream, subject, generation, sequence,
+event, predecessor, payload, retention, and checkpoint identities. Append is idempotent
+only for byte-equivalent envelope facts; conflicting event reuse, sequence gaps,
+cross-stream payload substitution, generation regression, and retention relabeling fail
+closed. Claim/lease/touch-set and operation-lock liveness are ephemeral; elections,
+accepted reviews, delivery completions, and operation receipts are durable checkpoints.
+Compaction may remove only ephemeral material whose decision is durably checkpointed,
+and observation failures never become absence. The unit stops before generalized
+mutation algebra and grants no network or production write authority.
 
 ## Command sequence
 
