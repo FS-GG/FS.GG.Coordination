@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "518d06eab8960fc0da9dd15fa26687ad6a24f1ca52446fa73d52df3164d63dc3"
+    "217940b4727be4403cea05877e29553e751e2d354684e8020343931f13ff5c1a"
 
 let expectedContract =
-    "499468a6ec597dda5823740864740c277804566f0bd5606d5b0e33701738fdf6"
+    "1b050d8d9b8b9fa65fd9fbcae2f8b5ed4141260704c7e419c1396b42c933f103"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -134,13 +134,13 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 61 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 71 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
     fail "RELATIONSHIPS" "wrong-cardinality"
 
-if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 7 then
+if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 10 then
     fail "ACTIONS" "wrong-cardinality"
 
 let trackedExit, trackedQnt, trackedError =
@@ -221,13 +221,13 @@ try
           "--root"
           scratch
           "--work"
-          "34-observation-outcomes"
+          "38-lifecycle-intent"
           "--title"
-          "Implement observation outcomes"
+          "Implement lifecycle intent"
           "--agent"
           "swift-0d50"
           "--session"
-          "gs2-02-3-profile2"
+          "gs2-02-4-profile2"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -241,10 +241,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "34-observation-outcomes" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "38-lifecycle-intent" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/34-observation-outcomes")
+    let generatedRoot = Path.Combine(scratch, "readiness/38-lifecycle-intent")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -383,6 +383,48 @@ try
         environment
     |> ignore
 
+    requireGreen
+        "QUINT-LIFECYCLE-VERIFY"
+        scratch
+        quint
+        [ "verify"
+          qnt
+          "--main"
+          "CoordinationProtocol"
+          "--init"
+          "init"
+          "--step"
+          "step"
+          "--invariant"
+          "humanIntentIsObservationIndependent"
+          "--max-steps"
+          "4"
+          "--verbosity"
+          "1" ]
+        environment
+    |> ignore
+
+    requireGreen
+        "QUINT-LIFECYCLE-DERIVATION-VERIFY"
+        scratch
+        quint
+        [ "verify"
+          qnt
+          "--main"
+          "CoordinationProtocol"
+          "--init"
+          "init"
+          "--step"
+          "step"
+          "--invariant"
+          "lifecycleStatusIsDerived"
+          "--max-steps"
+          "4"
+          "--verbosity"
+          "1" ]
+        environment
+    |> ignore
+
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
     let originalQnt = File.ReadAllText qnt
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
@@ -421,6 +463,48 @@ try
 
     if not (File.Exists counterexample) then
         fail "NEGATIVE-CONTROL" ($"missing ITF; {redOutput}; {redError}")
+
+    let lifecycleMutant = Path.Combine(scratch, "protocol-intent-follows-claim.qnt")
+    let preservedIntent =
+        "    humanIntentId' = humanIntentId,\n    authorizedHumanIntentId' = authorizedHumanIntentId,\n    lifecycleFacts' = facts,"
+    let collapsedIntent =
+        "    humanIntentId' = if (facts.claimPresent) \"INTENT-Ready\" else humanIntentId,\n    authorizedHumanIntentId' = authorizedHumanIntentId,\n    lifecycleFacts' = facts,"
+
+    if not (originalQnt.Contains(preservedIntent, StringComparison.Ordinal)) then
+        fail "LIFECYCLE-NEGATIVE-CONTROL" "intent-preservation fixture absent"
+
+    File.WriteAllText(lifecycleMutant, originalQnt.Replace(preservedIntent, collapsedIntent))
+    let lifecycleCounterexample = Path.Combine(scratch, "counterexample-intent-follows-claim.itf.json")
+
+    let lifecycleRedExit, lifecycleRedOutput, lifecycleRedError =
+        run
+            scratch
+            quint
+            [ "verify"
+              lifecycleMutant
+              "--main"
+              "CoordinationProtocol"
+              "--init"
+              "init"
+              "--step"
+              "step"
+              "--invariant"
+              "humanIntentIsObservationIndependent"
+              "--max-steps"
+              "1"
+              "--out-itf"
+              lifecycleCounterexample
+              "--verbosity"
+              "1" ]
+            environment
+
+    if lifecycleRedExit = 0 then
+        fail "LIFECYCLE-NEGATIVE-CONTROL" "claim-to-intent collapse passed"
+
+    if not (File.Exists lifecycleCounterexample) then
+        fail
+            "LIFECYCLE-NEGATIVE-CONTROL"
+            ($"missing ITF; {lifecycleRedOutput}; {lifecycleRedError}")
 
     let requireAuthorityRed name (observationMutation: string -> string) (sourceMutation: string -> string) =
         let mutated = Path.Combine(scratch, $"protocol-%s{name}.qnt")

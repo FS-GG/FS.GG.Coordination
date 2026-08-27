@@ -15,7 +15,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "499468a6ec597dda5823740864740c277804566f0bd5606d5b0e33701738fdf6",
+        "1b050d8d9b8b9fa65fd9fbcae2f8b5ed4141260704c7e419c1396b42c933f103",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -25,6 +25,8 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("OBS-Observed", CoordinationProtocolGenerated.Ids.ObsObserved)
     Assert.Equal("OBS-ProvenAbsent", CoordinationProtocolGenerated.Ids.ObsProvenAbsent)
     Assert.Equal("OBS-RateLimited", CoordinationProtocolGenerated.Ids.ObsRateLimited)
+    Assert.Equal("INTENT-Backlog", CoordinationProtocolGenerated.Ids.IntentBacklog)
+    Assert.Equal("INTENT-Cancelled", CoordinationProtocolGenerated.Ids.IntentCancelled)
 
     Assert.Equal(
         7,
@@ -40,7 +42,17 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         |> List.length
     )
 
+    Assert.Equal(
+        4,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "lifecycleIntent")
+        |> List.length
+    )
+
     Assert.Contains("ACT-AcceptObservationKnowledge", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("ACT-SetHumanIntent", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("ACT-ObserveLifecycleFacts", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("ACT-RefreshLifecycleStatus", CoordinationProtocolGenerated.CanonicalContractJson)
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =

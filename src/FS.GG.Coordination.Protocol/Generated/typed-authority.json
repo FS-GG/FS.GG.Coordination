@@ -8,57 +8,57 @@
   "artifacts": [
     {
       "id": "bindings",
-      "path": "readiness/34-observation-outcomes/quint/bindings.fs",
-      "sha256": "46e71a49fe0ef161fe55ebcbc2ba8230b9e95ba7a0aca91a574c9d288a54f0a0"
+      "path": "readiness/38-lifecycle-intent/quint/bindings.fs",
+      "sha256": "89cd8219d447e6fda7f35c2dd45cad62ab722d9175f6edc4e60897db45f06dc4"
     },
     {
       "id": "compilation-receipt",
-      "path": "readiness/34-observation-outcomes/quint/receipt.json",
-      "sha256": "12ce30c0955b2af6ecfef62ee36587b2f3f2a9d373c48360c4548b5f97747423"
+      "path": "readiness/38-lifecycle-intent/quint/receipt.json",
+      "sha256": "98abd7605b13ad6d970be6af9901f83079fd6002ad885b1b3617417cb4e47687"
     },
     {
       "id": "compiled-contract",
-      "path": "readiness/34-observation-outcomes/quint/contract.json",
-      "sha256": "499468a6ec597dda5823740864740c277804566f0bd5606d5b0e33701738fdf6"
+      "path": "readiness/38-lifecycle-intent/quint/contract.json",
+      "sha256": "1b050d8d9b8b9fa65fd9fbcae2f8b5ed4141260704c7e419c1396b42c933f103"
     },
     {
       "id": "fence-manifest",
-      "path": "readiness/34-observation-outcomes/quint/fences.json",
-      "sha256": "c0d0483bb2220185ea65eed30cde35c505705f2e135d8455eeefa631d69f8b33"
+      "path": "readiness/38-lifecycle-intent/quint/fences.json",
+      "sha256": "97ee6d5a257e20ce3eb1f55692cfb5630abe6b8a416fca6b5a72602e8f45a2bf"
     },
     {
       "id": "generated-modules",
-      "path": "readiness/34-observation-outcomes/quint/protocol.qnt",
-      "sha256": "9e27555d26cd9145174a2fe7d1df0f54a742e650cc090719e4846525bdc30018"
+      "path": "readiness/38-lifecycle-intent/quint/protocol.qnt",
+      "sha256": "c7f52a78b1e19838494072d3220ea24a2b26b7eed1e2954665e684bf618b11ee"
     },
     {
       "id": "markdown",
       "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-      "sha256": "518d06eab8960fc0da9dd15fa26687ad6a24f1ca52446fa73d52df3164d63dc3"
+      "sha256": "217940b4727be4403cea05877e29553e751e2d354684e8020343931f13ff5c1a"
     },
     {
       "id": "profile-bindings",
-      "path": "readiness/34-observation-outcomes/quint/profile-bindings.json",
-      "sha256": "c0ec9f1e6832ba13f6b32f872dcd8c4751e2bd36d3cf4b3a911fc603c0db2411"
+      "path": "readiness/38-lifecycle-intent/quint/profile-bindings.json",
+      "sha256": "37724b81ace5ebce27a844813b3a17a6947ab578f7d07a7f284dab1d1a58f001"
     },
     {
       "id": "sandbox-contract",
-      "path": "readiness/34-observation-outcomes/quint/sandbox-contract.json",
+      "path": "readiness/38-lifecycle-intent/quint/sandbox-contract.json",
       "sha256": "2bf8ff26ddb488444c59daa77515b183008c352213e48ac6e36e15e0bc08c122"
     },
     {
       "id": "source-map",
-      "path": "readiness/34-observation-outcomes/quint/source-map.json",
-      "sha256": "29158282b35495cfaaaed3bc3a12c40a8099754bae9cfb710238f3de2763a7e3"
+      "path": "readiness/38-lifecycle-intent/quint/source-map.json",
+      "sha256": "4f30d92965dd602857618b538f6358606ff22d1fbd3a0d724ab79daa0bc33d22"
     },
     {
       "id": "typed-effect",
-      "path": "readiness/34-observation-outcomes/quint/typed-effect.json",
-      "sha256": "e953aa6d936ddb76754017a4f0f4262052cf448a61181613b152bb13983e2066"
+      "path": "readiness/38-lifecycle-intent/quint/typed-effect.json",
+      "sha256": "a9d3d038f2898811ad3d936ec76fdd8444dfd30cb16a9ecd24ab674bc9af7cf4"
     }
   ],
   "authoringAgent": "swift-0d50",
-  "authoringSession": "gs2-02-3-profile2",
+  "authoringSession": "gs2-02-4-profile2",
   "rollbackManifestPath": null,
   "rollbackManifestSha256": null
 }
