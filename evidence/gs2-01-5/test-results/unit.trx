@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="54a4329c-8527-49b9-96e3-3d32e6a683c5" name="@6970fbbe8936 2026-08-27 02:05:40" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-27T02:05:40.0368534+02:00" queuing="2026-08-27T02:05:40.0368534+02:00" start="2026-08-27T02:05:39.7006914+02:00" finish="2026-08-27T02:05:40.0400488+02:00" />
+  <TestSettings name="default" id="02c928f7-1c67-47c6-aedb-f287ad569cb0">
+    <Deployment runDeploymentRoot="_6970fbbe8936_2026-08-27_02_05_40" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="bf4ae9fd-02a4-44df-be5b-4ef120d64ea3" testId="25ab73f2-c36a-624e-368c-e3eb6ac9fcf4" testName="FS.GG.Coordination.UnitTests.published Quint kernel manifest has the accepted identity and bundle digest" computerName="6970fbbe8936" duration="00:00:00.0058949" startTime="2026-08-27T02:05:39.9699794+02:00" endTime="2026-08-27T02:05:39.9786441+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bf4ae9fd-02a4-44df-be5b-4ef120d64ea3" />
+    <UnitTestResult executionId="13c853c1-ced0-4f99-a7bf-9ad45d1622cd" testId="2747ae7f-aa47-9fb1-a156-779aabc305e5" testName="FS.GG.Coordination.UnitTests.app boundary is inert" computerName="6970fbbe8936" duration="00:00:00.0002331" startTime="2026-08-27T02:05:39.9843378+02:00" endTime="2026-08-27T02:05:39.9843474+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="13c853c1-ced0-4f99-a7bf-9ad45d1622cd" />
+    <UnitTestResult executionId="30a4f256-f002-47a9-b9c3-65193df2c97c" testId="af634480-f99a-44a3-5b8d-9cf3e90e0b48" testName="FS.GG.Coordination.UnitTests.altered published Quint kernel manifest is refused by digest and identity" computerName="6970fbbe8936" duration="00:00:00.0049515" startTime="2026-08-27T02:05:39.9839509+02:00" endTime="2026-08-27T02:05:39.9839713+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="30a4f256-f002-47a9-b9c3-65193df2c97c" />
+    <UnitTestResult executionId="48ec8c88-0c0c-4336-8f47-266757f42a99" testId="4c695d88-2485-dbd5-4d1d-815a2487fa74" testName="FS.GG.Coordination.UnitTests.pure core declares only allowed inward dependencies" computerName="6970fbbe8936" duration="00:00:00.0012646" startTime="2026-08-27T02:05:39.9857246+02:00" endTime="2026-08-27T02:05:39.9868917+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="48ec8c88-0c0c-4336-8f47-266757f42a99" />
+    <UnitTestResult executionId="ea4b6ade-5e4d-464b-9304-fde0e10a0eeb" testId="61bed709-d51c-4546-1e19-d28244e22284" testName="FS.GG.Coordination.UnitTests.malformed published Quint kernel manifest is refused" computerName="6970fbbe8936" duration="00:00:00.0005576" startTime="2026-08-27T02:05:39.9842402+02:00" endTime="2026-08-27T02:05:39.9842500+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ea4b6ade-5e4d-464b-9304-fde0e10a0eeb" />
+    <UnitTestResult executionId="ee0b8d37-8f8f-49a0-9aa2-2f8164cd29d8" testId="d7872e2d-f53e-d344-3042-f7681a4789db" testName="FS.GG.Coordination.UnitTests.qualification contracts carry a typed result" computerName="6970fbbe8936" duration="00:00:00.0000225" startTime="2026-08-27T02:05:39.9856528+02:00" endTime="2026-08-27T02:05:39.9856710+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ee0b8d37-8f8f-49a0-9aa2-2f8164cd29d8" />
+    <UnitTestResult executionId="e856bc79-7550-4c5f-9099-9c6547ebb508" testId="d3cd4303-01d6-7feb-d596-2e241121b5d7" testName="FS.GG.Coordination.UnitTests.protocol boundary has a stable initial identity" computerName="6970fbbe8936" duration="00:00:00.0012270" startTime="2026-08-27T02:05:39.9844095+02:00" endTime="2026-08-27T02:05:39.9855802+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e856bc79-7550-4c5f-9099-9c6547ebb508" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.UnitTests.published Quint kernel manifest has the accepted identity and bundle digest" storage="/tmp/fsgg-coordination-gs2015/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="25ab73f2-c36a-624e-368c-e3eb6ac9fcf4">
+      <Execution id="bf4ae9fd-02a4-44df-be5b-4ef120d64ea3" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2015/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="published Quint kernel manifest has the accepted identity and bundle digest" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.malformed published Quint kernel manifest is refused" storage="/tmp/fsgg-coordination-gs2015/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="61bed709-d51c-4546-1e19-d28244e22284">
+      <Execution id="ea4b6ade-5e4d-464b-9304-fde0e10a0eeb" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2015/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="malformed published Quint kernel manifest is refused" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.protocol boundary has a stable initial identity" storage="/tmp/fsgg-coordination-gs2015/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="d3cd4303-01d6-7feb-d596-2e241121b5d7">
+      <Execution id="e856bc79-7550-4c5f-9099-9c6547ebb508" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2015/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="protocol boundary has a stable initial identity" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.altered published Quint kernel manifest is refused by digest and identity" storage="/tmp/fsgg-coordination-gs2015/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="af634480-f99a-44a3-5b8d-9cf3e90e0b48">
+      <Execution id="30a4f256-f002-47a9-b9c3-65193df2c97c" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2015/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="altered published Quint kernel manifest is refused by digest and identity" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.app boundary is inert" storage="/tmp/fsgg-coordination-gs2015/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="2747ae7f-aa47-9fb1-a156-779aabc305e5">
+      <Execution id="13c853c1-ced0-4f99-a7bf-9ad45d1622cd" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2015/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="app boundary is inert" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.pure core declares only allowed inward dependencies" storage="/tmp/fsgg-coordination-gs2015/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="4c695d88-2485-dbd5-4d1d-815a2487fa74">
+      <Execution id="48ec8c88-0c0c-4336-8f47-266757f42a99" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2015/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="pure core declares only allowed inward dependencies" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.UnitTests.qualification contracts carry a typed result" storage="/tmp/fsgg-coordination-gs2015/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="d7872e2d-f53e-d344-3042-f7681a4789db">
+      <Execution id="ee0b8d37-8f8f-49a0-9aa2-2f8164cd29d8" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-gs2015/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.UnitTests" name="qualification contracts carry a typed result" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="25ab73f2-c36a-624e-368c-e3eb6ac9fcf4" executionId="bf4ae9fd-02a4-44df-be5b-4ef120d64ea3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2747ae7f-aa47-9fb1-a156-779aabc305e5" executionId="13c853c1-ced0-4f99-a7bf-9ad45d1622cd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="af634480-f99a-44a3-5b8d-9cf3e90e0b48" executionId="30a4f256-f002-47a9-b9c3-65193df2c97c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4c695d88-2485-dbd5-4d1d-815a2487fa74" executionId="48ec8c88-0c0c-4336-8f47-266757f42a99" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="61bed709-d51c-4546-1e19-d28244e22284" executionId="ea4b6ade-5e4d-464b-9304-fde0e10a0eeb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d7872e2d-f53e-d344-3042-f7681a4789db" executionId="ee0b8d37-8f8f-49a0-9aa2-2f8164cd29d8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d3cd4303-01d6-7feb-d596-2e241121b5d7" executionId="e856bc79-7550-4c5f-9099-9c6547ebb508" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="7" executed="7" passed="7" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.04]   Discovering: FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.06]   Discovered:  FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.07]   Starting:    FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.10]   Finished:    FS.GG.Coordination.UnitTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

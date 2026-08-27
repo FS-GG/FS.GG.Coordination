@@ -1,0 +1,60 @@
+{
+  "schema": "fsgg.coordination.bootstrap-ci-contract/1",
+  "evidenceSchema": "fsgg.coordination.bootstrap-evidence/1",
+  "requiredProjectCount": 8,
+  "jobs": [
+    {
+      "id": "deterministic-build",
+      "artifact": "deterministic-build/protocol.dll",
+      "requiredRunFragments": [
+        "dotnet restore FS.GG.Coordination.sln --locked-mode",
+        "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror"
+      ]
+    },
+    {
+      "id": "compiler-and-tests",
+      "artifact": "compiler-and-tests/architecture.trx",
+      "requiredRunFragments": [
+        "dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj",
+        "dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
+      ]
+    },
+    {
+      "id": "dependency-and-security",
+      "artifact": "dependency-and-security/vulnerability-report.json",
+      "requiredRunFragments": [
+        "dotnet fsi eng/verify-dependencies.fsx -- --root .",
+        "dotnet list FS.GG.Coordination.sln package --vulnerable --include-transitive --format json --output-version 1 --source https://api.nuget.org/v3/index.json",
+        "dotnet fsi eng/bootstrap-ci.fsx -- vulnerability"
+      ]
+    },
+    {
+      "id": "package-install-smoke",
+      "artifact": "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg",
+      "requiredRunFragments": [
+        "bash eng/package-install-smoke.sh"
+      ]
+    },
+    {
+      "id": "evidence-manifest",
+      "artifact": "evidence-manifest/contract.json",
+      "requiredRunFragments": [
+        "needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke]",
+        "dotnet fsi eng/bootstrap-ci.fsx -- collect",
+        "dotnet fsi eng/bootstrap-ci.fsx -- evidence"
+      ]
+    }
+  ],
+  "forbiddenWorkflowTokens": [
+    "scripts/fsgg-coord",
+    "fsgg-coord-engine",
+    "workflow_dispatch",
+    "repository_dispatch",
+    "dotnet nuget push",
+    "gh release",
+    "id-token: write",
+    "contents: write",
+    "issues: write",
+    "pull-requests: write"
+  ]
+}

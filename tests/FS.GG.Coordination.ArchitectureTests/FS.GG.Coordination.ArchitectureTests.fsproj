@@ -3,6 +3,7 @@
   <ItemGroup>
     <Compile Include="../FS.GG.Coordination.UnitTests/Tests.fs" Link="BoundaryTests.fs" />
     <Compile Include="Tests.fs" />
+    <Compile Include="BootstrapCiTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
