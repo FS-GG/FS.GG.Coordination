@@ -8,6 +8,7 @@
     <Compile Include="RoadmapWorkArchitectureTests.fs" />
     <Compile Include="EvidenceStorageTests.fs" />
     <Compile Include="BootstrapRecoveryTests.fs" />
+    <Compile Include="RepositorySettingsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

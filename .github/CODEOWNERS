@@ -1,0 +1,9 @@
+* @FS-GG/coordination-maintainers
+/.github/ @FS-GG/coordination-maintainers
+/src/FS.GG.Coordination.Protocol/ @FS-GG/coordination-maintainers
+/src/FS.GG.Coordination.Qualification.Contracts/ @FS-GG/coordination-maintainers
+/eng/ @FS-GG/coordination-maintainers
+/evidence/ @FS-GG/coordination-maintainers
+/Directory.Build.props @FS-GG/coordination-maintainers
+/Directory.Packages.props @FS-GG/coordination-maintainers
+/global.json @FS-GG/coordination-maintainers
