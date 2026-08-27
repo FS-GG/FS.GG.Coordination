@@ -89,14 +89,22 @@ let validate (desiredPath: string) (receiptPath: string) =
           "deleteBranchOnMerge"; "hasIssues"; "hasProjects"; "hasWiki"; "id"; "nameWithOwner"; "nodeId"; "visibility" ]
         (desired.GetProperty("repository"))
     exactProperties "RS-DESIRED-SECURITY-SHAPE"
-        [ "dependabotSecurityUpdates"; "secretScanning"; "secretScanningNonProviderPatterns";
+        [ "dependabotAlerts"; "dependabotSecurityUpdates"; "dependencyGraph"; "secretScanning"; "secretScanningNonProviderPatterns";
           "secretScanningPushProtection"; "secretScanningValidityChecks" ] (desired.GetProperty("security"))
     for check in desired.GetProperty("checks").EnumerateArray() do
         exactProperties "RS-DESIRED-CHECK-SHAPE" [ "context"; "integrationId" ] check
     for ruleset in desired.GetProperty("rulesets").EnumerateArray() do
-        exactProperties "RS-DESIRED-RULESET-SHAPE"
-            [ "bypassActorCount"; "enforcement"; "include"; "name"; "requiredReviewCount"; "ruleTypes";
-              "strictChecks"; "target" ] ruleset
+        match ruleset.GetProperty("target").GetString() with
+        | "branch" ->
+            exactProperties "RS-DESIRED-RULESET-SHAPE"
+                [ "allowedMergeMethods"; "bypassActorCount"; "dismissStaleReviewsOnPush"; "doNotEnforceOnCreate";
+                  "enforcement"; "include"; "name"; "requireCodeOwnerReview"; "requireLastPushApproval";
+                  "requiredReviewCount"; "requiredReviewThreadResolution"; "ruleTypes"; "strictChecks"; "target" ] ruleset
+        | "tag" ->
+            exactProperties "RS-DESIRED-RULESET-SHAPE"
+                [ "bypassActorCount"; "enforcement"; "include"; "name"; "requiredReviewCount"; "ruleTypes";
+                  "strictChecks"; "target"; "updateAllowsFetchAndMerge" ] ruleset
+        | target -> fail "RS-DESIRED-RULESET-SHAPE" $"unsupported ruleset target {target}"
     for team in desired.GetProperty("teams").EnumerateArray() do
         exactProperties "RS-DESIRED-TEAM-SHAPE" [ "permission"; "slug" ] team
     for unsupported in desired.GetProperty("unsupported").EnumerateArray() do
@@ -115,11 +123,19 @@ let validate (desiredPath: string) (receiptPath: string) =
     for index in 0 .. desiredRules.Length - 1 do
         let wanted = desiredRules[index]
         let actual = receiptRules[index]
-        exactProperties "RS-RULESET-SHAPE"
-            [ "bypassActorCount"; "enforcement"; "id"; "include"; "name"; "requiredReviewCount"; "ruleTypes";
-              "strictChecks"; "target" ] actual
+        let semanticProperties =
+            match wanted.GetProperty("target").GetString() with
+            | "branch" ->
+                [ "allowedMergeMethods"; "bypassActorCount"; "dismissStaleReviewsOnPush"; "doNotEnforceOnCreate";
+                  "enforcement"; "include"; "name"; "requireCodeOwnerReview"; "requireLastPushApproval";
+                  "requiredReviewCount"; "requiredReviewThreadResolution"; "ruleTypes"; "strictChecks"; "target" ]
+            | "tag" ->
+                [ "bypassActorCount"; "enforcement"; "include"; "name"; "requiredReviewCount"; "ruleTypes";
+                  "strictChecks"; "target"; "updateAllowsFetchAndMerge" ]
+            | target -> fail "RS-RULESET-SHAPE" $"unsupported desired ruleset target {target}"
+        exactProperties "RS-RULESET-SHAPE" ("id" :: semanticProperties) actual
         if actual.GetProperty("id").GetInt64() <= 0L then fail "RS-RULESET-ID" "ruleset id must be positive"
-        for property in [ "bypassActorCount"; "enforcement"; "include"; "name"; "requiredReviewCount"; "ruleTypes"; "strictChecks"; "target" ] do
+        for property in semanticProperties do
             requireEqual "RS-RULESET-MISMATCH" property (wanted.GetProperty(property)) (actual.GetProperty(property))
 
     let desiredBytes = File.ReadAllBytes(desiredPath)
@@ -150,8 +166,16 @@ let validate (desiredPath: string) (receiptPath: string) =
         requireHash "RS-RESPONSE-DIGEST" "responseSha256" (operation.GetProperty("responseSha256").GetString())
 
     let requiredOps =
-        [ "repository"; "teams"; "actions-permissions"; "selected-actions"; "security"; "rulesets" ] |> Set.ofList
+        [ "repository"; "teams"; "actions-permissions"; "selected-actions"; "security"; "dependabot-alerts";
+          "dependency-graph"; "main-ruleset"; "release-tag-ruleset" ] |> Set.ofList
     if not (Set.isSubset requiredOps operationNames) then fail "RS-OPERATIONS" "authoritative response operation set is incomplete"
+    for ruleset in receiptRules do
+        let name = if ruleset.GetProperty("target").GetString() = "branch" then "main-ruleset" else "release-tag-ruleset"
+        let operation = operations |> Array.find (fun item -> item.GetProperty("name").GetString() = name)
+        let rulesetId = ruleset.GetProperty("id").GetInt64()
+        let expectedPath = $"/repos/FS-GG/FS.GG.Coordination/rulesets/{rulesetId}"
+        if operation.GetProperty("method").GetString() <> "GET" || operation.GetProperty("path").GetString() <> expectedPath then
+            fail "RS-RULESET-RESPONSE" $"{name} must bind the detailed ruleset response path {expectedPath}"
     if String.IsNullOrWhiteSpace(receipt.GetProperty("repair").GetString()) then fail "RS-REPAIR" "rollback or forward-repair guidance is required"
 
     let statedDigest = receipt.GetProperty("digest").GetString()

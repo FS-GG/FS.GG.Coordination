@@ -11,7 +11,7 @@ sourceAnalysis: readiness/20-complete-repository-provisioning/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/20-complete-repository-provisioning/analysis.json
-    digest: c4616ea99228b148a30507df3ae3233fb8f2e1022af02ede7309991cbf6fbc4e
+    digest: fdbf348ac3258a92075c4a39f4402bca471d09f4e24537a958cb1b4cdd06b247
     schemaVersion: 1
   - label: checklist
     path: work/20-complete-repository-provisioning/checklist.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/20-complete-repository-provisioning/plan.md
-    digest: 7b9b20dd0533a7715ad88470bfae6ca17f91be86d9883817a6d29df9230fea42
+    digest: d031628f87947120f6776817408796db4210815742fecc24c401d0150d180604
     schemaVersion: 1
   - label: spec
     path: work/20-complete-repository-provisioning/spec.md
-    digest: 622dc8f003e89a44e7e7681c38623b235554c41b650392285a0359796b83cea5
+    digest: e42b6316e671a4166f1524fede3f70cb87fd981ff9cc3aafbb6acea1ec3ef677
     schemaVersion: 1
   - label: tasks
     path: work/20-complete-repository-provisioning/tasks.yml
-    digest: 679c624a372a29b08da2446318ca936216a2a66dad43f393e2f8408dac442b02
+    digest: a190e7d6714230baec8773b244dbea859851fee4bfacc502ff2676760148e7cd
     schemaVersion: 1
 evidence:
   - id: EV001

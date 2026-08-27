@@ -60,12 +60,17 @@ let ``canonical provisioning fixture passes the strict validator`` () =
 [<InlineData("\"allowedActions\":\"selected\"", "\"allowedActions\":\"all\"", "RS-STATE-MISMATCH")>]
 [<InlineData("\"permission\":\"maintain\"", "\"permission\":\"admin\"", "RS-STATE-MISMATCH")>]
 [<InlineData("\"integrationId\":15368", "\"integrationId\":15369", "RS-STATE-MISMATCH")>]
+[<InlineData("\"dependencyGraph\":\"enabled\"", "\"dependencyGraph\":\"disabled\"", "RS-STATE-MISMATCH")>]
 [<InlineData("\"bypassActorCount\":0", "\"bypassActorCount\":1", "RS-RULESET-MISMATCH")>]
+[<InlineData("\"requireCodeOwnerReview\":true", "\"requireCodeOwnerReview\":false", "RS-RULESET-MISMATCH")>]
+[<InlineData("\"doNotEnforceOnCreate\":true", "\"doNotEnforceOnCreate\":false", "RS-RULESET-MISMATCH")>]
+[<InlineData("\"updateAllowsFetchAndMerge\":false", "\"updateAllowsFetchAndMerge\":true", "RS-RULESET-MISMATCH")>]
 [<InlineData(",\"update\"]", "]", "RS-RULESET-MISMATCH")>]
 [<InlineData("\"httpStatus\":403", "\"httpStatus\":200", "RS-STATE-MISMATCH")>]
 [<InlineData("\"id\":1,\"include\"", "\"id\":0,\"include\"", "RS-RULESET-ID")>]
 [<InlineData("\"name\":\"teams\"", "\"name\":\"teams-missing\"", "RS-OPERATIONS")>]
-[<InlineData("\"digest\":\"9", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
+[<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
+[<InlineData("\"digest\":\"4", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =
     withMutation oldValue newValue (fun path ->
         let exitCode, output = verify path
@@ -91,6 +96,7 @@ let ``ruleset requests bind review checks signatures and no bypass`` () =
     Assert.Contains("\"bypass_actors\":[]", tags)
     Assert.Contains("required_signatures", tags)
     Assert.Contains("\"type\":\"update\"", tags)
+    Assert.Contains("\"update_allows_fetch_and_merge\":false", tags)
 
 [<Fact>]
 let ``codeowners protects every provisioning authority surface`` () =
