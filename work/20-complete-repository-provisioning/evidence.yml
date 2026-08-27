@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 20-complete-repository-provisioning
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/20-complete-repository-provisioning/spec.md
 sourceClarifications: work/20-complete-repository-provisioning/clarifications.md
 sourceChecklist: work/20-complete-repository-provisioning/checklist.md
@@ -11,7 +11,7 @@ sourceAnalysis: readiness/20-complete-repository-provisioning/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/20-complete-repository-provisioning/analysis.json
-    digest: fdbf348ac3258a92075c4a39f4402bca471d09f4e24537a958cb1b4cdd06b247
+    digest: 7caa0946f59786a97f4dd4f408a39c4ed185483697847d1d40d780863bdd92e7
     schemaVersion: 1
   - label: checklist
     path: work/20-complete-repository-provisioning/checklist.md
@@ -23,19 +23,19 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/20-complete-repository-provisioning/plan.md
-    digest: d031628f87947120f6776817408796db4210815742fecc24c401d0150d180604
+    digest: 6b9dd87e94da49158b066fd452cb2b9967b4ea44954cf463db720398e3c3c444
     schemaVersion: 1
   - label: spec
     path: work/20-complete-repository-provisioning/spec.md
-    digest: e42b6316e671a4166f1524fede3f70cb87fd981ff9cc3aafbb6acea1ec3ef677
+    digest: 958301be1ae2769bc5b9fbb8aef03f8cfdcdbc25b12f8a7e9433e5220dbbe61d
     schemaVersion: 1
   - label: tasks
     path: work/20-complete-repository-provisioning/tasks.yml
-    digest: a190e7d6714230baec8773b244dbea859851fee4bfacc502ff2676760148e7cd
+    digest: 9ec7c6e2d3be5ad5ca5ef197822993d45f467c56d0bc739bc41f49323219ec0e
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T001
@@ -46,15 +46,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV002
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T002
@@ -65,15 +73,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV003
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T003
@@ -84,15 +100,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV004
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T004
@@ -103,15 +127,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV005
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T005
@@ -122,15 +154,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV006
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T006
@@ -141,15 +181,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV007
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T007
@@ -160,15 +208,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
     obligationRefs: [EV007]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV008
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T008
@@ -179,15 +235,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
     obligationRefs: [EV008]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV009
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T009
@@ -198,15 +262,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV009]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
   - id: EV010
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T010
@@ -217,12 +289,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV010]
-    artifacts: []
+    artifacts: [".github/CODEOWNERS", docs/architecture/repository-provisioning.md, eng/repository-settings/desired.json, eng/repository-settings/verify.fsx, evidence/github-substrate-v2/accepted/GS2-01.1.json, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings-prestate.json, evidence/github-substrate-v2/observations/GS2-01.1-repository-settings.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs, tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RepositorySettingsTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: artifacts/test-results/gs2-01-1.trx
+      digest: "sha256:37aeab697f5bcb5d2a4b1c39af264dfa0e3b7aeaa978c3edb84d9a1f471c4196"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 138
+      failed: 0
+      skipped: 0
+    notes: ["The merged protected-settings contract, exact pre/post receipts, immutable GS2-01.1 acceptance receipt, and their fail-closed architecture tests passed on the takeover candidate."]
 lifecycleNotes:
   - "Next lifecycle action: verify."
