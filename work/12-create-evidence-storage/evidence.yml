@@ -11,11 +11,11 @@ sourceAnalysis: readiness/12-create-evidence-storage/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/12-create-evidence-storage/analysis.json
-    digest: c1e341854823b15cb8c07986f65f71c76d831ae5e9a69a89e65b06a98bffb2cf
+    digest: 4e97b664941f5f5a433cbcdbe51e34a46c1544c7efe19c42a10b1e2722b4a4a4
     schemaVersion: 1
   - label: checklist
     path: work/12-create-evidence-storage/checklist.md
-    digest: 2bd75882e5d22deeb175b1c793e4479003093697608185008c9e48c789e7cd78
+    digest: 32d2a9d963d9295f68042a84a9ef16ea92aa1402382787cb5e0efbcbc02e7197
     schemaVersion: 1
   - label: clarifications
     path: work/12-create-evidence-storage/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/12-create-evidence-storage/plan.md
-    digest: c41c863015c0d2592bb34e3e12358dca856a255f694e84fe19528ac9d3925718
+    digest: d07508512b3be6e0facfd614dbc408b58a2020b0b1417d09c6d15d78ca281524
     schemaVersion: 1
   - label: spec
     path: work/12-create-evidence-storage/spec.md
-    digest: 38f118928bebbd3e5af71b8b667eac582e20bb6d123b7bc012e56df7a35e44b1
+    digest: 2bf5afa730df365635e913e95d64c3b09c4cdac45d2cfa47c54b0e4d37578c17
     schemaVersion: 1
   - label: tasks
     path: work/12-create-evidence-storage/tasks.yml
-    digest: c2a2d8ddbada00e7b7d72dd8ee8601877338b2d2951664bb72053ca20234d20b
+    digest: ef48fb96876aa1d321b2b4eadd9f6d1ee1f30016be737d5a21a9dd200ad317df
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV002
     kind: verification
     subject:
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV003
     kind: verification
     subject:
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV004
     kind: verification
     subject:
@@ -135,13 +135,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV005
     kind: verification
     subject:
@@ -162,13 +162,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV006
     kind: verification
     subject:
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV007
     kind: verification
     subject:
@@ -216,13 +216,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV008
     kind: verification
     subject:
@@ -243,13 +243,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV009
     kind: verification
     subject:
@@ -270,13 +270,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
   - id: EV010
     kind: verification
     subject:
@@ -297,12 +297,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-7.trx
-      digest: "sha256:90670e994fe8663ba4075d708b224e74a71c22f700c1fdf49aef81072c8f02c6"
+      digest: "sha256:def953775908bdcb1055a78425642e9090131aeaf4235be61d08fba108749c1d"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 81
       failed: 0
       skipped: 0
-    notes: ["The closed storage gate passed the repository contract and twelve isolated negative mutation cases; the locked build and all 97 tests passed."]
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

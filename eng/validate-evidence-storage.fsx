@@ -28,6 +28,7 @@ let stringProperty name value =
 
 let int64Property name value =
     let child = property name value
+    if child.ValueKind <> JsonValueKind.Number then fail "ES-JSON-TYPE" $"{name} must be an integer"
     match child.TryGetInt64() with
     | true, number -> number
     | _ -> fail "ES-JSON-TYPE" $"{name} must be an integer"
@@ -70,6 +71,54 @@ let ensureNoSymlink (root: string) (relative: string) =
 
 let validateSha (path: string) (value: string) =
     if isNull value || not (shaPattern.IsMatch value) then fail "ES-SHA256" $"{path} must be lowercase SHA-256"
+
+let nonEmpty path value =
+    if String.IsNullOrWhiteSpace value then fail "ES-RECORD-VALUE" $"{path} must not be empty"
+
+let validateTime path (value: string) =
+    let mutable parsed = DateTimeOffset.MinValue
+    if not (DateTimeOffset.TryParse(value, Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.RoundtripKind, &parsed)) then
+        fail "ES-RECORD-TIME" path
+
+let validateRecord categoryName relative (record: JsonElement) =
+    let require schema properties =
+        exactProperties relative properties record
+        if stringProperty "schema" record <> schema then fail "ES-RECORD-SCHEMA" relative
+        nonEmpty relative (stringProperty "id" record)
+        validateSha relative (stringProperty "sha256" record)
+    match categoryName with
+    | "corpus-inputs" ->
+        require "fsgg.coordination.corpus-input/1" [ "schema"; "id"; "input"; "sha256" ]
+        property "input" record |> ignore
+    | "external-observations" ->
+        require "fsgg.coordination.external-observation/1" [ "schema"; "id"; "source"; "observedAt"; "sha256" ]
+        nonEmpty relative (stringProperty "source" record)
+        validateTime relative (stringProperty "observedAt" record)
+    | "independent-oracles" ->
+        require "fsgg.coordination.independent-oracle/1" [ "schema"; "id"; "oracle"; "expected"; "sha256" ]
+        nonEmpty relative (stringProperty "oracle" record)
+        property "expected" record |> ignore
+    | "generated-cases" ->
+        require "fsgg.coordination.generated-case/1" [ "schema"; "id"; "generator"; "seed"; "sha256" ]
+        nonEmpty relative (stringProperty "generator" record)
+        nonEmpty relative (stringProperty "seed" record)
+    | "test-results" ->
+        require "fsgg.coordination.test-result/1" [ "schema"; "id"; "candidate"; "outcome"; "sha256" ]
+        let candidate = stringProperty "candidate" record
+        if candidate.Length <> 40 || candidate |> Seq.exists (Uri.IsHexDigit >> not) then fail "ES-RECORD-CANDIDATE" relative
+        let outcome = stringProperty "outcome" record
+        if outcome <> "passed" && outcome <> "failed" then fail "ES-RECORD-OUTCOME" relative
+    | "reviews" ->
+        exactProperties relative [ "schema"; "id"; "candidate"; "reviewer"; "decision"; "evidenceSha256" ] record
+        if stringProperty "schema" record <> "fsgg.coordination.review/1" then fail "ES-RECORD-SCHEMA" relative
+        nonEmpty relative (stringProperty "id" record)
+        nonEmpty relative (stringProperty "reviewer" record)
+        let candidate = stringProperty "candidate" record
+        if candidate.Length <> 40 || candidate |> Seq.exists (Uri.IsHexDigit >> not) then fail "ES-RECORD-CANDIDATE" relative
+        let decision = stringProperty "decision" record
+        if decision <> "accepted" && decision <> "changes-requested" then fail "ES-RECORD-DECISION" relative
+        validateSha relative (stringProperty "evidenceSha256" record)
+    | _ -> ()
 
 type Category = { Name: string; Path: string; Schema: string }
 
@@ -153,7 +202,16 @@ let validate evidenceRoot =
         if sha256 bytes <> digest then fail "ES-DIGEST-STALE" relative
         if categoryName = "accepted-receipts" then
             use receipt = readJson path
+            exactProperties
+                relative
+                [ "schema"; "unitId"; "state"; "unitContractSha256"; "sourceRevision"; "artifacts"; "acceptedAt"; "digest" ]
+                receipt.RootElement
             if stringProperty "schema" receipt.RootElement <> receiptSchema then fail "ES-RECEIPT-SCHEMA" relative
+            if stringProperty "state" receipt.RootElement <> "accepted" then fail "ES-RECEIPT-STATE" relative
+            validateSha relative (stringProperty "unitContractSha256" receipt.RootElement)
+            let sourceRevision = stringProperty "sourceRevision" receipt.RootElement
+            if sourceRevision.Length <> 40 || sourceRevision |> Seq.exists (Uri.IsHexDigit >> not) then fail "ES-RECEIPT-REVISION" relative
+            validateTime relative (stringProperty "acceptedAt" receipt.RootElement)
             validateSha relative (stringProperty "digest" receipt.RootElement)
 
         if categoryName = "artifact-manifests" then
@@ -161,20 +219,22 @@ let validate evidenceRoot =
             let manifest = manifestDocument.RootElement
             exactProperties
                 "artifact-manifest"
-                [ "schema"; "id"; "store"; "producer"; "artifact"; "bytes"; "mediaType"; "sha256" ]
+                [ "schema"; "id"; "store"; "repositoryId"; "producerId"; "artifactId"; "artifactName"; "bytes"; "mediaType"; "sha256" ]
                 manifest
             if stringProperty "schema" manifest <> "fsgg.coordination.artifact-manifest/1" then fail "ES-MANIFEST-SCHEMA" relative
             let store = stringProperty "store" manifest
-            let producer = stringProperty "producer" manifest
-            if store = "github-actions-artifact" && not (producer.StartsWith("github-actions-run:", StringComparison.Ordinal)) then
-                fail "ES-MANIFEST-LOCATOR" relative
-            elif store = "github-release-asset" && not (producer.StartsWith("github-release:", StringComparison.Ordinal)) then
-                fail "ES-MANIFEST-LOCATOR" relative
-            elif store <> "github-actions-artifact" && store <> "github-release-asset" then
+            if store <> "github-actions-artifact" && store <> "github-release-asset" then
                 fail "ES-MANIFEST-STORE" relative
-            if String.IsNullOrWhiteSpace(stringProperty "artifact" manifest) then fail "ES-MANIFEST-LOCATOR" relative
+            for name in [ "repositoryId"; "producerId"; "artifactId" ] do
+                if int64Property name manifest < 1L then fail "ES-MANIFEST-ID" $"{relative}/{name}"
+            if String.IsNullOrWhiteSpace(stringProperty "artifactName" manifest) then fail "ES-MANIFEST-LOCATOR" relative
             if int64Property "bytes" manifest < 0L then fail "ES-MANIFEST-LENGTH" relative
+            nonEmpty relative (stringProperty "mediaType" manifest)
             validateSha relative (stringProperty "sha256" manifest)
+
+        if categoryName <> "accepted-receipts" && categoryName <> "artifact-manifests" then
+            use recordDocument = readJson path
+            validateRecord categoryName relative recordDocument.RootElement
 
     let indexed = paths |> Seq.toList |> Set.ofList
     let discovered =
@@ -204,7 +264,33 @@ let mutateJson path mutation =
     mutation node
     File.WriteAllText(path, node.ToJsonString() + "\n", UTF8Encoding(false))
 
+let addTrackedJson (root: string) (id: string) (category: string) (path: string) (content: string) =
+    let payload = Path.Combine(root, path)
+    Directory.CreateDirectory(Path.GetDirectoryName payload) |> ignore
+    File.WriteAllText(payload, content + "\n", UTF8Encoding(false))
+    let bytes = File.ReadAllBytes payload
+    mutateJson (Path.Combine(root, "index.json")) (fun node ->
+        let entry = JsonObject()
+        entry.Add("id", id)
+        entry.Add("category", category)
+        entry.Add("storage", "git")
+        entry.Add("path", path)
+        entry.Add("mediaType", "application/json")
+        entry.Add("bytes", bytes.Length)
+        entry.Add("sha256", sha256 bytes)
+        node["entries"].AsArray().Add entry)
+
 let selfTest evidenceRoot =
+    let validManifest =
+        "{\"schema\":\"fsgg.coordination.artifact-manifest/1\",\"id\":\"artifact-1\",\"store\":\"github-actions-artifact\",\"repositoryId\":131313,\"producerId\":33038126581,\"artifactId\":98405834712,\"artifactName\":\"qualification-evidence\",\"bytes\":70000,\"mediaType\":\"application/zip\",\"sha256\":\"" + String('a', 64) + "\"}"
+    let positiveRoot = Path.Combine(Path.GetTempPath(), $"fsgg-evidence-{Guid.NewGuid():N}")
+    try
+        copyDirectory evidenceRoot positiveRoot
+        addTrackedJson positiveRoot "manifest-valid" "artifact-manifests" "artifact-manifests/manifest-valid.json" validManifest
+        validate positiveRoot |> ignore
+    finally
+        if Directory.Exists positiveRoot then Directory.Delete(positiveRoot, true)
+
     let cases: (string * (string -> unit) * string) list =
         [ "unsupported-version", (fun root -> mutateJson (Path.Combine(root, "index.json")) (fun node -> node["version"] <- 2)), "ES-INDEX-VERSION"
           "stale-digest", (fun root -> mutateJson (Path.Combine(root, "index.json")) (fun node ->
@@ -230,6 +316,11 @@ let selfTest evidenceRoot =
           "noncanonical", (fun root -> File.WriteAllText(Path.Combine(root, "index.json"), File.ReadAllText(Path.Combine(root, "index.json")).Replace("{\"schema\"", "{ \"schema\""))), "ES-JSON-CANONICAL"
           "missing-schema", (fun root -> File.Delete(Path.Combine(root, "schemas/v1/reviews.schema.json"))), "ES-SCHEMA-MISSING"
           "missing-category", (fun root -> Directory.Delete(Path.Combine(root, "reviews"), true)), "ES-CATEGORY-MISSING"
+          "malformed-category-record", (fun root ->
+              addTrackedJson root "review-malformed" "reviews" "reviews/malformed.json" "{}"), "ES-JSON-SHAPE"
+          "mutable-artifact-locator", (fun root ->
+              let mutableManifest = validManifest.Replace("\"producerId\":33038126581", "\"producerId\":\"latest\"")
+              addTrackedJson root "manifest-mutable" "artifact-manifests" "artifact-manifests/mutable.json" mutableManifest), "ES-JSON-TYPE"
           "stale-length", (fun root -> mutateJson (Path.Combine(root, "index.json")) (fun node ->
               let entry = node["entries"].AsArray()[0]
               entry["bytes"] <- 1)), "ES-LENGTH-STALE"
@@ -257,7 +348,7 @@ let selfTest evidenceRoot =
             with error when error.Message.StartsWith(expected + ":", StringComparison.Ordinal) -> ()
         finally
             if Directory.Exists temp then Directory.Delete(temp, true)
-    $"EVIDENCE_STORAGE_SELF_TEST_OK cases={cases.Length}"
+    $"EVIDENCE_STORAGE_SELF_TEST_OK negativeCases={cases.Length} positiveArtifactManifests=1"
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 try

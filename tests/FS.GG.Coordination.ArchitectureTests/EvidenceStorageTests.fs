@@ -23,7 +23,7 @@ let ``evidence storage contract and all independent negative cases pass`` () =
     child.WaitForExit()
     Assert.Equal(0, child.ExitCode)
     Assert.Contains("EVIDENCE_STORAGE_OK categories=8 entries=5 maxTrackedBytes=65536", output)
-    Assert.Contains("EVIDENCE_STORAGE_SELF_TEST_OK cases=12", output)
+    Assert.Contains("EVIDENCE_STORAGE_SELF_TEST_OK negativeCases=14 positiveArtifactManifests=1", output)
     Assert.Equal("", error)
 
 [<Fact>]
