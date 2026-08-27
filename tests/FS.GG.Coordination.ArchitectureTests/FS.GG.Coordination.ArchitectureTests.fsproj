@@ -6,6 +6,7 @@
     <Compile Include="Tests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
     <Compile Include="RoadmapWorkArchitectureTests.fs" />
+    <Compile Include="EvidenceStorageTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

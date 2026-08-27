@@ -24,6 +24,12 @@
       "qGate": "Q7",
       "executable": "dotnet",
       "args": ["test", "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj", "--configuration", "Release", "--no-build", "--no-restore"]
+    },
+    {
+      "id": "evidence-storage-contract",
+      "qGate": "Q7",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-evidence-storage.fsx", "--", "--self-test", "evidence/github-substrate-v2"]
     }
   ]
 }

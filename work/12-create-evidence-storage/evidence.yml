@@ -1,0 +1,308 @@
+schemaVersion: 1
+workId: 12-create-evidence-storage
+stage: evidence
+status: evidenceReady
+sourceSpec: work/12-create-evidence-storage/spec.md
+sourceClarifications: work/12-create-evidence-storage/clarifications.md
+sourceChecklist: work/12-create-evidence-storage/checklist.md
+sourcePlan: work/12-create-evidence-storage/plan.md
+sourceTasks: work/12-create-evidence-storage/tasks.yml
+sourceAnalysis: readiness/12-create-evidence-storage/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/12-create-evidence-storage/analysis.json
+    digest: 666cbe06f0c6466069b6d2d3d10d556995ad6f727deb2a26e82386f5a13c2810
+    schemaVersion: 1
+  - label: checklist
+    path: work/12-create-evidence-storage/checklist.md
+    digest: ab5ed795bf4c4abf312f50db14f3a3682c98a2422968c23db9274786162a0b82
+    schemaVersion: 1
+  - label: clarifications
+    path: work/12-create-evidence-storage/clarifications.md
+    digest: 02f7374fb58f32c9ed710a0cb462c959e8b66c88f4cce0bfdd6902387f0e5213
+    schemaVersion: 1
+  - label: plan
+    path: work/12-create-evidence-storage/plan.md
+    digest: 1385fdb13506b50789d69b751cfe6c8e1d76b41ca50d6856ff08c87dfe3dd886
+    schemaVersion: 1
+  - label: spec
+    path: work/12-create-evidence-storage/spec.md
+    digest: 531b931946311aaae305fecf7697d54f6641371b1c7519153a96fdc09fc5841e
+    schemaVersion: 1
+  - label: tasks
+    path: work/12-create-evidence-storage/tasks.yml
+    digest: 26503c8cf9c9b92800ca3d1dfb242a63238ca638685bc55931eff26e5bb6d022
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-evidence-storage.fsx, evidence/github-substrate-v2/index.json, evidence/github-substrate-v2/schemas/v1/artifact-manifests.schema.json, evidence/github-substrate-v2/storage-policy.json, tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/EvidenceStorageTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-7.trx
+      digest: "sha256:c8c4343dcc68ca66436bdd3004dbced423d13f6b654ce4dceb9bf9f4736f6110"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["The closed storage gate validates every indexed category record and passed fourteen isolated negative mutations plus one positive immutable artifact manifest; the locked build and all 97 tests passed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
