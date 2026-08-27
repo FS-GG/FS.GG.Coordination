@@ -90,6 +90,20 @@ let private withEvidence action =
         Assert.Equal("", collectError)
         action root artifacts manifest)
 
+let private runPackageSmoke scratch packageOverride =
+    let startInfo = ProcessStartInfo("bash")
+    startInfo.ArgumentList.Add(Path.Combine(repositoryRoot, "eng/package-install-smoke.sh"))
+    startInfo.ArgumentList.Add(scratch)
+    packageOverride |> Option.iter (fun path -> startInfo.Environment["FSGG_BOOTSTRAP_PACKAGE_OVERRIDE"] <- path)
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use childProcess = Process.Start startInfo
+    let output = childProcess.StandardOutput.ReadToEnd()
+    let error = childProcess.StandardError.ReadToEnd()
+    childProcess.WaitForExit()
+    childProcess.ExitCode, output.Trim(), error.Trim()
+
 [<Fact>]
 let ``bootstrap workflow satisfies the exact five-gate contract`` () =
     let exitCode, output, error = runBootstrap repositoryRoot [ "workflow" ]
@@ -131,12 +145,49 @@ let ``bootstrap workflow rejects authority expansion`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-permissions", error)
             Assert.Contains("rule=workflow-authority-ceiling", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects runner context in job environment`` () =
     withWorkflowMutation
         (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("/tmp/fsgg-${{ github.run_id }}-nuget-deterministic-build", "${{ runner.temp }}/nuget-deterministic-build")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-authority-ceiling", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects incomplete triggers`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  pull_request:\n", "")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-trigger", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects a vacuous action inventory`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("uses:", "uses-disabled:")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-action-pin", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects a missing required command`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror", "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-command-contract", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects imported v1 completion machinery`` () =
+    withWorkflowMutation
+        (fun path -> File.AppendAllText(path, "\n# scripts/fsgg-coord delivery\n"))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -162,6 +213,30 @@ let ``malformed vulnerability report is rejected`` () =
     let exitCode, _, error = validateVulnerability "not-json"
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-unreadable", error)
+
+[<Fact>]
+let ``unsafe vulnerability source is rejected`` () =
+    let report = (vulnerabilityJson 8 false).Replace("https://api.nuget.org", "http://api.nuget.org")
+    let exitCode, _, error = validateVulnerability report
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=vulnerability-report-source", error)
+
+[<Fact>]
+let ``package smoke rejects an absent staged package`` () =
+    withScratch "fsgg-bootstrap-package-absent-" (fun root ->
+        let missing = Path.Combine(root, "absent.nupkg")
+        let run = Path.Combine(root, "run")
+        let exitCode, _, _ = runPackageSmoke run (Some missing)
+        Assert.NotEqual(0, exitCode))
+
+[<Fact>]
+let ``package smoke rejects tampered staged bytes`` () =
+    withScratch "fsgg-bootstrap-package-tampered-" (fun root ->
+        let tampered = Path.Combine(root, "FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg")
+        File.WriteAllText(tampered, "not a NuGet package")
+        let run = Path.Combine(root, "run")
+        let exitCode, _, _ = runPackageSmoke run (Some tampered)
+        Assert.NotEqual(0, exitCode))
 
 [<Fact>]
 let ``exact-head evidence and artifact digests are accepted`` () =
@@ -200,3 +275,67 @@ let ``evidence rejects an artifact changed after collection`` () =
             runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-artifact-digest", error))
+
+[<Fact>]
+let ``evidence rejects duplicate and unknown gates`` () =
+    withEvidence (fun root artifacts manifest ->
+        let document = JsonNode.Parse(File.ReadAllText manifest).AsObject()
+        let gates = document["gates"].AsArray()
+        gates.Add(gates[0].DeepClone())
+        gates[1]["id"] <- JsonValue.Create("unknown-gate")
+        File.WriteAllText(manifest, document.ToJsonString())
+        let exitCode, _, error =
+            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("rule=evidence-gate-set", error))
+
+[<Fact>]
+let ``evidence rejects malformed declared digests`` () =
+    withEvidence (fun root artifacts manifest ->
+        let document = JsonNode.Parse(File.ReadAllText manifest).AsObject()
+        let first = document["gates"].AsArray()[0]
+        first["sha256"] <- JsonValue.Create("not-a-sha256")
+        File.WriteAllText(manifest, document.ToJsonString())
+        let exitCode, _, error =
+            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("rule=evidence-artifact-digest", error))
+
+[<Fact>]
+let ``evidence rejects altered command contracts and artifact paths`` () =
+    withEvidence (fun root artifacts manifest ->
+        let document = JsonNode.Parse(File.ReadAllText manifest).AsObject()
+        let first = document["gates"].AsArray()[0]
+        first["commands"].AsArray().Clear()
+        first["artifact"] <- JsonValue.Create("../outside")
+        File.WriteAllText(manifest, document.ToJsonString())
+        let exitCode, _, error =
+            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("rule=evidence-command-contract", error)
+        Assert.Contains("rule=evidence-artifact-path", error))
+
+[<Fact>]
+let ``evidence rejects missing artifact files`` () =
+    withEvidence (fun root artifacts manifest ->
+        File.Delete(Path.Combine(artifacts, "compiler-and-tests/architecture.trx"))
+        let exitCode, _, error =
+            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("rule=evidence-artifact-missing", error))
+
+[<Fact>]
+let ``evidence rejects malformed manifests and contract digests`` () =
+    withEvidence (fun root artifacts manifest ->
+        let document = JsonNode.Parse(File.ReadAllText manifest).AsObject()
+        document["contractSha256"] <- JsonValue.Create("wrong")
+        File.WriteAllText(manifest, document.ToJsonString())
+        let digestExit, _, digestError =
+            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+        Assert.NotEqual(0, digestExit)
+        Assert.Contains("rule=evidence-contract-digest", digestError)
+        File.WriteAllText(manifest, "not-json")
+        let malformedExit, _, malformedError =
+            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+        Assert.NotEqual(0, malformedExit)
+        Assert.Contains("rule=evidence-unreadable", malformedError))

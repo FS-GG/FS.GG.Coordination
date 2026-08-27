@@ -5,15 +5,21 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 smoke_root="${1:?usage: package-install-smoke.sh SCRATCH_DIR}"
 feed_dir="$smoke_root/feed"
 consumer_dir="$smoke_root/consumer"
+export NUGET_PACKAGES="$smoke_root/packages"
 
 mkdir -p "$feed_dir" "$consumer_dir"
 
-dotnet pack "$repo_root/src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj" \
-  --configuration Release \
-  --no-restore \
-  --output "$feed_dir" \
-  -p:IsPackable=true \
-  -p:PackageVersion=0.0.0-bootstrap
+package_path="$feed_dir/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
+if [[ -n "${FSGG_BOOTSTRAP_PACKAGE_OVERRIDE:-}" ]]; then
+  cp "$FSGG_BOOTSTRAP_PACKAGE_OVERRIDE" "$package_path"
+else
+  dotnet pack "$repo_root/src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj" \
+    --configuration Release \
+    --no-restore \
+    --output "$feed_dir" \
+    -p:IsPackable=true \
+    -p:PackageVersion=0.0.0-bootstrap
+fi
 
 cp "$repo_root/tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj" "$consumer_dir/Bootstrap.Consumer.fsproj"
 cp "$repo_root/tests/fixtures/bootstrap-package-consumer/Program.fs" "$consumer_dir/Program.fs"
@@ -46,5 +52,5 @@ dotnet build "$consumer_dir/Bootstrap.Consumer.fsproj" --configuration Release -
 dotnet run --project "$consumer_dir/Bootstrap.Consumer.fsproj" --configuration Release --no-build --no-restore \
   | grep -Fx 'FS.GG.Coordination.Protocol:1'
 
-test -f "$feed_dir/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
-printf 'PACKAGE_INSTALL_SMOKE_OK package=%s\n' "$feed_dir/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
+test -f "$package_path"
+printf 'PACKAGE_INSTALL_SMOKE_OK package=%s\n' "$package_path"
