@@ -16,7 +16,7 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/20-complete-repository-provisioning/spec.md sha256:89fa96b659039dc325b9ae5d0d43ebaf51f9a21e1d9748f245c11dd2b8ff0fed schemaVersion:1
+- spec: work/20-complete-repository-provisioning/spec.md sha256:3aa3f4293df46e3b7e34da0e57b650594fcf6deb25ed70346daa403e668e258f schemaVersion:1
 - clarifications: work/20-complete-repository-provisioning/clarifications.md sha256:a4db191bb58015ddd7d56d2b15844918ab933c94b6b2bdab64ac954042f6d2c1 schemaVersion:1
 - checklist: work/20-complete-repository-provisioning/checklist.md sha256:2d152308433384fc185051da6a2afeda68c8b8c60381468aaa365910a675ae29 schemaVersion:1
 
@@ -28,7 +28,7 @@ Prose status: planned
 
 ## Plan Decisions
 - PD-001 [AC-001] [FR-001] complete: Add repository-wide CODEOWNERS rooted in `@FS-GG/coordination-maintainers`, explicitly covering workflows, protocol, qualification contracts, evidence, and settings/release contracts. Validate the live team grant is exactly Maintain and the repository has no unexpected team grant.
-- PD-002 [AC-002, AC-005] [FR-002] complete: Record the authoritative pre-state, attach organization code-security configuration 17, bind its exact association and policy projection, verify CodeQL default setup and private vulnerability reporting, then apply supported repository security and replace `allowed_actions=all` with selected GitHub-owned Actions. Preserve the already-correct merge, repository-feature, workflow-token, and self-approval values. Bind the effective disabled validity-check and generic/non-provider projections as license-unsupported, and treat organization SHA-policy 403 as an explicit unsupported result, never success.
+- PD-002 [AC-002, AC-005] [FR-002] complete: Record the authoritative pre-state, attach organization code-security configuration 17, bind its exact association and policy projection, verify CodeQL default setup and private vulnerability reporting, then apply supported repository security and replace `allowed_actions=all` with selected GitHub-owned Actions. Preserve the already-correct merge, repository-feature, workflow-token, and self-approval values. Bind the effective disabled validity-check and non-provider-pattern projections as license-unsupported, preserve the distinct generic-secrets value as `not_set`, and treat organization SHA-policy 403 as an explicit unsupported result, never success.
 - PD-003 [AC-003] [FR-003] complete: After CODEOWNERS and the settings verifier merge, create one active `~DEFAULT_BRANCH` ruleset from reviewed JSON. Bind the six exact GitHub Actions contexts to App id 15368, require strict current-head checks and one independent approval, dismiss stale reviews, require last-push and CODEOWNERS approval plus resolved threads, block deletion/non-fast-forward changes, and define no bypass actor.
 - PD-004 [AC-004] [FR-004] complete: Create one active `refs/tags/v*` ruleset from reviewed JSON with deletion/non-fast-forward protection and required signatures, no bypass, and no release/runtime side effect.
 - PD-005 [AC-005] [FR-005] complete: Add a dependency-free F# validator over a versioned desired-state contract and compact receipt. Capture complete paginated REST responses, normalize only declared fields in fixed order, hash raw bytes, record operation outcomes and rollback guidance, and publish the exact post-state receipt on the accountable issue for independent acceptance.

@@ -24,6 +24,7 @@ The repository `security_and_analysis` projection reports direct repository sett
 attached organization configuration's overlay. Configuration 17's repository association and organization
 configuration endpoints are authoritative for that overlay; the receipt also preserves the repository projection
 without using it to contradict or invent attached policy state. In the current organization entitlement, validity
-checks and generic/non-provider secret patterns remain disabled in that effective repository projection even though
+checks and non-provider secret patterns remain disabled in that effective repository projection even though
 configuration 17 requests them; both are explicitly recorded as license-unsupported. Dynamic timestamps are excluded
-from desired state.
+from desired state. Configuration 17's separate generic-secrets field is `not_set` and is neither conflated with
+non-provider patterns nor claimed as an operational or unsupported control.
