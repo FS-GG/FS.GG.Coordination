@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "14d0bab1ca7a0ac3b212d6312521ca49ef7ba7a1d985a8789007d529e0cf6dc4"
+    "1d08484799e0394e838725b0babb19b68bc341d7ec1aff12b95c2232a5317bd4"
 
 let expectedContract =
-    "7fd85e5eda98ab567ab8f81efde3b73dcb4e393d8464c269714de031e8a39fe9"
+    "97584ae65098499328dfcf962e7be7034f6fbf98e635fa2f436646300b2641b0"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"

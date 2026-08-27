@@ -4,16 +4,16 @@
   "workId": "34-observation-outcomes",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/1.4.0",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
   "sourcesDigest": {
     "algorithm": "sha256",
-    "value": "29ef713d829ca32f5b8d8c83617ba4db78da316c8235c2cf0ad6daaf9d0587ed"
+    "value": "60eb5fc8f84e96094a5cc8a73cd30f15ec3edf28a4c9da7565a6afbd92b4e405"
   },
   "verificationReadiness": {
     "status": "verificationReady",
     "evidenceSupportedCount": 15,
-    "evidenceSelfAttestedCount": 15,
-    "evidenceObservedCount": 0
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 15
   },
   "disposition": {
     "state": "shipReady",

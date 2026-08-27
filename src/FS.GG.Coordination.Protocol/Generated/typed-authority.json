@@ -9,32 +9,32 @@
     {
       "id": "bindings",
       "path": "readiness/34-observation-outcomes/quint/bindings.fs",
-      "sha256": "bad0fa7a2d72befd59123a6fbf8692b3bba71b9f6e486fd98283f02dbbcf2086"
+      "sha256": "66dfc3fa7baa2f2758dc9a4d1fc65edaaba334ca96f100fe4429664246a38429"
     },
     {
       "id": "compilation-receipt",
       "path": "readiness/34-observation-outcomes/quint/receipt.json",
-      "sha256": "6ab76ed76fba6c811b0f262ef06451caac42c137d643b29f87ba6f883d784f04"
+      "sha256": "6366df35571b71b8699111835cf5227fa852f6e2e90bf71542846fe7ceca630b"
     },
     {
       "id": "compiled-contract",
       "path": "readiness/34-observation-outcomes/quint/contract.json",
-      "sha256": "7fd85e5eda98ab567ab8f81efde3b73dcb4e393d8464c269714de031e8a39fe9"
+      "sha256": "97584ae65098499328dfcf962e7be7034f6fbf98e635fa2f436646300b2641b0"
     },
     {
       "id": "fence-manifest",
       "path": "readiness/34-observation-outcomes/quint/fences.json",
-      "sha256": "8a90082abad9bae7b397620b3c88df9ac49e2bc19bcc2f58f76750b43f53e832"
+      "sha256": "7be7b199c4b2568fb624ed393e31f1f557deb9f99d1a87bce6cd8ef6abe3e102"
     },
     {
       "id": "generated-modules",
       "path": "readiness/34-observation-outcomes/quint/protocol.qnt",
-      "sha256": "63e4f261d58d9102661178ef872672feb54c4bf87a7c04ca4d4d8b31ba1d0a0c"
+      "sha256": "8efca82257e60040e1e8be5b404dd9c2d0b849383d707f8e1b2cdab6780c5cfb"
     },
     {
       "id": "markdown",
       "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-      "sha256": "14d0bab1ca7a0ac3b212d6312521ca49ef7ba7a1d985a8789007d529e0cf6dc4"
+      "sha256": "1d08484799e0394e838725b0babb19b68bc341d7ec1aff12b95c2232a5317bd4"
     },
     {
       "id": "profile-bindings",
@@ -49,12 +49,12 @@
     {
       "id": "source-map",
       "path": "readiness/34-observation-outcomes/quint/source-map.json",
-      "sha256": "336a54f42470fe57be2dd3811a86ea103a023a02ddc288e47aaa3f51b23f8949"
+      "sha256": "96c5d7677de6ae07f2002b7b397528716635ff8f9af09423bfe579cbcccb5947"
     },
     {
       "id": "typed-effect",
       "path": "readiness/34-observation-outcomes/quint/typed-effect.json",
-      "sha256": "a40aa7028435a30003c06663769121bd3cf20b07dfa89975369e577729dcd5dc"
+      "sha256": "37ab87f7b79e71c0cb9f2a9686cd05d57d17ad76a69096a88a24d66bc64bf068"
     }
   ],
   "authoringAgent": "swift-0d50",

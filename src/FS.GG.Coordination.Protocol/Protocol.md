@@ -333,7 +333,7 @@ module CoordinationProtocol {
   }
   val provenAbsenceWasAccepted = acceptedObservationKnowledge.contains(nativeGitHubAbsentObservation)
   val failureOutcomesDoNotBecomeAbsence = Set(
-    "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+    "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
   ).forall(outcomeId => not(observationContributesNegativeKnowledge({ ...nativeGitHubObservation, outcomeId: outcomeId })))
 }
 ```
