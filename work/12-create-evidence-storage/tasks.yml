@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/12-create-evidence-storage/spec.md
-    digest: 2bf5afa730df365635e913e95d64c3b09c4cdac45d2cfa47c54b0e4d37578c17
+    digest: 531b931946311aaae305fecf7697d54f6641371b1c7519153a96fdc09fc5841e
     schemaVersion: 1
   - label: clarifications
     path: work/12-create-evidence-storage/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/12-create-evidence-storage/checklist.md
-    digest: 32d2a9d963d9295f68042a84a9ef16ea92aa1402382787cb5e0efbcbc02e7197
+    digest: ab5ed795bf4c4abf312f50db14f3a3682c98a2422968c23db9274786162a0b82
     schemaVersion: 1
   - label: plan
     path: work/12-create-evidence-storage/plan.md
-    digest: d07508512b3be6e0facfd614dbc408b58a2020b0b1417d09c6d15d78ca281524
+    digest: 1385fdb13506b50789d69b751cfe6c8e1d76b41ca50d6856ff08c87dfe3dd886
     schemaVersion: 1
 tasks:
   - id: T001

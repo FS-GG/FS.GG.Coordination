@@ -10,6 +10,9 @@ let policySchema = "fsgg.coordination.evidence-storage-policy/1"
 let indexSchema = "fsgg.coordination.evidence-index/1"
 let receiptSchema = "fsgg.coordination.unit-acceptance/1"
 let shaPattern = Text.RegularExpressions.Regex("^[0-9a-f]{64}$")
+let revisionPattern = Text.RegularExpressions.Regex("^[0-9a-f]{40}$")
+let unitPattern = Text.RegularExpressions.Regex("^GS2-[0-9]{2}\.[0-9]+$")
+let canonicalTimePattern = Text.RegularExpressions.Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 
 let fail code detail = failwith $"{code}: {detail}"
 
@@ -77,8 +80,14 @@ let nonEmpty path value =
 
 let validateTime path (value: string) =
     let mutable parsed = DateTimeOffset.MinValue
-    if not (DateTimeOffset.TryParse(value, Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.RoundtripKind, &parsed)) then
+    let styles = Globalization.DateTimeStyles.AssumeUniversal ||| Globalization.DateTimeStyles.AdjustToUniversal
+    if isNull value
+       || not (canonicalTimePattern.IsMatch value)
+       || not (DateTimeOffset.TryParseExact(value, "yyyy-MM-dd'T'HH:mm:ss'Z'", Globalization.CultureInfo.InvariantCulture, styles, &parsed)) then
         fail "ES-RECORD-TIME" path
+
+let validateRevision path (value: string) =
+    if isNull value || not (revisionPattern.IsMatch value) then fail "ES-RECORD-CANDIDATE" path
 
 let validateRecord categoryName relative (record: JsonElement) =
     let require schema properties =
@@ -104,8 +113,7 @@ let validateRecord categoryName relative (record: JsonElement) =
         nonEmpty relative (stringProperty "seed" record)
     | "test-results" ->
         require "fsgg.coordination.test-result/1" [ "schema"; "id"; "candidate"; "outcome"; "sha256" ]
-        let candidate = stringProperty "candidate" record
-        if candidate.Length <> 40 || candidate |> Seq.exists (Uri.IsHexDigit >> not) then fail "ES-RECORD-CANDIDATE" relative
+        validateRevision relative (stringProperty "candidate" record)
         let outcome = stringProperty "outcome" record
         if outcome <> "passed" && outcome <> "failed" then fail "ES-RECORD-OUTCOME" relative
     | "reviews" ->
@@ -113,8 +121,7 @@ let validateRecord categoryName relative (record: JsonElement) =
         if stringProperty "schema" record <> "fsgg.coordination.review/1" then fail "ES-RECORD-SCHEMA" relative
         nonEmpty relative (stringProperty "id" record)
         nonEmpty relative (stringProperty "reviewer" record)
-        let candidate = stringProperty "candidate" record
-        if candidate.Length <> 40 || candidate |> Seq.exists (Uri.IsHexDigit >> not) then fail "ES-RECORD-CANDIDATE" relative
+        validateRevision relative (stringProperty "candidate" record)
         let decision = stringProperty "decision" record
         if decision <> "accepted" && decision <> "changes-requested" then fail "ES-RECORD-DECISION" relative
         validateSha relative (stringProperty "evidenceSha256" record)
@@ -207,10 +214,18 @@ let validate evidenceRoot =
                 [ "schema"; "unitId"; "state"; "unitContractSha256"; "sourceRevision"; "artifacts"; "acceptedAt"; "digest" ]
                 receipt.RootElement
             if stringProperty "schema" receipt.RootElement <> receiptSchema then fail "ES-RECEIPT-SCHEMA" relative
+            let unitId = stringProperty "unitId" receipt.RootElement
+            if isNull unitId || not (unitPattern.IsMatch unitId) then fail "ES-RECEIPT-UNIT" relative
             if stringProperty "state" receipt.RootElement <> "accepted" then fail "ES-RECEIPT-STATE" relative
             validateSha relative (stringProperty "unitContractSha256" receipt.RootElement)
             let sourceRevision = stringProperty "sourceRevision" receipt.RootElement
-            if sourceRevision.Length <> 40 || sourceRevision |> Seq.exists (Uri.IsHexDigit >> not) then fail "ES-RECEIPT-REVISION" relative
+            if isNull sourceRevision || not (revisionPattern.IsMatch sourceRevision) then fail "ES-RECEIPT-REVISION" relative
+            let artifacts = arrayProperty "artifacts" receipt.RootElement
+            if artifacts.IsEmpty then fail "ES-RECEIPT-ARTIFACTS" relative
+            for artifact in artifacts do
+                exactProperties relative [ "name"; "sha256" ] artifact
+                nonEmpty relative (stringProperty "name" artifact)
+                validateSha relative (stringProperty "sha256" artifact)
             validateTime relative (stringProperty "acceptedAt" receipt.RootElement)
             validateSha relative (stringProperty "digest" receipt.RootElement)
 
@@ -222,6 +237,7 @@ let validate evidenceRoot =
                 [ "schema"; "id"; "store"; "repositoryId"; "producerId"; "artifactId"; "artifactName"; "bytes"; "mediaType"; "sha256" ]
                 manifest
             if stringProperty "schema" manifest <> "fsgg.coordination.artifact-manifest/1" then fail "ES-MANIFEST-SCHEMA" relative
+            nonEmpty relative (stringProperty "id" manifest)
             let store = stringProperty "store" manifest
             if store <> "github-actions-artifact" && store <> "github-release-asset" then
                 fail "ES-MANIFEST-STORE" relative
@@ -336,7 +352,28 @@ let selfTest evidenceRoot =
                   let bytes = File.ReadAllBytes payload
                   let entry = node["entries"].AsArray()[0]
                   entry["bytes"] <- bytes.Length
-                  entry["sha256"] <- sha256 bytes)), "ES-PAYLOAD-OVERSIZE" ]
+                  entry["sha256"] <- sha256 bytes)), "ES-PAYLOAD-OVERSIZE"
+          "corpus-empty-id", (fun root ->
+              let content = "{\"schema\":\"fsgg.coordination.corpus-input/1\",\"id\":\"\",\"input\":{},\"sha256\":\"" + String('a', 64) + "\"}"
+              addTrackedJson root "corpus-invalid" "corpus-inputs" "corpus/invalid.json" content), "ES-RECORD-VALUE"
+          "observation-date-only", (fun root ->
+              let content = "{\"schema\":\"fsgg.coordination.external-observation/1\",\"id\":\"observation-1\",\"source\":\"https://example.invalid\",\"observedAt\":\"2026-08-27\",\"sha256\":\"" + String('a', 64) + "\"}"
+              addTrackedJson root "observation-invalid" "external-observations" "observations/invalid.json" content), "ES-RECORD-TIME"
+          "oracle-invalid-sha", (fun root ->
+              let content = "{\"schema\":\"fsgg.coordination.independent-oracle/1\",\"id\":\"oracle-1\",\"oracle\":\"reference\",\"expected\":{},\"sha256\":\"nope\"}"
+              addTrackedJson root "oracle-invalid" "independent-oracles" "oracles/invalid.json" content), "ES-SHA256"
+          "generated-extra-property", (fun root ->
+              let content = "{\"schema\":\"fsgg.coordination.generated-case/1\",\"id\":\"generated-1\",\"generator\":\"generator\",\"seed\":\"seed\",\"sha256\":\"" + String('a', 64) + "\",\"extra\":true}"
+              addTrackedJson root "generated-invalid" "generated-cases" "generated/invalid.json" content), "ES-JSON-SHAPE"
+          "test-uppercase-candidate", (fun root ->
+              let content = "{\"schema\":\"fsgg.coordination.test-result/1\",\"id\":\"test-1\",\"candidate\":\"" + String('A', 40) + "\",\"outcome\":\"passed\",\"sha256\":\"" + String('a', 64) + "\"}"
+              addTrackedJson root "test-invalid" "test-results" "test-results/invalid.json" content), "ES-RECORD-CANDIDATE"
+          "artifact-empty-id", (fun root ->
+              let content = validManifest.Replace("\"id\":\"artifact-1\"", "\"id\":\"\"")
+              addTrackedJson root "manifest-empty-id" "artifact-manifests" "artifact-manifests/empty-id.json" content), "ES-RECORD-VALUE"
+          "receipt-invalid-unit-and-artifacts", (fun root ->
+              let content = "{\"schema\":\"fsgg.coordination.unit-acceptance/1\",\"unitId\":\"x\",\"state\":\"accepted\",\"unitContractSha256\":\"" + String('a', 64) + "\",\"sourceRevision\":\"" + String('a', 40) + "\",\"artifacts\":[],\"acceptedAt\":\"2026-08-27T00:00:00Z\",\"digest\":\"" + String('a', 64) + "\"}"
+              addTrackedJson root "accepted-invalid" "accepted-receipts" "accepted/invalid.json" content), "ES-RECEIPT-UNIT" ]
     for name, mutate, expected in cases do
         let temp = Path.Combine(Path.GetTempPath(), $"fsgg-evidence-{Guid.NewGuid():N}")
         try

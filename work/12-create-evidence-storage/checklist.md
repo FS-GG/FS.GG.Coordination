@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/12-create-evidence-storage/clarifications.md
 
 ## Source Snapshot
-- spec: work/12-create-evidence-storage/spec.md sha256:2bf5afa730df365635e913e95d64c3b09c4cdac45d2cfa47c54b0e4d37578c17 schemaVersion:1
+- spec: work/12-create-evidence-storage/spec.md sha256:531b931946311aaae305fecf7697d54f6641371b1c7519153a96fdc09fc5841e schemaVersion:1
 - clarifications: work/12-create-evidence-storage/clarifications.md sha256:02f7374fb58f32c9ed710a0cb462c959e8b66c88f4cce0bfdd6902387f0e5213 schemaVersion:1
 
 ## Checklist Items
