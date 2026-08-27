@@ -75,7 +75,7 @@ let ``published kernel lock is exact and feed-served`` () =
     Assert.Equal("[1.5.0, 1.5.0]", package.GetProperty("requested").GetString())
     Assert.Equal("1.5.0", package.GetProperty("resolved").GetString())
     Assert.Equal(
-        "4moNCZKpvO+UsGHGR3IPLAq4xvZm4qvKe9l0T2FJojwitQ4rffNeWyzWcJHRU3p3djsi2KGjak6quRTL2LZ/Fg==",
+        "RAVNLuyPScmeoH+v5fSs5Ahd5DlR+S8kO1wSbX+xIOJ6WsLsF9iDIkXbqTCuwZFOWx72fARJEw4nZrBClUUxGw==",
         package.GetProperty("contentHash").GetString()
     )
 
