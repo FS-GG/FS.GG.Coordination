@@ -39,7 +39,7 @@ let private withMutation (oldValue: string) (newValue: string) (assertion: strin
 let ``repository provisioning contract is closed and least privilege`` () =
     use desired = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "eng/repository-settings/desired.json")))
     let value = desired.RootElement
-    Assert.Equal("fsgg.coordination.repository-settings-desired/1", value.GetProperty("schema").GetString())
+    Assert.Equal("fsgg.coordination.repository-settings-desired/2", value.GetProperty("schema").GetString())
     Assert.Equal("selected", value.GetProperty("actions").GetProperty("allowedActions").GetString())
     Assert.True(value.GetProperty("actions").GetProperty("githubOwnedAllowed").GetBoolean())
     Assert.False(value.GetProperty("actions").GetProperty("verifiedAllowed").GetBoolean())
@@ -48,6 +48,13 @@ let ``repository provisioning contract is closed and least privilege`` () =
     Assert.Equal(6, checks.Length)
     Assert.All(checks, fun check -> Assert.Equal(15368, check.GetProperty("integrationId").GetInt32()))
     Assert.All(value.GetProperty("rulesets").EnumerateArray(), fun ruleset -> Assert.Equal(0, ruleset.GetProperty("bypassActorCount").GetInt32()))
+    Assert.Equal("attached", value.GetProperty("codeSecurityConfiguration").GetProperty("associationStatus").GetString())
+    Assert.Equal(17, value.GetProperty("codeSecurityConfiguration").GetProperty("configuration").GetProperty("id").GetInt32())
+    Assert.Equal("configured", value.GetProperty("codeqlDefaultSetup").GetProperty("state").GetString())
+    Assert.Equal("enabled", value.GetProperty("security").GetProperty("privateVulnerabilityReporting").GetString())
+    Assert.Equal("disabled", value.GetProperty("security").GetProperty("secretScanningNonProviderPatterns").GetString())
+    Assert.Equal("disabled", value.GetProperty("security").GetProperty("secretScanningValidityChecks").GetString())
+    Assert.Equal(3, value.GetProperty("unsupported").GetArrayLength())
 
 [<Fact>]
 let ``canonical provisioning fixture passes the strict validator`` () =
@@ -61,6 +68,14 @@ let ``canonical provisioning fixture passes the strict validator`` () =
 [<InlineData("\"permission\":\"maintain\"", "\"permission\":\"admin\"", "RS-STATE-MISMATCH")>]
 [<InlineData("\"integrationId\":15368", "\"integrationId\":15369", "RS-STATE-MISMATCH")>]
 [<InlineData("\"dependencyGraph\":\"enabled\"", "\"dependencyGraph\":\"disabled\"", "RS-STATE-MISMATCH")>]
+[<InlineData("\"associationStatus\":\"attached\"", "\"associationStatus\":\"detached\"", "RS-STATE-MISMATCH")>]
+[<InlineData("\"enforcement\":\"unenforced\",\"id\":17", "\"enforcement\":\"unenforced\",\"id\":18", "RS-STATE-MISMATCH")>]
+[<InlineData("\"enforcement\":\"unenforced\",\"id\":17", "\"enforcement\":\"enforced\",\"id\":17", "RS-STATE-MISMATCH")>]
+[<InlineData("\"schedule\":\"weekly\",\"state\":\"configured\"", "\"schedule\":\"weekly\",\"state\":\"not-configured\"", "RS-STATE-MISMATCH")>]
+[<InlineData("\"languages\":[\"actions\"]", "\"languages\":[\"javascript-typescript\"]", "RS-STATE-MISMATCH")>]
+[<InlineData("\"privateVulnerabilityReporting\":\"enabled\"", "\"privateVulnerabilityReporting\":\"disabled\"", "RS-STATE-MISMATCH")>]
+[<InlineData("\"secretScanningNonProviderPatterns\":\"disabled\"", "\"secretScanningNonProviderPatterns\":\"enabled\"", "RS-STATE-MISMATCH")>]
+[<InlineData("\"secretScanningValidityChecks\":\"disabled\"", "\"secretScanningValidityChecks\":\"enabled\"", "RS-STATE-MISMATCH")>]
 [<InlineData("\"bypassActorCount\":0", "\"bypassActorCount\":1", "RS-RULESET-MISMATCH")>]
 [<InlineData("\"requireCodeOwnerReview\":true", "\"requireCodeOwnerReview\":false", "RS-RULESET-MISMATCH")>]
 [<InlineData("\"doNotEnforceOnCreate\":true", "\"doNotEnforceOnCreate\":false", "RS-RULESET-MISMATCH")>]
@@ -73,10 +88,14 @@ let ``canonical provisioning fixture passes the strict validator`` () =
 [<InlineData("\"httpStatus\":204", "\"httpStatus\":200", "RS-OPERATION-CONTRACT")>]
 [<InlineData("vulnerability-alerts", "actions/artifacts", "RS-OPERATION-CONTRACT")>]
 [<InlineData("Coordination/teams", "Coordination/collaborators", "RS-OPERATION-CONTRACT")>]
+[<InlineData("configurations/17/repositories", "configurations/18/repositories", "RS-OPERATION-CONTRACT")>]
+[<InlineData("/repos/FS-GG/FS.GG.Coordination/code-security-configuration\"", "/repos/FS-GG/FS.GG.Coordination/code-security-configuration-wrong\"", "RS-OPERATION-CONTRACT")>]
+[<InlineData("code-scanning/default-setup", "code-scanning/analyses", "RS-OPERATION-CONTRACT")>]
+[<InlineData("/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting\"", "/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting-wrong\"", "RS-OPERATION-CONTRACT")>]
 [<InlineData("\"method\":\"GET\",\"name\":\"dependency-graph\"", "\"method\":\"POST\",\"name\":\"dependency-graph\"", "RS-OPERATION-CONTRACT")>]
 [<InlineData("\"httpStatus\":200,\"method\":\"GET\",\"name\":\"main-ruleset\"", "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"", "RS-RULESET-RESPONSE")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
-[<InlineData("\"digest\":\"e", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
+[<InlineData("\"digest\":\"7", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =
     withMutation oldValue newValue (fun path ->
         let exitCode, output = verify path
