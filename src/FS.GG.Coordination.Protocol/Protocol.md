@@ -478,7 +478,14 @@ module CoordinationProtocol {
         previous.sequence == envelope.sequence - 1,
         previous.eventId == envelope.predecessorEventId,
       }),
-      events.exists(checkpoint => checkpoint.subjectId == envelope.subjectId and checkpoint.durableCheckpoint),
+      envelope.durableCheckpoint or events.exists(checkpoint => and {
+        checkpoint.streamKindId == envelope.streamKindId,
+        checkpoint.streamId == envelope.streamId,
+        checkpoint.subjectId == envelope.subjectId,
+        checkpoint.generation == envelope.generation,
+        checkpoint.sequence > envelope.sequence,
+        checkpoint.durableCheckpoint,
+      }),
     }
 
   pure def protocolEnvelopeIdentityIsConsistent(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
@@ -524,7 +531,11 @@ module CoordinationProtocol {
     envelope.retentionClass == "ephemeral",
     not(envelope.durableCheckpoint),
     events.exists(checkpoint => and {
+      checkpoint.streamKindId == envelope.streamKindId,
+      checkpoint.streamId == envelope.streamId,
       checkpoint.subjectId == envelope.subjectId,
+      checkpoint.generation == envelope.generation,
+      checkpoint.sequence > envelope.sequence,
       checkpoint.durableCheckpoint,
       checkpoint.retentionClass == "durable",
     }),
@@ -551,6 +562,18 @@ module CoordinationProtocol {
     streamKindId: "STREAM-Review", streamId: "review:subject-work", subjectId: "subject-work",
     generation: 1, sequence: 1, eventId: "review-event-1", predecessorEventId: "",
     payloadKindId: "PAYLOAD-Review", retentionClass: "durable", durableCheckpoint: true,
+  }
+
+  pure val operationLockEnvelope = {
+    streamKindId: "STREAM-OperationLock", streamId: "operation-lock:receiver", subjectId: "subject-work",
+    generation: 1, sequence: 1, eventId: "operation-lock-event-1", predecessorEventId: "",
+    payloadKindId: "PAYLOAD-OperationLock", retentionClass: "ephemeral", durableCheckpoint: false,
+  }
+
+  pure val electionCheckpointEnvelope = {
+    ...operationLockEnvelope,
+    sequence: 2, eventId: "election-event-2", predecessorEventId: "operation-lock-event-1",
+    payloadKindId: "PAYLOAD-Election", retentionClass: "durable", durableCheckpoint: true,
   }
 
   pure val closedLifecycleIntentCatalogue = and {
@@ -882,7 +905,9 @@ module CoordinationProtocol {
     appendProtocolEnvelope(claimEnvelope),
     appendProtocolEnvelope(leaseEnvelope),
     appendProtocolEnvelope(reviewCheckpointEnvelope),
-    compactEphemeralProtocolEnvelope(claimEnvelope),
+    appendProtocolEnvelope(operationLockEnvelope),
+    appendProtocolEnvelope(electionCheckpointEnvelope),
+    compactEphemeralProtocolEnvelope(operationLockEnvelope),
   }
 
   val acceptedVocabularyIsQualified = acceptedVocabulary == Set() or evidenceObserved
@@ -1119,17 +1144,21 @@ module CoordinationProtocolTests {
 
   run testEphemeralCompactionPreservesDurableCheckpoint =
     init
-      .then(appendProtocolEnvelope(claimEnvelope))
-      .then(appendProtocolEnvelope(leaseEnvelope))
-      .then(appendProtocolEnvelope(reviewCheckpointEnvelope))
-      .then(compactEphemeralProtocolEnvelope(claimEnvelope))
+      .then(appendProtocolEnvelope(operationLockEnvelope))
+      .then(appendProtocolEnvelope(electionCheckpointEnvelope))
+      .then(compactEphemeralProtocolEnvelope(operationLockEnvelope))
       .expect(and {
-        not(protocolStreamEvents.contains(claimEnvelope)),
-        protocolStreamEvents.contains(leaseEnvelope),
-        protocolStreamEvents.contains(reviewCheckpointEnvelope),
+        not(protocolStreamEvents.contains(operationLockEnvelope)),
+        protocolStreamEvents.contains(electionCheckpointEnvelope),
         protocolEnvelopesAreValidAndOrdered,
         durableProtocolCheckpointsArePreserved,
       })
+
+  run testUnrelatedCheckpointCannotCompactEphemeralHistory =
+    not(ephemeralEnvelopeMayBeCompacted(claimEnvelope, Set(claimEnvelope, reviewCheckpointEnvelope)))
+
+  run testUnrelatedCheckpointCannotExcuseMissingPredecessor =
+    not(retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(leaseEnvelope, reviewCheckpointEnvelope)))
 
   run testDurableCheckpointCannotBeCompacted =
     not(ephemeralEnvelopeMayBeCompacted(reviewCheckpointEnvelope, Set(reviewCheckpointEnvelope)))

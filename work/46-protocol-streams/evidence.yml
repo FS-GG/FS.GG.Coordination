@@ -53,8 +53,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coordination.ArchitectureTests/TestResults/gs2-02-6-architecture-final.trx
-      digest: "sha256:0b5870ce02df4a3403f03dc02f3b89f4fb22ec8476820f8d9653ec6ecf4f7dde"
+      source: artifacts/roadmap-work/GS2-02.6/architecture-tests.trx
+      digest: "sha256:5bdcad6964f458ad5ea318b4be7eb561836fbda8bf711d12ff3e75eb07b3cb9c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -80,8 +80,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coordination.ArchitectureTests/TestResults/gs2-02-6-architecture-final.trx
-      digest: "sha256:0b5870ce02df4a3403f03dc02f3b89f4fb22ec8476820f8d9653ec6ecf4f7dde"
+      source: artifacts/roadmap-work/GS2-02.6/architecture-tests.trx
+      digest: "sha256:5bdcad6964f458ad5ea318b4be7eb561836fbda8bf711d12ff3e75eb07b3cb9c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -107,8 +107,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coordination.ArchitectureTests/TestResults/gs2-02-6-architecture-final.trx
-      digest: "sha256:0b5870ce02df4a3403f03dc02f3b89f4fb22ec8476820f8d9653ec6ecf4f7dde"
+      source: artifacts/roadmap-work/GS2-02.6/architecture-tests.trx
+      digest: "sha256:5bdcad6964f458ad5ea318b4be7eb561836fbda8bf711d12ff3e75eb07b3cb9c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -134,8 +134,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coordination.ArchitectureTests/TestResults/gs2-02-6-architecture-final.trx
-      digest: "sha256:0b5870ce02df4a3403f03dc02f3b89f4fb22ec8476820f8d9653ec6ecf4f7dde"
+      source: artifacts/roadmap-work/GS2-02.6/architecture-tests.trx
+      digest: "sha256:5bdcad6964f458ad5ea318b4be7eb561836fbda8bf711d12ff3e75eb07b3cb9c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -161,8 +161,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coordination.ArchitectureTests/TestResults/gs2-02-6-architecture-final.trx
-      digest: "sha256:0b5870ce02df4a3403f03dc02f3b89f4fb22ec8476820f8d9653ec6ecf4f7dde"
+      source: artifacts/roadmap-work/GS2-02.6/architecture-tests.trx
+      digest: "sha256:5bdcad6964f458ad5ea318b4be7eb561836fbda8bf711d12ff3e75eb07b3cb9c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -188,8 +188,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coordination.ArchitectureTests/TestResults/gs2-02-6-architecture-final.trx
-      digest: "sha256:0b5870ce02df4a3403f03dc02f3b89f4fb22ec8476820f8d9653ec6ecf4f7dde"
+      source: artifacts/roadmap-work/GS2-02.6/architecture-tests.trx
+      digest: "sha256:5bdcad6964f458ad5ea318b4be7eb561836fbda8bf711d12ff3e75eb07b3cb9c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -215,8 +215,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coordination.ArchitectureTests/TestResults/gs2-02-6-architecture-final.trx
-      digest: "sha256:0b5870ce02df4a3403f03dc02f3b89f4fb22ec8476820f8d9653ec6ecf4f7dde"
+      source: artifacts/roadmap-work/GS2-02.6/architecture-tests.trx
+      digest: "sha256:5bdcad6964f458ad5ea318b4be7eb561836fbda8bf711d12ff3e75eb07b3cb9c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -242,8 +242,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coordination.ArchitectureTests/TestResults/gs2-02-6-architecture-final.trx
-      digest: "sha256:0b5870ce02df4a3403f03dc02f3b89f4fb22ec8476820f8d9653ec6ecf4f7dde"
+      source: artifacts/roadmap-work/GS2-02.6/architecture-tests.trx
+      digest: "sha256:5bdcad6964f458ad5ea318b4be7eb561836fbda8bf711d12ff3e75eb07b3cb9c"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141

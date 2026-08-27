@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "33ee6e61134e36198334e573027a45a44dbf7e261d14807b780f88061c0b1ad7"
+    "146f0f61ce01ddaac31b1ba06299dfcbf268edfa59599830bdc6ee0558c7089a"
 
 let expectedContract =
-    "d794029d921d4c3d499f7a672148629c5b48e2030f451cc2be942996461e522f"
+    "810b95a1df1b9bfc7ecdf469f1222e22234668c703d2ef4a05653b5ef8a3ed77"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -801,7 +801,8 @@ try
     let compactionGuard =
         "    ephemeralEnvelopeMayBeCompacted(envelope, protocolStreamEvents),"
 
-    let compactEphemeralStep = "    compactEphemeralProtocolEnvelope(claimEnvelope),"
+    let compactEphemeralStep =
+        "    compactEphemeralProtocolEnvelope(operationLockEnvelope),"
 
     let compactDurableStep =
         "    compactEphemeralProtocolEnvelope(reviewCheckpointEnvelope),"
@@ -846,6 +847,112 @@ try
         fail
             "PROTOCOL-STREAM-CHECKPOINT-NEGATIVE-CONTROL"
             ($"durable checkpoint compaction missing ITF; {checkpointRedOutput}; {checkpointRedError}")
+
+    let unrelatedCheckpointMutant =
+        Path.Combine(scratch, "protocol-stream-unrelated-checkpoint.qnt")
+
+    let streamBoundCompaction =
+        "      checkpoint.streamKindId == envelope.streamKindId,\n"
+        + "      checkpoint.streamId == envelope.streamId,\n"
+        + "      checkpoint.subjectId == envelope.subjectId,\n"
+        + "      checkpoint.generation == envelope.generation,\n"
+        + "      checkpoint.sequence > envelope.sequence,\n"
+        + "      checkpoint.durableCheckpoint,\n"
+        + "      checkpoint.retentionClass == \"durable\","
+
+    let subjectOnlyCompaction =
+        "      checkpoint.subjectId == envelope.subjectId,\n"
+        + "      checkpoint.durableCheckpoint,\n"
+        + "      checkpoint.retentionClass == \"durable\","
+
+    if not (originalQnt.Contains(streamBoundCompaction, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-CAUSAL-COMPACTION-NEGATIVE-CONTROL" "stream-bound compaction fixture absent"
+
+    File.WriteAllText(
+        unrelatedCheckpointMutant,
+        originalQnt.Replace(streamBoundCompaction, subjectOnlyCompaction)
+    )
+
+    let unrelatedRedExit, unrelatedRedOutput, unrelatedRedError =
+        run
+            scratch
+            quint
+            [ "test"
+              unrelatedCheckpointMutant
+              "--main"
+              "CoordinationProtocolTests"
+              "--backend"
+              "rust"
+              "--match"
+              "^testUnrelatedCheckpointCannotCompactEphemeralHistory$"
+              "--verbosity"
+              "0" ]
+            []
+
+    if unrelatedRedExit = 0 then
+        fail "PROTOCOL-STREAM-CAUSAL-COMPACTION-NEGATIVE-CONTROL" "unrelated checkpoint authorized compaction"
+
+    if
+        not (
+            (unrelatedRedOutput + "\n" + unrelatedRedError)
+                .Contains("failed", StringComparison.OrdinalIgnoreCase)
+        )
+    then
+        fail
+            "PROTOCOL-STREAM-CAUSAL-COMPACTION-NEGATIVE-CONTROL"
+            ($"unrelated checkpoint mutant did not produce a failed test; {unrelatedRedOutput}; {unrelatedRedError}")
+
+    let unrelatedPredecessorMutant =
+        Path.Combine(scratch, "protocol-stream-unrelated-predecessor.qnt")
+
+    let streamBoundPredecessor =
+        "        checkpoint.streamKindId == envelope.streamKindId,\n"
+        + "        checkpoint.streamId == envelope.streamId,\n"
+        + "        checkpoint.subjectId == envelope.subjectId,\n"
+        + "        checkpoint.generation == envelope.generation,\n"
+        + "        checkpoint.sequence > envelope.sequence,\n"
+        + "        checkpoint.durableCheckpoint,"
+
+    let subjectOnlyPredecessor =
+        "        checkpoint.subjectId == envelope.subjectId,\n"
+        + "        checkpoint.durableCheckpoint,"
+
+    if not (originalQnt.Contains(streamBoundPredecessor, StringComparison.Ordinal)) then
+        fail "PROTOCOL-STREAM-RETAINED-ORDERING-NEGATIVE-CONTROL" "stream-bound predecessor fixture absent"
+
+    File.WriteAllText(
+        unrelatedPredecessorMutant,
+        originalQnt.Replace(streamBoundPredecessor, subjectOnlyPredecessor)
+    )
+
+    let predecessorRedExit, predecessorRedOutput, predecessorRedError =
+        run
+            scratch
+            quint
+            [ "test"
+              unrelatedPredecessorMutant
+              "--main"
+              "CoordinationProtocolTests"
+              "--backend"
+              "rust"
+              "--match"
+              "^testUnrelatedCheckpointCannotExcuseMissingPredecessor$"
+              "--verbosity"
+              "0" ]
+            []
+
+    if predecessorRedExit = 0 then
+        fail "PROTOCOL-STREAM-RETAINED-ORDERING-NEGATIVE-CONTROL" "unrelated checkpoint excused a missing predecessor"
+
+    if
+        not (
+            (predecessorRedOutput + "\n" + predecessorRedError)
+                .Contains("failed", StringComparison.OrdinalIgnoreCase)
+        )
+    then
+        fail
+            "PROTOCOL-STREAM-RETAINED-ORDERING-NEGATIVE-CONTROL"
+            ($"unrelated predecessor mutant did not produce a failed test; {predecessorRedOutput}; {predecessorRedError}")
 
     let requireAuthorityRed name (observationMutation: string -> string) (sourceMutation: string -> string) =
         let mutated = Path.Combine(scratch, $"protocol-%s{name}.qnt")

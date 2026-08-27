@@ -4,10 +4,10 @@
   "workId": "46-protocol-streams",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/1.4.0",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
   "sourcesDigest": {
     "algorithm": "sha256",
-    "value": "22d4379ddc303122b3d2568126182b9d8ed99e50b997092f1d16df2f60c05c15"
+    "value": "7632722b0cbdb0bd4d5f4f8ff26672b9beedb59e3272b94866f06a6a9399c592"
   },
   "verificationReadiness": {
     "status": "verificationReady",
