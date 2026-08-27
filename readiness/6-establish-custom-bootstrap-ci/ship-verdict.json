@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "6-establish-custom-bootstrap-ci",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.2.5",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "99089482d36aa09bdf7f1a73ec20e4c4f0a52f9756f79a8409418585cb042ad7"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 29,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 29
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

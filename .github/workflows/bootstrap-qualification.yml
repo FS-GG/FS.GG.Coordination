@@ -1,0 +1,171 @@
+name: Bootstrap qualification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bootstrap-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deterministic-build:
+    name: deterministic-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-deterministic-build
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Restore the locked dependency graph
+        run: dotnet restore FS.GG.Coordination.sln --locked-mode
+      - name: Build with warnings as errors
+        run: dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror
+      - name: Stage deterministic build evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/deterministic-build"
+          cp src/FS.GG.Coordination.Protocol/bin/Release/net10.0/FS.GG.Coordination.Protocol.dll "$RUNNER_TEMP/deterministic-build/protocol.dll"
+      - name: Upload deterministic build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: deterministic-build
+          path: ${{ runner.temp }}/deterministic-build/protocol.dll
+          if-no-files-found: error
+
+  compiler-and-tests:
+    name: compiler-and-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-compiler-and-tests
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Restore and build once
+        run: |
+          dotnet restore FS.GG.Coordination.sln --locked-mode
+          dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror
+      - name: Run compiler-facing unit tests
+        run: dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
+      - name: Run architecture and negative-control tests
+        run: dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=architecture.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests"
+      - name: Upload compiler and test evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compiler-and-tests
+          path: ${{ runner.temp }}/compiler-and-tests/architecture.trx
+          if-no-files-found: error
+
+  dependency-and-security:
+    name: dependency-and-security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-dependency-and-security
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Restore the locked graph into an empty cache
+        run: dotnet restore FS.GG.Coordination.sln --locked-mode
+      - name: Verify the evaluated dependency boundary
+        run: dotnet fsi eng/verify-dependencies.fsx -- --root .
+      - name: Produce the vulnerability report from the public feed
+        run: |
+          mkdir -p "$RUNNER_TEMP/dependency-and-security"
+          dotnet list FS.GG.Coordination.sln package --vulnerable --include-transitive --format json --output-version 1 --source https://api.nuget.org/v3/index.json > "$RUNNER_TEMP/dependency-and-security/vulnerability-report.json"
+      - name: Reject partial or vulnerable reports
+        run: dotnet fsi eng/bootstrap-ci.fsx -- vulnerability --root . --report "$RUNNER_TEMP/dependency-and-security/vulnerability-report.json"
+      - name: Upload dependency and security evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dependency-and-security
+          path: ${{ runner.temp }}/dependency-and-security/vulnerability-report.json
+          if-no-files-found: error
+
+  package-install-smoke:
+    name: package-install-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-package-install-smoke
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Restore the package source project
+        run: dotnet restore src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj --locked-mode
+      - name: Pack and consume through a clean project
+        run: bash eng/package-install-smoke.sh "$RUNNER_TEMP/package-install-smoke-run"
+      - name: Stage the produced package
+        run: |
+          mkdir -p "$RUNNER_TEMP/package-install-smoke"
+          cp "$RUNNER_TEMP/package-install-smoke-run/feed/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg" "$RUNNER_TEMP/package-install-smoke/"
+      - name: Upload package-install evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: package-install-smoke
+          path: ${{ runner.temp }}/package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg
+          if-no-files-found: error
+
+  evidence-manifest:
+    name: evidence-manifest
+    needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-evidence-manifest
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Download all prerequisite evidence
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          path: ${{ runner.temp }}/bootstrap-artifacts
+      - name: Add the static qualification contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/bootstrap-artifacts/evidence-manifest"
+          cp eng/bootstrap-ci-contract.json "$RUNNER_TEMP/bootstrap-artifacts/evidence-manifest/contract.json"
+      - name: Collect the exact-head evidence manifest
+        run: dotnet fsi eng/bootstrap-ci.fsx -- collect --root . --head "${{ github.event.pull_request.head.sha || github.sha }}" --artifacts "$RUNNER_TEMP/bootstrap-artifacts" --output "$RUNNER_TEMP/bootstrap-evidence.json"
+      - name: Validate the manifest and every artifact digest
+        run: dotnet fsi eng/bootstrap-ci.fsx -- evidence --root . --head "${{ github.event.pull_request.head.sha || github.sha }}" --artifacts "$RUNNER_TEMP/bootstrap-artifacts" --file "$RUNNER_TEMP/bootstrap-evidence.json"
+      - name: Upload the evidence manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-evidence-manifest
+          path: ${{ runner.temp }}/bootstrap-evidence.json
+          if-no-files-found: error

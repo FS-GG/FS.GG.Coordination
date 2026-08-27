@@ -1,0 +1,821 @@
+schemaVersion: 1
+workId: 6-establish-custom-bootstrap-ci
+stage: evidence
+status: evidenceReady
+sourceSpec: work/6-establish-custom-bootstrap-ci/spec.md
+sourceClarifications: work/6-establish-custom-bootstrap-ci/clarifications.md
+sourceChecklist: work/6-establish-custom-bootstrap-ci/checklist.md
+sourcePlan: work/6-establish-custom-bootstrap-ci/plan.md
+sourceTasks: work/6-establish-custom-bootstrap-ci/tasks.yml
+sourceAnalysis: readiness/6-establish-custom-bootstrap-ci/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/6-establish-custom-bootstrap-ci/analysis.json
+    digest: c42c4b9b1bb77af72603689f0dfb7ee875a0e02b0d0f7d0903dbba5114978268
+    schemaVersion: 1
+  - label: checklist
+    path: work/6-establish-custom-bootstrap-ci/checklist.md
+    digest: a49067ee806c8c0e6368641c1d6090ab0e5f59f77d305b355149f7a122b05ff5
+    schemaVersion: 1
+  - label: clarifications
+    path: work/6-establish-custom-bootstrap-ci/clarifications.md
+    digest: 2d57f00313c58eb549b27747a400fc9b5e3a400094d2ed512e7732c0ce976937
+    schemaVersion: 1
+  - label: plan
+    path: work/6-establish-custom-bootstrap-ci/plan.md
+    digest: b191f8cc61b950556c743e00f6f22275244f6b1f33313bf29d6cc34e1ccddebd
+    schemaVersion: 1
+  - label: spec
+    path: work/6-establish-custom-bootstrap-ci/spec.md
+    digest: 0cbc07a423d280d17246329bb255b0ba9a2f488e4de4dd984aff61a79c8fce97
+    schemaVersion: 1
+  - label: tasks
+    path: work/6-establish-custom-bootstrap-ci/tasks.yml
+    digest: cf847f89e465867ebf4c6c988963380afa88059b7ac1f0afc956440fbdd8480a
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV013]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV014]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV015]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV016]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV017]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV018]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-006]
+    obligationRefs: [EV019]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV020]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV021]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV022]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV023]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV024]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV025]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV026]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV027]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV028]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV029]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-qualification.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/package-install-smoke.sh, evidence/gs2-01-5/qualification-report.md, evidence/gs2-01-5/test-results/architecture.trx, evidence/gs2-01-5/test-results/unit.trx, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/fixtures/bootstrap-package-consumer/Bootstrap.Consumer.fsproj, tests/fixtures/bootstrap-package-consumer/Program.fs]
+    sourceRefs:
+      - kind: verification
+        path: evidence/gs2-01-5/test-results/architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/gs2-01-5/test-results/architecture.trx
+      digest: "sha256:22feaea581b7c69d6a12ac9dd53bd873160989f45bd6816f41faf20deb5881b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 64
+      failed: 0
+      skipped: 0
+    notes: [Exact five-gate workflow, and adversarial controls passed., package smoke, retained test reports]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
