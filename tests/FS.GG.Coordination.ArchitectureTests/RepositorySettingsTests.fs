@@ -74,6 +74,7 @@ let ``canonical provisioning fixture passes the strict validator`` () =
 [<InlineData("vulnerability-alerts", "actions/artifacts", "RS-OPERATION-CONTRACT")>]
 [<InlineData("Coordination/teams", "Coordination/collaborators", "RS-OPERATION-CONTRACT")>]
 [<InlineData("\"method\":\"GET\",\"name\":\"dependency-graph\"", "\"method\":\"POST\",\"name\":\"dependency-graph\"", "RS-OPERATION-CONTRACT")>]
+[<InlineData("\"httpStatus\":200,\"method\":\"GET\",\"name\":\"main-ruleset\"", "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"", "RS-RULESET-RESPONSE")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
 [<InlineData("\"digest\":\"e", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =

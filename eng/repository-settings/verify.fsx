@@ -191,8 +191,10 @@ let validate (desiredPath: string) (receiptPath: string) =
         let operation = operations |> Array.find (fun item -> item.GetProperty("name").GetString() = name)
         let rulesetId = ruleset.GetProperty("id").GetInt64()
         let expectedPath = $"/repos/FS-GG/FS.GG.Coordination/rulesets/{rulesetId}"
-        if operation.GetProperty("method").GetString() <> "GET" || operation.GetProperty("path").GetString() <> expectedPath then
-            fail "RS-RULESET-RESPONSE" $"{name} must bind the detailed ruleset response path {expectedPath}"
+        if operation.GetProperty("method").GetString() <> "GET"
+           || operation.GetProperty("path").GetString() <> expectedPath
+           || operation.GetProperty("httpStatus").GetInt32() <> 200 then
+            fail "RS-RULESET-RESPONSE" $"{name} must bind GET {expectedPath} status=200"
     if String.IsNullOrWhiteSpace(receipt.GetProperty("repair").GetString()) then fail "RS-REPAIR" "rollback or forward-repair guidance is required"
 
     let statedDigest = receipt.GetProperty("digest").GetString()
