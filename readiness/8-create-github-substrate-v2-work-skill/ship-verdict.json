@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "8-create-github-substrate-v2-work-skill",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.2.5",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "bb6e99f889b813639e250cf69512469dbbb1f38c966309c332813d10aa5625a9"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 32,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 32
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

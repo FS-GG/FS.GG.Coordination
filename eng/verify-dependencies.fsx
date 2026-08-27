@@ -123,7 +123,8 @@ let private allowedDependencies =
           Set.ofList
               [ "FS.GG.Coordination.Protocol"
                 "FS.GG.Coordination.Core"
-                "FS.GG.Coordination.GitHub" ]
+                "FS.GG.Coordination.GitHub"
+                "FS.GG.Coordination.Qualification.Contracts" ]
           "FS.GG.Coordination.App",
           Set.ofList
               [ "FS.GG.Coordination.Protocol"

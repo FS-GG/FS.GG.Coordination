@@ -1,0 +1,29 @@
+{
+  "schema": "fsgg.coordination.gate-catalog/1",
+  "commands": [
+    {
+      "id": "skill-structure",
+      "qGate": "Q0",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-roadmap-work-skill.fsx", "--", ".agents/skills/github-substrate-v2-work/SKILL.md"]
+    },
+    {
+      "id": "locked-build",
+      "qGate": "Q7",
+      "executable": "dotnet",
+      "args": ["build", "FS.GG.Coordination.sln", "--configuration", "Release", "--no-restore", "--warnaserror"]
+    },
+    {
+      "id": "unit-tests",
+      "qGate": "Q7",
+      "executable": "dotnet",
+      "args": ["test", "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj", "--configuration", "Release", "--no-build", "--no-restore"]
+    },
+    {
+      "id": "architecture-tests",
+      "qGate": "Q7",
+      "executable": "dotnet",
+      "args": ["test", "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj", "--configuration", "Release", "--no-build", "--no-restore"]
+    }
+  ]
+}

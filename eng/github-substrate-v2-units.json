@@ -1,0 +1,116 @@
+{
+  "schema": "fsgg.coordination.roadmap-index/1",
+  "roadmap": {
+    "repository": "FS-GG/.github",
+    "revision": "8eaadbc5b24006a9af5054a2fdcd7ef67e5ce691",
+    "path": "docs/github-substrate-v2-roadmap.md",
+    "sha256": "61bc9c74eada6fecfc9f2bca3b0f7cff6ec87b76659a42ca0a8c6d2e92d647ae"
+  },
+  "units": [
+    {
+      "id": "GS2-01.1",
+      "title": "Complete repository provisioning",
+      "owner": "organization administrator",
+      "prerequisites": [],
+      "permissionCeiling": ["protected repository settings explicitly approved by an organization administrator"],
+      "exitGate": "exact protected settings receipt is verified",
+      "qGates": [],
+      "gateCommands": [],
+      "contractSha256": "bf43714e65158063235f0f9978877292c96fa8fe04f4b23878e6b1b0b9934766"
+    },
+    {
+      "id": "GS2-01.2",
+      "title": "Register the component",
+      "owner": ".github",
+      "prerequisites": [],
+      "permissionCeiling": ["reviewed organization registry and policy projections"],
+      "exitGate": "registry and ownership topology merge is accepted",
+      "qGates": [],
+      "gateCommands": [],
+      "contractSha256": "8d476194039f044722a3bb152272e1efaf4f74a712c64c310d6d965bafc8d8aa"
+    },
+    {
+      "id": "GS2-01.3",
+      "title": "Establish the solution boundary",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-01.2"],
+      "permissionCeiling": ["repository-local inert source, tests, and documentation"],
+      "exitGate": "one-way empty product boundary is independently accepted",
+      "qGates": [],
+      "gateCommands": [],
+      "contractSha256": "46eb0b78a45dbd965fd08633a66097f38921f5df064da5d27caa0e88fc71259a"
+    },
+    {
+      "id": "GS2-01.4",
+      "title": "Pin the published Quint-capable kernel",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-01.3"],
+      "permissionCeiling": ["published read-feed dependency and repository-local identity validation"],
+      "exitGate": "exact published kernel identity and bundle digest are accepted",
+      "qGates": [],
+      "gateCommands": [],
+      "contractSha256": "817bef04860025f4b1b5f5b55a32c7d51c1e735acb36bb2880c00324925327e6"
+    },
+    {
+      "id": "GS2-01.5",
+      "title": "Establish custom CI",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-01.3", "GS2-01.4"],
+      "permissionCeiling": ["read-only bootstrap CI and local qualification artifacts"],
+      "exitGate": "all five exact-head bootstrap jobs are accepted",
+      "qGates": [],
+      "gateCommands": [],
+      "contractSha256": "bb52b15761e53622419a47423a715ce810a5d8828ecac46fc9af9626b12ac221"
+    },
+    {
+      "id": "GS2-01.6",
+      "title": "Create the work skill",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-01.2", "GS2-01.3", "GS2-01.4", "GS2-01.5"],
+      "permissionCeiling": ["repository-local inspection, validation, evidence output, and closed qualification commands", "no network or GitHub mutation"],
+      "exitGate": "bounded work skill and exact-candidate command are independently accepted",
+      "qGates": ["Q0", "Q7"],
+      "gateCommands": ["skill-structure", "locked-build", "unit-tests", "architecture-tests"],
+      "gateContracts": [
+        { "id": "skill-structure", "qGate": "Q0", "commandSha256": "175592aa9c2fc078dc0a01a598962e1b1612f4436d1edc7ec72e31ef81399876" },
+        { "id": "locked-build", "qGate": "Q7", "commandSha256": "4cbb6d76471e1ec2e78e58de2baa30f13ef61163594562d6f4c1a8830dd2d872" },
+        { "id": "unit-tests", "qGate": "Q7", "commandSha256": "74cb88e28e3f576777ab8246edb1b684260b44d2b17748bb7d203422f9e6cbea" },
+        { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" }
+      ],
+      "contractSha256": "e2f9a8fadac41c80288e439a3c35b62a802915f3a7447776856a40e01f20ed37"
+    },
+    {
+      "id": "GS2-01.7",
+      "title": "Create evidence storage",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-01.6"],
+      "permissionCeiling": ["repository schemas, compact indexes, local evidence, and immutable CI artifacts"],
+      "exitGate": "versioned evidence storage and retention boundaries are independently accepted",
+      "qGates": ["Q7"],
+      "gateCommands": ["evidence-storage-contract"],
+      "contractSha256": "74b2ed3be4cd0a43b1eadf7822138155a7a53dc972227e2e30b1aca6b1525714"
+    },
+    {
+      "id": "GS2-01.8",
+      "title": "Prove bootstrap recovery",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-01.7"],
+      "permissionCeiling": ["clean-machine repository and published read-feed operations only"],
+      "exitGate": "clean clone through install validation is independently accepted",
+      "qGates": ["Q7"],
+      "gateCommands": ["bootstrap-recovery"],
+      "contractSha256": "7c5216200257b6189ad2a6afd1ee48be4f3c41ac9acbe1dc30a5f566c60d79ae"
+    },
+    {
+      "id": "GS2-01.9",
+      "title": "Provision non-production runtime",
+      "owner": "organization administrator and FS.GG.Coordination",
+      "prerequisites": ["GS2-01.1", "GS2-01.7", "GS2-01.8"],
+      "permissionCeiling": ["explicitly approved development and qualification environment administration", "no production event subscription"],
+      "exitGate": "non-production environment, recovery, observability, and kill switch receipts are accepted",
+      "qGates": ["Q4", "Q6", "Q7"],
+      "gateCommands": ["non-production-runtime"],
+      "contractSha256": "fde34355a8b2e65fcc99298bfefeb01c210267e2d760c100daf9272b6758bf0d"
+    }
+  ]
+}
