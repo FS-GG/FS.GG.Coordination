@@ -13,8 +13,9 @@ default-branch ruleset last. Every write is followed by an authoritative reread.
 or contradictory response stops the batch.
 
 The `main-protected` ruleset has no bypass actor. It blocks deletion and non-fast-forward updates and requires
-one independently approved, current pull request with resolved conversations, CODEOWNERS approval, and the
-six exact GitHub Actions checks proven by bootstrap qualification. Receipt capture rereads each ruleset's
+a current pull request with resolved conversations and the six exact GitHub Actions checks proven by bootstrap
+qualification. Native review requirements are disabled so one authenticated author can complete the workflow;
+the coordination review-decision receipt remains the approval record. Receipt capture rereads each ruleset's
 detailed endpoint, not the summary collection, so all review and check parameters remain bound. The release-tag ruleset has no bypass,
 requires signed `v*` tags, and blocks their update or deletion.
 

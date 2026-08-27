@@ -98,7 +98,7 @@ let ``exact live provisioning receipt passes the strict validator`` () =
 [<InlineData("\"secretScanningNonProviderPatterns\":\"disabled\"", "\"secretScanningNonProviderPatterns\":\"enabled\"", "RS-STATE-MISMATCH")>]
 [<InlineData("\"secretScanningValidityChecks\":\"disabled\"", "\"secretScanningValidityChecks\":\"enabled\"", "RS-STATE-MISMATCH")>]
 [<InlineData("\"bypassActorCount\":0", "\"bypassActorCount\":1", "RS-RULESET-MISMATCH")>]
-[<InlineData("\"requireCodeOwnerReview\":true", "\"requireCodeOwnerReview\":false", "RS-RULESET-MISMATCH")>]
+[<InlineData("\"requireCodeOwnerReview\":false", "\"requireCodeOwnerReview\":true", "RS-RULESET-MISMATCH")>]
 [<InlineData("\"doNotEnforceOnCreate\":true", "\"doNotEnforceOnCreate\":false", "RS-RULESET-MISMATCH")>]
 [<InlineData("\"updateAllowsFetchAndMerge\":false", "\"updateAllowsFetchAndMerge\":true", "RS-RULESET-MISMATCH")>]
 [<InlineData(",\"update\"]", "]", "RS-RULESET-MISMATCH")>]
@@ -120,8 +120,8 @@ let ``exact live provisioning receipt passes the strict validator`` () =
 [<InlineData("\"method\":\"GET\",\"name\":\"dependency-graph\"", "\"method\":\"POST\",\"name\":\"dependency-graph\"", "RS-OPERATION-CONTRACT")>]
 [<InlineData("\"httpStatus\":200,\"method\":\"GET\",\"name\":\"main-ruleset\"", "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"", "RS-RULESET-RESPONSE")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
-[<InlineData("\"digest\":\"4", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
-[<InlineData("\"preStateSha256\":\"1", "\"preStateSha256\":\"8", "RS-PRESTATE-DIGEST")>]
+[<InlineData("\"digest\":\"5", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
+[<InlineData("\"preStateSha256\":\"9", "\"preStateSha256\":\"8", "RS-PRESTATE-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =
     withMutation oldValue newValue (fun path ->
         let exitCode, output = verify fixturePreStatePath path
@@ -143,11 +143,14 @@ let ``validator rejects altered canonical pre-state bytes`` () =
         Assert.Contains("RS-PRESTATE-SELF-DIGEST", output))
 
 [<Fact>]
-let ``ruleset requests bind review checks signatures and no bypass`` () =
+let ``ruleset requests bind one-author review checks signatures and no bypass`` () =
     let branch = File.ReadAllText(Path.Combine(root, "eng/repository-settings/main-ruleset.json"))
     let tags = File.ReadAllText(Path.Combine(root, "eng/repository-settings/release-tag-ruleset.json"))
     for token in [ "required_status_checks"; "require_code_owner_review"; "require_last_push_approval"; "required_review_thread_resolution"; "strict_required_status_checks_policy" ] do
         Assert.Contains(token, branch)
+    Assert.Contains("\"required_approving_review_count\":0", branch)
+    Assert.Contains("\"require_code_owner_review\":false", branch)
+    Assert.Contains("\"require_last_push_approval\":false", branch)
     for check in [ "deterministic-build"; "compiler-and-tests"; "dependency-and-security"; "package-install-smoke"; "bootstrap-recovery"; "evidence-manifest" ] do
         Assert.Contains(check, branch)
     Assert.Contains("\"bypass_actors\":[]", branch)
