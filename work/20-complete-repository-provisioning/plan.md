@@ -16,7 +16,7 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/20-complete-repository-provisioning/spec.md sha256:0ecd05cebe1c6b5891534ac01d40429a808682eb6f6153147214c49324278814 schemaVersion:1
+- spec: work/20-complete-repository-provisioning/spec.md sha256:958301be1ae2769bc5b9fbb8aef03f8cfdcdbc25b12f8a7e9433e5220dbbe61d schemaVersion:1
 - clarifications: work/20-complete-repository-provisioning/clarifications.md sha256:a4db191bb58015ddd7d56d2b15844918ab933c94b6b2bdab64ac954042f6d2c1 schemaVersion:1
 - checklist: work/20-complete-repository-provisioning/checklist.md sha256:2d152308433384fc185051da6a2afeda68c8b8c60381468aaa365910a675ae29 schemaVersion:1
 

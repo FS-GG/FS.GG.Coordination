@@ -358,7 +358,9 @@ let selfTest evidenceRoot =
               File.AppendAllText(payload, String('x', 65537))
               mutateJson (Path.Combine(root, "index.json")) (fun node ->
                   let bytes = File.ReadAllBytes payload
-                  let entry = node["entries"].AsArray()[0]
+                  let entry =
+                      node["entries"].AsArray()
+                      |> Seq.find (fun item -> item["path"].GetValue<string>() = "accepted/GS2-01.2.json")
                   entry["bytes"] <- bytes.Length
                   entry["sha256"] <- sha256 bytes)), "ES-PAYLOAD-OVERSIZE"
           "corpus-empty-id", (fun root ->
