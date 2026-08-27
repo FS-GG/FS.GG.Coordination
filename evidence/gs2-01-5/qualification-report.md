@@ -13,7 +13,7 @@ Candidate: populated by the pull-request exact-head review record.
 
 ## Independent negative controls
 
-Architecture tests prove rejection of a missing workflow gate, mutable action reference, expanded write authority, partial vulnerability report, vulnerable report, malformed report, stale evidence candidate, missing evidence gate, and artifact bytes changed after collection. Existing dependency controls independently reject prohibited project edges, runtime/framework references, checkout-relative feeds, producer copies, malformed evaluated projects, and published-kernel metadata bypasses.
+Architecture tests prove rejection of missing or duplicate workflow gates, mutable or unapproved actions, cross-run artifact inputs, invalid checkout/trigger structure, unexpected or suppressed commands, expanded write authority, partial/wrong-project/vulnerable/unsafe-source reports, absent or tampered package bytes, stale evidence candidates, malformed/duplicate/unknown evidence gates, unsafe artifact paths, missing artifacts, and digest changes. Existing dependency controls independently reject prohibited project edges, runtime/framework references, checkout-relative feeds, producer copies, malformed evaluated projects, and published-kernel metadata bypasses. The retained architecture receipt records 64 passing cases.
 
 ## Boundary conclusion
 

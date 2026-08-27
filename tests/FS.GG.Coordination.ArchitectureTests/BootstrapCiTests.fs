@@ -49,9 +49,19 @@ let private vulnerabilityJson projectCount vulnerable =
     let vulnerability =
         if vulnerable then ",\"frameworks\":[{\"topLevelPackages\":[{\"vulnerabilities\":[{}]}]}]"
         else ""
+    let requiredProjects =
+        [ "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj"
+          "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
+          "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj"
+          "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj"
+          "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
+          "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
+          "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
+          "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj" ]
     let projects =
-        [ 1 .. projectCount ]
-        |> List.map (fun index -> $"{{\"path\":\"/src/project-%d{index}.fsproj\"%s{vulnerability}}}")
+        requiredProjects
+        |> List.take projectCount
+        |> List.map (fun path -> $"{{\"path\":\"%s{path}\"%s{vulnerability}}}")
         |> String.concat ","
     $"{{\"version\":1,\"parameters\":\"--vulnerable --include-transitive\",\"sources\":[\"https://api.nuget.org/v3/index.json\"],\"projects\":[%s{projects}]}}"
 
@@ -121,6 +131,15 @@ let ``bootstrap workflow rejects a missing gate`` () =
             Assert.Contains("rule=workflow-job-set", error))
 
 [<Fact>]
+let ``bootstrap workflow rejects duplicate job identities`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  compiler-and-tests:", "  deterministic-build:\n  compiler-and-tests:")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-job-set", error))
+
+[<Fact>]
 let ``bootstrap workflow rejects mutable action references`` () =
     withWorkflowMutation
         (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "actions/checkout@v7")))
@@ -130,9 +149,27 @@ let ``bootstrap workflow rejects mutable action references`` () =
             Assert.Contains("rule=workflow-action-pin", error))
 
 [<Fact>]
+let ``bootstrap workflow rejects pinned but unapproved actions`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Upload the evidence manifest", "      - name: Unapproved pinned action\n        uses: example/deploy@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      - name: Upload the evidence manifest")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-byte-contract", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects cross-run artifact downloads`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          path: ${{ runner.temp }}/bootstrap-artifacts", "          path: ${{ runner.temp }}/bootstrap-artifacts\n          run-id: 1")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-byte-contract", error))
+
+[<Fact>]
 let ``bootstrap workflow rejects checkout not bound to the evidence candidate`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          ref: ${{ github.event.pull_request.head.sha || github.sha }}\n", "")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          ref: ${{ github.event.pull_request.head.sha || github.sha }}", "          # ref: ${{ github.event.pull_request.head.sha || github.sha }}")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -160,7 +197,16 @@ let ``bootstrap workflow rejects runner context in job environment`` () =
 [<Fact>]
 let ``bootstrap workflow rejects incomplete triggers`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  pull_request:\n", "")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  pull_request:", "  # pull_request:")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-trigger", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects trigger children without top-level on`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("on:\n", "off:\n")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -178,20 +224,75 @@ let ``bootstrap workflow rejects a vacuous action inventory`` () =
 [<Fact>]
 let ``bootstrap workflow rejects a missing required command`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror", "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        run: dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror", "        run: dotnet build FS.GG.Coordination.sln --configuration Release --no-restore\n        # run: dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
             Assert.Contains("rule=workflow-command-contract", error))
 
 [<Fact>]
-let ``bootstrap workflow rejects imported v1 completion machinery`` () =
+let ``bootstrap workflow rejects shell success suppression`` () =
     withWorkflowMutation
-        (fun path -> File.AppendAllText(path, "\n# scripts/fsgg-coord delivery\n"))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror", "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror || true")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-command-contract", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects any unexpected executable command`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          dotnet restore FS.GG.Coordination.sln --locked-mode", "          set +o errexit\n          dotnet restore FS.GG.Coordination.sln --locked-mode")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-command-contract", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects checkout ref outside with`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        with:\n          ref: ${{ github.event.pull_request.head.sha || github.sha }}", "        env:\n          ref: ${{ github.event.pull_request.head.sha || github.sha }}")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-checkout-candidate", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects conditional gates`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Build with warnings as errors", "      - name: Build with warnings as errors\n        if: false")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-gate-bypass", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects package override seam`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Pack and consume through a clean project", "      - name: Pack and consume through a clean project\n        env:\n          FSGG_BOOTSTRAP_PACKAGE_OVERRIDE: fake.nupkg")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
             Assert.Contains("rule=workflow-authority-ceiling", error))
+
+[<Fact>]
+let ``bootstrap workflow rejects imported v1 completion machinery`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Upload the evidence manifest", "      - name: Forbidden completion route\n        run: scripts/fsgg-coord delivery\n      - name: Upload the evidence manifest")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-authority-ceiling", error))
+
+[<Fact>]
+let ``workflow comments cannot bypass the exact byte contract`` () =
+    withWorkflowMutation
+        (fun path -> File.AppendAllText(path, "\n# scripts/fsgg-coord delivery is intentionally absent\n"))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=workflow-byte-contract", error)
+            Assert.DoesNotContain("rule=workflow-authority-ceiling", error))
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
@@ -222,6 +323,27 @@ let ``unsafe vulnerability source is rejected`` () =
     Assert.Contains("rule=vulnerability-report-source", error)
 
 [<Fact>]
+let ``unexpected HTTPS vulnerability source is rejected`` () =
+    let report = (vulnerabilityJson 8 false).Replace("https://api.nuget.org/v3/index.json", "https://packages.example.invalid/v3/index.json")
+    let exitCode, _, error = validateVulnerability report
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=vulnerability-report-source", error)
+
+[<Fact>]
+let ``incomplete vulnerability parameters are rejected`` () =
+    let report = (vulnerabilityJson 8 false).Replace("--vulnerable --include-transitive", "--vulnerable")
+    let exitCode, _, error = validateVulnerability report
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=vulnerability-report-parameters", error)
+
+[<Fact>]
+let ``same-count wrong-project vulnerability report is rejected`` () =
+    let report = (vulnerabilityJson 8 false).Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
+    let exitCode, _, error = validateVulnerability report
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=vulnerability-report-completeness", error)
+
+[<Fact>]
 let ``package smoke rejects an absent staged package`` () =
     withScratch "fsgg-bootstrap-package-absent-" (fun root ->
         let missing = Path.Combine(root, "absent.nupkg")
@@ -237,6 +359,24 @@ let ``package smoke rejects tampered staged bytes`` () =
         let run = Path.Combine(root, "run")
         let exitCode, _, _ = runPackageSmoke run (Some tampered)
         Assert.NotEqual(0, exitCode))
+
+[<Fact>]
+let ``package override is unavailable inside GitHub Actions`` () =
+    withScratch "fsgg-bootstrap-package-actions-" (fun root ->
+        let package = Path.Combine(root, "candidate.nupkg")
+        File.WriteAllText(package, "irrelevant")
+        let startInfo = ProcessStartInfo("bash")
+        startInfo.ArgumentList.Add(Path.Combine(repositoryRoot, "eng/package-install-smoke.sh"))
+        startInfo.ArgumentList.Add(Path.Combine(root, "run"))
+        startInfo.Environment["GITHUB_ACTIONS"] <- "true"
+        startInfo.Environment["FSGG_BOOTSTRAP_PACKAGE_OVERRIDE"] <- package
+        startInfo.RedirectStandardError <- true
+        startInfo.UseShellExecute <- false
+        use childProcess = Process.Start startInfo
+        let error = childProcess.StandardError.ReadToEnd()
+        childProcess.WaitForExit()
+        Assert.NotEqual(0, childProcess.ExitCode)
+        Assert.Contains("package override is forbidden", error))
 
 [<Fact>]
 let ``exact-head evidence and artifact digests are accepted`` () =

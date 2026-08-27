@@ -1,47 +1,74 @@
 {
   "schema": "fsgg.coordination.bootstrap-ci-contract/1",
   "evidenceSchema": "fsgg.coordination.bootstrap-evidence/1",
+  "workflowSha256": "55ba1fc32b64d2dd46e206b23015c854a05d70b5c0346981c3cd4475b5154cf4",
   "requiredProjectCount": 8,
+  "requiredVulnerabilitySources": [
+    "https://api.nuget.org/v3/index.json"
+  ],
+  "requiredProjects": [
+    "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj",
+    "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj",
+    "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj",
+    "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj",
+    "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj",
+    "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj",
+    "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj",
+    "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
+  ],
   "jobs": [
     {
       "id": "deterministic-build",
       "artifact": "deterministic-build/protocol.dll",
       "requiredRunFragments": [
         "dotnet restore FS.GG.Coordination.sln --locked-mode",
-        "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror"
+        "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror",
+        "mkdir -p \"$RUNNER_TEMP/deterministic-build\"",
+        "cp src/FS.GG.Coordination.Protocol/bin/Release/net10.0/FS.GG.Coordination.Protocol.dll \"$RUNNER_TEMP/deterministic-build/protocol.dll\""
       ]
     },
     {
       "id": "compiler-and-tests",
       "artifact": "compiler-and-tests/architecture.trx",
       "requiredRunFragments": [
-        "dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj",
-        "dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
+        "dotnet restore FS.GG.Coordination.sln --locked-mode",
+        "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror",
+        "dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore",
+        "dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger \"trx;LogFileName=architecture.trx\" --results-directory \"$RUNNER_TEMP/compiler-and-tests\""
       ]
     },
     {
       "id": "dependency-and-security",
       "artifact": "dependency-and-security/vulnerability-report.json",
       "requiredRunFragments": [
+        "dotnet restore FS.GG.Coordination.sln --locked-mode",
         "dotnet fsi eng/verify-dependencies.fsx -- --root .",
-        "dotnet list FS.GG.Coordination.sln package --vulnerable --include-transitive --format json --output-version 1 --source https://api.nuget.org/v3/index.json",
-        "dotnet fsi eng/bootstrap-ci.fsx -- vulnerability"
+        "mkdir -p \"$RUNNER_TEMP/dependency-and-security\"",
+        "dotnet list FS.GG.Coordination.sln package --vulnerable --include-transitive --format json --output-version 1 --source https://api.nuget.org/v3/index.json > \"$RUNNER_TEMP/dependency-and-security/vulnerability-report.json\"",
+        "dotnet fsi eng/bootstrap-ci.fsx -- vulnerability --root . --report \"$RUNNER_TEMP/dependency-and-security/vulnerability-report.json\""
       ]
     },
     {
       "id": "package-install-smoke",
       "artifact": "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg",
       "requiredRunFragments": [
-        "bash eng/package-install-smoke.sh"
+        "dotnet restore src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj --locked-mode",
+        "bash eng/package-install-smoke.sh \"$RUNNER_TEMP/package-install-smoke-run\"",
+        "mkdir -p \"$RUNNER_TEMP/package-install-smoke\"",
+        "cp \"$RUNNER_TEMP/package-install-smoke-run/feed/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg\" \"$RUNNER_TEMP/package-install-smoke/\""
       ]
     },
     {
       "id": "evidence-manifest",
       "artifact": "evidence-manifest/contract.json",
+      "requiredJobFragments": [
+        "needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke]"
+      ],
       "requiredRunFragments": [
-        "needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke]",
-        "dotnet fsi eng/bootstrap-ci.fsx -- collect",
-        "dotnet fsi eng/bootstrap-ci.fsx -- evidence"
+        "mkdir -p \"$RUNNER_TEMP/bootstrap-artifacts/evidence-manifest\"",
+        "cp eng/bootstrap-ci-contract.json \"$RUNNER_TEMP/bootstrap-artifacts/evidence-manifest/contract.json\"",
+        "dotnet fsi eng/bootstrap-ci.fsx -- collect --root . --head \"${{ github.event.pull_request.head.sha || github.sha }}\" --artifacts \"$RUNNER_TEMP/bootstrap-artifacts\" --output \"$RUNNER_TEMP/bootstrap-evidence.json\"",
+        "dotnet fsi eng/bootstrap-ci.fsx -- evidence --root . --head \"${{ github.event.pull_request.head.sha || github.sha }}\" --artifacts \"$RUNNER_TEMP/bootstrap-artifacts\" --file \"$RUNNER_TEMP/bootstrap-evidence.json\""
       ]
     }
   ],
@@ -56,6 +83,7 @@
     "contents: write",
     "issues: write",
     "pull-requests: write",
-    "NUGET_PACKAGES: ${{ runner."
+    "NUGET_PACKAGES: ${{ runner.",
+    "FSGG_BOOTSTRAP_PACKAGE_OVERRIDE"
   ]
 }

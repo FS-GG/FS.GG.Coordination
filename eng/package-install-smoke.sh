@@ -10,6 +10,10 @@ export NUGET_PACKAGES="$smoke_root/packages"
 mkdir -p "$feed_dir" "$consumer_dir"
 
 package_path="$feed_dir/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
+if [[ "${GITHUB_ACTIONS:-}" == "true" && -n "${FSGG_BOOTSTRAP_PACKAGE_OVERRIDE:-}" ]]; then
+  printf 'package override is forbidden in GitHub Actions\n' >&2
+  exit 1
+fi
 if [[ -n "${FSGG_BOOTSTRAP_PACKAGE_OVERRIDE:-}" ]]; then
   cp "$FSGG_BOOTSTRAP_PACKAGE_OVERRIDE" "$package_path"
 else

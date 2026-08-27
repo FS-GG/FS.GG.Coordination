@@ -12,7 +12,7 @@ The machine-readable contract is `eng/bootstrap-ci-contract.json`. `eng/bootstra
 - `package-install-smoke`: a CI-only Protocol package restored and executed by a fresh consumer.
 - `evidence-manifest`: an exact-head manifest assembled only after the other four jobs pass.
 
-The validator rejects missing or extra jobs, mutable action references, expanded permissions, release/deployment routes, live GitHub write authority, and imported v1 coordination completion machinery.
+The validator rejects missing or extra jobs, mutable action references, expanded permissions, release/deployment routes, live GitHub write authority, and imported v1 coordination completion machinery. The readable semantic rules are backed by an exact workflow-byte digest in the reviewed contract, so unreviewed action steps, inputs, environments, commands, or YAML structure cannot sit outside the declared surface.
 
 ## Evidence binding
 
