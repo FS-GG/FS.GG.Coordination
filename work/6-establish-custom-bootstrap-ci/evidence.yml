@@ -11,7 +11,7 @@ sourceAnalysis: readiness/6-establish-custom-bootstrap-ci/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/6-establish-custom-bootstrap-ci/analysis.json
-    digest: 2b3a1671ba5bb62f80a58546ca15fdf6ece3753bc935bb14b2a4e92742c17002
+    digest: c42c4b9b1bb77af72603689f0dfb7ee875a0e02b0d0f7d0903dbba5114978268
     schemaVersion: 1
   - label: checklist
     path: work/6-establish-custom-bootstrap-ci/checklist.md
