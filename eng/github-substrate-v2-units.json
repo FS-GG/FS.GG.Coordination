@@ -135,7 +135,7 @@
         { "id": "canonical-quint-compiler", "qGate": "Q1", "commandSha256": "ab29099d8e0be9da2bc6611c94acb8706eb15f36158651b8ed6b5e3829bb62a1" },
         { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
       ],
-      "contractSha256": "b66f7e5ff9ddb2a29d18c2537c95511b2ed06ae7ce012d654372df81863b002a"
+      "contractSha256": "aa9a8186c763c4fd7e0cf80c638399afbf6e44bac64c41de92198323b52d2261"
     }
   ]
 }
