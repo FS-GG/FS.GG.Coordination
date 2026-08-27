@@ -1,0 +1,389 @@
+schemaVersion: 1
+workId: 16-prove-bootstrap-recovery
+stage: evidence
+status: evidenceReady
+sourceSpec: work/16-prove-bootstrap-recovery/spec.md
+sourceClarifications: work/16-prove-bootstrap-recovery/clarifications.md
+sourceChecklist: work/16-prove-bootstrap-recovery/checklist.md
+sourcePlan: work/16-prove-bootstrap-recovery/plan.md
+sourceTasks: work/16-prove-bootstrap-recovery/tasks.yml
+sourceAnalysis: readiness/16-prove-bootstrap-recovery/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/16-prove-bootstrap-recovery/analysis.json
+    digest: d33cb10f700e9a242b113a510605294445fb3cf2418a2917d59dc3b10f8d3819
+    schemaVersion: 1
+  - label: checklist
+    path: work/16-prove-bootstrap-recovery/checklist.md
+    digest: d0984859311337fc2f0b1627e941cb394cd979b10923ec728f671a90d905b750
+    schemaVersion: 1
+  - label: clarifications
+    path: work/16-prove-bootstrap-recovery/clarifications.md
+    digest: d2993962baa8b58e19d902c1370d7eeaec989d2e4baa4e354102401293f95bc0
+    schemaVersion: 1
+  - label: plan
+    path: work/16-prove-bootstrap-recovery/plan.md
+    digest: 8a89d0cc92427c7e57b6750ceb6ad66399d7d90ac33ccf6eec41ca0fdc3b1d41
+    schemaVersion: 1
+  - label: spec
+    path: work/16-prove-bootstrap-recovery/spec.md
+    digest: 940afa6af6b314f06308b14527f86cd8df6fe66f03f9b628c7f441214388afbf
+    schemaVersion: 1
+  - label: tasks
+    path: work/16-prove-bootstrap-recovery/tasks.yml
+    digest: e4d6203e4e9c7fddd616e5447727a1155a87178effc89fb58340c28283e2abb8
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV007]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV008]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV010]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV011]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-01-8.trx
+      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 85
+      failed: 0
+      skipped: 0
+    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

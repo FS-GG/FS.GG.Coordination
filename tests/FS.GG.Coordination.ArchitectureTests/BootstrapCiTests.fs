@@ -78,6 +78,7 @@ let private createArtifacts root =
           "compiler-and-tests/architecture.trx"
           "dependency-and-security/vulnerability-report.json"
           "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
+          "bootstrap-recovery/result.json"
           "evidence-manifest/contract.json" ]
     for relative in paths do
         let target = Path.Combine(root, relative)

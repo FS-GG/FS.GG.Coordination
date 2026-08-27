@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.bootstrap-ci-contract/1",
   "evidenceSchema": "fsgg.coordination.bootstrap-evidence/1",
-  "workflowSha256": "55ba1fc32b64d2dd46e206b23015c854a05d70b5c0346981c3cd4475b5154cf4",
+  "workflowSha256": "83c69cd8abe4fcc428cdc8c7ef1fe637b5caecb8b9e73805008ce0c271a887bf",
   "requiredProjectCount": 8,
   "requiredVulnerabilitySources": [
     "https://api.nuget.org/v3/index.json"
@@ -59,10 +59,19 @@
       ]
     },
     {
+      "id": "bootstrap-recovery",
+      "artifact": "bootstrap-recovery/result.json",
+      "requiredRunFragments": [
+        "dotnet fsi eng/bootstrap-recovery.fsx -- .",
+        "mkdir -p \"$RUNNER_TEMP/bootstrap-recovery\"",
+        "cp artifacts/bootstrap-recovery/result.json \"$RUNNER_TEMP/bootstrap-recovery/result.json\""
+      ]
+    },
+    {
       "id": "evidence-manifest",
       "artifact": "evidence-manifest/contract.json",
       "requiredJobFragments": [
-        "needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke]"
+        "needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke, bootstrap-recovery]"
       ],
       "requiredRunFragments": [
         "mkdir -p \"$RUNNER_TEMP/bootstrap-artifacts/evidence-manifest\"",
