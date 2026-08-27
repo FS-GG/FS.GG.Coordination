@@ -71,7 +71,13 @@
       "exitGate": "bounded work skill and exact-candidate command are independently accepted",
       "qGates": ["Q0", "Q7"],
       "gateCommands": ["skill-structure", "locked-build", "unit-tests", "architecture-tests"],
-      "contractSha256": "86b461aeba27f5b9ceb3e4739ce8f8b2422298a475a259c09203e6c9a5ff7458"
+      "gateContracts": [
+        { "id": "skill-structure", "qGate": "Q0", "commandSha256": "175592aa9c2fc078dc0a01a598962e1b1612f4436d1edc7ec72e31ef81399876" },
+        { "id": "locked-build", "qGate": "Q7", "commandSha256": "4cbb6d76471e1ec2e78e58de2baa30f13ef61163594562d6f4c1a8830dd2d872" },
+        { "id": "unit-tests", "qGate": "Q7", "commandSha256": "74cb88e28e3f576777ab8246edb1b684260b44d2b17748bb7d203422f9e6cbea" },
+        { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" }
+      ],
+      "contractSha256": "e2f9a8fadac41c80288e439a3c35b62a802915f3a7447776856a40e01f20ed37"
     },
     {
       "id": "GS2-01.7",

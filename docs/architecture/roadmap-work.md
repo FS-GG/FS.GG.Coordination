@@ -11,7 +11,7 @@ the Coordination Project remains a visibility projection.
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the active GS2-01 units with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
-command IDs, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
+command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
 
 `evidence/github-substrate-v2/accepted/*.json` uses
@@ -26,15 +26,19 @@ pin without invalidating an unchanged accepted unit contract.
 
 `roadmap-work manifest` emits canonical
 `fsgg.coordination.unit-evidence/1` candidate bytes. It requires a clean committed
-tree and tracked regular artifacts, rejects path and symlink escape, and binds the
+tree, a contained tracked unit index, and tracked regular artifacts, rejects path and symlink escape, and binds the
 roadmap and index SHA-256, unit, commit/tree, prerequisite receipt digests, Q gates, command
-IDs, artifact SHA-256 values, generator, and explicit UTC time. Its state is only
+IDs, command contracts, artifact SHA-256 values, generator, and explicit UTC time. Its state is only
 `candidate`; it cannot assert `qualified` or `accepted`.
 
 `eng/github-substrate-v2-gates.json` uses
 `fsgg.coordination.gate-catalog/1`. Catalog commands are `dotnet` plus literal
-argument arrays. There is no shell interpolation or caller override. Gate execution
-revalidates the manifest, current commit/tree, and artifacts, runs the selected
+argument arrays. Each selected entry must match the unit contract's ordered ID,
+Q gate, and SHA-256 of its executable-plus-arguments identity before any process
+starts. An admitted mutation such as `--list-tests` is therefore refused. There is
+no shell interpolation or caller override, and an external index cannot redefine
+the selected unit. Gate execution revalidates the manifest, current commit/tree,
+tracked index, and artifacts, runs the selected
 unit's exact command order, stops at the first failure, and writes compact result
 digests under ignored `artifacts/roadmap-work/`.
 

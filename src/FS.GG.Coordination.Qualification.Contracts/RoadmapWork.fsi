@@ -7,6 +7,18 @@ type RoadmapWorkFinding =
       Path: string
       Message: string }
 
+type RoadmapGateContract =
+    { Id: string
+      QGate: string
+      CommandSha256: string }
+
+type RoadmapGateCommand =
+    { Id: string
+      QGate: string
+      Executable: string
+      Arguments: string list
+      CommandSha256: string }
+
 type RoadmapUnit =
     { Id: string
       Title: string
@@ -16,6 +28,7 @@ type RoadmapUnit =
       ExitGate: string
       QGates: string list
       GateCommands: string list
+      GateContracts: RoadmapGateContract list
       ContractSha256: string }
 
 type RoadmapInspection =
@@ -33,9 +46,7 @@ type RoadmapArtifactInput =
       Path: string
       Bytes: ReadOnlyMemory<byte> }
 
-type RoadmapCandidate =
-    { Commit: string
-      Tree: string }
+type RoadmapCandidate = { Commit: string; Tree: string }
 
 [<RequireQualifiedAccess>]
 module RoadmapWork =
@@ -43,14 +54,14 @@ module RoadmapWork =
         index: ReadOnlyMemory<byte> ->
         roadmap: ReadOnlyMemory<byte> ->
         unitId: string ->
-        Result<RoadmapInspection, RoadmapWorkFinding list>
+            Result<RoadmapInspection, RoadmapWorkFinding list>
 
     val checkPrerequisites:
         indexBytes: ReadOnlyMemory<byte> ->
         roadmapBytes: ReadOnlyMemory<byte> ->
         receiptDocuments: ReadOnlyMemory<byte> list ->
         unitId: string ->
-        Result<PrerequisiteStatus, RoadmapWorkFinding list>
+            Result<PrerequisiteStatus, RoadmapWorkFinding list>
 
     val createManifest:
         indexBytes: ReadOnlyMemory<byte> ->
@@ -60,7 +71,7 @@ module RoadmapWork =
         candidate: RoadmapCandidate ->
         createdAt: string ->
         artifacts: RoadmapArtifactInput list ->
-        Result<byte array, RoadmapWorkFinding list>
+            Result<byte array, RoadmapWorkFinding list>
 
     val validateManifest:
         indexBytes: ReadOnlyMemory<byte> ->
@@ -69,8 +80,15 @@ module RoadmapWork =
         unitId: string ->
         candidate: RoadmapCandidate ->
         manifest: ReadOnlyMemory<byte> ->
-        Result<string list, RoadmapWorkFinding list>
+            Result<RoadmapGateContract list, RoadmapWorkFinding list>
 
-    val commandIds:
-        index: ReadOnlyMemory<byte> -> roadmap: ReadOnlyMemory<byte> -> unitId: string ->
-        Result<string list, RoadmapWorkFinding list>
+    val commandContracts:
+        index: ReadOnlyMemory<byte> ->
+        roadmap: ReadOnlyMemory<byte> ->
+        unitId: string ->
+            Result<RoadmapGateContract list, RoadmapWorkFinding list>
+
+    val validateGateCatalog:
+        expected: RoadmapGateContract list ->
+        catalog: ReadOnlyMemory<byte> ->
+            Result<RoadmapGateCommand list, RoadmapWorkFinding list>
