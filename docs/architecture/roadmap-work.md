@@ -9,8 +9,8 @@ the Coordination Project remains a visibility projection.
 
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
-path, and SHA-256, then registers the accepted GS2-01 units and active GS2-02.1
-frontier with stable IDs, owner,
+path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1,
+and the active GS2-02.2 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -60,6 +60,12 @@ invariant that must produce an ITF counterexample. The commands require
 `FSGG_SDD_CLI`, `FSGG_QUINT_CACHE`, `FSGG_QUINT_HOME`, and `JAVA_HOME` to point
 at preseeded qualified tools; tool and artifact identities are checked before
 execution and no acquisition occurs inside the gate.
+
+GS2-02.2 reuses those exact Q1/Q2 command identities against the extended
+literate source. It adds a closed seven-family authority catalogue and proves
+that incomplete, contradictory, stale-revision, wrong-revision-kind,
+wrong-authority, and omitted-family inputs fail closed. It does not add the
+GS2-02.3 observation-outcome algebra or any external write authority.
 
 ## Command sequence
 
