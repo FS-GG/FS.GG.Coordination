@@ -9,6 +9,7 @@ open Xunit
 let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 let private desiredPath = Path.Combine(root, "eng/repository-settings/desired.json")
 let private fixturePath = Path.Combine(root, "eng/repository-settings/fixture.json")
+let private receiptPath = Path.Combine(root, "eng/repository-settings/receipt.json")
 
 let private verify receiptPath =
     let startInfo = ProcessStartInfo("dotnet")
@@ -62,6 +63,12 @@ let ``canonical provisioning fixture passes the strict validator`` () =
     Assert.Equal(0, exitCode)
     Assert.Contains("repository-settings: PASS", output)
 
+[<Fact>]
+let ``exact live provisioning receipt passes the strict validator`` () =
+    let exitCode, output = verify receiptPath
+    Assert.Equal(0, exitCode)
+    Assert.Contains("operations=15", output)
+
 [<Theory>]
 [<InlineData("\"id\":1346720714", "\"id\":1346720715", "RS-STATE-MISMATCH")>]
 [<InlineData("\"allowedActions\":\"selected\"", "\"allowedActions\":\"all\"", "RS-STATE-MISMATCH")>]
@@ -92,10 +99,14 @@ let ``canonical provisioning fixture passes the strict validator`` () =
 [<InlineData("/repos/FS-GG/FS.GG.Coordination/code-security-configuration\"", "/repos/FS-GG/FS.GG.Coordination/code-security-configuration-wrong\"", "RS-OPERATION-CONTRACT")>]
 [<InlineData("code-scanning/default-setup", "code-scanning/analyses", "RS-OPERATION-CONTRACT")>]
 [<InlineData("/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting\"", "/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting-wrong\"", "RS-OPERATION-CONTRACT")>]
+[<InlineData("/repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow\"", "/repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow-wrong\"", "RS-OPERATION-CONTRACT")>]
+[<InlineData("/orgs/FS-GG/actions/permissions\"", "/orgs/FS-GG/actions/permissions-wrong\"", "RS-OPERATION-CONTRACT")>]
+[<InlineData("\"httpStatus\":403,\"method\":\"GET\",\"name\":\"organization-actions-permissions\"", "\"httpStatus\":200,\"method\":\"GET\",\"name\":\"organization-actions-permissions\"", "RS-OPERATION-STATUS")>]
+[<InlineData("\"name\":\"organization-actions-permissions\",\"path\":\"/orgs/FS-GG/actions/permissions\",\"responseSha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"status\":\"unsupported\"", "\"name\":\"organization-actions-permissions\",\"path\":\"/orgs/FS-GG/actions/permissions\",\"responseSha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"status\":\"verified\"", "RS-OPERATION-STATUS")>]
 [<InlineData("\"method\":\"GET\",\"name\":\"dependency-graph\"", "\"method\":\"POST\",\"name\":\"dependency-graph\"", "RS-OPERATION-CONTRACT")>]
 [<InlineData("\"httpStatus\":200,\"method\":\"GET\",\"name\":\"main-ruleset\"", "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"", "RS-RULESET-RESPONSE")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
-[<InlineData("\"digest\":\"7", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
+[<InlineData("\"digest\":\"2", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =
     withMutation oldValue newValue (fun path ->
         let exitCode, output = verify path

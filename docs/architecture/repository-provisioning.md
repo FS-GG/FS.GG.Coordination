@@ -17,7 +17,9 @@ detailed endpoint, not the summary collection, so all review and check parameter
 requires signed `v*` tags, and blocks their update or deletion.
 
 Organization Actions SHA enforcement is not a repository setting. A 403 from that organization endpoint is
-recorded as `unsupported`; it is never projected as enabled. This unit creates no environment, secret,
+bound to the exact `GET /orgs/FS-GG/actions/permissions` operation and recorded as `unsupported`; it is never
+projected as enabled. Repository workflow-token defaults are independently bound to the workflow-permissions
+endpoint rather than inferred from general Actions permissions. This unit creates no environment, secret,
 runtime, webhook, release, tag, package, production subscription, or GS2-01.9 output.
 
 The repository `security_and_analysis` projection reports direct repository settings and can lag or omit an

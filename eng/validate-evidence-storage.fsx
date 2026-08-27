@@ -294,7 +294,15 @@ let addTrackedJson (root: string) (id: string) (category: string) (path: string)
         entry.Add("mediaType", "application/json")
         entry.Add("bytes", bytes.Length)
         entry.Add("sha256", sha256 bytes)
-        node["entries"].AsArray().Add entry)
+        let entries = node["entries"].AsArray()
+        entries.Add entry
+        let ordered =
+            entries
+            |> Seq.map (fun item -> item.DeepClone())
+            |> Seq.sortBy (fun item -> item["id"].GetValue<string>())
+            |> Seq.toArray
+        entries.Clear()
+        for item in ordered do entries.Add item)
 
 let selfTest evidenceRoot =
     let validManifest =

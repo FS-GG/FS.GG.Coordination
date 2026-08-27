@@ -176,9 +176,13 @@ let validate (desiredPath: string) (receiptPath: string) =
         let name = operation.GetProperty("name").GetString()
         if String.IsNullOrWhiteSpace(name) || operationNames.Contains(name) then fail "RS-OPERATIONS" "operation names must be unique and nonempty"
         operationNames <- operationNames.Add(name)
-        requireString "RS-OPERATION-STATUS" "status" "verified" operation
         let httpStatus = operation.GetProperty("httpStatus").GetInt32()
-        if httpStatus < 200 || httpStatus > 299 then fail "RS-OPERATION-STATUS" $"operation {name} was not successful"
+        if name = "organization-actions-permissions" then
+            requireString "RS-OPERATION-STATUS" "status" "unsupported" operation
+            if httpStatus <> 403 then fail "RS-OPERATION-STATUS" "organization Actions permissions must bind the observed 403"
+        else
+            requireString "RS-OPERATION-STATUS" "status" "verified" operation
+            if httpStatus < 200 || httpStatus > 299 then fail "RS-OPERATION-STATUS" $"operation {name} was not successful"
         if String.IsNullOrWhiteSpace(operation.GetProperty("method").GetString()) || String.IsNullOrWhiteSpace(operation.GetProperty("path").GetString()) then
             fail "RS-OPERATIONS" "operation method and path must be nonempty"
         requireHash "RS-RESPONSE-DIGEST" "responseSha256" (operation.GetProperty("responseSha256").GetString())
@@ -186,7 +190,8 @@ let validate (desiredPath: string) (receiptPath: string) =
     let requiredOps =
         [ "repository"; "teams"; "actions-permissions"; "selected-actions"; "security"; "dependabot-alerts";
           "dependency-graph"; "code-security-association"; "code-security-configuration"; "codeql-default-setup";
-          "private-vulnerability-reporting"; "main-ruleset"; "release-tag-ruleset" ] |> Set.ofList
+          "private-vulnerability-reporting"; "workflow-permissions"; "organization-actions-permissions";
+          "main-ruleset"; "release-tag-ruleset" ] |> Set.ofList
     if operationNames <> requiredOps then fail "RS-OPERATIONS" "authoritative response operation set must be exact"
     let staticOperations =
         [ "actions-permissions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions", 200)
@@ -195,11 +200,13 @@ let validate (desiredPath: string) (receiptPath: string) =
           "codeql-default-setup", ("GET", "/repos/FS-GG/FS.GG.Coordination/code-scanning/default-setup", 200)
           "dependabot-alerts", ("GET", "/repos/FS-GG/FS.GG.Coordination/vulnerability-alerts", 204)
           "dependency-graph", ("GET", "/repos/FS-GG/FS.GG.Coordination/dependency-graph/sbom", 200)
+          "organization-actions-permissions", ("GET", "/orgs/FS-GG/actions/permissions", 403)
           "private-vulnerability-reporting", ("GET", "/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting", 200)
           "repository", ("GET", "/repos/FS-GG/FS.GG.Coordination", 200)
           "security", ("GET", "/repos/FS-GG/FS.GG.Coordination", 200)
           "selected-actions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions/selected-actions", 200)
-          "teams", ("GET", "/repos/FS-GG/FS.GG.Coordination/teams", 200) ]
+          "teams", ("GET", "/repos/FS-GG/FS.GG.Coordination/teams", 200)
+          "workflow-permissions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow", 200) ]
     for name, (expectedMethod, expectedPath, expectedStatus) in staticOperations do
         let operation = operations |> Array.find (fun item -> item.GetProperty("name").GetString() = name)
         if operation.GetProperty("method").GetString() <> expectedMethod
