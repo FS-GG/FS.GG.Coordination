@@ -42,7 +42,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index replaces the rejected runtime branch with GS2-02-1`` () =
+let ``roadmap unit index advances through GS2-02-2 without the rejected runtime branch`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -61,9 +61,10 @@ let ``roadmap unit index replaces the rejected runtime branch with GS2-02-1`` ()
              "GS2-01.6"
              "GS2-01.7"
              "GS2-01.8"
-             "GS2-02.1" ]
+             "GS2-02.1"
+             "GS2-02.2" ]
     then
-        Assert.Fail("bootstrap unit inventory differs")
+        Assert.Fail("roadmap unit inventory differs")
 
     Assert.Equal(ids.Length, ids |> List.distinct |> List.length)
 
@@ -96,6 +97,19 @@ let ``roadmap unit index replaces the rejected runtime branch with GS2-02-1`` ()
     Assert.Equal<string list>([ for index in 1..8 -> $"GS2-01.{index}" ], prerequisites)
     Assert.Equal(2, protocolUnit.GetProperty("gateContracts").GetArrayLength())
 
+    let authorityUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.2")
+
+    Assert.Equal<string list>(
+        [ "GS2-02.1" ],
+        authorityUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal(2, authorityUnit.GetProperty("gateContracts").GetArrayLength())
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -123,11 +137,14 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
         |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-01.6")
 
     let contracts = selected.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+
     let selectedCommands =
         commands
         |> List.filter (fun command ->
             contracts
-            |> List.exists (fun contract -> contract.GetProperty("id").GetString() = command.GetProperty("id").GetString()))
+            |> List.exists (fun contract ->
+                contract.GetProperty("id").GetString() = command.GetProperty("id").GetString()))
+
     Assert.Equal(4, contracts.Length)
 
     for command, contract in List.zip selectedCommands contracts do
@@ -138,15 +155,39 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
         index.RootElement.GetProperty("units").EnumerateArray()
         |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.1")
 
-    let protocolContracts = protocolUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
-    Assert.Equal<string list>([ "Q1"; "Q2" ], protocolContracts |> List.map (fun value -> value.GetProperty("qGate").GetString()))
+    let protocolContracts =
+        protocolUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+
+    Assert.Equal<string list>(
+        [ "Q1"; "Q2" ],
+        protocolContracts
+        |> List.map (fun value -> value.GetProperty("qGate").GetString())
+    )
+
+    let authorityUnit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.2")
+
+    let authorityContracts =
+        authorityUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+
+    Assert.Equal<string list>(
+        [ "Q1"; "Q2" ],
+        authorityContracts
+        |> List.map (fun value -> value.GetProperty("qGate").GetString())
+    )
 
 [<Fact>]
 let ``canonical Quint authority passes the independent static gate`` () =
     let exitCode, output, error =
         run
             "dotnet"
-            [ "fsi"; "eng/validate-canonical-quint-protocol.fsx"; "--"; "--root"; "."; "--static-only" ]
+            [ "fsi"
+              "eng/validate-canonical-quint-protocol.fsx"
+              "--"
+              "--root"
+              "."
+              "--static-only" ]
 
     Assert.Equal(0, exitCode)
     Assert.StartsWith("CANONICAL_QUINT_PROTOCOL_STATIC_OK", output)
@@ -154,15 +195,25 @@ let ``canonical Quint authority passes the independent static gate`` () =
 
 [<Fact>]
 let ``canonical Quint authority mutations fail closed`` () =
-    let tempRoot = Path.Combine(Path.GetTempPath(), $"fsgg-quint-authority-test-{Guid.NewGuid():N}")
+    let tempRoot =
+        Path.Combine(Path.GetTempPath(), $"fsgg-quint-authority-test-{Guid.NewGuid():N}")
+
     Directory.CreateDirectory(tempRoot) |> ignore
 
     let runMutation name mutate expectedCode =
         let clone = Path.Combine(tempRoot, name)
+
         let cloneExit, _, cloneError =
             run
                 "git"
-                [ "-c"; "advice.detachedHead=false"; "clone"; "--shared"; "--quiet"; root; clone ]
+                [ "-c"
+                  "advice.detachedHead=false"
+                  "clone"
+                  "--shared"
+                  "--quiet"
+                  root
+                  clone ]
+
         Assert.Equal(0, cloneExit)
         Assert.Equal("", cloneError)
         mutate clone
@@ -171,7 +222,12 @@ let ``canonical Quint authority mutations fail closed`` () =
             runAt
                 clone
                 "dotnet"
-                [ "fsi"; "eng/validate-canonical-quint-protocol.fsx"; "--"; "--root"; "."; "--static-only" ]
+                [ "fsi"
+                  "eng/validate-canonical-quint-protocol.fsx"
+                  "--"
+                  "--root"
+                  "."
+                  "--static-only" ]
 
         Assert.NotEqual(0, exitCode)
         Assert.Contains($"code={expectedCode}", error)
@@ -187,14 +243,22 @@ let ``canonical Quint authority mutations fail closed`` () =
         runMutation
             "identity"
             (fun clone ->
-                let path = Path.Combine(clone, "src/FS.GG.Coordination.Protocol/Generated/typed-authority.json")
-                File.WriteAllText(path, File.ReadAllText(path).Replace("FS.GG.SDD.Artifacts/1.5.0", "FS.GG.SDD.Artifacts/9.9.9")))
+                let path =
+                    Path.Combine(clone, "src/FS.GG.Coordination.Protocol/Generated/typed-authority.json")
+
+                File.WriteAllText(
+                    path,
+                    File.ReadAllText(path).Replace("FS.GG.SDD.Artifacts/1.5.0", "FS.GG.SDD.Artifacts/9.9.9")
+                ))
             "PACKAGE"
 
         runMutation
             "rival"
             (fun clone ->
-                File.WriteAllText(Path.Combine(clone, "src/FS.GG.Coordination.Protocol/Rival.fs"), "type Subject = | Rival"))
+                File.WriteAllText(
+                    Path.Combine(clone, "src/FS.GG.Coordination.Protocol/Rival.fs"),
+                    "type Subject = | Rival"
+                ))
             "PARALLEL-AST"
 
         runMutation
@@ -202,12 +266,16 @@ let ``canonical Quint authority mutations fail closed`` () =
             (fun clone ->
                 let path = Path.Combine(clone, "src/FS.GG.Coordination.Protocol/protocol.qnt")
                 File.WriteAllText(path, "module Rival {}")
-                let addExit, _, addError = runAt clone "git" [ "add"; "src/FS.GG.Coordination.Protocol/protocol.qnt" ]
+
+                let addExit, _, addError =
+                    runAt clone "git" [ "add"; "src/FS.GG.Coordination.Protocol/protocol.qnt" ]
+
                 Assert.Equal(0, addExit)
                 Assert.Equal("", addError))
             "GENERATED-QNT-TRACKED"
     finally
-        if Directory.Exists(tempRoot) then Directory.Delete(tempRoot, true)
+        if Directory.Exists(tempRoot) then
+            Directory.Delete(tempRoot, true)
 
 [<Fact>]
 let ``manifest refuses an external untracked unit index before evidence creation`` () =
@@ -219,7 +287,15 @@ let ``manifest refuses an external untracked unit index before evidence creation
 
     try
         let cloneExit, _, cloneError =
-            run "git" [ "-c"; "advice.detachedHead=false"; "clone"; "--shared"; "--quiet"; root; clone ]
+            run
+                "git"
+                [ "-c"
+                  "advice.detachedHead=false"
+                  "clone"
+                  "--shared"
+                  "--quiet"
+                  root
+                  clone ]
 
         Assert.Equal(0, cloneExit)
         Assert.Equal("", cloneError)

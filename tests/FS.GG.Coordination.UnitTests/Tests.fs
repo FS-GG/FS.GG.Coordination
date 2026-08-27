@@ -13,8 +13,22 @@ open FS.GG.Coordination.Qualification.Contracts
 let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg.quint.compiled-contract/v2", CoordinationProtocolGenerated.Schema)
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
-    Assert.Equal("83544455ece287d4e3722e7340620260a164fbbfe3103d7d1d88c5fd31736b4b", CoordinationProtocolGenerated.ContractFingerprint)
+
+    Assert.Equal(
+        "bc3fae134bc808ef9294da164bc66d461fd2495885a40cd127c92d3624419ac4",
+        CoordinationProtocolGenerated.ContractFingerprint
+    )
+
     Assert.Equal("SubjectVocabulary", CoordinationProtocolGenerated.Ids.SubjectVocabulary)
+    Assert.Equal("AUTH-NativeGitHub", CoordinationProtocolGenerated.Ids.AuthNativeGitHub)
+    Assert.Equal("AUTH-ClassifiedExternal", CoordinationProtocolGenerated.Ids.AuthClassifiedExternal)
+
+    Assert.Equal(
+        7,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "authorityBinding")
+        |> List.length
+    )
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =
@@ -60,22 +74,27 @@ let ``published Quint kernel manifest has the accepted identity and bundle diges
     let path = publishedManifestPath ()
     Assert.True(File.Exists path, $"restored package manifest missing: {path}")
 
-    match PublishedQuintKernel.validateManifest(ReadOnlyMemory<byte>(File.ReadAllBytes path)) with
+    match PublishedQuintKernel.validateManifest (ReadOnlyMemory<byte>(File.ReadAllBytes path)) with
     | Ok identity ->
         Assert.Equal("FS.GG.SDD.Artifacts", PublishedQuintKernel.referencedAssemblyName)
         Assert.Equal("1.5.0", identity.PackageVersion)
         Assert.Equal("fsgg.quint.q2-toolchain-identity/1", identity.Schema)
         Assert.Equal("fsgg-quint-profile/1", identity.Profile)
     | Error findings ->
-        let details = findings |> List.map (fun finding -> finding.Code) |> String.concat ", "
+        let details =
+            findings |> List.map (fun finding -> finding.Code) |> String.concat ", "
+
         Assert.Fail($"published manifest was refused: {details}")
 
 [<Fact>]
 let ``altered published Quint kernel manifest is refused by digest and identity`` () =
     let original = File.ReadAllText(publishedManifestPath (), Encoding.UTF8)
-    let altered = original.Replace("fsgg-quint-profile/1", "fsgg-quint-profile/9") |> Encoding.UTF8.GetBytes
 
-    match PublishedQuintKernel.validateManifest(ReadOnlyMemory<byte>(altered)) with
+    let altered =
+        original.Replace("fsgg-quint-profile/1", "fsgg-quint-profile/9")
+        |> Encoding.UTF8.GetBytes
+
+    match PublishedQuintKernel.validateManifest (ReadOnlyMemory<byte>(altered)) with
     | Ok _ -> Assert.Fail("altered manifest was accepted")
     | Error findings ->
         let codes = findings |> List.map _.Code |> Set.ofList
@@ -84,7 +103,7 @@ let ``altered published Quint kernel manifest is refused by digest and identity`
 
 [<Fact>]
 let ``malformed published Quint kernel manifest is refused`` () =
-    match PublishedQuintKernel.validateManifest(ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes "not-json")) with
+    match PublishedQuintKernel.validateManifest (ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes "not-json")) with
     | Ok _ -> Assert.Fail("malformed manifest was accepted")
     | Error findings ->
         let codes = findings |> List.map _.Code |> Set.ofList

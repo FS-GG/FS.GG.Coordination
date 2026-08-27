@@ -121,6 +121,21 @@
         { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
       ],
       "contractSha256": "900f26575b69aa19156cdf993249374bdd00fab4416cdf345bff17720442c0f1"
+    },
+    {
+      "id": "GS2-02.2",
+      "title": "Implement authority bindings",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-02.1"],
+      "permissionCeiling": ["repository-local canonical authority semantics, compiled projections, and qualification evidence", "no network, GitHub mutation, observation-outcome semantics, hosted runtime, deployment, publication, or production write authority"],
+      "exitGate": "the closed authority catalogue and fail-closed qualification semantics pass Q1 plus the pure portion of Q2",
+      "qGates": ["Q1", "Q2"],
+      "gateCommands": ["canonical-quint-compiler", "canonical-quint-pure-model"],
+      "gateContracts": [
+        { "id": "canonical-quint-compiler", "qGate": "Q1", "commandSha256": "ab29099d8e0be9da2bc6611c94acb8706eb15f36158651b8ed6b5e3829bb62a1" },
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
+      ],
+      "contractSha256": "aa9a8186c763c4fd7e0cf80c638399afbf6e44bac64c41de92198323b52d2261"
     }
   ]
 }
