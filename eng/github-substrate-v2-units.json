@@ -108,15 +108,19 @@
       "contractSha256": "f3446127faf96f8cd5f0f7ac55edcacb4dc407ba6706a51c9b9540453e99e098"
     },
     {
-      "id": "GS2-01.9",
-      "title": "Provision non-production runtime",
-      "owner": "organization administrator and FS.GG.Coordination",
-      "prerequisites": ["GS2-01.1", "GS2-01.7", "GS2-01.8"],
-      "permissionCeiling": ["explicitly approved development and qualification environment administration", "no production event subscription"],
-      "exitGate": "non-production environment, recovery, observability, and kill switch receipts are accepted",
-      "qGates": ["Q4", "Q6", "Q7"],
-      "gateCommands": ["non-production-runtime"],
-      "contractSha256": "fde34355a8b2e65fcc99298bfefeb01c210267e2d760c100daf9272b6758bf0d"
+      "id": "GS2-02.1",
+      "title": "Author the canonical literate Quint protocol",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-01.1", "GS2-01.2", "GS2-01.3", "GS2-01.4", "GS2-01.5", "GS2-01.6", "GS2-01.7", "GS2-01.8"],
+      "permissionCeiling": ["repository-local canonical protocol source, compiled projections, and qualification evidence", "no network, GitHub mutation, hosted runtime, deployment, publication, or production write authority"],
+      "exitGate": "the exact literate source regenerates deterministically and passes Q1 plus the pure portion of Q2",
+      "qGates": ["Q1", "Q2"],
+      "gateCommands": ["canonical-quint-compiler", "canonical-quint-pure-model"],
+      "gateContracts": [
+        { "id": "canonical-quint-compiler", "qGate": "Q1", "commandSha256": "ab29099d8e0be9da2bc6611c94acb8706eb15f36158651b8ed6b5e3829bb62a1" },
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
+      ],
+      "contractSha256": "900f26575b69aa19156cdf993249374bdd00fab4416cdf345bff17720442c0f1"
     }
   ]
 }

@@ -6,21 +6,21 @@ machinery into this repository.
 ## Immutable package boundary
 
 `Directory.Packages.local.props` pins `FS.GG.SDD.Artifacts` to the exact NuGet
-range `[1.4.0]`. Only `FS.GG.Coordination.Qualification.Contracts` declares a
+range `[1.5.0]`. Only `FS.GG.Coordination.Qualification.Contracts` declares a
 direct package reference. Locked restore records the canonical exact range
-`[1.4.0, 1.4.0]`, resolved version `1.4.0`, and NuGet SHA-512 content hash
-`4moNCZKpvO+UsGHGR3IPLAq4xvZm4qvKe9l0T2FJojwitQ4rffNeWyzWcJHRU3p3djsi2KGjak6quRTL2LZ/Fg==`.
+`[1.5.0, 1.5.0]`, resolved version `1.5.0`, and NuGet SHA-512 content hash
+`RAVNLuyPScmeoH+v5fSs5Ahd5DlR+S8kO1wSbX+xIOJ6WsLsF9iDIkXbqTCuwZFOWx72fARJEw4nZrBClUUxGw==`.
 
 The published package identifies repository commit
-`7fec4dd4549789bca67aae004b3dad8ee0b7a4fd`. Its signed NuGet.org container has
-SHA-256 `aa3ffa4d3e3ae7a8a6c7b25da2b1d4d6eca93f2bb1310ca90cbf4f2241673302`.
+`5c24634214e5fe9306c2595962423624ef15874e`. Its signed NuGet.org container has
+SHA-256 `4cb4a21c1ab93b7fea7b138a12024b2a96b7f64b01379ac1828e42938fe03e17`.
 The unsigned pre-push container receipt has a different SHA-256 because the
 feed signs the package; those transport hashes are evidence, not semantic
 identity.
 
 ## Semantic identity
 
-The stable semantic binding is the packaged
+The stable profile-1 semantic binding remains the packaged
 `quint/q1-identity-manifest.json` payload. Its SHA-256 is
 `abd9c18e8146ac3855be58ce88f1efbf5e74a4b1e42c8bc35927478cc74393b2`.
 `PublishedQuintKernel.validateManifest` checks that digest before accepting the
@@ -61,6 +61,10 @@ dependency gate evaluates the final `PackageReference` items so imported
 Unit tests mutate the manifest digest and profile identity. The positive test
 reads the manifest from the actual restored package rather than a repository
 fixture.
+
+Version 1.5.0 adds the separately selected `fsgg-quint-profile/2` compiler
+surface used by GS2-02.1. It does not reinterpret the profile-1 payload or its
+accepted Q1 identities.
 
 This unit does not add a Quint extractor, profile definition, compiled-contract
 generator, ITF implementation, protocol semantics, GitHub mutation authority,

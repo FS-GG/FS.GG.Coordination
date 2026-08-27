@@ -9,7 +9,8 @@ the Coordination Project remains a visibility projection.
 
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
-path, and SHA-256, then registers the active GS2-01 units with stable IDs, owner,
+path, and SHA-256, then registers the accepted GS2-01 units and active GS2-02.1
+frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -48,6 +49,17 @@ The `Q0` and `Q7` labels on GS2-01.6 identify the evidence lanes to which its
 architecture/skill controls and reproducible build/tests contribute. A successful
 unit run does not claim the complete fleet-level Q0 or Q7 gate; those gates remain
 subject to all roadmap-required evidence and later protected acceptance.
+
+GS2-02.1 replaces the rejected conditional GS2-01.9 runtime branch in the
+executable frontier. Its Q1 command regenerates the profile-2 manifest and
+compiled projections from the canonical Markdown with the published 1.5.0 CLI,
+an exact content-addressed Q1 cache, and byte-compares the retained review
+artifacts. Its Q2 command additionally runs native Quint simulation, the authored
+example, bounded Apalache verification, and an independently selected false
+invariant that must produce an ITF counterexample. The commands require
+`FSGG_SDD_CLI`, `FSGG_QUINT_CACHE`, `FSGG_QUINT_HOME`, and `JAVA_HOME` to point
+at preseeded qualified tools; tool and artifact identities are checked before
+execution and no acquisition occurs inside the gate.
 
 ## Command sequence
 

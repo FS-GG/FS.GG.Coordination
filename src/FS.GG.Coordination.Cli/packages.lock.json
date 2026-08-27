@@ -46,15 +46,15 @@
         "type": "Project",
         "dependencies": {
           "FS.GG.Coordination.Protocol": "[1.0.0, )",
-          "FS.GG.SDD.Artifacts": "[1.4.0, 1.4.0]",
+          "FS.GG.SDD.Artifacts": "[1.5.0, 1.5.0]",
           "FSharp.Core": "[10.1.302, )"
         }
       },
       "FS.GG.SDD.Artifacts": {
         "type": "CentralTransitive",
-        "requested": "[1.4.0, 1.4.0]",
-        "resolved": "1.4.0",
-        "contentHash": "4moNCZKpvO+UsGHGR3IPLAq4xvZm4qvKe9l0T2FJojwitQ4rffNeWyzWcJHRU3p3djsi2KGjak6quRTL2LZ/Fg==",
+        "requested": "[1.5.0, 1.5.0]",
+        "resolved": "1.5.0",
+        "contentHash": "RAVNLuyPScmeoH+v5fSs5Ahd5DlR+S8kO1wSbX+xIOJ6WsLsF9iDIkXbqTCuwZFOWx72fARJEw4nZrBClUUxGw==",
         "dependencies": {
           "FS.GG.Contracts": "7.5.2",
           "FSharp.Core": "10.1.302",
