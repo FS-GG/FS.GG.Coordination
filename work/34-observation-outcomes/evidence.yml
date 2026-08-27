@@ -1,0 +1,443 @@
+schemaVersion: 1
+workId: 34-observation-outcomes
+stage: evidence
+status: evidenceReady
+sourceSpec: work/34-observation-outcomes/spec.md
+sourceClarifications: work/34-observation-outcomes/clarifications.md
+sourceChecklist: work/34-observation-outcomes/checklist.md
+sourcePlan: work/34-observation-outcomes/plan.md
+sourceTasks: work/34-observation-outcomes/tasks.yml
+sourceAnalysis: readiness/34-observation-outcomes/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/34-observation-outcomes/analysis.json
+    digest: 8ea673b898d485ff2d9754cf6562f156a07514ca409be4a7dc55b533efe84616
+    schemaVersion: 1
+  - label: checklist
+    path: work/34-observation-outcomes/checklist.md
+    digest: f16e6fd188e3a56b465707f65d3cabb3400ca305ea517e8a1ab2d1c7492e714e
+    schemaVersion: 1
+  - label: clarifications
+    path: work/34-observation-outcomes/clarifications.md
+    digest: 5f53bd6a526d0f5e43c43930fbc0123f99828c8dd363c08b7c23561931921b6a
+    schemaVersion: 1
+  - label: plan
+    path: work/34-observation-outcomes/plan.md
+    digest: 8897705deb49fe445ab241ff77bea906add150d9f1af34bfa875bc2313d49501
+    schemaVersion: 1
+  - label: spec
+    path: work/34-observation-outcomes/spec.md
+    digest: 4bc947dcfe0f92b72082a9a4ed00d54a4f5ab6cff0f7be680a42573016541f4f
+    schemaVersion: 1
+  - label: tasks
+    path: work/34-observation-outcomes/tasks.yml
+    digest: 54faab42d32a63da0305623c41113d4a9852ef4a22c51121fba4363c245262c4
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-02-3-architecture.trx
+      digest: "sha256:bbdd7dab20e21e295a92ee2fe59a0c5447427733a6b8a377eb07541c22a9b6a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Validated by the canonical compiler and pure-model gate.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
