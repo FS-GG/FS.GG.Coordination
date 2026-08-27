@@ -19,6 +19,7 @@
     <ProjectReference Include="../../src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj" />
     <ProjectReference Include="../../src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj" />
     <ProjectReference Include="../../src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

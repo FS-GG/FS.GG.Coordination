@@ -80,6 +80,18 @@ module RoadmapWork =
         && value.Length = length
         && value |> Seq.forall Uri.IsHexDigit
 
+    let private isCanonicalUtcInstant (value: string) =
+        match
+            DateTimeOffset.TryParseExact(
+                value,
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal ||| DateTimeStyles.AdjustToUniversal
+            )
+        with
+        | true, parsed -> parsed.Offset = TimeSpan.Zero
+        | _ -> false
+
     let private strictObject path allowed (element: JsonElement) =
         if element.ValueKind <> JsonValueKind.Object then
             Error [ finding "RW-JSON-TYPE" path "expected an object" ]
@@ -789,11 +801,12 @@ module RoadmapWork =
                       yield finding "RW-CANDIDATE-COMMIT" "/candidateCommit" "expected exact 40-hex commit"
                   if not (isSha candidate.Tree 40) then
                       yield finding "RW-CANDIDATE-TREE" "/candidateTree" "expected exact 40-hex tree"
-                  match
-                      DateTimeOffset.TryParse(createdAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
-                  with
-                  | true, _ -> ()
-                  | _ -> yield finding "RW-CREATED-AT" "/createdAt" "expected explicit ISO-8601 instant"
+                  if not (isCanonicalUtcInstant createdAt) then
+                      yield
+                          finding
+                              "RW-CREATED-AT"
+                              "/createdAt"
+                              "expected canonical UTC instant YYYY-MM-DDTHH:MM:SSZ"
                   if List.isEmpty artifacts then
                       yield finding "RW-ARTIFACTS" "/artifacts" "at least one artifact is required"
                   yield! artifacts |> List.collect validArtifact
@@ -919,17 +932,14 @@ module RoadmapWork =
                                         "selected unit has no independently pinned gate command contracts" ]
 
                         match requiredString "" "createdAt" root with
-                        | Ok value ->
-                            match
-                                DateTimeOffset.TryParse(
-                                    value,
-                                    CultureInfo.InvariantCulture,
-                                    DateTimeStyles.RoundtripKind
-                                )
-                            with
-                            | true, _ -> ()
-                            | _ ->
-                                errors <- errors @ [ finding "RW-CREATED-AT" "/createdAt" "expected ISO-8601 instant" ]
+                        | Ok value when isCanonicalUtcInstant value -> ()
+                        | Ok _ ->
+                            errors <-
+                                errors
+                                @ [ finding
+                                        "RW-CREATED-AT"
+                                        "/createdAt"
+                                        "expected canonical UTC instant YYYY-MM-DDTHH:MM:SSZ" ]
                         | Error values -> errors <- errors @ values
 
                         match property "artifacts" root with

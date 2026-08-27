@@ -28,7 +28,9 @@ pin without invalidating an unchanged accepted unit contract.
 `fsgg.coordination.unit-evidence/1` candidate bytes. It requires a clean committed
 tree, a contained tracked unit index, and tracked regular artifacts, rejects path and symlink escape, and binds the
 roadmap and index SHA-256, unit, commit/tree, prerequisite receipt digests, Q gates, command
-IDs, command contracts, artifact SHA-256 values, generator, and explicit UTC time. Its state is only
+IDs, command contracts, artifact SHA-256 values, generator, and one canonical
+second-precision UTC time (`YYYY-MM-DDTHH:MM:SSZ`). Date-only, offset, and
+alternate fractional forms are refused. Its state is only
 `candidate`; it cannot assert `qualified` or `accepted`.
 
 `eng/github-substrate-v2-gates.json` uses

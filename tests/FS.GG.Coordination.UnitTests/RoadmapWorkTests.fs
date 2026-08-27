@@ -201,6 +201,31 @@ let ``manifest refuses traversal and validation refuses changed candidate`` () =
     | Error findings -> Assert.Contains("RW-MANIFEST-MISMATCH", codes findings)
 
 [<Fact>]
+let ``manifest creation requires one canonical UTC instant form`` () =
+    let candidate =
+        { Commit = String.replicate 40 "1"
+          Tree = String.replicate 40 "2" }
+
+    let artifact =
+        { Name = "skill"
+          Path = "skill.md"
+          Bytes = bytes "skill" }
+
+    for createdAt in [ "2026-08-27"; "2026-08-27T01:00:00+01:00"; "2026-08-27T01:00:00.000Z" ] do
+        match
+            RoadmapWork.createManifest
+                (bytes indexText)
+                (bytes roadmap)
+                [ validReceipt ]
+                "GS2-01.6"
+                candidate
+                createdAt
+                [ artifact ]
+        with
+        | Ok _ -> Assert.Fail($"noncanonical creation time was accepted: {createdAt}")
+        | Error findings -> Assert.Contains("RW-CREATED-AT", codes findings)
+
+[<Fact>]
 let ``unknown qualification gate and JSON members are refused`` () =
     let unknownGate = indexText.Replace("\"Q7\"", "\"Q99\"")
 
