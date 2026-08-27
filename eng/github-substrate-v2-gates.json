@@ -36,6 +36,18 @@
       "qGate": "Q7",
       "executable": "dotnet",
       "args": ["fsi", "eng/bootstrap-recovery.fsx", "--", "."]
+    },
+    {
+      "id": "canonical-quint-compiler",
+      "qGate": "Q1",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-canonical-quint-protocol.fsx", "--", "--root", ".", "--compiler-only"]
+    },
+    {
+      "id": "canonical-quint-pure-model",
+      "qGate": "Q2",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-canonical-quint-protocol.fsx", "--", "--root", "."]
     }
   ]
 }

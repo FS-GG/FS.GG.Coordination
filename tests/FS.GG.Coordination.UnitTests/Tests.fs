@@ -10,6 +10,13 @@ open FS.GG.Coordination.Protocol
 open FS.GG.Coordination.Qualification.Contracts
 
 [<Fact>]
+let ``generated protocol contract exposes stable profile-2 identities`` () =
+    Assert.Equal("fsgg.quint.compiled-contract/v2", CoordinationProtocolGenerated.Schema)
+    Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
+    Assert.Equal("83544455ece287d4e3722e7340620260a164fbbfe3103d7d1d88c5fd31736b4b", CoordinationProtocolGenerated.ContractFingerprint)
+    Assert.Equal("SubjectVocabulary", CoordinationProtocolGenerated.Ids.SubjectVocabulary)
+
+[<Fact>]
 let ``protocol boundary has a stable initial identity`` () =
     Assert.Equal("FS.GG.Coordination.Protocol", ProtocolBoundary.name)
     Assert.Equal(1us, ProtocolBoundary.schemaVersion)
@@ -56,7 +63,7 @@ let ``published Quint kernel manifest has the accepted identity and bundle diges
     match PublishedQuintKernel.validateManifest(ReadOnlyMemory<byte>(File.ReadAllBytes path)) with
     | Ok identity ->
         Assert.Equal("FS.GG.SDD.Artifacts", PublishedQuintKernel.referencedAssemblyName)
-        Assert.Equal("1.4.0", identity.PackageVersion)
+        Assert.Equal("1.5.0", identity.PackageVersion)
         Assert.Equal("fsgg.quint.q2-toolchain-identity/1", identity.Schema)
         Assert.Equal("fsgg-quint-profile/1", identity.Profile)
     | Error findings ->

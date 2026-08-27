@@ -72,10 +72,10 @@ let ``published kernel lock is exact and feed-served`` () =
         document.RootElement.GetProperty("dependencies").GetProperty("net10.0").GetProperty("FS.GG.SDD.Artifacts")
 
     Assert.Equal("Direct", package.GetProperty("type").GetString())
-    Assert.Equal("[1.4.0, 1.4.0]", package.GetProperty("requested").GetString())
-    Assert.Equal("1.4.0", package.GetProperty("resolved").GetString())
+    Assert.Equal("[1.5.0, 1.5.0]", package.GetProperty("requested").GetString())
+    Assert.Equal("1.5.0", package.GetProperty("resolved").GetString())
     Assert.Equal(
-        "4moNCZKpvO+UsGHGR3IPLAq4xvZm4qvKe9l0T2FJojwitQ4rffNeWyzWcJHRU3p3djsi2KGjak6quRTL2LZ/Fg==",
+        "RAVNLuyPScmeoH+v5fSs5Ahd5DlR+S8kO1wSbX+xIOJ6WsLsF9iDIkXbqTCuwZFOWx72fARJEw4nZrBClUUxGw==",
         package.GetProperty("contentHash").GetString()
     )
 
@@ -123,7 +123,7 @@ let ``imported published kernel metadata override is independently rejected`` ()
                             XElement(
                                 XName.Get "PackageReference",
                                 XAttribute(XName.Get "Update", "FS.GG.SDD.Artifacts"),
-                                XAttribute(XName.Get "VersionOverride", "[1.4.0]"),
+                                XAttribute(XName.Get "VersionOverride", "[1.5.0]"),
                                 XAttribute(XName.Get "GeneratePathProperty", "false")
                             )
                         )
@@ -134,7 +134,7 @@ let ``imported published kernel metadata override is independently rejected`` ()
         (fun root ->
             let exitCode, _, error = runVerifier root
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("dependency=[1.4.0] rule=published-kernel-version-must-be-central", error)
+            Assert.Contains("dependency=[1.5.0] rule=published-kernel-version-must-be-central", error)
             Assert.Contains("rule=published-kernel-path-property-required", error))
 
 [<Fact>]
@@ -203,7 +203,7 @@ let ``non exact central published kernel pin is independently rejected`` () =
         (fun root ->
             let exitCode, _, error = runVerifier root
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=published-kernel-central-pin-must-equal-1.4.0", error))
+            Assert.Contains("rule=published-kernel-central-pin-must-equal-1.5.0", error))
 
 [<Fact>]
 let ``forbidden pure-core edge is independently rejected`` () =

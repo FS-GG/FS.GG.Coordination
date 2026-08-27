@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 2,
+  "lifecycle": "typed-sdd",
+  "backend": "quint-specification-v1",
+  "profileIdentity": "fsgg-quint-profile/2",
+  "toolchainIdentity": "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486",
+  "packageIdentity": "FS.GG.SDD.Artifacts/1.5.0",
+  "artifacts": [
+    {
+      "id": "bindings",
+      "path": "readiness/26-canonical-quint-protocol/quint/bindings.fs",
+      "sha256": "18963f2ee34906cabe95890e24064b8d4953684bb4b6714aac066a6a78b5a196"
+    },
+    {
+      "id": "compilation-receipt",
+      "path": "readiness/26-canonical-quint-protocol/quint/receipt.json",
+      "sha256": "68771ea979eac94c174f1b2a998ce60b3e1290bcb5d7e610f9856d119124216e"
+    },
+    {
+      "id": "compiled-contract",
+      "path": "readiness/26-canonical-quint-protocol/quint/contract.json",
+      "sha256": "83544455ece287d4e3722e7340620260a164fbbfe3103d7d1d88c5fd31736b4b"
+    },
+    {
+      "id": "fence-manifest",
+      "path": "readiness/26-canonical-quint-protocol/quint/fences.json",
+      "sha256": "be642c4eba1b3bebcaa87391ab2322bbec61e9295c4408a281e74ccd72fa0f59"
+    },
+    {
+      "id": "generated-modules",
+      "path": "readiness/26-canonical-quint-protocol/quint/protocol.qnt",
+      "sha256": "2b8f4ab922669d1a27ccf75fe2e76c730b271896deec580f05e7a516d7847629"
+    },
+    {
+      "id": "markdown",
+      "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+      "sha256": "61c4ed50373bc0965869c2d226bf5f9194e803f011a0514b0e8c1075e1deacb0"
+    },
+    {
+      "id": "profile-bindings",
+      "path": "readiness/26-canonical-quint-protocol/quint/profile-bindings.json",
+      "sha256": "74d45811fd64b79afcfe4f343f41aecc35b4aa68ac0d825627d6105109d25e77"
+    },
+    {
+      "id": "sandbox-contract",
+      "path": "readiness/26-canonical-quint-protocol/quint/sandbox-contract.json",
+      "sha256": "2bf8ff26ddb488444c59daa77515b183008c352213e48ac6e36e15e0bc08c122"
+    },
+    {
+      "id": "source-map",
+      "path": "readiness/26-canonical-quint-protocol/quint/source-map.json",
+      "sha256": "b31e4c16a4fa8a2a610e8ef0ff302cfb03cdcfe529336b325cba2e3598298ce3"
+    },
+    {
+      "id": "typed-effect",
+      "path": "readiness/26-canonical-quint-protocol/quint/typed-effect.json",
+      "sha256": "30f143d92b6c41c844d7a754bc1aecd727a8a9ed6596e371e8b3f3903f8b43e7"
+    }
+  ],
+  "authoringAgent": "godwit-4a9f",
+  "authoringSession": "gs2-02-1-profile2",
+  "rollbackManifestPath": null,
+  "rollbackManifestSha256": null
+}

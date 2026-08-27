@@ -334,9 +334,9 @@ let centralPinViolations =
             |> Seq.toList
 
         match pins with
-        | [ "[1.4.0]" ] -> []
+        | [ "[1.5.0]" ] -> []
         | [] -> [ violation "repository" "FS.GG.SDD.Artifacts" "published-kernel-central-pin-missing" ]
-        | values -> [ violation "repository" (String.concat "," values) "published-kernel-central-pin-must-equal-1.4.0" ]
+        | values -> [ violation "repository" (String.concat "," values) "published-kernel-central-pin-must-equal-1.5.0" ]
 
 let producerCopyViolations =
     let forbiddenNames =

@@ -1,8 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="Generated/Protocol.Generated.fs" />
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Protocol.md" Pack="true" PackagePath="protocol/Protocol.md" />
+    <None Include="Protocol.bindings.json" Pack="true" PackagePath="protocol/Protocol.bindings.json" />
+    <None Include="Generated/typed-authority.json" Pack="true" PackagePath="protocol/typed-authority.json" />
+    <None Include="Generated/contract.json" Pack="true" PackagePath="protocol/contract.json" />
+    <None Include="Generated/source-map.json" Pack="true" PackagePath="protocol/source-map.json" />
+    <None Include="Generated/receipt.json" Pack="true" PackagePath="protocol/receipt.json" />
   </ItemGroup>
 
 </Project>
