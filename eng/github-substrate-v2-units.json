@@ -102,7 +102,10 @@
       "exitGate": "clean clone through install validation is independently accepted",
       "qGates": ["Q7"],
       "gateCommands": ["bootstrap-recovery"],
-      "contractSha256": "7c5216200257b6189ad2a6afd1ee48be4f3c41ac9acbe1dc30a5f566c60d79ae"
+      "gateContracts": [
+        { "id": "bootstrap-recovery", "qGate": "Q7", "commandSha256": "2accc796d33ab16872f170d98f5a271ba9cc7026a22a98786b906eff5a93d91e" }
+      ],
+      "contractSha256": "f3446127faf96f8cd5f0f7ac55edcacb4dc407ba6706a51c9b9540453e99e098"
     },
     {
       "id": "GS2-01.9",

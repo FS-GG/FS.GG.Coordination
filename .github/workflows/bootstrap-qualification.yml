@@ -135,9 +135,36 @@ jobs:
           path: ${{ runner.temp }}/package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg
           if-no-files-found: error
 
+  bootstrap-recovery:
+    name: bootstrap-recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Recover from committed bytes through install
+        run: dotnet fsi eng/bootstrap-recovery.fsx -- .
+      - name: Stage bootstrap recovery evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/bootstrap-recovery"
+          cp artifacts/bootstrap-recovery/result.json "$RUNNER_TEMP/bootstrap-recovery/result.json"
+      - name: Upload bootstrap recovery evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bootstrap-recovery
+          path: ${{ runner.temp }}/bootstrap-recovery/result.json
+          if-no-files-found: error
+
   evidence-manifest:
     name: evidence-manifest
-    needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke]
+    needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke, bootstrap-recovery]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:

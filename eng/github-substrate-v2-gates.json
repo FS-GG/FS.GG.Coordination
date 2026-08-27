@@ -30,6 +30,12 @@
       "qGate": "Q7",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-evidence-storage.fsx", "--", "--self-test", "evidence/github-substrate-v2"]
+    },
+    {
+      "id": "bootstrap-recovery",
+      "qGate": "Q7",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/bootstrap-recovery.fsx", "--", "."]
     }
   ]
 }

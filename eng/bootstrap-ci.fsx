@@ -277,6 +277,67 @@ let private safeArtifactPath (root: string) (relative: string) =
     let normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + string Path.DirectorySeparatorChar
     if combined.StartsWith(normalizedRoot, StringComparison.Ordinal) then Some combined else None
 
+let private recoveryStages =
+    [ "clone"; "restore"; "build"; "unit-tests"; "architecture-tests"; "pack"; "install"; "execute" ]
+
+let private isLowerSha256 (value: string) =
+    not (String.IsNullOrWhiteSpace value)
+    && value.Length = 64
+    && value |> Seq.forall (fun character -> character >= '0' && character <= '9' || character >= 'a' && character <= 'f')
+
+let private recoveryCanonicalBytes (head: string) (packageDigest: string) =
+    use stream = new MemoryStream()
+    use writer = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false))
+    writer.WriteStartObject()
+    writer.WriteString("schema", "fsgg.coordination.bootstrap-recovery/1")
+    writer.WriteString("candidate", head)
+    writer.WriteString("packageSha256", packageDigest)
+    writer.WriteStartArray("publishedSources")
+    writer.WriteStringValue("https://api.nuget.org/v3/index.json")
+    writer.WriteEndArray()
+    writer.WriteStartArray("stages")
+    for stage in recoveryStages do writer.WriteStringValue stage
+    writer.WriteEndArray()
+    writer.WriteEndObject()
+    writer.Flush()
+    Array.append (stream.ToArray()) [| byte '\n' |]
+
+let private inspectRecoveryReceipt (path: string) (head: string) =
+    try
+        let bytes = File.ReadAllBytes path
+        use document = JsonDocument.Parse bytes
+        let root = document.RootElement
+        let properties = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        let expectedProperties = [ "schema"; "candidate"; "packageSha256"; "publishedSources"; "stages" ]
+        let packageDigest = stringProperty "packageSha256" root |> Option.defaultValue ""
+        let sources = stringArray "publishedSources" root
+        let stages = stringArray "stages" root
+        [ if root.ValueKind <> JsonValueKind.Object || properties <> expectedProperties then
+              yield violation "recovery-receipt-properties" (String.concat "," properties)
+          if stringProperty "schema" root <> Some "fsgg.coordination.bootstrap-recovery/1" then
+              yield violation "recovery-receipt-schema" "unsupported or absent schema"
+          if stringProperty "candidate" root <> Some(head.ToLowerInvariant()) then
+              yield violation "recovery-receipt-candidate" $"expected=%s{head}"
+          if not (isLowerSha256 packageDigest) then
+              yield violation "recovery-receipt-package-digest" packageDigest
+          if sources <> [ "https://api.nuget.org/v3/index.json" ] then
+              yield violation "recovery-receipt-source" (String.concat "," sources)
+          if stages <> recoveryStages then
+              yield violation "recovery-receipt-stages" (String.concat "," stages)
+          if not (bytes.AsSpan().SequenceEqual((recoveryCanonicalBytes (head.ToLowerInvariant()) packageDigest).AsSpan())) then
+              yield violation "recovery-receipt-canonical" "bytes differ from the compact exact contract" ]
+    with exceptionValue ->
+        [ violation "recovery-receipt-unreadable" exceptionValue.Message ]
+
+let private inspectRecoveryArtifact (artifactRoot: string) (head: string) (contract: BootstrapContract) =
+    contract.Jobs
+    |> List.tryFind (fun job -> job.Id = "bootstrap-recovery")
+    |> Option.map (fun job ->
+        match safeArtifactPath artifactRoot job.Artifact with
+        | Some path when File.Exists path -> inspectRecoveryReceipt path head
+        | _ -> [ violation "recovery-receipt-missing" job.Artifact ])
+    |> Option.defaultValue [ violation "recovery-receipt-contract" "bootstrap-recovery job is absent" ]
+
 let private writeEvidence (output: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) =
     if not (isSha head) then failwith "candidate head must be an exact 40-hex SHA"
     let artifacts =
@@ -313,7 +374,8 @@ let private inspectEvidence (path: string) (head: string) (artifactRoot: string)
         let gates = arrayProperty "gates" root |> Option.defaultValue []
         let expected = contract.Jobs |> List.map (fun gate -> gate.Id, gate) |> Map.ofList
         let ids = gates |> List.choose (stringProperty "id")
-        [ if stringProperty "schema" root <> Some contract.EvidenceSchema then
+        [ yield! inspectRecoveryArtifact artifactRoot head contract
+          if stringProperty "schema" root <> Some contract.EvidenceSchema then
               yield violation "evidence-schema" "unsupported or absent schema"
           if stringProperty "candidate" root <> Some(head.ToLowerInvariant()) then
               yield violation "evidence-candidate" $"expected=%s{head}"
@@ -355,9 +417,12 @@ let result =
             |> Option.defaultValue [ violation "argument" "--report is required" ]
         | "collect" ->
             match optionValue "--head" arguments, optionValue "--artifacts" arguments, optionValue "--output" arguments with
-            | Some head, Some artifacts, Some output ->
-                writeEvidence (Path.GetFullPath output) head (Path.GetFullPath artifacts) contract
-                []
+            | Some head, Some artifacts, Some output when isSha head ->
+                let artifactRoot = Path.GetFullPath artifacts
+                let recoveryViolations = inspectRecoveryArtifact artifactRoot head contract
+                if List.isEmpty recoveryViolations then
+                    writeEvidence (Path.GetFullPath output) head artifactRoot contract
+                recoveryViolations
             | _ -> [ violation "argument" "collect requires --head, --artifacts, and --output" ]
         | "evidence" ->
             match optionValue "--head" arguments, optionValue "--artifacts" arguments, optionValue "--file" arguments with

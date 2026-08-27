@@ -78,12 +78,18 @@ let private createArtifacts root =
           "compiler-and-tests/architecture.trx"
           "dependency-and-security/vulnerability-report.json"
           "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
+          "bootstrap-recovery/result.json"
           "evidence-manifest/contract.json" ]
     for relative in paths do
         let target = Path.Combine(root, relative)
         Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
         if relative = "evidence-manifest/contract.json" then
             File.Copy(Path.Combine(repositoryRoot, "eng/bootstrap-ci-contract.json"), target)
+        elif relative = "bootstrap-recovery/result.json" then
+            let packageDigest = String.replicate 64 "b"
+            File.WriteAllText(
+                target,
+                $"{{\"schema\":\"fsgg.coordination.bootstrap-recovery/1\",\"candidate\":\"%s{exactHead}\",\"packageSha256\":\"%s{packageDigest}\",\"publishedSources\":[\"https://api.nuget.org/v3/index.json\"],\"stages\":[\"clone\",\"restore\",\"build\",\"unit-tests\",\"architecture-tests\",\"pack\",\"install\",\"execute\"]}}\n")
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
 
@@ -115,7 +121,7 @@ let private runPackageSmoke scratch packageOverride =
     childProcess.ExitCode, output.Trim(), error.Trim()
 
 [<Fact>]
-let ``bootstrap workflow satisfies the exact five-gate contract`` () =
+let ``bootstrap workflow satisfies the exact six-job contract`` () =
     let exitCode, output, error = runBootstrap repositoryRoot [ "workflow" ]
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=workflow", output)
@@ -386,6 +392,60 @@ let ``exact-head evidence and artifact digests are accepted`` () =
         Assert.Equal(0, exitCode)
         Assert.Equal("BOOTSTRAP_CI_OK mode=evidence", output)
         Assert.Equal("", error))
+
+let private mutateRecoveryReceipt mutate =
+    withEvidence (fun root artifacts manifest ->
+        let path = Path.Combine(artifacts, "bootstrap-recovery/result.json")
+        mutate path
+        runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ])
+
+[<Fact>]
+let ``recovery evidence rejects malformed JSON`` () =
+    let exitCode, _, error = mutateRecoveryReceipt (fun path -> File.WriteAllText(path, "not-json"))
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=recovery-receipt-unreadable", error)
+
+[<Fact>]
+let ``recovery evidence rejects a stale candidate`` () =
+    let exitCode, _, error =
+        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace(exactHead, String.replicate 40 "c")))
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=recovery-receipt-candidate", error)
+
+[<Fact>]
+let ``recovery evidence rejects feed substitution`` () =
+    let exitCode, _, error =
+        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("https://api.nuget.org/v3/index.json", "https://packages.example.invalid/v3/index.json")))
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=recovery-receipt-source", error)
+
+[<Theory>]
+[<InlineData("\"clone\",", "")>]
+[<InlineData("\"clone\",\"restore\"", "\"restore\",\"clone\"")>]
+[<InlineData("\"execute\"", "\"execute\",\"publish\"")>]
+let ``recovery evidence rejects missing reordered and extra stages`` (original: string) (replacement: string) =
+    let exitCode, _, error =
+        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace(original, replacement)))
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=recovery-receipt-stages", error)
+
+[<Fact>]
+let ``recovery evidence rejects a malformed package digest`` () =
+    let exitCode, _, error =
+        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace(String.replicate 64 "b", "ABC")))
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=recovery-receipt-package-digest", error)
+
+[<Fact>]
+let ``recovery evidence rejects unexpected fields and noncanonical bytes`` () =
+    let unexpectedCode, _, unexpectedError =
+        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("{\"schema\"", "{\"extra\":true,\"schema\"")))
+    Assert.NotEqual(0, unexpectedCode)
+    Assert.Contains("rule=recovery-receipt-properties", unexpectedError)
+    let shapeCode, _, shapeError =
+        mutateRecoveryReceipt (fun path -> File.AppendAllText(path, "\n"))
+    Assert.NotEqual(0, shapeCode)
+    Assert.Contains("rule=recovery-receipt-canonical", shapeError)
 
 [<Fact>]
 let ``evidence rejects a stale candidate`` () =
