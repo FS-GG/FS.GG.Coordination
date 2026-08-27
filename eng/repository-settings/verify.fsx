@@ -168,7 +168,24 @@ let validate (desiredPath: string) (receiptPath: string) =
     let requiredOps =
         [ "repository"; "teams"; "actions-permissions"; "selected-actions"; "security"; "dependabot-alerts";
           "dependency-graph"; "main-ruleset"; "release-tag-ruleset" ] |> Set.ofList
-    if not (Set.isSubset requiredOps operationNames) then fail "RS-OPERATIONS" "authoritative response operation set is incomplete"
+    if operationNames <> requiredOps then fail "RS-OPERATIONS" "authoritative response operation set must be exact"
+    let staticOperations =
+        [ "actions-permissions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions", 200)
+          "dependabot-alerts", ("GET", "/repos/FS-GG/FS.GG.Coordination/vulnerability-alerts", 204)
+          "dependency-graph", ("GET", "/repos/FS-GG/FS.GG.Coordination/dependency-graph/sbom", 200)
+          "repository", ("GET", "/repos/FS-GG/FS.GG.Coordination", 200)
+          "security", ("GET", "/repos/FS-GG/FS.GG.Coordination", 200)
+          "selected-actions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions/selected-actions", 200)
+          "teams", ("GET", "/repos/FS-GG/FS.GG.Coordination/teams", 200) ]
+    for name, (expectedMethod, expectedPath, expectedStatus) in staticOperations do
+        let operation = operations |> Array.find (fun item -> item.GetProperty("name").GetString() = name)
+        if operation.GetProperty("method").GetString() <> expectedMethod
+           || operation.GetProperty("path").GetString() <> expectedPath
+           || operation.GetProperty("httpStatus").GetInt32() <> expectedStatus then
+            fail "RS-OPERATION-CONTRACT" $"{name} must be {expectedMethod} {expectedPath} status={expectedStatus}"
+    let dependabotOperation = operations |> Array.find (fun item -> item.GetProperty("name").GetString() = "dependabot-alerts")
+    if dependabotOperation.GetProperty("responseSha256").GetString() <> "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" then
+        fail "RS-OPERATION-CONTRACT" "Dependabot-alerts 204 response must bind the empty response body"
     for ruleset in receiptRules do
         let name = if ruleset.GetProperty("target").GetString() = "branch" then "main-ruleset" else "release-tag-ruleset"
         let operation = operations |> Array.find (fun item -> item.GetProperty("name").GetString() = name)

@@ -69,8 +69,13 @@ let ``canonical provisioning fixture passes the strict validator`` () =
 [<InlineData("\"httpStatus\":403", "\"httpStatus\":200", "RS-STATE-MISMATCH")>]
 [<InlineData("\"id\":1,\"include\"", "\"id\":0,\"include\"", "RS-RULESET-ID")>]
 [<InlineData("\"name\":\"teams\"", "\"name\":\"teams-missing\"", "RS-OPERATIONS")>]
+[<InlineData("dependency-graph/sbom", "issues", "RS-OPERATION-CONTRACT")>]
+[<InlineData("\"httpStatus\":204", "\"httpStatus\":200", "RS-OPERATION-CONTRACT")>]
+[<InlineData("vulnerability-alerts", "actions/artifacts", "RS-OPERATION-CONTRACT")>]
+[<InlineData("Coordination/teams", "Coordination/collaborators", "RS-OPERATION-CONTRACT")>]
+[<InlineData("\"method\":\"GET\",\"name\":\"dependency-graph\"", "\"method\":\"POST\",\"name\":\"dependency-graph\"", "RS-OPERATION-CONTRACT")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
-[<InlineData("\"digest\":\"4", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
+[<InlineData("\"digest\":\"e", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =
     withMutation oldValue newValue (fun path ->
         let exitCode, output = verify path
