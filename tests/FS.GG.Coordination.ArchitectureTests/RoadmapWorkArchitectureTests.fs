@@ -136,7 +136,7 @@ let ``manifest refuses an external untracked unit index before evidence creation
         Assert.Equal("", headError)
 
         let checkoutExit, _, checkoutError =
-            runAt clone "git" [ "checkout"; "--quiet"; head ]
+            runAt clone "git" [ "-c"; "advice.detachedHead=false"; "checkout"; "--quiet"; head ]
 
         Assert.Equal(0, checkoutExit)
         Assert.Equal("", checkoutError)
