@@ -1,4 +1,4 @@
-# GS2-02.5 canonical coordination protocol
+# GS2-02.6 canonical coordination protocol
 
 This document is the sole authored source for the coordination protocol baseline. Every behavioral
 fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
@@ -6,11 +6,12 @@ projections and must never be edited independently.
 
 GS2-02.1 established vocabulary and stable integration identities; GS2-02.2 added the closed,
 revision-aware authority catalogue; GS2-02.3 added observation outcomes and knowledge semantics.
-GS2-02.4 added lifecycle intent and derived status. This unit adds native parent/child and blocking
-relations as typed, directed edge sets. Edge-local add and remove intent is idempotent, preserves
-unrelated edges, rejects self edges, and never converts observation failure into proven absence.
-Later GS2-02 units refine streams, generalized mutations, plans, desired state, and compiled outputs.
-No hosted runtime or production mutation authority is defined here.
+GS2-02.4 added lifecycle intent and derived status; GS2-02.5 added native relation algebra. This unit
+adds typed claim/lease/touch-set, operation-lock/election, review, delivery, and operation-receipt
+streams. Envelopes have closed payload identities, contiguous per-generation ordering, fail-closed
+observation semantics, and explicit ephemeral-versus-durable retention. Later GS2-02 units refine
+generalized mutations, plans, desired state, and compiled outputs. No hosted runtime or production
+mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -74,6 +75,26 @@ module CoordinationProtocol {
   }
   type NativeRelationKind = { id: str, kind: str, direction: str }
   type NativeRelationEdge = { relationKindId: str, sourceId: str, targetId: str }
+  type ProtocolStreamKind = { id: str, kind: str, family: str }
+  type ProtocolPayloadKind = {
+    id: str,
+    kind: str,
+    streamKindId: str,
+    retentionClass: str,
+    durableCheckpoint: bool,
+  }
+  type ProtocolEnvelope = {
+    streamKindId: str,
+    streamId: str,
+    subjectId: str,
+    generation: int,
+    sequence: int,
+    eventId: str,
+    predecessorEventId: str,
+    payloadKindId: str,
+    retentionClass: str,
+    durableCheckpoint: bool,
+  }
 
   pure val vocabularyCatalogue = Set(
     { id: "SubjectVocabulary", kind: "subject", family: "subjects" },
@@ -123,6 +144,25 @@ module CoordinationProtocol {
     { id: "REL-Blocks", kind: "nativeRelationKind", direction: "blocker-to-blocked" }
   )
 
+  pure val protocolStreamKindCatalogue = Set(
+    { id: "STREAM-Claim", kind: "protocolStreamKind", family: "claim-lease-touch-set" },
+    { id: "STREAM-OperationLock", kind: "protocolStreamKind", family: "operation-lock-election" },
+    { id: "STREAM-Review", kind: "protocolStreamKind", family: "review" },
+    { id: "STREAM-Delivery", kind: "protocolStreamKind", family: "delivery" },
+    { id: "STREAM-OperationReceipt", kind: "protocolStreamKind", family: "operation-receipt" }
+  )
+
+  pure val protocolPayloadKindCatalogue = Set(
+    { id: "PAYLOAD-Claim", kind: "protocolPayloadKind", streamKindId: "STREAM-Claim", retentionClass: "ephemeral", durableCheckpoint: false },
+    { id: "PAYLOAD-Lease", kind: "protocolPayloadKind", streamKindId: "STREAM-Claim", retentionClass: "ephemeral", durableCheckpoint: false },
+    { id: "PAYLOAD-TouchSet", kind: "protocolPayloadKind", streamKindId: "STREAM-Claim", retentionClass: "ephemeral", durableCheckpoint: false },
+    { id: "PAYLOAD-OperationLock", kind: "protocolPayloadKind", streamKindId: "STREAM-OperationLock", retentionClass: "ephemeral", durableCheckpoint: false },
+    { id: "PAYLOAD-Election", kind: "protocolPayloadKind", streamKindId: "STREAM-OperationLock", retentionClass: "durable", durableCheckpoint: true },
+    { id: "PAYLOAD-Review", kind: "protocolPayloadKind", streamKindId: "STREAM-Review", retentionClass: "durable", durableCheckpoint: true },
+    { id: "PAYLOAD-Delivery", kind: "protocolPayloadKind", streamKindId: "STREAM-Delivery", retentionClass: "durable", durableCheckpoint: true },
+    { id: "PAYLOAD-OperationReceipt", kind: "protocolPayloadKind", streamKindId: "STREAM-OperationReceipt", retentionClass: "durable", durableCheckpoint: true }
+  )
+
   pure val relationshipCatalogue = Set(
     { id: "REL-Subject-Evidence", kind: "verifiedBy", fromId: "SubjectVocabulary", toId: "EvidenceObligationVocabulary" },
     { id: "REL-Authority-Evidence", kind: "verifiedBy", fromId: "AuthorityVocabulary", toId: "EvidenceObligationVocabulary" },
@@ -149,6 +189,8 @@ module CoordinationProtocol {
     { id: "BOUND-ObservationOutcomeCardinality", kind: "bound", minimum: 9, maximum: 9 },
     { id: "BOUND-LifecycleIntentCardinality", kind: "bound", minimum: 4, maximum: 4 },
     { id: "BOUND-NativeRelationKindCardinality", kind: "bound", minimum: 2, maximum: 2 },
+    { id: "BOUND-ProtocolStreamKindCardinality", kind: "bound", minimum: 5, maximum: 5 },
+    { id: "BOUND-ProtocolPayloadKindCardinality", kind: "bound", minimum: 8, maximum: 8 },
     { id: "BOUND-TraceSteps", kind: "bound", minimum: 0, maximum: 4 }
   )
 
@@ -172,6 +214,11 @@ module CoordinationProtocol {
     ,{ id: "VERIFY-NativeRelations", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
         "REL-ParentChild", "REL-Blocks"
       ), boundIds: Set("BOUND-NativeRelationKindCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-ProtocolStreams", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "STREAM-Claim", "STREAM-OperationLock", "STREAM-Review", "STREAM-Delivery", "STREAM-OperationReceipt",
+        "PAYLOAD-Claim", "PAYLOAD-Lease", "PAYLOAD-TouchSet", "PAYLOAD-OperationLock", "PAYLOAD-Election",
+        "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+      ), boundIds: Set("BOUND-ProtocolStreamKindCardinality", "BOUND-ProtocolPayloadKindCardinality", "BOUND-TraceSteps") }
   )
 
   pure val compatibilityCatalogue = Set(
@@ -210,6 +257,22 @@ module CoordinationProtocol {
       ) }
     ,{ id: "RelationObservationFailuresDoNotBecomeAbsence", kind: "invariant", subjects: Set(
         "REL-ParentChild", "REL-Blocks", "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+      ) }
+    ,{ id: "ProtocolStreamCataloguesAreClosed", kind: "invariant", subjects: Set(
+        "STREAM-Claim", "STREAM-OperationLock", "STREAM-Review", "STREAM-Delivery", "STREAM-OperationReceipt"
+      ) }
+    ,{ id: "ProtocolEnvelopesAreValidAndOrdered", kind: "invariant", subjects: Set(
+        "PAYLOAD-Claim", "PAYLOAD-Lease", "PAYLOAD-TouchSet", "PAYLOAD-OperationLock", "PAYLOAD-Election",
+        "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+      ) }
+    ,{ id: "DurableProtocolCheckpointsArePreserved", kind: "invariant", subjects: Set(
+        "PAYLOAD-Election", "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+      ) }
+    ,{ id: "ProtocolStreamChangesPreservePriorSemantics", kind: "invariant", subjects: Set(
+        "STREAM-Claim", "INTENT-Backlog", "REL-ParentChild", "REL-Blocks"
+      ) }
+    ,{ id: "ProtocolStreamObservationFailuresDoNotBecomeAbsence", kind: "invariant", subjects: Set(
+        "AUTH-ProtocolStream", "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
       ) }
   )
 
@@ -354,6 +417,142 @@ module CoordinationProtocol {
   pure val parentChildEdge = { relationKindId: "REL-ParentChild", sourceId: "subject-parent", targetId: "subject-child" }
   pure val blockingEdge = { relationKindId: "REL-Blocks", sourceId: "subject-blocker", targetId: "subject-blocked" }
 
+  pure def protocolStreamKindExists(streamKindId: str): bool =
+    protocolStreamKindCatalogue.exists(streamKind => streamKind.id == streamKindId)
+
+  pure def protocolPayloadMatchesEnvelope(envelope: ProtocolEnvelope): bool =
+    protocolPayloadKindCatalogue.exists(payload => and {
+      payload.id == envelope.payloadKindId,
+      payload.streamKindId == envelope.streamKindId,
+      payload.retentionClass == envelope.retentionClass,
+      payload.durableCheckpoint == envelope.durableCheckpoint,
+    })
+
+  pure def protocolEnvelopeShapeIsValid(envelope: ProtocolEnvelope): bool = and {
+    protocolStreamKindExists(envelope.streamKindId),
+    protocolPayloadMatchesEnvelope(envelope),
+    envelope.streamId != "",
+    envelope.subjectId != "",
+    envelope.generation > 0,
+    envelope.sequence > 0,
+    envelope.eventId != "",
+    envelope.predecessorEventId != envelope.eventId,
+    if (envelope.sequence == 1) envelope.predecessorEventId == "" else envelope.predecessorEventId != "",
+  }
+
+  pure def protocolAppendHasPredecessor(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    if (envelope.sequence == 1) {
+      if (envelope.generation == 1) true
+      else events.exists(previous => and {
+        previous.streamKindId == envelope.streamKindId,
+        previous.streamId == envelope.streamId,
+        previous.subjectId == envelope.subjectId,
+        previous.generation == envelope.generation - 1,
+        previous.durableCheckpoint,
+      })
+    } else events.exists(previous => and {
+      previous.streamKindId == envelope.streamKindId,
+      previous.streamId == envelope.streamId,
+      previous.subjectId == envelope.subjectId,
+      previous.generation == envelope.generation,
+      previous.sequence == envelope.sequence - 1,
+      previous.eventId == envelope.predecessorEventId,
+    })
+
+  pure def retainedProtocolEnvelopeHasPredecessor(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    if (envelope.sequence == 1) {
+      if (envelope.generation == 1) true
+      else events.exists(previous => and {
+        previous.streamKindId == envelope.streamKindId,
+        previous.streamId == envelope.streamId,
+        previous.subjectId == envelope.subjectId,
+        previous.generation == envelope.generation - 1,
+        previous.durableCheckpoint,
+      })
+    } else or {
+      events.exists(previous => and {
+        previous.streamKindId == envelope.streamKindId,
+        previous.streamId == envelope.streamId,
+        previous.subjectId == envelope.subjectId,
+        previous.generation == envelope.generation,
+        previous.sequence == envelope.sequence - 1,
+        previous.eventId == envelope.predecessorEventId,
+      }),
+      events.exists(checkpoint => checkpoint.subjectId == envelope.subjectId and checkpoint.durableCheckpoint),
+    }
+
+  pure def protocolEnvelopeIdentityIsConsistent(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    events.filter(existing => existing.eventId == envelope.eventId).forall(existing => existing == envelope)
+
+  pure def protocolEnvelopeSequenceIsUnique(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    events.filter(existing => and {
+      existing.streamKindId == envelope.streamKindId,
+      existing.streamId == envelope.streamId,
+      existing.subjectId == envelope.subjectId,
+      existing.generation == envelope.generation,
+      existing.sequence == envelope.sequence,
+    }).forall(existing => existing == envelope)
+
+  pure def protocolEnvelopeIsOrdered(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool = and {
+    retainedProtocolEnvelopeHasPredecessor(envelope, events),
+    protocolEnvelopeIdentityIsConsistent(envelope, events),
+    protocolEnvelopeSequenceIsUnique(envelope, events),
+  }
+
+  pure def protocolAppendIsValid(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    if (events.contains(envelope)) true
+    else and {
+      protocolEnvelopeShapeIsValid(envelope),
+      events.forall(existing => existing.eventId != envelope.eventId),
+      events.forall(existing => not(and {
+        existing.streamKindId == envelope.streamKindId,
+        existing.streamId == envelope.streamId,
+        existing.subjectId == envelope.subjectId,
+        existing.generation == envelope.generation,
+        existing.sequence == envelope.sequence,
+      })),
+      protocolAppendHasPredecessor(envelope, events),
+      if (envelope.sequence == 1) events.forall(existing => not(and {
+        existing.streamKindId == envelope.streamKindId,
+        existing.streamId == envelope.streamId,
+        existing.subjectId == envelope.subjectId,
+        existing.generation >= envelope.generation,
+      })) else true,
+    }
+
+  pure def ephemeralEnvelopeMayBeCompacted(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool = and {
+    envelope.retentionClass == "ephemeral",
+    not(envelope.durableCheckpoint),
+    events.exists(checkpoint => and {
+      checkpoint.subjectId == envelope.subjectId,
+      checkpoint.durableCheckpoint,
+      checkpoint.retentionClass == "durable",
+    }),
+  }
+
+  pure def protocolStreamObservationContributesKnowledge(outcomeId: str, events: Set[ProtocolEnvelope]): bool =
+    if (outcomeId == "OBS-Observed") events.forall(event => and {
+      protocolEnvelopeShapeIsValid(event),
+      protocolEnvelopeIsOrdered(event, events),
+    }) else outcomeId == "OBS-ProvenAbsent" and events == Set()
+
+  pure val claimEnvelope = {
+    streamKindId: "STREAM-Claim", streamId: "claim:subject-work", subjectId: "subject-work",
+    generation: 1, sequence: 1, eventId: "claim-event-1", predecessorEventId: "",
+    payloadKindId: "PAYLOAD-Claim", retentionClass: "ephemeral", durableCheckpoint: false,
+  }
+
+  pure val leaseEnvelope = {
+    ...claimEnvelope,
+    sequence: 2, eventId: "lease-event-2", predecessorEventId: "claim-event-1", payloadKindId: "PAYLOAD-Lease",
+  }
+
+  pure val reviewCheckpointEnvelope = {
+    streamKindId: "STREAM-Review", streamId: "review:subject-work", subjectId: "subject-work",
+    generation: 1, sequence: 1, eventId: "review-event-1", predecessorEventId: "",
+    payloadKindId: "PAYLOAD-Review", retentionClass: "durable", durableCheckpoint: true,
+  }
+
   pure val closedLifecycleIntentCatalogue = and {
     lifecycleIntentCatalogue.map(intent => intent.id) == Set(
       "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
@@ -364,6 +563,22 @@ module CoordinationProtocol {
   pure val closedNativeRelationKindCatalogue = and {
     nativeRelationKindCatalogue.map(relationKind => relationKind.id) == Set("REL-ParentChild", "REL-Blocks"),
     nativeRelationKindCatalogue.map(relationKind => relationKind.direction) == Set("parent-to-child", "blocker-to-blocked"),
+  }
+
+  pure val closedProtocolStreamCatalogues = and {
+    protocolStreamKindCatalogue.map(streamKind => streamKind.id) == Set(
+      "STREAM-Claim", "STREAM-OperationLock", "STREAM-Review", "STREAM-Delivery", "STREAM-OperationReceipt"
+    ),
+    protocolPayloadKindCatalogue.map(payload => payload.id) == Set(
+      "PAYLOAD-Claim", "PAYLOAD-Lease", "PAYLOAD-TouchSet", "PAYLOAD-OperationLock", "PAYLOAD-Election",
+      "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+    ),
+    protocolPayloadKindCatalogue.filter(payload => payload.retentionClass == "ephemeral").map(payload => payload.id) == Set(
+      "PAYLOAD-Claim", "PAYLOAD-Lease", "PAYLOAD-TouchSet", "PAYLOAD-OperationLock"
+    ),
+    protocolPayloadKindCatalogue.filter(payload => payload.durableCheckpoint).map(payload => payload.id) == Set(
+      "PAYLOAD-Election", "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+    ),
   }
 
   pure val closedAuthorityCatalogue = and {
@@ -400,6 +615,8 @@ module CoordinationProtocol {
   var lifecycleStatusCurrent: bool
   var nativeRelationEdges: Set[NativeRelationEdge]
   var authorizedNativeRelationEdges: Set[NativeRelationEdge]
+  var protocolStreamEvents: Set[ProtocolEnvelope]
+  var authorizedDurableProtocolCheckpoints: Set[ProtocolEnvelope]
 
   action init = all {
     evidenceObserved' = false,
@@ -415,6 +632,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = true,
     nativeRelationEdges' = Set(),
     authorizedNativeRelationEdges' = Set(),
+    protocolStreamEvents' = Set(),
+    authorizedDurableProtocolCheckpoints' = Set(),
   }
 
   action observeProtocolEvidence: bool = all {
@@ -431,6 +650,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
     nativeRelationEdges' = nativeRelationEdges,
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action acceptVocabularyIdentity(vocabularyId: str): bool = all {
@@ -449,6 +670,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
     nativeRelationEdges' = nativeRelationEdges,
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action observeAuthority(observation: AuthorityObservation): bool = all {
@@ -465,6 +688,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
     nativeRelationEdges' = nativeRelationEdges,
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action acceptObservedAuthority: bool = all {
@@ -483,6 +708,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
     nativeRelationEdges' = nativeRelationEdges,
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action acceptObservationKnowledge: bool = all {
@@ -501,6 +728,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
     nativeRelationEdges' = nativeRelationEdges,
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action setHumanIntent(intentId: str): bool = all {
@@ -518,6 +747,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = false,
     nativeRelationEdges' = nativeRelationEdges,
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action observeLifecycleFacts(facts: LifecycleFacts): bool = all {
@@ -534,6 +765,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = false,
     nativeRelationEdges' = nativeRelationEdges,
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action refreshLifecycleStatus: bool = all {
@@ -551,6 +784,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = true,
     nativeRelationEdges' = nativeRelationEdges,
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action addNativeRelation(edge: NativeRelationEdge): bool = all {
@@ -568,6 +803,8 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
     nativeRelationEdges' = nativeRelationEdges.union(Set(edge)),
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges.union(Set(edge)),
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action removeNativeRelation(edge: NativeRelationEdge): bool = all {
@@ -585,6 +822,49 @@ module CoordinationProtocol {
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
     nativeRelationEdges' = nativeRelationEdges.filter(existing => existing != edge),
     authorizedNativeRelationEdges' = authorizedNativeRelationEdges.filter(existing => existing != edge),
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action appendProtocolEnvelope(envelope: ProtocolEnvelope): bool = all {
+    protocolAppendIsValid(envelope, protocolStreamEvents),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents.union(Set(envelope)),
+    authorizedDurableProtocolCheckpoints' =
+      if (envelope.durableCheckpoint) authorizedDurableProtocolCheckpoints.union(Set(envelope))
+      else authorizedDurableProtocolCheckpoints,
+  }
+
+  action compactEphemeralProtocolEnvelope(envelope: ProtocolEnvelope): bool = all {
+    protocolStreamEvents.contains(envelope),
+    ephemeralEnvelopeMayBeCompacted(envelope, protocolStreamEvents),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents.filter(existing => existing != envelope),
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
   }
 
   action step = any {
@@ -599,6 +879,10 @@ module CoordinationProtocol {
     addNativeRelation(parentChildEdge),
     addNativeRelation(blockingEdge),
     removeNativeRelation(parentChildEdge),
+    appendProtocolEnvelope(claimEnvelope),
+    appendProtocolEnvelope(leaseEnvelope),
+    appendProtocolEnvelope(reviewCheckpointEnvelope),
+    compactEphemeralProtocolEnvelope(claimEnvelope),
   }
 
   val acceptedVocabularyIsQualified = acceptedVocabulary == Set() or evidenceObserved
@@ -637,6 +921,22 @@ module CoordinationProtocol {
   val relationObservationFailuresDoNotBecomeAbsence = Set(
     "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
   ).forall(outcomeId => not(relationObservationContributesKnowledge(outcomeId, Set())))
+  val protocolEnvelopesAreValidAndOrdered = and {
+    closedProtocolStreamCatalogues,
+    protocolStreamEvents.forall(event => and {
+      protocolEnvelopeShapeIsValid(event),
+      protocolEnvelopeIsOrdered(event, protocolStreamEvents),
+    }),
+  }
+  val durableProtocolCheckpointsArePreserved =
+    protocolStreamEvents.filter(event => event.durableCheckpoint) == authorizedDurableProtocolCheckpoints
+  val protocolStreamChangesPreservePriorSemantics = and {
+    humanIntentId == authorizedHumanIntentId,
+    nativeRelationEdges == authorizedNativeRelationEdges,
+  }
+  val protocolStreamObservationFailuresDoNotBecomeAbsence = Set(
+    "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+  ).forall(outcomeId => not(protocolStreamObservationContributesKnowledge(outcomeId, Set())))
 }
 ```
 
@@ -779,6 +1079,67 @@ module CoordinationProtocolTests {
   run testProvenRelationAbsenceRequiresEmptySet = and {
     relationObservationContributesKnowledge("OBS-ProvenAbsent", Set()),
     not(relationObservationContributesKnowledge("OBS-ProvenAbsent", Set(parentChildEdge))),
+  }
+
+  run testProtocolStreamCataloguesAreClosed = closedProtocolStreamCatalogues
+
+  run testProtocolEnvelopeAppendIsOrderedAndIdempotent =
+    init
+      .then(appendProtocolEnvelope(claimEnvelope))
+      .then(appendProtocolEnvelope(claimEnvelope))
+      .then(appendProtocolEnvelope(leaseEnvelope))
+      .expect(and {
+        protocolStreamEvents == Set(claimEnvelope, leaseEnvelope),
+        protocolEnvelopesAreValidAndOrdered,
+        durableProtocolCheckpointsArePreserved,
+        protocolStreamChangesPreservePriorSemantics,
+      })
+
+  run testProtocolEnvelopeGapIsRejected =
+    not(protocolAppendIsValid({ ...leaseEnvelope, sequence: 3 }, Set(claimEnvelope)))
+
+  run testProtocolEnvelopePredecessorMismatchIsRejected =
+    not(protocolAppendIsValid({ ...leaseEnvelope, predecessorEventId: "wrong-event" }, Set(claimEnvelope)))
+
+  run testProtocolPayloadCannotCrossStreams =
+    not(protocolEnvelopeShapeIsValid({ ...claimEnvelope, streamKindId: "STREAM-Review" }))
+
+  run testProtocolRetentionCannotBeRelabeled = and {
+    not(protocolEnvelopeShapeIsValid({ ...claimEnvelope, retentionClass: "durable" })),
+    not(protocolEnvelopeShapeIsValid({ ...reviewCheckpointEnvelope, durableCheckpoint: false })),
+  }
+
+  run testProtocolEventIdentityConflictIsRejected =
+    not(protocolAppendIsValid({ ...leaseEnvelope, eventId: claimEnvelope.eventId }, Set(claimEnvelope)))
+
+  run testProtocolGenerationCannotRegressOrSkip = and {
+    not(protocolAppendIsValid({ ...reviewCheckpointEnvelope, generation: 2, eventId: "review-event-2" }, Set())),
+    not(protocolAppendIsValid({ ...reviewCheckpointEnvelope, generation: 1, eventId: "review-event-other" }, Set(reviewCheckpointEnvelope))),
+  }
+
+  run testEphemeralCompactionPreservesDurableCheckpoint =
+    init
+      .then(appendProtocolEnvelope(claimEnvelope))
+      .then(appendProtocolEnvelope(leaseEnvelope))
+      .then(appendProtocolEnvelope(reviewCheckpointEnvelope))
+      .then(compactEphemeralProtocolEnvelope(claimEnvelope))
+      .expect(and {
+        not(protocolStreamEvents.contains(claimEnvelope)),
+        protocolStreamEvents.contains(leaseEnvelope),
+        protocolStreamEvents.contains(reviewCheckpointEnvelope),
+        protocolEnvelopesAreValidAndOrdered,
+        durableProtocolCheckpointsArePreserved,
+      })
+
+  run testDurableCheckpointCannotBeCompacted =
+    not(ephemeralEnvelopeMayBeCompacted(reviewCheckpointEnvelope, Set(reviewCheckpointEnvelope)))
+
+  run testProtocolStreamObservationFailuresStayNonAbsent =
+    protocolStreamObservationFailuresDoNotBecomeAbsence
+
+  run testProvenProtocolStreamAbsenceRequiresEmptySet = and {
+    protocolStreamObservationContributesKnowledge("OBS-ProvenAbsent", Set()),
+    not(protocolStreamObservationContributesKnowledge("OBS-ProvenAbsent", Set(claimEnvelope))),
   }
 }
 ```

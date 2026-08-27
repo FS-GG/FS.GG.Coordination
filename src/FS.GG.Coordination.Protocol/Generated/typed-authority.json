@@ -8,57 +8,57 @@
   "artifacts": [
     {
       "id": "bindings",
-      "path": "readiness/42-native-relation-algebra/quint/bindings.fs",
-      "sha256": "65559fe98069e4e0736ad763beed3265e79cef66abf8ea195940546dd3f87e5a"
+      "path": "readiness/46-protocol-streams/quint/bindings.fs",
+      "sha256": "fb809ad10d737c2d3520529639411a793cc57f294cec99ec37d968b56ae1bda8"
     },
     {
       "id": "compilation-receipt",
-      "path": "readiness/42-native-relation-algebra/quint/receipt.json",
-      "sha256": "87b4eb8f0045069f7e46350b43b2c9a483273973d27fded852e6cb2f15112e68"
+      "path": "readiness/46-protocol-streams/quint/receipt.json",
+      "sha256": "e18f297554487631e97baa4812b6c32fafb08c9e8e49f3e6db4c840e462fdf3b"
     },
     {
       "id": "compiled-contract",
-      "path": "readiness/42-native-relation-algebra/quint/contract.json",
-      "sha256": "581d45c6db8d302df5a2ea6413d4d2cf4107388617ef6f820c55bf4fbb4d4e1b"
+      "path": "readiness/46-protocol-streams/quint/contract.json",
+      "sha256": "d794029d921d4c3d499f7a672148629c5b48e2030f451cc2be942996461e522f"
     },
     {
       "id": "fence-manifest",
-      "path": "readiness/42-native-relation-algebra/quint/fences.json",
-      "sha256": "5c755807120d5d56b905371fe0d4ab075b291032413b5491250c8a3139015372"
+      "path": "readiness/46-protocol-streams/quint/fences.json",
+      "sha256": "fe4c654e933d56e240b80d744a51561e520cbba439f9018d9e489f763a654dbb"
     },
     {
       "id": "generated-modules",
-      "path": "readiness/42-native-relation-algebra/quint/protocol.qnt",
-      "sha256": "eb33c961149d7ca577048241bbb5ec45eedb930d69d25a7ee2f8be5cad3a78f2"
+      "path": "readiness/46-protocol-streams/quint/protocol.qnt",
+      "sha256": "9225856206c2785c65942ef8fb0b2fc109721190fa4a5bd3ea6ac52c48d056e1"
     },
     {
       "id": "markdown",
       "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-      "sha256": "6a27deb32cbb096a273f5ac03f320667850d460a86fbfa6885fca44426dac14a"
+      "sha256": "33ee6e61134e36198334e573027a45a44dbf7e261d14807b780f88061c0b1ad7"
     },
     {
       "id": "profile-bindings",
-      "path": "readiness/42-native-relation-algebra/quint/profile-bindings.json",
-      "sha256": "2596f7d0496895d9c95e25acd80f7123300d00cdd0c19859b7c2eee0dd77b077"
+      "path": "readiness/46-protocol-streams/quint/profile-bindings.json",
+      "sha256": "0d2532ec05e8f739ead458528ce326e2e0b872b0b8d4617ebcf68373e2695779"
     },
     {
       "id": "sandbox-contract",
-      "path": "readiness/42-native-relation-algebra/quint/sandbox-contract.json",
+      "path": "readiness/46-protocol-streams/quint/sandbox-contract.json",
       "sha256": "2bf8ff26ddb488444c59daa77515b183008c352213e48ac6e36e15e0bc08c122"
     },
     {
       "id": "source-map",
-      "path": "readiness/42-native-relation-algebra/quint/source-map.json",
-      "sha256": "ae2af43a55cfd6aecfab914b238d7c870d5a8a388058128759f50cb78a92441b"
+      "path": "readiness/46-protocol-streams/quint/source-map.json",
+      "sha256": "fe33ad18ef46b6dd17ec9072c82e5273eafe4b548523cab9f1ac3a4353d4e799"
     },
     {
       "id": "typed-effect",
-      "path": "readiness/42-native-relation-algebra/quint/typed-effect.json",
-      "sha256": "65d8e1ac719e409d4c415131ccb9fbc605600aafa58165d8dcd075bc8c58ce74"
+      "path": "readiness/46-protocol-streams/quint/typed-effect.json",
+      "sha256": "0089944f0d2c8bad4969f15a9e31b725e21f1d03b136018984a84cac44b8221f"
     }
   ],
-  "authoringAgent": "avocet-bdf8",
-  "authoringSession": "gs2-02-5-profile2",
+  "authoringAgent": "swift-fee9",
+  "authoringSession": "gs2-02-6-profile2",
   "rollbackManifestPath": null,
   "rollbackManifestSha256": null
 }

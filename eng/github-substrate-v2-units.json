@@ -181,6 +181,21 @@
         { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
       ],
       "contractSha256": "4f2145b8d571306d2b8a3e4ec6ddc525767ad23bfec1749a7a2be930348c7fd9"
+    },
+    {
+      "id": "GS2-02.6",
+      "title": "Implement protocol streams",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-02.5"],
+      "permissionCeiling": ["repository-local canonical protocol-stream semantics, compiled projections, and qualification evidence", "no network, GitHub mutation, generalized mutation algebra, hosted runtime, deployment, publication, or production write authority"],
+      "exitGate": "typed protocol-stream envelopes and explicit ephemeral-versus-durable retention pass Q1 plus the pure portion of Q2",
+      "qGates": ["Q1", "Q2"],
+      "gateCommands": ["canonical-quint-compiler", "canonical-quint-pure-model"],
+      "gateContracts": [
+        { "id": "canonical-quint-compiler", "qGate": "Q1", "commandSha256": "ab29099d8e0be9da2bc6611c94acb8706eb15f36158651b8ed6b5e3829bb62a1" },
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
+      ],
+      "contractSha256": "aeb9edcc4d1fa0c7f338a025513a3520233215ba7cc15a73521a178cafbb76fd"
     }
   ]
 }

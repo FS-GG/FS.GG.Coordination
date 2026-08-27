@@ -15,7 +15,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "581d45c6db8d302df5a2ea6413d4d2cf4107388617ef6f820c55bf4fbb4d4e1b",
+        "d794029d921d4c3d499f7a672148629c5b48e2030f451cc2be942996461e522f",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -29,6 +29,10 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("INTENT-Cancelled", CoordinationProtocolGenerated.Ids.IntentCancelled)
     Assert.Equal("REL-ParentChild", CoordinationProtocolGenerated.Ids.RelParentChild)
     Assert.Equal("REL-Blocks", CoordinationProtocolGenerated.Ids.RelBlocks)
+    Assert.Equal("STREAM-Claim", CoordinationProtocolGenerated.Ids.StreamClaim)
+    Assert.Equal("STREAM-OperationReceipt", CoordinationProtocolGenerated.Ids.StreamOperationReceipt)
+    Assert.Equal("PAYLOAD-Lease", CoordinationProtocolGenerated.Ids.PayloadLease)
+    Assert.Equal("PAYLOAD-Delivery", CoordinationProtocolGenerated.Ids.PayloadDelivery)
 
     Assert.Equal(
         7,
@@ -58,12 +62,28 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         |> List.length
     )
 
+    Assert.Equal(
+        5,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "protocolStreamKind")
+        |> List.length
+    )
+
+    Assert.Equal(
+        8,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "protocolPayloadKind")
+        |> List.length
+    )
+
     Assert.Contains("ACT-AcceptObservationKnowledge", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-SetHumanIntent", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-ObserveLifecycleFacts", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-RefreshLifecycleStatus", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-AddNativeRelation", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-RemoveNativeRelation", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("ACT-AppendProtocolEnvelope", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("ACT-CompactEphemeralProtocolEnvelope", CoordinationProtocolGenerated.CanonicalContractJson)
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =

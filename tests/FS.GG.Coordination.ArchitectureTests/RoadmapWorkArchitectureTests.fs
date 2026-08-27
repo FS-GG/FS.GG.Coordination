@@ -42,7 +42,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-02-5 without the rejected runtime branch`` () =
+let ``roadmap unit index advances through GS2-02-6 without the rejected runtime branch`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -65,7 +65,8 @@ let ``roadmap unit index advances through GS2-02-5 without the rejected runtime 
              "GS2-02.2"
              "GS2-02.3"
              "GS2-02.4"
-             "GS2-02.5" ]
+             "GS2-02.5"
+             "GS2-02.6" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -152,6 +153,19 @@ let ``roadmap unit index advances through GS2-02-5 without the rejected runtime 
 
     Assert.Equal(2, relationUnit.GetProperty("gateContracts").GetArrayLength())
 
+    let streamUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.6")
+
+    Assert.Equal<string list>(
+        [ "GS2-02.5" ],
+        streamUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal(2, streamUnit.GetProperty("gateContracts").GetArrayLength())
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -229,6 +243,19 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "Q1"; "Q2" ],
         lifecycleContracts
+        |> List.map (fun value -> value.GetProperty("qGate").GetString())
+    )
+
+    let streamUnit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.6")
+
+    let streamContracts =
+        streamUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+
+    Assert.Equal<string list>(
+        [ "Q1"; "Q2" ],
+        streamContracts
         |> List.map (fun value -> value.GetProperty("qGate").GetString())
     )
 

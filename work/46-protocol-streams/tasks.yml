@@ -1,0 +1,116 @@
+schemaVersion: 1
+work:
+  id: 46-protocol-streams
+  title: "Protocol Streams"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/46-protocol-streams/spec.md
+  sourceClarifications: work/46-protocol-streams/clarifications.md
+  sourceChecklist: work/46-protocol-streams/checklist.md
+  sourcePlan: work/46-protocol-streams/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/46-protocol-streams/spec.md
+    digest: 4dc6380bd311958b9956f94bf44c9aab8c333fdf238b0b53b3d9aaa41050e984
+    schemaVersion: 1
+  - label: clarifications
+    path: work/46-protocol-streams/clarifications.md
+    digest: c2c1a1dea7e955d724d2ac43589590b8cf3ec389ef8941fb00df7efbc71deaa6
+    schemaVersion: 1
+  - label: checklist
+    path: work/46-protocol-streams/checklist.md
+    digest: 08caac8a5101c272e487492119fc9c018eeee5c82d4cf0b433a661224445659c
+    schemaVersion: 1
+  - label: plan
+    path: work/46-protocol-streams/plan.md
+    digest: b76a9c310b9b0661e05277091db980c9a9d4eb5c6e9010e577b4550bb25545fe
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-004]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV008]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 46-protocol-streams."
