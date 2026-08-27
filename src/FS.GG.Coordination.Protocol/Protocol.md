@@ -145,7 +145,7 @@ module CoordinationProtocol {
     { id: "AcceptedObservationKnowledgeIsQualified", kind: "invariant", subjects: Set("ObservationPlanVocabulary", "EvidenceObligationVocabulary") },
     { id: "ProvenAbsenceCanBeAccepted", kind: "example", subjects: Set("OBS-ProvenAbsent") },
     { id: "FailureOutcomesDoNotBecomeAbsence", kind: "invariant", subjects: Set(
-        "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+        "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
       ) }
   )
 
@@ -345,51 +345,53 @@ the evidence guard must make the invariant red in the bounded negative control.
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
 
-  run evidenceBeforeAcceptance =
+  run testEvidenceBeforeAcceptance =
     init
       .then(observeProtocolEvidence)
       .then(acceptVocabularyIdentity("SubjectVocabulary"))
       .expect(and { acceptedVocabularyIsQualified, vocabularyCanBeAccepted })
 
-  run authorityBindingCanBeAccepted =
+  run testAuthorityBindingCanBeAccepted =
     init
       .then(observeAuthority(nativeGitHubObservation))
       .then(acceptObservedAuthority)
       .expect(and { closedAuthorityCatalogue, acceptedAuthoritiesAreQualified, authorityCanBeAccepted })
 
-  run provenAbsenceCanBeAccepted =
+  run testProvenAbsenceCanBeAccepted =
     init
       .then(observeAuthority(nativeGitHubAbsentObservation))
       .then(acceptObservationKnowledge)
       .expect(and { closedObservationOutcomeCatalogue, acceptedObservationKnowledgeIsQualified, provenAbsenceWasAccepted })
 
-  run incompleteAuthorityIsRejected =
+  run testIncompleteAuthorityIsRejected =
     not(authorityObservationIsQualified({ ...nativeGitHubObservation, complete: false }))
 
-  run staleRevisionIsRejected =
+  run testStaleRevisionIsRejected =
     not(authorityObservationIsQualified({ ...nativeGitHubObservation, revisionValue: "stale-revision" }))
 
-  run wrongAuthorityIsRejected =
+  run testWrongAuthorityIsRejected =
     not(authorityObservationIsQualified({ ...nativeGitHubObservation, authorityId: "AUTH-PackageFeed" }))
 
-  run contradictoryAuthorityIsRejected =
+  run testContradictoryAuthorityIsRejected =
     not(authorityObservationIsQualified({ ...nativeGitHubObservation, contradictory: true }))
 
-  run incompleteAbsenceIsRejected =
+  run testIncompleteAbsenceIsRejected =
     not(observationContributesNegativeKnowledge({ ...nativeGitHubAbsentObservation, complete: false }))
 
-  run unreadableIsNotAbsence =
+  run testUnreadableIsNotAbsence =
     not(observationContributesNegativeKnowledge({ ...nativeGitHubObservation, outcomeId: "OBS-Unreadable" }))
 
-  run unauthorizedIsNotAbsence =
+  run testUnauthorizedIsNotAbsence =
     not(observationContributesNegativeKnowledge({ ...nativeGitHubObservation, outcomeId: "OBS-Unauthorized" }))
 
-  run staleIsNotAbsence =
+  run testStaleIsNotAbsence =
     not(observationContributesNegativeKnowledge({ ...nativeGitHubObservation, outcomeId: "OBS-Stale", revisionValue: "stale-revision" }))
 
-  run rateLimitIsRetryableNotAbsent = and {
+  run testRateLimitIsRetryableNotAbsent = and {
     observationIsRetryableFailure(nativeGitHubRateLimitedObservation),
     not(observationContributesNegativeKnowledge(nativeGitHubRateLimitedObservation)),
   }
+
+  run testFailureOutcomesStayNonAbsent = failureOutcomesDoNotBecomeAbsence
 }
 ```

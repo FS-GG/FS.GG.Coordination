@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "1d08484799e0394e838725b0babb19b68bc341d7ec1aff12b95c2232a5317bd4"
+    "518d06eab8960fc0da9dd15fa26687ad6a24f1ca52446fa73d52df3164d63dc3"
 
 let expectedContract =
-    "97584ae65098499328dfcf962e7be7034f6fbf98e635fa2f436646300b2641b0"
+    "499468a6ec597dda5823740864740c277804566f0bd5606d5b0e33701738fdf6"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -308,6 +308,8 @@ try
           "CoordinationProtocolTests"
           "--backend"
           "rust"
+          "--match"
+          "^test"
           "--verbosity"
           "0" ]
         []
