@@ -1,13 +1,15 @@
-# GS2-02.3 canonical coordination protocol
+# GS2-02.4 canonical coordination protocol
 
 This document is the sole authored source for the coordination protocol baseline. Every behavioral
 fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
 projections and must never be edited independently.
 
 GS2-02.1 established vocabulary and stable integration identities; GS2-02.2 added the closed,
-revision-aware authority catalogue. This unit refines only observation outcomes and their knowledge
-semantics. Later GS2-02 units refine lifecycle intent, streams, mutations, plans, desired state, and
-compiled outputs. No hosted runtime or production mutation authority is defined here.
+revision-aware authority catalogue; GS2-02.3 added observation outcomes and knowledge semantics.
+This unit refines only lifecycle intent and derived status. Human scheduling intent remains distinct
+from claims, blockers, pull-request, review, and delivery observations. Later GS2-02 units refine
+relation algebra, streams, mutations, plans, desired state, and compiled outputs. No hosted runtime
+or production mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -51,6 +53,24 @@ module CoordinationProtocol {
     contradictory: bool,
     retryAfterPresent: bool,
   }
+  type LifecycleIntent = {
+    id: str,
+    kind: str,
+    schedulingClass: str,
+    terminal: bool,
+  }
+  type LifecycleFacts = {
+    claimOutcomeId: str,
+    claimPresent: bool,
+    blockerOutcomeId: str,
+    blocked: bool,
+    pullRequestOutcomeId: str,
+    pullRequestOpen: bool,
+    reviewOutcomeId: str,
+    reviewAccepted: bool,
+    deliveryOutcomeId: str,
+    delivered: bool,
+  }
 
   pure val vocabularyCatalogue = Set(
     { id: "SubjectVocabulary", kind: "subject", family: "subjects" },
@@ -88,6 +108,13 @@ module CoordinationProtocol {
     { id: "OBS-RateLimited", kind: "observationOutcome", knowledgeClass: "none", retryClass: "authority-window", terminal: false }
   )
 
+  pure val lifecycleIntentCatalogue = Set(
+    { id: "INTENT-Backlog", kind: "lifecycleIntent", schedulingClass: "backlog", terminal: false },
+    { id: "INTENT-Ready", kind: "lifecycleIntent", schedulingClass: "ready", terminal: false },
+    { id: "INTENT-Paused", kind: "lifecycleIntent", schedulingClass: "paused", terminal: false },
+    { id: "INTENT-Cancelled", kind: "lifecycleIntent", schedulingClass: "cancelled", terminal: true }
+  )
+
   pure val relationshipCatalogue = Set(
     { id: "REL-Subject-Evidence", kind: "verifiedBy", fromId: "SubjectVocabulary", toId: "EvidenceObligationVocabulary" },
     { id: "REL-Authority-Evidence", kind: "verifiedBy", fromId: "AuthorityVocabulary", toId: "EvidenceObligationVocabulary" },
@@ -112,6 +139,7 @@ module CoordinationProtocol {
     { id: "BOUND-VocabularyCardinality", kind: "bound", minimum: 11, maximum: 11 },
     { id: "BOUND-AuthorityCardinality", kind: "bound", minimum: 7, maximum: 7 },
     { id: "BOUND-ObservationOutcomeCardinality", kind: "bound", minimum: 9, maximum: 9 },
+    { id: "BOUND-LifecycleIntentCardinality", kind: "bound", minimum: 4, maximum: 4 },
     { id: "BOUND-TraceSteps", kind: "bound", minimum: 0, maximum: 4 }
   )
 
@@ -129,6 +157,9 @@ module CoordinationProtocol {
         "OBS-Observed", "OBS-ProvenAbsent", "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported",
         "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
       ), boundIds: Set("BOUND-ObservationOutcomeCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-LifecycleIntent", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
+      ), boundIds: Set("BOUND-LifecycleIntentCardinality", "BOUND-TraceSteps") }
   )
 
   pure val compatibilityCatalogue = Set(
@@ -145,6 +176,18 @@ module CoordinationProtocol {
     { id: "AcceptedObservationKnowledgeIsQualified", kind: "invariant", subjects: Set("ObservationPlanVocabulary", "EvidenceObligationVocabulary") },
     { id: "ProvenAbsenceCanBeAccepted", kind: "example", subjects: Set("OBS-ProvenAbsent") },
     { id: "FailureOutcomesDoNotBecomeAbsence", kind: "invariant", subjects: Set(
+        "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+      ) },
+    { id: "LifecycleIntentCatalogueIsClosed", kind: "invariant", subjects: Set(
+        "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
+      ) },
+    { id: "HumanIntentIsObservationIndependent", kind: "invariant", subjects: Set(
+        "INTENT-Backlog", "INTENT-Ready", "ObservationPlanVocabulary"
+      ) },
+    { id: "LifecycleStatusIsDerived", kind: "invariant", subjects: Set(
+        "INTENT-Ready", "OBS-Observed", "OBS-ProvenAbsent"
+      ) },
+    { id: "UnknownLifecycleFactsFailClosed", kind: "invariant", subjects: Set(
         "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
       ) }
   )
@@ -222,6 +265,66 @@ module CoordinationProtocol {
   pure def authorityObservationIsQualified(observation: AuthorityObservation): bool =
     observationContributesPositiveKnowledge(observation)
 
+  pure val emptyLifecycleFacts = {
+    claimOutcomeId: "OBS-ProvenAbsent",
+    claimPresent: false,
+    blockerOutcomeId: "OBS-ProvenAbsent",
+    blocked: false,
+    pullRequestOutcomeId: "OBS-ProvenAbsent",
+    pullRequestOpen: false,
+    reviewOutcomeId: "OBS-ProvenAbsent",
+    reviewAccepted: false,
+    deliveryOutcomeId: "OBS-ProvenAbsent",
+    delivered: false,
+  }
+
+  pure val claimedLifecycleFacts = {
+    ...emptyLifecycleFacts,
+    claimOutcomeId: "OBS-Observed",
+    claimPresent: true,
+  }
+
+  pure val reviewLifecycleFacts = {
+    ...claimedLifecycleFacts,
+    pullRequestOutcomeId: "OBS-Observed",
+    pullRequestOpen: true,
+    reviewOutcomeId: "OBS-Observed",
+    reviewAccepted: true,
+  }
+
+  pure def lifecycleFactIsKnowledge(outcomeId: str, present: bool): bool =
+    if (outcomeId == "OBS-Observed") present else outcomeId == "OBS-ProvenAbsent" and not(present)
+
+  pure def lifecycleFactsAreKnowledge(facts: LifecycleFacts): bool = and {
+    lifecycleFactIsKnowledge(facts.claimOutcomeId, facts.claimPresent),
+    lifecycleFactIsKnowledge(facts.blockerOutcomeId, facts.blocked),
+    lifecycleFactIsKnowledge(facts.pullRequestOutcomeId, facts.pullRequestOpen),
+    lifecycleFactIsKnowledge(facts.reviewOutcomeId, facts.reviewAccepted),
+    lifecycleFactIsKnowledge(facts.deliveryOutcomeId, facts.delivered),
+  }
+
+  pure def lifecycleIntentExists(intentId: str): bool =
+    lifecycleIntentCatalogue.exists(intent => intent.id == intentId)
+
+  pure def deriveLifecycleStatus(intentId: str, facts: LifecycleFacts): str =
+    if (not(lifecycleIntentExists(intentId)) or not(lifecycleFactsAreKnowledge(facts))) "indeterminate"
+    else if (intentId == "INTENT-Cancelled") "cancelled"
+    else if (facts.delivered) "delivered"
+    else if (facts.reviewAccepted) "accepted"
+    else if (facts.blocked) "blocked"
+    else if (facts.pullRequestOpen) "in-review"
+    else if (facts.claimPresent) "claimed"
+    else if (intentId == "INTENT-Ready") "ready"
+    else if (intentId == "INTENT-Paused") "paused"
+    else "backlog"
+
+  pure val closedLifecycleIntentCatalogue = and {
+    lifecycleIntentCatalogue.map(intent => intent.id) == Set(
+      "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
+    ),
+    lifecycleIntentCatalogue.filter(intent => intent.terminal).map(intent => intent.id) == Set("INTENT-Cancelled"),
+  }
+
   pure val closedAuthorityCatalogue = and {
     authorityCatalogue.map(binding => binding.id) == Set(
       "AUTH-NativeGitHub", "AUTH-RepositoryRegistry", "AUTH-ProtocolStream", "AUTH-GitLedger",
@@ -249,6 +352,11 @@ module CoordinationProtocol {
   var authorityObservationAvailable: bool
   var acceptedAuthorityObservations: Set[AuthorityObservation]
   var acceptedObservationKnowledge: Set[AuthorityObservation]
+  var humanIntentId: str
+  var authorizedHumanIntentId: str
+  var lifecycleFacts: LifecycleFacts
+  var lifecycleStatus: str
+  var lifecycleStatusCurrent: bool
 
   action init = all {
     evidenceObserved' = false,
@@ -257,6 +365,11 @@ module CoordinationProtocol {
     authorityObservationAvailable' = false,
     acceptedAuthorityObservations' = Set(),
     acceptedObservationKnowledge' = Set(),
+    humanIntentId' = "INTENT-Backlog",
+    authorizedHumanIntentId' = "INTENT-Backlog",
+    lifecycleFacts' = emptyLifecycleFacts,
+    lifecycleStatus' = "backlog",
+    lifecycleStatusCurrent' = true,
   }
 
   action observeProtocolEvidence: bool = all {
@@ -266,6 +379,11 @@ module CoordinationProtocol {
     authorityObservationAvailable' = authorityObservationAvailable,
     acceptedAuthorityObservations' = acceptedAuthorityObservations,
     acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
   }
 
   action acceptVocabularyIdentity(vocabularyId: str): bool = all {
@@ -277,6 +395,11 @@ module CoordinationProtocol {
     authorityObservationAvailable' = authorityObservationAvailable,
     acceptedAuthorityObservations' = acceptedAuthorityObservations,
     acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
   }
 
   action observeAuthority(observation: AuthorityObservation): bool = all {
@@ -286,6 +409,11 @@ module CoordinationProtocol {
     authorityObservationAvailable' = true,
     acceptedAuthorityObservations' = acceptedAuthorityObservations,
     acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
   }
 
   action acceptObservedAuthority: bool = all {
@@ -297,6 +425,11 @@ module CoordinationProtocol {
     authorityObservationAvailable' = authorityObservationAvailable,
     acceptedAuthorityObservations' = acceptedAuthorityObservations.union(Set(authorityObservation)),
     acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
   }
 
   action acceptObservationKnowledge: bool = all {
@@ -308,6 +441,55 @@ module CoordinationProtocol {
     authorityObservationAvailable' = authorityObservationAvailable,
     acceptedAuthorityObservations' = acceptedAuthorityObservations,
     acceptedObservationKnowledge' = acceptedObservationKnowledge.union(Set(authorityObservation)),
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+  }
+
+  action setHumanIntent(intentId: str): bool = all {
+    lifecycleIntentExists(intentId),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = intentId,
+    authorizedHumanIntentId' = intentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = false,
+  }
+
+  action observeLifecycleFacts(facts: LifecycleFacts): bool = all {
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = facts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = false,
+  }
+
+  action refreshLifecycleStatus: bool = all {
+    lifecycleFactsAreKnowledge(lifecycleFacts),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = deriveLifecycleStatus(humanIntentId, lifecycleFacts),
+    lifecycleStatusCurrent' = true,
   }
 
   action step = any {
@@ -316,6 +498,9 @@ module CoordinationProtocol {
     observeAuthority(nativeGitHubObservation),
     acceptObservedAuthority,
     acceptObservationKnowledge,
+    setHumanIntent("INTENT-Ready"),
+    observeLifecycleFacts(claimedLifecycleFacts),
+    refreshLifecycleStatus,
   }
 
   val acceptedVocabularyIsQualified = acceptedVocabulary == Set() or evidenceObserved
@@ -335,6 +520,16 @@ module CoordinationProtocol {
   val failureOutcomesDoNotBecomeAbsence = Set(
     "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
   ).forall(outcomeId => not(observationContributesNegativeKnowledge({ ...nativeGitHubObservation, outcomeId: outcomeId })))
+  val humanIntentIsObservationIndependent = and {
+    closedLifecycleIntentCatalogue,
+    lifecycleIntentExists(humanIntentId),
+    humanIntentId == authorizedHumanIntentId,
+  }
+  val lifecycleStatusIsDerived =
+    not(lifecycleStatusCurrent) or lifecycleStatus == deriveLifecycleStatus(humanIntentId, lifecycleFacts)
+  val unknownLifecycleFactsFailClosed = Set(
+    "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+  ).forall(outcomeId => deriveLifecycleStatus("INTENT-Ready", { ...emptyLifecycleFacts, claimOutcomeId: outcomeId }) == "indeterminate")
 }
 ```
 
@@ -393,5 +588,40 @@ module CoordinationProtocolTests {
   }
 
   run testFailureOutcomesStayNonAbsent = failureOutcomesDoNotBecomeAbsence
+
+  run testHumanIntentSurvivesClaimObservation =
+    init
+      .then(setHumanIntent("INTENT-Paused"))
+      .then(observeLifecycleFacts(claimedLifecycleFacts))
+      .then(refreshLifecycleStatus)
+      .expect(and {
+        humanIntentIsObservationIndependent,
+        lifecycleStatusIsDerived,
+        humanIntentId == "INTENT-Paused",
+        lifecycleStatus == "claimed",
+      })
+
+  run testReviewAndDeliveryAreDerivedFacts = and {
+    deriveLifecycleStatus("INTENT-Ready", reviewLifecycleFacts) == "accepted",
+    deriveLifecycleStatus("INTENT-Ready", { ...reviewLifecycleFacts, deliveryOutcomeId: "OBS-Observed", delivered: true }) == "delivered",
+  }
+
+  run testBlockerDoesNotRewriteIntent =
+    init
+      .then(setHumanIntent("INTENT-Ready"))
+      .then(observeLifecycleFacts({ ...emptyLifecycleFacts, blockerOutcomeId: "OBS-Observed", blocked: true }))
+      .then(refreshLifecycleStatus)
+      .expect(and {
+        humanIntentIsObservationIndependent,
+        humanIntentId == "INTENT-Ready",
+        lifecycleStatus == "blocked",
+      })
+
+  run testCancelledIntentOverridesObservedProgress =
+    deriveLifecycleStatus("INTENT-Cancelled", reviewLifecycleFacts) == "cancelled"
+
+  run testUnknownLifecycleObservationsFailClosed = unknownLifecycleFactsFailClosed
+
+  run testInvalidHumanIntentIsRejected = not(lifecycleIntentExists("INTENT-Claimed"))
 }
 ```
