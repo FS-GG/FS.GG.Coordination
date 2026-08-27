@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "8f2acd164d74d39026a22a414684df01eb0db94ad7c036e3d26ee079c1527252"
+    "14d0bab1ca7a0ac3b212d6312521ca49ef7ba7a1d985a8789007d529e0cf6dc4"
 
 let expectedContract =
-    "bc3fae134bc808ef9294da164bc66d461fd2495885a40cd127c92d3624419ac4"
+    "7fd85e5eda98ab567ab8f81efde3b73dcb4e393d8464c269714de031e8a39fe9"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -134,13 +134,13 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 46 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 61 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
     fail "RELATIONSHIPS" "wrong-cardinality"
 
-if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 6 then
+if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 7 then
     fail "ACTIONS" "wrong-cardinality"
 
 let trackedExit, trackedQnt, trackedError =
@@ -221,13 +221,13 @@ try
           "--root"
           scratch
           "--work"
-          "30-authority-bindings"
+          "34-observation-outcomes"
           "--title"
-          "Implement authority bindings"
+          "Implement observation outcomes"
           "--agent"
           "swift-0d50"
           "--session"
-          "gs2-02-2-profile2"
+          "gs2-02-3-profile2"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -241,10 +241,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "30-authority-bindings" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "34-observation-outcomes" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/30-authority-bindings")
+    let generatedRoot = Path.Combine(scratch, "readiness/34-observation-outcomes")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")

@@ -15,13 +15,16 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "bc3fae134bc808ef9294da164bc66d461fd2495885a40cd127c92d3624419ac4",
+        "7fd85e5eda98ab567ab8f81efde3b73dcb4e393d8464c269714de031e8a39fe9",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
     Assert.Equal("SubjectVocabulary", CoordinationProtocolGenerated.Ids.SubjectVocabulary)
     Assert.Equal("AUTH-NativeGitHub", CoordinationProtocolGenerated.Ids.AuthNativeGitHub)
     Assert.Equal("AUTH-ClassifiedExternal", CoordinationProtocolGenerated.Ids.AuthClassifiedExternal)
+    Assert.Equal("OBS-Observed", CoordinationProtocolGenerated.Ids.ObsObserved)
+    Assert.Equal("OBS-ProvenAbsent", CoordinationProtocolGenerated.Ids.ObsProvenAbsent)
+    Assert.Equal("OBS-RateLimited", CoordinationProtocolGenerated.Ids.ObsRateLimited)
 
     Assert.Equal(
         7,
@@ -29,6 +32,15 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         |> List.filter (fun entry -> entry.Kind = "authorityBinding")
         |> List.length
     )
+
+    Assert.Equal(
+        9,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "observationOutcome")
+        |> List.length
+    )
+
+    Assert.Contains("ACT-AcceptObservationKnowledge", CoordinationProtocolGenerated.CanonicalContractJson)
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =

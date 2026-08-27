@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1,
-and the active GS2-02.2 frontier with stable IDs, owner,
+GS2-02.2, and the active GS2-02.3 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -66,6 +66,15 @@ literate source. It adds a closed seven-family authority catalogue and proves
 that incomplete, contradictory, stale-revision, wrong-revision-kind,
 wrong-authority, and omitted-family inputs fail closed. It does not add the
 GS2-02.3 observation-outcome algebra or any external write authority.
+
+GS2-02.3 reuses the same immutable Q1/Q2 command identities and adds a closed
+nine-outcome observation algebra. `Observed` and `ProvenAbsent` are the only
+knowledge-bearing outcomes; contradictory, unreadable, unsupported,
+unauthorized, incomplete, stale, and rate-limited observations cannot silently
+become absence. Retry classification is explicit, and proven absence is accepted
+only from complete, non-contradictory evidence at the authority's bound revision.
+The unit remains a pure repository-local model and grants no lifecycle intent,
+network, deployment, publication, or production write authority.
 
 ## Command sequence
 
