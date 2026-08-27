@@ -46,7 +46,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV002
     kind: verification
     subject:
@@ -73,7 +73,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV003
     kind: verification
     subject:
@@ -100,7 +100,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV004
     kind: verification
     subject:
@@ -127,7 +127,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -135,13 +135,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV005
     kind: verification
     subject:
@@ -154,7 +154,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -162,13 +162,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV006
     kind: verification
     subject:
@@ -181,7 +181,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV007
     kind: verification
     subject:
@@ -208,7 +208,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV007]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -216,13 +216,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV008
     kind: verification
     subject:
@@ -235,7 +235,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV008]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -243,13 +243,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV009
     kind: verification
     subject:
@@ -262,7 +262,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
     obligationRefs: [EV009]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -270,13 +270,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV010
     kind: verification
     subject:
@@ -289,7 +289,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV010]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -297,13 +297,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV011
     kind: verification
     subject:
@@ -316,7 +316,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV011]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -324,13 +324,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV012
     kind: verification
     subject:
@@ -343,7 +343,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV012]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -351,13 +351,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
   - id: EV013
     kind: verification
     subject:
@@ -370,7 +370,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV013]
-    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
+    artifacts: [".github/workflows/bootstrap-qualification.yml", docs/architecture/bootstrap-recovery.md, eng/bootstrap-ci-contract.json, eng/bootstrap-ci.fsx, eng/bootstrap-recovery.fsx, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapRecoveryTests.fs
@@ -378,12 +378,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/gs2-01-8.trx
-      digest: "sha256:0d862079bebdd6c5883224b0bac67ee4bbaa88bb4a5ba1434aebe8261b1e3e3c"
+      digest: "sha256:c5c696608c267f92399c37a26b740023ef4d12e442992006b7146a7252e7e1d0"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 85
+      passed: 93
       failed: 0
       skipped: 0
-    notes: [16 unit tests, The locked build, "and 85 architecture tests passed; the runner also rejected a dirty candidate before execution."]
+    notes: ["The locked build, 16 unit tests, and 93 architecture tests passed; the runner rejected a dirty candidate before execution and the evidence collector passed eight independent recovery-receipt mutations."]
 lifecycleNotes:
   - "Next lifecycle action: verify."
