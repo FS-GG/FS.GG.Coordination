@@ -11,7 +11,7 @@ sourceAnalysis: readiness/8-create-github-substrate-v2-work-skill/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/8-create-github-substrate-v2-work-skill/analysis.json
-    digest: e4e545974a855fe9f754500c56aadceb1f5da7b9918c390dd807605dcddef64a
+    digest: b57522d842890db77a93e6562c3fd60d07e794833e0d6c1ea41c83a1aa4e86cf
     schemaVersion: 1
   - label: checklist
     path: work/8-create-github-substrate-v2-work-skill/checklist.md
