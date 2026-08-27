@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "217940b4727be4403cea05877e29553e751e2d354684e8020343931f13ff5c1a"
+    "6a27deb32cbb096a273f5ac03f320667850d460a86fbfa6885fca44426dac14a"
 
 let expectedContract =
-    "1b050d8d9b8b9fa65fd9fbcae2f8b5ed4141260704c7e419c1396b42c933f103"
+    "581d45c6db8d302df5a2ea6413d4d2cf4107388617ef6f820c55bf4fbb4d4e1b"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -134,13 +134,13 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 71 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 80 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
     fail "RELATIONSHIPS" "wrong-cardinality"
 
-if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 10 then
+if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 12 then
     fail "ACTIONS" "wrong-cardinality"
 
 let trackedExit, trackedQnt, trackedError =
@@ -221,13 +221,13 @@ try
           "--root"
           scratch
           "--work"
-          "38-lifecycle-intent"
+          "42-native-relation-algebra"
           "--title"
-          "Implement lifecycle intent"
+          "Implement native relation algebra"
           "--agent"
-          "swift-0d50"
+          "avocet-bdf8"
           "--session"
-          "gs2-02-4-profile2"
+          "gs2-02-5-profile2"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -241,10 +241,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "38-lifecycle-intent" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "42-native-relation-algebra" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/38-lifecycle-intent")
+    let generatedRoot = Path.Combine(scratch, "readiness/42-native-relation-algebra")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -425,6 +425,48 @@ try
         environment
     |> ignore
 
+    requireGreen
+        "QUINT-RELATION-VALIDITY-VERIFY"
+        scratch
+        quint
+        [ "verify"
+          qnt
+          "--main"
+          "CoordinationProtocol"
+          "--init"
+          "init"
+          "--step"
+          "step"
+          "--invariant"
+          "nativeRelationEdgesAreValid"
+          "--max-steps"
+          "4"
+          "--verbosity"
+          "1" ]
+        environment
+    |> ignore
+
+    requireGreen
+        "QUINT-RELATION-PRESERVATION-VERIFY"
+        scratch
+        quint
+        [ "verify"
+          qnt
+          "--main"
+          "CoordinationProtocol"
+          "--init"
+          "init"
+          "--step"
+          "step"
+          "--invariant"
+          "relationChangesPreserveUnrelatedEdges"
+          "--max-steps"
+          "4"
+          "--verbosity"
+          "1" ]
+        environment
+    |> ignore
+
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
     let originalQnt = File.ReadAllText qnt
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
@@ -505,6 +547,93 @@ try
         fail
             "LIFECYCLE-NEGATIVE-CONTROL"
             ($"missing ITF; {lifecycleRedOutput}; {lifecycleRedError}")
+
+    let replacementMutant = Path.Combine(scratch, "protocol-relation-whole-set-replacement.qnt")
+    let edgeLocalAdd = "    nativeRelationEdges' = nativeRelationEdges.union(Set(edge)),"
+    let wholeSetReplacement = "    nativeRelationEdges' = Set(edge),"
+
+    if not (originalQnt.Contains(edgeLocalAdd, StringComparison.Ordinal)) then
+        fail "RELATION-NEGATIVE-CONTROL" "edge-local add fixture absent"
+
+    File.WriteAllText(replacementMutant, originalQnt.Replace(edgeLocalAdd, wholeSetReplacement))
+    let replacementCounterexample = Path.Combine(scratch, "counterexample-relation-whole-set-replacement.itf.json")
+
+    let replacementRedExit, replacementRedOutput, replacementRedError =
+        run
+            scratch
+            quint
+            [ "verify"
+              replacementMutant
+              "--main"
+              "CoordinationProtocol"
+              "--init"
+              "init"
+              "--step"
+              "step"
+              "--invariant"
+              "relationChangesPreserveUnrelatedEdges"
+              "--max-steps"
+              "2"
+              "--out-itf"
+              replacementCounterexample
+              "--verbosity"
+              "1" ]
+            environment
+
+    if replacementRedExit = 0 then
+        fail "RELATION-NEGATIVE-CONTROL" "whole-set replacement passed"
+
+    if not (File.Exists replacementCounterexample) then
+        fail
+            "RELATION-NEGATIVE-CONTROL"
+            ($"whole-set replacement missing ITF; {replacementRedOutput}; {replacementRedError}")
+
+    let selfEdgeMutant = Path.Combine(scratch, "protocol-relation-self-edge.qnt")
+    let validRelationStep = "    addNativeRelation(parentChildEdge),"
+    let invalidRelationStep = "    addNativeRelation({ ...parentChildEdge, targetId: parentChildEdge.sourceId }),"
+    let relationGuard = "    nativeRelationEdgeIsValid(edge),\n    evidenceObserved' = evidenceObserved,"
+
+    if not (originalQnt.Contains(validRelationStep, StringComparison.Ordinal)) then
+        fail "RELATION-VALIDITY-NEGATIVE-CONTROL" "relation step fixture absent"
+
+    if not (originalQnt.Contains(relationGuard, StringComparison.Ordinal)) then
+        fail "RELATION-VALIDITY-NEGATIVE-CONTROL" "relation guard fixture absent"
+
+    let withoutRelationGuard =
+        originalQnt.Replace(relationGuard, "    evidenceObserved' = evidenceObserved,")
+
+    File.WriteAllText(selfEdgeMutant, withoutRelationGuard.Replace(validRelationStep, invalidRelationStep))
+    let selfEdgeCounterexample = Path.Combine(scratch, "counterexample-relation-self-edge.itf.json")
+
+    let selfEdgeRedExit, selfEdgeRedOutput, selfEdgeRedError =
+        run
+            scratch
+            quint
+            [ "verify"
+              selfEdgeMutant
+              "--main"
+              "CoordinationProtocol"
+              "--init"
+              "init"
+              "--step"
+              "step"
+              "--invariant"
+              "nativeRelationEdgesAreValid"
+              "--max-steps"
+              "1"
+              "--out-itf"
+              selfEdgeCounterexample
+              "--verbosity"
+              "1" ]
+            environment
+
+    if selfEdgeRedExit = 0 then
+        fail "RELATION-VALIDITY-NEGATIVE-CONTROL" "self edge passed"
+
+    if not (File.Exists selfEdgeCounterexample) then
+        fail
+            "RELATION-VALIDITY-NEGATIVE-CONTROL"
+            ($"self edge missing ITF; {selfEdgeRedOutput}; {selfEdgeRedError}")
 
     let requireAuthorityRed name (observationMutation: string -> string) (sourceMutation: string -> string) =
         let mutated = Path.Combine(scratch, $"protocol-%s{name}.qnt")
