@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="RoadmapCommand.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -12,6 +13,7 @@
     <ProjectReference Include="..\FS.GG.Coordination.Protocol\FS.GG.Coordination.Protocol.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.GitHub\FS.GG.Coordination.GitHub.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Qualification.Contracts\FS.GG.Coordination.Qualification.Contracts.fsproj" />
   </ItemGroup>
 
 </Project>

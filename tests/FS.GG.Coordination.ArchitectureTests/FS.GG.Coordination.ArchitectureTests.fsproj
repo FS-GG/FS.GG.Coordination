@@ -2,8 +2,10 @@
 
   <ItemGroup>
     <Compile Include="../FS.GG.Coordination.UnitTests/Tests.fs" Link="BoundaryTests.fs" />
+    <Compile Include="../FS.GG.Coordination.UnitTests/RoadmapWorkTests.fs" Link="RoadmapWorkUnitTests.fs" />
     <Compile Include="Tests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
+    <Compile Include="RoadmapWorkArchitectureTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

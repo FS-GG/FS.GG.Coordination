@@ -9,7 +9,7 @@ The production dependency graph is:
 Protocol
 ├──> Core
 │    └──> GitHub
-│         ├──> CLI
+│         ├──> CLI ──> Qualification.Contracts
 │         └──> App (inert class library)
 └──> Qualification.Contracts
 ```
@@ -36,6 +36,10 @@ GS2-01.4 adds one deliberate package edge from `Qualification.Contracts` to the
 published `FS.GG.SDD.Artifacts` kernel. That edge is governed by
 [Published Quint kernel](published-quint-kernel.md): it is not permitted in any
 other production project and does not change the one-way project graph.
+GS2-01.6 adds the outward CLI-to-Qualification.Contracts edge so the local-only
+roadmap command projects the same compiled validation contract that tests consume;
+the CLI still has no direct `FS.GG.SDD.Artifacts` package reference and no inward
+layer acquires a host dependency.
 `FS.GG.Coordination.ArchitectureTests` runs
 the policy against the real repository plus independent invalid project-edge,
 framework-reference, RestSharp-package, root-web-SDK, child-web-SDK, App-hosting,
@@ -46,9 +50,8 @@ being rejected first by another policy rule. The `Boundary qualification`
 workflow invokes the locked restore, Release build, test suite, and dependency policy on
 GitHub-hosted runners.
 
-The following remain outside this unit:
+The following remain outside the bootstrap boundary:
 
-- bootstrap CI and evidence-manifest validation (GS2-01.5)
 - lifecycle command behavior and protocol semantics (GS2-02 and later)
 - any App listener, deployment identity, webhook registration, secret,
   subscription, or production mutation authority
