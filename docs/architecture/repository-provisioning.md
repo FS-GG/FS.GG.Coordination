@@ -2,7 +2,9 @@
 
 GS2-01.1 treats live GitHub responses as authority. The reviewed desired state is
 `eng/repository-settings/desired.json`; the two request documents beside it are the only ruleset payloads
-that may be applied. `verify.fsx` validates the compact post-state receipt before independent acceptance.
+that may be applied. `prestate.json` preserves the canonical state immediately before the final idempotent
+ruleset verification batch. `verify.fsx` recomputes its file digest while validating the compact post-state
+receipt before independent acceptance.
 
 The apply sequence is deliberately staged: merge CODEOWNERS and this contract, prove the public dependency
 graph, attach organization code-security configuration 17, verify its full policy projection and CodeQL default setup,
@@ -30,3 +32,8 @@ checks and non-provider secret patterns remain disabled in that effective reposi
 configuration 17 requests them; both are explicitly recorded as license-unsupported. Dynamic timestamps are excluded
 from desired state. Configuration 17's separate generic-secrets field is `not_set` and is neither conflated with
 non-provider patterns nor claimed as an operational or unsupported control.
+
+The first live apply checkpoint retained only a pre-state digest and is not accepted as independently replayable.
+The final receipt therefore binds a later, explicit idempotent verification batch: capture the already-protected
+state as canonical pre-state bytes, reapply the unchanged reviewed tag and branch rulesets, and capture a fresh
+post-state. This supersedes the earlier unaccepted batch without reconstructing or inventing historical bytes.

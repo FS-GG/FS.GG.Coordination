@@ -9,14 +9,16 @@ open Xunit
 let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 let private desiredPath = Path.Combine(root, "eng/repository-settings/desired.json")
 let private fixturePath = Path.Combine(root, "eng/repository-settings/fixture.json")
+let private fixturePreStatePath = Path.Combine(root, "eng/repository-settings/fixture-prestate.json")
 let private receiptPath = Path.Combine(root, "eng/repository-settings/receipt.json")
+let private preStatePath = Path.Combine(root, "eng/repository-settings/prestate.json")
 
-let private verify receiptPath =
+let private verify preStatePath receiptPath =
     let startInfo = ProcessStartInfo("dotnet")
     startInfo.WorkingDirectory <- root
     startInfo.RedirectStandardOutput <- true
     startInfo.RedirectStandardError <- true
-    for argument in [ "fsi"; "eng/repository-settings/verify.fsx"; "--"; desiredPath; receiptPath ] do
+    for argument in [ "fsi"; "eng/repository-settings/verify.fsx"; "--"; desiredPath; preStatePath; receiptPath ] do
         startInfo.ArgumentList.Add(argument)
     use child = Process.Start(startInfo)
     let output = child.StandardOutput.ReadToEnd()
@@ -30,6 +32,18 @@ let private withMutation (oldValue: string) (newValue: string) (assertion: strin
     let changed = original.Replace(oldValue, newValue)
     Assert.NotEqual<string>(original, changed)
     let path = Path.Combine(Path.GetTempPath(), $"repository-settings-{Guid.NewGuid():N}.json")
+    try
+        File.WriteAllText(path, changed)
+        assertion path
+    finally
+        File.Delete(path)
+
+let private withPreStateMutation (oldValue: string) (newValue: string) (assertion: string -> unit) =
+    let original = File.ReadAllText(fixturePreStatePath)
+    Assert.Contains(oldValue, original)
+    let changed = original.Replace(oldValue, newValue)
+    Assert.NotEqual<string>(original, changed)
+    let path = Path.Combine(Path.GetTempPath(), $"repository-settings-prestate-{Guid.NewGuid():N}.json")
     try
         File.WriteAllText(path, changed)
         assertion path
@@ -59,13 +73,13 @@ let ``repository provisioning contract is closed and least privilege`` () =
 
 [<Fact>]
 let ``canonical provisioning fixture passes the strict validator`` () =
-    let exitCode, output = verify fixturePath
+    let exitCode, output = verify fixturePreStatePath fixturePath
     Assert.Equal(0, exitCode)
     Assert.Contains("repository-settings: PASS", output)
 
 [<Fact>]
 let ``exact live provisioning receipt passes the strict validator`` () =
-    let exitCode, output = verify receiptPath
+    let exitCode, output = verify preStatePath receiptPath
     Assert.Equal(0, exitCode)
     Assert.Contains("operations=15", output)
 
@@ -106,19 +120,27 @@ let ``exact live provisioning receipt passes the strict validator`` () =
 [<InlineData("\"method\":\"GET\",\"name\":\"dependency-graph\"", "\"method\":\"POST\",\"name\":\"dependency-graph\"", "RS-OPERATION-CONTRACT")>]
 [<InlineData("\"httpStatus\":200,\"method\":\"GET\",\"name\":\"main-ruleset\"", "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"", "RS-RULESET-RESPONSE")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
-[<InlineData("\"digest\":\"2", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
+[<InlineData("\"digest\":\"4", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
+[<InlineData("\"preStateSha256\":\"1", "\"preStateSha256\":\"8", "RS-PRESTATE-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =
     withMutation oldValue newValue (fun path ->
-        let exitCode, output = verify path
+        let exitCode, output = verify fixturePreStatePath path
         Assert.NotEqual(0, exitCode)
         Assert.Contains(expectedRule, output))
 
 [<Fact>]
 let ``validator rejects noncanonical receipt bytes`` () =
     withMutation "{\"actions\"" "{ \"actions\"" (fun path ->
-        let exitCode, output = verify path
+        let exitCode, output = verify fixturePreStatePath path
         Assert.NotEqual(0, exitCode)
         Assert.Contains("RS-RECEIPT-CANONICAL", output))
+
+[<Fact>]
+let ``validator rejects altered canonical pre-state bytes`` () =
+    withPreStateMutation "\"observedAt\":\"2026-08-27T00:00:00Z\"" "\"observedAt\":\"2026-08-27T00:00:01Z\"" (fun path ->
+        let exitCode, output = verify path fixturePath
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("RS-PRESTATE-SELF-DIGEST", output))
 
 [<Fact>]
 let ``ruleset requests bind review checks signatures and no bypass`` () =
