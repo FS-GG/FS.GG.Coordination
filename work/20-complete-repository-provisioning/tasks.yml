@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/20-complete-repository-provisioning/spec.md
-    digest: 3aa3f4293df46e3b7e34da0e57b650594fcf6deb25ed70346daa403e668e258f
+    digest: 0ecd05cebe1c6b5891534ac01d40429a808682eb6f6153147214c49324278814
     schemaVersion: 1
   - label: clarifications
     path: work/20-complete-repository-provisioning/clarifications.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/20-complete-repository-provisioning/plan.md
-    digest: e3308a7d95c653baedb3eeff5ba5690ec26c91e0e7e2766de96d304acb52e279
+    digest: 3b044d2e89775febce5886fcbff1338ef0aed941e0df9c6734c4620241d670b2
     schemaVersion: 1
 tasks:
   - id: T001

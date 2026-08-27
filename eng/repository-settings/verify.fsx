@@ -72,10 +72,12 @@ let hashPattern = Regex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)
 let requireHash (code: string) (name: string) (value: string) =
     if not (hashPattern.IsMatch value) then fail code $"{name} must be lowercase SHA-256"
 
-let validate (desiredPath: string) (receiptPath: string) =
+let validate (desiredPath: string) (preStatePath: string) (receiptPath: string) =
     use desiredDoc = loadCanonical "RS-DESIRED-CANONICAL" desiredPath
+    use preStateDoc = loadCanonical "RS-PRESTATE-CANONICAL" preStatePath
     use receiptDoc = loadCanonical "RS-RECEIPT-CANONICAL" receiptPath
     let desired = desiredDoc.RootElement
+    let preState = preStateDoc.RootElement
     let receipt = receiptDoc.RootElement
 
     exactProperties "RS-DESIRED-SHAPE"
@@ -126,6 +128,57 @@ let validate (desiredPath: string) (receiptPath: string) =
         exactProperties "RS-DESIRED-TEAM-SHAPE" [ "permission"; "slug" ] team
     for unsupported in desired.GetProperty("unsupported").EnumerateArray() do
         exactProperties "RS-DESIRED-UNSUPPORTED-SHAPE" [ "httpStatus"; "status"; "surface" ] unsupported
+    exactProperties "RS-PRESTATE-SHAPE"
+        [ "actions"; "checks"; "codeSecurityConfiguration"; "codeqlDefaultSetup"; "digest"; "observedAt";
+          "operations"; "repository"; "rulesets"; "schema"; "security"; "teams"; "unsupported" ] preState
+    requireString "RS-PRESTATE-SCHEMA" "schema" "fsgg.coordination.repository-settings-pre-state/1" preState
+    for property in [ "actions"; "checks"; "codeSecurityConfiguration"; "codeqlDefaultSetup"; "repository"; "security"; "teams"; "unsupported" ] do
+        requireEqual "RS-PRESTATE-MISMATCH" property (desired.GetProperty(property)) (preState.GetProperty(property))
+    let desiredPreStateRules = desired.GetProperty("rulesets").EnumerateArray() |> Seq.toArray
+    let actualPreStateRules = preState.GetProperty("rulesets").EnumerateArray() |> Seq.toArray
+    if desiredPreStateRules.Length <> actualPreStateRules.Length then fail "RS-PRESTATE-RULESET-COUNT" "pre-state ruleset count differs"
+    for index in 0 .. desiredPreStateRules.Length - 1 do
+        let wanted = desiredPreStateRules[index]
+        let actual = actualPreStateRules[index]
+        let semanticProperties =
+            if wanted.GetProperty("target").GetString() = "branch" then
+                [ "allowedMergeMethods"; "bypassActorCount"; "dismissStaleReviewsOnPush"; "doNotEnforceOnCreate";
+                  "enforcement"; "include"; "name"; "requireCodeOwnerReview"; "requireLastPushApproval";
+                  "requiredReviewCount"; "requiredReviewThreadResolution"; "ruleTypes"; "strictChecks"; "target" ]
+            else
+                [ "bypassActorCount"; "enforcement"; "include"; "name"; "requiredReviewCount"; "ruleTypes";
+                  "strictChecks"; "target"; "updateAllowsFetchAndMerge" ]
+        exactProperties "RS-PRESTATE-RULESET-SHAPE" ("id" :: semanticProperties) actual
+        if actual.GetProperty("id").GetInt64() <= 0L then fail "RS-PRESTATE-RULESET-ID" "pre-state ruleset id must be positive"
+        for property in semanticProperties do
+            requireEqual "RS-PRESTATE-RULESET-MISMATCH" property (wanted.GetProperty(property)) (actual.GetProperty(property))
+    let preStateOperations = preState.GetProperty("operations").EnumerateArray() |> Seq.toArray
+    if preStateOperations.Length <> 15 then fail "RS-PRESTATE-OPERATIONS" "pre-state must bind all 15 authoritative operations"
+    let mutable preStateNames = Set.empty
+    for operation in preStateOperations do
+        exactProperties "RS-PRESTATE-OPERATION-SHAPE" [ "httpStatus"; "method"; "name"; "path"; "responseSha256"; "status" ] operation
+        let name = operation.GetProperty("name").GetString()
+        if String.IsNullOrWhiteSpace(name) || preStateNames.Contains(name) then fail "RS-PRESTATE-OPERATIONS" "pre-state operation names must be unique and nonempty"
+        preStateNames <- preStateNames.Add(name)
+        requireHash "RS-PRESTATE-RESPONSE-DIGEST" "responseSha256" (operation.GetProperty("responseSha256").GetString())
+    let expectedPreStateNames =
+        [ "actions-permissions"; "code-security-association"; "code-security-configuration"; "codeql-default-setup";
+          "dependabot-alerts"; "dependency-graph"; "main-ruleset"; "organization-actions-permissions";
+          "private-vulnerability-reporting"; "release-tag-ruleset"; "repository"; "security"; "selected-actions";
+          "teams"; "workflow-permissions" ] |> Set.ofList
+    if preStateNames <> expectedPreStateNames then fail "RS-PRESTATE-OPERATIONS" "pre-state authoritative operation set must be exact"
+    let mutable preStateObserved = DateTimeOffset.MinValue
+    if not (DateTimeOffset.TryParseExact(preState.GetProperty("observedAt").GetString(), "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                                        CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal ||| DateTimeStyles.AdjustToUniversal,
+                                        &preStateObserved)) then
+        fail "RS-PRESTATE-OBSERVED-AT" "pre-state observedAt must be canonical UTC seconds"
+    let statedPreStateDigest = preState.GetProperty("digest").GetString()
+    requireHash "RS-PRESTATE-SELF-DIGEST" "digest" statedPreStateDigest
+    let unsignedPreState = JsonNode.Parse(preState.GetRawText()).AsObject()
+    unsignedPreState.Remove("digest") |> ignore
+    use unsignedPreStateDoc = JsonDocument.Parse(unsignedPreState.ToJsonString())
+    if statedPreStateDigest <> sha256 (canonicalBytes unsignedPreStateDoc.RootElement) then
+        fail "RS-PRESTATE-SELF-DIGEST" "pre-state self-digest mismatch"
     exactProperties "RS-RECEIPT-SHAPE"
         [ "actions"; "checks"; "codeSecurityConfiguration"; "codeqlDefaultSetup"; "desiredSha256"; "digest";
           "observedAt"; "operations"; "preStateSha256"; "repair"; "repository"; "rulesets"; "schema";
@@ -160,7 +213,10 @@ let validate (desiredPath: string) (receiptPath: string) =
     let desiredDigest = receipt.GetProperty("desiredSha256").GetString()
     requireHash "RS-DESIRED-DIGEST" "desiredSha256" desiredDigest
     if desiredDigest <> sha256 desiredBytes then fail "RS-DESIRED-DIGEST" "desired contract digest mismatch"
-    requireHash "RS-PRESTATE-DIGEST" "preStateSha256" (receipt.GetProperty("preStateSha256").GetString())
+    let statedPreStateFileDigest = receipt.GetProperty("preStateSha256").GetString()
+    requireHash "RS-PRESTATE-DIGEST" "preStateSha256" statedPreStateFileDigest
+    if statedPreStateFileDigest <> sha256 (File.ReadAllBytes(preStatePath)) then
+        fail "RS-PRESTATE-DIGEST" "pre-state artifact digest mismatch"
 
     let mutable observed = DateTimeOffset.MinValue
     let observedText = receipt.GetProperty("observedAt").GetString()
@@ -176,9 +232,13 @@ let validate (desiredPath: string) (receiptPath: string) =
         let name = operation.GetProperty("name").GetString()
         if String.IsNullOrWhiteSpace(name) || operationNames.Contains(name) then fail "RS-OPERATIONS" "operation names must be unique and nonempty"
         operationNames <- operationNames.Add(name)
-        requireString "RS-OPERATION-STATUS" "status" "verified" operation
         let httpStatus = operation.GetProperty("httpStatus").GetInt32()
-        if httpStatus < 200 || httpStatus > 299 then fail "RS-OPERATION-STATUS" $"operation {name} was not successful"
+        if name = "organization-actions-permissions" then
+            requireString "RS-OPERATION-STATUS" "status" "unsupported" operation
+            if httpStatus <> 403 then fail "RS-OPERATION-STATUS" "organization Actions permissions must bind the observed 403"
+        else
+            requireString "RS-OPERATION-STATUS" "status" "verified" operation
+            if httpStatus < 200 || httpStatus > 299 then fail "RS-OPERATION-STATUS" $"operation {name} was not successful"
         if String.IsNullOrWhiteSpace(operation.GetProperty("method").GetString()) || String.IsNullOrWhiteSpace(operation.GetProperty("path").GetString()) then
             fail "RS-OPERATIONS" "operation method and path must be nonempty"
         requireHash "RS-RESPONSE-DIGEST" "responseSha256" (operation.GetProperty("responseSha256").GetString())
@@ -186,7 +246,8 @@ let validate (desiredPath: string) (receiptPath: string) =
     let requiredOps =
         [ "repository"; "teams"; "actions-permissions"; "selected-actions"; "security"; "dependabot-alerts";
           "dependency-graph"; "code-security-association"; "code-security-configuration"; "codeql-default-setup";
-          "private-vulnerability-reporting"; "main-ruleset"; "release-tag-ruleset" ] |> Set.ofList
+          "private-vulnerability-reporting"; "workflow-permissions"; "organization-actions-permissions";
+          "main-ruleset"; "release-tag-ruleset" ] |> Set.ofList
     if operationNames <> requiredOps then fail "RS-OPERATIONS" "authoritative response operation set must be exact"
     let staticOperations =
         [ "actions-permissions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions", 200)
@@ -195,11 +256,13 @@ let validate (desiredPath: string) (receiptPath: string) =
           "codeql-default-setup", ("GET", "/repos/FS-GG/FS.GG.Coordination/code-scanning/default-setup", 200)
           "dependabot-alerts", ("GET", "/repos/FS-GG/FS.GG.Coordination/vulnerability-alerts", 204)
           "dependency-graph", ("GET", "/repos/FS-GG/FS.GG.Coordination/dependency-graph/sbom", 200)
+          "organization-actions-permissions", ("GET", "/orgs/FS-GG/actions/permissions", 403)
           "private-vulnerability-reporting", ("GET", "/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting", 200)
           "repository", ("GET", "/repos/FS-GG/FS.GG.Coordination", 200)
           "security", ("GET", "/repos/FS-GG/FS.GG.Coordination", 200)
           "selected-actions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions/selected-actions", 200)
-          "teams", ("GET", "/repos/FS-GG/FS.GG.Coordination/teams", 200) ]
+          "teams", ("GET", "/repos/FS-GG/FS.GG.Coordination/teams", 200)
+          "workflow-permissions", ("GET", "/repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow", 200) ]
     for name, (expectedMethod, expectedPath, expectedStatus) in staticOperations do
         let operation = operations |> Array.find (fun item -> item.GetProperty("name").GetString() = name)
         if operation.GetProperty("method").GetString() <> expectedMethod
@@ -231,5 +294,5 @@ let validate (desiredPath: string) (receiptPath: string) =
     printfn "repository-settings: PASS receipt=%s digest=%s operations=%d" receiptPath statedDigest operations.Length
 
 match fsi.CommandLineArgs |> Array.skip 1 |> Array.toList with
-| [ desired; receipt ] -> validate desired receipt
-| _ -> fail "RS-USAGE" "verify.fsx <desired.json> <receipt.json>"
+| [ desired; preState; receipt ] -> validate desired preState receipt
+| _ -> fail "RS-USAGE" "verify.fsx <desired.json> <prestate.json> <receipt.json>"
