@@ -9,8 +9,8 @@ the Coordination Project remains a visibility projection.
 
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
-path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.3,
-and the active GS2-02.4 frontier with stable IDs, owner,
+path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.4,
+and the active GS2-02.5 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -82,6 +82,14 @@ independent fact/outcome pairs; derived lifecycle status is never accepted as in
 presence and proven absence contribute lifecycle knowledge, every other GS2-02.3 outcome derives
 `indeterminate`, and observation/status-refresh actions preserve the separately authorized intent.
 The unit stops before relation algebra and grants no network or production write authority.
+
+GS2-02.5 reuses those exact command identities and adds closed, directed
+`REL-ParentChild` and `REL-Blocks` kinds. Native relation state is a set of typed edges:
+duplicate adds and absent removes converge, edge-local changes preserve unrelated edges,
+relation kind and endpoint direction remain distinct, and self edges fail closed. Relation
+observation failures retain the GS2-02.3 outcome algebra and cannot become proven absence;
+lifecycle intent remains independent. The unit stops before protocol streams and generalized
+mutation envelopes and grants no network or production write authority.
 
 ## Command sequence
 

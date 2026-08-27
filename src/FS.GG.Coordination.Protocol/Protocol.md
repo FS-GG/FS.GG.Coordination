@@ -1,4 +1,4 @@
-# GS2-02.4 canonical coordination protocol
+# GS2-02.5 canonical coordination protocol
 
 This document is the sole authored source for the coordination protocol baseline. Every behavioral
 fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
@@ -6,10 +6,11 @@ projections and must never be edited independently.
 
 GS2-02.1 established vocabulary and stable integration identities; GS2-02.2 added the closed,
 revision-aware authority catalogue; GS2-02.3 added observation outcomes and knowledge semantics.
-This unit refines only lifecycle intent and derived status. Human scheduling intent remains distinct
-from claims, blockers, pull-request, review, and delivery observations. Later GS2-02 units refine
-relation algebra, streams, mutations, plans, desired state, and compiled outputs. No hosted runtime
-or production mutation authority is defined here.
+GS2-02.4 added lifecycle intent and derived status. This unit adds native parent/child and blocking
+relations as typed, directed edge sets. Edge-local add and remove intent is idempotent, preserves
+unrelated edges, rejects self edges, and never converts observation failure into proven absence.
+Later GS2-02 units refine streams, generalized mutations, plans, desired state, and compiled outputs.
+No hosted runtime or production mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -71,6 +72,8 @@ module CoordinationProtocol {
     deliveryOutcomeId: str,
     delivered: bool,
   }
+  type NativeRelationKind = { id: str, kind: str, direction: str }
+  type NativeRelationEdge = { relationKindId: str, sourceId: str, targetId: str }
 
   pure val vocabularyCatalogue = Set(
     { id: "SubjectVocabulary", kind: "subject", family: "subjects" },
@@ -115,6 +118,11 @@ module CoordinationProtocol {
     { id: "INTENT-Cancelled", kind: "lifecycleIntent", schedulingClass: "cancelled", terminal: true }
   )
 
+  pure val nativeRelationKindCatalogue = Set(
+    { id: "REL-ParentChild", kind: "nativeRelationKind", direction: "parent-to-child" },
+    { id: "REL-Blocks", kind: "nativeRelationKind", direction: "blocker-to-blocked" }
+  )
+
   pure val relationshipCatalogue = Set(
     { id: "REL-Subject-Evidence", kind: "verifiedBy", fromId: "SubjectVocabulary", toId: "EvidenceObligationVocabulary" },
     { id: "REL-Authority-Evidence", kind: "verifiedBy", fromId: "AuthorityVocabulary", toId: "EvidenceObligationVocabulary" },
@@ -140,6 +148,7 @@ module CoordinationProtocol {
     { id: "BOUND-AuthorityCardinality", kind: "bound", minimum: 7, maximum: 7 },
     { id: "BOUND-ObservationOutcomeCardinality", kind: "bound", minimum: 9, maximum: 9 },
     { id: "BOUND-LifecycleIntentCardinality", kind: "bound", minimum: 4, maximum: 4 },
+    { id: "BOUND-NativeRelationKindCardinality", kind: "bound", minimum: 2, maximum: 2 },
     { id: "BOUND-TraceSteps", kind: "bound", minimum: 0, maximum: 4 }
   )
 
@@ -160,6 +169,9 @@ module CoordinationProtocol {
     ,{ id: "VERIFY-LifecycleIntent", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
         "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
       ), boundIds: Set("BOUND-LifecycleIntentCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-NativeRelations", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "REL-ParentChild", "REL-Blocks"
+      ), boundIds: Set("BOUND-NativeRelationKindCardinality", "BOUND-TraceSteps") }
   )
 
   pure val compatibilityCatalogue = Set(
@@ -189,6 +201,15 @@ module CoordinationProtocol {
       ) },
     { id: "UnknownLifecycleFactsFailClosed", kind: "invariant", subjects: Set(
         "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+      ) }
+    ,{ id: "NativeRelationKindCatalogueIsClosed", kind: "invariant", subjects: Set("REL-ParentChild", "REL-Blocks") }
+    ,{ id: "NativeRelationEdgesAreValid", kind: "invariant", subjects: Set("REL-ParentChild", "REL-Blocks") }
+    ,{ id: "RelationChangesPreserveUnrelatedEdges", kind: "invariant", subjects: Set("REL-ParentChild", "REL-Blocks") }
+    ,{ id: "RelationChangesPreserveLifecycleIntent", kind: "invariant", subjects: Set(
+        "REL-ParentChild", "REL-Blocks", "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
+      ) }
+    ,{ id: "RelationObservationFailuresDoNotBecomeAbsence", kind: "invariant", subjects: Set(
+        "REL-ParentChild", "REL-Blocks", "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
       ) }
   )
 
@@ -318,11 +339,31 @@ module CoordinationProtocol {
     else if (intentId == "INTENT-Paused") "paused"
     else "backlog"
 
+  pure def nativeRelationKindExists(relationKindId: str): bool =
+    nativeRelationKindCatalogue.exists(relationKind => relationKind.id == relationKindId)
+
+  pure def nativeRelationEdgeIsValid(edge: NativeRelationEdge): bool = and {
+    nativeRelationKindExists(edge.relationKindId),
+    edge.sourceId != edge.targetId,
+  }
+
+  pure def relationObservationContributesKnowledge(outcomeId: str, edges: Set[NativeRelationEdge]): bool =
+    if (outcomeId == "OBS-Observed") edges.forall(nativeRelationEdgeIsValid)
+    else outcomeId == "OBS-ProvenAbsent" and edges == Set()
+
+  pure val parentChildEdge = { relationKindId: "REL-ParentChild", sourceId: "subject-parent", targetId: "subject-child" }
+  pure val blockingEdge = { relationKindId: "REL-Blocks", sourceId: "subject-blocker", targetId: "subject-blocked" }
+
   pure val closedLifecycleIntentCatalogue = and {
     lifecycleIntentCatalogue.map(intent => intent.id) == Set(
       "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
     ),
     lifecycleIntentCatalogue.filter(intent => intent.terminal).map(intent => intent.id) == Set("INTENT-Cancelled"),
+  }
+
+  pure val closedNativeRelationKindCatalogue = and {
+    nativeRelationKindCatalogue.map(relationKind => relationKind.id) == Set("REL-ParentChild", "REL-Blocks"),
+    nativeRelationKindCatalogue.map(relationKind => relationKind.direction) == Set("parent-to-child", "blocker-to-blocked"),
   }
 
   pure val closedAuthorityCatalogue = and {
@@ -357,6 +398,8 @@ module CoordinationProtocol {
   var lifecycleFacts: LifecycleFacts
   var lifecycleStatus: str
   var lifecycleStatusCurrent: bool
+  var nativeRelationEdges: Set[NativeRelationEdge]
+  var authorizedNativeRelationEdges: Set[NativeRelationEdge]
 
   action init = all {
     evidenceObserved' = false,
@@ -370,6 +413,8 @@ module CoordinationProtocol {
     lifecycleFacts' = emptyLifecycleFacts,
     lifecycleStatus' = "backlog",
     lifecycleStatusCurrent' = true,
+    nativeRelationEdges' = Set(),
+    authorizedNativeRelationEdges' = Set(),
   }
 
   action observeProtocolEvidence: bool = all {
@@ -384,6 +429,8 @@ module CoordinationProtocol {
     lifecycleFacts' = lifecycleFacts,
     lifecycleStatus' = lifecycleStatus,
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
   }
 
   action acceptVocabularyIdentity(vocabularyId: str): bool = all {
@@ -400,6 +447,8 @@ module CoordinationProtocol {
     lifecycleFacts' = lifecycleFacts,
     lifecycleStatus' = lifecycleStatus,
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
   }
 
   action observeAuthority(observation: AuthorityObservation): bool = all {
@@ -414,6 +463,8 @@ module CoordinationProtocol {
     lifecycleFacts' = lifecycleFacts,
     lifecycleStatus' = lifecycleStatus,
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
   }
 
   action acceptObservedAuthority: bool = all {
@@ -430,6 +481,8 @@ module CoordinationProtocol {
     lifecycleFacts' = lifecycleFacts,
     lifecycleStatus' = lifecycleStatus,
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
   }
 
   action acceptObservationKnowledge: bool = all {
@@ -446,6 +499,8 @@ module CoordinationProtocol {
     lifecycleFacts' = lifecycleFacts,
     lifecycleStatus' = lifecycleStatus,
     lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
   }
 
   action setHumanIntent(intentId: str): bool = all {
@@ -461,6 +516,8 @@ module CoordinationProtocol {
     lifecycleFacts' = lifecycleFacts,
     lifecycleStatus' = lifecycleStatus,
     lifecycleStatusCurrent' = false,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
   }
 
   action observeLifecycleFacts(facts: LifecycleFacts): bool = all {
@@ -475,6 +532,8 @@ module CoordinationProtocol {
     lifecycleFacts' = facts,
     lifecycleStatus' = lifecycleStatus,
     lifecycleStatusCurrent' = false,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
   }
 
   action refreshLifecycleStatus: bool = all {
@@ -490,6 +549,42 @@ module CoordinationProtocol {
     lifecycleFacts' = lifecycleFacts,
     lifecycleStatus' = deriveLifecycleStatus(humanIntentId, lifecycleFacts),
     lifecycleStatusCurrent' = true,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+  }
+
+  action addNativeRelation(edge: NativeRelationEdge): bool = all {
+    nativeRelationEdgeIsValid(edge),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges.union(Set(edge)),
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges.union(Set(edge)),
+  }
+
+  action removeNativeRelation(edge: NativeRelationEdge): bool = all {
+    nativeRelationEdgeIsValid(edge),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges.filter(existing => existing != edge),
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges.filter(existing => existing != edge),
   }
 
   action step = any {
@@ -501,6 +596,9 @@ module CoordinationProtocol {
     setHumanIntent("INTENT-Ready"),
     observeLifecycleFacts(claimedLifecycleFacts),
     refreshLifecycleStatus,
+    addNativeRelation(parentChildEdge),
+    addNativeRelation(blockingEdge),
+    removeNativeRelation(parentChildEdge),
   }
 
   val acceptedVocabularyIsQualified = acceptedVocabulary == Set() or evidenceObserved
@@ -530,6 +628,15 @@ module CoordinationProtocol {
   val unknownLifecycleFactsFailClosed = Set(
     "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
   ).forall(outcomeId => deriveLifecycleStatus("INTENT-Ready", { ...emptyLifecycleFacts, claimOutcomeId: outcomeId }) == "indeterminate")
+  val nativeRelationEdgesAreValid = and {
+    closedNativeRelationKindCatalogue,
+    nativeRelationEdges.forall(nativeRelationEdgeIsValid),
+  }
+  val relationChangesPreserveUnrelatedEdges = nativeRelationEdges == authorizedNativeRelationEdges
+  val relationChangesPreserveLifecycleIntent = humanIntentId == authorizedHumanIntentId
+  val relationObservationFailuresDoNotBecomeAbsence = Set(
+    "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+  ).forall(outcomeId => not(relationObservationContributesKnowledge(outcomeId, Set())))
 }
 ```
 
@@ -623,5 +730,55 @@ module CoordinationProtocolTests {
   run testUnknownLifecycleObservationsFailClosed = unknownLifecycleFactsFailClosed
 
   run testInvalidHumanIntentIsRejected = not(lifecycleIntentExists("INTENT-Claimed"))
+
+  run testParentAndBlockingRelationsRemainDistinct = and {
+    closedNativeRelationKindCatalogue,
+    parentChildEdge.relationKindId != blockingEdge.relationKindId,
+    parentChildEdge.sourceId != parentChildEdge.targetId,
+    blockingEdge.sourceId != blockingEdge.targetId,
+  }
+
+  run testDuplicateRelationAddIsIdempotent =
+    init
+      .then(addNativeRelation(parentChildEdge))
+      .then(addNativeRelation(parentChildEdge))
+      .expect(and {
+        nativeRelationEdges == Set(parentChildEdge),
+        relationChangesPreserveUnrelatedEdges,
+        relationChangesPreserveLifecycleIntent,
+      })
+
+  run testAbsentRelationRemoveIsIdempotent =
+    init
+      .then(removeNativeRelation(parentChildEdge))
+      .then(removeNativeRelation(parentChildEdge))
+      .expect(and { nativeRelationEdges == Set(), relationChangesPreserveUnrelatedEdges })
+
+  run testRelationRemovePreservesUnrelatedEdges =
+    init
+      .then(addNativeRelation(parentChildEdge))
+      .then(addNativeRelation(blockingEdge))
+      .then(removeNativeRelation(parentChildEdge))
+      .expect(and {
+        nativeRelationEdges == Set(blockingEdge),
+        relationChangesPreserveUnrelatedEdges,
+        relationChangesPreserveLifecycleIntent,
+      })
+
+  run testReversedEndpointsAreNotEquivalent =
+    parentChildEdge != { ...parentChildEdge, sourceId: parentChildEdge.targetId, targetId: parentChildEdge.sourceId }
+
+  run testSelfRelationIsRejected =
+    not(nativeRelationEdgeIsValid({ ...parentChildEdge, targetId: parentChildEdge.sourceId }))
+
+  run testUnknownRelationKindIsRejected =
+    not(nativeRelationEdgeIsValid({ ...parentChildEdge, relationKindId: "REL-Unknown" }))
+
+  run testRelationObservationFailuresStayNonAbsent = relationObservationFailuresDoNotBecomeAbsence
+
+  run testProvenRelationAbsenceRequiresEmptySet = and {
+    relationObservationContributesKnowledge("OBS-ProvenAbsent", Set()),
+    not(relationObservationContributesKnowledge("OBS-ProvenAbsent", Set(parentChildEdge))),
+  }
 }
 ```
