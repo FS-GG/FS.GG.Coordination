@@ -1,0 +1,281 @@
+schemaVersion: 1
+workId: 50-mutation-algebra
+stage: evidence
+status: evidenceReady
+sourceSpec: work/50-mutation-algebra/spec.md
+sourceClarifications: work/50-mutation-algebra/clarifications.md
+sourceChecklist: work/50-mutation-algebra/checklist.md
+sourcePlan: work/50-mutation-algebra/plan.md
+sourceTasks: work/50-mutation-algebra/tasks.yml
+sourceAnalysis: readiness/50-mutation-algebra/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/50-mutation-algebra/analysis.json
+    digest: 9df06ace80b1dcd06c4cc982f379a4112064386ba301fe0d75a1e2c73f377536
+    schemaVersion: 1
+  - label: checklist
+    path: work/50-mutation-algebra/checklist.md
+    digest: 6283887d56a8a8159b61e6616f10a6cf26e6762ff0862c8d61de0904cd4fa533
+    schemaVersion: 1
+  - label: clarifications
+    path: work/50-mutation-algebra/clarifications.md
+    digest: 00490ff7d0b4f13b7532c0d0a1298b2b773b710d89301a5c202842efe22390dd
+    schemaVersion: 1
+  - label: plan
+    path: work/50-mutation-algebra/plan.md
+    digest: 2bf4d677567e5f75516b1482f014fa76c1f94d1944928a8c440213488b01babf
+    schemaVersion: 1
+  - label: spec
+    path: work/50-mutation-algebra/spec.md
+    digest: ab2fbe2f90b01138ae841e5230381f105c736d5f3e6cd748cf90bbcf7d9bdadf
+    schemaVersion: 1
+  - label: tasks
+    path: work/50-mutation-algebra/tasks.yml
+    digest: 2da8ed35c0374bb6467620119005dd5df32ac1451421a730e2b7b5714bd35b85
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-005]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/roadmap-work/GS2-02.7/architecture-tests.trx
+      digest: "sha256:5221887383ec79dab98d115513ce51b6aaa6a72602e4f16d331d32ca608c0042"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
