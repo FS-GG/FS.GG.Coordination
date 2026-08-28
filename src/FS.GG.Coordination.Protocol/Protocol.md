@@ -1217,24 +1217,28 @@ module CoordinationProtocolTests {
   }
 
   pure def desiredStatePhaseMayAdvance(
-    fromPhaseId: str, toPhaseId: str, planOutcomeId: str, observed: DesiredStateFact
+    fromPhaseId: str, toPhaseId: str, planOutcomeId: str,
+    desired: DesiredStateFact, observed: DesiredStateFact
   ): bool = or {
     and {
       fromPhaseId == "DSPH-Inspect", toPhaseId == "DSPH-Plan",
-      desiredStateFactShapeIsValid(observed), observed.complete, observed.supported,
+      desiredStateFactShapeIsValid(desired), desiredStateFactShapeIsValid(observed),
+      desiredStateIdentityMatches(desired, observed), observed.complete, observed.supported,
       observed.permissionGranted, Set("OBS-Observed", "OBS-ProvenAbsent").contains(observed.outcomeId),
     },
     and {
       fromPhaseId == "DSPH-Plan", toPhaseId == "DSPH-Apply",
-      planOutcomeId == "DSPLAN-Ready",
+      planOutcomeId == desiredStatePlanOutcomeFor(desired, observed),
+      desiredStateMayApply(desired, observed),
     },
     and {
       fromPhaseId == "DSPH-Plan", toPhaseId == "DSPH-Verify",
-      planOutcomeId == "DSPLAN-NoChange",
+      planOutcomeId == "DSPLAN-NoChange", planOutcomeId == desiredStatePlanOutcomeFor(desired, observed),
+      desiredStateIsVerified(desired, observed),
     },
     and {
       fromPhaseId == "DSPH-Apply", toPhaseId == "DSPH-Verify",
-      planOutcomeId == "DSPLAN-Ready",
+      planOutcomeId == "DSPLAN-Ready", desiredStateIsVerified(desired, observed),
     },
   }
 
@@ -1656,14 +1660,37 @@ module CoordinationProtocolTests {
   }
 
   run testDesiredStatePhaseTransitionsAreClosed = and {
-    desiredStatePhaseMayAdvance("DSPH-Inspect", "DSPH-Plan", "DSPLAN-NoChange", desiredWorkflowPins),
-    desiredStatePhaseMayAdvance("DSPH-Plan", "DSPH-Apply", "DSPLAN-Ready", desiredWorkflowPins),
-    desiredStatePhaseMayAdvance("DSPH-Plan", "DSPH-Verify", "DSPLAN-NoChange", desiredWorkflowPins),
-    desiredStatePhaseMayAdvance("DSPH-Apply", "DSPH-Verify", "DSPLAN-Ready", desiredWorkflowPins),
-    not(desiredStatePhaseMayAdvance("DSPH-Inspect", "DSPH-Apply", "DSPLAN-Ready", desiredWorkflowPins)),
-    not(desiredStatePhaseMayAdvance("DSPH-Plan", "DSPH-Apply", "DSPLAN-Unauthorized", desiredWorkflowPins)),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Inspect", "DSPH-Plan", "DSPLAN-NoChange", desiredWorkflowPins, desiredWorkflowPins
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", "DSPLAN-Ready", desiredWorkflowPins,
+      { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Verify", "DSPLAN-NoChange", desiredWorkflowPins, desiredWorkflowPins
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify", "DSPLAN-Ready", desiredWorkflowPins, desiredWorkflowPins
+    ),
     not(desiredStatePhaseMayAdvance(
-      "DSPH-Inspect", "DSPH-Plan", "DSPLAN-NoChange", { ...desiredWorkflowPins, complete: false }
+      "DSPH-Inspect", "DSPH-Apply", "DSPLAN-Ready", desiredWorkflowPins, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", "DSPLAN-Unauthorized", desiredWorkflowPins, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", "DSPLAN-Ready", desiredWorkflowPins,
+      { ...desiredWorkflowPins, outcomeId: "OBS-Unauthorized", permissionGranted: false }
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", "DSPLAN-Ready",
+      { ...desiredWorkflowPins, outcomeId: "OBS-Unauthorized", permissionGranted: false },
+      { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Inspect", "DSPH-Plan", "DSPLAN-NoChange", desiredWorkflowPins,
+      { ...desiredWorkflowPins, complete: false }
     )),
   }
 }

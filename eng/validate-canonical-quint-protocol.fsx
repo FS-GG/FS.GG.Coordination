@@ -16,7 +16,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "1b15ee9aad56fce4e5d7401b9c8a1940d9be3a345c95e2168c12a038d19d3cb9"
+    "6d2280fedff7152563bbbb7ec534418ca8114d2ca3a69021fea628411a96956e"
 
 let expectedContract =
     "a0e898c83b8bd61555736a2840d886be7676fd07a39c4502871d92accbdf3cf1"
@@ -284,7 +284,7 @@ try
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-9-profile2-r4"
+          "gs2-02-9-profile2-r5"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -804,7 +804,7 @@ try
 
     requireDesiredStateRed
         "phase-authorization"
-        "      planOutcomeId == \"DSPLAN-Ready\",\n    },\n    and {\n      fromPhaseId == \"DSPH-Plan\", toPhaseId == \"DSPH-Verify\""
+        "      desiredStateMayApply(desired, observed),\n    },\n    and {\n      fromPhaseId == \"DSPH-Plan\", toPhaseId == \"DSPH-Verify\""
         "      true,\n    },\n    and {\n      fromPhaseId == \"DSPH-Plan\", toPhaseId == \"DSPH-Verify\""
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
