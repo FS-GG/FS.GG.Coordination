@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/54-durable-plans/ship.json",
-      "digest": "sha256:cdf24cd1e82905c8575042b32b86e9d80ec2f60380ba9215afa1848edc099f80",
+      "digest": "sha256:aa3e70002fa33b00b93e12f4ff16030203e33bb4dadff5c4c27f8c1d4c4e2e8a",
       "schemaVersion": 1
     },
     {
       "path": "readiness/54-durable-plans/verify.json",
-      "digest": "sha256:16c9b466b89e4a5f0a8d64b8802d6de68df15d69e62a41ee557b080eda7b19fb",
+      "digest": "sha256:cf445fdb6a0796b74404472a91f8f9e8226ec52fa7d926d5bc2c378afcfb1163",
       "schemaVersion": 1
     },
     {
       "path": "readiness/54-durable-plans/work-model.json",
-      "digest": "sha256:42994f97a13dd3922955b949ce31df885e51e8451d2687f96c9a60ad20ef11c3",
+      "digest": "sha256:674187955a45847d2962153ca8e1367e14129a420ba637a6bf5d7a72ca8ecc2f",
       "schemaVersion": 1
     }
   ],

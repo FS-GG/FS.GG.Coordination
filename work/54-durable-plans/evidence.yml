@@ -11,7 +11,7 @@ sourceAnalysis: readiness/54-durable-plans/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/54-durable-plans/analysis.json
-    digest: 24c9d161a8e260044ee01f4c7cecd14834fb396bd34260ac2f9f5e8edc4d4a4e
+    digest: 2dff876c1daa0cb6faa020119c105d4bb77df94f6d21ab6dac44100b0d646298
     schemaVersion: 1
   - label: checklist
     path: work/54-durable-plans/checklist.md
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/roadmap-work/GS2-02.8/architecture-tests.trx
-      digest: "sha256:bcedf956f805a643bf4a1b522d7866071f1c3510c95770d5aed3bd706087e2a5"
+      digest: "sha256:386aca9976f49e7a38e42662041476baf5dcec110c9f64e242f478d11c90332e"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141

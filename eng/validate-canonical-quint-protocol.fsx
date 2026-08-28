@@ -16,7 +16,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "70e74ba2e38c79511aee109d3be4699486a91085eba9a5fcfa975348496fde77"
+    "9422eed4810553f4d5cf5b046d66c99d7d4e4f2e7f4163cf188d12a95ae516df"
 
 let expectedContract =
     "d1ac357cbc8c84c8668914b514196a04b3ca297411ccaf66d43f3260b1f8f4fb"
@@ -253,7 +253,7 @@ try
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-8-profile2-r10"
+          "gs2-02-8-profile2-r11"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -691,18 +691,8 @@ try
         "    true,"
 
     requireDurablePlanRed
-        "compensation-predecessor"
-        "    compensation.predecessorStepId == original.stepId,"
-        "    true,"
-
-    requireDurablePlanRed
-        "compensation-immediate-sequence"
-        "    compensation.sequence == original.sequence + 1,"
-        "    compensation.sequence > original.sequence,"
-
-    requireDurablePlanRed
-        "compensation-causation"
-        "    compensation.causationId == original.intent.operationId,"
+        "compensation-ordered-follow-relation"
+        "    durablePlanStepMayFollow(original, compensation),"
         "    true,"
 
     requireDurablePlanRed

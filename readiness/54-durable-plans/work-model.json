@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "186f67018377e5ce76d1aac188ad35d753b6892ba6a16939340a9ec78e29185e"
+        "value": "f2351b1478014e93f9e740e9506b30bcac217fa32a8691ab97b80c00b6062e7e"
       }
     },
     {
@@ -751,7 +751,7 @@
           "path": "work/54-durable-plans/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "186f67018377e5ce76d1aac188ad35d753b6892ba6a16939340a9ec78e29185e"
+            "value": "f2351b1478014e93f9e740e9506b30bcac217fa32a8691ab97b80c00b6062e7e"
           },
           "schemaVersion": 1
         },
@@ -782,7 +782,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "ababe7504aada22d92f590d7dde73dbef65cff0e72318f62a6b909aed793b01b"
+        "value": "75afad588472c8b198c4121531e44c7662ad2e37eb4b15446572cafc4e0d03d7"
       },
       "currency": "current"
     }

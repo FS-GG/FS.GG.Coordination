@@ -1196,12 +1196,8 @@ module CoordinationProtocolTests {
     compensation: DurablePlanStep, original: DurablePlanStep, originalReceipt: MutationResult,
     appliedInBoundary: Set[DurablePlanStep], existingCompensations: Set[MutationIntent],
   ): bool = and {
-    durablePlanStepShapeIsValid(compensation), durablePlanStepShapeIsValid(original),
-    compensation.planId == original.planId, compensation.correlationId == original.correlationId,
+    durablePlanStepMayFollow(original, compensation),
     compensation.compensationBoundaryId == original.compensationBoundaryId,
-    compensation.predecessorStepId == original.stepId,
-    compensation.sequence == original.sequence + 1,
-    compensation.causationId == original.intent.operationId,
     originalReceipt.intent == original.intent,
     originalReceipt.outcomeId == "MOUT-Applied",
     compensationIntentIsValid(compensation.intent, originalReceipt, existingCompensations),
@@ -1354,6 +1350,10 @@ module CoordinationProtocolTests {
     )),
     not(durablePlanCompensationIsValid(
       { ...planCompensationStep, sequence: 99 },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, stepId: planCreateStep.stepId },
       planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
     )),
   }
