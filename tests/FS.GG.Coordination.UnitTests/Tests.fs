@@ -15,7 +15,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "d1ac357cbc8c84c8668914b514196a04b3ca297411ccaf66d43f3260b1f8f4fb",
+        "15610d3149af9a52534b9fa7c78e0c89b7f2b6955af3d8af631ffe69ede2c4fb",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -41,6 +41,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("PDISP-ReceiptReread", CoordinationProtocolGenerated.Ids.PdispReceiptReread)
     Assert.Equal("PDISP-Replan", CoordinationProtocolGenerated.Ids.PdispReplan)
     Assert.Equal("PDISP-Compensate", CoordinationProtocolGenerated.Ids.PdispCompensate)
+    Assert.Equal("DSTATE-Specification", CoordinationProtocolGenerated.Ids.DstateSpecification)
 
     Assert.Equal(
         7,
@@ -105,6 +106,13 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         |> List.length
     )
 
+    Assert.Equal(
+        1,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "desiredStateSpecification")
+        |> List.length
+    )
+
     Assert.Contains("ACT-AcceptObservationKnowledge", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-SetHumanIntent", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-ObserveLifecycleFacts", CoordinationProtocolGenerated.CanonicalContractJson)
@@ -114,6 +122,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Contains("ACT-AppendProtocolEnvelope", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-CompactEphemeralProtocolEnvelope", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("VERIFY-DurablePlans", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("DSTATE-Specification", CoordinationProtocolGenerated.CanonicalContractJson)
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =

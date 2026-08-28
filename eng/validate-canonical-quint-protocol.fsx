@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "9422eed4810553f4d5cf5b046d66c99d7d4e4f2e7f4163cf188d12a95ae516df"
+    "37abda32716640a4c95475d22a10d958eccc29b0c0021d73a2b20fb5a33990df"
 
 let expectedContract =
-    "d1ac357cbc8c84c8668914b514196a04b3ca297411ccaf66d43f3260b1f8f4fb"
+    "15610d3149af9a52534b9fa7c78e0c89b7f2b6955af3d8af631ffe69ede2c4fb"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -134,7 +134,7 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 132 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 133 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
@@ -168,6 +168,26 @@ let expectedDurablePlanDispositionIds =
 
 if durablePlanDispositionIds <> expectedDurablePlanDispositionIds then
     fail "DURABLE-PLAN-DISPOSITIONS" (String.concat "," durablePlanDispositionIds)
+
+let desiredStateEntries =
+    contractRoot.GetProperty("catalogue").EnumerateArray()
+    |> Seq.filter (fun entry -> entry.GetProperty("id").GetString() = "DSTATE-Specification")
+    |> Seq.toList
+
+match desiredStateEntries with
+| [ desiredState ] ->
+    let field name =
+        desiredState.GetProperty("value").GetProperty("fields").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("name").GetString() = name)
+        |> _.GetProperty("value")
+        |> _.GetProperty("value")
+
+    if field "familyCount" |> _.GetInt32() <> 8 then fail "DESIRED-STATE-SUMMARY" "family-count"
+    if field "phaseCount" |> _.GetInt32() <> 4 then fail "DESIRED-STATE-SUMMARY" "phase-count"
+    if field "outcomeCount" |> _.GetInt32() <> 7 then fail "DESIRED-STATE-SUMMARY" "outcome-count"
+    if field "authorityClass" |> _.GetString() <> "revision-bound" then fail "DESIRED-STATE-SUMMARY" "authority"
+    if field "executionClass" |> _.GetString() <> "pure-intent-no-writer" then fail "DESIRED-STATE-SUMMARY" "execution"
+| _ -> fail "DESIRED-STATE-SUMMARY" "expected-one"
 
 let trackedExit, trackedQnt, trackedError =
     run root "git" [ "ls-files"; "*.qnt" ] []
@@ -247,13 +267,13 @@ try
           "--root"
           scratch
           "--work"
-          "54-durable-plans"
+          "58-desired-state-specifications"
           "--title"
-          "Implement durable plans"
+          "Implement desired-state specifications"
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-8-profile2-r11"
+          "gs2-02-9-profile2-r3"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -267,10 +287,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "54-durable-plans" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "58-desired-state-specifications" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/54-durable-plans")
+    let generatedRoot = Path.Combine(scratch, "readiness/58-desired-state-specifications")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -709,6 +729,62 @@ try
         "disposition-boundary-history"
         "    applied.step.compensationBoundaryId == current.compensationBoundaryId,"
         "    true,"
+
+    let requireDesiredStateRed (name: string) (fixture: string) (replacement: string) =
+        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
+            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
+
+        let mutant = Path.Combine(scratch, $"protocol-desired-state-%s{name}.qnt")
+        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
+
+        let exitCode, output, error =
+            run
+                scratch
+                quint
+                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+                  "--match"; "^testDesiredState"; "--verbosity"; "0" ]
+                []
+
+        if exitCode = 0 then
+            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
+
+        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
+            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+
+    requireDesiredStateRed
+        "family-completeness"
+        "    facts.map(fact => fact.familyId) == desiredStateFamilyCatalogue.map(family => family.id),"
+        "    true,"
+
+    requireDesiredStateRed
+        "subject-binding"
+        "    desired.subjectId == observed.subjectId, desired.profileId == observed.profileId,"
+        "    true, desired.profileId == observed.profileId,"
+
+    requireDesiredStateRed
+        "profile-binding"
+        "    desired.subjectId == observed.subjectId, desired.profileId == observed.profileId,"
+        "    desired.subjectId == observed.subjectId, true,"
+
+    requireDesiredStateRed
+        "unsupported-classification"
+        "    else if (not(observed.supported) or observed.outcomeId == \"OBS-Unsupported\") \"DSPLAN-Unsupported\""
+        "    else if (observed.outcomeId == \"OBS-Unsupported\") \"DSPLAN-Ready\""
+
+    requireDesiredStateRed
+        "permission-classification"
+        "    else if (not(observed.permissionGranted) or observed.outcomeId == \"OBS-Unauthorized\") \"DSPLAN-Unauthorized\""
+        "    else if (observed.outcomeId == \"OBS-Unauthorized\") \"DSPLAN-Ready\""
+
+    requireDesiredStateRed
+        "stale-classification"
+        "    else if (observed.outcomeId == \"OBS-Stale\") \"DSPLAN-Stale\""
+        "    else if (observed.outcomeId == \"OBS-Stale\") \"DSPLAN-Ready\""
+
+    requireDesiredStateRed
+        "policy-content-binding"
+        "    desired.contentDigest == observed.contentDigest,\n  }\n\n  pure def desiredStateSpecificationIsComplete"
+        "    true,\n  }\n\n  pure def desiredStateSpecificationIsComplete"
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 
