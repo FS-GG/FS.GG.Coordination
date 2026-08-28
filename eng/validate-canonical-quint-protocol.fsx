@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "2616e0326153321585d0ab39a7b22d7725f0f12812072eaf42777f8478f51518"
+    "02e785935f1f5a21fd0ed3d1bc14f3b1ab66cdfafa4ddd43b04e5d3d485006fe"
 
 let expectedContract =
-    "d43aaf1e06dbaffa72f2fe44b6910f588d103facfc3d6c189c03bdaf95e71e96"
+    "f81a44c902842acb5623f1f5390253ff01ff795ea0eed8ec5806bed405343fef"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -241,7 +241,7 @@ try
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-7-profile2-r5"
+          "gs2-02-7-profile2-r8"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -591,6 +591,16 @@ try
         "compensation-outcome-binding"
         "    original.outcomeId == \"MOUT-Applied\",\n    original.resultingRevision == intent.expectedRevision,"
         "    original.resultingRevision == intent.expectedRevision,"
+
+    requireMutationRed
+        "compensation-predecessor-shape-binding"
+        "    mutationIntentShapeIsValid(original.intent),\n    mutationResultOutcomeIsValid(original),"
+        "    mutationResultOutcomeIsValid(original),"
+
+    requireMutationRed
+        "compensation-uniqueness-binding"
+        "      existing != intent,"
+        "      existing == intent,"
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 

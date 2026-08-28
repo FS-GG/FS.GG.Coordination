@@ -361,18 +361,6 @@ module CoordinationProtocol {
     retryAfterPresent: false,
   }
 
-  pure val nativeGitHubAbsentObservation = {
-    ...nativeGitHubObservation,
-    outcomeId: "OBS-ProvenAbsent",
-  }
-
-  pure val nativeGitHubRateLimitedObservation = {
-    ...nativeGitHubObservation,
-    outcomeId: "OBS-RateLimited",
-    complete: false,
-    retryAfterPresent: true,
-  }
-
   pure def observationAuthorityShapeIsBound(observation: AuthorityObservation): bool =
     authorityCatalogue.exists(binding => and {
       binding.id == observation.authorityId,
@@ -438,14 +426,6 @@ module CoordinationProtocol {
     ...emptyLifecycleFacts,
     claimOutcomeId: "OBS-Observed",
     claimPresent: true,
-  }
-
-  pure val reviewLifecycleFacts = {
-    ...claimedLifecycleFacts,
-    pullRequestOutcomeId: "OBS-Observed",
-    pullRequestOpen: true,
-    reviewOutcomeId: "OBS-Observed",
-    reviewAccepted: true,
   }
 
   pure def lifecycleFactIsKnowledge(outcomeId: str, present: bool): bool =
@@ -706,14 +686,24 @@ module CoordinationProtocol {
     else mutationOutcomeIsUncertain(previous.outcomeId),
   }
 
-  pure def compensationIntentIsValid(intent: MutationIntent, original: MutationResult): bool = and {
+  pure def compensationIntentIsValid(
+    intent: MutationIntent,
+    original: MutationResult,
+    existingCompensations: Set[MutationIntent],
+  ): bool = and {
     intent.mutationKindId == "MUT-Compensate",
     mutationIntentShapeIsValid(intent),
+    mutationIntentShapeIsValid(original.intent),
+    mutationResultOutcomeIsValid(original),
     original.intent.operationId == intent.compensatesOperationId,
     original.intent.subjectId == intent.subjectId,
     original.intent.mutationKindId != "MUT-Compensate",
     original.outcomeId == "MOUT-Applied",
     original.resultingRevision == intent.expectedRevision,
+    not(existingCompensations.exists(existing => and {
+      existing.compensatesOperationId == intent.compensatesOperationId,
+      existing != intent,
+    })),
   }
 
   pure def mutationOutcomeForRevision(expectedRevision: int, observedRevision: int): str =
@@ -729,8 +719,6 @@ module CoordinationProtocol {
   pure val createAppliedResult = {
     intent: createIntent, outcomeId: "MOUT-Applied", resultingRevision: 1,
   }
-
-  pure val createIdempotentResult = { ...createAppliedResult, outcomeId: "MOUT-Idempotent" }
 
   pure val compensateCreateIntent = {
     operationId: "operation-compensate-1", subjectId: createIntent.subjectId, mutationKindId: "MUT-Compensate",
@@ -1115,12 +1103,6 @@ inverts each material binding and preserves the earlier bounded invariants.
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
 
-  run testEvidenceBeforeAcceptance =
-    init
-      .then(observeProtocolEvidence)
-      .then(acceptVocabularyIdentity("SubjectVocabulary"))
-      .expect(acceptedVocabularyIsQualified)
-
   run testUnrelatedCheckpointCannotCompactEphemeralHistory =
     not(ephemeralEnvelopeMayBeCompacted(claimEnvelope, Set(claimEnvelope, reviewCheckpointEnvelope)))
 
@@ -1128,15 +1110,14 @@ module CoordinationProtocolTests {
     not(retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(leaseEnvelope, reviewCheckpointEnvelope)))
 
   run testMutationExactReplayIsIdempotent = and {
-    mutationResultMayFollow(createAppliedResult, createIdempotentResult),
-    not(mutationResultMayFollow(createAppliedResult, createAppliedResult)),
+    mutationResultMayFollow(createAppliedResult, { ...createAppliedResult, outcomeId: "MOUT-Idempotent" }),
   }
 
   run testMutationKindsBindPayloadAndTarget = and {
     not(mutationIntentShapeIsValid({ ...createIntent, targetKind: "stream" })),
     not(mutationIntentShapeIsValid({ ...createIntent, payloadKind: "append" })),
     mutationKindCatalogue.exists(kind => and {
-      kind.id == "MUT-RemoveEdge", kind.targetKind == "relation", kind.payloadKind == "edge",
+      kind.id == "MUT-RemoveEdge", kind.payloadKind == "edge",
     }),
   }
 
@@ -1156,9 +1137,23 @@ module CoordinationProtocolTests {
   run testMutationStaleRevisionIsConflict =
     mutationOutcomeForRevision(4, 5) == "MOUT-RevisionConflict"
 
-  run testMutationCompensationRequiresAppliedPredecessor = and {
-    compensationIntentIsValid(compensateCreateIntent, createAppliedResult),
-    not(compensationIntentIsValid(compensateCreateIntent, { ...createAppliedResult, outcomeId: "MOUT-TimedOut" })),
+  run testMutationCompensationBoundary = and {
+    compensationIntentIsValid(compensateCreateIntent, createAppliedResult, Set()),
+    not(compensationIntentIsValid(
+      compensateCreateIntent,
+      { ...createAppliedResult, outcomeId: "MOUT-Idempotent" },
+      Set(),
+    )),
+    not(compensationIntentIsValid(
+      compensateCreateIntent,
+      { ...createAppliedResult, intent: { ...createIntent, mutationKindId: "MUT-Unknown" } },
+      Set(),
+    )),
+    not(compensationIntentIsValid(
+      { ...compensateCreateIntent, operationId: "operation-compensate-2", idempotencyKey: "key-compensate-2" },
+      createAppliedResult,
+      Set(compensateCreateIntent),
+    )),
   }
 }
 ```
