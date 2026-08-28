@@ -9,37 +9,37 @@
     {
       "id": "bindings",
       "path": "readiness/50-mutation-algebra/quint/bindings.fs",
-      "sha256": "ed08c71a576a0854ee6c4d760000a5f3ad0b27ad00ff6da5fc7d1fc07c616e55"
+      "sha256": "70113e911f33aa4313991f020c8d863f5605f450a7bdb52df47dd7fe341fbd4d"
     },
     {
       "id": "compilation-receipt",
       "path": "readiness/50-mutation-algebra/quint/receipt.json",
-      "sha256": "12631ee8dd019168fb28109f8c5c7afcfaed02f0db95b2c767c5935b66bafd06"
+      "sha256": "b6d998fdd45682b9ea63787497f285a1ae5b29d558b98e3f69c972a72d700fc4"
     },
     {
       "id": "compiled-contract",
       "path": "readiness/50-mutation-algebra/quint/contract.json",
-      "sha256": "3248076bd8ab7493ea62c085ecf1fcf6c2fae5dcd984cb2fa2c92913d9b86a24"
+      "sha256": "d43aaf1e06dbaffa72f2fe44b6910f588d103facfc3d6c189c03bdaf95e71e96"
     },
     {
       "id": "fence-manifest",
       "path": "readiness/50-mutation-algebra/quint/fences.json",
-      "sha256": "4f4db5186d817d80eec8d81226de86d0b5f450528b5a2a9c9087a75087f68d03"
+      "sha256": "e518547f38ab7cd18614ce268d9e00ce3b07ba81d0ff3eb335f8800d480db38b"
     },
     {
       "id": "generated-modules",
       "path": "readiness/50-mutation-algebra/quint/protocol.qnt",
-      "sha256": "60d6da8ef8f3fee0a4e2831106263bc10ce77487587e4775fc3af13611e0f65d"
+      "sha256": "4ee50ba8c57e2102ab04982bcd159a152962d980beb4b034c47b4512cfde605d"
     },
     {
       "id": "markdown",
       "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-      "sha256": "da01f3e01bd6742800b0a171d462c319227ca0fcad122b9c9a857a9e948bb39c"
+      "sha256": "2616e0326153321585d0ab39a7b22d7725f0f12812072eaf42777f8478f51518"
     },
     {
       "id": "profile-bindings",
       "path": "readiness/50-mutation-algebra/quint/profile-bindings.json",
-      "sha256": "d738438c2f7c3c387bd21bc9b852c80ef5c385ee43dd23284317350978a43de9"
+      "sha256": "2eaa09cb42f206c3a88a2e7487f797697bba09644d65955c7a8b308952d8f2bc"
     },
     {
       "id": "sandbox-contract",
@@ -49,16 +49,16 @@
     {
       "id": "source-map",
       "path": "readiness/50-mutation-algebra/quint/source-map.json",
-      "sha256": "60fe5c7423c527e8cad9d712a2ac42c1913bbe34b56d8ee28179047ae39474b0"
+      "sha256": "1a9d51dc7830f7a3ac51b4d29321ac8aa2907d7c54a3b4da3030bbd51af1d037"
     },
     {
       "id": "typed-effect",
       "path": "readiness/50-mutation-algebra/quint/typed-effect.json",
-      "sha256": "8dcc21c1b49a52d8440f3f695ba05f1ce01301e923acbb5fb63ed19ddd80b848"
+      "sha256": "a806c19f199b5ee37a0f0e7f374f46c39ef63fd6128781fc5408631a63c10403"
     }
   ],
   "authoringAgent": "dunlin-3f64",
-  "authoringSession": "gs2-02-7-profile2-r4",
+  "authoringSession": "gs2-02-7-profile2-r5",
   "rollbackManifestPath": null,
   "rollbackManifestSha256": null
 }

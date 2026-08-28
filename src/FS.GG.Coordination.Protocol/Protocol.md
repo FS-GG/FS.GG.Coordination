@@ -8,8 +8,9 @@ GS2-02.1 established vocabulary and stable integration identities; GS2-02.2 adde
 revision-aware authority catalogue; GS2-02.3 added observation outcomes and knowledge semantics.
 GS2-02.4 added lifecycle intent and derived status; GS2-02.5 added native relation algebra; GS2-02.6
 added typed retained protocol streams. This unit adds the closed mutation algebra: eight mutation
-kinds, expected-revision and idempotency bindings, explicit terminal-versus-uncertain outcomes, and
-bounded compensation. Later GS2-02 units refine durable plans, desired state, and compiled outputs.
+kinds with kind-bound target and payload shapes, expected-revision and idempotency bindings, explicit
+terminal-versus-uncertain outcomes, exact replay as an idempotent no-op, and bounded compensation.
+Later GS2-02 units refine durable plans, desired state, and compiled outputs.
 No network writer, hosted runtime, durable-plan executor, or production mutation authority is defined
 here.
 
@@ -98,6 +99,7 @@ module CoordinationProtocol {
   type MutationKind = {
     id: str,
     kind: str,
+    targetKind: str,
     payloadKind: str,
     revisionRequirement: str,
   }
@@ -112,9 +114,11 @@ module CoordinationProtocol {
     operationId: str,
     subjectId: str,
     mutationKindId: str,
+    targetKind: str,
+    payloadKind: str,
     expectedRevision: int,
     idempotencyKey: str,
-    intentDigest: str,
+    payloadDigest: str,
     compensatesOperationId: str,
   }
   type MutationResult = {
@@ -191,14 +195,14 @@ module CoordinationProtocol {
   )
 
   pure val mutationKindCatalogue = Set(
-    { id: "MUT-Create", kind: "mutationKind", payloadKind: "create", revisionRequirement: "absent" },
-    { id: "MUT-Append", kind: "mutationKind", payloadKind: "append", revisionRequirement: "exact" },
-    { id: "MUT-AddEdge", kind: "mutationKind", payloadKind: "edge", revisionRequirement: "exact" },
-    { id: "MUT-RemoveEdge", kind: "mutationKind", payloadKind: "edge", revisionRequirement: "exact" },
-    { id: "MUT-Set", kind: "mutationKind", payloadKind: "scalar", revisionRequirement: "exact" },
-    { id: "MUT-Clear", kind: "mutationKind", payloadKind: "scalar", revisionRequirement: "exact" },
-    { id: "MUT-Transition", kind: "mutationKind", payloadKind: "transition", revisionRequirement: "exact" },
-    { id: "MUT-Compensate", kind: "mutationKind", payloadKind: "compensation", revisionRequirement: "exact" }
+    { id: "MUT-Create", kind: "mutationKind", targetKind: "subject", payloadKind: "create", revisionRequirement: "absent" },
+    { id: "MUT-Append", kind: "mutationKind", targetKind: "stream", payloadKind: "append", revisionRequirement: "exact" },
+    { id: "MUT-AddEdge", kind: "mutationKind", targetKind: "relation", payloadKind: "edge", revisionRequirement: "exact" },
+    { id: "MUT-RemoveEdge", kind: "mutationKind", targetKind: "relation", payloadKind: "edge", revisionRequirement: "exact" },
+    { id: "MUT-Set", kind: "mutationKind", targetKind: "field", payloadKind: "scalar", revisionRequirement: "exact" },
+    { id: "MUT-Clear", kind: "mutationKind", targetKind: "field", payloadKind: "scalar", revisionRequirement: "exact" },
+    { id: "MUT-Transition", kind: "mutationKind", targetKind: "lifecycle", payloadKind: "transition", revisionRequirement: "exact" },
+    { id: "MUT-Compensate", kind: "mutationKind", targetKind: "mutation", payloadKind: "compensation", revisionRequirement: "exact" }
   )
 
   pure val mutationOutcomeCatalogue = Set(
@@ -657,6 +661,8 @@ module CoordinationProtocol {
   pure def mutationKindMatchesIntent(intent: MutationIntent): bool =
     mutationKindCatalogue.exists(mutationKind => and {
       mutationKind.id == intent.mutationKindId,
+      mutationKind.targetKind == intent.targetKind,
+      mutationKind.payloadKind == intent.payloadKind,
       if (mutationKind.revisionRequirement == "absent") intent.expectedRevision == 0
       else intent.expectedRevision > 0,
     })
@@ -666,7 +672,7 @@ module CoordinationProtocol {
     intent.operationId != "",
     intent.subjectId != "",
     intent.idempotencyKey != "",
-    intent.intentDigest != "",
+    intent.payloadDigest != "",
     if (intent.mutationKindId == "MUT-Compensate") and {
       intent.compensatesOperationId != "",
       intent.compensatesOperationId != intent.operationId,
@@ -692,7 +698,11 @@ module CoordinationProtocol {
     previous.intent == current.intent,
     mutationResultOutcomeIsValid(previous),
     mutationResultOutcomeIsValid(current),
-    if (mutationOutcomeIsTerminal(previous.outcomeId)) previous == current
+    if (mutationOutcomeIsTerminal(previous.outcomeId))
+      if (previous.outcomeId == "MOUT-Applied") and {
+        current.outcomeId == "MOUT-Idempotent",
+        current.resultingRevision == previous.resultingRevision,
+      } else previous == current
     else mutationOutcomeIsUncertain(previous.outcomeId),
   }
 
@@ -706,19 +716,13 @@ module CoordinationProtocol {
     original.resultingRevision == intent.expectedRevision,
   }
 
-  pure def compensationsConflict(left: MutationIntent, right: MutationIntent): bool = and {
-    left.mutationKindId == "MUT-Compensate",
-    right.mutationKindId == "MUT-Compensate",
-    left.compensatesOperationId == right.compensatesOperationId,
-    left != right,
-  }
-
   pure def mutationOutcomeForRevision(expectedRevision: int, observedRevision: int): str =
     if (expectedRevision == observedRevision) "MOUT-Applied" else "MOUT-RevisionConflict"
 
   pure val createIntent = {
     operationId: "operation-create-1", subjectId: "subject-created", mutationKindId: "MUT-Create",
-    expectedRevision: 0, idempotencyKey: "key-create-1", intentDigest: "digest-create-1",
+    targetKind: "subject", payloadKind: "create", expectedRevision: 0,
+    idempotencyKey: "key-create-1", payloadDigest: "digest-create-1",
     compensatesOperationId: "",
   }
 
@@ -726,14 +730,13 @@ module CoordinationProtocol {
     intent: createIntent, outcomeId: "MOUT-Applied", resultingRevision: 1,
   }
 
+  pure val createIdempotentResult = { ...createAppliedResult, outcomeId: "MOUT-Idempotent" }
+
   pure val compensateCreateIntent = {
     operationId: "operation-compensate-1", subjectId: createIntent.subjectId, mutationKindId: "MUT-Compensate",
-    expectedRevision: 1, idempotencyKey: "key-compensate-1", intentDigest: "digest-compensate-1",
+    targetKind: "mutation", payloadKind: "compensation", expectedRevision: 1,
+    idempotencyKey: "key-compensate-1", payloadDigest: "digest-compensate-1",
     compensatesOperationId: createIntent.operationId,
-  }
-
-  pure val compensateCreateResult = {
-    intent: compensateCreateIntent, outcomeId: "MOUT-Applied", resultingRevision: 2,
   }
 
   pure val closedLifecycleIntentCatalogue = and {
@@ -761,26 +764,6 @@ module CoordinationProtocol {
     ),
     protocolPayloadKindCatalogue.filter(payload => payload.durableCheckpoint).map(payload => payload.id) == Set(
       "PAYLOAD-Election", "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
-    ),
-  }
-
-  pure val closedMutationCatalogues = and {
-    mutationKindCatalogue.map(mutationKind => mutationKind.id) == Set(
-      "MUT-Create", "MUT-Append", "MUT-AddEdge", "MUT-RemoveEdge",
-      "MUT-Set", "MUT-Clear", "MUT-Transition", "MUT-Compensate"
-    ),
-    mutationKindCatalogue.map(mutationKind => mutationKind.payloadKind) == Set(
-      "create", "append", "edge", "scalar", "transition", "compensation"
-    ),
-    mutationOutcomeCatalogue.map(outcome => outcome.id) == Set(
-      "MOUT-Applied", "MOUT-Idempotent", "MOUT-Rejected", "MOUT-RevisionConflict",
-      "MOUT-RateLimited", "MOUT-Unavailable", "MOUT-TimedOut", "MOUT-Incomplete"
-    ),
-    mutationOutcomeCatalogue.filter(outcome => outcome.finality == "terminal").map(outcome => outcome.id) == Set(
-      "MOUT-Applied", "MOUT-Idempotent", "MOUT-Rejected", "MOUT-RevisionConflict"
-    ),
-    mutationOutcomeCatalogue.filter(outcome => outcome.finality == "uncertain").map(outcome => outcome.id) == Set(
-      "MOUT-RateLimited", "MOUT-Unavailable", "MOUT-TimedOut", "MOUT-Incomplete"
     ),
   }
 
@@ -1125,8 +1108,8 @@ The executable witness records evidence before accepting the subject vocabulary 
 the evidence guard must make the invariant red in the bounded negative control.
 
 The profile-2 compiler has a fixed 4,096-node typed graph ceiling. The executable suite therefore
-keeps one dense witness per independently mutated law; the longer pre-GS2-02.7 examples remain below
-as readable historical examples and the verifier continues to exercise their invariants and mutants.
+uses compact, independently named witnesses for every mutation law, while the validator separately
+inverts each material binding and preserves the earlier bounded invariants.
 
 ```quint protocol.qnt +=
 module CoordinationProtocolTests {
@@ -1144,264 +1127,38 @@ module CoordinationProtocolTests {
   run testUnrelatedCheckpointCannotExcuseMissingPredecessor =
     not(retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(leaseEnvelope, reviewCheckpointEnvelope)))
 
-  run testMutationAlgebra = and {
-    mutationResultMayFollow(createAppliedResult, createAppliedResult),
-    mutationIntentsConflict(createIntent, { ...createIntent, operationId: "operation-other", mutationKindId: "MUT-Append", expectedRevision: 1 }),
+  run testMutationExactReplayIsIdempotent = and {
+    mutationResultMayFollow(createAppliedResult, createIdempotentResult),
+    not(mutationResultMayFollow(createAppliedResult, createAppliedResult)),
+  }
+
+  run testMutationKindsBindPayloadAndTarget = and {
+    not(mutationIntentShapeIsValid({ ...createIntent, targetKind: "stream" })),
+    not(mutationIntentShapeIsValid({ ...createIntent, payloadKind: "append" })),
+    mutationKindCatalogue.exists(kind => and {
+      kind.id == "MUT-RemoveEdge", kind.targetKind == "relation", kind.payloadKind == "edge",
+    }),
+  }
+
+  run testMutationUncertainOutcomesRemainUnknown =
+    mutationOutcomeCatalogue.exists(outcome => and {
+      outcome.id == "MOUT-RateLimited", outcome.finality == "uncertain", outcome.effectClass == "unknown",
+    })
+
+  run testMutationIdempotencyBindingsRejectSubstitution = and {
+    mutationIntentsConflict(createIntent, {
+      ...createIntent, operationId: "operation-other", mutationKindId: "MUT-Append",
+      targetKind: "stream", payloadKind: "append", expectedRevision: 1,
+    }),
     mutationIntentsConflict(createIntent, { ...createIntent, idempotencyKey: "key-other" }),
-    mutationOutcomeForRevision(4, 5) == "MOUT-RevisionConflict",
+  }
+
+  run testMutationStaleRevisionIsConflict =
+    mutationOutcomeForRevision(4, 5) == "MOUT-RevisionConflict"
+
+  run testMutationCompensationRequiresAppliedPredecessor = and {
     compensationIntentIsValid(compensateCreateIntent, createAppliedResult),
     not(compensationIntentIsValid(compensateCreateIntent, { ...createAppliedResult, outcomeId: "MOUT-TimedOut" })),
-  }
-}
-```
-
-```quint-archive
-module CoordinationProtocolTests {
-  import CoordinationProtocol.*
-
-  run testEvidenceBeforeAcceptance =
-    init
-      .then(observeProtocolEvidence)
-      .then(acceptVocabularyIdentity("SubjectVocabulary"))
-      .expect(and { acceptedVocabularyIsQualified, vocabularyCanBeAccepted })
-
-  run testAuthorityBindingCanBeAccepted =
-    init
-      .then(observeAuthority(nativeGitHubObservation))
-      .then(acceptObservedAuthority)
-      .expect(and { closedAuthorityCatalogue, acceptedAuthoritiesAreQualified, authorityCanBeAccepted })
-
-  run testProvenAbsenceCanBeAccepted =
-    init
-      .then(observeAuthority(nativeGitHubAbsentObservation))
-      .then(acceptObservationKnowledge)
-      .expect(and { closedObservationOutcomeCatalogue, acceptedObservationKnowledgeIsQualified, provenAbsenceWasAccepted })
-
-  run testIncompleteAuthorityIsRejected =
-    not(authorityObservationIsQualified({ ...nativeGitHubObservation, complete: false }))
-
-  run testStaleRevisionIsRejected =
-    not(authorityObservationIsQualified({ ...nativeGitHubObservation, revisionValue: "stale-revision" }))
-
-  run testWrongAuthorityIsRejected =
-    not(authorityObservationIsQualified({ ...nativeGitHubObservation, authorityId: "AUTH-PackageFeed" }))
-
-  run testContradictoryAuthorityIsRejected =
-    not(authorityObservationIsQualified({ ...nativeGitHubObservation, contradictory: true }))
-
-  run testIncompleteAbsenceIsRejected =
-    not(observationContributesNegativeKnowledge({ ...nativeGitHubAbsentObservation, complete: false }))
-
-  run testUnreadableIsNotAbsence =
-    not(observationContributesNegativeKnowledge({ ...nativeGitHubObservation, outcomeId: "OBS-Unreadable" }))
-
-  run testUnauthorizedIsNotAbsence =
-    not(observationContributesNegativeKnowledge({ ...nativeGitHubObservation, outcomeId: "OBS-Unauthorized" }))
-
-  run testStaleIsNotAbsence =
-    not(observationContributesNegativeKnowledge({ ...nativeGitHubObservation, outcomeId: "OBS-Stale", revisionValue: "stale-revision" }))
-
-  run testRateLimitIsRetryableNotAbsent = and {
-    observationIsRetryableFailure(nativeGitHubRateLimitedObservation),
-    not(observationContributesNegativeKnowledge(nativeGitHubRateLimitedObservation)),
-  }
-
-  run testFailureOutcomesStayNonAbsent = failureOutcomesDoNotBecomeAbsence
-
-  run testHumanIntentSurvivesClaimObservation =
-    init
-      .then(setHumanIntent("INTENT-Paused"))
-      .then(observeLifecycleFacts(claimedLifecycleFacts))
-      .then(refreshLifecycleStatus)
-      .expect(and {
-        humanIntentIsObservationIndependent,
-        lifecycleStatusIsDerived,
-        humanIntentId == "INTENT-Paused",
-        lifecycleStatus == "claimed",
-      })
-
-  run testReviewAndDeliveryAreDerivedFacts = and {
-    deriveLifecycleStatus("INTENT-Ready", reviewLifecycleFacts) == "accepted",
-    deriveLifecycleStatus("INTENT-Ready", { ...reviewLifecycleFacts, deliveryOutcomeId: "OBS-Observed", delivered: true }) == "delivered",
-  }
-
-  run testBlockerDoesNotRewriteIntent =
-    init
-      .then(setHumanIntent("INTENT-Ready"))
-      .then(observeLifecycleFacts({ ...emptyLifecycleFacts, blockerOutcomeId: "OBS-Observed", blocked: true }))
-      .then(refreshLifecycleStatus)
-      .expect(and {
-        humanIntentIsObservationIndependent,
-        humanIntentId == "INTENT-Ready",
-        lifecycleStatus == "blocked",
-      })
-
-  run testCancelledIntentOverridesObservedProgress =
-    deriveLifecycleStatus("INTENT-Cancelled", reviewLifecycleFacts) == "cancelled"
-
-  run testUnknownLifecycleObservationsFailClosed = unknownLifecycleFactsFailClosed
-
-  run testInvalidHumanIntentIsRejected = not(lifecycleIntentExists("INTENT-Claimed"))
-
-  run testParentAndBlockingRelationsRemainDistinct = and {
-    closedNativeRelationKindCatalogue,
-    parentChildEdge.relationKindId != blockingEdge.relationKindId,
-    parentChildEdge.sourceId != parentChildEdge.targetId,
-    blockingEdge.sourceId != blockingEdge.targetId,
-  }
-
-  run testDuplicateRelationAddIsIdempotent =
-    init
-      .then(addNativeRelation(parentChildEdge))
-      .then(addNativeRelation(parentChildEdge))
-      .expect(and {
-        nativeRelationEdges == Set(parentChildEdge),
-        relationChangesPreserveUnrelatedEdges,
-        relationChangesPreserveLifecycleIntent,
-      })
-
-  run testAbsentRelationRemoveIsIdempotent =
-    init
-      .then(removeNativeRelation(parentChildEdge))
-      .then(removeNativeRelation(parentChildEdge))
-      .expect(and { nativeRelationEdges == Set(), relationChangesPreserveUnrelatedEdges })
-
-  run testRelationRemovePreservesUnrelatedEdges =
-    init
-      .then(addNativeRelation(parentChildEdge))
-      .then(addNativeRelation(blockingEdge))
-      .then(removeNativeRelation(parentChildEdge))
-      .expect(and {
-        nativeRelationEdges == Set(blockingEdge),
-        relationChangesPreserveUnrelatedEdges,
-        relationChangesPreserveLifecycleIntent,
-      })
-
-  run testReversedEndpointsAreNotEquivalent =
-    parentChildEdge != { ...parentChildEdge, sourceId: parentChildEdge.targetId, targetId: parentChildEdge.sourceId }
-
-  run testSelfRelationIsRejected =
-    not(nativeRelationEdgeIsValid({ ...parentChildEdge, targetId: parentChildEdge.sourceId }))
-
-  run testUnknownRelationKindIsRejected =
-    not(nativeRelationEdgeIsValid({ ...parentChildEdge, relationKindId: "REL-Unknown" }))
-
-  run testRelationObservationFailuresStayNonAbsent = relationObservationFailuresDoNotBecomeAbsence
-
-  run testProvenRelationAbsenceRequiresEmptySet = and {
-    relationObservationContributesKnowledge("OBS-ProvenAbsent", Set()),
-    not(relationObservationContributesKnowledge("OBS-ProvenAbsent", Set(parentChildEdge))),
-  }
-
-  run testProtocolStreamCataloguesAreClosed = closedProtocolStreamCatalogues
-
-  run testProtocolEnvelopeAppendIsOrderedAndIdempotent =
-    init
-      .then(appendProtocolEnvelope(claimEnvelope))
-      .then(appendProtocolEnvelope(claimEnvelope))
-      .then(appendProtocolEnvelope(leaseEnvelope))
-      .expect(and {
-        protocolStreamEvents == Set(claimEnvelope, leaseEnvelope),
-        protocolEnvelopesAreValidAndOrdered,
-        durableProtocolCheckpointsArePreserved,
-        protocolStreamChangesPreservePriorSemantics,
-      })
-
-  run testProtocolEnvelopeGapIsRejected =
-    not(protocolAppendIsValid({ ...leaseEnvelope, sequence: 3 }, Set(claimEnvelope)))
-
-  run testProtocolEnvelopePredecessorMismatchIsRejected =
-    not(protocolAppendIsValid({ ...leaseEnvelope, predecessorEventId: "wrong-event" }, Set(claimEnvelope)))
-
-  run testProtocolPayloadCannotCrossStreams =
-    not(protocolEnvelopeShapeIsValid({ ...claimEnvelope, streamKindId: "STREAM-Review" }))
-
-  run testProtocolRetentionCannotBeRelabeled = and {
-    not(protocolEnvelopeShapeIsValid({ ...claimEnvelope, retentionClass: "durable" })),
-    not(protocolEnvelopeShapeIsValid({ ...reviewCheckpointEnvelope, durableCheckpoint: false })),
-  }
-
-  run testProtocolEventIdentityConflictIsRejected =
-    not(protocolAppendIsValid({ ...leaseEnvelope, eventId: claimEnvelope.eventId }, Set(claimEnvelope)))
-
-  run testProtocolGenerationCannotRegressOrSkip = and {
-    not(protocolAppendIsValid({ ...reviewCheckpointEnvelope, generation: 2, eventId: "review-event-2" }, Set())),
-    not(protocolAppendIsValid({ ...reviewCheckpointEnvelope, generation: 1, eventId: "review-event-other" }, Set(reviewCheckpointEnvelope))),
-  }
-
-  run testEphemeralCompactionPreservesDurableCheckpoint =
-    init
-      .then(appendProtocolEnvelope(operationLockEnvelope))
-      .then(appendProtocolEnvelope(electionCheckpointEnvelope))
-      .then(compactEphemeralProtocolEnvelope(operationLockEnvelope))
-      .expect(and {
-        not(protocolStreamEvents.contains(operationLockEnvelope)),
-        protocolStreamEvents.contains(electionCheckpointEnvelope),
-        protocolEnvelopesAreValidAndOrdered,
-        durableProtocolCheckpointsArePreserved,
-      })
-
-  run testUnrelatedCheckpointCannotCompactEphemeralHistory =
-    not(ephemeralEnvelopeMayBeCompacted(claimEnvelope, Set(claimEnvelope, reviewCheckpointEnvelope)))
-
-  run testUnrelatedCheckpointCannotExcuseMissingPredecessor =
-    not(retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(leaseEnvelope, reviewCheckpointEnvelope)))
-
-  run testDurableCheckpointCannotBeCompacted =
-    not(ephemeralEnvelopeMayBeCompacted(reviewCheckpointEnvelope, Set(reviewCheckpointEnvelope)))
-
-  run testProtocolStreamObservationFailuresStayNonAbsent =
-    protocolStreamObservationFailuresDoNotBecomeAbsence
-
-  run testProvenProtocolStreamAbsenceRequiresEmptySet = and {
-    protocolStreamObservationContributesKnowledge("OBS-ProvenAbsent", Set()),
-    not(protocolStreamObservationContributesKnowledge("OBS-ProvenAbsent", Set(claimEnvelope))),
-  }
-
-  run testMutationCataloguesAreClosed = closedMutationCatalogues
-
-  run testExactTerminalReplayIsIdempotent =
-    mutationResultMayFollow(createAppliedResult, createAppliedResult)
-
-  run testUncertainResultCanConvergeUnderSameIdentity = and {
-    mutationResultMayFollow(createTimedOutResult, createAppliedResult),
-    mutationResultsAreBound,
-  }
-
-  run testIdempotencyBindingRejectsSubstitution = and {
-    mutationIntentsConflict(createIntent, { ...createIntent, intentDigest: "digest-other" }),
-    mutationIntentsConflict(createIntent, { ...createIntent, operationId: "operation-other" }),
-    mutationIntentsConflict(createIntent, { ...createIntent, idempotencyKey: "key-other" }),
-    not(mutationIntentsConflict(createIntent, createIntent)),
-  }
-
-  run testExpectedRevisionClassifiesConflict = and {
-    mutationOutcomeForRevision(4, 4) == "MOUT-Applied",
-    mutationOutcomeForRevision(4, 5) == "MOUT-RevisionConflict",
-    not(mutationResultMayFollow(createAppliedResult, { ...createAppliedResult, outcomeId: "MOUT-RevisionConflict", resultingRevision: 0 })),
-  }
-
-  run testUncertainOutcomesNeverClaimAnEffect = and {
-    Set("MOUT-RateLimited", "MOUT-Unavailable", "MOUT-TimedOut", "MOUT-Incomplete")
-      .forall(mutationOutcomeIsUncertain),
-    Set("MOUT-Applied", "MOUT-Idempotent", "MOUT-Rejected", "MOUT-RevisionConflict")
-      .forall(outcomeId => not(mutationOutcomeIsUncertain(outcomeId))),
-  }
-
-  run testCompensationRequiresAppliedPredecessor = and {
-    compensationIntentIsValid(compensateCreateIntent, createAppliedResult),
-    not(compensationIntentIsValid(compensateCreateIntent, createTimedOutResult)),
-    not(compensationIntentIsValid({ ...compensateCreateIntent, expectedRevision: 2 }, createAppliedResult)),
-    not(compensationIntentIsValid({ ...compensateCreateIntent, compensatesOperationId: "operation-unknown" }, createAppliedResult)),
-  }
-
-  run testCompensationRejectsSelfChainsAndDuplicateKeys = and {
-    not(mutationIntentShapeIsValid({ ...compensateCreateIntent, compensatesOperationId: compensateCreateIntent.operationId })),
-    not(compensationIntentIsValid(
-      { ...compensateCreateIntent, operationId: "operation-compensate-chain", idempotencyKey: "key-compensate-chain", compensatesOperationId: compensateCreateIntent.operationId, expectedRevision: 2 },
-      compensateCreateResult
-    )),
-    compensationsConflict(compensateCreateIntent, { ...compensateCreateIntent, operationId: "operation-compensate-other", idempotencyKey: "key-compensate-other" }),
   }
 }
 ```

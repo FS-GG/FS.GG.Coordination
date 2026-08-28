@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "da01f3e01bd6742800b0a171d462c319227ca0fcad122b9c9a857a9e948bb39c"
+    "2616e0326153321585d0ab39a7b22d7725f0f12812072eaf42777f8478f51518"
 
 let expectedContract =
-    "3248076bd8ab7493ea62c085ecf1fcf6c2fae5dcd984cb2fa2c92913d9b86a24"
+    "d43aaf1e06dbaffa72f2fe44b6910f588d103facfc3d6c189c03bdaf95e71e96"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -241,7 +241,7 @@ try
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-7-profile2-r4"
+          "gs2-02-7-profile2-r5"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -538,7 +538,7 @@ try
                 scratch
                 quint
                 [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testMutationAlgebra$"; "--verbosity"; "0" ]
+                  "--match"; "^testMutation"; "--verbosity"; "0" ]
                 []
 
         if exitCode = 0 then
@@ -556,6 +556,31 @@ try
         "operation-binding"
         "left.operationId == right.operationId or left.idempotencyKey == right.idempotencyKey"
         "left.idempotencyKey == right.idempotencyKey"
+
+    requireMutationRed
+        "target-kind-binding"
+        "      mutationKind.targetKind == intent.targetKind,\n      mutationKind.payloadKind == intent.payloadKind,"
+        "      mutationKind.payloadKind == intent.payloadKind,"
+
+    requireMutationRed
+        "payload-kind-binding"
+        "      mutationKind.targetKind == intent.targetKind,\n      mutationKind.payloadKind == intent.payloadKind,"
+        "      mutationKind.targetKind == intent.targetKind,"
+
+    requireMutationRed
+        "remove-edge-payload-classification"
+        "targetKind: \"relation\", payloadKind: \"edge\", revisionRequirement: \"exact\" },\n    { id: \"MUT-Set\""
+        "targetKind: \"relation\", payloadKind: \"scalar\", revisionRequirement: \"exact\" },\n    { id: \"MUT-Set\""
+
+    requireMutationRed
+        "rate-limit-uncertainty-classification"
+        "id: \"MOUT-RateLimited\", kind: \"mutationOutcome\", finality: \"uncertain\", effectClass: \"unknown\""
+        "id: \"MOUT-RateLimited\", kind: \"mutationOutcome\", finality: \"terminal\", effectClass: \"applied\""
+
+    requireMutationRed
+        "exact-replay-idempotent-outcome"
+        "        current.outcomeId == \"MOUT-Idempotent\","
+        "        current.outcomeId == \"MOUT-Applied\","
 
     requireMutationRed
         "stale-revision"
