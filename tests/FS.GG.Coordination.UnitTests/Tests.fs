@@ -3,6 +3,7 @@
 open System
 open System.IO
 open System.Text
+open System.Text.Json
 open Xunit
 open FS.GG.Coordination.App
 open FS.GG.Coordination.Core
@@ -15,7 +16,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "d8afa5fcccc2a8ecaf9142075f741933b743b5c45afe202faa8d9e96d4717b09",
+        "90dd92eca75971c2159efdc2cfa3c168f74eab491bf52568580e2526d49a7ee3",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -42,6 +43,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("PDISP-Replan", CoordinationProtocolGenerated.Ids.PdispReplan)
     Assert.Equal("PDISP-Compensate", CoordinationProtocolGenerated.Ids.PdispCompensate)
     Assert.Equal("DSTATE-Specification", CoordinationProtocolGenerated.Ids.DstateSpecification)
+    Assert.Equal("COUT-Specification", CoordinationProtocolGenerated.Ids.CoutSpecification)
 
     Assert.Equal(
         7,
@@ -113,6 +115,13 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         |> List.length
     )
 
+    Assert.Equal(
+        1,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "compiledOutputSpecification")
+        |> List.length
+    )
+
     Assert.Contains("ACT-AcceptObservationKnowledge", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-SetHumanIntent", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-ObserveLifecycleFacts", CoordinationProtocolGenerated.CanonicalContractJson)
@@ -126,6 +135,43 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Contains("project-workflow|project-visibility|project-membership-policy", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("family|ordinal|source|profile|contract|content", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("markdown|json", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("missing|duplicate|substituted|unsupported|incomplete|reordered|stale", CoordinationProtocolGenerated.CanonicalContractJson)
+
+    let repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+
+    use outputManifest =
+        JsonDocument.Parse(
+            File.ReadAllBytes(
+                Path.Combine(
+                    repositoryRoot,
+                    "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/manifest.json"
+                )
+            )
+        )
+
+    let outputRoot = outputManifest.RootElement
+    Assert.Equal("fsgg.quint.compiled-output-manifest/1", outputRoot.GetProperty("schema").GetString())
+    Assert.Equal("9744d83e81779bb883ad5bf4193d060f89d79aefd3e5ed102b8a02fb5f56439c", outputRoot.GetProperty("sourceSha256").GetString())
+    Assert.Equal(CoordinationProtocolGenerated.ContractFingerprint, outputRoot.GetProperty("contractSha256").GetString())
+
+    let outputs = outputRoot.GetProperty("outputs").EnumerateArray() |> Seq.toList
+    Assert.Equal(9, outputs.Length)
+    Assert.Equal<int list>([ 1..9 ], outputs |> List.map (fun output -> output.GetProperty("ordinal").GetInt32()))
+    Assert.All(outputs, fun output ->
+        Assert.True(output.GetProperty("supported").GetBoolean())
+        Assert.True(output.GetProperty("complete").GetBoolean())
+        Assert.True(output.GetProperty("fresh").GetBoolean()))
+
+    let projection = outputs |> List.find (fun output -> output.GetProperty("family").GetString() = "COUT-ProjectionViews")
+    Assert.Equal<string list>(
+        [ "projection-view.json"; "projection-view.md" ],
+        projection.GetProperty("files").EnumerateArray()
+        |> Seq.map (fun file -> file.GetProperty("path").GetString())
+        |> Seq.toList
+    )
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =

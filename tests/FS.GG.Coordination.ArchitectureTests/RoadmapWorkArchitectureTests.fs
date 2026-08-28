@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open System.Text.Json
+open System.Text.Json.Nodes
 open Xunit
 
 let private root =
@@ -457,6 +458,65 @@ let ``canonical Quint authority mutations fail closed`` () =
                 Assert.Equal(0, addExit)
                 Assert.Equal("", addError))
             "GENERATED-QNT-TRACKED"
+
+        let mutateOutputManifest name mutate expectedCode =
+            runMutation
+                name
+                (fun clone ->
+                    let path =
+                        Path.Combine(clone, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/manifest.json")
+
+                    let document = JsonNode.Parse(File.ReadAllText path).AsObject()
+                    mutate document
+                    File.WriteAllText(path, document.ToJsonString()))
+                expectedCode
+
+        mutateOutputManifest
+            "compiled-output-duplicate"
+            (fun document ->
+                let outputs = document["outputs"].AsArray()
+                outputs.Add(outputs[0].DeepClone()))
+            "COMPILED-OUTPUT-COUNT"
+
+        mutateOutputManifest
+            "compiled-output-substitution"
+            (fun document -> document["outputs"].AsArray().[0].AsObject()["family"] <- "COUT-Diagrams")
+            "COMPILED-OUTPUT-ORDER"
+
+        mutateOutputManifest
+            "compiled-output-unsupported"
+            (fun document -> document["outputs"].AsArray().[0].AsObject()["supported"] <- false)
+            "COMPILED-OUTPUT-UNSUPPORTED"
+
+        mutateOutputManifest
+            "compiled-output-incomplete"
+            (fun document -> document["outputs"].AsArray().[0].AsObject()["complete"] <- false)
+            "COMPILED-OUTPUT-INCOMPLETE"
+
+        mutateOutputManifest
+            "compiled-output-stale"
+            (fun document -> document["outputs"].AsArray().[0].AsObject()["fresh"] <- false)
+            "COMPILED-OUTPUT-STALE"
+
+        runMutation
+            "compiled-output-missing-format"
+            (fun clone ->
+                File.Delete(
+                    Path.Combine(
+                        clone,
+                        "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/projection-view.md"
+                    )
+                ))
+            "COMPILED-OUTPUT-FILES"
+
+        runMutation
+            "compiled-output-content"
+            (fun clone ->
+                File.AppendAllText(
+                    Path.Combine(clone, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/diagrams.md"),
+                    "substituted\n"
+                ))
+            "COMPILED-OUTPUT-CONTENT"
     finally
         if Directory.Exists(tempRoot) then
             Directory.Delete(tempRoot, true)

@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "5f142084be0e1763a6261de39cf78a5ed5e75dce84d751238aa40085ec7a6b90"
+    "9744d83e81779bb883ad5bf4193d060f89d79aefd3e5ed102b8a02fb5f56439c"
 
 let expectedContract =
-    "d8afa5fcccc2a8ecaf9142075f741933b743b5c45afe202faa8d9e96d4717b09"
+    "90dd92eca75971c2159efdc2cfa3c168f74eab491bf52568580e2526d49a7ee3"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -87,6 +87,9 @@ let contract = Path.Combine(retained, "contract.json")
 let binding = Path.Combine(retained, "Protocol.Generated.fs")
 let sourceMap = Path.Combine(retained, "source-map.json")
 let receipt = Path.Combine(retained, "receipt.json")
+let outputGenerator = Path.Combine(root, "eng/generate-compiled-contract-outputs.fsx")
+let compiledOutputs = Path.Combine(retained, "compiled-outputs")
+let compiledOutputManifest = Path.Combine(compiledOutputs, "manifest.json")
 
 for code, path in
     [ "SOURCE-MISSING", source
@@ -95,7 +98,9 @@ for code, path in
       "CONTRACT-MISSING", contract
       "BINDING-MISSING", binding
       "SOURCE-MAP-MISSING", sourceMap
-      "RECEIPT-MISSING", receipt ] do
+      "RECEIPT-MISSING", receipt
+      "OUTPUT-GENERATOR-MISSING", outputGenerator
+      "COMPILED-OUTPUT-MANIFEST-MISSING", compiledOutputManifest ] do
     requireFile code path
 
 if sha256 source <> expectedSource then
@@ -134,7 +139,7 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 133 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 134 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
@@ -200,6 +205,114 @@ match desiredStateEntries with
     for name, expected in expectedFields do
         if (field name).GetString() <> expected then fail "DESIRED-STATE-SUMMARY" name
 | _ -> fail "DESIRED-STATE-SUMMARY" "expected-one"
+
+let compiledOutputEntries =
+    contractRoot.GetProperty("catalogue").EnumerateArray()
+    |> Seq.filter (fun entry -> entry.GetProperty("id").GetString() = "COUT-Specification")
+    |> Seq.toList
+
+match compiledOutputEntries with
+| [ compiledOutput ] ->
+    let field name =
+        compiledOutput.GetProperty("value").GetProperty("fields").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("name").GetString() = name)
+        |> _.GetProperty("value")
+        |> _.GetProperty("value")
+        |> _.GetString()
+
+    let expectedFields =
+        [ "familyContract", "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory"
+          "identityContract", "family|ordinal|source|profile|contract|content"
+          "qualificationContract", "supported|complete|fresh"
+          "projectionViewFormats", "markdown|json"
+          "refusalContract", "missing|duplicate|substituted|unsupported|incomplete|reordered|stale" ]
+
+    for name, expected in expectedFields do
+        if field name <> expected then fail "COMPILED-OUTPUT-SUMMARY" name
+| _ -> fail "COMPILED-OUTPUT-SUMMARY" "expected-one"
+
+let expectedCompiledOutputs =
+    [ ("COUT-Schemas", 1, [ "schemas.json" ])
+      ("COUT-CommandMetadata", 2, [ "command-metadata.json" ])
+      ("COUT-PermissionCensus", 3, [ "permission-census.json" ])
+      ("COUT-MutationCensus", 4, [ "mutation-census.json" ])
+      ("COUT-SettingsPlans", 5, [ "settings-plans.json" ])
+      ("COUT-ProjectionViews", 6, [ "projection-view.json"; "projection-view.md" ])
+      ("COUT-SemanticDiff", 7, [ "semantic-diff.json" ])
+      ("COUT-Diagrams", 8, [ "diagrams.md" ])
+      ("COUT-ModelTestInventory", 9, [ "model-test-inventory.json" ]) ]
+
+let compiledOutputDocument = JsonDocument.Parse(File.ReadAllBytes compiledOutputManifest)
+let compiledOutputRoot = compiledOutputDocument.RootElement
+
+if compiledOutputRoot.GetProperty("schema").GetString() <> "fsgg.quint.compiled-output-manifest/1" then
+    fail "COMPILED-OUTPUT-SCHEMA" "wrong"
+
+if compiledOutputRoot.GetProperty("sourceSha256").GetString() <> expectedSource then
+    fail "COMPILED-OUTPUT-SOURCE" "stale"
+
+if compiledOutputRoot.GetProperty("profile").GetString() <> expectedProfile then
+    fail "COMPILED-OUTPUT-PROFILE" "wrong"
+
+if compiledOutputRoot.GetProperty("contractSha256").GetString() <> expectedContract then
+    fail "COMPILED-OUTPUT-CONTRACT" "stale"
+
+let actualCompiledOutputs = compiledOutputRoot.GetProperty("outputs").EnumerateArray() |> Seq.toList
+
+if actualCompiledOutputs.Length <> expectedCompiledOutputs.Length then
+    fail "COMPILED-OUTPUT-COUNT" (string actualCompiledOutputs.Length)
+
+let expectedFiles =
+    expectedCompiledOutputs
+    |> List.collect (fun (_, _, files) -> files)
+    |> Set.ofList
+    |> Set.add "manifest.json"
+
+let actualFiles =
+    Directory.EnumerateFiles(compiledOutputs, "*", SearchOption.TopDirectoryOnly)
+    |> Seq.map Path.GetFileName
+    |> Set.ofSeq
+
+if actualFiles <> expectedFiles then
+    fail "COMPILED-OUTPUT-FILES" (String.concat "," actualFiles)
+
+for expected, actual in List.zip expectedCompiledOutputs actualCompiledOutputs do
+    let expectedFamily, expectedOrdinal, expectedFamilyFiles = expected
+
+    if actual.GetProperty("family").GetString() <> expectedFamily then
+        fail "COMPILED-OUTPUT-ORDER" expectedFamily
+
+    if actual.GetProperty("ordinal").GetInt32() <> expectedOrdinal then
+        fail "COMPILED-OUTPUT-ORDER" expectedFamily
+
+    if actual.GetProperty("sourceSha256").GetString() <> expectedSource then
+        fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
+
+    if actual.GetProperty("profile").GetString() <> expectedProfile then
+        fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
+
+    if actual.GetProperty("contractSha256").GetString() <> expectedContract then
+        fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
+
+    if not (actual.GetProperty("supported").GetBoolean()) then fail "COMPILED-OUTPUT-UNSUPPORTED" expectedFamily
+    if not (actual.GetProperty("complete").GetBoolean()) then fail "COMPILED-OUTPUT-INCOMPLETE" expectedFamily
+    if not (actual.GetProperty("fresh").GetBoolean()) then fail "COMPILED-OUTPUT-STALE" expectedFamily
+
+    let actualFamilyFiles =
+        actual.GetProperty("files").EnumerateArray()
+        |> Seq.map (fun file -> file.GetProperty("path").GetString())
+        |> Seq.toList
+
+    if actualFamilyFiles <> expectedFamilyFiles then
+        fail "COMPILED-OUTPUT-FAMILY-FILES" expectedFamily
+
+    for file in actual.GetProperty("files").EnumerateArray() do
+        let relative = file.GetProperty("path").GetString()
+        let path = Path.Combine(compiledOutputs, relative)
+        requireFile "COMPILED-OUTPUT-FILE-MISSING" path
+
+        if file.GetProperty("contentSha256").GetString() <> sha256 path then
+            fail "COMPILED-OUTPUT-CONTENT" relative
 
 let trackedExit, trackedQnt, trackedError =
     run root "git" [ "ls-files"; "*.qnt" ] []
@@ -279,13 +392,13 @@ try
           "--root"
           scratch
           "--work"
-          "58-desired-state-specifications"
+          "62-compiled-contract-outputs"
           "--title"
-          "Implement desired-state specifications"
+          "GS2-02.10 compiled-contract outputs"
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-9-profile2-r6"
+          "gs2-02-10-profile2-r4"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -299,10 +412,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "58-desired-state-specifications" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "62-compiled-contract-outputs" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/58-desired-state-specifications")
+    let generatedRoot = Path.Combine(scratch, "readiness/62-compiled-contract-outputs")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -316,6 +429,28 @@ try
 
         if not (File.ReadAllBytes(expected).AsSpan().SequenceEqual(File.ReadAllBytes(actual))) then
             fail "STALE-PROJECTION" (Path.GetFileName expected)
+
+    let scratchRetained = Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Generated")
+    Directory.CreateDirectory(scratchRetained) |> ignore
+    File.Copy(Path.Combine(generatedRoot, "quint/contract.json"), Path.Combine(scratchRetained, "contract.json"), true)
+
+    let scratchCompiledOutputs = Path.Combine(scratch, "compiled-outputs")
+
+    requireGreen
+        "COMPILED-OUTPUT-GENERATOR"
+        root
+        "dotnet"
+        [ "fsi"; outputGenerator; "--"; "--root"; scratch; "--output"; scratchCompiledOutputs ]
+        []
+    |> ignore
+
+    for relative in expectedFiles do
+        let expected = Path.Combine(compiledOutputs, relative)
+        let actual = Path.Combine(scratchCompiledOutputs, relative)
+        requireFile "COMPILED-OUTPUT-REGEN-MISSING" actual
+
+        if not (File.ReadAllBytes(expected).AsSpan().SequenceEqual(File.ReadAllBytes(actual))) then
+            fail "COMPILED-OUTPUT-STALE-PROJECTION" relative
 
     let qnt = Path.Combine(generatedRoot, "quint/protocol.qnt")
     requireGreen "QUINT-TYPECHECK" scratch quint [ "typecheck"; qnt ] [] |> ignore
@@ -822,6 +957,69 @@ try
         "phase-authority-binding"
         "      desiredStatePhaseAuthorityMatches(authority, desired, observed),"
         "      true,"
+
+    let requireCompiledOutputRed (name: string) (fixture: string) (replacement: string) =
+        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
+            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
+
+        let mutant = Path.Combine(scratch, $"protocol-compiled-output-%s{name}.qnt")
+        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
+
+        let exitCode, output, error =
+            run
+                scratch
+                quint
+                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+                  "--match"; "^testCompiledOutput"; "--verbosity"; "0" ]
+                []
+
+        if exitCode = 0 then
+            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
+
+        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
+            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+
+    requireCompiledOutputRed
+        "duplicate-family"
+        "    outputs.size() == compiledOutputFamilyCatalogue.size(),"
+        "    true,"
+
+    requireCompiledOutputRed
+        "family-completeness"
+        ("    outputs.size() == compiledOutputFamilyCatalogue.size(),\n"
+         + "    outputs.map(output => output.familyId) == compiledOutputFamilyCatalogue.map(family => family.id),\n"
+         + "    outputs.map(output => output.ordinal) == Set(1, 2, 3, 4, 5, 6, 7, 8, 9),")
+        "    true,\n    true,\n    true,"
+
+    requireCompiledOutputRed
+        "family-order"
+        "      family.id == output.familyId, family.ordinal == output.ordinal,"
+        "      family.id == output.familyId, true,"
+
+    requireCompiledOutputRed
+        "source-identity"
+        "    output.sourceIdentity == \"literate-quint-authority\","
+        "    true,"
+
+    requireCompiledOutputRed
+        "support-qualification"
+        "    output.contentDigest != \"\", output.supported, output.complete, output.fresh,"
+        "    output.contentDigest != \"\", true, output.complete, output.fresh,"
+
+    requireCompiledOutputRed
+        "completeness-qualification"
+        "    output.contentDigest != \"\", output.supported, output.complete, output.fresh,"
+        "    output.contentDigest != \"\", output.supported, true, output.fresh,"
+
+    requireCompiledOutputRed
+        "freshness-qualification"
+        "    output.contentDigest != \"\", output.supported, output.complete, output.fresh,"
+        "    output.contentDigest != \"\", output.supported, output.complete, true,"
+
+    requireCompiledOutputRed
+        "projection-formats"
+        "      family.contentContract == output.contentContract, family.formats == output.formats,"
+        "      family.contentContract == output.contentContract, true,"
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 

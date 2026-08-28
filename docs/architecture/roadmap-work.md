@@ -9,8 +9,8 @@ the Coordination Project remains a visibility projection.
 
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
-path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.8,
-and the active GS2-02.9 frontier with stable IDs, owner,
+path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
+and the active GS2-02.10 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -139,6 +139,27 @@ closed phase/refusal contract. The adjacent canonical `quint-test` fence carries
 typed surface sets, transition predicate, and witnesses within the compiler's fixed authority-graph ceiling.
 This unit defines intent and verification only: it adds no writer, network, GitHub
 mutation, deployment, publication, or production authority.
+
+GS2-02.10 reuses the immutable Q1/Q2 command identities and derives a closed,
+canonically ordered compiled-output contract from the same literate Quint authority.
+The nine families are schemas, command metadata, permission census, mutation census,
+settings plans, projection views, semantic diff, diagrams, and model-test inventory;
+projection views require both Markdown and JSON. Every typed output fact binds family,
+ordinal, source, profile, contract, content, support, completeness, and freshness.
+Missing, duplicate, substituted, unsupported, incomplete, reordered, stale, or
+single-format projection sets fail closed. The retained profile-2 projection exports
+the exact ordered family, identity, qualification, view-format, and refusal contracts.
+`eng/generate-compiled-contract-outputs.fsx` consumes that contract and the canonical
+literate source to materialize a nine-entry typed manifest plus concrete schema,
+command, permission, mutation, settings-plan, JSON/Markdown projection, semantic-diff,
+Mermaid diagram, and model-test-inventory files. Every entry carries the real source
+SHA-256, profile, contract fingerprint, ordinal, qualification flags, file paths, and
+content digests. The independent validator regenerates the directory and byte-compares
+it; architecture mutants delete, duplicate, substitute, stale, truncate, and alter the
+retained set. The adjacent executable `quint-test` fence remains the bounded semantic
+witness within the compiler's fixed graph ceiling. This unit remains repository-local
+and stops before deterministic deployment identity or any writer, network, hosted
+runtime, publication, or production authority.
 
 ## Command sequence
 

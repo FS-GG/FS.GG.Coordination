@@ -1,0 +1,146 @@
+schemaVersion: 1
+work:
+  id: 62-compiled-contract-outputs
+  title: "GS2-02.10 compiled-contract outputs"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/62-compiled-contract-outputs/spec.md
+  sourceClarifications: work/62-compiled-contract-outputs/clarifications.md
+  sourceChecklist: work/62-compiled-contract-outputs/checklist.md
+  sourcePlan: work/62-compiled-contract-outputs/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/62-compiled-contract-outputs/spec.md
+    digest: 5937ca0f04ce4a47cc561707377e39ee06143db80ca913aeca161b1ed88fa74e
+    schemaVersion: 1
+  - label: clarifications
+    path: work/62-compiled-contract-outputs/clarifications.md
+    digest: 0f7047fbf7baf852e2daab6f6e6b323f4f57b28719f62bcbc2c72f6fecdc7d38
+    schemaVersion: 1
+  - label: checklist
+    path: work/62-compiled-contract-outputs/checklist.md
+    digest: ae5cb818424739d2243b7e8962971edd7c4344468f0de1ac0a464d4463ed0db9
+    schemaVersion: 1
+  - label: plan
+    path: work/62-compiled-contract-outputs/plan.md
+    digest: 7c3c726bf1f806b6af8320a0109c21d132f4be159360ba765e817bd2e877226e
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-002, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-002
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Record verification evidence VO-002
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-002, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Record verification evidence VO-003
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-003, VO-003]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Refresh generated view impact GV-002
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-002, PD-002]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV011]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 62-compiled-contract-outputs."

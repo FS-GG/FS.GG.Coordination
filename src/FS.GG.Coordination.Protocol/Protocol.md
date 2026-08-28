@@ -1,4 +1,4 @@
-# GS2-02.9 canonical coordination protocol
+# GS2-02.10 canonical coordination protocol
 
 This document is the sole authored source for the coordination protocol baseline. Every behavioral
 fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
@@ -9,9 +9,11 @@ revision-aware authority catalogue; GS2-02.3 added observation outcomes and know
 GS2-02.4 added lifecycle intent and derived status; GS2-02.5 added native relation algebra; GS2-02.6
 added typed retained protocol streams; GS2-02.7 added the closed mutation algebra; GS2-02.8 added
 ordered resumable durable plans. This unit adds closed desired-state families and pure inspect, plan,
-apply-intent, and verify classification for GitHub configuration. Later GS2-02 units refine compiled
-outputs and deterministic identity. No network writer, hosted runtime, reconciler, plan executor, or
-production mutation authority is defined here.
+apply-intent, and verify classification for GitHub configuration. This unit adds a closed catalogue
+of deterministic compiled-contract output families and typed qualification of their identity,
+content, completeness, support, freshness, and order. Later GS2-02 units refine deterministic
+deployment identity. No network writer, hosted runtime, reconciler, plan executor, or production
+mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -245,6 +247,15 @@ module CoordinationProtocol {
       phaseContract: "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify",
       phaseAuthorityContract: "subject|profile|family|content|authority-revision|plan-outcome|apply-receipt",
       refusalContract: "unsupported|unauthorized|incomplete|stale|identity-mismatch" }
+  )
+
+  pure val compiledOutputSpecificationCatalogue = Set(
+    { id: "COUT-Specification", kind: "compiledOutputSpecification",
+      familyContract: "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory",
+      identityContract: "family|ordinal|source|profile|contract|content",
+      qualificationContract: "supported|complete|fresh",
+      projectionViewFormats: "markdown|json",
+      refusalContract: "missing|duplicate|substituted|unsupported|incomplete|reordered|stale" }
   )
 
   pure val relationshipCatalogue = Set(
@@ -818,6 +829,7 @@ module CoordinationProtocol {
     observationOutcomeCatalogue.filter(outcome => outcome.knowledgeClass == "contradictory").map(outcome => outcome.id) == Set("OBS-Contradictory"),
   }
 
+
   var evidenceObserved: bool
   var acceptedVocabulary: Set[str]
   var authorityObservation: AuthorityObservation
@@ -1145,6 +1157,52 @@ inverts each material binding and preserves the earlier bounded invariants.
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
 
+  type CompiledOutputFamily = {
+    id: str, ordinal: int, contentContract: str, formats: Set[str],
+  }
+
+  pure val compiledOutputFamilyCatalogue = Set(
+    { id: "COUT-Schemas", ordinal: 1,
+      contentContract: "authority|observation|lifecycle|relation|stream|mutation|durable-plan|desired-state|compiled-output",
+      formats: Set("json-schema") },
+    { id: "COUT-CommandMetadata", ordinal: 2, contentContract: "inspect|plan|apply-intent|verify", formats: Set("json") },
+    { id: "COUT-PermissionCensus", ordinal: 3,
+      contentContract: "organization-administration|repository-administration|project-administration|actions-administration|release-administration|security-administration",
+      formats: Set("json") },
+    { id: "COUT-MutationCensus", ordinal: 4,
+      contentContract: "create|append|add-edge|remove-edge|set|clear|transition|compensate|applied|idempotent|rejected|revision-conflict|rate-limited|unavailable|timed-out|incomplete",
+      formats: Set("json") },
+    { id: "COUT-SettingsPlans", ordinal: 5,
+      contentContract: "issue-schema|repository-properties|projects|repository-profile|workflow-pins|releases|permissions|security-supply-chain|inspect|plan|apply|verify",
+      formats: Set("json") },
+    { id: "COUT-ProjectionViews", ordinal: 6,
+      contentContract: "catalogue|relationships|actions|verification|bounds|compatibility",
+      formats: Set("markdown", "json") },
+    { id: "COUT-SemanticDiff", ordinal: 7,
+      contentContract: "family|identity|content|support|completeness|freshness|order", formats: Set("json") },
+    { id: "COUT-Diagrams", ordinal: 8,
+      contentContract: "authority-map|phase-flow|mutation-flow|stream-flow", formats: Set("mermaid") },
+    { id: "COUT-ModelTestInventory", ordinal: 9,
+      contentContract: "invariant|witness|negative-control|bounded-verification", formats: Set("json") }
+  )
+
+  pure val closedCompiledOutputFamilyCatalogue = and {
+    compiledOutputFamilyCatalogue.map(family => family.id) == Set(
+      "COUT-Schemas", "COUT-CommandMetadata", "COUT-PermissionCensus", "COUT-MutationCensus",
+      "COUT-SettingsPlans", "COUT-ProjectionViews", "COUT-SemanticDiff", "COUT-Diagrams",
+      "COUT-ModelTestInventory"
+    ),
+    compiledOutputFamilyCatalogue.map(family => family.ordinal) == Set(1, 2, 3, 4, 5, 6, 7, 8, 9),
+    compiledOutputFamilyCatalogue.filter(family => family.id == "COUT-ProjectionViews")
+      .forall(family => family.formats == Set("markdown", "json")),
+  }
+
+  type CompiledOutput = {
+    familyId: str, ordinal: int, sourceIdentity: str, profileIdentity: str,
+    contractIdentity: str, contentContract: str, formats: Set[str], contentDigest: str,
+    supported: bool, complete: bool, fresh: bool,
+  }
+
   type DesiredStateFact = {
     authorityId: str, authorityRevision: str, subjectId: str, profileId: str,
     familyId: str, targetKind: str, surfaceIds: Set[str], contentDigest: str, requiredPermission: str,
@@ -1154,6 +1212,59 @@ module CoordinationProtocolTests {
   type DesiredStatePhaseAuthority = {
     subjectId: str, profileId: str, familyId: str, desiredContentDigest: str,
     authorityRevision: str, planOutcomeId: str, applyReceiptOutcomeId: str,
+  }
+
+  pure def compiledOutput(
+    familyId: str, ordinal: int, contentContract: str, formats: Set[str], contentDigest: str
+  ): CompiledOutput = {
+    familyId: familyId, ordinal: ordinal, sourceIdentity: "literate-quint-authority",
+    profileIdentity: "fsgg-quint-profile/2", contractIdentity: "compiled-output-contract/v1",
+    contentContract: contentContract, formats: formats, contentDigest: contentDigest,
+    supported: true, complete: true, fresh: true,
+  }
+
+  pure val completeCompiledOutputs = Set(
+    compiledOutput("COUT-Schemas", 1,
+      "authority|observation|lifecycle|relation|stream|mutation|durable-plan|desired-state|compiled-output",
+      Set("json-schema"), "digest-schemas"),
+    compiledOutput("COUT-CommandMetadata", 2, "inspect|plan|apply-intent|verify", Set("json"), "digest-command-metadata"),
+    compiledOutput("COUT-PermissionCensus", 3,
+      "organization-administration|repository-administration|project-administration|actions-administration|release-administration|security-administration",
+      Set("json"), "digest-permission-census"),
+    compiledOutput("COUT-MutationCensus", 4,
+      "create|append|add-edge|remove-edge|set|clear|transition|compensate|applied|idempotent|rejected|revision-conflict|rate-limited|unavailable|timed-out|incomplete",
+      Set("json"), "digest-mutation-census"),
+    compiledOutput("COUT-SettingsPlans", 5,
+      "issue-schema|repository-properties|projects|repository-profile|workflow-pins|releases|permissions|security-supply-chain|inspect|plan|apply|verify",
+      Set("json"), "digest-settings-plans"),
+    compiledOutput("COUT-ProjectionViews", 6,
+      "catalogue|relationships|actions|verification|bounds|compatibility",
+      Set("markdown", "json"), "digest-projection-views"),
+    compiledOutput("COUT-SemanticDiff", 7, "family|identity|content|support|completeness|freshness|order",
+      Set("json"), "digest-semantic-diff"),
+    compiledOutput("COUT-Diagrams", 8, "authority-map|phase-flow|mutation-flow|stream-flow",
+      Set("mermaid"), "digest-diagrams"),
+    compiledOutput("COUT-ModelTestInventory", 9, "invariant|witness|negative-control|bounded-verification",
+      Set("json"), "digest-model-test-inventory")
+  )
+
+  pure def compiledOutputShapeIsQualified(output: CompiledOutput): bool = and {
+    output.sourceIdentity == "literate-quint-authority",
+    output.profileIdentity == "fsgg-quint-profile/2",
+    output.contractIdentity == "compiled-output-contract/v1",
+    output.contentDigest != "", output.supported, output.complete, output.fresh,
+    compiledOutputFamilyCatalogue.exists(family => and {
+      family.id == output.familyId, family.ordinal == output.ordinal,
+      family.contentContract == output.contentContract, family.formats == output.formats,
+    }),
+  }
+
+  pure def compiledOutputSetIsQualified(outputs: Set[CompiledOutput]): bool = and {
+    closedCompiledOutputFamilyCatalogue,
+    outputs.size() == compiledOutputFamilyCatalogue.size(),
+    outputs.map(output => output.familyId) == compiledOutputFamilyCatalogue.map(family => family.id),
+    outputs.map(output => output.ordinal) == Set(1, 2, 3, 4, 5, 6, 7, 8, 9),
+    outputs.forall(compiledOutputShapeIsQualified),
   }
 
   pure val desiredStateFamilyCatalogue = Set(
@@ -1746,6 +1857,70 @@ module CoordinationProtocolTests {
       { ...desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Applied"),
         desiredContentDigest: "digest-forged-workflow-pin" },
       desiredWorkflowPins, desiredWorkflowPins
+    )),
+  }
+
+  run testCompiledOutputsAreCompleteAndDeterministic = and {
+    compiledOutputSetIsQualified(completeCompiledOutputs),
+    completeCompiledOutputs.map(output => output.familyId) == compiledOutputFamilyCatalogue.map(family => family.id),
+    completeCompiledOutputs.map(output => output.ordinal) == Set(1, 2, 3, 4, 5, 6, 7, 8, 9),
+    completeCompiledOutputs.filter(output => output.familyId == "COUT-ProjectionViews")
+      .forall(output => output.formats == Set("markdown", "json")),
+  }
+
+  run testCompiledOutputsRejectMissingDuplicateAndReorderedFamilies = and {
+    not(compiledOutputSetIsQualified(completeCompiledOutputs.filter(
+      output => output.familyId != "COUT-Diagrams"
+    ))),
+    not(compiledOutputSetIsQualified(completeCompiledOutputs.union(Set(
+      compiledOutput("COUT-Diagrams", 8, "authority-map|phase-flow|mutation-flow|stream-flow",
+        Set("mermaid"), "digest-conflicting-diagrams")
+    )))),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => and {
+        output.familyId != "COUT-SemanticDiff", output.familyId != "COUT-Diagrams"
+      }).union(Set(
+        compiledOutput("COUT-SemanticDiff", 8, "family|identity|content|support|completeness|freshness|order",
+          Set("json"), "digest-semantic-diff"),
+        compiledOutput("COUT-Diagrams", 7, "authority-map|phase-flow|mutation-flow|stream-flow",
+          Set("mermaid"), "digest-diagrams")
+      ))
+    )),
+  }
+
+  run testCompiledOutputsRejectSubstitutionAndUnqualifiedFacts = and {
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-Schemas").union(Set({
+        ...compiledOutput("COUT-Schemas", 1,
+          "authority|observation|lifecycle|relation|stream|mutation|durable-plan|desired-state|compiled-output",
+          Set("json-schema"), "digest-schemas"), sourceIdentity: "substituted-authority"
+      }))
+    )),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-PermissionCensus").union(Set({
+        ...compiledOutput("COUT-PermissionCensus", 3,
+          "organization-administration|repository-administration|project-administration|actions-administration|release-administration|security-administration",
+          Set("json"), "digest-permission-census"), supported: false
+      }))
+    )),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-SettingsPlans").union(Set({
+        ...compiledOutput("COUT-SettingsPlans", 5,
+          "issue-schema|repository-properties|projects|repository-profile|workflow-pins|releases|permissions|security-supply-chain|inspect|plan|apply|verify",
+          Set("json"), "digest-settings-plans"), complete: false
+      }))
+    )),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-ModelTestInventory").union(Set({
+        ...compiledOutput("COUT-ModelTestInventory", 9, "invariant|witness|negative-control|bounded-verification",
+          Set("json"), "digest-model-test-inventory"), fresh: false
+      }))
+    )),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-ProjectionViews").union(Set(
+        compiledOutput("COUT-ProjectionViews", 6, "catalogue|relationships|actions|verification|bounds|compatibility",
+          Set("json"), "digest-projection-views")
+      ))
     )),
   }
 }

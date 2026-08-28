@@ -1,0 +1,63 @@
+---
+schemaVersion: 1
+workId: 62-compiled-contract-outputs
+title: GS2-02.10 compiled-contract outputs
+stage: plan
+changeTier: tier1
+status: planned
+sourceSpec: work/62-compiled-contract-outputs/spec.md
+sourceClarifications: work/62-compiled-contract-outputs/clarifications.md
+sourceChecklist: work/62-compiled-contract-outputs/checklist.md
+publicOrToolFacingImpact: true
+---
+
+# GS2-02.10 compiled-contract outputs Plan
+
+Prose status: planned
+
+## Source Snapshot
+- spec: work/62-compiled-contract-outputs/spec.md sha256:5937ca0f04ce4a47cc561707377e39ee06143db80ca913aeca161b1ed88fa74e schemaVersion:1
+- clarifications: work/62-compiled-contract-outputs/clarifications.md sha256:0f7047fbf7baf852e2daab6f6e6b323f4f57b28719f62bcbc2c72f6fecdc7d38 schemaVersion:1
+- checklist: work/62-compiled-contract-outputs/checklist.md sha256:ae5cb818424739d2243b7e8962971edd7c4344468f0de1ac0a464d4463ed0db9 schemaVersion:1
+
+## Plan Scope
+- Work item 62-compiled-contract-outputs is planned from the current specification, clarification, and checklist facts.
+- Requirement count: 3.
+- Clarification decision count: 0.
+- Checklist result count: 3.
+
+## Plan Decisions
+- PD-001 [AC-001] [FR-001] complete: Extend the sole literate Quint authority with a typed `CompiledOutputFamily` catalogue and revision-bound `CompiledOutput` facts. A qualified output binds family, ordinal, source digest, profile identity, contract fingerprint, content digest, support, completeness, and freshness; the complete set is accepted only when every closed family occurs exactly once in canonical order.
+- PD-002 [AC-001] [FR-002] complete: Compile one deterministic contract projection for each of the nine output families: schemas, command metadata, permission census, mutation census, settings plans, Markdown/JSON projection views, semantic diff, diagrams, and model-test inventory. `ProjectionViews` is one family with two required formats. A repository-local output compiler consumes the retained contract and literate source, emits the typed nine-entry manifest and concrete files, and is byte-compared by the independent validator; it introduces no new authority.
+- PD-003 [AC-002] [FR-003] complete: Fail closed in both Quint witnesses and the independent validator for missing, duplicate, substituted, unsupported, incomplete, reordered, and stale output facts. Preserve all GS2-02.1 through GS2-02.9 catalogue behavior and stop before any external writer, network call, runtime reconciliation, or GS2-02.11 deterministic deployment identity.
+
+## Contract Impact
+- PC-001 [PD-001] compiledContract: `src/FS.GG.Coordination.Protocol/Protocol.md` remains the only authored behavioral source; its generated `contract.json`, `Protocol.Generated.fs`, source map, receipt, and typed authority change together under profile 2. Profile 1 remains frozen.
+- PC-002 [PD-002] outputCatalogue: The compiled contract exposes the closed nine-family catalogue, exact per-family content contract, canonical ordinals, and the two projection-view formats. `Generated/compiled-outputs/manifest.json` binds the real source, profile, contract, qualification, file, and content identities for all nine concrete families. Consumers reject any omission, duplicate, substitution, unknown family, stale identity, or altered file.
+
+## Verification Obligations
+- VO-001 [PD-001] [PC-001] semanticTest: Run Quint typecheck and focused positive witnesses proving exact coverage, stable identity binding, and canonical ordering.
+- VO-002 [PD-002] [PC-002] mutationTest: Independently mutate a family omission, duplicate, identity, ordinal, freshness, support, completeness, and projection-view formats; each mutation must fail with a stable diagnostic.
+- VO-003 [PD-003] [PC-001] regressionTest: Regenerate all retained projections twice, require byte-identical output, then run protocol unit tests, architecture tests, and the roadmap qualification gates.
+
+## Performance Intent
+No performance intent is declared for this work item.
+
+## Migration Posture
+- PM-001 [PC-001] regenerateTogether: Regenerate the retained profile-2 contract, bindings, source map, receipt, and typed authority from the updated literate source; do not hand-edit generated files and do not migrate profile 1.
+
+## Generated View Impact
+- GV-001 [PD-001] workModel: `readiness/62-compiled-contract-outputs/work-model.json` refreshes from current lifecycle sources.
+- GV-002 [PD-002] compiledProtocol: The retained protocol projections refresh from the sole literate Quint authority and must be byte-identical across repeated generation.
+
+## Accepted Deferrals
+No accepted plan deferrals recorded.
+
+## Planning Findings
+No blocking planning findings recorded.
+
+## Advisory Notes
+- Optional Governance pointers remain compatibility facts only.
+
+## Lifecycle Notes
+- Next lifecycle action: `fsgg-sdd tasks --work 62-compiled-contract-outputs`.
