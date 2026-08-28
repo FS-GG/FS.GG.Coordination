@@ -1,0 +1,106 @@
+schemaVersion: 1
+work:
+  id: 58-desired-state-specifications
+  title: "Desired State Specifications"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/58-desired-state-specifications/spec.md
+  sourceClarifications: work/58-desired-state-specifications/clarifications.md
+  sourceChecklist: work/58-desired-state-specifications/checklist.md
+  sourcePlan: work/58-desired-state-specifications/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/58-desired-state-specifications/spec.md
+    digest: 743f2d1e6d0c898dc0a9143e6ac13bbd80444c06313e45cd1ae061426e2c081e
+    schemaVersion: 1
+  - label: clarifications
+    path: work/58-desired-state-specifications/clarifications.md
+    digest: 688b1610c2ed65c3c252b85e241a213cecebfd705589871371849608db3e4859
+    schemaVersion: 1
+  - label: checklist
+    path: work/58-desired-state-specifications/checklist.md
+    digest: b03e9da11612c5e2344df979ec4d247c24844f39fdc1a9bd72d041eeaabc054d
+    schemaVersion: 1
+  - label: plan
+    path: work/58-desired-state-specifications/plan.md
+    digest: 15fc0b607b0ebab05ef75b3b353aac89a956da9e218bfd10dcdb6544641db5c4
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-003]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV007]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 58-desired-state-specifications."

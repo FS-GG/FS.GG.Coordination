@@ -1,4 +1,4 @@
-# GS2-02.8 canonical coordination protocol
+# GS2-02.9 canonical coordination protocol
 
 This document is the sole authored source for the coordination protocol baseline. Every behavioral
 fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
@@ -7,11 +7,11 @@ projections and must never be edited independently.
 GS2-02.1 established vocabulary and stable integration identities; GS2-02.2 added the closed,
 revision-aware authority catalogue; GS2-02.3 added observation outcomes and knowledge semantics.
 GS2-02.4 added lifecycle intent and derived status; GS2-02.5 added native relation algebra; GS2-02.6
-added typed retained protocol streams; GS2-02.7 added the closed mutation algebra. This unit compiles
-decisions into ordered, resumable durable steps with stable causation and correlation, exact receipt
-re-read, explicit compensation boundaries, and derived advance, re-read, replan, or compensate
-dispositions. Later GS2-02 units refine desired state and compiled outputs. No network writer, hosted
-runtime, durable-plan executor, or production mutation authority is defined here.
+added typed retained protocol streams; GS2-02.7 added the closed mutation algebra; GS2-02.8 added
+ordered resumable durable plans. This unit adds closed desired-state families and pure inspect, plan,
+apply-intent, and verify classification for GitHub configuration. Later GS2-02 units refine compiled
+outputs and deterministic identity. No network writer, hosted runtime, reconciler, plan executor, or
+production mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -135,7 +135,6 @@ module CoordinationProtocol {
     compensationBoundaryId: str,
     intent: MutationIntent,
   }
-
   pure val vocabularyCatalogue = Set(
     { id: "SubjectVocabulary", kind: "subject", family: "subjects" },
     { id: "AuthorityVocabulary", kind: "authority", family: "authorities" },
@@ -230,6 +229,22 @@ module CoordinationProtocol {
     { id: "PDISP-ReceiptReread", kind: "durablePlanDisposition", receiptClass: "uncertain", nextAction: "reread-receipt" },
     { id: "PDISP-Replan", kind: "durablePlanDisposition", receiptClass: "terminal-refusal-no-applied-boundary", nextAction: "compile-new-plan" },
     { id: "PDISP-Compensate", kind: "durablePlanDisposition", receiptClass: "terminal-refusal-applied-boundary", nextAction: "compensate-reverse" }
+  )
+
+  pure val desiredStateSpecificationCatalogue = Set(
+    { id: "DSTATE-Specification", kind: "desiredStateSpecification", authorityClass: "revision-bound",
+      executionClass: "pure-intent-no-writer",
+      issueSchemaContract: "issue-type|issue-field|field-type|allowed-value",
+      repositoryPropertiesContract: "property-schema|property-value",
+      projectsContract: "project-field|project-view|project-workflow|project-visibility|project-membership-policy",
+      repositoryProfileContract: "ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy",
+      workflowPinsContract: "reusable-workflow-pin|action-pin",
+      releasesContract: "release-environment|immutable-release|tag-protection|trusted-publisher",
+      permissionsContract: "repository-visibility|team-access|workflow-permission|environment-protection",
+      securitySupplyChainContract: "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy",
+      phaseContract: "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify",
+      phaseAuthorityContract: "subject|profile|family|content|authority-revision|plan-outcome|apply-receipt",
+      refusalContract: "unsupported|unauthorized|incomplete|stale|identity-mismatch" }
   )
 
   pure val relationshipCatalogue = Set(
@@ -1130,6 +1145,178 @@ inverts each material binding and preserves the earlier bounded invariants.
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
 
+  type DesiredStateFact = {
+    authorityId: str, authorityRevision: str, subjectId: str, profileId: str,
+    familyId: str, targetKind: str, surfaceIds: Set[str], contentDigest: str, requiredPermission: str,
+    outcomeId: str, complete: bool, supported: bool, permissionGranted: bool,
+  }
+
+  type DesiredStatePhaseAuthority = {
+    subjectId: str, profileId: str, familyId: str, desiredContentDigest: str,
+    authorityRevision: str, planOutcomeId: str, applyReceiptOutcomeId: str,
+  }
+
+  pure val desiredStateFamilyCatalogue = Set(
+    { id: "DSTATE-IssueSchema", targetKind: "organization-issue-schema", requiredPermission: "organization-administration",
+      surfaceIds: Set("issue-type", "issue-field", "field-type", "allowed-value") },
+    { id: "DSTATE-RepositoryProperties", targetKind: "repository-properties", requiredPermission: "repository-administration",
+      surfaceIds: Set("property-schema", "property-value") },
+    { id: "DSTATE-Projects", targetKind: "organization-project", requiredPermission: "project-administration",
+      surfaceIds: Set("project-field", "project-view", "project-workflow", "project-visibility", "project-membership-policy") },
+    { id: "DSTATE-RepositoryProfile", targetKind: "repository-profile", requiredPermission: "repository-administration",
+      surfaceIds: Set("ruleset", "merge-queue", "merge-policy", "actions-policy", "branch-deletion-policy") },
+    { id: "DSTATE-WorkflowPins", targetKind: "workflow-policy", requiredPermission: "actions-administration",
+      surfaceIds: Set("reusable-workflow-pin", "action-pin") },
+    { id: "DSTATE-Releases", targetKind: "release-policy", requiredPermission: "release-administration",
+      surfaceIds: Set("release-environment", "immutable-release", "tag-protection", "trusted-publisher") },
+    { id: "DSTATE-Permissions", targetKind: "permission-policy", requiredPermission: "organization-administration",
+      surfaceIds: Set("repository-visibility", "team-access", "workflow-permission", "environment-protection") },
+    { id: "DSTATE-SecuritySupplyChain", targetKind: "security-supply-chain", requiredPermission: "security-administration",
+      surfaceIds: Set("vulnerability-policy", "secret-policy", "dependency-policy", "sbom-policy", "attestation-policy") }
+  )
+  pure val desiredStatePhaseCatalogue = Set(
+    { id: "DSPH-Inspect" }, { id: "DSPH-Plan" }, { id: "DSPH-Apply" }, { id: "DSPH-Verify" }
+  )
+  pure val desiredStatePlanOutcomeCatalogue = Set(
+    { id: "DSPLAN-Ready" }, { id: "DSPLAN-NoChange" }, { id: "DSPLAN-Unsupported" },
+    { id: "DSPLAN-Unauthorized" }, { id: "DSPLAN-Incomplete" }, { id: "DSPLAN-Stale" },
+    { id: "DSPLAN-IdentityMismatch" }
+  )
+
+  pure def desiredStateFactShapeIsValid(fact: DesiredStateFact): bool = and {
+    fact.subjectId != "", fact.profileId != "", fact.contentDigest != "",
+    authorityCatalogue.exists(authority => and {
+      authority.id == fact.authorityId, authority.revisionValue == fact.authorityRevision,
+    }),
+    observationOutcomeCatalogue.exists(outcome => outcome.id == fact.outcomeId),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == fact.familyId, family.targetKind == fact.targetKind,
+      family.requiredPermission == fact.requiredPermission, family.surfaceIds == fact.surfaceIds,
+    }),
+  }
+
+  pure def desiredStateIdentityMatches(desired: DesiredStateFact, observed: DesiredStateFact): bool = and {
+    desired.authorityId == observed.authorityId,
+    desired.authorityRevision == observed.authorityRevision,
+    desired.subjectId == observed.subjectId, desired.profileId == observed.profileId,
+    desired.familyId == observed.familyId, desired.targetKind == observed.targetKind,
+    desired.surfaceIds == observed.surfaceIds, desired.requiredPermission == observed.requiredPermission,
+  }
+
+  pure def desiredStatePlanOutcomeFor(desired: DesiredStateFact, observed: DesiredStateFact): str =
+    if (not(desiredStateFactShapeIsValid(desired)) or not(desiredStateFactShapeIsValid(observed)))
+      "DSPLAN-IdentityMismatch"
+    else if (not(desiredStateIdentityMatches(desired, observed))) "DSPLAN-IdentityMismatch"
+    else if (not(observed.supported) or observed.outcomeId == "OBS-Unsupported") "DSPLAN-Unsupported"
+    else if (not(observed.permissionGranted) or observed.outcomeId == "OBS-Unauthorized") "DSPLAN-Unauthorized"
+    else if (not(observed.complete) or observed.outcomeId == "OBS-Incomplete") "DSPLAN-Incomplete"
+    else if (observed.outcomeId == "OBS-Stale") "DSPLAN-Stale"
+    else if (observed.outcomeId == "OBS-ProvenAbsent") "DSPLAN-Ready"
+    else if (observed.outcomeId == "OBS-Observed")
+      if (desired.contentDigest == observed.contentDigest) "DSPLAN-NoChange" else "DSPLAN-Ready"
+    else "DSPLAN-Incomplete"
+
+  pure def desiredStateMayApply(desired: DesiredStateFact, observed: DesiredStateFact): bool = and {
+    desired.complete, desired.supported, desired.permissionGranted,
+    desired.outcomeId == "OBS-Observed",
+    desiredStatePlanOutcomeFor(desired, observed) == "DSPLAN-Ready",
+  }
+
+  pure def desiredStatePhaseAuthorityMatches(
+    authority: DesiredStatePhaseAuthority, desired: DesiredStateFact, observed: DesiredStateFact
+  ): bool = and {
+    authority.subjectId == desired.subjectId, authority.subjectId == observed.subjectId,
+    authority.profileId == desired.profileId, authority.profileId == observed.profileId,
+    authority.familyId == desired.familyId, authority.familyId == observed.familyId,
+    authority.desiredContentDigest == desired.contentDigest,
+    authority.authorityRevision == desired.authorityRevision,
+    authority.authorityRevision == observed.authorityRevision,
+  }
+
+  pure def desiredStatePhaseMayAdvance(
+    fromPhaseId: str, toPhaseId: str, authority: DesiredStatePhaseAuthority,
+    desired: DesiredStateFact, observed: DesiredStateFact
+  ): bool = or {
+    and {
+      fromPhaseId == "DSPH-Inspect", toPhaseId == "DSPH-Plan",
+      desiredStatePhaseAuthorityMatches(authority, desired, observed),
+      desiredStateFactShapeIsValid(desired), desiredStateFactShapeIsValid(observed),
+      desiredStateIdentityMatches(desired, observed), observed.complete, observed.supported,
+      observed.permissionGranted, Set("OBS-Observed", "OBS-ProvenAbsent").contains(observed.outcomeId),
+    },
+    and {
+      fromPhaseId == "DSPH-Plan", toPhaseId == "DSPH-Apply",
+      desiredStatePhaseAuthorityMatches(authority, desired, observed),
+      authority.planOutcomeId == desiredStatePlanOutcomeFor(desired, observed),
+      desiredStateMayApply(desired, observed),
+    },
+    and {
+      fromPhaseId == "DSPH-Plan", toPhaseId == "DSPH-Verify",
+      desiredStatePhaseAuthorityMatches(authority, desired, observed),
+      authority.planOutcomeId == "DSPLAN-NoChange",
+      authority.planOutcomeId == desiredStatePlanOutcomeFor(desired, observed),
+      desiredStateIsVerified(desired, observed),
+    },
+    and {
+      fromPhaseId == "DSPH-Apply", toPhaseId == "DSPH-Verify",
+      desiredStatePhaseAuthorityMatches(authority, desired, observed),
+      authority.planOutcomeId == "DSPLAN-Ready",
+      Set("MOUT-Applied", "MOUT-Idempotent").contains(authority.applyReceiptOutcomeId),
+      desiredStateIsVerified(desired, observed),
+    },
+  }
+
+  pure def desiredStateIsVerified(desired: DesiredStateFact, observed: DesiredStateFact): bool = and {
+    desiredStateFactShapeIsValid(desired), desiredStateFactShapeIsValid(observed),
+    desired.complete, desired.supported, desired.permissionGranted, desired.outcomeId == "OBS-Observed",
+    desiredStateIdentityMatches(desired, observed), observed.complete, observed.supported,
+    observed.permissionGranted, observed.outcomeId == "OBS-Observed",
+    desired.contentDigest == observed.contentDigest,
+  }
+
+  pure def desiredStateSpecificationIsComplete(facts: Set[DesiredStateFact]): bool = and {
+    facts.map(fact => fact.familyId) == desiredStateFamilyCatalogue.map(family => family.id),
+    facts.forall(fact => and {
+      desiredStateFactShapeIsValid(fact), fact.complete, fact.supported, fact.permissionGranted,
+      fact.outcomeId == "OBS-Observed",
+      facts.forall(peer => and {
+        peer.authorityId == fact.authorityId, peer.authorityRevision == fact.authorityRevision,
+        peer.subjectId == fact.subjectId, peer.profileId == fact.profileId,
+        if (peer.familyId == fact.familyId) peer == fact else true,
+      }),
+    }),
+  }
+
+  pure val closedDesiredStateCatalogues = and {
+    desiredStateFamilyCatalogue.map(family => family.id) == Set(
+      "DSTATE-IssueSchema", "DSTATE-RepositoryProperties", "DSTATE-Projects", "DSTATE-RepositoryProfile",
+      "DSTATE-WorkflowPins", "DSTATE-Releases", "DSTATE-Permissions", "DSTATE-SecuritySupplyChain"
+    ),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == "DSTATE-IssueSchema",
+      family.surfaceIds == Set("issue-type", "issue-field", "field-type", "allowed-value"),
+    }),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == "DSTATE-Projects",
+      family.surfaceIds == Set("project-field", "project-view", "project-workflow", "project-visibility", "project-membership-policy"),
+    }),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == "DSTATE-RepositoryProfile",
+      family.surfaceIds == Set("ruleset", "merge-queue", "merge-policy", "actions-policy", "branch-deletion-policy"),
+    }),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == "DSTATE-SecuritySupplyChain",
+      family.surfaceIds == Set("vulnerability-policy", "secret-policy", "dependency-policy", "sbom-policy", "attestation-policy"),
+    }),
+    desiredStatePhaseCatalogue.map(phase => phase.id) == Set(
+      "DSPH-Inspect", "DSPH-Plan", "DSPH-Apply", "DSPH-Verify"
+    ),
+    desiredStatePlanOutcomeCatalogue.map(outcome => outcome.id) == Set(
+      "DSPLAN-Ready", "DSPLAN-NoChange", "DSPLAN-Unsupported", "DSPLAN-Unauthorized",
+      "DSPLAN-Incomplete", "DSPLAN-Stale", "DSPLAN-IdentityMismatch"
+    ),
+  }
+
   type DurablePlanCheckpoint = {
     step: DurablePlanStep,
     receipt: MutationResult,
@@ -1238,6 +1425,66 @@ module CoordinationProtocolTests {
     receiptReadId: "receipt-read-create-uncertain", dispositionId: "PDISP-ReceiptReread",
   }
   pure val planCreateAppliedHistory = Set({ step: planCreateStep, receipt: createAppliedResult })
+
+  pure def desiredFact(
+    familyId: str, targetKind: str, surfaces: Set[str], permission: str, digest: str
+  ): DesiredStateFact = {
+    authorityId: "AUTH-NativeGitHub", authorityRevision: "node-id-and-updated-at",
+    subjectId: "FS-GG/example", profileId: "repository-profile-v2", familyId: familyId,
+    targetKind: targetKind, surfaceIds: surfaces, contentDigest: digest, requiredPermission: permission,
+    outcomeId: "OBS-Observed", complete: true, supported: true, permissionGranted: true,
+  }
+
+  pure def desiredPhaseAuthority(
+    desired: DesiredStateFact, planOutcomeId: str, applyReceiptOutcomeId: str
+  ): DesiredStatePhaseAuthority = {
+    subjectId: desired.subjectId, profileId: desired.profileId, familyId: desired.familyId,
+    desiredContentDigest: desired.contentDigest, authorityRevision: desired.authorityRevision,
+    planOutcomeId: planOutcomeId, applyReceiptOutcomeId: applyReceiptOutcomeId,
+  }
+
+  pure val desiredIssueSchema = desiredFact(
+    "DSTATE-IssueSchema", "organization-issue-schema",
+    Set("issue-type", "issue-field", "field-type", "allowed-value"),
+    "organization-administration", "digest-issue-schema"
+  )
+  pure val desiredRepositoryProperties = desiredFact(
+    "DSTATE-RepositoryProperties", "repository-properties", Set("property-schema", "property-value"),
+    "repository-administration", "digest-properties"
+  )
+  pure val desiredProjects = desiredFact(
+    "DSTATE-Projects", "organization-project",
+    Set("project-field", "project-view", "project-workflow", "project-visibility", "project-membership-policy"),
+    "project-administration", "digest-projects"
+  )
+  pure val desiredRepositoryProfile = desiredFact(
+    "DSTATE-RepositoryProfile", "repository-profile",
+    Set("ruleset", "merge-queue", "merge-policy", "actions-policy", "branch-deletion-policy"),
+    "repository-administration", "digest-repository-profile"
+  )
+  pure val desiredWorkflowPins = desiredFact(
+    "DSTATE-WorkflowPins", "workflow-policy", Set("reusable-workflow-pin", "action-pin"),
+    "actions-administration", "digest-workflow-pins"
+  )
+  pure val desiredReleases = desiredFact(
+    "DSTATE-Releases", "release-policy",
+    Set("release-environment", "immutable-release", "tag-protection", "trusted-publisher"),
+    "release-administration", "digest-releases"
+  )
+  pure val desiredPermissions = desiredFact(
+    "DSTATE-Permissions", "permission-policy",
+    Set("repository-visibility", "team-access", "workflow-permission", "environment-protection"),
+    "organization-administration", "digest-permissions"
+  )
+  pure val desiredSecuritySupplyChain = desiredFact(
+    "DSTATE-SecuritySupplyChain", "security-supply-chain",
+    Set("vulnerability-policy", "secret-policy", "dependency-policy", "sbom-policy", "attestation-policy"),
+    "security-administration", "digest-security"
+  )
+  pure val completeDesiredState = Set(
+    desiredIssueSchema, desiredRepositoryProperties, desiredProjects, desiredRepositoryProfile,
+    desiredWorkflowPins, desiredReleases, desiredPermissions, desiredSecuritySupplyChain
+  )
 
   pure val closedDurablePlanDispositionCatalogue = and {
     durablePlanDispositionCatalogue.map(disposition => disposition.id) == Set(
@@ -1375,6 +1622,130 @@ module CoordinationProtocolTests {
         receiptReadId: "receipt-read-append-rejected", dispositionId: "PDISP-Compensate" },
       Set({ step: { ...planCreateStep, compensationBoundaryId: "boundary-forged" },
             receipt: createAppliedResult }),
+    )),
+  }
+
+  run testDesiredStateCataloguesAndSpecificationAreClosed = and {
+    closedDesiredStateCatalogues,
+    desiredStateSpecificationIsComplete(completeDesiredState),
+    not(desiredStateSpecificationIsComplete(completeDesiredState.filter(
+      fact => fact.familyId != "DSTATE-Projects"
+    ))),
+    not(desiredStateSpecificationIsComplete(completeDesiredState.union(Set({
+      ...desiredWorkflowPins, contentDigest: "digest-conflicting-workflow-pins"
+    })))),
+    not(desiredStateFactShapeIsValid({
+      ...desiredWorkflowPins, surfaceIds: Set("reusable-workflow-pin")
+    })),
+  }
+
+  run testDesiredStatePlanBindsSubjectProfileAndContent = and {
+    desiredStatePlanOutcomeFor(
+      desiredWorkflowPins, { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    ) == "DSPLAN-Ready",
+    desiredStateMayApply(
+      desiredWorkflowPins, { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    ),
+    desiredStatePlanOutcomeFor(desiredWorkflowPins, desiredWorkflowPins) == "DSPLAN-NoChange",
+    not(desiredStateMayApply(desiredWorkflowPins, desiredWorkflowPins)),
+    desiredStatePlanOutcomeFor(
+      desiredWorkflowPins, { ...desiredWorkflowPins, subjectId: "FS-GG/other" }
+    ) == "DSPLAN-IdentityMismatch",
+    desiredStatePlanOutcomeFor(
+      desiredWorkflowPins, { ...desiredWorkflowPins, profileId: "repository-profile-other" }
+    ) == "DSPLAN-IdentityMismatch",
+    desiredStatePlanOutcomeFor(
+      desiredWorkflowPins, { ...desiredWorkflowPins, surfaceIds: Set("reusable-workflow-pin") }
+    ) == "DSPLAN-IdentityMismatch",
+  }
+
+  run testDesiredStateUnsupportedAndPermissionOutcomesFailClosed = and {
+    desiredStatePlanOutcomeFor(
+      desiredRepositoryProfile,
+      { ...desiredRepositoryProfile, outcomeId: "OBS-Unsupported", supported: false }
+    ) == "DSPLAN-Unsupported",
+    desiredStatePlanOutcomeFor(
+      desiredRepositoryProfile,
+      { ...desiredRepositoryProfile, outcomeId: "OBS-Unauthorized", permissionGranted: false }
+    ) == "DSPLAN-Unauthorized",
+    desiredStatePlanOutcomeFor(
+      desiredRepositoryProfile,
+      { ...desiredRepositoryProfile, outcomeId: "OBS-Incomplete", complete: false }
+    ) == "DSPLAN-Incomplete",
+    desiredStatePlanOutcomeFor(
+      desiredRepositoryProfile, { ...desiredRepositoryProfile, outcomeId: "OBS-Stale" }
+    ) == "DSPLAN-Stale",
+  }
+
+  run testDesiredStateVerificationRejectsPolicySubstitution = and {
+    desiredStateIsVerified(desiredWorkflowPins, desiredWorkflowPins),
+    desiredStateIsVerified(desiredReleases, desiredReleases),
+    desiredStateIsVerified(desiredSecuritySupplyChain, desiredSecuritySupplyChain),
+    not(desiredStateIsVerified(
+      desiredWorkflowPins, { ...desiredWorkflowPins, contentDigest: "digest-floating-workflow-pin" }
+    )),
+    not(desiredStateIsVerified(
+      desiredReleases, { ...desiredReleases, contentDigest: "digest-mutable-release" }
+    )),
+    not(desiredStateIsVerified(
+      desiredSecuritySupplyChain, { ...desiredSecuritySupplyChain, contentDigest: "digest-missing-attestation" }
+    )),
+  }
+
+  run testDesiredStatePhaseTransitionsAreClosed = and {
+    desiredStatePhaseMayAdvance(
+      "DSPH-Inspect", "DSPH-Plan", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-NoChange", "MOUT-Incomplete"),
+      desiredWorkflowPins, desiredWorkflowPins
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Incomplete"),
+      desiredWorkflowPins,
+      { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Verify", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-NoChange", "MOUT-Incomplete"),
+      desiredWorkflowPins, desiredWorkflowPins
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Applied"),
+      desiredWorkflowPins, desiredWorkflowPins
+    ),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Inspect", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Incomplete"),
+      desiredWorkflowPins, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Unauthorized", "MOUT-Incomplete"),
+      desiredWorkflowPins, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Incomplete"),
+      desiredWorkflowPins,
+      { ...desiredWorkflowPins, outcomeId: "OBS-Unauthorized", permissionGranted: false }
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Incomplete"),
+      { ...desiredWorkflowPins, outcomeId: "OBS-Unauthorized", permissionGranted: false },
+      { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Inspect", "DSPH-Plan", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-NoChange", "MOUT-Incomplete"),
+      desiredWorkflowPins,
+      { ...desiredWorkflowPins, complete: false }
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Applied"),
+      { ...desiredWorkflowPins, outcomeId: "OBS-Unauthorized", permissionGranted: false }, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-TimedOut"),
+      desiredWorkflowPins, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify",
+      { ...desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Applied"),
+        desiredContentDigest: "digest-forged-workflow-pin" },
+      desiredWorkflowPins, desiredWorkflowPins
     )),
   }
 }

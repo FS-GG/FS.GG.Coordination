@@ -11,11 +11,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 153,
+          "line": 152,
           "column": 1
         },
         "end": {
-          "line": 162,
+          "line": 161,
           "column": 4
         }
       }
@@ -28,11 +28,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 255,
+          "line": 270,
           "column": 1
         },
         "end": {
-          "line": 268,
+          "line": 283,
           "column": 4
         }
       }
@@ -45,11 +45,28 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 305,
+          "line": 320,
           "column": 1
         },
         "end": {
-          "line": 308,
+          "line": 323,
+          "column": 4
+        }
+      }
+    },
+    {
+      "id": "EXPORT-DesiredStateSpecification",
+      "module": "CoordinationProtocol",
+      "declaration": "desiredStateSpecificationCatalogue",
+      "promoteCatalogueRows": true,
+      "source": {
+        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+        "start": {
+          "line": 234,
+          "column": 1
+        },
+        "end": {
+          "line": 249,
           "column": 4
         }
       }
@@ -62,11 +79,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 228,
+          "line": 227,
           "column": 1
         },
         "end": {
-          "line": 234,
+          "line": 233,
           "column": 4
         }
       }
@@ -79,11 +96,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 175,
+          "line": 174,
           "column": 1
         },
         "end": {
-          "line": 181,
+          "line": 180,
           "column": 4
         }
       }
@@ -96,11 +113,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 206,
+          "line": 205,
           "column": 1
         },
         "end": {
-          "line": 216,
+          "line": 215,
           "column": 4
         }
       }
@@ -113,11 +130,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 217,
+          "line": 216,
           "column": 1
         },
         "end": {
-          "line": 227,
+          "line": 226,
           "column": 4
         }
       }
@@ -130,11 +147,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 182,
+          "line": 181,
           "column": 1
         },
         "end": {
-          "line": 186,
+          "line": 185,
           "column": 4
         }
       }
@@ -147,11 +164,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 163,
+          "line": 162,
           "column": 1
         },
         "end": {
-          "line": 174,
+          "line": 173,
           "column": 4
         }
       }
@@ -164,11 +181,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 309,
+          "line": 324,
           "column": 1
         },
         "end": {
-          "line": 377,
+          "line": 392,
           "column": 4
         }
       }
@@ -181,11 +198,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 195,
+          "line": 194,
           "column": 1
         },
         "end": {
-          "line": 205,
+          "line": 204,
           "column": 4
         }
       }
@@ -198,11 +215,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 187,
+          "line": 186,
           "column": 1
         },
         "end": {
-          "line": 194,
+          "line": 193,
           "column": 4
         }
       }
@@ -215,11 +232,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 235,
+          "line": 250,
           "column": 1
         },
         "end": {
-          "line": 254,
+          "line": 269,
           "column": 4
         }
       }
@@ -232,11 +249,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 269,
+          "line": 284,
           "column": 1
         },
         "end": {
-          "line": 304,
+          "line": 319,
           "column": 4
         }
       }
@@ -249,11 +266,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 139,
+          "line": 138,
           "column": 1
         },
         "end": {
-          "line": 152,
+          "line": 151,
           "column": 4
         }
       }
@@ -267,11 +284,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 916,
+          "line": 931,
           "column": 1
         },
         "end": {
-          "line": 935,
+          "line": 950,
           "column": 4
         }
       }
@@ -283,11 +300,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 896,
+          "line": 911,
           "column": 1
         },
         "end": {
-          "line": 915,
+          "line": 930,
           "column": 4
         }
       }
@@ -299,11 +316,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 858,
+          "line": 873,
           "column": 1
         },
         "end": {
-          "line": 877,
+          "line": 892,
           "column": 4
         }
       }
@@ -315,11 +332,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 992,
+          "line": 1007,
           "column": 1
         },
         "end": {
-          "line": 1010,
+          "line": 1025,
           "column": 4
         }
       }
@@ -331,11 +348,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1030,
+          "line": 1045,
           "column": 1
         },
         "end": {
-          "line": 1050,
+          "line": 1065,
           "column": 4
         }
       }
@@ -347,11 +364,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1051,
+          "line": 1066,
           "column": 1
         },
         "end": {
-          "line": 1070,
+          "line": 1085,
           "column": 4
         }
       }
@@ -363,11 +380,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 822,
+          "line": 837,
           "column": 1
         },
         "end": {
-          "line": 839,
+          "line": 854,
           "column": 4
         }
       }
@@ -379,11 +396,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 878,
+          "line": 893,
           "column": 1
         },
         "end": {
-          "line": 895,
+          "line": 910,
           "column": 4
         }
       }
@@ -395,11 +412,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 955,
+          "line": 970,
           "column": 1
         },
         "end": {
-          "line": 972,
+          "line": 987,
           "column": 4
         }
       }
@@ -411,11 +428,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 840,
+          "line": 855,
           "column": 1
         },
         "end": {
-          "line": 857,
+          "line": 872,
           "column": 4
         }
       }
@@ -427,11 +444,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 973,
+          "line": 988,
           "column": 1
         },
         "end": {
-          "line": 991,
+          "line": 1006,
           "column": 4
         }
       }
@@ -443,11 +460,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1011,
+          "line": 1026,
           "column": 1
         },
         "end": {
-          "line": 1029,
+          "line": 1044,
           "column": 4
         }
       }
@@ -459,11 +476,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 936,
+          "line": 951,
           "column": 1
         },
         "end": {
-          "line": 954,
+          "line": 969,
           "column": 4
         }
       }
@@ -475,11 +492,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1071,
+          "line": 1086,
           "column": 1
         },
         "end": {
-          "line": 1090,
+          "line": 1105,
           "column": 4
         }
       }
