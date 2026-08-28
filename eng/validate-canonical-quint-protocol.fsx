@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "6d2280fedff7152563bbbb7ec534418ca8114d2ca3a69021fea628411a96956e"
+    "5f142084be0e1763a6261de39cf78a5ed5e75dce84d751238aa40085ec7a6b90"
 
 let expectedContract =
-    "a0e898c83b8bd61555736a2840d886be7676fd07a39c4502871d92accbdf3cf1"
+    "d8afa5fcccc2a8ecaf9142075f741933b743b5c45afe202faa8d9e96d4717b09"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -194,6 +194,7 @@ match desiredStateEntries with
           "permissionsContract", "repository-visibility|team-access|workflow-permission|environment-protection"
           "securitySupplyChainContract", "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy"
           "phaseContract", "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify"
+          "phaseAuthorityContract", "subject|profile|family|content|authority-revision|plan-outcome|apply-receipt"
           "refusalContract", "unsupported|unauthorized|incomplete|stale|identity-mismatch" ]
 
     for name, expected in expectedFields do
@@ -284,7 +285,7 @@ try
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-9-profile2-r5"
+          "gs2-02-9-profile2-r6"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -806,6 +807,21 @@ try
         "phase-authorization"
         "      desiredStateMayApply(desired, observed),\n    },\n    and {\n      fromPhaseId == \"DSPH-Plan\", toPhaseId == \"DSPH-Verify\""
         "      true,\n    },\n    and {\n      fromPhaseId == \"DSPH-Plan\", toPhaseId == \"DSPH-Verify\""
+
+    requireDesiredStateRed
+        "desired-qualification"
+        "    desired.complete, desired.supported, desired.permissionGranted, desired.outcomeId == \"OBS-Observed\","
+        "    true,"
+
+    requireDesiredStateRed
+        "apply-receipt"
+        "      Set(\"MOUT-Applied\", \"MOUT-Idempotent\").contains(authority.applyReceiptOutcomeId),"
+        "      true,"
+
+    requireDesiredStateRed
+        "phase-authority-binding"
+        "      desiredStatePhaseAuthorityMatches(authority, desired, observed),"
+        "      true,"
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 

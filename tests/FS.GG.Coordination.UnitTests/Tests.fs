@@ -15,7 +15,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "a0e898c83b8bd61555736a2840d886be7676fd07a39c4502871d92accbdf3cf1",
+        "d8afa5fcccc2a8ecaf9142075f741933b743b5c45afe202faa8d9e96d4717b09",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 

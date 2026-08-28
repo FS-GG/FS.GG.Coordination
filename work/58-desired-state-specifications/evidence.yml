@@ -53,8 +53,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r5.trx
-      digest: "sha256:ee736cd6dc40ce34486bd3d92854a7c892d9a2e5d603648d05764f3189a3d2a9"
+      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r6.trx
+      digest: "sha256:c36bad3c65573987958962bb777060b1f7aded29182a7919842b981cbfcfff1f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -80,8 +80,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r5.trx
-      digest: "sha256:ee736cd6dc40ce34486bd3d92854a7c892d9a2e5d603648d05764f3189a3d2a9"
+      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r6.trx
+      digest: "sha256:c36bad3c65573987958962bb777060b1f7aded29182a7919842b981cbfcfff1f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -107,8 +107,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r5.trx
-      digest: "sha256:ee736cd6dc40ce34486bd3d92854a7c892d9a2e5d603648d05764f3189a3d2a9"
+      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r6.trx
+      digest: "sha256:c36bad3c65573987958962bb777060b1f7aded29182a7919842b981cbfcfff1f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -134,8 +134,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r5.trx
-      digest: "sha256:ee736cd6dc40ce34486bd3d92854a7c892d9a2e5d603648d05764f3189a3d2a9"
+      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r6.trx
+      digest: "sha256:c36bad3c65573987958962bb777060b1f7aded29182a7919842b981cbfcfff1f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -161,8 +161,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r5.trx
-      digest: "sha256:ee736cd6dc40ce34486bd3d92854a7c892d9a2e5d603648d05764f3189a3d2a9"
+      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r6.trx
+      digest: "sha256:c36bad3c65573987958962bb777060b1f7aded29182a7919842b981cbfcfff1f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -188,8 +188,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r5.trx
-      digest: "sha256:ee736cd6dc40ce34486bd3d92854a7c892d9a2e5d603648d05764f3189a3d2a9"
+      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r6.trx
+      digest: "sha256:c36bad3c65573987958962bb777060b1f7aded29182a7919842b981cbfcfff1f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
@@ -215,8 +215,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r5.trx
-      digest: "sha256:ee736cd6dc40ce34486bd3d92854a7c892d9a2e5d603648d05764f3189a3d2a9"
+      source: artifacts/test-results/58-desired-state-specifications/architecture-tests-r6.trx
+      digest: "sha256:c36bad3c65573987958962bb777060b1f7aded29182a7919842b981cbfcfff1f"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 141
