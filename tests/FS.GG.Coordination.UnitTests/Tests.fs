@@ -3,6 +3,7 @@
 open System
 open System.IO
 open System.Text
+open System.Text.Json
 open Xunit
 open FS.GG.Coordination.App
 open FS.GG.Coordination.Core
@@ -138,6 +139,39 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Contains("family|ordinal|source|profile|contract|content", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("markdown|json", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("missing|duplicate|substituted|unsupported|incomplete|reordered|stale", CoordinationProtocolGenerated.CanonicalContractJson)
+
+    let repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+
+    use outputManifest =
+        JsonDocument.Parse(
+            File.ReadAllBytes(
+                Path.Combine(
+                    repositoryRoot,
+                    "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/manifest.json"
+                )
+            )
+        )
+
+    let outputRoot = outputManifest.RootElement
+    Assert.Equal("fsgg.quint.compiled-output-manifest/1", outputRoot.GetProperty("schema").GetString())
+    Assert.Equal("9744d83e81779bb883ad5bf4193d060f89d79aefd3e5ed102b8a02fb5f56439c", outputRoot.GetProperty("sourceSha256").GetString())
+    Assert.Equal(CoordinationProtocolGenerated.ContractFingerprint, outputRoot.GetProperty("contractSha256").GetString())
+
+    let outputs = outputRoot.GetProperty("outputs").EnumerateArray() |> Seq.toList
+    Assert.Equal(9, outputs.Length)
+    Assert.Equal<int list>([ 1..9 ], outputs |> List.map (fun output -> output.GetProperty("ordinal").GetInt32()))
+    Assert.All(outputs, fun output ->
+        Assert.True(output.GetProperty("supported").GetBoolean())
+        Assert.True(output.GetProperty("complete").GetBoolean())
+        Assert.True(output.GetProperty("fresh").GetBoolean()))
+
+    let projection = outputs |> List.find (fun output -> output.GetProperty("family").GetString() = "COUT-ProjectionViews")
+    Assert.Equal<string list>(
+        [ "projection-view.json"; "projection-view.md" ],
+        projection.GetProperty("files").EnumerateArray()
+        |> Seq.map (fun file -> file.GetProperty("path").GetString())
+        |> Seq.toList
+    )
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =

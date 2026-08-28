@@ -87,6 +87,9 @@ let contract = Path.Combine(retained, "contract.json")
 let binding = Path.Combine(retained, "Protocol.Generated.fs")
 let sourceMap = Path.Combine(retained, "source-map.json")
 let receipt = Path.Combine(retained, "receipt.json")
+let outputGenerator = Path.Combine(root, "eng/generate-compiled-contract-outputs.fsx")
+let compiledOutputs = Path.Combine(retained, "compiled-outputs")
+let compiledOutputManifest = Path.Combine(compiledOutputs, "manifest.json")
 
 for code, path in
     [ "SOURCE-MISSING", source
@@ -95,7 +98,9 @@ for code, path in
       "CONTRACT-MISSING", contract
       "BINDING-MISSING", binding
       "SOURCE-MAP-MISSING", sourceMap
-      "RECEIPT-MISSING", receipt ] do
+      "RECEIPT-MISSING", receipt
+      "OUTPUT-GENERATOR-MISSING", outputGenerator
+      "COMPILED-OUTPUT-MANIFEST-MISSING", compiledOutputManifest ] do
     requireFile code path
 
 if sha256 source <> expectedSource then
@@ -226,6 +231,89 @@ match compiledOutputEntries with
         if field name <> expected then fail "COMPILED-OUTPUT-SUMMARY" name
 | _ -> fail "COMPILED-OUTPUT-SUMMARY" "expected-one"
 
+let expectedCompiledOutputs =
+    [ ("COUT-Schemas", 1, [ "schemas.json" ])
+      ("COUT-CommandMetadata", 2, [ "command-metadata.json" ])
+      ("COUT-PermissionCensus", 3, [ "permission-census.json" ])
+      ("COUT-MutationCensus", 4, [ "mutation-census.json" ])
+      ("COUT-SettingsPlans", 5, [ "settings-plans.json" ])
+      ("COUT-ProjectionViews", 6, [ "projection-view.json"; "projection-view.md" ])
+      ("COUT-SemanticDiff", 7, [ "semantic-diff.json" ])
+      ("COUT-Diagrams", 8, [ "diagrams.md" ])
+      ("COUT-ModelTestInventory", 9, [ "model-test-inventory.json" ]) ]
+
+let compiledOutputDocument = JsonDocument.Parse(File.ReadAllBytes compiledOutputManifest)
+let compiledOutputRoot = compiledOutputDocument.RootElement
+
+if compiledOutputRoot.GetProperty("schema").GetString() <> "fsgg.quint.compiled-output-manifest/1" then
+    fail "COMPILED-OUTPUT-SCHEMA" "wrong"
+
+if compiledOutputRoot.GetProperty("sourceSha256").GetString() <> expectedSource then
+    fail "COMPILED-OUTPUT-SOURCE" "stale"
+
+if compiledOutputRoot.GetProperty("profile").GetString() <> expectedProfile then
+    fail "COMPILED-OUTPUT-PROFILE" "wrong"
+
+if compiledOutputRoot.GetProperty("contractSha256").GetString() <> expectedContract then
+    fail "COMPILED-OUTPUT-CONTRACT" "stale"
+
+let actualCompiledOutputs = compiledOutputRoot.GetProperty("outputs").EnumerateArray() |> Seq.toList
+
+if actualCompiledOutputs.Length <> expectedCompiledOutputs.Length then
+    fail "COMPILED-OUTPUT-COUNT" (string actualCompiledOutputs.Length)
+
+let expectedFiles =
+    expectedCompiledOutputs
+    |> List.collect (fun (_, _, files) -> files)
+    |> Set.ofList
+    |> Set.add "manifest.json"
+
+let actualFiles =
+    Directory.EnumerateFiles(compiledOutputs, "*", SearchOption.TopDirectoryOnly)
+    |> Seq.map Path.GetFileName
+    |> Set.ofSeq
+
+if actualFiles <> expectedFiles then
+    fail "COMPILED-OUTPUT-FILES" (String.concat "," actualFiles)
+
+for expected, actual in List.zip expectedCompiledOutputs actualCompiledOutputs do
+    let expectedFamily, expectedOrdinal, expectedFamilyFiles = expected
+
+    if actual.GetProperty("family").GetString() <> expectedFamily then
+        fail "COMPILED-OUTPUT-ORDER" expectedFamily
+
+    if actual.GetProperty("ordinal").GetInt32() <> expectedOrdinal then
+        fail "COMPILED-OUTPUT-ORDER" expectedFamily
+
+    if actual.GetProperty("sourceSha256").GetString() <> expectedSource then
+        fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
+
+    if actual.GetProperty("profile").GetString() <> expectedProfile then
+        fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
+
+    if actual.GetProperty("contractSha256").GetString() <> expectedContract then
+        fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
+
+    if not (actual.GetProperty("supported").GetBoolean()) then fail "COMPILED-OUTPUT-UNSUPPORTED" expectedFamily
+    if not (actual.GetProperty("complete").GetBoolean()) then fail "COMPILED-OUTPUT-INCOMPLETE" expectedFamily
+    if not (actual.GetProperty("fresh").GetBoolean()) then fail "COMPILED-OUTPUT-STALE" expectedFamily
+
+    let actualFamilyFiles =
+        actual.GetProperty("files").EnumerateArray()
+        |> Seq.map (fun file -> file.GetProperty("path").GetString())
+        |> Seq.toList
+
+    if actualFamilyFiles <> expectedFamilyFiles then
+        fail "COMPILED-OUTPUT-FAMILY-FILES" expectedFamily
+
+    for file in actual.GetProperty("files").EnumerateArray() do
+        let relative = file.GetProperty("path").GetString()
+        let path = Path.Combine(compiledOutputs, relative)
+        requireFile "COMPILED-OUTPUT-FILE-MISSING" path
+
+        if file.GetProperty("contentSha256").GetString() <> sha256 path then
+            fail "COMPILED-OUTPUT-CONTENT" relative
+
 let trackedExit, trackedQnt, trackedError =
     run root "git" [ "ls-files"; "*.qnt" ] []
 
@@ -341,6 +429,28 @@ try
 
         if not (File.ReadAllBytes(expected).AsSpan().SequenceEqual(File.ReadAllBytes(actual))) then
             fail "STALE-PROJECTION" (Path.GetFileName expected)
+
+    let scratchRetained = Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Generated")
+    Directory.CreateDirectory(scratchRetained) |> ignore
+    File.Copy(Path.Combine(generatedRoot, "quint/contract.json"), Path.Combine(scratchRetained, "contract.json"), true)
+
+    let scratchCompiledOutputs = Path.Combine(scratch, "compiled-outputs")
+
+    requireGreen
+        "COMPILED-OUTPUT-GENERATOR"
+        root
+        "dotnet"
+        [ "fsi"; outputGenerator; "--"; "--root"; scratch; "--output"; scratchCompiledOutputs ]
+        []
+    |> ignore
+
+    for relative in expectedFiles do
+        let expected = Path.Combine(compiledOutputs, relative)
+        let actual = Path.Combine(scratchCompiledOutputs, relative)
+        requireFile "COMPILED-OUTPUT-REGEN-MISSING" actual
+
+        if not (File.ReadAllBytes(expected).AsSpan().SequenceEqual(File.ReadAllBytes(actual))) then
+            fail "COMPILED-OUTPUT-STALE-PROJECTION" relative
 
     let qnt = Path.Combine(generatedRoot, "quint/protocol.qnt")
     requireGreen "QUINT-TYPECHECK" scratch quint [ "typecheck"; qnt ] [] |> ignore

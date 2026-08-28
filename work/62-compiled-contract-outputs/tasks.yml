@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/62-compiled-contract-outputs/plan.md
-    digest: 917d3f69d9d0bcc6ede7e381340a94a574684033870456e4a30d6b4e40f50120
+    digest: 7c3c726bf1f806b6af8320a0109c21d132f4be159360ba765e817bd2e877226e
     schemaVersion: 1
 tasks:
   - id: T001

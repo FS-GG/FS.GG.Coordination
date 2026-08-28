@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "917d3f69d9d0bcc6ede7e381340a94a574684033870456e4a30d6b4e40f50120"
+        "value": "7c3c726bf1f806b6af8320a0109c21d132f4be159360ba765e817bd2e877226e"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "e23799601c3dddebdc1d9c11895ebf1df2bddfd2e972d512ff858fdcec530f71"
+        "value": "e96141ec93715ae1f795206fb8340cd1c8e4361122a343cfbb9dd74a78ee5292"
       }
     }
   ],
@@ -803,7 +803,7 @@
           "path": "work/62-compiled-contract-outputs/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "917d3f69d9d0bcc6ede7e381340a94a574684033870456e4a30d6b4e40f50120"
+            "value": "7c3c726bf1f806b6af8320a0109c21d132f4be159360ba765e817bd2e877226e"
           },
           "schemaVersion": 1
         },
@@ -819,14 +819,14 @@
           "path": "work/62-compiled-contract-outputs/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "e23799601c3dddebdc1d9c11895ebf1df2bddfd2e972d512ff858fdcec530f71"
+            "value": "e96141ec93715ae1f795206fb8340cd1c8e4361122a343cfbb9dd74a78ee5292"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "6ec24944d998b1bd191bb826b659ee3ae4e1bdc982c5c8d346563c4b0380362d"
+        "value": "9c49dabfda7fd6ebcb1f3e1feed0d7708094bd58b7a6b44f71ace65e2f98e4c1"
       },
       "currency": "current"
     }

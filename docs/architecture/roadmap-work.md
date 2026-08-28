@@ -148,11 +148,18 @@ projection views require both Markdown and JSON. Every typed output fact binds f
 ordinal, source, profile, contract, content, support, completeness, and freshness.
 Missing, duplicate, substituted, unsupported, incomplete, reordered, stale, or
 single-format projection sets fail closed. The retained profile-2 projection exports
-the exact ordered family, identity, qualification, view-format, and refusal contracts;
-the adjacent executable `quint-test` fence carries the richer typed facts and focused
-negative controls within the compiler's fixed graph ceiling. This unit remains
-repository-local and stops before deterministic deployment identity or any writer,
-network, hosted runtime, publication, or production authority.
+the exact ordered family, identity, qualification, view-format, and refusal contracts.
+`eng/generate-compiled-contract-outputs.fsx` consumes that contract and the canonical
+literate source to materialize a nine-entry typed manifest plus concrete schema,
+command, permission, mutation, settings-plan, JSON/Markdown projection, semantic-diff,
+Mermaid diagram, and model-test-inventory files. Every entry carries the real source
+SHA-256, profile, contract fingerprint, ordinal, qualification flags, file paths, and
+content digests. The independent validator regenerates the directory and byte-compares
+it; architecture mutants delete, duplicate, substitute, stale, truncate, and alter the
+retained set. The adjacent executable `quint-test` fence remains the bounded semantic
+witness within the compiler's fixed graph ceiling. This unit remains repository-local
+and stops before deterministic deployment identity or any writer, network, hosted
+runtime, publication, or production authority.
 
 ## Command sequence
 
