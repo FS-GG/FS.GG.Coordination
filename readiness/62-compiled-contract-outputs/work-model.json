@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "18d6f836212602b916535083f8895b71cc262959440af0282703d7812959db10"
+        "value": "42b539580514540f2685f5ac9adffe0438af0ca7761986709312861117743672"
       }
     },
     {
@@ -795,7 +795,7 @@
           "path": "work/62-compiled-contract-outputs/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "18d6f836212602b916535083f8895b71cc262959440af0282703d7812959db10"
+            "value": "42b539580514540f2685f5ac9adffe0438af0ca7761986709312861117743672"
           },
           "schemaVersion": 1
         },
@@ -826,7 +826,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "9c49dabfda7fd6ebcb1f3e1feed0d7708094bd58b7a6b44f71ace65e2f98e4c1"
+        "value": "c7656bdede5ad452bc4ae9486569b42a6051431583834df45ccce2d8ccf51a51"
       },
       "currency": "current"
     }

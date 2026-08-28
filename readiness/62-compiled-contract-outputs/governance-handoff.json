@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/62-compiled-contract-outputs/ship.json",
-      "digest": "sha256:ed163d4f8da061f2bddf160f9466dfc0dfbcc6db91051ecc2e2b3905266097dd",
+      "digest": "sha256:3bb8f89b873f2c04fb4c7a8b08ba8fe79d35b8a5f6c9600f2379a4b1b59f422e",
       "schemaVersion": 1
     },
     {
       "path": "readiness/62-compiled-contract-outputs/verify.json",
-      "digest": "sha256:0aec96c66fc3d70c80f34011f034524d8aa6f26ec5465ed97dcee6b5c3123ac0",
+      "digest": "sha256:044e1dbfe40a40e543bb9e4d8882d11ccbfccd6654090e4ede67cd3a860410f7",
       "schemaVersion": 1
     },
     {
       "path": "readiness/62-compiled-contract-outputs/work-model.json",
-      "digest": "sha256:5da49db18d3a4135eb2bd9c90f91923acadb5899ca3d1e512d1fefefdceca6fa",
+      "digest": "sha256:ffb109fc44b59a4330416b1c9b7ec4a5d5036b151dc67a3e58394f6345a6e07b",
       "schemaVersion": 1
     }
   ],
