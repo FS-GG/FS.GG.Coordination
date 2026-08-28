@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "37abda32716640a4c95475d22a10d958eccc29b0c0021d73a2b20fb5a33990df"
+    "1b15ee9aad56fce4e5d7401b9c8a1940d9be3a345c95e2168c12a038d19d3cb9"
 
 let expectedContract =
-    "15610d3149af9a52534b9fa7c78e0c89b7f2b6955af3d8af631ffe69ede2c4fb"
+    "a0e898c83b8bd61555736a2840d886be7676fd07a39c4502871d92accbdf3cf1"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -182,11 +182,22 @@ match desiredStateEntries with
         |> _.GetProperty("value")
         |> _.GetProperty("value")
 
-    if field "familyCount" |> _.GetInt32() <> 8 then fail "DESIRED-STATE-SUMMARY" "family-count"
-    if field "phaseCount" |> _.GetInt32() <> 4 then fail "DESIRED-STATE-SUMMARY" "phase-count"
-    if field "outcomeCount" |> _.GetInt32() <> 7 then fail "DESIRED-STATE-SUMMARY" "outcome-count"
-    if field "authorityClass" |> _.GetString() <> "revision-bound" then fail "DESIRED-STATE-SUMMARY" "authority"
-    if field "executionClass" |> _.GetString() <> "pure-intent-no-writer" then fail "DESIRED-STATE-SUMMARY" "execution"
+    let expectedFields =
+        [ "authorityClass", "revision-bound"
+          "executionClass", "pure-intent-no-writer"
+          "issueSchemaContract", "issue-type|issue-field|field-type|allowed-value"
+          "repositoryPropertiesContract", "property-schema|property-value"
+          "projectsContract", "project-field|project-view|project-workflow|project-visibility|project-membership-policy"
+          "repositoryProfileContract", "ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy"
+          "workflowPinsContract", "reusable-workflow-pin|action-pin"
+          "releasesContract", "release-environment|immutable-release|tag-protection|trusted-publisher"
+          "permissionsContract", "repository-visibility|team-access|workflow-permission|environment-protection"
+          "securitySupplyChainContract", "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy"
+          "phaseContract", "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify"
+          "refusalContract", "unsupported|unauthorized|incomplete|stale|identity-mismatch" ]
+
+    for name, expected in expectedFields do
+        if (field name).GetString() <> expected then fail "DESIRED-STATE-SUMMARY" name
 | _ -> fail "DESIRED-STATE-SUMMARY" "expected-one"
 
 let trackedExit, trackedQnt, trackedError =
@@ -273,7 +284,7 @@ try
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-9-profile2-r3"
+          "gs2-02-9-profile2-r4"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -767,6 +778,11 @@ try
         "    desired.subjectId == observed.subjectId, true,"
 
     requireDesiredStateRed
+        "surface-binding"
+        "      family.requiredPermission == fact.requiredPermission, family.surfaceIds == fact.surfaceIds,"
+        "      family.requiredPermission == fact.requiredPermission, true,"
+
+    requireDesiredStateRed
         "unsupported-classification"
         "    else if (not(observed.supported) or observed.outcomeId == \"OBS-Unsupported\") \"DSPLAN-Unsupported\""
         "    else if (observed.outcomeId == \"OBS-Unsupported\") \"DSPLAN-Ready\""
@@ -785,6 +801,11 @@ try
         "policy-content-binding"
         "    desired.contentDigest == observed.contentDigest,\n  }\n\n  pure def desiredStateSpecificationIsComplete"
         "    true,\n  }\n\n  pure def desiredStateSpecificationIsComplete"
+
+    requireDesiredStateRed
+        "phase-authorization"
+        "      planOutcomeId == \"DSPLAN-Ready\",\n    },\n    and {\n      fromPhaseId == \"DSPH-Plan\", toPhaseId == \"DSPH-Verify\""
+        "      true,\n    },\n    and {\n      fromPhaseId == \"DSPH-Plan\", toPhaseId == \"DSPH-Verify\""
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 

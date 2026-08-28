@@ -133,9 +133,10 @@ repository profiles, workflow pins, releases, permissions, and security/supply-c
 policy. Every fact binds its subject, profile, content, authority revision, support,
 permission, and freshness. Inspect, plan, apply, and verify are closed phases;
 unsupported, unauthorized, incomplete, stale, and identity-mismatched facts fail
-closed instead of becoming a mutation plan. The compiled profile exports a compact
-revision-bound summary, while the adjacent canonical `quint-test` fence carries the
-detailed algebra and witnesses within the compiler's fixed authority-graph ceiling.
+closed instead of becoming a mutation plan. The compiled profile exports a compact,
+revision-bound contract that explicitly names every governed settings surface and the
+closed phase/refusal contract. The adjacent canonical `quint-test` fence carries the
+typed surface sets, transition predicate, and witnesses within the compiler's fixed authority-graph ceiling.
 This unit defines intent and verification only: it adds no writer, network, GitHub
 mutation, deployment, publication, or production authority.
 

@@ -15,7 +15,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "15610d3149af9a52534b9fa7c78e0c89b7f2b6955af3d8af631ffe69ede2c4fb",
+        "a0e898c83b8bd61555736a2840d886be7676fd07a39c4502871d92accbdf3cf1",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -123,6 +123,9 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Contains("ACT-CompactEphemeralProtocolEnvelope", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("VERIFY-DurablePlans", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("DSTATE-Specification", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("project-workflow|project-visibility|project-membership-policy", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy", CoordinationProtocolGenerated.CanonicalContractJson)
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =
