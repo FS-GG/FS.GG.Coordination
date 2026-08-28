@@ -11,7 +11,7 @@ sourceAnalysis: readiness/66-gs2-02-11-deterministic-identity/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/66-gs2-02-11-deterministic-identity/analysis.json
-    digest: 634e1f3d1659feced0ff371f9ed362342f207244a30db234173e77311cac2552
+    digest: 06ef66e28b3f56c3334b18b67dfe282ab5197e29ae6e93166e93b8bcf3296a38
     schemaVersion: 1
   - label: checklist
     path: work/66-gs2-02-11-deterministic-identity/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/66-gs2-02-11-deterministic-identity/plan.md
-    digest: c41b4827578bb80ca928bebed9a4bab2e2e7ab2be080eb85a2702eecaecbf369
+    digest: cbe21c1c181b5c390488efc1f2421b2e2b0d13b22d10c1f9a39e306ace6a13eb
     schemaVersion: 1
   - label: spec
     path: work/66-gs2-02-11-deterministic-identity/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/66-gs2-02-11-deterministic-identity/tasks.yml
-    digest: 59d83aa15dcc74899084649bc7edba8ae0c85e588f12f07e77205e99bea0d9d1
+    digest: 4c7e307a3aa92fbfd60f04cd33337534e87d86d61584a22e1994a7fe391154e6
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -486,10 +486,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -513,10 +513,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -540,10 +540,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
-      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digest: "sha256:9d6fdb640e3716a589f7bd867e2cd8c5839bd42873305861103e9cecaa3f2f11"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 141
+      passed: 143
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]

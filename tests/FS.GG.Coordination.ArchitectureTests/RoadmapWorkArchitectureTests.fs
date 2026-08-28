@@ -41,6 +41,11 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .", qualification)
     Assert.Contains("quint-linux-amd64", qualification)
     Assert.Contains("sha256sum --check --status", qualification)
+    Assert.Contains("fsgg-sdd\" analyze --root . --work 66-gs2-02-11-deterministic-identity", qualification)
+    Assert.Contains("fsgg-sdd\" verify --root . --work 66-gs2-02-11-deterministic-identity", qualification)
+    Assert.Contains("fsgg-sdd\" ship --root . --work 66-gs2-02-11-deterministic-identity", qualification)
+    Assert.Contains("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0", workflow)
+    Assert.Contains("/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true", workflow)
 
 [<Fact>]
 let ``hosted canonical Quint gate cannot silently downgrade to static validation`` () =
