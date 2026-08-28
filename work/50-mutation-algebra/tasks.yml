@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/50-mutation-algebra/plan.md
-    digest: 02520205baf51484ba2327960f45a11d6d7487cc56d077dc82fd770541709dc9
+    digest: 2bf4d677567e5f75516b1482f014fa76c1f94d1944928a8c440213488b01babf
     schemaVersion: 1
 tasks:
   - id: T001
