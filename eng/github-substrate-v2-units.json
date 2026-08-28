@@ -256,6 +256,21 @@
         { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
       ],
       "contractSha256": "0d486d024dab9a528260f1b9075d9e7b758e7f455580ffa0c6077f8209e23965"
+    },
+    {
+      "id": "GS2-02.11",
+      "title": "Prove deterministic identity",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-02.10"],
+      "permissionCeiling": ["repository-local deterministic identity, canonical normalization, semantic diff, and qualification evidence", "no network, GitHub mutation, independent qualification-system semantics, hosted runtime, deployment, publication, or production write authority"],
+      "exitGate": "equivalent literate Quint forms normalize identically, semantic changes produce stable reviewable diffs, prose-only changes cannot alter behavioral identity, and unsupported source, extractor, Quint, profile, or schema versions fail before execution under Q1 plus the pure portion of Q2",
+      "qGates": ["Q1", "Q2"],
+      "gateCommands": ["canonical-quint-compiler", "canonical-quint-pure-model"],
+      "gateContracts": [
+        { "id": "canonical-quint-compiler", "qGate": "Q1", "commandSha256": "ab29099d8e0be9da2bc6611c94acb8706eb15f36158651b8ed6b5e3829bb62a1" },
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
+      ],
+      "contractSha256": "d1a50fef666ea9adc9e7710100d008213f28fbb88068a20a347a193764fd33be"
     }
   ]
 }
