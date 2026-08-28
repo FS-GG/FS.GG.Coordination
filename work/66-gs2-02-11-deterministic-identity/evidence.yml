@@ -1,0 +1,551 @@
+schemaVersion: 1
+workId: 66-gs2-02-11-deterministic-identity
+stage: evidence
+status: evidenceReady
+sourceSpec: work/66-gs2-02-11-deterministic-identity/spec.md
+sourceClarifications: work/66-gs2-02-11-deterministic-identity/clarifications.md
+sourceChecklist: work/66-gs2-02-11-deterministic-identity/checklist.md
+sourcePlan: work/66-gs2-02-11-deterministic-identity/plan.md
+sourceTasks: work/66-gs2-02-11-deterministic-identity/tasks.yml
+sourceAnalysis: readiness/66-gs2-02-11-deterministic-identity/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/66-gs2-02-11-deterministic-identity/analysis.json
+    digest: 634e1f3d1659feced0ff371f9ed362342f207244a30db234173e77311cac2552
+    schemaVersion: 1
+  - label: checklist
+    path: work/66-gs2-02-11-deterministic-identity/checklist.md
+    digest: 005fd569138ac2b70ad011cea4d49336b6f7f277b8d550d75fffaa0301cffae6
+    schemaVersion: 1
+  - label: clarifications
+    path: work/66-gs2-02-11-deterministic-identity/clarifications.md
+    digest: ac4793c7fbfeec998e3d302443968ef25e5199b53b22e1bbb2544fce9ba55524
+    schemaVersion: 1
+  - label: plan
+    path: work/66-gs2-02-11-deterministic-identity/plan.md
+    digest: c41b4827578bb80ca928bebed9a4bab2e2e7ab2be080eb85a2702eecaecbf369
+    schemaVersion: 1
+  - label: spec
+    path: work/66-gs2-02-11-deterministic-identity/spec.md
+    digest: e5491ee927fb6bff2415582c30ca3254200f0d5e05b9449801ee2adc8de7e513
+    schemaVersion: 1
+  - label: tasks
+    path: work/66-gs2-02-11-deterministic-identity/tasks.yml
+    digest: 59d83aa15dcc74899084649bc7edba8ae0c85e588f12f07e77205e99bea0d9d1
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003, PD-004, PD-005]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003, PD-005]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-canonical-quint-protocol.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx
+      digest: "sha256:c687fbdc046e959876cae4cadf44260d71db79dcd906e42d358a195c416dc6e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 141
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

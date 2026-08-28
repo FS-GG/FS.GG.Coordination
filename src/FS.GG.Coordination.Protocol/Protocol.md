@@ -1,4 +1,4 @@
-# GS2-02.10 canonical coordination protocol
+# GS2-02.11 canonical coordination protocol
 
 This document is the sole authored source for the coordination protocol baseline. Every behavioral
 fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
@@ -11,8 +11,8 @@ added typed retained protocol streams; GS2-02.7 added the closed mutation algebr
 ordered resumable durable plans. This unit adds closed desired-state families and pure inspect, plan,
 apply-intent, and verify classification for GitHub configuration. This unit adds a closed catalogue
 of deterministic compiled-contract output families and typed qualification of their identity,
-content, completeness, support, freshness, and order. Later GS2-02 units refine deterministic
-deployment identity. No network writer, hosted runtime, reconciler, plan executor, or production
+content, completeness, support, freshness, and order. This unit binds canonical typed-effect behavior
+to an exact five-part version tuple and stable semantic-diff projection. No network writer or production
 mutation authority is defined here.
 
 ```quint protocol.qnt +=
@@ -252,10 +252,10 @@ module CoordinationProtocol {
   pure val compiledOutputSpecificationCatalogue = Set(
     { id: "COUT-Specification", kind: "compiledOutputSpecification",
       familyContract: "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory",
-      identityContract: "family|ordinal|source|profile|contract|content",
+      identityContract: "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content",
       qualificationContract: "supported|complete|fresh",
-      projectionViewFormats: "markdown|json",
-      refusalContract: "missing|duplicate|substituted|unsupported|incomplete|reordered|stale" }
+      projectionViewFormats: "markdown|json", normalizationAuthority: "typed-effect-json",
+      refusalContract: "missing|duplicate|substituted|unsupported|incomplete|reordered|stale", versionContract: "fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2", semanticDiffContract: "ordinal|json-pointer|value-sha256" }
   )
 
   pure val relationshipCatalogue = Set(
@@ -1157,6 +1157,50 @@ inverts each material binding and preserves the earlier bounded invariants.
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
 
+  type DeterministicVersionTuple = {
+    sourceVersion: str, extractorVersion: str, quintVersion: str,
+    profileVersion: str, schemaVersion: str,
+  }
+
+  type DeterministicIdentity = {
+    sourceSha256: str, behavioralSha256: str, contractSha256: str,
+    normalizationAuthority: str, versions: DeterministicVersionTuple,
+    semanticDiffRows: List[str], supported: bool, complete: bool, fresh: bool,
+  }
+
+  pure val supportedDeterministicVersions = {
+    sourceVersion: "fsgg.quint.literate-source/1",
+    extractorVersion: "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0",
+    quintVersion: "sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
+    profileVersion: "fsgg-quint-profile/2",
+    schemaVersion: "fsgg.quint.compiled-contract/v2",
+  }
+
+  pure def deterministicVersionsAreSupported(versions: DeterministicVersionTuple): bool =
+    versions == supportedDeterministicVersions
+
+  pure def deterministicIdentityIsQualified(identity: DeterministicIdentity): bool = and {
+    identity.sourceSha256 != "", identity.behavioralSha256 != "", identity.contractSha256 != "",
+    identity.normalizationAuthority == "typed-effect-json",
+    deterministicVersionsAreSupported(identity.versions), identity.supported, identity.complete, identity.fresh,
+  }
+
+  pure def behavioralIdentityIsEquivalent(left: DeterministicIdentity, right: DeterministicIdentity): bool = and {
+    deterministicIdentityIsQualified(left), deterministicIdentityIsQualified(right),
+    left.behavioralSha256 == right.behavioralSha256,
+    left.contractSha256 == right.contractSha256,
+    left.versions == right.versions,
+    left.semanticDiffRows == right.semanticDiffRows,
+  }
+
+  pure val canonicalDeterministicIdentity = {
+    sourceSha256: "source-canonical", behavioralSha256: "behavior-canonical",
+    contractSha256: "contract-canonical", normalizationAuthority: "typed-effect-json",
+    versions: supportedDeterministicVersions,
+    semanticDiffRows: List("1:/catalogue/0:row-a", "2:/properties/0:row-b"),
+    supported: true, complete: true, fresh: true,
+  }
+
   type CompiledOutputFamily = {
     id: str, ordinal: int, contentContract: str, formats: Set[str],
   }
@@ -1922,6 +1966,41 @@ module CoordinationProtocolTests {
           Set("json"), "digest-projection-views")
       ))
     )),
+  }
+
+  run testDeterministicIdentityEquivalentAuthoringFormsConverge = and {
+    behavioralIdentityIsEquivalent(
+      canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, sourceSha256: "source-equivalent-authoring" }
+    ),
+    behavioralIdentityIsEquivalent(
+      canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, sourceSha256: "source-prose-only" }
+    ),
+  }
+
+  run testDeterministicIdentitySemanticChangesRemainReviewable = and {
+    not(behavioralIdentityIsEquivalent(
+      canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, behavioralSha256: "behavior-changed",
+        semanticDiffRows: List("1:/catalogue/0:row-changed", "2:/properties/0:row-b") }
+    )),
+    canonicalDeterministicIdentity.semanticDiffRows ==
+      List("1:/catalogue/0:row-a", "2:/properties/0:row-b"),
+  }
+
+  run testDeterministicIdentityUnsupportedVersionsFailClosed = and {
+    deterministicIdentityIsQualified(canonicalDeterministicIdentity),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, sourceVersion: "unsupported-source" } })),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, extractorVersion: "unsupported-extractor" } })),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, quintVersion: "unsupported-quint" } })),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, profileVersion: "unsupported-profile" } })),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, schemaVersion: "unsupported-schema" } })),
   }
 }
 ```

@@ -2,7 +2,9 @@ open System
 open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
+open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 
 let expectedPackage = "FS.GG.SDD.Artifacts/1.5.0"
 let expectedProfile = "fsgg-quint-profile/2"
@@ -16,10 +18,18 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "9744d83e81779bb883ad5bf4193d060f89d79aefd3e5ed102b8a02fb5f56439c"
+    "6b190fa12ebd883e8131c8f385943ae172da03a4c1856961fe22feb8bfd737d2"
 
 let expectedContract =
-    "90dd92eca75971c2159efdc2cfa3c168f74eab491bf52568580e2526d49a7ee3"
+    "9c89970f289f711a4b58181fd330d914ec339dfb13e3af56da36ca6cf5070a4c"
+
+let expectedBehavior =
+    "bd1e92bae8f0ffd1598019b0d9c4510f25f139931b743807944962b89f758883"
+
+let expectedSourceVersion = "fsgg.quint.literate-source/1"
+let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
+let expectedQuintVersion = "sha256:" + expectedQuint
+let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -222,10 +232,13 @@ match compiledOutputEntries with
 
     let expectedFields =
         [ "familyContract", "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory"
-          "identityContract", "family|ordinal|source|profile|contract|content"
+          "identityContract", "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content"
           "qualificationContract", "supported|complete|fresh"
           "projectionViewFormats", "markdown|json"
-          "refusalContract", "missing|duplicate|substituted|unsupported|incomplete|reordered|stale" ]
+          "refusalContract", "missing|duplicate|substituted|unsupported|incomplete|reordered|stale"
+          "normalizationAuthority", "typed-effect-json"
+          "versionContract", String.concat "|" [ expectedSourceVersion; expectedExtractorVersion; expectedQuintVersion; expectedProfile; expectedSchemaVersion ]
+          "semanticDiffContract", "ordinal|json-pointer|value-sha256" ]
 
     for name, expected in expectedFields do
         if field name <> expected then fail "COMPILED-OUTPUT-SUMMARY" name
@@ -245,17 +258,51 @@ let expectedCompiledOutputs =
 let compiledOutputDocument = JsonDocument.Parse(File.ReadAllBytes compiledOutputManifest)
 let compiledOutputRoot = compiledOutputDocument.RootElement
 
+let receiptDocument = JsonDocument.Parse(File.ReadAllBytes receipt)
+let receiptRoot = receiptDocument.RootElement
+
+if receiptRoot.GetProperty("sourceSha256").GetString() <> expectedSource then
+    fail "RECEIPT-SOURCE" "stale"
+
+if receiptRoot.GetProperty("contractSha256").GetString() <> expectedContract then
+    fail "RECEIPT-CONTRACT" "stale"
+
+if receiptRoot.GetProperty("typedEffectSha256").GetString() <> expectedBehavior then
+    fail "RECEIPT-BEHAVIOR" "stale"
+
+let validateDeterministicIdentity code (identity: JsonElement) =
+    if identity.GetProperty("schema").GetString() <> "fsgg.quint.deterministic-identity/1" then fail code "schema"
+    if identity.GetProperty("sourceSha256").GetString() <> expectedSource then fail code "source"
+    if identity.GetProperty("behavioralSha256").GetString() <> expectedBehavior then fail code "behavior"
+    if identity.GetProperty("contractSha256").GetString() <> expectedContract then fail code "contract"
+    if identity.GetProperty("normalizationAuthority").GetString() <> "typed-effect-json" then fail code "normalization"
+
+    let versions = identity.GetProperty("versions")
+    if versions.GetProperty("source").GetString() <> expectedSourceVersion then fail "SOURCE-VERSION" "unsupported"
+    if versions.GetProperty("extractor").GetString() <> expectedExtractorVersion then fail "EXTRACTOR-VERSION" "unsupported"
+    if versions.GetProperty("quint").GetString() <> expectedQuintVersion then fail "QUINT-VERSION" "unsupported"
+    if versions.GetProperty("profile").GetString() <> expectedProfile then fail "PROFILE-VERSION" "unsupported"
+    if versions.GetProperty("schema").GetString() <> expectedSchemaVersion then fail "SCHEMA-VERSION" "unsupported"
+    if not (identity.GetProperty("supported").GetBoolean()) then fail code "unsupported"
+    if not (identity.GetProperty("complete").GetBoolean()) then fail code "incomplete"
+    if not (identity.GetProperty("fresh").GetBoolean()) then fail code "stale"
+
 if compiledOutputRoot.GetProperty("schema").GetString() <> "fsgg.quint.compiled-output-manifest/1" then
     fail "COMPILED-OUTPUT-SCHEMA" "wrong"
 
 if compiledOutputRoot.GetProperty("sourceSha256").GetString() <> expectedSource then
     fail "COMPILED-OUTPUT-SOURCE" "stale"
 
+if compiledOutputRoot.GetProperty("behavioralSha256").GetString() <> expectedBehavior then
+    fail "COMPILED-OUTPUT-BEHAVIOR" "stale"
+
 if compiledOutputRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "COMPILED-OUTPUT-PROFILE" "wrong"
 
 if compiledOutputRoot.GetProperty("contractSha256").GetString() <> expectedContract then
     fail "COMPILED-OUTPUT-CONTRACT" "stale"
+
+validateDeterministicIdentity "COMPILED-OUTPUT-IDENTITY" (compiledOutputRoot.GetProperty("identity"))
 
 let actualCompiledOutputs = compiledOutputRoot.GetProperty("outputs").EnumerateArray() |> Seq.toList
 
@@ -288,11 +335,16 @@ for expected, actual in List.zip expectedCompiledOutputs actualCompiledOutputs d
     if actual.GetProperty("sourceSha256").GetString() <> expectedSource then
         fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
 
+    if actual.GetProperty("behavioralSha256").GetString() <> expectedBehavior then
+        fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
+
     if actual.GetProperty("profile").GetString() <> expectedProfile then
         fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
 
     if actual.GetProperty("contractSha256").GetString() <> expectedContract then
         fail "COMPILED-OUTPUT-IDENTITY" expectedFamily
+
+    validateDeterministicIdentity "COMPILED-OUTPUT-IDENTITY" (actual.GetProperty("identity"))
 
     if not (actual.GetProperty("supported").GetBoolean()) then fail "COMPILED-OUTPUT-UNSUPPORTED" expectedFamily
     if not (actual.GetProperty("complete").GetBoolean()) then fail "COMPILED-OUTPUT-INCOMPLETE" expectedFamily
@@ -392,13 +444,13 @@ try
           "--root"
           scratch
           "--work"
-          "62-compiled-contract-outputs"
+          "66-gs2-02-11-deterministic-identity"
           "--title"
-          "GS2-02.10 compiled-contract outputs"
+          "GS2-02.11 deterministic identity"
           "--agent"
-          "dunlin-3f64"
+          "swift-5db0"
           "--session"
-          "gs2-02-10-profile2-r4"
+          "gs2-02-11-profile2-r1"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -412,10 +464,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "62-compiled-contract-outputs" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "66-gs2-02-11-deterministic-identity" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/62-compiled-contract-outputs")
+    let generatedRoot = Path.Combine(scratch, "readiness/66-gs2-02-11-deterministic-identity")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -433,6 +485,8 @@ try
     let scratchRetained = Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Generated")
     Directory.CreateDirectory(scratchRetained) |> ignore
     File.Copy(Path.Combine(generatedRoot, "quint/contract.json"), Path.Combine(scratchRetained, "contract.json"), true)
+    File.Copy(Path.Combine(generatedRoot, "typed-authority.json"), Path.Combine(scratchRetained, "typed-authority.json"), true)
+    File.Copy(Path.Combine(generatedRoot, "quint/receipt.json"), Path.Combine(scratchRetained, "receipt.json"), true)
 
     let scratchCompiledOutputs = Path.Combine(scratch, "compiled-outputs")
 
@@ -451,6 +505,152 @@ try
 
         if not (File.ReadAllBytes(expected).AsSpan().SequenceEqual(File.ReadAllBytes(actual))) then
             fail "COMPILED-OUTPUT-STALE-PROJECTION" relative
+
+    let canonicalReceipt = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(generatedRoot, "quint/receipt.json"))).RootElement
+    let canonicalBehavior = canonicalReceipt.GetProperty("typedEffectSha256").GetString()
+    let canonicalSource = canonicalReceipt.GetProperty("sourceSha256").GetString()
+    let canonicalContract = canonicalReceipt.GetProperty("contractSha256").GetString()
+
+    let authorVariant name (sourceText: string) =
+        let variantRoot = Path.Combine(scratch, name)
+        let variantSource = Path.Combine(variantRoot, "src/FS.GG.Coordination.Protocol/Protocol.md")
+        let variantSelectors = Path.Combine(variantRoot, "src/FS.GG.Coordination.Protocol/Protocol.bindings.json")
+        Directory.CreateDirectory(Path.GetDirectoryName variantSource) |> ignore
+        File.WriteAllText(variantSource, sourceText, UTF8Encoding(false))
+        File.Copy(selectors, variantSelectors)
+        let work = $"66-gs2-02-11-{name}"
+
+        requireGreen
+            ($"AUTHOR-{name.ToUpperInvariant()}")
+            root
+            cli
+            [ "typed-sdd"; "author"; "--root"; variantRoot; "--work"; work
+              "--title"; $"GS2-02.11 {name}"; "--agent"; "swift-5db0"; "--session"; $"gs2-02-11-{name}"
+              "--backend"; "quint-specification-v1"; "--profile"; expectedProfile
+              "--source"; "src/FS.GG.Coordination.Protocol/Protocol.md"
+              "--bindings"; "src/FS.GG.Coordination.Protocol/Protocol.bindings.json"; "--cache"; cache ]
+            []
+        |> ignore
+
+        let variantGenerated = Path.Combine(variantRoot, "readiness", work, "quint")
+        let variantReceiptPath = Path.Combine(variantGenerated, "receipt.json")
+        requireFile "VARIANT-RECEIPT" variantReceiptPath
+        let variantReceipt = JsonDocument.Parse(File.ReadAllBytes variantReceiptPath).RootElement
+        let identity =
+            variantReceipt.GetProperty("sourceSha256").GetString(),
+            variantReceipt.GetProperty("typedEffectSha256").GetString(),
+            variantReceipt.GetProperty("contractSha256").GetString()
+
+        let rawTypedEffect = Path.Combine(variantGenerated, "typed-effect.json")
+        if File.Exists rawTypedEffect then File.Delete rawTypedEffect
+        identity
+
+    let canonicalText = File.ReadAllText(source, Encoding.UTF8)
+    let triviaFixture = "}\n```\n\nThe executable witness"
+    if not (canonicalText.Contains(triviaFixture, StringComparison.Ordinal)) then fail "EQUIVALENT-AUTHORING" "trivia fixture absent"
+    let equivalentText = canonicalText.Replace(triviaFixture, "  // semantically inert authoring trivia\n}\n```\n\nThe executable witness")
+    let equivalentSource, equivalentBehavior, equivalentContract = authorVariant "equivalent-quint-trivia" equivalentText
+
+    if equivalentSource = canonicalSource then fail "EQUIVALENT-AUTHORING" "raw source did not change"
+    if equivalentBehavior <> canonicalBehavior then fail "EQUIVALENT-AUTHORING" "behavior changed"
+    if equivalentContract <> canonicalContract then fail "EQUIVALENT-AUTHORING" "public contract changed"
+
+    let proseFixture = "This document is the sole authored source for the coordination protocol baseline."
+    if not (canonicalText.Contains(proseFixture, StringComparison.Ordinal)) then fail "PROSE-ONLY" "fixture absent"
+    let proseText = canonicalText.Replace(proseFixture, proseFixture + " Review prose may evolve independently.")
+    let proseSource, proseBehavior, proseContract = authorVariant "prose-only" proseText
+
+    if proseSource = canonicalSource then fail "PROSE-ONLY" "raw source did not change"
+    if proseBehavior <> canonicalBehavior then fail "PROSE-ONLY" "behavior changed"
+    if proseContract <> canonicalContract then fail "PROSE-ONLY" "public contract changed"
+
+    let semanticFixture = "  action observeProtocolEvidence: bool = all {\n    evidenceObserved' = true,"
+    if not (canonicalText.Contains(semanticFixture, StringComparison.Ordinal)) then fail "SEMANTIC-CHANGE" "fixture absent"
+    let semanticText =
+        canonicalText.Replace(
+            semanticFixture,
+            "  action observeProtocolEvidence: bool = all {\n    evidenceObserved' = lifecycleStatusCurrent,"
+        )
+    let _, semanticBehavior, semanticContract = authorVariant "semantic-change" semanticText
+
+    if semanticBehavior = canonicalBehavior then fail "SEMANTIC-CHANGE" "behavior did not change"
+    if semanticContract = canonicalContract then fail "SEMANTIC-CHANGE" "public contract did not change"
+
+    let semanticVariantRoot = Path.Combine(scratch, "semantic-change")
+    let semanticGenerated = Path.Combine(semanticVariantRoot, "readiness/66-gs2-02-11-semantic-change")
+    let semanticRetained = Path.Combine(semanticVariantRoot, "src/FS.GG.Coordination.Protocol/Generated")
+    Directory.CreateDirectory(semanticRetained) |> ignore
+    File.Copy(Path.Combine(semanticGenerated, "typed-authority.json"), Path.Combine(semanticRetained, "typed-authority.json"), true)
+    File.Copy(Path.Combine(semanticGenerated, "quint/contract.json"), Path.Combine(semanticRetained, "contract.json"), true)
+    File.Copy(Path.Combine(semanticGenerated, "quint/receipt.json"), Path.Combine(semanticRetained, "receipt.json"), true)
+    let semanticOutputs = Path.Combine(semanticVariantRoot, "compiled-outputs")
+
+    requireGreen
+        "SEMANTIC-DIFF-GENERATOR"
+        root
+        "dotnet"
+        [ "fsi"; outputGenerator; "--"; "--root"; semanticVariantRoot; "--output"; semanticOutputs ]
+        []
+    |> ignore
+
+    let readSemanticRows path =
+        let document = JsonDocument.Parse(File.ReadAllBytes path)
+        let rows = document.RootElement.GetProperty("content").GetProperty("rows").EnumerateArray() |> Seq.toList
+        let paths = rows |> List.map (fun row -> row.GetProperty("path").GetString())
+        if paths <> List.sort paths then fail "SEMANTIC-DIFF-ORDER" path
+        for ordinal, row in rows |> List.indexed do
+            if row.GetProperty("ordinal").GetInt32() <> ordinal + 1 then fail "SEMANTIC-DIFF-ORDINAL" path
+        rows
+        |> Seq.map (fun row -> row.GetProperty("path").GetString(), row.GetProperty("valueSha256").GetString())
+        |> Map.ofSeq
+
+    let canonicalRows = readSemanticRows (Path.Combine(compiledOutputs, "semantic-diff.json"))
+    let changedRows = readSemanticRows (Path.Combine(semanticOutputs, "semantic-diff.json"))
+    let changedPaths =
+        Set.union (canonicalRows |> Map.keys |> Set.ofSeq) (changedRows |> Map.keys |> Set.ofSeq)
+        |> Set.filter (fun path -> Map.tryFind path canonicalRows <> Map.tryFind path changedRows)
+
+    if not (changedPaths.Contains "/behavioralSha256") then fail "SEMANTIC-DIFF-BEHAVIOR" "missing"
+    if changedPaths.Count < 2 then fail "SEMANTIC-DIFF-CONTRACT" "no public contract row changed"
+
+    let requireGeneratorRed (name: string) (fieldName: string) (replacement: string) (expectedCode: string) =
+        let mutantRoot = Path.Combine(scratch, "generator-mutant-" + name)
+        let mutantSource = Path.Combine(mutantRoot, "src/FS.GG.Coordination.Protocol/Protocol.md")
+        let mutantRetained = Path.Combine(mutantRoot, "src/FS.GG.Coordination.Protocol/Generated")
+        Directory.CreateDirectory(Path.GetDirectoryName mutantSource) |> ignore
+        Directory.CreateDirectory(mutantRetained) |> ignore
+        File.Copy(source, mutantSource)
+        File.Copy(authority, Path.Combine(mutantRetained, "typed-authority.json"))
+        File.Copy(receipt, Path.Combine(mutantRetained, "receipt.json"))
+
+        let mutantContract = JsonNode.Parse(File.ReadAllText(contract))
+        let catalogue = mutantContract["catalogue"].AsArray()
+        let specification =
+            catalogue
+            |> Seq.find (fun entry -> entry["id"].GetValue<string>() = "COUT-Specification")
+        let fields = (specification["value"]["fields"]).AsArray()
+        let field = fields |> Seq.find (fun entry -> entry["name"].GetValue<string>() = fieldName)
+        field["value"]["value"] <- JsonValue.Create(replacement)
+        File.WriteAllText(Path.Combine(mutantRetained, "contract.json"), mutantContract.ToJsonString(), UTF8Encoding(false))
+
+        let exitCode, output, error =
+            run root "dotnet" [ "fsi"; outputGenerator; "--"; "--root"; mutantRoot ] []
+
+        if exitCode = 0 then fail "GENERATOR-NEGATIVE-CONTROL" ($"{name}: mutant passed")
+        if not ((output + "\n" + error).Contains($"code={expectedCode}", StringComparison.Ordinal)) then
+            fail "GENERATOR-NEGATIVE-CONTROL" ($"{name}: expected={expectedCode}; stdout={output}; stderr={error}")
+
+    let supportedVersions = [ expectedSourceVersion; expectedExtractorVersion; expectedQuintVersion; expectedProfile; expectedSchemaVersion ]
+    let versionMutation index replacement =
+        supportedVersions |> List.mapi (fun position value -> if position = index then replacement else value) |> String.concat "|"
+
+    requireGeneratorRed "source-version" "versionContract" (versionMutation 0 "fsgg.quint.literate-source/999") "SOURCE-VERSION"
+    requireGeneratorRed "extractor-version" "versionContract" (versionMutation 1 "quint-specification-v1@FS.GG.SDD.Artifacts/999") "EXTRACTOR-VERSION"
+    requireGeneratorRed "quint-version" "versionContract" (versionMutation 2 "sha256:substituted") "QUINT-VERSION"
+    requireGeneratorRed "profile-version" "versionContract" (versionMutation 3 "fsgg-quint-profile/999") "PROFILE-VERSION"
+    requireGeneratorRed "schema-version" "versionContract" (versionMutation 4 "fsgg.quint.compiled-contract/v999") "SCHEMA-VERSION"
+    requireGeneratorRed "normalization-authority" "normalizationAuthority" "raw-markdown" "NORMALIZATION-AUTHORITY"
+    requireGeneratorRed "semantic-diff-contract" "semanticDiffContract" "unordered-raw-values" "SEMANTIC-DIFF-CONTRACT"
 
     let qnt = Path.Combine(generatedRoot, "quint/protocol.qnt")
     requireGreen "QUINT-TYPECHECK" scratch quint [ "typecheck"; qnt ] [] |> ignore

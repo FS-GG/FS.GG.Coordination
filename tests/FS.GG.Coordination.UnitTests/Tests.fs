@@ -16,7 +16,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "90dd92eca75971c2159efdc2cfa3c168f74eab491bf52568580e2526d49a7ee3",
+        "9c89970f289f711a4b58181fd330d914ec339dfb13e3af56da36ca6cf5070a4c",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -136,7 +136,10 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Contains("ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory", CoordinationProtocolGenerated.CanonicalContractJson)
-    Assert.Contains("family|ordinal|source|profile|contract|content", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("typed-effect-json", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("ordinal|json-pointer|value-sha256", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("markdown|json", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("missing|duplicate|substituted|unsupported|incomplete|reordered|stale", CoordinationProtocolGenerated.CanonicalContractJson)
 
@@ -154,13 +157,26 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
 
     let outputRoot = outputManifest.RootElement
     Assert.Equal("fsgg.quint.compiled-output-manifest/1", outputRoot.GetProperty("schema").GetString())
-    Assert.Equal("9744d83e81779bb883ad5bf4193d060f89d79aefd3e5ed102b8a02fb5f56439c", outputRoot.GetProperty("sourceSha256").GetString())
+    Assert.Equal("6b190fa12ebd883e8131c8f385943ae172da03a4c1856961fe22feb8bfd737d2", outputRoot.GetProperty("sourceSha256").GetString())
+    Assert.Equal("bd1e92bae8f0ffd1598019b0d9c4510f25f139931b743807944962b89f758883", outputRoot.GetProperty("behavioralSha256").GetString())
     Assert.Equal(CoordinationProtocolGenerated.ContractFingerprint, outputRoot.GetProperty("contractSha256").GetString())
+
+    let identity = outputRoot.GetProperty("identity")
+    Assert.Equal("fsgg.quint.deterministic-identity/1", identity.GetProperty("schema").GetString())
+    Assert.Equal("typed-effect-json", identity.GetProperty("normalizationAuthority").GetString())
+    let versions = identity.GetProperty("versions")
+    Assert.Equal("fsgg.quint.literate-source/1", versions.GetProperty("source").GetString())
+    Assert.Equal("quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0", versions.GetProperty("extractor").GetString())
+    Assert.Equal("sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f", versions.GetProperty("quint").GetString())
+    Assert.Equal("fsgg-quint-profile/2", versions.GetProperty("profile").GetString())
+    Assert.Equal("fsgg.quint.compiled-contract/v2", versions.GetProperty("schema").GetString())
 
     let outputs = outputRoot.GetProperty("outputs").EnumerateArray() |> Seq.toList
     Assert.Equal(9, outputs.Length)
     Assert.Equal<int list>([ 1..9 ], outputs |> List.map (fun output -> output.GetProperty("ordinal").GetInt32()))
     Assert.All(outputs, fun output ->
+        Assert.Equal(outputRoot.GetProperty("behavioralSha256").GetString(), output.GetProperty("behavioralSha256").GetString())
+        Assert.Equal(identity.GetRawText(), output.GetProperty("identity").GetRawText())
         Assert.True(output.GetProperty("supported").GetBoolean())
         Assert.True(output.GetProperty("complete").GetBoolean())
         Assert.True(output.GetProperty("fresh").GetBoolean()))
@@ -171,6 +187,26 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         projection.GetProperty("files").EnumerateArray()
         |> Seq.map (fun file -> file.GetProperty("path").GetString())
         |> Seq.toList
+    )
+
+    use semanticDiff =
+        JsonDocument.Parse(
+            File.ReadAllBytes(
+                Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/semantic-diff.json")
+            )
+        )
+
+    let rows = semanticDiff.RootElement.GetProperty("content").GetProperty("rows").EnumerateArray() |> Seq.toList
+    Assert.NotEmpty(rows)
+    Assert.Equal<int list>([ 1..rows.Length ], rows |> List.map (fun row -> row.GetProperty("ordinal").GetInt32()))
+    Assert.Equal<string list>(
+        rows |> List.map (fun row -> row.GetProperty("path").GetString()) |> List.sort,
+        rows |> List.map (fun row -> row.GetProperty("path").GetString())
+    )
+    Assert.Contains(rows, fun row -> row.GetProperty("path").GetString() = "/behavioralSha256")
+    Assert.False(
+        File.Exists(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Protocol/Generated/typed-effect.json")),
+        "raw typed IR must remain private and must not be retained"
     )
 
 [<Fact>]
