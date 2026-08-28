@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "02e785935f1f5a21fd0ed3d1bc14f3b1ab66cdfafa4ddd43b04e5d3d485006fe"
+    "9422eed4810553f4d5cf5b046d66c99d7d4e4f2e7f4163cf188d12a95ae516df"
 
 let expectedContract =
-    "f81a44c902842acb5623f1f5390253ff01ff795ea0eed8ec5806bed405343fef"
+    "d1ac357cbc8c84c8668914b514196a04b3ca297411ccaf66d43f3260b1f8f4fb"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -134,7 +134,7 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 124 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 132 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
@@ -156,6 +156,18 @@ let expectedMutationIds =
 
 if mutationIds <> expectedMutationIds then
     fail "MUTATION-CATALOGUES" (String.concat "," mutationIds)
+
+let durablePlanDispositionIds =
+    contractRoot.GetProperty("catalogue").EnumerateArray()
+    |> Seq.map (fun entry -> entry.GetProperty("id").GetString())
+    |> Seq.filter (fun id -> id.StartsWith("PDISP-", StringComparison.Ordinal))
+    |> Set.ofSeq
+
+let expectedDurablePlanDispositionIds =
+    Set [ "PDISP-Advance"; "PDISP-ReceiptReread"; "PDISP-Replan"; "PDISP-Compensate" ]
+
+if durablePlanDispositionIds <> expectedDurablePlanDispositionIds then
+    fail "DURABLE-PLAN-DISPOSITIONS" (String.concat "," durablePlanDispositionIds)
 
 let trackedExit, trackedQnt, trackedError =
     run root "git" [ "ls-files"; "*.qnt" ] []
@@ -235,13 +247,13 @@ try
           "--root"
           scratch
           "--work"
-          "50-mutation-algebra"
+          "54-durable-plans"
           "--title"
-          "Implement mutation algebra"
+          "Implement durable plans"
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-7-profile2-r8"
+          "gs2-02-8-profile2-r11"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -255,10 +267,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "50-mutation-algebra" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "54-durable-plans" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/50-mutation-algebra")
+    let generatedRoot = Path.Combine(scratch, "readiness/54-durable-plans")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -275,6 +287,31 @@ try
 
     let qnt = Path.Combine(generatedRoot, "quint/protocol.qnt")
     requireGreen "QUINT-TYPECHECK" scratch quint [ "typecheck"; qnt ] [] |> ignore
+
+    let extractQuintTestFence (markdown: string) =
+        let lines = File.ReadAllLines markdown
+        let mutable inside = false
+        let mutable fences = 0
+        let body = ResizeArray<string>()
+
+        for line in lines do
+            if line.Trim() = "```quint-test" then
+                if inside then fail "QUINT-TEST-FENCE" "nested"
+                inside <- true
+                fences <- fences + 1
+            elif inside && line.Trim() = "```" then
+                inside <- false
+            elif inside then
+                body.Add line
+
+        if inside then fail "QUINT-TEST-FENCE" "unterminated"
+        if fences <> 1 then fail "QUINT-TEST-FENCE" ($"expected-one; actual=%d{fences}")
+        String.Join(Environment.NewLine, body)
+
+    let q2Qnt = Path.Combine(scratch, "protocol-q2.qnt")
+    let q2Source = File.ReadAllText(qnt) + Environment.NewLine + extractQuintTestFence(source) + Environment.NewLine
+    File.WriteAllText(q2Qnt, q2Source)
+    requireGreen "QUINT-Q2-TYPECHECK" scratch quint [ "typecheck"; q2Qnt ] [] |> ignore
 
     if compilerOnly then
         Directory.Delete(scratch, true)
@@ -317,7 +354,7 @@ try
         scratch
         quint
         [ "test"
-          qnt
+          q2Qnt
           "--main"
           "CoordinationProtocolTests"
           "--backend"
@@ -524,7 +561,7 @@ try
     |> ignore
 
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
-    let originalQnt = File.ReadAllText qnt
+    let originalQnt = File.ReadAllText q2Qnt
 
     let requireMutationRed (name: string) (fixture: string) (replacement: string) =
         if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
@@ -601,6 +638,77 @@ try
         "compensation-uniqueness-binding"
         "      existing != intent,"
         "      existing == intent,"
+
+    let requireDurablePlanRed (name: string) (fixture: string) (replacement: string) =
+        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
+            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
+
+        let mutant = Path.Combine(scratch, $"protocol-durable-plan-%s{name}.qnt")
+        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
+
+        let exitCode, output, error =
+            run
+                scratch
+                quint
+                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+                  "--match"; "^testDurablePlan"; "--verbosity"; "0" ]
+                []
+
+        if exitCode = 0 then
+            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
+
+        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
+            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+
+    requireDurablePlanRed
+        "predecessor-binding"
+        "    current.sequence == previous.sequence + 1, current.predecessorStepId == previous.stepId,"
+        "    current.sequence == previous.sequence + 1, true,"
+
+    requireDurablePlanRed
+        "causation-binding"
+        "    current.causationId == previous.intent.operationId, current.stepId != previous.stepId,"
+        "    true, current.stepId != previous.stepId,"
+
+    requireDurablePlanRed
+        "correlation-binding"
+        "    previous.planId == current.planId, previous.correlationId == current.correlationId,"
+        "    previous.planId == current.planId, true,"
+
+    requireDurablePlanRed
+        "receipt-intent-binding"
+        "    checkpoint.receipt.intent == checkpoint.step.intent, mutationResultOutcomeIsValid(checkpoint.receipt),"
+        "    true, mutationResultOutcomeIsValid(checkpoint.receipt),"
+
+    requireDurablePlanRed
+        "uncertain-receipt-reread"
+        "    else if (mutationOutcomeIsUncertain(receipt.outcomeId)) \"PDISP-ReceiptReread\""
+        "    else if (mutationOutcomeIsUncertain(receipt.outcomeId)) \"PDISP-Advance\""
+
+    requireDurablePlanRed
+        "compensation-boundary"
+        "    compensation.compensationBoundaryId == original.compensationBoundaryId,"
+        "    true,"
+
+    requireDurablePlanRed
+        "compensation-ordered-follow-relation"
+        "    durablePlanStepMayFollow(original, compensation),"
+        "    true,"
+
+    requireDurablePlanRed
+        "compensation-reverse-order"
+        "      applied.sequence <= original.sequence,"
+        "      true,"
+
+    requireDurablePlanRed
+        "disposition-classification"
+        "    if (receipt.outcomeId == \"MOUT-Applied\" or receipt.outcomeId == \"MOUT-Idempotent\") \"PDISP-Advance\""
+        "    if (receipt.outcomeId == \"MOUT-Applied\" or receipt.outcomeId == \"MOUT-Idempotent\") \"PDISP-Replan\""
+
+    requireDurablePlanRed
+        "disposition-boundary-history"
+        "    applied.step.compensationBoundaryId == current.compensationBoundaryId,"
+        "    true,"
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 

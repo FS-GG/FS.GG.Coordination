@@ -9,8 +9,8 @@ the Coordination Project remains a visibility projection.
 
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
-path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.5,
-and the active GS2-02.7 frontier with stable IDs, owner,
+path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.7,
+and the active GS2-02.8 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -113,6 +113,19 @@ incomplete results remain explicitly uncertain and never claim an effect. Compen
 is permitted only against an applied, non-compensation predecessor for the same subject
 and resulting revision. The unit stops before durable plan sequencing and grants no
 network, GitHub mutation, or production write authority.
+
+GS2-02.8 reuses the immutable Q1/Q2 command identities and adds ordered, resumable
+durable-plan steps. Each step binds plan, predecessor, sequence, causation, correlation,
+compensation boundary, and mutation intent. A checkpoint binds the exact operation receipt;
+terminal success advances, uncertain outcomes require receipt re-read, and terminal refusal
+chooses replan or reverse compensation according to whether the boundary already contains an
+applied step. Compensation is limited to the same boundary and reverse application order.
+The profile-2 authority fence continues to generate the retained contract, while one adjacent
+authored `quint-test` fence supplies executable critic witnesses without consuming the compiler's
+fixed authority-graph ceiling. The validator assembles those exact fences, reruns all prior mutation
+negative controls, and requires each durable-plan binding to fail independently when weakened. The
+unit stops before desired-state specification semantics and grants no network, GitHub mutation, or
+production write authority.
 
 ## Command sequence
 
