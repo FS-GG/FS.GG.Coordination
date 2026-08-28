@@ -181,6 +181,19 @@ let ``roadmap unit index advances through GS2-02-8 without the rejected runtime 
 
     Assert.Equal(2, mutationUnit.GetProperty("gateContracts").GetArrayLength())
 
+    let durablePlanUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.8")
+
+    Assert.Equal<string list>(
+        [ "GS2-02.7" ],
+        durablePlanUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal(2, durablePlanUnit.GetProperty("gateContracts").GetArrayLength())
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -281,6 +294,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "Q1"; "Q2" ],
         mutationUnit.GetProperty("gateContracts").EnumerateArray()
+        |> Seq.map (fun value -> value.GetProperty("qGate").GetString())
+        |> Seq.toList
+    )
+
+    let durablePlanUnit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.8")
+
+    Assert.Equal<string list>(
+        [ "Q1"; "Q2" ],
+        durablePlanUnit.GetProperty("gateContracts").EnumerateArray()
         |> Seq.map (fun value -> value.GetProperty("qGate").GetString())
         |> Seq.toList
     )

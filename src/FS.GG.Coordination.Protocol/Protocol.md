@@ -1,4 +1,4 @@
-# GS2-02.7 canonical coordination protocol
+# GS2-02.8 canonical coordination protocol
 
 This document is the sole authored source for the coordination protocol baseline. Every behavioral
 fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
@@ -7,12 +7,11 @@ projections and must never be edited independently.
 GS2-02.1 established vocabulary and stable integration identities; GS2-02.2 added the closed,
 revision-aware authority catalogue; GS2-02.3 added observation outcomes and knowledge semantics.
 GS2-02.4 added lifecycle intent and derived status; GS2-02.5 added native relation algebra; GS2-02.6
-added typed retained protocol streams. This unit adds the closed mutation algebra: eight mutation
-kinds with kind-bound target and payload shapes, expected-revision and idempotency bindings, explicit
-terminal-versus-uncertain outcomes, exact replay as an idempotent no-op, and bounded compensation.
-Later GS2-02 units refine durable plans, desired state, and compiled outputs.
-No network writer, hosted runtime, durable-plan executor, or production mutation authority is defined
-here.
+added typed retained protocol streams; GS2-02.7 added the closed mutation algebra. This unit compiles
+decisions into ordered, resumable durable steps with stable causation and correlation, exact receipt
+re-read, explicit compensation boundaries, and derived advance, re-read, replan, or compensate
+dispositions. Later GS2-02 units refine desired state and compiled outputs. No network writer, hosted
+runtime, durable-plan executor, or production mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -126,6 +125,16 @@ module CoordinationProtocol {
     outcomeId: str,
     resultingRevision: int,
   }
+  type DurablePlanStep = {
+    planId: str,
+    stepId: str,
+    predecessorStepId: str,
+    sequence: int,
+    causationId: str,
+    correlationId: str,
+    compensationBoundaryId: str,
+    intent: MutationIntent,
+  }
 
   pure val vocabularyCatalogue = Set(
     { id: "SubjectVocabulary", kind: "subject", family: "subjects" },
@@ -216,6 +225,13 @@ module CoordinationProtocol {
     { id: "MOUT-Incomplete", kind: "mutationOutcome", finality: "uncertain", effectClass: "unknown", retryClass: "complete-observation" }
   )
 
+  pure val durablePlanDispositionCatalogue = Set(
+    { id: "PDISP-Advance", kind: "durablePlanDisposition", receiptClass: "terminal-success", nextAction: "next-step" },
+    { id: "PDISP-ReceiptReread", kind: "durablePlanDisposition", receiptClass: "uncertain", nextAction: "reread-receipt" },
+    { id: "PDISP-Replan", kind: "durablePlanDisposition", receiptClass: "terminal-refusal-no-applied-boundary", nextAction: "compile-new-plan" },
+    { id: "PDISP-Compensate", kind: "durablePlanDisposition", receiptClass: "terminal-refusal-applied-boundary", nextAction: "compensate-reverse" }
+  )
+
   pure val relationshipCatalogue = Set(
     { id: "REL-Subject-Evidence", kind: "verifiedBy", fromId: "SubjectVocabulary", toId: "EvidenceObligationVocabulary" },
     { id: "REL-Authority-Evidence", kind: "verifiedBy", fromId: "AuthorityVocabulary", toId: "EvidenceObligationVocabulary" },
@@ -246,6 +262,7 @@ module CoordinationProtocol {
     { id: "BOUND-ProtocolPayloadKindCardinality", kind: "bound", minimum: 8, maximum: 8 },
     { id: "BOUND-MutationKindCardinality", kind: "bound", minimum: 8, maximum: 8 },
     { id: "BOUND-MutationOutcomeCardinality", kind: "bound", minimum: 8, maximum: 8 },
+    { id: "BOUND-DurablePlanDispositionCardinality", kind: "bound", minimum: 4, maximum: 4 },
     { id: "BOUND-TraceSteps", kind: "bound", minimum: 0, maximum: 4 }
   )
 
@@ -279,6 +296,10 @@ module CoordinationProtocol {
         "MOUT-Applied", "MOUT-Idempotent", "MOUT-Rejected", "MOUT-RevisionConflict",
         "MOUT-RateLimited", "MOUT-Unavailable", "MOUT-TimedOut", "MOUT-Incomplete"
       ), boundIds: Set("BOUND-MutationKindCardinality", "BOUND-MutationOutcomeCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-DurablePlans", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "PDISP-Advance", "PDISP-ReceiptReread", "PDISP-Replan", "PDISP-Compensate",
+        "PAYLOAD-OperationReceipt", "MUT-Compensate"
+      ), boundIds: Set("BOUND-DurablePlanDispositionCardinality", "BOUND-TraceSteps") }
   )
 
   pure val compatibilityCatalogue = Set(
@@ -345,6 +366,12 @@ module CoordinationProtocol {
       ) }
     ,{ id: "CompensationRequiresAppliedPredecessor", kind: "invariant", subjects: Set(
         "MUT-Compensate", "MOUT-Applied"
+      ) }
+    ,{ id: "DurablePlansAreOrderedAndResumable", kind: "invariant", subjects: Set(
+        "PDISP-Advance", "PDISP-ReceiptReread", "PDISP-Replan", "PDISP-Compensate", "PAYLOAD-OperationReceipt"
+      ) }
+    ,{ id: "DurablePlanCompensationIsBoundaryBound", kind: "invariant", subjects: Set(
+        "MUT-Compensate", "PDISP-Compensate"
       ) }
   )
 
@@ -1096,12 +1123,107 @@ The executable witness records evidence before accepting the subject vocabulary 
 the evidence guard must make the invariant red in the bounded negative control.
 
 The profile-2 compiler has a fixed 4,096-node typed graph ceiling. The executable suite therefore
-uses compact, independently named witnesses for every mutation law, while the validator separately
+uses compact, independently named witnesses for every durable-plan law, while the validator separately
 inverts each material binding and preserves the earlier bounded invariants.
 
-```quint protocol.qnt +=
+```quint-test
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
+
+  type DurablePlanCheckpoint = {
+    step: DurablePlanStep,
+    receipt: MutationResult,
+    receiptReadId: str,
+    dispositionId: str,
+  }
+
+  pure def durablePlanDispositionFor(receipt: MutationResult, hasAppliedInBoundary: bool): str =
+    if (receipt.outcomeId == "MOUT-Applied" or receipt.outcomeId == "MOUT-Idempotent") "PDISP-Advance"
+    else if (mutationOutcomeIsUncertain(receipt.outcomeId)) "PDISP-ReceiptReread"
+    else if (receipt.outcomeId == "MOUT-Rejected" or receipt.outcomeId == "MOUT-RevisionConflict")
+      if (hasAppliedInBoundary) "PDISP-Compensate" else "PDISP-Replan"
+    else ""
+
+  pure def durablePlanStepShapeIsValid(step: DurablePlanStep): bool = and {
+    step.planId != "", step.stepId != "", step.sequence > 0, step.causationId != "",
+    step.correlationId != "", step.compensationBoundaryId != "", mutationIntentShapeIsValid(step.intent),
+    if (step.sequence == 1) step.predecessorStepId == "" else step.predecessorStepId != "",
+  }
+
+  pure def durablePlanStepMayFollow(previous: DurablePlanStep, current: DurablePlanStep): bool = and {
+    durablePlanStepShapeIsValid(previous), durablePlanStepShapeIsValid(current),
+    previous.planId == current.planId, previous.correlationId == current.correlationId,
+    current.sequence == previous.sequence + 1, current.predecessorStepId == previous.stepId,
+    current.causationId == previous.intent.operationId, current.stepId != previous.stepId,
+    current.intent.operationId != previous.intent.operationId,
+  }
+
+  pure def durablePlanCheckpointIsBound(checkpoint: DurablePlanCheckpoint, hasAppliedInBoundary: bool): bool = and {
+    durablePlanStepShapeIsValid(checkpoint.step), checkpoint.receiptReadId != "",
+    checkpoint.receipt.intent == checkpoint.step.intent, mutationResultOutcomeIsValid(checkpoint.receipt),
+    checkpoint.dispositionId == durablePlanDispositionFor(checkpoint.receipt, hasAppliedInBoundary),
+    durablePlanDispositionCatalogue.exists(disposition => disposition.id == checkpoint.dispositionId),
+  }
+
+  pure def durablePlanMayAdvance(checkpoint: DurablePlanCheckpoint): bool = and {
+    durablePlanCheckpointIsBound(checkpoint, false), checkpoint.dispositionId == "PDISP-Advance",
+  }
+
+  pure def durablePlanCompensationIsValid(
+    compensation: DurablePlanStep, original: DurablePlanStep, originalReceipt: MutationResult,
+    appliedInBoundary: Set[DurablePlanStep], existingCompensations: Set[MutationIntent],
+  ): bool = and {
+    durablePlanStepShapeIsValid(compensation), durablePlanStepShapeIsValid(original),
+    compensation.planId == original.planId, compensation.correlationId == original.correlationId,
+    compensation.compensationBoundaryId == original.compensationBoundaryId,
+    compensation.sequence > original.sequence, originalReceipt.intent == original.intent,
+    originalReceipt.outcomeId == "MOUT-Applied",
+    compensationIntentIsValid(compensation.intent, originalReceipt, existingCompensations),
+    appliedInBoundary.contains(original),
+    appliedInBoundary.forall(applied => and {
+      applied.planId == original.planId, applied.compensationBoundaryId == original.compensationBoundaryId,
+      applied.sequence <= original.sequence,
+    }),
+  }
+
+  pure val appendIntent = {
+    operationId: "operation-append-2", subjectId: "subject-stream", mutationKindId: "MUT-Append",
+    targetKind: "stream", payloadKind: "append", expectedRevision: 1,
+    idempotencyKey: "key-append-2", payloadDigest: "digest-append-2", compensatesOperationId: "",
+  }
+  pure val planCreateStep = {
+    planId: "plan-1", stepId: "step-create-1", predecessorStepId: "", sequence: 1,
+    causationId: "decision-1", correlationId: "correlation-1", compensationBoundaryId: "boundary-1",
+    intent: createIntent,
+  }
+  pure val planAppendStep = {
+    planId: planCreateStep.planId, stepId: "step-append-2", predecessorStepId: planCreateStep.stepId, sequence: 2,
+    causationId: createIntent.operationId, correlationId: planCreateStep.correlationId,
+    compensationBoundaryId: planCreateStep.compensationBoundaryId, intent: appendIntent,
+  }
+  pure val planCompensationStep = {
+    planId: planCreateStep.planId, stepId: "step-compensate-2", predecessorStepId: planCreateStep.stepId, sequence: 2,
+    causationId: createIntent.operationId, correlationId: planCreateStep.correlationId,
+    compensationBoundaryId: planCreateStep.compensationBoundaryId, intent: compensateCreateIntent,
+  }
+  pure val planCreateCheckpoint = {
+    step: planCreateStep, receipt: createAppliedResult,
+    receiptReadId: "receipt-read-create-1", dispositionId: "PDISP-Advance",
+  }
+  pure val planUncertainCheckpoint = {
+    step: planCreateStep,
+    receipt: { intent: createIntent, outcomeId: "MOUT-RateLimited", resultingRevision: 0 },
+    receiptReadId: "receipt-read-create-uncertain", dispositionId: "PDISP-ReceiptReread",
+  }
+
+  pure val closedDurablePlanDispositionCatalogue = and {
+    durablePlanDispositionCatalogue.map(disposition => disposition.id) == Set(
+      "PDISP-Advance", "PDISP-ReceiptReread", "PDISP-Replan", "PDISP-Compensate"
+    ),
+    durablePlanDispositionCatalogue.map(disposition => disposition.nextAction) == Set(
+      "next-step", "reread-receipt", "compile-new-plan", "compensate-reverse"
+    ),
+  }
 
   run testUnrelatedCheckpointCannotCompactEphemeralHistory =
     not(ephemeralEnvelopeMayBeCompacted(claimEnvelope, Set(claimEnvelope, reviewCheckpointEnvelope)))
@@ -1154,6 +1276,58 @@ module CoordinationProtocolTests {
       createAppliedResult,
       Set(compensateCreateIntent),
     )),
+  }
+
+  run testDurablePlanOrderingBindsPredecessorAndIdentity = and {
+    closedDurablePlanDispositionCatalogue,
+    durablePlanStepMayFollow(planCreateStep, planAppendStep),
+    not(durablePlanStepMayFollow(planCreateStep, { ...planAppendStep, predecessorStepId: "step-other" })),
+    not(durablePlanStepMayFollow(planCreateStep, { ...planAppendStep, causationId: "operation-other" })),
+    not(durablePlanStepMayFollow(planCreateStep, { ...planAppendStep, correlationId: "correlation-other" })),
+  }
+
+  run testDurablePlanExactReceiptIsRequiredToAdvance = and {
+    durablePlanCheckpointIsBound(planCreateCheckpoint, false),
+    durablePlanMayAdvance(planCreateCheckpoint),
+    not(durablePlanCheckpointIsBound(
+      { ...planCreateCheckpoint,
+        receipt: { intent: appendIntent, outcomeId: "MOUT-Applied", resultingRevision: 2 } },
+      false,
+    )),
+  }
+
+  run testDurablePlanUncertaintyRequiresReceiptReread = and {
+    durablePlanCheckpointIsBound(planUncertainCheckpoint, false),
+    not(durablePlanMayAdvance(planUncertainCheckpoint)),
+    not(durablePlanCheckpointIsBound(
+      { ...planUncertainCheckpoint, dispositionId: "PDISP-Advance" },
+      false,
+    )),
+  }
+
+  run testDurablePlanCompensationIsBoundaryBoundAndReverseOrdered = and {
+    durablePlanCompensationIsValid(
+      planCompensationStep, planCreateStep, createAppliedResult, Set(planCreateStep), Set()
+    ),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, compensationBoundaryId: "boundary-other" },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      planCompensationStep, planCreateStep, createAppliedResult,
+      Set(planCreateStep, planAppendStep), Set(),
+    )),
+  }
+
+  run testDurablePlanDispositionIsDerived = and {
+    durablePlanDispositionFor(createAppliedResult, false) == "PDISP-Advance",
+    durablePlanDispositionFor(planUncertainCheckpoint.receipt, false) == "PDISP-ReceiptReread",
+    durablePlanDispositionFor(
+      { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 }, false
+    ) == "PDISP-Replan",
+    durablePlanDispositionFor(
+      { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 }, true
+    ) == "PDISP-Compensate",
   }
 }
 ```
