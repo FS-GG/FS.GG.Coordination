@@ -42,7 +42,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-02-6 without the rejected runtime branch`` () =
+let ``roadmap unit index advances through GS2-02-7 without the rejected runtime branch`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -66,7 +66,8 @@ let ``roadmap unit index advances through GS2-02-6 without the rejected runtime 
              "GS2-02.3"
              "GS2-02.4"
              "GS2-02.5"
-             "GS2-02.6" ]
+             "GS2-02.6"
+             "GS2-02.7" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -166,6 +167,19 @@ let ``roadmap unit index advances through GS2-02-6 without the rejected runtime 
 
     Assert.Equal(2, streamUnit.GetProperty("gateContracts").GetArrayLength())
 
+    let mutationUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.7")
+
+    Assert.Equal<string list>(
+        [ "GS2-02.6" ],
+        mutationUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal(2, mutationUnit.GetProperty("gateContracts").GetArrayLength())
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -257,6 +271,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
         [ "Q1"; "Q2" ],
         streamContracts
         |> List.map (fun value -> value.GetProperty("qGate").GetString())
+    )
+
+    let mutationUnit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-02.7")
+
+    Assert.Equal<string list>(
+        [ "Q1"; "Q2" ],
+        mutationUnit.GetProperty("gateContracts").EnumerateArray()
+        |> Seq.map (fun value -> value.GetProperty("qGate").GetString())
+        |> Seq.toList
     )
 
     let authorityUnit =

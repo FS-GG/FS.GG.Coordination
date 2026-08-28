@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.5,
-and the active GS2-02.6 frontier with stable IDs, owner,
+and the active GS2-02.7 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -102,6 +102,17 @@ accepted reviews, delivery completions, and operation receipts are durable check
 Compaction may remove only ephemeral material whose decision is durably checkpointed,
 and observation failures never become absence. The unit stops before generalized
 mutation algebra and grants no network or production write authority.
+
+GS2-02.7 reuses those exact command identities and adds a closed eight-kind mutation
+algebra for create, append, add/remove edge, set/clear, transition, and compensation.
+Every intent binds operation, subject, expected revision, idempotency key, and content
+digest. Exact terminal replay converges, conflicting reuse of either operation or key
+fails closed, and stale revisions classify as conflicts. Applied, idempotent, rejected,
+and revision-conflict results are terminal; rate-limited, unavailable, timed-out, and
+incomplete results remain explicitly uncertain and never claim an effect. Compensation
+is permitted only against an applied, non-compensation predecessor for the same subject
+and resulting revision. The unit stops before durable plan sequencing and grants no
+network, GitHub mutation, or production write authority.
 
 ## Command sequence
 

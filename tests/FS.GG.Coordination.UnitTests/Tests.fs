@@ -15,7 +15,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "810b95a1df1b9bfc7ecdf469f1222e22234668c703d2ef4a05653b5ef8a3ed77",
+        "3248076bd8ab7493ea62c085ecf1fcf6c2fae5dcd984cb2fa2c92913d9b86a24",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -33,6 +33,10 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("STREAM-OperationReceipt", CoordinationProtocolGenerated.Ids.StreamOperationReceipt)
     Assert.Equal("PAYLOAD-Lease", CoordinationProtocolGenerated.Ids.PayloadLease)
     Assert.Equal("PAYLOAD-Delivery", CoordinationProtocolGenerated.Ids.PayloadDelivery)
+    Assert.Equal("MUT-Create", CoordinationProtocolGenerated.Ids.MutCreate)
+    Assert.Equal("MUT-Compensate", CoordinationProtocolGenerated.Ids.MutCompensate)
+    Assert.Equal("MOUT-Applied", CoordinationProtocolGenerated.Ids.MoutApplied)
+    Assert.Equal("MOUT-TimedOut", CoordinationProtocolGenerated.Ids.MoutTimedOut)
 
     Assert.Equal(
         7,
@@ -73,6 +77,20 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         8,
         CoordinationProtocolGenerated.Catalogue
         |> List.filter (fun entry -> entry.Kind = "protocolPayloadKind")
+        |> List.length
+    )
+
+    Assert.Equal(
+        8,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "mutationKind")
+        |> List.length
+    )
+
+    Assert.Equal(
+        8,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "mutationOutcome")
         |> List.length
     )
 

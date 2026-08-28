@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "0bca8c283f7ac35b4ad48a18ba6500eacc86b93a",
+    "revision": "687d6af6d26ef6a4910e421d65ab5059452f02a5",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "f47baa5b8f912a1d77074cc76e5d41bf7862dbf6fe3e1b0d21027bd2adefe946"
+    "sha256": "2ed3496ec0a21a88a54a44824bcfdb06b93194f58e011f491914e81a35254287"
   },
   "units": [
     {
@@ -196,6 +196,21 @@
         { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
       ],
       "contractSha256": "aeb9edcc4d1fa0c7f338a025513a3520233215ba7cc15a73521a178cafbb76fd"
+    },
+    {
+      "id": "GS2-02.7",
+      "title": "Implement mutation algebra",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-02.6"],
+      "permissionCeiling": ["repository-local canonical mutation-algebra semantics, compiled projections, and qualification evidence", "no network, GitHub mutation, durable plan sequencing, hosted runtime, deployment, publication, or production write authority"],
+      "exitGate": "closed mutation kinds, expected revisions, idempotency identities, terminal-versus-uncertain outcomes, and compensation guards pass Q1 plus the pure portion of Q2",
+      "qGates": ["Q1", "Q2"],
+      "gateCommands": ["canonical-quint-compiler", "canonical-quint-pure-model"],
+      "gateContracts": [
+        { "id": "canonical-quint-compiler", "qGate": "Q1", "commandSha256": "ab29099d8e0be9da2bc6611c94acb8706eb15f36158651b8ed6b5e3829bb62a1" },
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" }
+      ],
+      "contractSha256": "fd49e0e4306c0b690bd784aac425a432dceb78b4161170e41c3018d3f2f7ac90"
     }
   ]
 }

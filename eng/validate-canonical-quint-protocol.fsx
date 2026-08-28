@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "146f0f61ce01ddaac31b1ba06299dfcbf268edfa59599830bdc6ee0558c7089a"
+    "da01f3e01bd6742800b0a171d462c319227ca0fcad122b9c9a857a9e948bb39c"
 
 let expectedContract =
-    "810b95a1df1b9bfc7ecdf469f1222e22234668c703d2ef4a05653b5ef8a3ed77"
+    "3248076bd8ab7493ea62c085ecf1fcf6c2fae5dcd984cb2fa2c92913d9b86a24"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -134,7 +134,7 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 101 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 124 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
@@ -142,6 +142,20 @@ if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
 
 if contractRoot.GetProperty("actionEffects").GetArrayLength() <> 14 then
     fail "ACTIONS" "wrong-cardinality"
+
+let mutationIds =
+    contractRoot.GetProperty("catalogue").EnumerateArray()
+    |> Seq.map (fun entry -> entry.GetProperty("id").GetString())
+    |> Seq.filter (fun id -> id.StartsWith("MUT-", StringComparison.Ordinal) || id.StartsWith("MOUT-", StringComparison.Ordinal))
+    |> Set.ofSeq
+
+let expectedMutationIds =
+    Set [ "MUT-Create"; "MUT-Append"; "MUT-AddEdge"; "MUT-RemoveEdge"; "MUT-Set"; "MUT-Clear"; "MUT-Transition"; "MUT-Compensate"
+          "MOUT-Applied"; "MOUT-Idempotent"; "MOUT-Rejected"; "MOUT-RevisionConflict"
+          "MOUT-RateLimited"; "MOUT-Unavailable"; "MOUT-TimedOut"; "MOUT-Incomplete" ]
+
+if mutationIds <> expectedMutationIds then
+    fail "MUTATION-CATALOGUES" (String.concat "," mutationIds)
 
 let trackedExit, trackedQnt, trackedError =
     run root "git" [ "ls-files"; "*.qnt" ] []
@@ -221,13 +235,13 @@ try
           "--root"
           scratch
           "--work"
-          "46-protocol-streams"
+          "50-mutation-algebra"
           "--title"
-          "Implement protocol streams"
+          "Implement mutation algebra"
           "--agent"
-          "swift-fee9"
+          "dunlin-3f64"
           "--session"
-          "gs2-02-6-profile2"
+          "gs2-02-7-profile2-r4"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -241,10 +255,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "46-protocol-streams" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "50-mutation-algebra" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/46-protocol-streams")
+    let generatedRoot = Path.Combine(scratch, "readiness/50-mutation-algebra")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -511,6 +525,48 @@ try
 
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
     let originalQnt = File.ReadAllText qnt
+
+    let requireMutationRed (name: string) (fixture: string) (replacement: string) =
+        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
+            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
+
+        let mutant = Path.Combine(scratch, $"protocol-mutation-%s{name}.qnt")
+        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
+
+        let exitCode, output, error =
+            run
+                scratch
+                quint
+                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+                  "--match"; "^testMutationAlgebra$"; "--verbosity"; "0" ]
+                []
+
+        if exitCode = 0 then
+            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
+
+        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
+            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+
+    requireMutationRed
+        "idempotency-key-binding"
+        "left.operationId == right.operationId or left.idempotencyKey == right.idempotencyKey"
+        "left.operationId == right.operationId"
+
+    requireMutationRed
+        "operation-binding"
+        "left.operationId == right.operationId or left.idempotencyKey == right.idempotencyKey"
+        "left.idempotencyKey == right.idempotencyKey"
+
+    requireMutationRed
+        "stale-revision"
+        "if (expectedRevision == observedRevision) \"MOUT-Applied\" else \"MOUT-RevisionConflict\""
+        "\"MOUT-Applied\""
+
+    requireMutationRed
+        "compensation-outcome-binding"
+        "    original.outcomeId == \"MOUT-Applied\",\n    original.resultingRevision == intent.expectedRevision,"
+        "    original.resultingRevision == intent.expectedRevision,"
+
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 
     if not (originalQnt.Contains(guard, StringComparison.Ordinal)) then
