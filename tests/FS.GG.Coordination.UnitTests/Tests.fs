@@ -197,6 +197,10 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         )
 
     let rows = semanticDiff.RootElement.GetProperty("content").GetProperty("rows").EnumerateArray() |> Seq.toList
+    Assert.DoesNotContain(
+        outputRoot.GetProperty("sourceSha256").GetString(),
+        semanticDiff.RootElement.GetProperty("content").GetRawText()
+    )
     Assert.NotEmpty(rows)
     Assert.Equal<int list>([ 1..rows.Length ], rows |> List.map (fun row -> row.GetProperty("ordinal").GetInt32()))
     Assert.Equal<string list>(

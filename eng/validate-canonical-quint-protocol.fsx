@@ -42,6 +42,29 @@ let sha256 path =
     use stream = File.OpenRead path
     SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
 
+let sha256Text (value: string) =
+    value
+    |> Encoding.UTF8.GetBytes
+    |> SHA256.HashData
+    |> Convert.ToHexString
+    |> _.ToLowerInvariant()
+
+let normalizeSupportedAuthoring (value: string) =
+    let lf = value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal)
+
+    let normalizedFences =
+        lf.Split('\n')
+        |> Array.map (fun line ->
+            let leadingSpaces = line.Length - line.TrimStart(' ').Length
+
+            if leadingSpaces > 0 && leadingSpaces <= 3 && line.Substring(leadingSpaces).StartsWith("```", StringComparison.Ordinal) then
+                line.Substring(leadingSpaces)
+            else
+                line)
+        |> String.concat "\n"
+
+    normalizedFences.Replace("\n```\n\n```quint protocol.qnt +=\n", "\n", StringComparison.Ordinal)
+
 let requireFile code path =
     if not (File.Exists path) then
         fail code path
@@ -510,13 +533,17 @@ try
     let canonicalBehavior = canonicalReceipt.GetProperty("typedEffectSha256").GetString()
     let canonicalSource = canonicalReceipt.GetProperty("sourceSha256").GetString()
     let canonicalContract = canonicalReceipt.GetProperty("contractSha256").GetString()
+    let canonicalSemanticDiffPath = Path.Combine(compiledOutputs, "semantic-diff.json")
+    let canonicalSemanticContent =
+        JsonDocument.Parse(File.ReadAllBytes canonicalSemanticDiffPath).RootElement.GetProperty("content").GetRawText()
 
     let authorVariant name (sourceText: string) =
         let variantRoot = Path.Combine(scratch, name)
         let variantSource = Path.Combine(variantRoot, "src/FS.GG.Coordination.Protocol/Protocol.md")
         let variantSelectors = Path.Combine(variantRoot, "src/FS.GG.Coordination.Protocol/Protocol.bindings.json")
         Directory.CreateDirectory(Path.GetDirectoryName variantSource) |> ignore
-        File.WriteAllText(variantSource, sourceText, UTF8Encoding(false))
+        let normalizedSourceText = normalizeSupportedAuthoring sourceText
+        File.WriteAllText(variantSource, normalizedSourceText, UTF8Encoding(false))
         File.Copy(selectors, variantSelectors)
         let work = $"66-gs2-02-11-{name}"
 
@@ -532,37 +559,87 @@ try
             []
         |> ignore
 
-        let variantGenerated = Path.Combine(variantRoot, "readiness", work, "quint")
+        let variantReadiness = Path.Combine(variantRoot, "readiness", work)
+        let variantGenerated = Path.Combine(variantReadiness, "quint")
         let variantReceiptPath = Path.Combine(variantGenerated, "receipt.json")
         requireFile "VARIANT-RECEIPT" variantReceiptPath
         let variantReceipt = JsonDocument.Parse(File.ReadAllBytes variantReceiptPath).RootElement
+
+        if variantReceipt.GetProperty("sourceSha256").GetString() <> sha256 variantSource then
+            fail "VARIANT-NORMALIZED-SOURCE" name
+
         let identity =
-            variantReceipt.GetProperty("sourceSha256").GetString(),
+            sha256Text sourceText,
             variantReceipt.GetProperty("typedEffectSha256").GetString(),
             variantReceipt.GetProperty("contractSha256").GetString()
 
+        let variantRetained = Path.Combine(variantRoot, "src/FS.GG.Coordination.Protocol/Generated")
+        Directory.CreateDirectory(variantRetained) |> ignore
+        File.Copy(Path.Combine(variantReadiness, "typed-authority.json"), Path.Combine(variantRetained, "typed-authority.json"), true)
+        File.Copy(Path.Combine(variantGenerated, "contract.json"), Path.Combine(variantRetained, "contract.json"), true)
+        File.Copy(Path.Combine(variantGenerated, "receipt.json"), Path.Combine(variantRetained, "receipt.json"), true)
+        let variantOutputs = Path.Combine(variantRoot, "compiled-outputs")
+
+        requireGreen
+            ($"COMPILED-OUTPUT-{name.ToUpperInvariant()}")
+            root
+            "dotnet"
+            [ "fsi"; outputGenerator; "--"; "--root"; variantRoot; "--output"; variantOutputs ]
+            []
+        |> ignore
+
+        let semanticDiffPath = Path.Combine(variantOutputs, "semantic-diff.json")
+        requireFile "VARIANT-SEMANTIC-DIFF" semanticDiffPath
+        let semanticContent =
+            JsonDocument.Parse(File.ReadAllBytes semanticDiffPath).RootElement.GetProperty("content").GetRawText()
+
         let rawTypedEffect = Path.Combine(variantGenerated, "typed-effect.json")
         if File.Exists rawTypedEffect then File.Delete rawTypedEffect
-        identity
+        identity, semanticContent, variantOutputs
+
+    let requireEquivalentVariant name sourceText =
+        let (variantSource, variantBehavior, variantContract), semanticContent, _ = authorVariant name sourceText
+        if variantSource = canonicalSource then fail "EQUIVALENT-AUTHORING" $"{name}: raw source did not change"
+        if variantBehavior <> canonicalBehavior then fail "EQUIVALENT-AUTHORING" $"{name}: behavior changed"
+        if variantContract <> canonicalContract then fail "EQUIVALENT-AUTHORING" $"{name}: public contract changed"
+        if semanticContent <> canonicalSemanticContent then fail "EQUIVALENT-AUTHORING" $"{name}: semantic diff changed"
 
     let canonicalText = File.ReadAllText(source, Encoding.UTF8)
     let triviaFixture = "}\n```\n\nThe executable witness"
     if not (canonicalText.Contains(triviaFixture, StringComparison.Ordinal)) then fail "EQUIVALENT-AUTHORING" "trivia fixture absent"
     let equivalentText = canonicalText.Replace(triviaFixture, "  // semantically inert authoring trivia\n}\n```\n\nThe executable witness")
-    let equivalentSource, equivalentBehavior, equivalentContract = authorVariant "equivalent-quint-trivia" equivalentText
+    requireEquivalentVariant "equivalent-quint-trivia" equivalentText
 
-    if equivalentSource = canonicalSource then fail "EQUIVALENT-AUTHORING" "raw source did not change"
-    if equivalentBehavior <> canonicalBehavior then fail "EQUIVALENT-AUTHORING" "behavior changed"
-    if equivalentContract <> canonicalContract then fail "EQUIVALENT-AUTHORING" "public contract changed"
+    let partitionFixture = "\n}\n```\n\nThe executable witness"
+    if not (canonicalText.Contains(partitionFixture, StringComparison.Ordinal)) then fail "EQUIVALENT-AUTHORING" "partition fixture absent"
+    let partitionedText =
+        canonicalText.Replace(
+            partitionFixture,
+            "\n```\n\n```quint protocol.qnt +=\n}\n```\n\nThe executable witness"
+        )
+    requireEquivalentVariant "equivalent-named-block-partition" partitionedText
+
+    let openingFence = "```quint protocol.qnt +=\n"
+    if not (canonicalText.StartsWith("# GS2-02.11", StringComparison.Ordinal) && canonicalText.Contains(openingFence, StringComparison.Ordinal)) then
+        fail "EQUIVALENT-AUTHORING" "fence indentation fixture absent"
+    let indentedFenceText =
+        canonicalText
+            .Replace(openingFence, "  ```quint protocol.qnt +=\n", StringComparison.Ordinal)
+            .Replace(partitionFixture, "\n}\n  ```\n\nThe executable witness", StringComparison.Ordinal)
+    requireEquivalentVariant "equivalent-fence-indentation" indentedFenceText
+
+    let crlfText = canonicalText.Replace("\n", "\r\n", StringComparison.Ordinal)
+    requireEquivalentVariant "equivalent-crlf" crlfText
 
     let proseFixture = "This document is the sole authored source for the coordination protocol baseline."
     if not (canonicalText.Contains(proseFixture, StringComparison.Ordinal)) then fail "PROSE-ONLY" "fixture absent"
     let proseText = canonicalText.Replace(proseFixture, proseFixture + " Review prose may evolve independently.")
-    let proseSource, proseBehavior, proseContract = authorVariant "prose-only" proseText
+    let (proseSource, proseBehavior, proseContract), proseSemanticContent, _ = authorVariant "prose-only" proseText
 
     if proseSource = canonicalSource then fail "PROSE-ONLY" "raw source did not change"
     if proseBehavior <> canonicalBehavior then fail "PROSE-ONLY" "behavior changed"
     if proseContract <> canonicalContract then fail "PROSE-ONLY" "public contract changed"
+    if proseSemanticContent <> canonicalSemanticContent then fail "PROSE-ONLY" "semantic diff changed"
 
     let semanticFixture = "  action observeProtocolEvidence: bool = all {\n    evidenceObserved' = true,"
     if not (canonicalText.Contains(semanticFixture, StringComparison.Ordinal)) then fail "SEMANTIC-CHANGE" "fixture absent"
@@ -571,27 +648,10 @@ try
             semanticFixture,
             "  action observeProtocolEvidence: bool = all {\n    evidenceObserved' = lifecycleStatusCurrent,"
         )
-    let _, semanticBehavior, semanticContract = authorVariant "semantic-change" semanticText
+    let (_, semanticBehavior, semanticContract), _, semanticOutputs = authorVariant "semantic-change" semanticText
 
     if semanticBehavior = canonicalBehavior then fail "SEMANTIC-CHANGE" "behavior did not change"
     if semanticContract = canonicalContract then fail "SEMANTIC-CHANGE" "public contract did not change"
-
-    let semanticVariantRoot = Path.Combine(scratch, "semantic-change")
-    let semanticGenerated = Path.Combine(semanticVariantRoot, "readiness/66-gs2-02-11-semantic-change")
-    let semanticRetained = Path.Combine(semanticVariantRoot, "src/FS.GG.Coordination.Protocol/Generated")
-    Directory.CreateDirectory(semanticRetained) |> ignore
-    File.Copy(Path.Combine(semanticGenerated, "typed-authority.json"), Path.Combine(semanticRetained, "typed-authority.json"), true)
-    File.Copy(Path.Combine(semanticGenerated, "quint/contract.json"), Path.Combine(semanticRetained, "contract.json"), true)
-    File.Copy(Path.Combine(semanticGenerated, "quint/receipt.json"), Path.Combine(semanticRetained, "receipt.json"), true)
-    let semanticOutputs = Path.Combine(semanticVariantRoot, "compiled-outputs")
-
-    requireGreen
-        "SEMANTIC-DIFF-GENERATOR"
-        root
-        "dotnet"
-        [ "fsi"; outputGenerator; "--"; "--root"; semanticVariantRoot; "--output"; semanticOutputs ]
-        []
-    |> ignore
 
     let readSemanticRows path =
         let document = JsonDocument.Parse(File.ReadAllBytes path)
@@ -604,7 +664,7 @@ try
         |> Seq.map (fun row -> row.GetProperty("path").GetString(), row.GetProperty("valueSha256").GetString())
         |> Map.ofSeq
 
-    let canonicalRows = readSemanticRows (Path.Combine(compiledOutputs, "semantic-diff.json"))
+    let canonicalRows = readSemanticRows canonicalSemanticDiffPath
     let changedRows = readSemanticRows (Path.Combine(semanticOutputs, "semantic-diff.json"))
     let changedPaths =
         Set.union (canonicalRows |> Map.keys |> Set.ofSeq) (changedRows |> Map.keys |> Set.ofSeq)

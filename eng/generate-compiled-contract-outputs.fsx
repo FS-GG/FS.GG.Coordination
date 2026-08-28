@@ -276,7 +276,6 @@ semanticDiffContent.Add("identityFields", identityContract.Split('|') |> Seq.map
 semanticDiffContent.Add("qualificationFields", qualificationContract.Split('|') |> Seq.map stringNode |> array)
 semanticDiffContent.Add("refusalKinds", refusalContract.Split('|') |> Seq.map stringNode |> array)
 semanticDiffContent.Add("familyOrder", families |> Seq.map (fun (_, _, id) -> stringNode id) |> array)
-semanticDiffContent.Add("identity", identityNode ())
 
 let pointerEscape (value: string) = value.Replace("~", "~0").Replace("/", "~1")
 

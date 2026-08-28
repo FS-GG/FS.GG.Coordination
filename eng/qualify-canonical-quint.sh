@@ -103,6 +103,8 @@ export HOME="$qualification_root/home"
 cd "$repo_root"
 dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --compiler-only
 dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .
+"$tool_path/fsgg-sdd" evidence --root . --work 66-gs2-02-11-deterministic-identity \
+  --sync-observed-run artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx --text
 "$tool_path/fsgg-sdd" analyze --root . --work 66-gs2-02-11-deterministic-identity --text
 "$tool_path/fsgg-sdd" verify --root . --work 66-gs2-02-11-deterministic-identity --text
 "$tool_path/fsgg-sdd" ship --root . --work 66-gs2-02-11-deterministic-identity --text
