@@ -14,7 +14,7 @@
     {
       "id": "compilation-receipt",
       "path": "readiness/54-durable-plans/quint/receipt.json",
-      "sha256": "de3bd104347d9f90524d2ef073c55d4c44ac5e8ffc6a36a753d18fc80c4f5b87"
+      "sha256": "8f54fd59468ce90a39c64b82aa25e1b5d765d71cc210394c8538098962b97793"
     },
     {
       "id": "compiled-contract",
@@ -24,7 +24,7 @@
     {
       "id": "fence-manifest",
       "path": "readiness/54-durable-plans/quint/fences.json",
-      "sha256": "3fa3bedf432e71c9baee750a123d4d8759f1f7eb636a6573e688f6566d1b629e"
+      "sha256": "3e123f63fc9fa8fd80afb1383faa4e507327b0268524139b9d5c3b81aa0188d9"
     },
     {
       "id": "generated-modules",
@@ -34,7 +34,7 @@
     {
       "id": "markdown",
       "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-      "sha256": "b7faf4b38d930cf0a7cf9b7243dd33fd45ba3602cd8a6cab86c7a1e3b55c39c0"
+      "sha256": "70e74ba2e38c79511aee109d3be4699486a91085eba9a5fcfa975348496fde77"
     },
     {
       "id": "profile-bindings",
@@ -49,7 +49,7 @@
     {
       "id": "source-map",
       "path": "readiness/54-durable-plans/quint/source-map.json",
-      "sha256": "7887d16db9d6172c009e8e0b2eaa021c74f3cb447812dba24192433b2d1d7808"
+      "sha256": "9a247319f8f6b524cea020202620f6317f72a2246d871e852f3e92981b99b144"
     },
     {
       "id": "typed-effect",
@@ -58,7 +58,7 @@
     }
   ],
   "authoringAgent": "dunlin-3f64",
-  "authoringSession": "gs2-02-8-profile2-r8",
+  "authoringSession": "gs2-02-8-profile2-r10",
   "rollbackManifestPath": null,
   "rollbackManifestSha256": null
 }

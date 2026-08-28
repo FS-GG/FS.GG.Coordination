@@ -1137,11 +1137,31 @@ module CoordinationProtocolTests {
     dispositionId: str,
   }
 
-  pure def durablePlanDispositionFor(receipt: MutationResult, hasAppliedInBoundary: bool): str =
+  type DurableAppliedStep = {
+    step: DurablePlanStep,
+    receipt: MutationResult,
+  }
+
+  pure def durableAppliedBoundaryHistoryIsValid(
+    current: DurablePlanStep, appliedHistory: Set[DurableAppliedStep],
+  ): bool = appliedHistory.forall(applied => and {
+    durablePlanStepShapeIsValid(applied.step), mutationResultOutcomeIsValid(applied.receipt),
+    applied.receipt.intent == applied.step.intent,
+    applied.receipt.outcomeId == "MOUT-Applied" or applied.receipt.outcomeId == "MOUT-Idempotent",
+    applied.step.planId == current.planId, applied.step.correlationId == current.correlationId,
+    applied.step.compensationBoundaryId == current.compensationBoundaryId,
+    applied.step.sequence < current.sequence,
+  })
+
+  pure def durablePlanDispositionFor(
+    step: DurablePlanStep, receipt: MutationResult, appliedHistory: Set[DurableAppliedStep],
+  ): str =
     if (receipt.outcomeId == "MOUT-Applied" or receipt.outcomeId == "MOUT-Idempotent") "PDISP-Advance"
     else if (mutationOutcomeIsUncertain(receipt.outcomeId)) "PDISP-ReceiptReread"
     else if (receipt.outcomeId == "MOUT-Rejected" or receipt.outcomeId == "MOUT-RevisionConflict")
-      if (hasAppliedInBoundary) "PDISP-Compensate" else "PDISP-Replan"
+      if (durableAppliedBoundaryHistoryIsValid(step, appliedHistory) and appliedHistory.size() > 0)
+        "PDISP-Compensate"
+      else "PDISP-Replan"
     else ""
 
   pure def durablePlanStepShapeIsValid(step: DurablePlanStep): bool = and {
@@ -1158,15 +1178,18 @@ module CoordinationProtocolTests {
     current.intent.operationId != previous.intent.operationId,
   }
 
-  pure def durablePlanCheckpointIsBound(checkpoint: DurablePlanCheckpoint, hasAppliedInBoundary: bool): bool = and {
+  pure def durablePlanCheckpointIsBound(
+    checkpoint: DurablePlanCheckpoint, appliedHistory: Set[DurableAppliedStep],
+  ): bool = and {
     durablePlanStepShapeIsValid(checkpoint.step), checkpoint.receiptReadId != "",
     checkpoint.receipt.intent == checkpoint.step.intent, mutationResultOutcomeIsValid(checkpoint.receipt),
-    checkpoint.dispositionId == durablePlanDispositionFor(checkpoint.receipt, hasAppliedInBoundary),
+    durableAppliedBoundaryHistoryIsValid(checkpoint.step, appliedHistory),
+    checkpoint.dispositionId == durablePlanDispositionFor(checkpoint.step, checkpoint.receipt, appliedHistory),
     durablePlanDispositionCatalogue.exists(disposition => disposition.id == checkpoint.dispositionId),
   }
 
   pure def durablePlanMayAdvance(checkpoint: DurablePlanCheckpoint): bool = and {
-    durablePlanCheckpointIsBound(checkpoint, false), checkpoint.dispositionId == "PDISP-Advance",
+    durablePlanCheckpointIsBound(checkpoint, Set()), checkpoint.dispositionId == "PDISP-Advance",
   }
 
   pure def durablePlanCompensationIsValid(
@@ -1176,7 +1199,10 @@ module CoordinationProtocolTests {
     durablePlanStepShapeIsValid(compensation), durablePlanStepShapeIsValid(original),
     compensation.planId == original.planId, compensation.correlationId == original.correlationId,
     compensation.compensationBoundaryId == original.compensationBoundaryId,
-    compensation.sequence > original.sequence, originalReceipt.intent == original.intent,
+    compensation.predecessorStepId == original.stepId,
+    compensation.sequence == original.sequence + 1,
+    compensation.causationId == original.intent.operationId,
+    originalReceipt.intent == original.intent,
     originalReceipt.outcomeId == "MOUT-Applied",
     compensationIntentIsValid(compensation.intent, originalReceipt, existingCompensations),
     appliedInBoundary.contains(original),
@@ -1215,6 +1241,7 @@ module CoordinationProtocolTests {
     receipt: { intent: createIntent, outcomeId: "MOUT-RateLimited", resultingRevision: 0 },
     receiptReadId: "receipt-read-create-uncertain", dispositionId: "PDISP-ReceiptReread",
   }
+  pure val planCreateAppliedHistory = Set({ step: planCreateStep, receipt: createAppliedResult })
 
   pure val closedDurablePlanDispositionCatalogue = and {
     durablePlanDispositionCatalogue.map(disposition => disposition.id) == Set(
@@ -1287,21 +1314,21 @@ module CoordinationProtocolTests {
   }
 
   run testDurablePlanExactReceiptIsRequiredToAdvance = and {
-    durablePlanCheckpointIsBound(planCreateCheckpoint, false),
+    durablePlanCheckpointIsBound(planCreateCheckpoint, Set()),
     durablePlanMayAdvance(planCreateCheckpoint),
     not(durablePlanCheckpointIsBound(
       { ...planCreateCheckpoint,
         receipt: { intent: appendIntent, outcomeId: "MOUT-Applied", resultingRevision: 2 } },
-      false,
+      Set(),
     )),
   }
 
   run testDurablePlanUncertaintyRequiresReceiptReread = and {
-    durablePlanCheckpointIsBound(planUncertainCheckpoint, false),
+    durablePlanCheckpointIsBound(planUncertainCheckpoint, Set()),
     not(durablePlanMayAdvance(planUncertainCheckpoint)),
     not(durablePlanCheckpointIsBound(
       { ...planUncertainCheckpoint, dispositionId: "PDISP-Advance" },
-      false,
+      Set(),
     )),
   }
 
@@ -1317,17 +1344,38 @@ module CoordinationProtocolTests {
       planCompensationStep, planCreateStep, createAppliedResult,
       Set(planCreateStep, planAppendStep), Set(),
     )),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, predecessorStepId: "step-forged" },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, causationId: "operation-forged" },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, sequence: 99 },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
   }
 
   run testDurablePlanDispositionIsDerived = and {
-    durablePlanDispositionFor(createAppliedResult, false) == "PDISP-Advance",
-    durablePlanDispositionFor(planUncertainCheckpoint.receipt, false) == "PDISP-ReceiptReread",
+    durablePlanDispositionFor(planCreateStep, createAppliedResult, Set()) == "PDISP-Advance",
+    durablePlanDispositionFor(planCreateStep, planUncertainCheckpoint.receipt, Set()) == "PDISP-ReceiptReread",
     durablePlanDispositionFor(
-      { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 }, false
+      planAppendStep,
+      { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 }, Set()
     ) == "PDISP-Replan",
     durablePlanDispositionFor(
-      { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 }, true
+      planAppendStep,
+      { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 }, planCreateAppliedHistory
     ) == "PDISP-Compensate",
+    not(durablePlanCheckpointIsBound(
+      { step: planAppendStep,
+        receipt: { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 },
+        receiptReadId: "receipt-read-append-rejected", dispositionId: "PDISP-Compensate" },
+      Set({ step: { ...planCreateStep, compensationBoundaryId: "boundary-forged" },
+            receipt: createAppliedResult }),
+    )),
   }
 }
 ```

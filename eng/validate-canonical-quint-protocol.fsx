@@ -16,7 +16,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "b7faf4b38d930cf0a7cf9b7243dd33fd45ba3602cd8a6cab86c7a1e3b55c39c0"
+    "70e74ba2e38c79511aee109d3be4699486a91085eba9a5fcfa975348496fde77"
 
 let expectedContract =
     "d1ac357cbc8c84c8668914b514196a04b3ca297411ccaf66d43f3260b1f8f4fb"
@@ -253,7 +253,7 @@ try
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-8-profile2-r8"
+          "gs2-02-8-profile2-r10"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -691,6 +691,21 @@ try
         "    true,"
 
     requireDurablePlanRed
+        "compensation-predecessor"
+        "    compensation.predecessorStepId == original.stepId,"
+        "    true,"
+
+    requireDurablePlanRed
+        "compensation-immediate-sequence"
+        "    compensation.sequence == original.sequence + 1,"
+        "    compensation.sequence > original.sequence,"
+
+    requireDurablePlanRed
+        "compensation-causation"
+        "    compensation.causationId == original.intent.operationId,"
+        "    true,"
+
+    requireDurablePlanRed
         "compensation-reverse-order"
         "      applied.sequence <= original.sequence,"
         "      true,"
@@ -699,6 +714,11 @@ try
         "disposition-classification"
         "    if (receipt.outcomeId == \"MOUT-Applied\" or receipt.outcomeId == \"MOUT-Idempotent\") \"PDISP-Advance\""
         "    if (receipt.outcomeId == \"MOUT-Applied\" or receipt.outcomeId == \"MOUT-Idempotent\") \"PDISP-Replan\""
+
+    requireDurablePlanRed
+        "disposition-boundary-history"
+        "    applied.step.compensationBoundaryId == current.compensationBoundaryId,"
+        "    true,"
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 
