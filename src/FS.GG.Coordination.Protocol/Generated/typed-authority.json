@@ -8,57 +8,57 @@
   "artifacts": [
     {
       "id": "bindings",
-      "path": "readiness/58-desired-state-specifications/quint/bindings.fs",
-      "sha256": "a03535db86ac3eef9f96f8ca4e638c1b04eb37f879a56c2b86c0fb09b4818dab"
+      "path": "readiness/62-compiled-contract-outputs/quint/bindings.fs",
+      "sha256": "4a8f8ec5d4752e5372a31d6239c865fab36f1711b128dc900a60ea55aff37dac"
     },
     {
       "id": "compilation-receipt",
-      "path": "readiness/58-desired-state-specifications/quint/receipt.json",
-      "sha256": "6b061e4491afe6085f833fa2c059bad8a545b12bcf950fce46d396d25586fe26"
+      "path": "readiness/62-compiled-contract-outputs/quint/receipt.json",
+      "sha256": "c5bcfc430bcf00f94374e92d6793a3f5e0f998fb86ef332c3b1b3d0ae417be8e"
     },
     {
       "id": "compiled-contract",
-      "path": "readiness/58-desired-state-specifications/quint/contract.json",
-      "sha256": "d8afa5fcccc2a8ecaf9142075f741933b743b5c45afe202faa8d9e96d4717b09"
+      "path": "readiness/62-compiled-contract-outputs/quint/contract.json",
+      "sha256": "90dd92eca75971c2159efdc2cfa3c168f74eab491bf52568580e2526d49a7ee3"
     },
     {
       "id": "fence-manifest",
-      "path": "readiness/58-desired-state-specifications/quint/fences.json",
-      "sha256": "e902f2723656bc746c05cac73220b6164618ee94b3468fa9d5a47f08ed57d917"
+      "path": "readiness/62-compiled-contract-outputs/quint/fences.json",
+      "sha256": "2611bf309ef89fdc47fc19f2b5d2ac80f25196a1dfbd7bce8816bd52b950e6fd"
     },
     {
       "id": "generated-modules",
-      "path": "readiness/58-desired-state-specifications/quint/protocol.qnt",
-      "sha256": "aabbebe7c36c0c169e986407f160a36b929fb2db9d2fdecfe5392ee91cbfa8db"
+      "path": "readiness/62-compiled-contract-outputs/quint/protocol.qnt",
+      "sha256": "288cc07b49266c6e9950a8e24e587a3ca96c2f9a90db33f2d9be6ba25b9cb50f"
     },
     {
       "id": "markdown",
       "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-      "sha256": "5f142084be0e1763a6261de39cf78a5ed5e75dce84d751238aa40085ec7a6b90"
+      "sha256": "9744d83e81779bb883ad5bf4193d060f89d79aefd3e5ed102b8a02fb5f56439c"
     },
     {
       "id": "profile-bindings",
-      "path": "readiness/58-desired-state-specifications/quint/profile-bindings.json",
-      "sha256": "a1dabdf880139713294ab76ef23a76ae2056f86b5681950ecb47d02fb10e61a5"
+      "path": "readiness/62-compiled-contract-outputs/quint/profile-bindings.json",
+      "sha256": "d16a1c69340946f8113c02a61ed166daf753dc3ba214ec88c09862846ac40894"
     },
     {
       "id": "sandbox-contract",
-      "path": "readiness/58-desired-state-specifications/quint/sandbox-contract.json",
+      "path": "readiness/62-compiled-contract-outputs/quint/sandbox-contract.json",
       "sha256": "2bf8ff26ddb488444c59daa77515b183008c352213e48ac6e36e15e0bc08c122"
     },
     {
       "id": "source-map",
-      "path": "readiness/58-desired-state-specifications/quint/source-map.json",
-      "sha256": "4ffc5dfe0ca6ec1a3df9da034e5f40bafedf4b7abe038edfa1b218318b25aa18"
+      "path": "readiness/62-compiled-contract-outputs/quint/source-map.json",
+      "sha256": "4989ede7981fe94ee4b56c57ff78f579ee245e563101954d34d2db630b36b197"
     },
     {
       "id": "typed-effect",
-      "path": "readiness/58-desired-state-specifications/quint/typed-effect.json",
-      "sha256": "9a47bd3b0c217f1e548d4561b66055a97a41e02d3acfb6ea28e7b25c9a7220d5"
+      "path": "readiness/62-compiled-contract-outputs/quint/typed-effect.json",
+      "sha256": "714ccafa6f641b75314eafdca78f398c3bf152334a42e83a09aeda8e642786b2"
     }
   ],
   "authoringAgent": "dunlin-3f64",
-  "authoringSession": "gs2-02-9-profile2-r6",
+  "authoringSession": "gs2-02-10-profile2-r4",
   "rollbackManifestPath": null,
   "rollbackManifestSha256": null
 }

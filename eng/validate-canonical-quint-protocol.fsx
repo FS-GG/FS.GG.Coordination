@@ -16,10 +16,10 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "5f142084be0e1763a6261de39cf78a5ed5e75dce84d751238aa40085ec7a6b90"
+    "9744d83e81779bb883ad5bf4193d060f89d79aefd3e5ed102b8a02fb5f56439c"
 
 let expectedContract =
-    "d8afa5fcccc2a8ecaf9142075f741933b743b5c45afe202faa8d9e96d4717b09"
+    "90dd92eca75971c2159efdc2cfa3c168f74eab491bf52568580e2526d49a7ee3"
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -134,7 +134,7 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 133 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 134 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
@@ -200,6 +200,31 @@ match desiredStateEntries with
     for name, expected in expectedFields do
         if (field name).GetString() <> expected then fail "DESIRED-STATE-SUMMARY" name
 | _ -> fail "DESIRED-STATE-SUMMARY" "expected-one"
+
+let compiledOutputEntries =
+    contractRoot.GetProperty("catalogue").EnumerateArray()
+    |> Seq.filter (fun entry -> entry.GetProperty("id").GetString() = "COUT-Specification")
+    |> Seq.toList
+
+match compiledOutputEntries with
+| [ compiledOutput ] ->
+    let field name =
+        compiledOutput.GetProperty("value").GetProperty("fields").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("name").GetString() = name)
+        |> _.GetProperty("value")
+        |> _.GetProperty("value")
+        |> _.GetString()
+
+    let expectedFields =
+        [ "familyContract", "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory"
+          "identityContract", "family|ordinal|source|profile|contract|content"
+          "qualificationContract", "supported|complete|fresh"
+          "projectionViewFormats", "markdown|json"
+          "refusalContract", "missing|duplicate|substituted|unsupported|incomplete|reordered|stale" ]
+
+    for name, expected in expectedFields do
+        if field name <> expected then fail "COMPILED-OUTPUT-SUMMARY" name
+| _ -> fail "COMPILED-OUTPUT-SUMMARY" "expected-one"
 
 let trackedExit, trackedQnt, trackedError =
     run root "git" [ "ls-files"; "*.qnt" ] []
@@ -279,13 +304,13 @@ try
           "--root"
           scratch
           "--work"
-          "58-desired-state-specifications"
+          "62-compiled-contract-outputs"
           "--title"
-          "Implement desired-state specifications"
+          "GS2-02.10 compiled-contract outputs"
           "--agent"
           "dunlin-3f64"
           "--session"
-          "gs2-02-9-profile2-r6"
+          "gs2-02-10-profile2-r4"
           "--backend"
           "quint-specification-v1"
           "--profile"
@@ -299,10 +324,10 @@ try
         []
     |> ignore
 
-    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "58-desired-state-specifications" ] []
+    requireGreen "INSPECT" root cli [ "typed-sdd"; "inspect"; "--root"; scratch; "--work"; "62-compiled-contract-outputs" ] []
     |> ignore
 
-    let generatedRoot = Path.Combine(scratch, "readiness/58-desired-state-specifications")
+    let generatedRoot = Path.Combine(scratch, "readiness/62-compiled-contract-outputs")
 
     let comparisons =
         [ authority, Path.Combine(generatedRoot, "typed-authority.json")
@@ -822,6 +847,69 @@ try
         "phase-authority-binding"
         "      desiredStatePhaseAuthorityMatches(authority, desired, observed),"
         "      true,"
+
+    let requireCompiledOutputRed (name: string) (fixture: string) (replacement: string) =
+        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
+            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
+
+        let mutant = Path.Combine(scratch, $"protocol-compiled-output-%s{name}.qnt")
+        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
+
+        let exitCode, output, error =
+            run
+                scratch
+                quint
+                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+                  "--match"; "^testCompiledOutput"; "--verbosity"; "0" ]
+                []
+
+        if exitCode = 0 then
+            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
+
+        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
+            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+
+    requireCompiledOutputRed
+        "duplicate-family"
+        "    outputs.size() == compiledOutputFamilyCatalogue.size(),"
+        "    true,"
+
+    requireCompiledOutputRed
+        "family-completeness"
+        ("    outputs.size() == compiledOutputFamilyCatalogue.size(),\n"
+         + "    outputs.map(output => output.familyId) == compiledOutputFamilyCatalogue.map(family => family.id),\n"
+         + "    outputs.map(output => output.ordinal) == Set(1, 2, 3, 4, 5, 6, 7, 8, 9),")
+        "    true,\n    true,\n    true,"
+
+    requireCompiledOutputRed
+        "family-order"
+        "      family.id == output.familyId, family.ordinal == output.ordinal,"
+        "      family.id == output.familyId, true,"
+
+    requireCompiledOutputRed
+        "source-identity"
+        "    output.sourceIdentity == \"literate-quint-authority\","
+        "    true,"
+
+    requireCompiledOutputRed
+        "support-qualification"
+        "    output.contentDigest != \"\", output.supported, output.complete, output.fresh,"
+        "    output.contentDigest != \"\", true, output.complete, output.fresh,"
+
+    requireCompiledOutputRed
+        "completeness-qualification"
+        "    output.contentDigest != \"\", output.supported, output.complete, output.fresh,"
+        "    output.contentDigest != \"\", output.supported, true, output.fresh,"
+
+    requireCompiledOutputRed
+        "freshness-qualification"
+        "    output.contentDigest != \"\", output.supported, output.complete, output.fresh,"
+        "    output.contentDigest != \"\", output.supported, output.complete, true,"
+
+    requireCompiledOutputRed
+        "projection-formats"
+        "      family.contentContract == output.contentContract, family.formats == output.formats,"
+        "      family.contentContract == output.contentContract, true,"
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 

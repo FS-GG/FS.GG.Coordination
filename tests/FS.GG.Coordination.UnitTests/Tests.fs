@@ -15,7 +15,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "d8afa5fcccc2a8ecaf9142075f741933b743b5c45afe202faa8d9e96d4717b09",
+        "90dd92eca75971c2159efdc2cfa3c168f74eab491bf52568580e2526d49a7ee3",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -42,6 +42,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("PDISP-Replan", CoordinationProtocolGenerated.Ids.PdispReplan)
     Assert.Equal("PDISP-Compensate", CoordinationProtocolGenerated.Ids.PdispCompensate)
     Assert.Equal("DSTATE-Specification", CoordinationProtocolGenerated.Ids.DstateSpecification)
+    Assert.Equal("COUT-Specification", CoordinationProtocolGenerated.Ids.CoutSpecification)
 
     Assert.Equal(
         7,
@@ -113,6 +114,13 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
         |> List.length
     )
 
+    Assert.Equal(
+        1,
+        CoordinationProtocolGenerated.Catalogue
+        |> List.filter (fun entry -> entry.Kind = "compiledOutputSpecification")
+        |> List.length
+    )
+
     Assert.Contains("ACT-AcceptObservationKnowledge", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-SetHumanIntent", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ACT-ObserveLifecycleFacts", CoordinationProtocolGenerated.CanonicalContractJson)
@@ -126,6 +134,10 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Contains("project-workflow|project-visibility|project-membership-policy", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("family|ordinal|source|profile|contract|content", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("markdown|json", CoordinationProtocolGenerated.CanonicalContractJson)
+    Assert.Contains("missing|duplicate|substituted|unsupported|incomplete|reordered|stale", CoordinationProtocolGenerated.CanonicalContractJson)
 
 [<Fact>]
 let ``protocol boundary has a stable initial identity`` () =
