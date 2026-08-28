@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/66-gs2-02-11-deterministic-identity/plan.md
-    digest: c41b4827578bb80ca928bebed9a4bab2e2e7ab2be080eb85a2702eecaecbf369
+    digest: cbe21c1c181b5c390488efc1f2421b2e2b0d13b22d10c1f9a39e306ace6a13eb
     schemaVersion: 1
 tasks:
   - id: T001

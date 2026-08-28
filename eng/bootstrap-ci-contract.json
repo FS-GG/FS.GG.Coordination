@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.bootstrap-ci-contract/1",
   "evidenceSchema": "fsgg.coordination.bootstrap-evidence/1",
-  "workflowSha256": "83c69cd8abe4fcc428cdc8c7ef1fe637b5caecb8b9e73805008ce0c271a887bf",
+  "workflowSha256": "264a6e7c91ce89545ec099e92cc701305b7307b967db221cc1b58c3b7769b077",
   "requiredProjectCount": 8,
   "requiredVulnerabilitySources": [
     "https://api.nuget.org/v3/index.json"
@@ -34,7 +34,8 @@
         "dotnet restore FS.GG.Coordination.sln --locked-mode",
         "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror",
         "dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore",
-        "dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger \"trx;LogFileName=architecture.trx\" --results-directory \"$RUNNER_TEMP/compiler-and-tests\""
+        "dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger \"trx;LogFileName=architecture.trx\" --results-directory \"$RUNNER_TEMP/compiler-and-tests\"",
+        "bash eng/qualify-canonical-quint.sh"
       ]
     },
     {

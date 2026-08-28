@@ -46,7 +46,7 @@ jobs:
   compiler-and-tests:
     name: compiler-and-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-compiler-and-tests
     steps:
@@ -66,6 +66,8 @@ jobs:
         run: dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
       - name: Run architecture and negative-control tests
         run: dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=architecture.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests"
+      - name: Run exact-head canonical Quint Q1 and Q2
+        run: bash eng/qualify-canonical-quint.sh
       - name: Upload compiler and test evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

@@ -29,6 +29,27 @@ let private runAt workingDirectory executable arguments =
 let private run executable arguments = runAt root executable arguments
 
 [<Fact>]
+let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject`` () =
+    let workflow =
+        File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
+
+    let qualification =
+        File.ReadAllText(Path.Combine(root, "eng/qualify-canonical-quint.sh"))
+
+    Assert.Contains("run: bash eng/qualify-canonical-quint.sh", workflow)
+    Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --compiler-only", qualification)
+    Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .", qualification)
+    Assert.Contains("quint-linux-amd64", qualification)
+    Assert.Contains("sha256sum --check --status", qualification)
+
+[<Fact>]
+let ``hosted canonical Quint gate cannot silently downgrade to static validation`` () =
+    let qualification =
+        File.ReadAllText(Path.Combine(root, "eng/qualify-canonical-quint.sh"))
+
+    Assert.DoesNotContain("--static-only", qualification)
+
+[<Fact>]
 let ``roadmap work skill satisfies its independent structure ceiling`` () =
     let exitCode, output, error =
         run

@@ -41,13 +41,13 @@ Prose status: planned
 - PD-003 [AC-003] [FR-003] [DEC-003] complete: Flatten public compiled-contract JSON into stable ordinal JSON-pointer/value-digest rows, add the behavioral identity row, and require a semantic mutant to change identity and the expected ordered row.
 - PD-004 [AC-004] [FR-004] [DEC-002] complete: Validate source grammar, extractor package/backend, Quint/toolchain, profile, and contract schema against exact supported values before invoking Quint; invert each comparison and assert a distinct red diagnostic.
 - PD-005 [AC-005] [FR-005] [DEC-002] complete: Add deterministic-identity facts to the canonical compiled contract and carry raw source, behavioral digest, version tuple, public contract, completeness, and freshness bindings through retained outputs and manifests without retaining raw IR, adding a rival AST, or adding a public runtime command.
-- PD-006 [AC-006] [FR-006] [DEC-003] complete: Extend unit and architecture coverage, regenerate all projections from `Protocol.md`, run existing witnesses/invariants plus new Quint tests, then execute exact `canonical-quint-compiler` Q1 and `canonical-quint-pure-model` Q2 catalog commands.
+- PD-006 [AC-006] [FR-006] [DEC-003] complete: Extend unit and architecture coverage, regenerate all projections from `Protocol.md`, run existing witnesses/invariants plus new Quint tests, and bind the exact `canonical-quint-compiler` Q1 and `canonical-quint-pure-model` Q2 subjects into the required exact-head `compiler-and-tests` hosted check with digest-verified Quint, lmt, Rust evaluator, Apalache, JRE, Go, and SDD CLI inputs.
 
 ## Contract Impact
 - PC-001 [PD-001] [PD-003] [PD-004] [PD-005] additive schema: `fsgg.quint.compiled-contract/v2`, `fsgg.quint.compiled-output/1`, and `fsgg.quint.compiled-output-manifest/1` gain derived deterministic-identity/version/diff facts; existing fields keep their meanings and raw-source bindings.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PD-002] [PD-003] [PD-004] [PD-005] [PD-006] [PC-001] semanticTest: Observe Quint typecheck/tests/invariants, equivalent/prose/semantic scratch compilation, five version-refusal mutations, retained regeneration, warning-free build, unit/architecture suites, and catalog-bound Q1/Q2 gates.
+- VO-001 [PD-001] [PD-002] [PD-003] [PD-004] [PD-005] [PD-006] [PC-001] semanticTest: Observe Quint typecheck/tests/invariants, equivalent/prose/semantic scratch compilation, five version-refusal mutations, retained regeneration, warning-free build, unit/architecture suites, catalog-bound Q1/Q2 gates, and a behavioral-identity inversion that turns the hosted gate red.
 
 ## Performance Intent
 No performance intent is declared for this work item.
