@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "7c40e0ed33d2d25cd50a153f910f7632cab9dd59249ba9ae9e8f165eed8f5ddb"
+        "value": "9ace607cd760c5185cbfb89a1ec11f9f20586cbd13f7629a9b3de619efe56542"
       }
     },
     {
@@ -751,7 +751,7 @@
           "path": "work/50-mutation-algebra/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "7c40e0ed33d2d25cd50a153f910f7632cab9dd59249ba9ae9e8f165eed8f5ddb"
+            "value": "9ace607cd760c5185cbfb89a1ec11f9f20586cbd13f7629a9b3de619efe56542"
           },
           "schemaVersion": 1
         },
@@ -782,7 +782,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "52a9483bb5c6cf823f18a69e84b02cd940c19a01dd7bb8994dbcc297b63b32b1"
+        "value": "1616dca5ac8eecd621688eb02fca344a6503381ba8d614245a149a9bcf308011"
       },
       "currency": "current"
     }
