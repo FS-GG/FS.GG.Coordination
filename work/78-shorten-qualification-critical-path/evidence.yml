@@ -11,7 +11,7 @@ sourceAnalysis: readiness/78-shorten-qualification-critical-path/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/78-shorten-qualification-critical-path/analysis.json
-    digest: 7890c3c0889127eb1c7be1a966addf254a6d1fd574bcba9e71242ac390062205
+    digest: f3387915071028e94c8aba2574ab667194a33b08e9439540fc9906fd8af5730f
     schemaVersion: 1
   - label: checklist
     path: work/78-shorten-qualification-critical-path/checklist.md
