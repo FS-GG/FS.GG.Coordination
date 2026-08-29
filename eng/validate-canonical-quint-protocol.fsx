@@ -5,6 +5,8 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
+open System.Threading
+open System.Threading.Tasks
 
 let expectedPackage = "FS.GG.SDD.Artifacts/1.5.0"
 let expectedProfile = "fsgg-quint-profile/2"
@@ -30,12 +32,46 @@ let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
+let expectedExternalProcessCount = 85
+let expectedQuintProcessCount = 61
+let expectedApalacheVerifyInvocationCount = 14
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
 
+let qualificationClock = Stopwatch.StartNew()
+let mutable externalProcessCount = 0
+let mutable quintProcessCount = 0
+let mutable quintRejectedProcessCount = 0
+let mutable apalacheVerifyInvocationCount = 0
+let mutable verifiedPositiveInvariantCount = 0
+let mutable q1Outcome = "not-run"
+let mutable q2Outcome = "not-run"
+let mutable currentPhase = "q1"
+let mutable preparationDurationMs = 0L
+let mutable preparationDigest: string option = None
+let mutable failureReceiptWriter: (string -> string -> unit) option = None
+
+let positiveInvariants =
+    [ "acceptedVocabularyIsQualified"
+      "acceptedAuthoritiesAreQualified"
+      "humanIntentIsObservationIndependent"
+      "lifecycleStatusIsDerived"
+      "nativeRelationEdgesAreValid"
+      "relationChangesPreserveUnrelatedEdges"
+      "protocolEnvelopesAreValidAndOrdered"
+      "durableProtocolCheckpointsArePreserved" ]
+
 let fail code detail =
     eprintfn "CANONICAL_QUINT_PROTOCOL_RED code=%s detail=%s" code detail
+
+    match failureReceiptWriter with
+    | Some writer ->
+        try writer code detail
+        with exceptionValue ->
+            eprintfn "CANONICAL_QUINT_RECEIPT_RED code=WRITE detail=%s" exceptionValue.Message
+    | None -> ()
+
     exit 1
 
 let sha256 path =
@@ -69,7 +105,18 @@ let requireFile code path =
     if not (File.Exists path) then
         fail code path
 
-let run workingDirectory executable arguments environment =
+let run workingDirectory (executable: string) arguments environment =
+    Interlocked.Increment(&externalProcessCount) |> ignore
+
+    let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
+
+    if isQuint then
+        Interlocked.Increment(&quintProcessCount) |> ignore
+
+        match arguments with
+        | "verify" :: _ -> Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
+        | _ -> ()
+
     let info = ProcessStartInfo(executable)
     info.WorkingDirectory <- workingDirectory
     info.UseShellExecute <- false
@@ -86,6 +133,10 @@ let run workingDirectory executable arguments environment =
     let output = child.StandardOutput.ReadToEndAsync()
     let error = child.StandardError.ReadToEndAsync()
     child.WaitForExit()
+
+    if isQuint && child.ExitCode <> 0 then
+        Interlocked.Increment(&quintRejectedProcessCount) |> ignore
+
     child.ExitCode, output.Result.Trim(), error.Result.Trim()
 
 let requireGreen code workingDirectory executable arguments environment =
@@ -98,16 +149,132 @@ let requireGreen code workingDirectory executable arguments environment =
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 
-let rec parse root staticOnly compilerOnly remaining =
+let rec parse root staticOnly compilerOnly output receiptFailurePhase remaining =
     match remaining with
-    | [] -> root, staticOnly, compilerOnly
-    | "--root" :: value :: tail -> parse (Path.GetFullPath value) staticOnly compilerOnly tail
-    | "--static-only" :: tail -> parse root true compilerOnly tail
-    | "--compiler-only" :: tail -> parse root staticOnly true tail
+    | [] -> root, staticOnly, compilerOnly, output, receiptFailurePhase
+    | "--root" :: value :: tail -> parse (Path.GetFullPath value) staticOnly compilerOnly output receiptFailurePhase tail
+    | "--static-only" :: tail -> parse root true compilerOnly output receiptFailurePhase tail
+    | "--compiler-only" :: tail -> parse root staticOnly true output receiptFailurePhase tail
+    | "--output" :: value :: tail -> parse root staticOnly compilerOnly (Some value) receiptFailurePhase tail
+    | "--exercise-failure-receipt" :: value :: tail -> parse root staticOnly compilerOnly output (Some value) tail
     | value :: _ -> fail "ARGUMENT" value
 
-let root, staticOnly, compilerOnly =
-    parse (Path.GetFullPath ".") false false arguments
+let root, staticOnly, compilerOnly, outputOption, receiptFailurePhase =
+    parse (Path.GetFullPath ".") false false None None arguments
+
+let qualificationOutput =
+    outputOption
+    |> Option.map Path.GetFullPath
+    |> Option.defaultValue (Path.Combine(root, "artifacts/canonical-quint/qualification.json"))
+
+let writeQualificationReceipt failure =
+    let totalDurationMs = qualificationClock.ElapsedMilliseconds
+    let q2DurationMs = Math.Max(0L, totalDurationMs - preparationDurationMs)
+    let preparationValue = preparationDigest |> Option.defaultValue "none"
+
+    let failureCode, failureDetailSha256 =
+        match failure with
+        | Some(code, detail) -> code, sha256Text detail
+        | None -> "none", "none"
+
+    let resultSha256 =
+        sha256Text
+            ($"%s{q1Outcome}|%s{q2Outcome}|%d{verifiedPositiveInvariantCount}|%d{quintRejectedProcessCount}|%d{externalProcessCount}|%d{quintProcessCount}|%d{apalacheVerifyInvocationCount}|%s{preparationValue}|%s{failureCode}|%s{failureDetailSha256}")
+
+    let outputDirectory = Path.GetDirectoryName qualificationOutput
+
+    if not (String.IsNullOrWhiteSpace outputDirectory) then
+        Directory.CreateDirectory outputDirectory |> ignore
+
+    let temporaryOutput = qualificationOutput + "." + Guid.NewGuid().ToString("N") + ".tmp"
+
+    do
+        use outputStream = File.Create temporaryOutput
+        use writer = new Utf8JsonWriter(outputStream, JsonWriterOptions(Indented = true))
+        writer.WriteStartObject()
+        writer.WriteString("schema", "fsgg.coordination.canonical-quint-qualification/1")
+        writer.WriteString("q1Outcome", q1Outcome)
+        writer.WriteString("q2Outcome", q2Outcome)
+        writer.WriteNumber("positiveInvariantCount", verifiedPositiveInvariantCount)
+        writer.WriteNumber("negativeControlCount", quintRejectedProcessCount)
+        writer.WriteNumber("preparationDurationMs", preparationDurationMs)
+        writer.WriteNumber("q2DurationMs", q2DurationMs)
+        writer.WriteNumber("totalDurationMs", totalDurationMs)
+        writer.WriteStartObject("processCounts")
+        writer.WriteNumber("external", externalProcessCount)
+        writer.WriteNumber("quintCli", quintProcessCount)
+        writer.WriteNumber("apalacheVerify", apalacheVerifyInvocationCount)
+        writer.WriteEndObject()
+        writer.WriteStartObject("tools")
+        writer.WriteString("toolchainSha256", expectedToolchain)
+        writer.WriteString("quintSha256", expectedQuint)
+        writer.WriteString("apalacheJarSha256", expectedApalacheJar)
+        writer.WriteEndObject()
+        writer.WriteStartObject("inputs")
+        writer.WriteString("sourceSha256", expectedSource)
+        writer.WriteString("contractSha256", expectedContract)
+        writer.WriteEndObject()
+
+        match preparationDigest with
+        | Some digest -> writer.WriteString("preparationSha256", digest)
+        | None -> writer.WriteNull("preparationSha256")
+
+        match failure with
+        | Some(code, _) ->
+            writer.WriteStartObject("failure")
+            writer.WriteString("code", code)
+            writer.WriteString("detailSha256", failureDetailSha256)
+            writer.WriteEndObject()
+        | None -> writer.WriteNull("failure")
+
+        writer.WriteString("resultSha256", resultSha256)
+        writer.WriteEndObject()
+        writer.Flush()
+        outputStream.Flush(true)
+
+    File.Move(temporaryOutput, qualificationOutput, true)
+
+failureReceiptWriter <-
+    Some(fun code detail ->
+        if currentPhase = "q1" then
+            q1Outcome <- "failed"
+            q2Outcome <- "not-run"
+        else
+            q2Outcome <- "failed"
+
+        writeQualificationReceipt (Some(code, detail)))
+
+let requireCompletedProcessInventory () =
+    if
+        externalProcessCount <> expectedExternalProcessCount
+        || quintProcessCount <> expectedQuintProcessCount
+        || apalacheVerifyInvocationCount <> expectedApalacheVerifyInvocationCount
+    then
+        fail
+            "PROCESS-INVENTORY-COVERAGE"
+            ($"expected=%d{expectedExternalProcessCount}/%d{expectedQuintProcessCount}/%d{expectedApalacheVerifyInvocationCount}; actual=%d{externalProcessCount}/%d{quintProcessCount}/%d{apalacheVerifyInvocationCount}")
+
+match receiptFailurePhase with
+| Some "q1" -> fail "RECEIPT-SELF-TEST-Q1" "exercise q1 failure receipt"
+| Some "q2" ->
+    q1Outcome <- "passed"
+    currentPhase <- "q2"
+    preparationDurationMs <- qualificationClock.ElapsedMilliseconds
+    preparationDigest <- Some(String.replicate 64 "0")
+    fail "RECEIPT-SELF-TEST-Q2" "exercise q2 failure receipt"
+| Some "process-inventory" ->
+    q1Outcome <- "passed"
+    currentPhase <- "q2"
+    verifiedPositiveInvariantCount <- 8
+    quintRejectedProcessCount <- 56
+    externalProcessCount <- 84
+    quintProcessCount <- 60
+    apalacheVerifyInvocationCount <- 14
+    preparationDurationMs <- qualificationClock.ElapsedMilliseconds
+    preparationDigest <- Some(String.replicate 64 "0")
+    requireCompletedProcessInventory ()
+| Some value -> fail "ARGUMENT" ($"invalid failure receipt phase: %s{value}")
+| None -> ()
 
 let source = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
 
@@ -752,15 +919,25 @@ try
     File.WriteAllText(q2Qnt, q2Source)
     requireGreen "QUINT-Q2-TYPECHECK" scratch quint [ "typecheck"; q2Qnt ] [] |> ignore
 
+    preparationDurationMs <- qualificationClock.ElapsedMilliseconds
+
+    let preparationSha256 =
+        sha256Text ($"%s{sha256 qnt}|%s{sha256 q2Qnt}|%s{expectedToolchain}")
+
+    preparationDigest <- Some preparationSha256
+    q1Outcome <- "passed"
+    currentPhase <- "q2"
+
+    printfn
+        "CANONICAL_QUINT_COMPILER_OK contract=%s source=%s profile=%s preparation=%s durationMs=%d"
+        expectedContract
+        expectedSource
+        expectedProfile
+        preparationSha256
+        preparationDurationMs
+
     if compilerOnly then
         Directory.Delete(scratch, true)
-
-        printfn
-            "CANONICAL_QUINT_COMPILER_OK contract=%s source=%s profile=%s"
-            expectedContract
-            expectedSource
-            expectedProfile
-
         exit 0
 
     requireGreen
@@ -832,196 +1009,56 @@ try
           + Environment.GetEnvironmentVariable("PATH") ]
 
     requireGreen
-        "QUINT-VERIFY"
+        "QUINT-POSITIVE-INVARIANTS-VERIFY"
         scratch
         quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
-          "acceptedVocabularyIsQualified"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
+        ([ "verify"
+           qnt
+           "--main"
+           "CoordinationProtocol"
+           "--init"
+           "init"
+           "--step"
+           "step"
+           "--invariants" ]
+         @ positiveInvariants
+         @ [ "--max-steps"
+             "4"
+             "--verbosity"
+             "1" ])
         environment
     |> ignore
 
-    requireGreen
-        "QUINT-AUTHORITY-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
-          "acceptedAuthoritiesAreQualified"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-LIFECYCLE-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
-          "humanIntentIsObservationIndependent"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-LIFECYCLE-DERIVATION-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
-          "lifecycleStatusIsDerived"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-RELATION-VALIDITY-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
-          "nativeRelationEdgesAreValid"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-RELATION-PRESERVATION-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
-          "relationChangesPreserveUnrelatedEdges"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-PROTOCOL-STREAM-ORDERING-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
-          "protocolEnvelopesAreValidAndOrdered"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-PROTOCOL-STREAM-RETENTION-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
-          "durableProtocolCheckpointsArePreserved"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
+    verifiedPositiveInvariantCount <- positiveInvariants.Length
 
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
     let originalQnt = File.ReadAllText q2Qnt
+    let rustMutationChecks = ResizeArray<unit -> unit>()
 
-    let requireMutationRed (name: string) (fixture: string) (replacement: string) =
+    let enqueueRustMutation code filePrefix testMatch (name: string) (fixture: string) (replacement: string) =
         if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
-            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
+            fail code ($"%s{name}: fixture absent")
 
-        let mutant = Path.Combine(scratch, $"protocol-mutation-%s{name}.qnt")
+        let mutant = Path.Combine(scratch, $"%s{filePrefix}-%s{name}.qnt")
         File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
 
-        let exitCode, output, error =
-            run
-                scratch
-                quint
-                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testMutation"; "--verbosity"; "0" ]
-                []
+        rustMutationChecks.Add(fun () ->
+            let exitCode, output, error =
+                run
+                    scratch
+                    quint
+                    [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+                      "--match"; testMatch; "--verbosity"; "0" ]
+                    []
 
-        if exitCode = 0 then
-            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
+            if exitCode = 0 then
+                fail code ($"%s{name}: mutant passed")
 
-        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
-            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+            if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
+                fail code ($"%s{name}: no failed witness; %s{output}; %s{error}"))
+
+    let requireMutationRed (name: string) (fixture: string) (replacement: string) =
+        enqueueRustMutation "MUTATION-NEGATIVE-CONTROL" "protocol-mutation" "^testMutation" name fixture replacement
 
     requireMutationRed
         "idempotency-key-binding"
@@ -1079,25 +1116,7 @@ try
         "      existing == intent,"
 
     let requireDurablePlanRed (name: string) (fixture: string) (replacement: string) =
-        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
-            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
-
-        let mutant = Path.Combine(scratch, $"protocol-durable-plan-%s{name}.qnt")
-        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
-
-        let exitCode, output, error =
-            run
-                scratch
-                quint
-                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testDurablePlan"; "--verbosity"; "0" ]
-                []
-
-        if exitCode = 0 then
-            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
-
-        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
-            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+        enqueueRustMutation "DURABLE-PLAN-NEGATIVE-CONTROL" "protocol-durable-plan" "^testDurablePlan" name fixture replacement
 
     requireDurablePlanRed
         "predecessor-binding"
@@ -1150,25 +1169,7 @@ try
         "    true,"
 
     let requireDesiredStateRed (name: string) (fixture: string) (replacement: string) =
-        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
-            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
-
-        let mutant = Path.Combine(scratch, $"protocol-desired-state-%s{name}.qnt")
-        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
-
-        let exitCode, output, error =
-            run
-                scratch
-                quint
-                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testDesiredState"; "--verbosity"; "0" ]
-                []
-
-        if exitCode = 0 then
-            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
-
-        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
-            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+        enqueueRustMutation "DESIRED-STATE-NEGATIVE-CONTROL" "protocol-desired-state" "^testDesiredState" name fixture replacement
 
     requireDesiredStateRed
         "family-completeness"
@@ -1231,25 +1232,7 @@ try
         "      true,"
 
     let requireCompiledOutputRed (name: string) (fixture: string) (replacement: string) =
-        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
-            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
-
-        let mutant = Path.Combine(scratch, $"protocol-compiled-output-%s{name}.qnt")
-        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
-
-        let exitCode, output, error =
-            run
-                scratch
-                quint
-                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testCompiledOutput"; "--verbosity"; "0" ]
-                []
-
-        if exitCode = 0 then
-            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
-
-        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
-            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+        enqueueRustMutation "COMPILED-OUTPUT-NEGATIVE-CONTROL" "protocol-compiled-output" "^testCompiledOutput" name fixture replacement
 
     requireCompiledOutputRed
         "duplicate-family"
@@ -1292,6 +1275,12 @@ try
         "projection-formats"
         "      family.contentContract == output.contentContract, family.formats == output.formats,"
         "      family.contentContract == output.contentContract, true,"
+
+    if rustMutationChecks.Count <> 41 then
+        fail "RUST-MUTATION-INVENTORY" ($"expected=41; actual=%d{rustMutationChecks.Count}")
+
+    let parallelOptions = ParallelOptions(MaxDegreeOfParallelism = 2)
+    Parallel.ForEach(rustMutationChecks, parallelOptions, fun check -> check ()) |> ignore
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 
@@ -1810,11 +1799,25 @@ try
     requireAuthorityRed "omitted-family" (mutateStep "nativeGitHubObservation") (fun text ->
         text.Replace(omittedFamilyRow, ""))
 
+    if verifiedPositiveInvariantCount <> 8 then
+        fail "POSITIVE-INVARIANT-COVERAGE" ($"expected=8; actual=%d{verifiedPositiveInvariantCount}")
+
+    if quintRejectedProcessCount <> 56 then
+        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=56; actual=%d{quintRejectedProcessCount}")
+
+    requireCompletedProcessInventory ()
+
+    q2Outcome <- "passed"
+    writeQualificationReceipt None
+    let totalDurationMs = qualificationClock.ElapsedMilliseconds
+
     printfn
-        "CANONICAL_QUINT_PROTOCOL_OK contract=%s source=%s profile=%s"
+        "CANONICAL_QUINT_PROTOCOL_OK contract=%s source=%s profile=%s receipt=%s durationMs=%d"
         expectedContract
         expectedSource
         expectedProfile
+        qualificationOutput
+        totalDurationMs
 finally
     if Directory.Exists scratch then
         Directory.Delete(scratch, true)

@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.bootstrap-ci-contract/1",
   "evidenceSchema": "fsgg.coordination.bootstrap-evidence/1",
-  "workflowSha256": "902e9dddf1e00a5ae1c2e5d14a9d69d5c5202dd10fe370ebbf7da23a98256ff5",
+  "workflowSha256": "0dd553f9d330277e4476eacc5cea24ceb83d39fbe58f967a64dd35a0ca92a793",
   "requiredProjectCount": 8,
   "requiredVulnerabilitySources": [
     "https://api.nuget.org/v3/index.json"
@@ -35,13 +35,20 @@
         "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror",
         "dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore",
         "dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger \"trx;LogFileName=architecture-tests.trx\" --results-directory artifacts/test-results/70-gs2-03-1-qualification-manifest",
+        "mkdir -p \"$RUNNER_TEMP/compiler-and-tests\"",
+        "cp artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx \"$RUNNER_TEMP/compiler-and-tests/architecture.trx\""
+      ]
+    },
+    {
+      "id": "canonical-quint",
+      "artifact": "canonical-quint/qualification.json",
+      "requiredRunFragments": [
+        "dotnet restore src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj --locked-mode",
         "if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then",
         "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
         "fi",
         "/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true",
-        "bash eng/qualify-canonical-quint.sh",
-        "mkdir -p \"$RUNNER_TEMP/compiler-and-tests\"",
-        "cp artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx \"$RUNNER_TEMP/compiler-and-tests/architecture.trx\""
+        "bash eng/qualify-canonical-quint.sh"
       ]
     },
     {
@@ -78,7 +85,7 @@
       "id": "evidence-manifest",
       "artifact": "evidence-manifest/contract.json",
       "requiredJobFragments": [
-        "needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke, bootstrap-recovery]"
+        "needs: [deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, bootstrap-recovery]"
       ],
       "requiredRunFragments": [
         "mkdir -p \"$RUNNER_TEMP/bootstrap-artifacts/evidence-manifest\"",

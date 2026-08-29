@@ -39,16 +39,19 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     let validator =
         File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
 
+    Assert.Contains("  canonical-quint:", workflow)
+    Assert.Contains("needs: [deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, bootstrap-recovery]", workflow)
     Assert.Contains("run: bash eng/qualify-canonical-quint.sh", workflow)
-    Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --compiler-only", qualification)
-    Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .", qualification)
+    let validatorInvocation = "dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output"
+    Assert.Contains(validatorInvocation, qualification)
+    Assert.Equal(
+        qualification.IndexOf(validatorInvocation, StringComparison.Ordinal),
+        qualification.LastIndexOf(validatorInvocation, StringComparison.Ordinal)
+    )
+    Assert.DoesNotContain("--compiler-only", qualification)
     Assert.Contains("quint-linux-amd64", qualification)
     Assert.Contains("sha256sum --check --status", qualification)
-    Assert.Contains("evidence --root . --work 70-gs2-03-1-qualification-manifest", qualification)
-    Assert.Contains("--sync-observed-run artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx", qualification)
-    Assert.Contains("fsgg-sdd\" analyze --root . --work 70-gs2-03-1-qualification-manifest", qualification)
-    Assert.Contains("fsgg-sdd\" verify --root . --work 70-gs2-03-1-qualification-manifest", qualification)
-    Assert.Contains("fsgg-sdd\" ship --root . --work 70-gs2-03-1-qualification-manifest", qualification)
+    Assert.DoesNotContain("70-gs2-03-1-qualification-manifest", qualification)
     Assert.Contains("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0", workflow)
     Assert.Contains("/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true", workflow)
     Assert.Contains("equivalent-named-block-partition", validator)
@@ -57,14 +60,22 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("equivalent-quint-trivia", validator)
     Assert.Contains("executedEquivalentVariants.Add name", validator)
     Assert.Contains("EQUIVALENT-AUTHORING-COVERAGE", validator)
+    Assert.Contains("\"--invariants\"", validator)
+    Assert.Contains("fsgg.coordination.canonical-quint-qualification/1", validator)
 
-    let analyzeCommand = "fsgg-sdd\" analyze --root . --work 70-gs2-03-1-qualification-manifest"
-    let evidenceCommand = "fsgg-sdd\" evidence --root . --work 70-gs2-03-1-qualification-manifest"
-    let firstAnalyze = qualification.IndexOf(analyzeCommand, StringComparison.Ordinal)
-    let evidenceSync = qualification.IndexOf(evidenceCommand, StringComparison.Ordinal)
-    let refreshedAnalyze = qualification.IndexOf(analyzeCommand, firstAnalyze + analyzeCommand.Length, StringComparison.Ordinal)
-    Assert.True(firstAnalyze >= 0 && firstAnalyze < evidenceSync)
-    Assert.True(evidenceSync < refreshedAnalyze)
+    let receiptSchema =
+        File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json"))
+    Assert.Contains("fsgg.coordination.canonical-quint-qualification/1", receiptSchema)
+    Assert.Contains("\"negativeControlCount\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":56}", receiptSchema)
+    Assert.Contains("\"apalacheVerify\"", receiptSchema)
+    Assert.Contains("ParallelOptions(MaxDegreeOfParallelism = 2)", validator)
+    Assert.Contains("if: ${{ always() }}", workflow)
+    Assert.Contains("q1Outcome <- \"failed\"", validator)
+    Assert.Contains("q2Outcome <- \"failed\"", validator)
+    Assert.Contains("requireCompletedProcessInventory ()", validator)
+    Assert.Contains("expectedExternalProcessCount = 85", validator)
+    Assert.Contains("expectedQuintProcessCount = 61", validator)
+    Assert.Contains("expectedApalacheVerifyInvocationCount = 14", validator)
 
 [<Fact>]
 let ``hosted canonical Quint gate cannot silently downgrade to static validation`` () =
@@ -489,6 +500,71 @@ let ``canonical Quint authority passes the independent static gate`` () =
     Assert.StartsWith("CANONICAL_QUINT_PROTOCOL_STATIC_OK", output)
     Assert.Equal("", error)
 
+[<Theory>]
+[<InlineData("q1", "failed", "not-run", "RECEIPT-SELF-TEST-Q1", JsonValueKind.Null)>]
+[<InlineData("q2", "passed", "failed", "RECEIPT-SELF-TEST-Q2", JsonValueKind.String)>]
+let ``canonical Quint failure receipts retain the failed phase`` phase q1 q2 code preparationKind =
+    let receipt =
+        Path.Combine(Path.GetTempPath(), $"fsgg-quint-failure-%s{phase}-" + Guid.NewGuid().ToString("N") + ".json")
+
+    try
+        let exitCode, _, error =
+            run
+                "dotnet"
+                [ "fsi"
+                  "eng/validate-canonical-quint-protocol.fsx"
+                  "--"
+                  "--root"
+                  "."
+                  "--output"
+                  receipt
+                  "--exercise-failure-receipt"
+                  phase ]
+
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains($"code=%s{code}", error)
+        use document = JsonDocument.Parse(File.ReadAllBytes receipt)
+        let value = document.RootElement
+        Assert.Equal(q1, value.GetProperty("q1Outcome").GetString())
+        Assert.Equal(q2, value.GetProperty("q2Outcome").GetString())
+        Assert.Equal(code, value.GetProperty("failure").GetProperty("code").GetString())
+        Assert.Equal(preparationKind, value.GetProperty("preparationSha256").ValueKind)
+        Assert.Equal(0, value.GetProperty("positiveInvariantCount").GetInt32())
+        Assert.Equal(0, value.GetProperty("negativeControlCount").GetInt32())
+    finally
+        if File.Exists receipt then File.Delete receipt
+
+[<Fact>]
+let ``canonical Quint retained process inventory near miss fails closed`` () =
+    let receipt =
+        Path.Combine(Path.GetTempPath(), "fsgg-quint-process-inventory-" + Guid.NewGuid().ToString("N") + ".json")
+
+    try
+        let exitCode, _, error =
+            run
+                "dotnet"
+                [ "fsi"
+                  "eng/validate-canonical-quint-protocol.fsx"
+                  "--"
+                  "--root"
+                  "."
+                  "--output"
+                  receipt
+                  "--exercise-failure-receipt"
+                  "process-inventory" ]
+
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("code=PROCESS-INVENTORY-COVERAGE", error)
+        Assert.Contains("expected=85/61/14; actual=84/60/14", error)
+        use document = JsonDocument.Parse(File.ReadAllBytes receipt)
+        let value = document.RootElement
+        Assert.Equal("passed", value.GetProperty("q1Outcome").GetString())
+        Assert.Equal("failed", value.GetProperty("q2Outcome").GetString())
+        Assert.Equal(84, value.GetProperty("processCounts").GetProperty("external").GetInt32())
+        Assert.Equal("PROCESS-INVENTORY-COVERAGE", value.GetProperty("failure").GetProperty("code").GetString())
+    finally
+        if File.Exists receipt then File.Delete receipt
+
 [<Fact>]
 let ``canonical Quint authority mutations fail closed`` () =
     let tempRoot =
@@ -513,6 +589,7 @@ let ``canonical Quint authority mutations fail closed`` () =
         Assert.Equal(0, cloneExit)
         Assert.Equal("", cloneError)
         mutate clone
+        let failureReceipt = Path.Combine(clone, "failure-receipt.json")
 
         let exitCode, _, error =
             runAt
@@ -523,10 +600,18 @@ let ``canonical Quint authority mutations fail closed`` () =
                   "--"
                   "--root"
                   "."
-                  "--static-only" ]
+                  "--static-only"
+                  "--output"
+                  failureReceipt ]
 
         Assert.NotEqual(0, exitCode)
         Assert.Contains($"code={expectedCode}", error)
+        Assert.True(File.Exists failureReceipt)
+        use receipt = JsonDocument.Parse(File.ReadAllBytes failureReceipt)
+        Assert.Equal("failed", receipt.RootElement.GetProperty("q1Outcome").GetString())
+        Assert.Equal("not-run", receipt.RootElement.GetProperty("q2Outcome").GetString())
+        Assert.Equal(expectedCode, receipt.RootElement.GetProperty("failure").GetProperty("code").GetString())
+        Assert.Equal(JsonValueKind.Null, receipt.RootElement.GetProperty("preparationSha256").ValueKind)
 
     try
         runMutation
