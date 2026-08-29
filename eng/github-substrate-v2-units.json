@@ -302,6 +302,22 @@
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
       "contractSha256": "fed54e1376d62a319ae9628a6df383a6327ce3c3a32229a2c1b0e55ae838e33e"
+    },
+    {
+      "id": "GS2-03.3",
+      "title": "Add generated structural tests",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-03.2"],
+      "permissionCeiling": ["repository-local generated structural cases derived only from the qualified Quint source and compiled contract, registration and coverage checks, schema round-trip and projection-freshness validation, and evidence", "no independently authored behavioral model, independent black-box oracle, fault injection, network, GitHub mutation, deployment, publication, or production write authority"],
+      "exitGate": "vocabulary completeness, transition coverage, command and mutation registration, permission coverage, schema round-trip, and projection freshness cases derive deterministically from the qualified Quint source and compiled contract without creating a second behavioral model under the pure portion of Q2 and Q7 architecture and evidence-storage controls",
+      "qGates": ["Q2", "Q7"],
+      "gateCommands": ["canonical-quint-pure-model", "architecture-tests", "evidence-storage-contract"],
+      "gateContracts": [
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" },
+        { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" },
+        { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
+      ],
+      "contractSha256": "4d492fb04e73c30f81ad8b96426afc13bc784595336c5a07e866da2e057cf804"
     }
   ]
 }

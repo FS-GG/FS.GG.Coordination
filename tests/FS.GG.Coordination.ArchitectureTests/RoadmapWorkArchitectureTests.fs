@@ -88,7 +88,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-03-2 without the rejected runtime branch`` () =
+let ``roadmap unit index advances through GS2-03-3 without the rejected runtime branch`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -119,7 +119,8 @@ let ``roadmap unit index advances through GS2-03-2 without the rejected runtime 
              "GS2-02.10"
              "GS2-02.11"
              "GS2-03.1"
-             "GS2-03.2" ]
+             "GS2-03.2"
+             "GS2-03.3" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -312,6 +313,24 @@ let ``roadmap unit index advances through GS2-03-2 without the rejected runtime 
         [ "Q2"; "Q7" ],
         frozenCorpusUnit.GetProperty("gateContracts").EnumerateArray()
         |> Seq.map (fun value -> value.GetProperty("qGate").GetString())
+        |> Seq.toList
+    )
+
+    let generatedStructuralUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-03.3")
+
+    Assert.Equal<string list>(
+        [ "GS2-03.2" ],
+        generatedStructuralUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "canonical-quint-pure-model"; "architecture-tests"; "evidence-storage-contract" ],
+        generatedStructuralUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
         |> Seq.toList
     )
 
