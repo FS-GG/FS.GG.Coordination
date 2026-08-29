@@ -20,7 +20,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "b82983e10324c241cef1187cf58ce2ec5222ab4d7e253d53179d5343927c518a"
+    "2a21fcd7188ad6486aedae9bbae6f1840178d5878c4b578ff49c336b1bf5e98e"
 
 let expectedContract =
     "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
@@ -32,8 +32,8 @@ let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
-let expectedExternalProcessCount = 85
-let expectedQuintProcessCount = 61
+let expectedExternalProcessCount = 93
+let expectedQuintProcessCount = 68
 let expectedApalacheVerifyInvocationCount = 14
 
 let expectedApalacheJar =
@@ -267,8 +267,8 @@ match receiptFailurePhase with
     currentPhase <- "q2"
     verifiedPositiveInvariantCount <- 8
     quintRejectedProcessCount <- 56
-    externalProcessCount <- 84
-    quintProcessCount <- 60
+    externalProcessCount <- 92
+    quintProcessCount <- 67
     apalacheVerifyInvocationCount <- 14
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
@@ -288,6 +288,9 @@ let binding = Path.Combine(retained, "Protocol.Generated.fs")
 let sourceMap = Path.Combine(retained, "source-map.json")
 let receipt = Path.Combine(retained, "receipt.json")
 let outputGenerator = Path.Combine(root, "eng/generate-compiled-contract-outputs.fsx")
+let qualificationValidator = Path.Combine(root, "eng/validate-quint-qualification.fsx")
+let qualificationConfiguration = Path.Combine(root, "eng/quint-qualification.json")
+let qualificationBaseline = Path.Combine(root, "eng/quint-qualification-baseline.json")
 let compiledOutputs = Path.Combine(retained, "compiled-outputs")
 let compiledOutputManifest = Path.Combine(compiledOutputs, "manifest.json")
 
@@ -300,6 +303,9 @@ for code, path in
       "SOURCE-MAP-MISSING", sourceMap
       "RECEIPT-MISSING", receipt
       "OUTPUT-GENERATOR-MISSING", outputGenerator
+      "QUALIFICATION-VALIDATOR-MISSING", qualificationValidator
+      "QUALIFICATION-CONFIG-MISSING", qualificationConfiguration
+      "QUALIFICATION-BASELINE-MISSING", qualificationBaseline
       "COMPILED-OUTPUT-MANIFEST-MISSING", compiledOutputManifest ] do
     requireFile code path
 
@@ -578,6 +584,14 @@ for rival in
       "type ObservationPlan =" ] do
     if authoredFsharp.Contains(rival, StringComparison.Ordinal) then
         fail "PARALLEL-AST" rival
+
+requireGreen
+    "QUINT-QUALIFICATION-CONTRACT"
+    root
+    "dotnet"
+    [ "fsi"; qualificationValidator; "--"; "--self-test"; "--root"; root; "--config"; qualificationConfiguration ]
+    []
+|> ignore
 
 if staticOnly then
     printfn "CANONICAL_QUINT_PROTOCOL_STATIC_OK contract=%s profile=%s" expectedContract expectedProfile
@@ -939,6 +953,34 @@ try
     if compilerOnly then
         Directory.Delete(scratch, true)
         exit 0
+
+    for rootModule in
+        [ "QualificationAuthorityRoot"
+          "QualificationLifecycleRoot"
+          "QualificationRelationsRoot"
+          "QualificationProtocolStreamsRoot" ] do
+        requireGreen
+            "QUINT-BOUNDED-ROOT"
+            scratch
+            quint
+            [ "run"; q2Qnt; "--main"; rootModule; "--init"; "init"; "--step"; "rootStep"
+              "--invariant"; "rootSafety"; "--witnesses"; "positiveWitness"; "adversarialWitness"
+              "--max-steps"; "8"; "--max-samples"; "100"; "--seed"; "1"; "--verbosity"; "0" ]
+            []
+        |> ignore
+
+    for rootPattern in
+        [ "^test(Mutation|DurablePlan)"
+          "^testDesiredState"
+          "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)" ] do
+        requireGreen
+            "QUINT-BOUNDED-TEST-ROOT"
+            scratch
+            quint
+            [ "test"; q2Qnt; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+              "--match"; rootPattern; "--verbosity"; "0" ]
+            []
+        |> ignore
 
     requireGreen
         "QUINT-RUN"

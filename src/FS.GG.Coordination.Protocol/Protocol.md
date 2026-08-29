@@ -2097,4 +2097,73 @@ module CoordinationProtocolTests {
           digest: "generated-digest", fresh: false })) })),
   }
 }
+
+// GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only
+// the actions and properties needed for one independently qualified closure. Quint flattening
+// therefore retains the used transitive closure instead of the all-actions integration root.
+module QualificationAuthorityRoot {
+  import CoordinationProtocol.*
+
+  action rootStep = any {
+    observeProtocolEvidence,
+    acceptVocabularyIdentity("SubjectVocabulary"),
+    observeAuthority(nativeGitHubObservation),
+    acceptObservedAuthority,
+    acceptObservationKnowledge,
+  }
+
+  val rootSafety = and { acceptedVocabularyIsQualified, acceptedAuthoritiesAreQualified }
+  val positiveWitness = acceptedVocabulary.contains("SubjectVocabulary")
+  val adversarialWitness = authorityObservationAvailable
+  val antiVacuityWitness = acceptedVocabulary.contains("SubjectVocabulary") and not(evidenceObserved)
+}
+
+module QualificationLifecycleRoot {
+  import CoordinationProtocol.*
+
+  action rootStep = any {
+    observeProtocolEvidence,
+    setHumanIntent("INTENT-Ready"),
+    observeLifecycleFacts(claimedLifecycleFacts),
+    refreshLifecycleStatus,
+  }
+
+  val rootSafety = and { humanIntentIsObservationIndependent, lifecycleStatusIsDerived }
+  val positiveWitness = lifecycleStatusCurrent and lifecycleStatus == "In progress"
+  val adversarialWitness = humanIntentId == "INTENT-Ready" and not(lifecycleStatusCurrent)
+  val antiVacuityWitness = lifecycleStatusCurrent and lifecycleStatus != deriveLifecycleStatus(humanIntentId, lifecycleFacts)
+}
+
+module QualificationRelationsRoot {
+  import CoordinationProtocol.*
+
+  action rootStep = any {
+    addNativeRelation(parentChildEdge),
+    addNativeRelation(blockingEdge),
+    removeNativeRelation(parentChildEdge),
+  }
+
+  val rootSafety = and { nativeRelationEdgesAreValid, relationChangesPreserveUnrelatedEdges }
+  val positiveWitness = nativeRelationEdges.contains(parentChildEdge)
+  val adversarialWitness = nativeRelationEdges.contains(blockingEdge)
+  val antiVacuityWitness = nativeRelationEdges.exists(edge => not(nativeRelationEdgeIsValid(edge)))
+}
+
+module QualificationProtocolStreamsRoot {
+  import CoordinationProtocol.*
+
+  action rootStep = any {
+    appendProtocolEnvelope(claimEnvelope),
+    appendProtocolEnvelope(leaseEnvelope),
+    appendProtocolEnvelope(reviewCheckpointEnvelope),
+    appendProtocolEnvelope(operationLockEnvelope),
+    appendProtocolEnvelope(electionCheckpointEnvelope),
+    compactEphemeralProtocolEnvelope(operationLockEnvelope),
+  }
+
+  val rootSafety = and { protocolEnvelopesAreValidAndOrdered, durableProtocolCheckpointsArePreserved }
+  val positiveWitness = protocolStreamEvents.contains(reviewCheckpointEnvelope)
+  val adversarialWitness = protocolStreamEvents.contains(operationLockEnvelope)
+  val antiVacuityWitness = not(durableProtocolCheckpointsArePreserved)
+}
 ```

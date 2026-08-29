@@ -531,7 +531,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
         let toolProperties = tools.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let inputProperties = inputs.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let preparationDigest = stringProperty "preparationSha256" root |> Option.defaultValue ""
-        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|56|85|61|14|%s{preparationDigest}|none|none"))
+        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|56|93|68|14|%s{preparationDigest}|none|none"))
         let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
         let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
         let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
@@ -545,10 +545,10 @@ let private inspectCanonicalQuintReceipt (path: string) =
               yield violation "quint-receipt-inventory" "expected eight positive invariants and 56 observed negative-control rejections"
           if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
               yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
-          if int64Property "external" processCounts <> Some 85L
-             || int64Property "quintCli" processCounts <> Some 61L
+          if int64Property "external" processCounts <> Some 93L
+             || int64Property "quintCli" processCounts <> Some 68L
              || int64Property "apalacheVerify" processCounts <> Some 14L then
-              yield violation "quint-receipt-process-count" "expected exact retained process inventory 85/61/14"
+              yield violation "quint-receipt-process-count" "expected exact retained process inventory 93/68/14"
           if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
               yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
           if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then
@@ -563,7 +563,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
               if stringProperty name tools <> Some expected then
                   yield violation "quint-receipt-tool-digest" name
           let expectedInputs =
-              [ "sourceSha256", "b82983e10324c241cef1187cf58ce2ec5222ab4d7e253d53179d5343927c518a"
+              [ "sourceSha256", "2a21fcd7188ad6486aedae9bbae6f1840178d5878c4b578ff49c336b1bf5e98e"
                 "contractSha256", "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76" ]
           for name, expected in expectedInputs do
               if stringProperty name inputs <> Some expected then

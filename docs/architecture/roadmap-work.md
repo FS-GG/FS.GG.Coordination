@@ -161,6 +161,29 @@ witness within the compiler's fixed graph ceiling. This unit remains repository-
 and stops before deterministic deployment identity or any writer, network, hosted
 runtime, publication, or production authority.
 
+GS2-03.4 keeps the same canonical profile-2 behavior and adds seven bounded
+qualification roots in the adjacent executable Quint fence. Four state-machine
+roots expose authority, lifecycle, relation, and protocol-stream transitions;
+three test roots isolate mutation/durable-plan, desired-state, and qualification
+closures. `eng/quint-qualification.json` classifies every canonical state variable
+and action, closes the acyclic module graph, binds exact root closures, witnesses,
+selection modes, budgets, and future-module admission. Ordinary pull requests use
+the complete reverse-dependency closure, while main, acceptance, freeze, and
+release checkpoints use the full inventory.
+
+`eng/validate-quint-qualification.fsx` is the separately authored black-box
+observer for claim exclusion, stale projection, dependency concurrency, partial
+operation, old-client fencing, ledger tamper, exact-head review, post-merge
+verification, dual-feed recovery, bounded concrete/abstract equivalence, and the
+scale envelope. Every oracle has a subject mutation that must change its outcome.
+The validator also rejects cycles, incomplete closure, missing witnesses, stale
+identity, missing or exceeded measurements, unsound selection, and incomplete
+future admission. `eng/quint-qualification-baseline.json` retains the runner-class
+calibration and all required depth/state/sample/time/memory/artifact measurements;
+the evidence index binds the independent oracle implementation and both retained
+contracts. These surfaces are repository-local and grant no network, GitHub
+mutation, deployment, publication, or production-write authority.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

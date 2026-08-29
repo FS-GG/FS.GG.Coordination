@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "584d60fc30f82598dee00036c75a7355c128527f",
+    "revision": "2cb04ef5f1bc7b44e924c89af949cc64b948265e",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "e1621fce3a4e86a22391490cacd17ab0b4e8b911a9eba518e43d110d042427fc"
+    "sha256": "6d71c797c7c6aaeaa8674cd7e25c9cb4ec39ac5b3692e983675e21f2364642f3"
   },
   "units": [
     {
