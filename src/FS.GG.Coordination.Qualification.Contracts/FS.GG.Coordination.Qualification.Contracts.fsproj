@@ -3,6 +3,8 @@
   <ItemGroup>
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
+    <Compile Include="QualificationReuse.fsi" />
+    <Compile Include="QualificationReuse.fs" />
     <Compile Include="BootstrapCi.fsi" />
     <Compile Include="BootstrapCi.fs" />
     <Compile Include="RoadmapWork.fsi" />

@@ -1,6 +1,7 @@
 module FS.GG.Coordination.Qualification.Contracts.BootstrapCi
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text
@@ -27,6 +28,18 @@ type ActionPins =
       UploadArtifact: string
       DownloadArtifact: string }
 
+type ReuseContract =
+    { JobId: string
+      Artifact: string
+      TimeoutMinutes: int
+      EntryPoint: string
+      UploadName: string
+      WorkflowPath: string
+      MaxCandidateArtifacts: int
+      Runner: string
+      Architecture: string
+      ReviewPolicy: string }
+
 type BootstrapContract =
     { EvidenceSchema: string
       Actions: ActionPins
@@ -36,6 +49,7 @@ type BootstrapContract =
       RequiredGateCount: int
       RequiredProjects: string list
       RequiredVulnerabilitySources: string list
+      Reuse: ReuseContract
       Jobs: GateContract list
       Bytes: byte array }
 
@@ -97,7 +111,7 @@ let private loadContract root =
     let bytes = File.ReadAllBytes path
     use document = JsonDocument.Parse bytes
     let value = document.RootElement
-    if stringProperty "schema" value <> Some "fsgg.coordination.bootstrap-qualification-plan/2" then
+    if stringProperty "schema" value <> Some "fsgg.coordination.bootstrap-qualification-plan/3" then
         failwith "bootstrap qualification plan schema is unsupported"
     let evidenceSchema = stringProperty "evidenceSchema" value |> Option.defaultWith (fun () -> failwith "evidenceSchema is missing")
     let actionsValue = value.GetProperty("actions")
@@ -122,7 +136,7 @@ let private loadContract root =
     for name in [ "checkout"; "setupDotnet"; "uploadArtifact"; "downloadArtifact" ] do
         if stringProperty name actionRuntimes <> Some "node24" then failwith $"action runtime must be node24: %s{name}"
     if stringArray "triggers" value <> [ "pull_request"; "push:main" ] then failwith "triggers must be pull_request and push:main"
-    if stringArray "permissions" value <> [ "contents:read" ] then failwith "permissions must be contents:read"
+    if stringArray "permissions" value <> [ "actions:read"; "contents:read" ] then failwith "permissions must be actions:read and contents:read"
     let concurrency = value.GetProperty("concurrency")
     let concurrencyGroup = stringProperty "group" concurrency |> Option.defaultWith (fun () -> failwith "concurrency group is missing")
     let cancelInProgress = boolProperty "cancelInProgress" concurrency |> Option.defaultWith (fun () -> failwith "cancelInProgress is missing")
@@ -136,6 +150,20 @@ let private loadContract root =
     let requiredVulnerabilitySources = stringArray "requiredVulnerabilitySources" value
     if List.isEmpty requiredVulnerabilitySources || requiredVulnerabilitySources |> List.exists (fun source -> not (source.StartsWith("https://", StringComparison.OrdinalIgnoreCase))) then
         failwith "requiredVulnerabilitySources must be a non-empty HTTPS-only set"
+    let reuseValue = value.GetProperty("reuse")
+    let reuse =
+        { JobId = stringProperty "jobId" reuseValue |> Option.defaultWith (fun () -> failwith "reuse jobId is missing")
+          Artifact = stringProperty "artifact" reuseValue |> Option.defaultWith (fun () -> failwith "reuse artifact is missing")
+          TimeoutMinutes = reuseValue.GetProperty("timeoutMinutes").GetInt32()
+          EntryPoint = stringProperty "entryPoint" reuseValue |> Option.defaultWith (fun () -> failwith "reuse entryPoint is missing")
+          UploadName = stringProperty "uploadName" reuseValue |> Option.defaultWith (fun () -> failwith "reuse uploadName is missing")
+          WorkflowPath = stringProperty "workflowPath" reuseValue |> Option.defaultWith (fun () -> failwith "reuse workflowPath is missing")
+          MaxCandidateArtifacts = reuseValue.GetProperty("maxCandidateArtifacts").GetInt32()
+          Runner = stringProperty "runner" reuseValue |> Option.defaultWith (fun () -> failwith "reuse runner is missing")
+          Architecture = stringProperty "architecture" reuseValue |> Option.defaultWith (fun () -> failwith "reuse architecture is missing")
+          ReviewPolicy = stringProperty "reviewPolicy" reuseValue |> Option.defaultWith (fun () -> failwith "reuse reviewPolicy is missing") }
+    if reuse <> { JobId = "reuse-decision"; Artifact = "reuse-decision/decision.json"; TimeoutMinutes = 5; EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"; UploadName = "reuse-decision"; WorkflowPath = ".github/workflows/bootstrap-qualification.yml"; MaxCandidateArtifacts = 100; Runner = "ubuntu-latest"; Architecture = "x64"; ReviewPolicy = "structured-decisions/1" } then
+        failwith "reuse policy differs from the reviewed fail-closed contract"
     let jobs =
         arrayProperty "jobs" value
         |> Option.defaultWith (fun () -> failwith "jobs are missing")
@@ -190,6 +218,7 @@ let private loadContract root =
       RequiredGateCount = requiredGateCount
       RequiredProjects = requiredProjects
       RequiredVulnerabilitySources = requiredVulnerabilitySources
+      Reuse = reuse
       Jobs = jobs
       Bytes = bytes }
 
@@ -216,6 +245,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "    branches: [main]"
     line ""
     line "permissions:"
+    line "  actions: read"
     line "  contents: read"
     line ""
     line "concurrency:"
@@ -223,13 +253,50 @@ let private renderWorkflow (contract: BootstrapContract) =
     line $"  cancel-in-progress: %s{contract.CancelInProgress.ToString().ToLowerInvariant()}"
     line ""
     line "jobs:"
+    line $"  %s{contract.Reuse.JobId}:"
+    line $"    name: %s{contract.Reuse.JobId}"
+    line $"    runs-on: %s{contract.Reuse.Runner}"
+    line $"    timeout-minutes: %d{contract.Reuse.TimeoutMinutes}"
+    line "    outputs:"
+    line "      route: ${{ steps.decide.outputs.route }}"
+    line "      prior-run-id: ${{ steps.decide.outputs.prior-run-id }}"
+    line "    env:"
+    line "      GH_TOKEN: ${{ github.token }}"
+    line "      FSGG_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}"
+    line "      FSGG_CURRENT_RUN_ID: ${{ github.run_id }}"
+    line "      FSGG_REPOSITORY: ${{ github.repository }}"
+    line "      FSGG_RUNNER_TEMP: /tmp/fsgg-${{ github.run_id }}-reuse"
+    line "    steps:"
+    line "      - name: Check out the exact candidate"
+    line $"        uses: actions/checkout@%s{contract.Actions.Checkout}"
+    line "        with:"
+    line "          ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+    line "          fetch-depth: 0"
+    line "      - name: Set up the pinned .NET SDK"
+    line $"        uses: actions/setup-dotnet@%s{contract.Actions.SetupDotnet}"
+    line "        with:"
+    line "          global-json-file: global.json"
+    line "      - name: Select the exact-head qualification route"
+    line "        id: decide"
+    line $"        run: %s{contract.Reuse.EntryPoint}"
+    line "      - name: Upload the qualification route receipt"
+    line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
+    line "        with:"
+    line $"          name: %s{contract.Reuse.UploadName}"
+    line "          path: ${{ env.FSGG_RUNNER_TEMP }}/decision.json"
+    line "          if-no-files-found: error"
+    line ""
     for gate in contract.Jobs do
         line $"  %s{gate.Id}:"
         line $"    name: %s{gate.Id}"
-        if not (List.isEmpty gate.Needs) then
-            let needs = String.concat ", " gate.Needs
-            line $"    needs: [%s{needs}]"
-        line "    runs-on: ubuntu-latest"
+        let needs = contract.Reuse.JobId :: gate.Needs
+        let renderedNeeds = String.concat ", " needs
+        line $"    needs: [%s{renderedNeeds}]"
+        if gate.DownloadArtifacts then
+            line "    if: ${{ always() && needs.reuse-decision.result == 'success' }}"
+        else
+            line "    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}"
+        line $"    runs-on: %s{contract.Reuse.Runner}"
         line $"    timeout-minutes: %d{gate.TimeoutMinutes}"
         if not (List.isEmpty gate.Environment) then
             line "    env:"
@@ -245,10 +312,23 @@ let private renderWorkflow (contract: BootstrapContract) =
         line "        with:"
         line "          global-json-file: global.json"
         if gate.DownloadArtifacts then
-            line "      - name: Download all prerequisite evidence"
+            line "      - name: Download the current route receipt"
+            line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
+            line "        with:"
+            line $"          name: %s{contract.Reuse.UploadName}"
+            line "          path: ${{ runner.temp }}/bootstrap-decision"
+            line "      - name: Download current execution evidence"
+            line "        if: ${{ needs.reuse-decision.outputs.route == 'execute' }}"
             line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
             line "        with:"
             line "          path: ${{ runner.temp }}/bootstrap-artifacts"
+            line "      - name: Download selected prior evidence"
+            line "        if: ${{ needs.reuse-decision.outputs.route == 'reuse' }}"
+            line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
+            line "        with:"
+            line "          run-id: ${{ needs.reuse-decision.outputs.prior-run-id }}"
+            line "          github-token: ${{ github.token }}"
+            line "          path: ${{ runner.temp }}/prior-bootstrap-artifacts"
         line "      - name: Run the stable qualification gate"
         line $"        run: %s{gate.EntryPoint}"
         line "      - name: Upload qualification evidence"
@@ -322,6 +402,54 @@ let private safeArtifactPath (root: string) (relative: string) =
     let combined = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)))
     let normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + string Path.DirectorySeparatorChar
     if combined.StartsWith(normalizedRoot, StringComparison.Ordinal) then Some combined else None
+
+let private trackedFiles root =
+    let startInfo = ProcessStartInfo("git")
+    startInfo.WorkingDirectory <- root
+    startInfo.ArgumentList.Add("ls-files")
+    startInfo.ArgumentList.Add("-s")
+    startInfo.ArgumentList.Add("-z")
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use childProcess = Process.Start startInfo
+    let output = childProcess.StandardOutput.ReadToEnd()
+    let error = childProcess.StandardError.ReadToEnd()
+    childProcess.WaitForExit()
+    if childProcess.ExitCode <> 0 then failwith $"cannot enumerate the tracked qualification tree: %s{error.Trim()}"
+    output.Split('\000', StringSplitOptions.RemoveEmptyEntries)
+    |> Array.map (fun entry ->
+        let tab = entry.IndexOf('\t')
+        if tab < 0 then failwith "tracked tree entry is malformed"
+        let identity = entry.Substring(0, tab).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        if identity.Length <> 3 || identity[2] <> "0" then failwith "tracked tree entry has an unsupported stage"
+        let mode = identity[0]
+        let relative = entry.Substring(tab + 1)
+        let absolute = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar))
+        let bytes =
+            if mode = "120000" then
+                let target = FileInfo(absolute).LinkTarget
+                if isNull target then failwith $"tracked symbolic link is unreadable: %s{relative}"
+                Encoding.UTF8.GetBytes target
+            else File.ReadAllBytes absolute
+        ({ Mode = mode
+           Path = relative
+           Bytes = bytes }: QualificationReuse.TrackedFile))
+    |> Array.toList
+
+let private qualificationSubject root (contract: BootstrapContract) =
+    let planBytes = contract.Bytes
+    let workflowBytes = File.ReadAllBytes(Path.Combine(root, contract.Reuse.WorkflowPath))
+    let environment =
+        Encoding.UTF8.GetBytes(
+            String.concat "|"
+                [ contract.Reuse.Runner
+                  contract.Reuse.Architecture
+                  contract.ConcurrencyGroup
+                  string contract.CancelInProgress
+                  String.concat "," [ "actions:read"; "contents:read" ] ])
+    let reviewPolicy = Encoding.UTF8.GetBytes contract.Reuse.ReviewPolicy
+    QualificationReuse.createSubject (trackedFiles root) planBytes workflowBytes environment reviewPolicy
 
 let private recoveryStages =
     [ "clone"; "restore"; "build"; "unit-tests"; "architecture-tests"; "pack"; "install"; "execute" ]
@@ -455,7 +583,12 @@ let private inspectCanonicalQuintArtifact (artifactRoot: string) (contract: Boot
         | _ -> [ violation "quint-receipt-missing" job.Artifact ])
     |> Option.defaultValue [ violation "quint-receipt-contract" "formal receipt kind is absent" ]
 
-let private writeEvidence (output: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) =
+let private decisionText = function
+    | QualificationReuse.Reuse -> "reuse"
+    | QualificationReuse.Execute -> "execute"
+    | QualificationReuse.Refuse -> "refuse"
+
+let private writeEvidence (output: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) (decision: QualificationReuse.Decision) =
     if not (isSha head) then failwith "candidate head must be an exact 40-hex SHA"
     let artifacts =
         contract.Jobs
@@ -469,6 +602,19 @@ let private writeEvidence (output: string) (head: string) (artifactRoot: string)
     writer.WriteStartObject()
     writer.WriteString("schema", contract.EvidenceSchema)
     writer.WriteString("candidate", head.ToLowerInvariant())
+    writer.WriteString("route", decisionText decision.Kind)
+    writer.WriteString("subjectSha256", decision.SubjectSha256)
+    writer.WriteString("decisionSha256", decision.SelfSha256)
+    match decision.Prior with
+    | None -> writer.WriteNull("prior")
+    | Some prior ->
+        writer.WriteStartObject("prior")
+        writer.WriteString("head", prior.Head)
+        writer.WriteNumber("runId", prior.RunId)
+        writer.WriteNumber("attempt", prior.Attempt)
+        writer.WriteString("evidenceSha256", prior.EvidenceSha256)
+        writer.WriteString("artifactExpiresAt", prior.ArtifactExpiresAt)
+        writer.WriteEndObject()
     writer.WriteString("planSha256", sha256Bytes contract.Bytes)
     writer.WriteStartArray("gates")
     for gate, digest in artifacts do
@@ -484,19 +630,40 @@ let private writeEvidence (output: string) (head: string) (artifactRoot: string)
     writer.WriteEndObject()
     writer.Flush()
 
-let private inspectEvidence (path: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) =
+let private inspectEvidence (path: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) (decision: QualificationReuse.Decision) =
     try
         use document = JsonDocument.Parse(File.ReadAllBytes path)
         let root = document.RootElement
         let gates = arrayProperty "gates" root |> Option.defaultValue []
         let expected = contract.Jobs |> List.map (fun gate -> gate.Id, gate) |> Map.ofList
         let ids = gates |> List.choose (stringProperty "id")
-        [ yield! inspectRecoveryArtifact artifactRoot head contract
+        let artifactHead = decision.Prior |> Option.map _.Head |> Option.defaultValue head
+        [ yield! inspectRecoveryArtifact artifactRoot artifactHead contract
           yield! inspectCanonicalQuintArtifact artifactRoot contract
           if stringProperty "schema" root <> Some contract.EvidenceSchema then
               yield violation "evidence-schema" "unsupported or absent schema"
           if stringProperty "candidate" root <> Some(head.ToLowerInvariant()) then
               yield violation "evidence-candidate" $"expected=%s{head}"
+          if stringProperty "route" root <> Some(decisionText decision.Kind) then
+              yield violation "evidence-route" "terminal route does not match the decision receipt"
+          if stringProperty "subjectSha256" root <> Some decision.SubjectSha256 then
+              yield violation "evidence-subject-digest" "terminal subject does not match the decision receipt"
+          if stringProperty "decisionSha256" root <> Some decision.SelfSha256 then
+              yield violation "evidence-decision-digest" "terminal decision digest does not match"
+          let priorElement = root.GetProperty("prior")
+          match decision.Prior with
+          | None when priorElement.ValueKind <> JsonValueKind.Null ->
+              yield violation "evidence-prior" "execute evidence must not carry prior authority"
+          | Some prior when priorElement.ValueKind <> JsonValueKind.Object ->
+              yield violation "evidence-prior" "reuse evidence must carry prior authority"
+          | Some prior ->
+              if stringProperty "head" priorElement <> Some prior.Head
+                 || int64Property "runId" priorElement <> Some prior.RunId
+                 || priorElement.GetProperty("attempt").GetInt32() <> prior.Attempt
+                 || stringProperty "evidenceSha256" priorElement <> Some prior.EvidenceSha256
+                 || stringProperty "artifactExpiresAt" priorElement <> Some prior.ArtifactExpiresAt then
+                  yield violation "evidence-prior" "prior authority differs from the decision receipt"
+          | None -> ()
           if stringProperty "planSha256" root <> Some(sha256Bytes contract.Bytes) then
               yield violation "evidence-plan-digest" "qualification plan bytes do not match"
           if ids.Length <> gates.Length || ids |> List.distinct |> List.length <> ids.Length || Set.ofList ids <> (expected |> Map.keys |> Set.ofSeq) then
@@ -519,6 +686,37 @@ let private inspectEvidence (path: string) (head: string) (artifactRoot: string)
                           yield violation "evidence-artifact-digest" $"gate=%s{id} observed=%s{observed}" ]
     with exceptionValue ->
         [ violation "evidence-unreadable" exceptionValue.Message ]
+
+let private loadDecision path =
+    match QualificationReuse.parseDecision (File.ReadAllBytes path) with
+    | Ok decision -> decision
+    | Error problem -> failwith $"reuse decision is invalid: %s{problem}"
+
+let private writeDecision path decision =
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath path)) |> ignore
+    File.WriteAllBytes(path, QualificationReuse.decisionBytes decision)
+
+let private selectPriorManifest (path: string) (priorHead: string) (contract: BootstrapContract) =
+    use document = JsonDocument.Parse(File.ReadAllBytes path)
+    let root = document.RootElement
+    if stringProperty "schema" root <> Some contract.EvidenceSchema then failwith "prior terminal evidence schema is unsupported"
+    if stringProperty "candidate" root <> Some(priorHead.ToLowerInvariant()) then failwith "prior terminal evidence head does not match its run"
+    if stringProperty "route" root <> Some "execute" then failwith "transitive qualification reuse is not selectable"
+    if stringProperty "planSha256" root <> Some(sha256Bytes contract.Bytes) then failwith "prior qualification plan differs"
+    stringProperty "subjectSha256" root |> Option.defaultWith (fun () -> failwith "prior subject digest is missing")
+
+let private requiredInt64 name arguments =
+    match optionValue name arguments with
+    | Some value ->
+        match Int64.TryParse value with
+        | true, parsed when parsed > 0L -> parsed
+        | _ -> failwith $"%s{name} must be a positive integer"
+    | None -> failwith $"%s{name} is required"
+
+let private requiredInt name arguments =
+    let value = requiredInt64 name arguments
+    if value > int64 Int32.MaxValue then failwith $"%s{name} is too large"
+    int value
 
 let execute (arguments: string list) =
     let arguments = arguments |> List.filter ((<>) "--")
@@ -543,6 +741,39 @@ let execute (arguments: string list) =
                 File.WriteAllText(output, renderWorkflow contract, UTF8Encoding(false))
                 []
             | "workflow" -> inspectWorkflow root contract
+            | "subject" ->
+                match optionValue "--output" arguments with
+                | Some output ->
+                    qualificationSubject root contract
+                    |> QualificationReuse.subjectBytes
+                    |> fun bytes -> File.WriteAllBytes(Path.GetFullPath output, bytes)
+                    []
+                | None -> [ violation "argument" "subject requires --output" ]
+            | "select" ->
+                match optionValue "--head" arguments, optionValue "--output" arguments with
+                | Some head, Some output when isSha head ->
+                    let subject = qualificationSubject root contract
+                    let decision =
+                        match optionValue "--refuse" arguments with
+                        | Some reason -> QualificationReuse.refuse head subject.SubjectSha256 reason
+                        | None ->
+                            match optionValue "--prior-manifest" arguments, optionValue "--prior-head" arguments with
+                            | None, None -> QualificationReuse.decide head subject.SubjectSha256 None None
+                            | Some manifest, Some priorHead when isSha priorHead ->
+                                let evidenceDigest = sha256File (Path.GetFullPath manifest)
+                                let prior: QualificationReuse.PriorRun =
+                                    { Head = priorHead.ToLowerInvariant()
+                                      RunId = requiredInt64 "--prior-run" arguments
+                                      Attempt = requiredInt "--prior-attempt" arguments
+                                      EvidenceSha256 = evidenceDigest
+                                      ArtifactExpiresAt = optionValue "--expires" arguments |> Option.defaultWith (fun () -> failwith "--expires is required")
+                                      RunnerMinutes = 0M }
+                                let priorSubject = selectPriorManifest (Path.GetFullPath manifest) prior.Head contract
+                                QualificationReuse.decide head subject.SubjectSha256 (Some prior) (Some priorSubject)
+                            | _ -> QualificationReuse.refuse head subject.SubjectSha256 "incomplete-prior-selection"
+                    writeDecision (Path.GetFullPath output) decision
+                    []
+                | _ -> [ violation "argument" "select requires an exact --head and --output" ]
             | "vulnerability" ->
                 optionValue "--report" arguments
                 |> Option.map (fun path -> inspectVulnerabilityReport (Path.GetFullPath path) root contract)
@@ -551,29 +782,55 @@ let execute (arguments: string list) =
                 match
                     optionValue "--head" arguments,
                     optionValue "--artifacts" arguments,
-                    optionValue "--output" arguments
+                    optionValue "--output" arguments,
+                    optionValue "--decision" arguments
                 with
-                | Some head, Some artifacts, Some output when isSha head ->
+                | Some head, Some artifacts, Some output, Some decisionPath when isSha head ->
                     let artifactRoot = Path.GetFullPath artifacts
+                    let decision = loadDecision (Path.GetFullPath decisionPath)
 
                     let qualificationViolations =
-                        inspectRecoveryArtifact artifactRoot head contract
-                        @ inspectCanonicalQuintArtifact artifactRoot contract
+                        [ if decision.Candidate <> head.ToLowerInvariant() then
+                              yield violation "reuse-candidate" "decision is not bound to the current exact head"
+                          if decision.Kind = QualificationReuse.Refuse then
+                              yield violation "reuse-refused" decision.Reason
+                          match decision.Prior with
+                          | None ->
+                              yield! inspectRecoveryArtifact artifactRoot head contract
+                              yield! inspectCanonicalQuintArtifact artifactRoot contract
+                          | Some prior ->
+                              let priorDecisionPath = Path.Combine(artifactRoot, contract.Reuse.Artifact)
+                              let priorManifestPath = Path.Combine(artifactRoot, "bootstrap-evidence-manifest/bootstrap-evidence.json")
+                              if not (File.Exists priorDecisionPath) then
+                                  yield violation "reuse-prior-decision-missing" contract.Reuse.Artifact
+                              elif not (File.Exists priorManifestPath) then
+                                  yield violation "reuse-prior-evidence-missing" "bootstrap-evidence-manifest/bootstrap-evidence.json"
+                              else
+                                  let priorDecision = loadDecision priorDecisionPath
+                                  if priorDecision.Kind <> QualificationReuse.Execute
+                                     || priorDecision.Candidate <> prior.Head
+                                     || priorDecision.SubjectSha256 <> decision.SubjectSha256 then
+                                      yield violation "reuse-prior-decision" "prior execution decision is not equivalent"
+                                  if sha256File priorManifestPath <> prior.EvidenceSha256 then
+                                      yield violation "reuse-prior-evidence-digest" "selected prior manifest bytes changed"
+                                  yield! inspectEvidence priorManifestPath prior.Head artifactRoot contract priorDecision ]
 
                     if List.isEmpty qualificationViolations then
-                        writeEvidence (Path.GetFullPath output) head artifactRoot contract
+                        writeEvidence (Path.GetFullPath output) head artifactRoot contract decision
 
                     qualificationViolations
-                | _ -> [ violation "argument" "collect requires --head, --artifacts, and --output" ]
+                | _ -> [ violation "argument" "collect requires --head, --artifacts, --output, and --decision" ]
             | "evidence" ->
                 match
                     optionValue "--head" arguments,
                     optionValue "--artifacts" arguments,
-                    optionValue "--file" arguments
+                    optionValue "--file" arguments,
+                    optionValue "--decision" arguments
                 with
-                | Some head, Some artifacts, Some path when isSha head ->
-                    inspectEvidence (Path.GetFullPath path) head (Path.GetFullPath artifacts) contract
-                | _ -> [ violation "argument" "evidence requires an exact --head plus --artifacts and --file" ]
+                | Some head, Some artifacts, Some path, Some decisionPath when isSha head ->
+                    let decision = loadDecision (Path.GetFullPath decisionPath)
+                    inspectEvidence (Path.GetFullPath path) head (Path.GetFullPath artifacts) contract decision
+                | _ -> [ violation "argument" "evidence requires an exact --head plus --artifacts, --file, and --decision" ]
             | unknown -> [ violation "argument" $"unknown mode: %s{unknown}" ]
         with exceptionValue ->
             [ violation "qualification-plan-invalid" exceptionValue.Message ]
