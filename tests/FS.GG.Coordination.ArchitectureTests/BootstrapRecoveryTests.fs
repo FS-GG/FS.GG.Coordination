@@ -35,7 +35,7 @@ let ``recovery receipt contract is compact exact and hosted read only`` () =
     Assert.Contains("run: bash eng/bootstrap-gates/bootstrap-recovery.sh", workflow)
     Assert.Contains("dotnet fsi eng/bootstrap-recovery.fsx -- .", File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/bootstrap-recovery.sh")))
     Assert.Contains("bootstrap-recovery/result.json", contract)
-    Assert.Contains("permissions:\n  contents: read", workflow.Replace("\r\n", "\n"))
+    Assert.Contains("permissions:\n  actions: read\n  contents: read", workflow.Replace("\r\n", "\n"))
     Assert.DoesNotContain("contents: write", workflow)
     Assert.DoesNotContain("id-token: write", workflow)
 

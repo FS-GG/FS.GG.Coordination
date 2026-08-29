@@ -144,11 +144,20 @@ let private withEvidence action =
         Directory.CreateDirectory artifacts |> ignore
         createArtifacts artifacts
         let manifest = Path.Combine(root, "evidence.json")
+        let decision = Path.Combine(root, "decision.json")
+        QualificationReuse.decide exactHead (String.replicate 64 "d") None None
+        |> QualificationReuse.decisionBytes
+        |> fun bytes -> File.WriteAllBytes(decision, bytes)
         let collectCode, _, collectError =
-            runBootstrap root [ "collect"; "--head"; exactHead; "--artifacts"; artifacts; "--output"; manifest ]
+            runBootstrap root [ "collect"; "--head"; exactHead; "--artifacts"; artifacts; "--output"; manifest; "--decision"; decision ]
         Assert.Equal(0, collectCode)
         Assert.Equal("", collectError)
         action root artifacts manifest)
+
+let private runEvidence root head artifacts manifest =
+    runBootstrap root
+        [ "evidence"; "--head"; head; "--artifacts"; artifacts; "--file"; manifest
+          "--decision"; Path.Combine(root, "decision.json") ]
 
 let private runPackageSmoke scratch packageOverride =
     let startInfo = ProcessStartInfo("bash")
@@ -164,12 +173,81 @@ let private runPackageSmoke scratch packageOverride =
     childProcess.WaitForExit()
     childProcess.ExitCode, output.Trim(), error.Trim()
 
+let private tracked (mode: string) (path: string) (contents: string) : QualificationReuse.TrackedFile =
+    { Mode = mode; Path = path; Bytes = Encoding.UTF8.GetBytes contents }
+
 [<Fact>]
-let ``bootstrap workflow satisfies the exact seven-job contract`` () =
+let ``qualification subject is canonical across tracked-file enumeration order`` () =
+    let files = [ tracked "100644" "b.txt" "b"; tracked "100755" "a.sh" "a" ]
+    let create values =
+        QualificationReuse.createSubject values (Encoding.UTF8.GetBytes "plan") (Encoding.UTF8.GetBytes "workflow") (Encoding.UTF8.GetBytes "environment") (Encoding.UTF8.GetBytes "review")
+    let first = create files
+    let second = create (List.rev files)
+    Assert.Equal(first, second)
+    Assert.True((QualificationReuse.subjectBytes first).AsSpan().SequenceEqual((QualificationReuse.subjectBytes second).AsSpan()))
+
+[<Theory>]
+[<InlineData("100644", "a.txt", "value-2")>]
+[<InlineData("100755", "a.txt", "value")>]
+[<InlineData("100644", "renamed.txt", "value")>]
+let ``qualification subject changes for independently mutated tree bytes mode or path`` mode path contents =
+    let create file =
+        QualificationReuse.createSubject [ file ] (Encoding.UTF8.GetBytes "plan") (Encoding.UTF8.GetBytes "workflow") (Encoding.UTF8.GetBytes "environment") (Encoding.UTF8.GetBytes "review")
+    let baseline = create (tracked "100644" "a.txt" "value")
+    let mutated = create (tracked mode path contents)
+    Assert.NotEqual<string>(baseline.TreeSha256, mutated.TreeSha256)
+    Assert.NotEqual<string>(baseline.SubjectSha256, mutated.SubjectSha256)
+
+[<Fact>]
+let ``qualification subject rejects duplicate unsafe and unsupported tracked identities`` () =
+    let create files =
+        QualificationReuse.createSubject files [| 1uy |] [| 2uy |] [| 3uy |] [| 4uy |] |> ignore
+    Assert.Throws<ArgumentException>(fun () -> create [ tracked "100644" "a" "1"; tracked "100644" "a" "2" ]) |> ignore
+    Assert.Throws<ArgumentException>(fun () -> create [ tracked "100644" "../a" "1" ]) |> ignore
+    Assert.Throws<ArgumentException>(fun () -> create [ tracked "160000" "submodule" "1" ]) |> ignore
+
+[<Fact>]
+let ``reuse decision distinguishes hit miss and incomplete authority`` () =
+    let subject = String.replicate 64 "a"
+    let prior: QualificationReuse.PriorRun =
+        { Head = String.replicate 40 "b"; RunId = 42L; Attempt = 1
+          EvidenceSha256 = String.replicate 64 "c"; ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
+    Assert.Equal(QualificationReuse.Reuse, (QualificationReuse.decide exactHead subject (Some prior) (Some subject)).Kind)
+    Assert.Equal(QualificationReuse.Execute, (QualificationReuse.decide exactHead subject None None).Kind)
+    Assert.Equal(QualificationReuse.Execute, (QualificationReuse.decide exactHead subject (Some prior) (Some(String.replicate 64 "d"))).Kind)
+    Assert.Equal(QualificationReuse.Refuse, (QualificationReuse.decide exactHead subject (Some prior) None).Kind)
+    let unmeasured = { prior with RunnerMinutes = None }
+    let measuredDecision = QualificationReuse.decide exactHead subject (Some prior) (Some subject)
+    let unmeasuredDecision = QualificationReuse.decide exactHead subject (Some unmeasured) (Some subject)
+    Assert.Equal(QualificationReuse.Reuse, unmeasuredDecision.Kind)
+    Assert.NotEqual<string>(measuredDecision.SelfSha256, unmeasuredDecision.SelfSha256)
+    Assert.Equal(Ok unmeasuredDecision, QualificationReuse.decisionBytes unmeasuredDecision |> QualificationReuse.parseDecision)
+    let invalid = { prior with RunnerMinutes = Some -1M }
+    Assert.Throws<ArgumentException>(fun () -> QualificationReuse.decide exactHead subject (Some invalid) (Some subject) |> ignore) |> ignore
+
+[<Fact>]
+let ``reuse receipt round trips canonical bytes and rejects tampering`` () =
+    let decision = QualificationReuse.decide exactHead (String.replicate 64 "a") None None
+    let bytes = QualificationReuse.decisionBytes decision
+    Assert.Equal(Ok decision, QualificationReuse.parseDecision bytes)
+    let tampered = Encoding.UTF8.GetString(bytes).Replace("no-compatible-prior", "different-reason") |> Encoding.UTF8.GetBytes
+    Assert.True(QualificationReuse.parseDecision tampered |> Result.isError)
+    let unknown = Encoding.UTF8.GetString(bytes).Replace("{\"schema\"", "{\"unknown\":true,\"schema\"") |> Encoding.UTF8.GetBytes
+    Assert.True(QualificationReuse.parseDecision unknown |> Result.isError)
+
+[<Fact>]
+let ``bootstrap workflow satisfies the reuse decision plus exact seven-gate contract`` () =
     let exitCode, output, error = runBootstrap repositoryRoot [ "workflow" ]
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=workflow", output)
     Assert.Equal("", error)
+
+[<Fact>]
+let ``reuse telemetry measures completed runner jobs without becoming route authority`` () =
+    let entryPoint = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/reuse-decision.sh"))
+    Assert.Contains("actions/runs/$run_id/jobs?filter=latest&per_page=100", entryPoint)
+    Assert.Contains("runner_minutes=\"\"", entryPoint)
+    Assert.Contains("select_args+=(--runner-minutes \"$runner_minutes\")", entryPoint)
 
 [<Fact>]
 let ``production FSI adapter matches the compiled green outcome`` () =
@@ -206,6 +284,15 @@ let ``qualification plan rejects an unreviewed action revision`` () =
 let ``qualification plan rejects a legacy action runtime`` () =
     withPlanMutation
         (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("\"checkout\": \"node24\"", "\"checkout\": \"node20\"")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=qualification-plan-invalid", error))
+
+[<Fact>]
+let ``qualification plan rejects reuse before the reviewed evidence epoch`` () =
+    withPlanMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("2026-08-29T13:32:00Z", "2026-01-01T00:00:00Z")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -260,7 +347,8 @@ let ``representative gate addition changes only the plan and its stable entry po
 [<InlineData("dependency-and-security", "FS.GG.Coordination.sln")>]
 [<InlineData("package-install-smoke", "FS.GG.Coordination.Protocol.fsproj")>]
 [<InlineData("bootstrap-recovery", "eng/bootstrap-recovery.fsx")>]
-[<InlineData("evidence-manifest", "eng/bootstrap-qualification-plan.json")>]
+[<InlineData("reuse-decision", "eng/bootstrap-qualification-plan.json")>]
+[<InlineData("evidence-manifest", "bootstrap-decision/decision.json")>]
 let ``stable gate entry point refuses a removed repository subject`` gateId expectedSubject =
     withScratch $"fsgg-bootstrap-gate-inversion-%s{gateId}-" (fun root ->
         let exitCode, output, error = runGateWithoutRepositorySubject gateId root
@@ -287,24 +375,42 @@ let ``performance evidence retains five source-linked timing samples and every a
     Assert.DoesNotContain("actions/runs/33251281115", removedSource)
 
 [<Fact>]
+let ``reuse performance evidence retains the exact execute hit pair and thresholds`` () =
+    let evaluation =
+        File.ReadAllText(Path.Combine(repositoryRoot, "work/80-digest-bound-exact-head-qualification-reuse/performance-evaluation.md"))
+    let requiredEvidence =
+        [ "actions/runs/33255549867"
+          "actions/runs/33255929882"
+          "30c9b48940f9a598af170183049bde9f0494693c"
+          "saved 467 wall-seconds (89.5%) and 873 runner-seconds (94.7%, 14m33s)"
+          "settled in 55 seconds, below the 180-second target"
+          "added 78 wall-seconds over the comparable cohort median, below the 90-second ceiling"
+          "represents an unavailable measurement as `null`"
+          "route selection remains unchanged for measured versus unavailable telemetry" ]
+    for evidence in requiredEvidence do Assert.Contains(evidence, evaluation)
+
+[<Fact>]
 let ``bootstrap control surface stays typed thin and bounded`` () =
     let lineCount relative = File.ReadAllLines(Path.Combine(repositoryRoot, relative)).Length
     let gateLines =
         Directory.GetFiles(Path.Combine(repositoryRoot, "eng/bootstrap-gates"), "*.sh")
         |> Array.sumBy (File.ReadAllLines >> Array.length)
     let core = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"))
+    let reuseCore = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs"))
     let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
-    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 210)
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 180)
-    Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 20)
-    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 600)
-    Assert.InRange(gateLines, 1, 60)
+    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 260)
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 190)
+    Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 22)
+    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 900)
+    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 300)
+    Assert.InRange(gateLines, 1, 140)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
     Assert.DoesNotContain("expectedIds", core)
     Assert.DoesNotContain("gate.Id =", core)
     Assert.DoesNotContain("job.Id =", core)
+    Assert.DoesNotContain("GitHub", reuseCore)
     Assert.DoesNotContain("NUGET_PACKAGES: ${{ runner.", workflow)
     Assert.DoesNotContain("FSGG_QUINT_RECEIPT: ${{ runner.", workflow)
     Assert.DoesNotContain("actions/cache@", workflow)
@@ -346,7 +452,7 @@ let ``bootstrap workflow rejects pinned but unapproved actions`` () =
             Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
-let ``bootstrap workflow rejects cross-run artifact downloads`` () =
+let ``bootstrap workflow rejects an unbound cross-run artifact download`` () =
     withWorkflowMutation
         (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          path: ${{ runner.temp }}/bootstrap-artifacts", "          path: ${{ runner.temp }}/bootstrap-artifacts\n          run-id: 1")))
         (fun root ->
@@ -569,22 +675,77 @@ let ``package override is unavailable inside GitHub Actions`` () =
 let ``exact-head evidence and artifact digests are accepted`` () =
     withEvidence (fun root artifacts manifest ->
         let exitCode, output, error =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.Equal(0, exitCode)
         Assert.Equal("BOOTSTRAP_CI_OK mode=evidence", output)
         Assert.Equal("", error))
+
+[<Fact>]
+let ``reuse revalidates prior execution artifacts and emits current-head evidence`` () =
+    withEvidence (fun root artifacts priorManifest ->
+        let copy relative source =
+            let target = Path.Combine(artifacts, relative)
+            Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
+            File.Copy(source, target)
+        copy "reuse-decision/decision.json" (Path.Combine(root, "decision.json"))
+        copy "bootstrap-evidence-manifest/bootstrap-evidence.json" priorManifest
+        let evidenceDigest = SHA256.HashData(File.ReadAllBytes priorManifest) |> Convert.ToHexString |> _.ToLowerInvariant()
+        let prior: QualificationReuse.PriorRun =
+            { Head = exactHead; RunId = 42L; Attempt = 1; EvidenceSha256 = evidenceDigest
+              ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
+        let currentHead = String.replicate 40 "e"
+        let currentDecision = QualificationReuse.decide currentHead (String.replicate 64 "d") (Some prior) (Some(String.replicate 64 "d"))
+        let decisionPath = Path.Combine(root, "reuse.json")
+        File.WriteAllBytes(decisionPath, QualificationReuse.decisionBytes currentDecision)
+        let currentManifest = Path.Combine(root, "current-evidence.json")
+        let collectCode, _, collectError =
+            runBootstrap root [ "collect"; "--head"; currentHead; "--artifacts"; artifacts; "--output"; currentManifest; "--decision"; decisionPath ]
+        Assert.Equal(0, collectCode)
+        Assert.Equal("", collectError)
+        let evidenceCode, _, evidenceError =
+            runBootstrap root [ "evidence"; "--head"; currentHead; "--artifacts"; artifacts; "--file"; currentManifest; "--decision"; decisionPath ]
+        Assert.Equal(0, evidenceCode)
+        Assert.Equal("", evidenceError)
+        let current = JsonNode.Parse(File.ReadAllText currentManifest).AsObject()
+        Assert.Equal("reuse", current["route"].GetValue<string>())
+        Assert.Equal(currentHead, current["candidate"].GetValue<string>())
+        let retainedHead = ((current["prior"])["head"]).GetValue<string>()
+        Assert.Equal(exactHead, retainedHead))
+
+[<Fact>]
+let ``reuse refuses a selected prior manifest whose bytes changed`` () =
+    withEvidence (fun root artifacts priorManifest ->
+        let priorDecisionPath = Path.Combine(artifacts, "reuse-decision/decision.json")
+        let retainedManifest = Path.Combine(artifacts, "bootstrap-evidence-manifest/bootstrap-evidence.json")
+        Directory.CreateDirectory(Path.GetDirectoryName priorDecisionPath) |> ignore
+        Directory.CreateDirectory(Path.GetDirectoryName retainedManifest) |> ignore
+        File.Copy(Path.Combine(root, "decision.json"), priorDecisionPath)
+        File.Copy(priorManifest, retainedManifest)
+        let originalDigest = SHA256.HashData(File.ReadAllBytes retainedManifest) |> Convert.ToHexString |> _.ToLowerInvariant()
+        let prior: QualificationReuse.PriorRun =
+            { Head = exactHead; RunId = 42L; Attempt = 1; EvidenceSha256 = originalDigest
+              ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
+        let currentHead = String.replicate 40 "e"
+        let decision = QualificationReuse.decide currentHead (String.replicate 64 "d") (Some prior) (Some(String.replicate 64 "d"))
+        let decisionPath = Path.Combine(root, "reuse.json")
+        File.WriteAllBytes(decisionPath, QualificationReuse.decisionBytes decision)
+        File.AppendAllText(retainedManifest, "tampered")
+        let exitCode, _, error =
+            runBootstrap root [ "collect"; "--head"; currentHead; "--artifacts"; artifacts; "--output"; Path.Combine(root, "current.json"); "--decision"; decisionPath ]
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("rule=reuse-prior-evidence-digest", error))
 
 let private mutateRecoveryReceipt mutate =
     withEvidence (fun root artifacts manifest ->
         let path = Path.Combine(artifacts, "bootstrap-recovery/result.json")
         mutate path
-        runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ])
+        runEvidence root exactHead artifacts manifest)
 
 let private mutateCanonicalQuintReceipt mutate =
     withEvidence (fun root artifacts manifest ->
         let path = Path.Combine(artifacts, "canonical-quint/qualification.json")
         mutate path
-        runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ])
+        runEvidence root exactHead artifacts manifest)
 
 [<Theory>]
 [<InlineData("\"q1Outcome\":\"passed\"", "\"q1Outcome\":\"failed\"", "quint-receipt-outcome")>]
@@ -661,7 +822,7 @@ let ``evidence rejects a stale candidate`` () =
     withEvidence (fun root artifacts manifest ->
         let differentHead = String.replicate 40 "b"
         let exitCode, _, error =
-            runBootstrap root [ "evidence"; "--head"; differentHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root differentHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-candidate", error))
 
@@ -672,7 +833,7 @@ let ``evidence rejects a missing gate`` () =
         document["gates"].AsArray().RemoveAt(0)
         File.WriteAllText(manifest, document.ToJsonString())
         let exitCode, _, error =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-gate-set", error))
 
@@ -681,7 +842,7 @@ let ``evidence rejects an artifact changed after collection`` () =
     withEvidence (fun root artifacts manifest ->
         File.AppendAllText(Path.Combine(artifacts, "deterministic-build/protocol.dll"), "tampered")
         let exitCode, _, error =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-artifact-digest", error))
 
@@ -694,7 +855,7 @@ let ``evidence rejects duplicate and unknown gates`` () =
         gates[1]["id"] <- JsonValue.Create("unknown-gate")
         File.WriteAllText(manifest, document.ToJsonString())
         let exitCode, _, error =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-gate-set", error))
 
@@ -706,7 +867,7 @@ let ``evidence rejects malformed declared digests`` () =
         first["sha256"] <- JsonValue.Create("not-a-sha256")
         File.WriteAllText(manifest, document.ToJsonString())
         let exitCode, _, error =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-artifact-digest", error))
 
@@ -719,7 +880,7 @@ let ``evidence rejects altered command contracts and artifact paths`` () =
         first["artifact"] <- JsonValue.Create("../outside")
         File.WriteAllText(manifest, document.ToJsonString())
         let exitCode, _, error =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-command-contract", error)
         Assert.Contains("rule=evidence-artifact-path", error))
@@ -729,7 +890,7 @@ let ``evidence rejects missing artifact files`` () =
     withEvidence (fun root artifacts manifest ->
         File.Delete(Path.Combine(artifacts, "compiler-and-tests/architecture.trx"))
         let exitCode, _, error =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-artifact-missing", error))
 
@@ -740,11 +901,11 @@ let ``evidence rejects malformed manifests and contract digests`` () =
         document["planSha256"] <- JsonValue.Create("wrong")
         File.WriteAllText(manifest, document.ToJsonString())
         let digestExit, _, digestError =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, digestExit)
         Assert.Contains("rule=evidence-plan-digest", digestError)
         File.WriteAllText(manifest, "not-json")
         let malformedExit, _, malformedError =
-            runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
+            runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, malformedExit)
         Assert.Contains("rule=evidence-unreadable", malformedError))

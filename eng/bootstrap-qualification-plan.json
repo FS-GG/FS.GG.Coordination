@@ -1,6 +1,6 @@
 {
-  "schema": "fsgg.coordination.bootstrap-qualification-plan/2",
-  "evidenceSchema": "fsgg.coordination.bootstrap-evidence/2",
+  "schema": "fsgg.coordination.bootstrap-qualification-plan/3",
+  "evidenceSchema": "fsgg.coordination.bootstrap-evidence/3",
   "actions": {
     "checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
     "setupDotnet": "a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -14,7 +14,7 @@
     "downloadArtifact": "node24"
   },
   "triggers": ["pull_request", "push:main"],
-  "permissions": ["contents:read"],
+  "permissions": ["actions:read", "contents:read"],
   "concurrency": {
     "group": "bootstrap-qualification-${{ github.ref }}",
     "cancelInProgress": true
@@ -32,6 +32,19 @@
     "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj",
     "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
   ],
+  "reuse": {
+    "jobId": "reuse-decision",
+    "artifact": "reuse-decision/decision.json",
+    "timeoutMinutes": 5,
+    "entryPoint": "bash eng/bootstrap-gates/reuse-decision.sh",
+    "uploadName": "reuse-decision",
+    "workflowPath": ".github/workflows/bootstrap-qualification.yml",
+    "maxCandidateArtifacts": 100,
+    "notBefore": "2026-08-29T13:32:00Z",
+    "runner": "ubuntu-latest",
+    "architecture": "x64",
+    "reviewPolicy": "structured-decisions/1"
+  },
   "jobs": [
     {
       "id": "deterministic-build",

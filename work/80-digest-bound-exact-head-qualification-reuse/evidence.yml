@@ -1,0 +1,1228 @@
+schemaVersion: 1
+workId: 80-digest-bound-exact-head-qualification-reuse
+stage: evidence
+status: evidenceReady
+sourceSpec: work/80-digest-bound-exact-head-qualification-reuse/spec.md
+sourceClarifications: work/80-digest-bound-exact-head-qualification-reuse/clarifications.md
+sourceChecklist: work/80-digest-bound-exact-head-qualification-reuse/checklist.md
+sourcePlan: work/80-digest-bound-exact-head-qualification-reuse/plan.md
+sourceTasks: work/80-digest-bound-exact-head-qualification-reuse/tasks.yml
+sourceAnalysis: readiness/80-digest-bound-exact-head-qualification-reuse/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/80-digest-bound-exact-head-qualification-reuse/analysis.json
+    digest: c07349a24ca5f3408f339580b7467242ab5d60a71fec041cbd2c3f92a9d7151a
+    schemaVersion: 1
+  - label: checklist
+    path: work/80-digest-bound-exact-head-qualification-reuse/checklist.md
+    digest: 6414c017247b235a68165fe5e62c4a51a7ebbdac3ec9dfcee21744f17ac7987a
+    schemaVersion: 1
+  - label: clarifications
+    path: work/80-digest-bound-exact-head-qualification-reuse/clarifications.md
+    digest: 371067962ee235a92410dc4dd1aa0051fcd9c1ea0005a9cef06b7fd951bafc65
+    schemaVersion: 1
+  - label: plan
+    path: work/80-digest-bound-exact-head-qualification-reuse/plan.md
+    digest: 11b37faf0f4867444516eca1e3022fe6185a52ca094a804e71c25cd4c5e6a6a9
+    schemaVersion: 1
+  - label: spec
+    path: work/80-digest-bound-exact-head-qualification-reuse/spec.md
+    digest: 4c9e514eb812a9837b77a6168b31df4cae2e096609854cf895f08b65f450e0c4
+    schemaVersion: 1
+  - label: tasks
+    path: work/80-digest-bound-exact-head-qualification-reuse/tasks.yml
+    digest: 5c88e5f30f3733c1c1b689dfb6ea951b405fb076ee5352fd22475dfe2e62575d
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, work/80-digest-bound-exact-head-qualification-reuse/performance-evaluation.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+      - kind: verification
+        path: work/80-digest-bound-exact-head-qualification-reuse/performance-evaluation.md
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-001, FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV017]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-001, FR-002, FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV018]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-004, FR-006, FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV019]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-004, FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV020]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-003, FR-006, FR-007, FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV021]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: [FR-003, FR-005, FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV022]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: [FR-005, FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV023]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: [FR-007, FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV024]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV025]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-006]
+    obligationRefs: [EV026]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV027]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-005]
+    obligationRefs: [EV028]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006]
+    obligationRefs: [EV029]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV030]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV031
+    kind: verification
+    subject:
+      type: task
+      id: T031
+    taskRefs: [T031]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-006]
+    obligationRefs: [EV031]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV032
+    kind: verification
+    subject:
+      type: task
+      id: T032
+    taskRefs: [T032]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV032]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV033
+    kind: verification
+    subject:
+      type: task
+      id: T033
+    taskRefs: [T033]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-005]
+    obligationRefs: [EV033]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV034
+    kind: verification
+    subject:
+      type: task
+      id: T034
+    taskRefs: [T034]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006]
+    obligationRefs: [EV034]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV035
+    kind: verification
+    subject:
+      type: task
+      id: T035
+    taskRefs: [T035]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV035]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV036
+    kind: verification
+    subject:
+      type: task
+      id: T036
+    taskRefs: [T036]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV036]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV037
+    kind: verification
+    subject:
+      type: task
+      id: T037
+    taskRefs: [T037]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV037]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV038
+    kind: verification
+    subject:
+      type: task
+      id: T038
+    taskRefs: [T038]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV038]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV039
+    kind: verification
+    subject:
+      type: task
+      id: T039
+    taskRefs: [T039]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV039]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV040
+    kind: verification
+    subject:
+      type: task
+      id: T040
+    taskRefs: [T040]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV040]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV041
+    kind: verification
+    subject:
+      type: task
+      id: T041
+    taskRefs: [T041]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV041]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV042
+    kind: verification
+    subject:
+      type: task
+      id: T042
+    taskRefs: [T042]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV042]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV043
+    kind: verification
+    subject:
+      type: task
+      id: T043
+    taskRefs: [T043]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV043]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV044
+    kind: verification
+    subject:
+      type: task
+      id: T044
+    taskRefs: [T044]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV044]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/80-digest-bound-exact-head-qualification-reuse/qualification.trx
+      digest: "sha256:607f52480f38f75f07ccfe5d421eefb83a6b310572a893345d9aeceb34251742"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 189
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
