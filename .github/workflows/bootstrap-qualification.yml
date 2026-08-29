@@ -83,7 +83,7 @@ jobs:
     timeout-minutes: 25
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint
-      FSGG_QUINT_RECEIPT: ${{ runner.temp }}/canonical-quint/qualification.json
+      FSGG_QUINT_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint/qualification.json
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -107,7 +107,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: canonical-quint
-          path: ${{ runner.temp }}/canonical-quint/qualification.json
+          path: ${{ env.FSGG_QUINT_RECEIPT }}
           if-no-files-found: error
 
   dependency-and-security:

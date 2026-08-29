@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.bootstrap-ci-contract/1",
   "evidenceSchema": "fsgg.coordination.bootstrap-evidence/1",
-  "workflowSha256": "5bc8c48dd1abac3d5753c38de8df04828cb4192bfb74fc9c12628d8b1a99134b",
+  "workflowSha256": "9f231f57d3d62ba7874125089d3286e23533d0f84fe3a62653b6cfb87c390001",
   "requiredProjectCount": 8,
   "requiredVulnerabilitySources": [
     "https://api.nuget.org/v3/index.json"
