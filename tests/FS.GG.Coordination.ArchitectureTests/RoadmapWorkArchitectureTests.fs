@@ -103,7 +103,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-03-4 without the rejected runtime branch`` () =
+let ``roadmap unit index advances through GS2-03-5 without the rejected runtime branch`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -136,7 +136,8 @@ let ``roadmap unit index advances through GS2-03-4 without the rejected runtime 
              "GS2-03.1"
              "GS2-03.2"
              "GS2-03.3"
-             "GS2-03.4" ]
+             "GS2-03.4"
+             "GS2-03.5" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -376,6 +377,42 @@ let ``roadmap unit index advances through GS2-03-4 without the rejected runtime 
     Assert.Contains("03.4b", oracleExitGate)
     Assert.Contains("03.4c", oracleExitGate)
     Assert.Contains("anti-vacuity", oracleExitGate)
+
+    let nativeQuintTestsUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-03.5")
+
+    Assert.Equal<string list>(
+        [ "GS2-03.4" ],
+        nativeQuintTestsUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "canonical-quint-pure-model"; "architecture-tests"; "evidence-storage-contract" ],
+        nativeQuintTestsUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let nativeQuintExitGate = nativeQuintTestsUnit.GetProperty("exitGate").GetString()
+
+    for requiredTerm in
+        [ "examples"
+          "simulation"
+          "reachability witnesses"
+          "safety properties"
+          "temporal liveness checks"
+          "bounded model checking"
+          "claim/election"
+          "relation mutation"
+          "lifecycle"
+          "operation saga"
+          "epoch"
+          "rollback"
+          "Quint/ITF counterexamples" ] do
+        Assert.Contains(requiredTerm, nativeQuintExitGate)
 
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
