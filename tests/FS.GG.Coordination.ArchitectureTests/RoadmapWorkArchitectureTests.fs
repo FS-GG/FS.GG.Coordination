@@ -88,7 +88,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-03-1 without the rejected runtime branch`` () =
+let ``roadmap unit index advances through GS2-03-2 without the rejected runtime branch`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -118,7 +118,8 @@ let ``roadmap unit index advances through GS2-03-1 without the rejected runtime 
              "GS2-02.9"
              "GS2-02.10"
              "GS2-02.11"
-             "GS2-03.1" ]
+             "GS2-03.1"
+             "GS2-03.2" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -295,6 +296,24 @@ let ``roadmap unit index advances through GS2-03-1 without the rejected runtime 
     )
 
     Assert.Equal(3, qualificationManifestUnit.GetProperty("gateContracts").GetArrayLength())
+
+    let frozenCorpusUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-03.2")
+
+    Assert.Equal<string list>(
+        [ "GS2-03.1" ],
+        frozenCorpusUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "Q2"; "Q7" ],
+        frozenCorpusUnit.GetProperty("gateContracts").EnumerateArray()
+        |> Seq.map (fun value -> value.GetProperty("qGate").GetString())
+        |> Seq.toList
+    )
 
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =

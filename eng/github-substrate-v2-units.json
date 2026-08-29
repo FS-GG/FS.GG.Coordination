@@ -287,6 +287,21 @@
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
       "contractSha256": "5ddea3f6cd09b4e04b74305b9da0779d1fd1970a20f320cdde9e2916cc94f0be"
+    },
+    {
+      "id": "GS2-03.2",
+      "title": "Import the frozen corpus",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-03.1"],
+      "permissionCeiling": ["repository-local frozen-corpus byte preservation, provenance, expected-behavior, ambiguity, current-v1-result semantics, validation, and evidence", "no normalization of corpus defects, network, GitHub mutation, generated structural tests, independent oracle, fault injection, deployment, publication, or production write authority"],
+      "exitGate": "original frozen-corpus bytes, provenance, expected behavior, ambiguity, and current-v1 result are preserved without normalizing away the defect under the pure portion of Q2 and Q7 evidence-storage controls",
+      "qGates": ["Q2", "Q7"],
+      "gateCommands": ["canonical-quint-pure-model", "evidence-storage-contract"],
+      "gateContracts": [
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" },
+        { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
+      ],
+      "contractSha256": "fed54e1376d62a319ae9628a6df383a6327ce3c3a32229a2c1b0e55ae838e33e"
     }
   ]
 }
