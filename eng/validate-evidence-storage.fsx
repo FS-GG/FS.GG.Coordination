@@ -21,6 +21,7 @@ let q0EvidenceRelative = "corpus/provenance/q0-evidence.source"
 let q0ManifestSha256 = "5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"
 let q0EvidenceSha256 = "3a0a73d81823c1667f61f9493c1611aa89b85e24d3e1580cd922d309e2f12f87"
 let frozenAggregateSha256 = "bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753"
+let frozenCorpusSchemaSha256 = "75a4925efdd72b6ff1d7a2b0a64030bea3704d31c5d7bf8dd7cb22aae74399dd"
 let explicitIndeterminateRationale = "Q0 deliberately classifies this expected decision as Indeterminate; the import preserves that ambiguity without selecting a fallback outcome."
 let noneRecordedRationale = "Q0 records no case-level ambiguity for this artifact; the import preserves that absence without inferring additional certainty."
 let unobservedDetail = "Q0 froze these multi-case source bytes and their expected behavior but did not bind an atomic runtime result to this individual artifact; no green result is inferred."
@@ -495,6 +496,9 @@ let validateFrozenCorpus (root: string) (entries: JsonElement list) =
         validateJsonSchema corpusSchema metadataRelative corpusSchema record
 
     if metadataIds.Count <> 21 then fail "FC-METADATA-COUNT" "metadata identity count differs"
+    let schemaBytes = File.ReadAllBytes(Path.Combine(root, "schemas/v1/corpus-inputs.schema.json"))
+    if sha256 schemaBytes <> frozenCorpusSchemaSha256 then
+        fail "FC-SCHEMA-DIGEST" "the frozen corpus schema differs from its accepted content identity"
     $"frozenCorpusCases=21 observed={observedCount} unobserved={unobservedCount} aggregate={frozenAggregateSha256}"
 
 let validate evidenceRoot =
@@ -808,6 +812,11 @@ let selfTest evidenceRoot =
           "frozen-schema-observed-at", (fun root ->
               mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
                   setNestedString node [ "properties"; "input"; "properties"; "currentV1Result"; "properties"; "observedAt" ] "type" "string")), "FC-SCHEMA-CONTRACT"
+          "frozen-schema-required-source", (fun root ->
+              mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
+                  let required = ((nestedObject node [ "properties"; "input" ])["required"]).AsArray()
+                  let sourceIndex = required |> Seq.findIndex (fun item -> item.GetValue<string>() = "source")
+                  required.RemoveAt(sourceIndex))), "FC-SCHEMA-DIGEST"
           "frozen-schema-id-pattern", (fun root ->
               mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
                   setNestedString node [ "properties"; "id" ] "pattern" "^Z-[a-z0-9-]+$")), "ES-SCHEMA-VALIDATION"
