@@ -4,7 +4,7 @@ FS.GG.Coordination qualifies an inert bootstrap substrate through six independen
 
 ## Qualification plan
 
-`eng/bootstrap-qualification-plan.json` is the single semantic authority for gate identities, dependency edges, stable entrypoints, artifacts, timeouts, cache policy, immutable action pins, action runtimes, triggers, permissions, concurrency, and terminal evidence. `eng/generate-bootstrap-workflow.fsx -- --root .` deterministically projects the committed workflow; `eng/bootstrap-ci.fsx workflow --root .` rejects a stale projection. The generated YAML is deliberately thin and requires exactly these jobs:
+`eng/bootstrap-qualification-plan.json` is the single semantic authority for gate identities, dependency edges, stable entrypoints, artifacts, timeouts, immutable action pins, action runtimes, triggers, permissions, concurrency, and terminal evidence. `eng/generate-bootstrap-workflow.fsx -- --root .` deterministically projects the committed workflow; `eng/bootstrap-ci.fsx workflow --root .` rejects a stale projection. The generated YAML is deliberately thin and requires exactly these jobs:
 
 - `deterministic-build`: locked restore and warnings-as-errors Release build.
 - `compiler-and-tests`: unit and architecture suites, retaining architecture TRX.
@@ -14,17 +14,17 @@ FS.GG.Coordination qualifies an inert bootstrap substrate through six independen
 - `bootstrap-recovery`: reconstruction and clean-consumer execution from committed bytes.
 - `evidence-manifest`: an exact-head manifest assembled only after all six prerequisite jobs pass.
 
-Each job invokes one script under `eng/bootstrap-gates/`; command mechanics live behind those stable entrypoints rather than inside YAML. The renderer cannot emit mutable action references, expanded permissions, release/deployment routes, live GitHub write authority, fallback cache keys, or imported v1 completion machinery. Any manual YAML change is stale by construction.
+Each job invokes one script under `eng/bootstrap-gates/`; command mechanics live behind those stable entrypoints rather than inside YAML. The renderer cannot emit mutable action references, expanded permissions, release/deployment routes, live GitHub write authority, or imported v1 completion machinery. Any manual YAML change is stale by construction.
 
 The validator and evidence implementation compile into `FS.GG.Coordination.Qualification.Contracts.BootstrapCi`. `eng/bootstrap-ci.fsx` is only the production argument/stdout adapter. Architecture tests call the compiled decisions directly and retain bounded green/red process-level parity tests for the adapter.
 
-Ordinary deterministic, build/test, and package gates cache only the NuGet global-packages directory at the stable runner-local literal `/tmp/fsgg-nuget-packages`. The exact key binds runner OS, `global.json`, and every `packages.lock.json`; it has no prefix fallback. Dependency/security, recovery, and canonical Quint remain cold. Every restore remains locked, and cache absence is an ordinary restore path. Job-level environment values use literals or the `github` context; `runner.temp` is confined to step inputs and runtime shell variables where that context is available.
+NuGet action caching was measured and rejected. On exact-head run `33250382392`, the cold miss and warm exact-key hit both left restore at roughly the same scale while the cache action added restore/post overhead; deterministic and package jobs were a few seconds slower on the warm attempt, and compiler timing remained dominated by architecture-runner variance. The dependency set is only about 5.8 MB and locked restore is already short, so retaining the cache would add a fifth action and extra plan/workflow branches without moving the critical path. Every gate keeps locked restore; dependency/security, recovery, and canonical Quint keep their isolated cold paths. Job-level environment values use literals or the `github` context; `runner.temp` is confined to step inputs and runtime shell variables where that context is available.
 
-The plan pins checkout v7.0.1, setup-dotnet v6.0.0, cache v6.1.0, upload-artifact v7.0.1, and download-artifact v8.0.1 by exact commit. Their official `action.yml` manifests were resolved at those commits on 2026-08-29 and each declares `using: node24`; the plan records and validates that runtime inventory.
+The plan pins checkout v7.0.1, setup-dotnet v6.0.0, upload-artifact v7.0.1, and download-artifact v8.0.1 by exact commit. Their official `action.yml` manifests were resolved at those commits on 2026-08-29 and each declares `using: node24`; the plan records and validates that runtime inventory.
 
 ## Performance and complexity budget
 
-The exact-merge baseline run `33248808361` took about 366 seconds end to end. Its compiler/test job took 315 seconds, including a 275-second architecture step. The retained TRX attributed 267.82 aggregate test-seconds to 58 bootstrap validator cases because every case launched a new FSI process. Direct compiled calls preserve those cases and add bounded green/red adapter parity. The focused corpus now completes locally in about 4.3 seconds including both process checks; the complete 162-test architecture suite completes in about 45 seconds on the same host.
+The exact-merge baseline run `33248808361` took about 366 seconds end to end. Its compiler/test job took 315 seconds, including a 275-second architecture step. The retained TRX attributed 267.82 aggregate test-seconds to 58 bootstrap validator cases because every case launched a new FSI process. Direct compiled calls preserve those cases and add bounded green/red adapter parity. The focused corpus now completes locally in about 4.3 seconds including both process checks; the complete 167-test architecture suite completes in about 45 seconds on the same host.
 
 Architecture tests cap the generated workflow at 210 lines, the plan at 180, the adapter at 20, the compiled core at 600, and all stable gate scripts together at 60. They also reject reintroduction of workflow byte digests, `requiredRunFragments`, or regular-expression YAML parsing.
 

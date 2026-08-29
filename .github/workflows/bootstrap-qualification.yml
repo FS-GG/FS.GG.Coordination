@@ -19,8 +19,6 @@ jobs:
     name: deterministic-build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      NUGET_PACKAGES: /tmp/fsgg-nuget-packages
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -30,11 +28,6 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
-      - name: Restore the exact dependency cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: /tmp/fsgg-nuget-packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/deterministic-build.sh
       - name: Upload qualification evidence
@@ -48,8 +41,6 @@ jobs:
     name: compiler-and-tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      NUGET_PACKAGES: /tmp/fsgg-nuget-packages
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -59,11 +50,6 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
-      - name: Restore the exact dependency cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: /tmp/fsgg-nuget-packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/compiler-and-tests.sh
       - name: Upload qualification evidence
@@ -127,8 +113,6 @@ jobs:
     name: package-install-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      NUGET_PACKAGES: /tmp/fsgg-nuget-packages
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -138,11 +122,6 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
-      - name: Restore the exact dependency cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: /tmp/fsgg-nuget-packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/package-install-smoke.sh
       - name: Upload qualification evidence

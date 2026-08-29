@@ -11,7 +11,6 @@ type GateContract =
       Artifact: string
       TimeoutMinutes: int
       EntryPoint: string
-      Cache: bool
       FetchDepth: int
       AlwaysUpload: bool
       Needs: string list
@@ -20,15 +19,12 @@ type GateContract =
 type ActionPins =
     { Checkout: string
       SetupDotnet: string
-      Cache: string
       UploadArtifact: string
       DownloadArtifact: string }
 
 type BootstrapContract =
     { EvidenceSchema: string
       Actions: ActionPins
-      CacheKey: string
-      CachePath: string
       ConcurrencyGroup: string
       CancelInProgress: bool
       RequiredProjectCount: int
@@ -94,13 +90,11 @@ let private loadContract root =
     let actions =
         { Checkout = action "checkout"
           SetupDotnet = action "setupDotnet"
-          Cache = action "cache"
           UploadArtifact = action "uploadArtifact"
           DownloadArtifact = action "downloadArtifact" }
     let approvedActions =
         [ actions.Checkout, "3d3c42e5aac5ba805825da76410c181273ba90b1"
           actions.SetupDotnet, "a98b56852c35b8e3190ac28c8c2271da59106c68"
-          actions.Cache, "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
           actions.UploadArtifact, "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
           actions.DownloadArtifact, "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" ]
     for actionPin, approvedPin in approvedActions do
@@ -108,7 +102,7 @@ let private loadContract root =
             failwith "every action must use an exact immutable SHA"
         if actionPin <> approvedPin then failwith "action pin is not the reviewed Node 24 revision"
     let actionRuntimes = value.GetProperty("actionRuntimes")
-    for name in [ "checkout"; "setupDotnet"; "cache"; "uploadArtifact"; "downloadArtifact" ] do
+    for name in [ "checkout"; "setupDotnet"; "uploadArtifact"; "downloadArtifact" ] do
         if stringProperty name actionRuntimes <> Some "node24" then failwith $"action runtime must be node24: %s{name}"
     if stringArray "triggers" value <> [ "pull_request"; "push:main" ] then failwith "triggers must be pull_request and push:main"
     if stringArray "permissions" value <> [ "contents:read" ] then failwith "permissions must be contents:read"
@@ -117,11 +111,6 @@ let private loadContract root =
     let cancelInProgress = boolProperty "cancelInProgress" concurrency |> Option.defaultWith (fun () -> failwith "cancelInProgress is missing")
     if concurrencyGroup <> "bootstrap-qualification-${{ github.ref }}" || not cancelInProgress then
         failwith "concurrency must cancel superseded attempts within the candidate ref"
-    let cacheKey = stringProperty "cacheKey" value |> Option.defaultWith (fun () -> failwith "cacheKey is missing")
-    let cachePath = stringProperty "cachePath" value |> Option.defaultWith (fun () -> failwith "cachePath is missing")
-    if cacheKey <> "${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}" then
-        failwith "cacheKey must bind runner OS, global.json, and every lock file exactly"
-    if cachePath <> "/tmp/fsgg-nuget-packages" then failwith "cachePath must be a stable runner-local literal"
     let requiredProjectCount = value.GetProperty("requiredProjectCount").GetInt32()
     let requiredProjects = stringArray "requiredProjects" value
     if requiredProjects.Length <> requiredProjectCount || (requiredProjects |> List.distinct |> List.length) <> requiredProjectCount then
@@ -138,7 +127,6 @@ let private loadContract root =
               Artifact = stringProperty "artifact" job |> Option.defaultWith (fun () -> failwith "job artifact is missing")
               TimeoutMinutes = job.GetProperty("timeoutMinutes").GetInt32()
               EntryPoint = entryPoint
-              Cache = boolProperty "cache" job |> Option.defaultValue false
               FetchDepth = job.GetProperty("fetchDepth").GetInt32()
               AlwaysUpload = boolProperty "alwaysUpload" job |> Option.defaultValue false
               Needs = stringArray "needs" job
@@ -148,11 +136,9 @@ let private loadContract root =
     if (jobs |> List.map _.Id |> Set.ofList) <> expectedIds || (jobs |> List.map _.Id |> List.distinct |> List.length) <> expectedIds.Count then
         failwith "jobs must contain the exact seven-gate identity set"
     let prerequisiteIds = expectedIds.Remove "evidence-manifest"
-    let cachedIds = set [ "deterministic-build"; "compiler-and-tests"; "package-install-smoke" ]
     for job in jobs do
         if job.TimeoutMinutes < 1 || job.TimeoutMinutes > 35 then failwith $"job timeout is outside the bounded policy: %s{job.Id}"
         if job.EntryPoint <> $"bash eng/bootstrap-gates/%s{job.Id}.sh" then failwith $"job entryPoint is not stable: %s{job.Id}"
-        if job.Cache <> cachedIds.Contains job.Id then failwith $"job cache policy is invalid: %s{job.Id}"
         if job.FetchDepth <> (if job.Id = "bootstrap-recovery" then 0 else 1) then failwith $"job fetch depth is invalid: %s{job.Id}"
         if job.AlwaysUpload <> (job.Id = "canonical-quint") then failwith $"job always-upload policy is invalid: %s{job.Id}"
         if job.Id = "evidence-manifest" then
@@ -162,8 +148,6 @@ let private loadContract root =
             failwith $"prerequisite gate must remain independently scheduled: %s{job.Id}"
     { EvidenceSchema = evidenceSchema
       Actions = actions
-      CacheKey = cacheKey
-      CachePath = cachePath
       ConcurrencyGroup = concurrencyGroup
       CancelInProgress = cancelInProgress
       RequiredProjectCount = requiredProjectCount
@@ -210,12 +194,9 @@ let private renderWorkflow (contract: BootstrapContract) =
             line $"    needs: [%s{needs}]"
         line "    runs-on: ubuntu-latest"
         line $"    timeout-minutes: %d{gate.TimeoutMinutes}"
-        if gate.Cache || gate.Id = "canonical-quint" || gate.Id = "dependency-and-security" || gate.Id = "evidence-manifest" then
+        if gate.Id = "canonical-quint" || gate.Id = "dependency-and-security" || gate.Id = "evidence-manifest" then
             line "    env:"
-            if gate.Cache then
-                line $"      NUGET_PACKAGES: %s{contract.CachePath}"
-            else
-                line ("      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-" + gate.Id)
+            line ("      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-" + gate.Id)
             if gate.Id = "canonical-quint" then
                 line "      FSGG_QUINT_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint/qualification.json"
             if gate.Id = "evidence-manifest" then
@@ -230,12 +211,6 @@ let private renderWorkflow (contract: BootstrapContract) =
         line $"        uses: actions/setup-dotnet@%s{contract.Actions.SetupDotnet}"
         line "        with:"
         line "          global-json-file: global.json"
-        if gate.Cache then
-            line "      - name: Restore the exact dependency cache"
-            line $"        uses: actions/cache@%s{contract.Actions.Cache}"
-            line "        with:"
-            line $"          path: %s{contract.CachePath}"
-            line $"          key: %s{contract.CacheKey}"
         if gate.Id = "evidence-manifest" then
             line "      - name: Download all prerequisite evidence"
             line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"

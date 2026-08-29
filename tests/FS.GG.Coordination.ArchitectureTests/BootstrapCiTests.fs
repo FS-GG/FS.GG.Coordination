@@ -187,9 +187,9 @@ let ``qualification plan rejects an unreviewed action revision`` () =
             Assert.Contains("rule=qualification-plan-invalid", error))
 
 [<Fact>]
-let ``qualification plan rejects a cache key without the exact lock graph`` () =
+let ``qualification plan rejects a legacy action runtime`` () =
     withPlanMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}", "${{ runner.os }}-nuget")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("\"checkout\": \"node24\"", "\"checkout\": \"node20\"")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -222,6 +222,7 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.DoesNotContain("Text.RegularExpressions", core)
     Assert.DoesNotContain("NUGET_PACKAGES: ${{ runner.", workflow)
     Assert.DoesNotContain("FSGG_QUINT_RECEIPT: ${{ runner.", workflow)
+    Assert.DoesNotContain("actions/cache@", workflow)
 
 [<Fact>]
 let ``bootstrap workflow rejects a missing gate`` () =
@@ -287,9 +288,9 @@ let ``bootstrap workflow rejects authority expansion`` () =
             Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
-let ``bootstrap workflow rejects broad cache fallback keys`` () =
+let ``bootstrap workflow rejects unavailable runner context in job environment`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}", "          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}\n          restore-keys: ${{ runner.os }}-nuget-")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint", "NUGET_PACKAGES: ${{ runner.temp }}/nuget-canonical-quint")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
