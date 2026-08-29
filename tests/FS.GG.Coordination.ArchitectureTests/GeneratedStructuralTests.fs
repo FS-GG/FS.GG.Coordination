@@ -64,6 +64,10 @@ let private assertArtifactMutation name expectedCode =
 let private withQualifiedCopy action =
     let scratch = Directory.CreateTempSubdirectory("fsgg-generated-structural-")
     try
+        let protocolRelative = "src/FS.GG.Coordination.Protocol/Protocol.md"
+        let protocolDestination = Path.Combine(scratch.FullName, protocolRelative)
+        Directory.CreateDirectory(Path.GetDirectoryName protocolDestination) |> ignore
+        File.Copy(Path.Combine(root, protocolRelative), protocolDestination)
         let source = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated")
         for path in Directory.GetFiles(source, "*", SearchOption.AllDirectories) do
             let relative = Path.GetRelativePath(root, path)
@@ -182,6 +186,28 @@ let ``unregistered command mutation and projection changes are rejected`` () =
         (output["content"]["entries"]).AsArray().RemoveAt(0))
     assertSourceMutation "projection-view.json" "COUT-ProjectionViews" "GST-PROJECTION-REGISTRATION" (fun output ->
         (output["content"]["catalogue"]).AsArray().RemoveAt(0))
+
+[<Fact>]
+let ``schema and permission censuses agree with their independent producers`` () =
+    let assertProducerOmission fileName family (collectionName: string) (expectedCount: int) expectedCode mutate =
+        withQualifiedCopy (fun scratch ->
+            rewriteCompiledOutput scratch fileName family (fun output ->
+                let collection = (output["content"][collectionName]).AsArray()
+                Assert.Equal(expectedCount, collection.Count)
+                mutate output)
+            match GeneratedStructuralTests.check scratch artifactRelative with
+            | Ok _ -> failwith $"%s{family} producer omission unexpectedly validated"
+            | Error error -> Assert.StartsWith(expectedCode, error))
+    assertProducerOmission "schemas.json" "COUT-Schemas" "recordShapes" 28 "GST-SCHEMA-REGISTRATION" (fun output ->
+        (output["content"]["recordShapes"]).AsArray().RemoveAt(0))
+    assertProducerOmission "permission-census.json" "COUT-PermissionCensus" "requiredPermissions" 6 "GST-PERMISSION-REGISTRATION" (fun output ->
+        (output["content"]["requiredPermissions"]).AsArray().RemoveAt(0))
+    withQualifiedCopy (fun scratch ->
+        let protocolPath = Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Protocol.md")
+        File.AppendAllText(protocolPath, "\n", UTF8Encoding(false))
+        match GeneratedStructuralTests.check scratch artifactRelative with
+        | Ok _ -> failwith "qualified source digest drift unexpectedly validated"
+        | Error error -> Assert.StartsWith("GST-INPUT-DIGEST", error))
 
 [<Fact>]
 let ``compiled output family contract and safe paths are authoritative`` () =

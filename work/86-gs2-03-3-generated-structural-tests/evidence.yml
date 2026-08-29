@@ -23,11 +23,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/86-gs2-03-3-generated-structural-tests/plan.md
-    digest: eddc4d8a61ab488e5ee30bcbd0ac632963ac44a0da519ada6ac3b95d647514d2
+    digest: eaa8d93af4b341aea36a43fded87330afe82d412729a0d802d625fd2d16635ca
     schemaVersion: 1
   - label: spec
     path: work/86-gs2-03-3-generated-structural-tests/spec.md
-    digest: cb2668e4046f31f2b172d55d9c7665a5c64ac4da80e0eadf2b494e96f54e5976
+    digest: a3c00ff98bb0a25d244ab79a1af355131370ef7d4eae3a625d47855094f1e16e
     schemaVersion: 1
   - label: tasks
     path: work/86-gs2-03-3-generated-structural-tests/tasks.yml
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/86-gs2-03-3-generated-structural-tests/qualification.trx
-      digest: "sha256:0b500e626fab258a17f526dcce01e1fb427337b7fb4a5034c75c89705abe9062"
+      digest: "sha256:63fb72850c83b053866917c3e8684e2c6f6f0046d0e135b98e0aeac2d4808516"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 219
+      passed: 220
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]

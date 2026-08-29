@@ -6,6 +6,7 @@ open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Text.RegularExpressions
 
 [<Literal>]
 let private Schema = "fsgg.quint.generated-structural-tests/1"
@@ -130,6 +131,73 @@ let private uniqueBy code label keyOf values =
     | Some duplicate -> Error $"%s{code}: duplicate %s{label} %s{keyOf duplicate}"
     | None -> Ok values
 
+let private traverse mapping values =
+    values
+    |> List.fold (fun state value ->
+        match state, mapping value with
+        | Ok collected, Ok item -> Ok(item :: collected)
+        | Error error, _ | _, Error error -> Error error) (Ok [])
+    |> Result.map List.rev
+
+let private expectedPermissionInventory (sourceBytes: byte array) =
+    Regex.Matches(Encoding.UTF8.GetString sourceBytes, "requiredPermission:\\s*\"([^\"]+)\"", RegexOptions.CultureInvariant)
+    |> Seq.cast<Match>
+    |> Seq.map (fun item -> item.Groups[1].Value)
+    |> Seq.distinct
+    |> Seq.sort
+    |> Seq.toList
+
+let private observedPermissionInventory permissions =
+    match tryProperty "content" permissions |> Option.bind (tryProperty "requiredPermissions") with
+    | Some values when values.ValueKind = JsonValueKind.Array ->
+        values.EnumerateArray()
+        |> Seq.map _.Clone()
+        |> Seq.toList
+        |> traverse (fun value ->
+            if value.ValueKind = JsonValueKind.String then Ok(value.GetString())
+            else Error "GST-PERMISSION-REGISTRATION: permission census contains a non-string")
+    | _ -> Error "GST-PERMISSION-REGISTRATION: missing requiredPermissions"
+
+let private expectedSchemaInventory contract =
+    arrayProperty "GST-SCHEMA-REGISTRATION" "catalogue" contract
+    |> Result.bind (traverse (fun item ->
+        match stringProperty "GST-SCHEMA-REGISTRATION" "kind" item,
+              tryProperty "value" item |> Option.bind (tryProperty "fields") with
+        | Ok kind, Some fields when fields.ValueKind = JsonValueKind.Array ->
+            fields.EnumerateArray()
+            |> Seq.map _.Clone()
+            |> Seq.toList
+            |> traverse (stringProperty "GST-SCHEMA-REGISTRATION" "name")
+            |> Result.map (fun names -> kind, names)
+        | Error error, _ -> Error error
+        | _ -> Error "GST-SCHEMA-REGISTRATION: catalogue entry has no record fields"))
+    |> Result.map (fun rows ->
+        rows
+        |> List.groupBy fst
+        |> List.map (fun (kind, entries) -> kind, entries |> List.collect snd |> List.distinct |> List.sort)
+        |> List.sortBy fst)
+
+let private observedSchemaInventory schemas =
+    let schemaRow (value: JsonElement) =
+        match stringProperty "GST-SCHEMA-REGISTRATION" "kind" value,
+              arrayProperty "GST-SCHEMA-REGISTRATION" "fields" value with
+        | Ok kind, Ok fields ->
+            fields
+            |> traverse (fun field ->
+                if field.ValueKind = JsonValueKind.String then Ok(field.GetString())
+                else Error "GST-SCHEMA-REGISTRATION: schema field is not a string")
+            |> Result.map (fun names -> kind, names |> List.distinct |> List.sort)
+        | Error error, _ | _, Error error -> Error error
+
+    match tryProperty "content" schemas |> Option.bind (tryProperty "recordShapes") with
+    | Some values when values.ValueKind = JsonValueKind.Array ->
+        values.EnumerateArray()
+        |> Seq.map _.Clone()
+        |> Seq.toList
+        |> traverse schemaRow
+        |> Result.map (List.sortBy fst)
+    | _ -> Error "GST-SCHEMA-REGISTRATION: missing recordShapes"
+
 let private compiledOutputFamilies contract =
     let pascalCase (value: string) =
         value.Split('-', StringSplitOptions.RemoveEmptyEntries)
@@ -175,13 +243,14 @@ let private jsonRelative family =
     | _ -> None
 
 let private loadQualified root =
+    let sourceRelative = "src/FS.GG.Coordination.Protocol/Protocol.md"
     let contractRelative = "src/FS.GG.Coordination.Protocol/Generated/contract.json"
     let outputRoot = "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs"
     let manifestRelative = outputRoot + "/manifest.json"
 
-    match readBytes root contractRelative, readBytes root manifestRelative with
-    | Error error, _ | _, Error error -> Error error
-    | Ok contractBytes, Ok manifestBytes ->
+    match readBytes root sourceRelative, readBytes root contractRelative, readBytes root manifestRelative with
+    | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+    | Ok sourceBytes, Ok contractBytes, Ok manifestBytes ->
         match parseJson "GST-INPUT-MALFORMED" contractRelative contractBytes, parseJson "GST-INPUT-MALFORMED" manifestRelative manifestBytes with
         | Error error, _ | _, Error error -> Error error
         | Ok contract, Ok manifest ->
@@ -194,15 +263,17 @@ let private loadQualified root =
             | Ok contractSchema, Ok manifestSchema, Ok sourceSha, Ok behavioralSha, Ok contractSha, Ok outputs ->
                 match requireEqual "GST-INPUT-SCHEMA" "contract schema" "fsgg.quint.compiled-contract/v2" contractSchema,
                       requireEqual "GST-INPUT-SCHEMA" "manifest schema" "fsgg.quint.compiled-output-manifest/1" manifestSchema,
+                      requireEqual "GST-INPUT-DIGEST" "qualified source digest" sourceSha (sha256 sourceBytes),
                       requireEqual "GST-INPUT-DIGEST" "compiled contract digest" contractSha (sha256 contractBytes),
                       uniqueBy "GST-SOURCE-DUPLICATE" "compiled-output family" (fun output -> stringProperty "GST-INPUT-MANIFEST" "family" output |> Result.defaultValue "") outputs,
                       compiledOutputFamilies contract with
-                | Error error, _, _, _, _
-                | _, Error error, _, _, _
-                | _, _, Error error, _, _
-                | _, _, _, Error error, _
-                | _, _, _, _, Error error -> Error error
-                | Ok (), Ok (), Ok (), Ok uniqueOutputs, Ok expectedFamilies ->
+                | Error error, _, _, _, _, _
+                | _, Error error, _, _, _, _
+                | _, _, Error error, _, _, _
+                | _, _, _, Error error, _, _
+                | _, _, _, _, Error error, _
+                | _, _, _, _, _, Error error -> Error error
+                | Ok (), Ok (), Ok (), Ok (), Ok uniqueOutputs, Ok expectedFamilies ->
                     let sortedOutputs =
                         uniqueOutputs
                         |> List.sortBy (fun output -> intProperty "GST-INPUT-MANIFEST" "ordinal" output |> Result.defaultValue Int32.MaxValue)
@@ -330,22 +401,33 @@ let private loadQualified root =
                                     | Some left, Some right -> sameRaw "GST-PROJECTION-REGISTRATION" projectionName left right
                                     | _ -> Error $"GST-PROJECTION-REGISTRATION: missing %s{projectionName}"
 
+
+                                let expectedPermissions = expectedPermissionInventory sourceBytes
+                                let observedPermissions = observedPermissionInventory permissions
+                                let expectedSchemas = expectedSchemaInventory contract
+                                let observedSchemas = observedSchemaInventory schemas
+
                                 match tryProperty "actionEffects" contract,
                                       tryProperty "content" commands |> Option.bind (tryProperty "actions"),
                                       uniqueBy "GST-SOURCE-DUPLICATE" "registered mutation" (fun item -> stringProperty "GST-INPUT-SCHEMA" "id" item |> Result.defaultValue "") registeredMutations,
-                                      uniqueBy "GST-SOURCE-DUPLICATE" "contract mutation" (fun item -> stringProperty "GST-INPUT-SCHEMA" "id" item |> Result.defaultValue "") contractMutations with
-                                | Some contractActions, Some commandActions, Ok registered, Ok expectedMutations ->
+                                      uniqueBy "GST-SOURCE-DUPLICATE" "contract mutation" (fun item -> stringProperty "GST-INPUT-SCHEMA" "id" item |> Result.defaultValue "") contractMutations,
+                                      observedPermissions,
+                                      expectedSchemas,
+                                      observedSchemas with
+                                | Some contractActions, Some commandActions, Ok registered, Ok expectedMutations, Ok actualPermissions, Ok expectedSchemaRows, Ok actualSchemaRows ->
                                     let expectedMutationIds = expectedMutations |> List.map (fun item -> stringProperty "GST-INPUT-SCHEMA" "id" item |> Result.defaultValue "") |> List.sort
                                     let registeredMutationIds = registered |> List.map (fun item -> stringProperty "GST-INPUT-SCHEMA" "id" item |> Result.defaultValue "") |> List.sort
                                     match sameRaw "GST-COMMAND-REGISTRATION" "command actions" contractActions commandActions,
                                           (if expectedMutationIds = registeredMutationIds then Ok() else Error "GST-MUTATION-REGISTRATION: mutation census differs from the qualified catalogue"),
+                                          (if not expectedPermissions.IsEmpty && expectedPermissions = actualPermissions then Ok() else Error "GST-PERMISSION-REGISTRATION: permission census differs from the qualified source"),
+                                          (if not expectedSchemaRows.IsEmpty && expectedSchemaRows = actualSchemaRows then Ok() else Error "GST-SCHEMA-REGISTRATION: schema census differs from the qualified contract"),
                                           projectionPair "catalogue" "catalogue",
                                           projectionPair "relationships" "relationships",
                                           projectionPair "actionEffects" "actions",
                                           projectionPair "verificationProfiles" "verificationProfiles",
                                           projectionPair "bounds" "bounds",
                                           projectionPair "compatibility" "compatibility" with
-                                    | Ok (), Ok (), Ok (), Ok (), Ok (), Ok (), Ok (), Ok () ->
+                                    | Ok (), Ok (), Ok (), Ok (), Ok (), Ok (), Ok (), Ok (), Ok (), Ok () ->
                                         Ok
                                             { SourceSha256 = sourceSha
                                               BehavioralSha256 = behavioralSha
@@ -358,16 +440,22 @@ let private loadQualified root =
                                               Schemas = schemas
                                               ProjectionView = projection
                                               Manifest = manifest }
-                                    | Error error, _, _, _, _, _, _, _
-                                    | _, Error error, _, _, _, _, _, _
-                                    | _, _, Error error, _, _, _, _, _
-                                    | _, _, _, Error error, _, _, _, _
-                                    | _, _, _, _, Error error, _, _, _
-                                    | _, _, _, _, _, Error error, _, _
-                                    | _, _, _, _, _, _, Error error, _
-                                    | _, _, _, _, _, _, _, Error error -> Error error
-                                | None, _, _, _ | _, None, _, _ -> Error "GST-COMMAND-REGISTRATION: missing action registration"
-                                | _, _, Error error, _ | _, _, _, Error error -> Error error
+                                    | Error error, _, _, _, _, _, _, _, _, _
+                                    | _, Error error, _, _, _, _, _, _, _, _
+                                    | _, _, Error error, _, _, _, _, _, _, _
+                                    | _, _, _, Error error, _, _, _, _, _, _
+                                    | _, _, _, _, Error error, _, _, _, _, _
+                                    | _, _, _, _, _, Error error, _, _, _, _
+                                    | _, _, _, _, _, _, Error error, _, _, _
+                                    | _, _, _, _, _, _, _, Error error, _, _
+                                    | _, _, _, _, _, _, _, _, Error error, _
+                                    | _, _, _, _, _, _, _, _, _, Error error -> Error error
+                                | None, _, _, _, _, _, _ | _, None, _, _, _, _, _ -> Error "GST-COMMAND-REGISTRATION: missing action registration"
+                                | _, _, Error error, _, _, _, _
+                                | _, _, _, Error error, _, _, _
+                                | _, _, _, _, Error error, _, _
+                                | _, _, _, _, _, Error error, _
+                                | _, _, _, _, _, _, Error error -> Error error
                             | Error error, _, _, _, _
                             | _, Error error, _, _, _
                             | _, _, Error error, _, _
