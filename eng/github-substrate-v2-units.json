@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "2cb04ef5f1bc7b44e924c89af949cc64b948265e",
+    "revision": "8872061033e4d8068426379f5ca6cd13588f6190",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "6d71c797c7c6aaeaa8674cd7e25c9cb4ec39ac5b3692e983675e21f2364642f3"
+    "sha256": "186917f36b60c6cb50f4b12a2e15e297c2a5e8eb566b21bcdb83698415e4ee63"
   },
   "units": [
     {
@@ -335,6 +335,22 @@
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
       "contractSha256": "5bb145e01da91b70207e3fcd02274235b2d8ec6883a68bdc4e21cfae18523e6c"
+    },
+    {
+      "id": "GS2-03.5",
+      "title": "Add native Quint model/property/formal tests",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-03.4"],
+      "permissionCeiling": ["repository-local native Quint examples, simulation, reachability witnesses, safety properties, temporal liveness checks, bounded model checking, and reproducible Quint/ITF counterexample evidence across claim/election, relation mutation, lifecycle, operation saga, epoch, and rollback state spaces", "no external fault injection, network, GitHub mutation, deployment, publication, production write, or successor-unit implementation authority"],
+      "exitGate": "native Quint examples, simulation, reachability witnesses, safety properties, temporal liveness checks, and bounded model checking cover claim/election, relation mutation, lifecycle, operation saga, epoch, and rollback state spaces and retain reproducible Quint/ITF counterexamples under Q2 and Q7",
+      "qGates": ["Q2", "Q7"],
+      "gateCommands": ["canonical-quint-pure-model", "architecture-tests", "evidence-storage-contract"],
+      "gateContracts": [
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" },
+        { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" },
+        { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
+      ],
+      "contractSha256": "1d7e6539bf45ade0a565c194e34c1b6d108f2206ebc45fdd56f42c9ed6f0abe1"
     }
   ]
 }
