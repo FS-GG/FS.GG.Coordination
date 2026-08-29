@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "1ccb56538867384a7f1e6ebb12826e6abdacd640b981a6ecc38b18f20c02dde2"
+        "value": "722b9d046af9a0a79d014467707796393b89e25cdc6c3dc428a271e7c7897bde"
       }
     },
     {
@@ -1496,7 +1496,10 @@
       "requirementRefs": [
         "FR-001"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1520,7 +1523,10 @@
       "requirementRefs": [
         "FR-002"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1544,7 +1550,10 @@
       "requirementRefs": [
         "FR-003"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1568,7 +1577,10 @@
       "requirementRefs": [
         "FR-004"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1592,7 +1604,11 @@
       "requirementRefs": [
         "FR-005"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/bootstrap-ci.fsx",
+        "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json",
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1616,7 +1632,10 @@
       "requirementRefs": [
         "FR-006"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        ".github/workflows/bootstrap-qualification.yml",
+        "eng/bootstrap-ci-contract.json"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1640,7 +1659,10 @@
       "requirementRefs": [
         "FR-007"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1664,7 +1686,10 @@
       "requirementRefs": [
         "FR-008"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/validate-canonical-quint-protocol.fsx",
+        "work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1688,7 +1713,10 @@
       "requirementRefs": [
         "FR-009"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1712,7 +1740,11 @@
       "requirementRefs": [
         "FR-010"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/bootstrap-ci.fsx",
+        "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json",
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1736,7 +1768,10 @@
       "requirementRefs": [
         "FR-011"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/validate-canonical-quint-protocol.fsx",
+        "work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1758,7 +1793,10 @@
         "T012"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1780,7 +1818,10 @@
         "T013"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/validate-canonical-quint-protocol.fsx",
+        "work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1802,7 +1843,10 @@
         "T014"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/validate-canonical-quint-protocol.fsx",
+        "work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1824,7 +1868,10 @@
         "T015"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1846,7 +1893,11 @@
         "T016"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/bootstrap-ci.fsx",
+        "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json",
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1868,7 +1919,10 @@
         "T017"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1892,7 +1946,10 @@
       "requirementRefs": [
         "FR-001"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1917,7 +1974,10 @@
         "FR-002",
         "FR-005"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1941,7 +2001,10 @@
       "requirementRefs": [
         "FR-003"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1965,7 +2028,10 @@
       "requirementRefs": [
         "FR-004"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -1989,7 +2055,11 @@
       "requirementRefs": [
         "FR-007"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/bootstrap-ci.fsx",
+        "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json",
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2013,7 +2083,10 @@
       "requirementRefs": [
         "FR-008"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/validate-canonical-quint-protocol.fsx",
+        "work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2037,7 +2110,10 @@
       "requirementRefs": [
         "FR-009"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2059,7 +2135,10 @@
         "T025"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2081,7 +2160,10 @@
         "T026"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        ".github/workflows/bootstrap-qualification.yml",
+        "eng/bootstrap-ci-contract.json"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2103,7 +2185,11 @@
         "T027"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/bootstrap-ci.fsx",
+        "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json",
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2125,7 +2211,10 @@
         "T028"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2147,7 +2236,10 @@
         "T029"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2169,7 +2261,11 @@
         "T030"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/bootstrap-ci.fsx",
+        "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json",
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2191,7 +2287,10 @@
         "T031"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        ".github/workflows/bootstrap-qualification.yml",
+        "eng/bootstrap-ci-contract.json"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2213,7 +2312,10 @@
         "T032"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/validate-canonical-quint-protocol.fsx",
+        "work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2235,7 +2337,10 @@
         "T033"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "docs/architecture/bootstrap-qualification.md",
+        "eng/validate-canonical-quint-protocol.fsx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2257,7 +2362,11 @@
         "T034"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "eng/bootstrap-ci.fsx",
+        "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json",
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2279,7 +2388,10 @@
         "T035"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "readiness/79-optimize-canonical-quint-q1-q2/analysis.json",
+        "readiness/79-optimize-canonical-quint-q1-q2/work-model.json"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2301,7 +2413,10 @@
         "T036"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "readiness/79-optimize-canonical-quint-q1-q2/analysis.json",
+        "readiness/79-optimize-canonical-quint-q1-q2/work-model.json"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -2369,7 +2484,7 @@
           "path": "work/79-optimize-canonical-quint-q1-q2/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "1ccb56538867384a7f1e6ebb12826e6abdacd640b981a6ecc38b18f20c02dde2"
+            "value": "722b9d046af9a0a79d014467707796393b89e25cdc6c3dc428a271e7c7897bde"
           },
           "schemaVersion": 1
         },
@@ -2400,7 +2515,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "d468355403856ce1229fb6aa5f3cfc83a01217b550e20632a7f3ff14fe9f44b5"
+        "value": "ce3f836e02289fe351c172bf021acb18f7454cb7e795fef1e6c523f531d21e59"
       },
       "currency": "current"
     }

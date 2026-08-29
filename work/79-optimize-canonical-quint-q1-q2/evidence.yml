@@ -11,27 +11,27 @@ sourceAnalysis: readiness/79-optimize-canonical-quint-q1-q2/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/79-optimize-canonical-quint-q1-q2/analysis.json
-    digest: 69c74df184fcc55d860b422766a5c07b2351918ed3b9d6830a9530e6b16047e3
+    digest: e8ac71b14d7a47d10c2cbd4dd8d85ebd80951be38cd65d7ae863ece23874697b
     schemaVersion: 1
   - label: checklist
     path: work/79-optimize-canonical-quint-q1-q2/checklist.md
-    digest: 6194d9dcf3ad9879e36c31cc72906560916af460bdeb0fa6e160a07cbd09f622
+    digest: 5ca29c587b0df00cf5de0942703a8865c8f480d881481707c7b5f8f5ac568c91
     schemaVersion: 1
   - label: clarifications
     path: work/79-optimize-canonical-quint-q1-q2/clarifications.md
-    digest: bae387547f1f4b667bbd13232624833c714555272a7bb5f1f8edfa1ed98f2581
+    digest: 445de0058bd200c1694a41d5fa73af9bee27eabb3eecec99edf549e282c796a8
     schemaVersion: 1
   - label: plan
     path: work/79-optimize-canonical-quint-q1-q2/plan.md
-    digest: 91f410549182a4b8839aa3972e75a34d4c5e414380233c2e4c9fd800e84f1a1f
+    digest: 0000d6d3038d62699beaa3935f6b3b971452efd0d9350d0c087895a679e9d610
     schemaVersion: 1
   - label: spec
     path: work/79-optimize-canonical-quint-q1-q2/spec.md
-    digest: b7ed7b4ee23e7ade0a8fa9276592a3a9e64c0b830f48ea204081e00c86ba9045
+    digest: 430508aa2892714c446008111143a8b79f8b3eb2ea0eaf703172081f9e6eb4d9
     schemaVersion: 1
   - label: tasks
     path: work/79-optimize-canonical-quint-q1-q2/tasks.yml
-    digest: c4d8a88896845b944e8f4d760481c14d5cdf5b0db45f862045164597557bec35
+    digest: 148494844b2b3ee8d0c7b234e60edf2c6a1c25c317fd111db57bcacc46c310a0
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -46,18 +46,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV001]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -73,18 +73,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV002]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -100,18 +100,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV003]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -127,18 +127,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV004]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -154,7 +154,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: []
+    artifacts: [eng/bootstrap-ci.fsx, evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -181,18 +181,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: []
+    artifacts: [".github/workflows/bootstrap-qualification.yml", eng/bootstrap-ci-contract.json]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: ".github/workflows/bootstrap-qualification.yml"
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -208,18 +208,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV007]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -235,18 +235,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV008]
-    artifacts: []
+    artifacts: [eng/validate-canonical-quint-protocol.fsx, work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -262,18 +262,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV009]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -289,7 +289,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-010]
     obligationRefs: [EV010]
-    artifacts: []
+    artifacts: [eng/bootstrap-ci.fsx, evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -316,18 +316,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-011]
     obligationRefs: [EV011]
-    artifacts: []
+    artifacts: [eng/validate-canonical-quint-protocol.fsx, work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -343,18 +343,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV012]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -370,18 +370,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV013]
-    artifacts: []
+    artifacts: [eng/validate-canonical-quint-protocol.fsx, work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -397,18 +397,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV014]
-    artifacts: []
+    artifacts: [eng/validate-canonical-quint-protocol.fsx, work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -424,18 +424,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV015]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -451,7 +451,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV016]
-    artifacts: []
+    artifacts: [eng/bootstrap-ci.fsx, evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -478,18 +478,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV017]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -505,18 +505,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV018]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -532,18 +532,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV019]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -559,18 +559,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV020]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -586,18 +586,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV021]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -613,7 +613,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV022]
-    artifacts: []
+    artifacts: [eng/bootstrap-ci.fsx, evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
@@ -621,10 +621,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -640,18 +640,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-008]
     obligationRefs: [EV023]
-    artifacts: []
+    artifacts: [eng/validate-canonical-quint-protocol.fsx, work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -667,18 +667,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-009]
     obligationRefs: [EV024]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -694,18 +694,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002]
     obligationRefs: [EV025]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -721,18 +721,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006, PD-010]
     obligationRefs: [EV026]
-    artifacts: []
+    artifacts: [".github/workflows/bootstrap-qualification.yml", eng/bootstrap-ci-contract.json]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: ".github/workflows/bootstrap-qualification.yml"
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -748,7 +748,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007, PD-010]
     obligationRefs: [EV027]
-    artifacts: []
+    artifacts: [eng/bootstrap-ci.fsx, evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
@@ -756,10 +756,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -775,18 +775,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003, PD-004]
     obligationRefs: [EV028]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -802,18 +802,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
     obligationRefs: [EV029]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -829,7 +829,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005, PD-007]
     obligationRefs: [EV030]
-    artifacts: []
+    artifacts: [eng/bootstrap-ci.fsx, evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
@@ -837,10 +837,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -856,18 +856,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006, PD-010]
     obligationRefs: [EV031]
-    artifacts: []
+    artifacts: [".github/workflows/bootstrap-qualification.yml", eng/bootstrap-ci-contract.json]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: ".github/workflows/bootstrap-qualification.yml"
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -883,18 +883,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-008, PD-011]
     obligationRefs: [EV032]
-    artifacts: []
+    artifacts: [eng/validate-canonical-quint-protocol.fsx, work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: work/79-optimize-canonical-quint-q1-q2/optimization-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -910,18 +910,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-009]
     obligationRefs: [EV033]
-    artifacts: []
+    artifacts: [docs/architecture/bootstrap-qualification.md, eng/validate-canonical-quint-protocol.fsx]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: eng/validate-canonical-quint-protocol.fsx
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -937,7 +937,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV034]
-    artifacts: []
+    artifacts: [eng/bootstrap-ci.fsx, evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json, tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
@@ -945,10 +945,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -964,18 +964,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV035]
-    artifacts: []
+    artifacts: [readiness/79-optimize-canonical-quint-q1-q2/analysis.json, readiness/79-optimize-canonical-quint-q1-q2/work-model.json]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: readiness/79-optimize-canonical-quint-q1-q2/work-model.json
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -991,18 +991,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV036]
-    artifacts: []
+    artifacts: [readiness/79-optimize-canonical-quint-q1-q2/analysis.json, readiness/79-optimize-canonical-quint-q1-q2/work-model.json]
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+        path: readiness/79-optimize-canonical-quint-q1-q2/work-model.json
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:575057919ac523846ff9ea7c6a5bdddacd7ccd7fcb346ac6eb82deed729462c9"
+      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 153
+      passed: 156
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]

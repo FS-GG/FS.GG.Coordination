@@ -47,6 +47,41 @@ is not present in the production validator.
 
 ## Hosted exact-head comparison
 
-Pending candidate and baseline run collection. This section will record five
-samples per cohort, medians, p95 values, job/phase durations, immutable run
-links, and the exact candidate head before acceptance.
+Candidate head: `7764fd94d88a7bfe1d22bb6c1fcd408ac67d8a7c`.
+All candidate attempts passed with the identical 8-positive, 56-negative,
+61-Quint, and 14-Apalache inventory. p95 uses the nearest-rank value, which is
+the maximum of a five-sample cohort.
+
+The baseline is the five most recent successful `main` runs before this
+change. Formal qualification was then serialized inside `compiler-and-tests`.
+
+| Baseline run | Workflow (s) | Compiler job (s) | Formal step (s) |
+| --- | ---: | ---: | ---: |
+| [33241482759](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33241482759) | 914 | 888 | 617 |
+| [33239786404](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33239786404) | 853 | 830 | 582 |
+| [33232073099](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33232073099) | 708 | 685 | 485 |
+| [33228843157](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33228843157) | 904 | 881 | 617 |
+| [33224839552](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33224839552) | 904 | 880 | 611 |
+| **median** | **904** | **880** | **611** |
+| **p95** | **914** | **888** | **617** |
+
+The candidate cohort is five attempts of the same exact head. Attempt 1 is the
+full workflow under ordinary sibling-job load. Attempts 2–5 rerun the
+canonical job alone, retaining the same hosted image, pins, command, and head;
+this resource-context distinction is intentional and explicit.
+
+| Candidate attempt | Job (s) | Formal step (s) | Q1 (s) | Q2 (s) | Receipt total (s) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| [1](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33245399602/attempts/1) | 483 | 465 | 94.688 | 340.750 | 435.438 |
+| [2](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33245399602/attempts/2) | 340 | 324 | 67.872 | 237.450 | 305.322 |
+| [3](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33245399602/attempts/3) | 416 | 403 | 76.136 | 306.404 | 382.540 |
+| [4](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33245399602/attempts/4) | 409 | 394 | 73.971 | 299.363 | 373.334 |
+| [5](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33245399602/attempts/5) | 393 | 378 | 70.586 | 287.922 | 358.508 |
+| **median** | **409** | **394** | **73.971** | **299.363** | **373.334** |
+| **p95** | **483** | **465** | **94.688** | **340.750** | **435.438** |
+
+The candidate formal-step median is 35.5% below baseline and its p95 is 24.6%
+below baseline. The ordinary fully concurrent candidate workflow completed in
+509s, 43.7% below the 904s baseline median. Only one full-topology candidate
+sample exists because the four measurement reruns intentionally isolated the
+formal job; no multi-sample workflow p95 is claimed.
