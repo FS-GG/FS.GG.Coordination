@@ -27,6 +27,24 @@ Attempt 2 restored an exact 5.8 MB cache under key `Linux-nuget-4ce94908d328a5de
 
 Decision: reject NuGet action caching for this workflow. The dependency graph is too small for the extra action, plan fields, generated steps, cache lifecycle, and third-party acquisition surface to provide a material win. The final candidate removes that experiment and retains locked restore plus isolated cold security/formal/recovery paths.
 
+## Final cache-free confirmation
+
+Run `33251281115` qualified the cache-free head `c88ac69acf167a0ffc832e9e9be53fdb06cf0ca9` with all seven jobs green. It confirms that the retained improvement comes from compiled validation and the reduced control surface, not caching.
+
+| Route | Baseline | Cache-free candidate | Change |
+| --- | ---: | ---: | ---: |
+| Compiler/tests job | 315s | 165s | -47.6% |
+| Bootstrap recovery job | 338s | 173s | -48.8% |
+| Deterministic build | 40s | 42s | +5.0% |
+| Package smoke | 27s | 25s | -7.4% |
+| Dependency/security | 29s | 30s | +3.4% |
+| Canonical Quint | 332s | 408s | +22.9% |
+| Evidence fan-in | 22s | 18s | -18.2% |
+| Aggregate runner time | 1103s | 861s | -21.9% |
+| Settled workflow | 366s | 431s | +17.8% |
+
+The final candidate again exceeds both owned-route and runner-consumption thresholds. Its settled workflow remains entirely canonical-Quint-bound: the unchanged formal route ran 76 seconds above baseline while compiler/tests and recovery finished roughly 150 and 165 seconds earlier respectively.
+
 ## Local corroboration
 
 The retained baseline TRX attributed 267.82 aggregate test-seconds to 58 bootstrap validator cases, each launching FSI. The compiled core executes the expanded 65-test corpus, including green/red adapter parity, in about four seconds locally. The complete architecture suite passes 167/167 in about 45 seconds locally. This directly explains the hosted compiler and recovery reductions without changing gate identities or assertions.
@@ -36,5 +54,6 @@ The retained baseline TRX attributed 267.82 aggregate test-seconds to 58 bootstr
 - Compiler/tests improvement exceeds 30% in both candidate attempts.
 - Recovery improvement is 48.5% in both attempts.
 - Aggregate runner-time improvement exceeds 10% in both attempts.
+- The final cache-free run reduces aggregate runner time by 21.9%, compiler/tests by 47.6%, and recovery by 48.8%.
 - Cache miss/hit semantics are equal and the non-beneficial cache is absent from the final projection.
 - Overall settled latency is disclosed as canonical-Quint-bound; #80 owns any later exact-evidence reuse that can remove repeated formal qualification from that path.
