@@ -16,6 +16,10 @@ let private executeWith selfTest extraArguments =
     info.UseShellExecute <- false
     info.RedirectStandardOutput <- true
     info.RedirectStandardError <- true
+    // The ordinary architecture lane deliberately has no formal compiler. Future
+    // admission must fail closed here; the canonical lane supplies the digest-pinned binary.
+    info.Environment["FSGG_QUINT_BIN"] <- ""
+    info.Environment["FSGG_QUINT_CACHE"] <- ""
     info.ArgumentList.Add "fsi"
     info.ArgumentList.Add "eng/validate-quint-qualification.fsx"
     info.ArgumentList.Add "--"
@@ -107,8 +111,8 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
 
         let futureExit, futureOutput, futureError =
             executeWith false [ "--mode"; "future-behavior"; "--proposal"; proposal ]
-        Assert.True((futureExit = 0), $"%s{futureOutput}\n%s{futureError}")
-        Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations", futureOutput)
+        Assert.NotEqual(0, futureExit)
+        Assert.Contains("QQ-PROPOSAL-COMPILER-UNAVAILABLE", futureOutput + futureError)
 
         File.WriteAllText(proposal, File.ReadAllText(proposal).Replace(behaviorSha, String.replicate 64 "b"))
         let badFutureExit, badFutureOutput, badFutureError =
@@ -139,6 +143,48 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
         File.Delete proposal
         File.Delete invalidProposedSource
         File.Delete reuseReceipt
+
+[<Fact>]
+let ``imports from any Quint module are part of the executable closure`` () =
+    let scratch = Directory.CreateTempSubdirectory("fsgg-quint-import-closure-")
+    try
+        let protocolDirectory = Path.Combine(scratch.FullName, "src/FS.GG.Coordination.Protocol")
+        let engDirectory = Path.Combine(scratch.FullName, "eng")
+        Directory.CreateDirectory protocolDirectory |> ignore
+        Directory.CreateDirectory engDirectory |> ignore
+        let sourcePath = Path.Combine(protocolDirectory, "Protocol.md")
+        let configPath = Path.Combine(engDirectory, "quint-qualification.json")
+        let baselinePath = Path.Combine(engDirectory, "quint-qualification-baseline.json")
+        let mutatedSource =
+            File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
+                .Replace(
+                    "module QualificationAuthorityRoot {",
+                    "module QualificationInjectedHelper { pure val injected = true }\nmodule QualificationAuthorityRoot {\n  import QualificationInjectedHelper.injected")
+        File.WriteAllText(sourcePath, mutatedSource)
+        let fileSha path =
+            SHA256.HashData(File.ReadAllBytes path) |> Convert.ToHexString |> _.ToLowerInvariant()
+        let config = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification.json"))).AsObject()
+        config["sourceSha256"] <- JsonValue.Create(fileSha sourcePath)
+        File.WriteAllText(configPath, config.ToJsonString())
+        let baseline = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification-baseline.json"))).AsObject()
+        baseline["sourceSha256"] <- JsonValue.Create(fileSha sourcePath)
+        baseline["configurationSha256"] <- JsonValue.Create(fileSha configPath)
+        File.WriteAllText(baselinePath, baseline.ToJsonString())
+        let info = ProcessStartInfo("dotnet")
+        info.WorkingDirectory <- root
+        info.UseShellExecute <- false
+        info.RedirectStandardOutput <- true
+        info.RedirectStandardError <- true
+        for argument in [ "fsi"; "eng/validate-quint-qualification.fsx"; "--"; "--root"; scratch.FullName; "--config"; "eng/quint-qualification.json"; "--mode"; "protected"; "--protected-mode"; "main" ] do
+            info.ArgumentList.Add argument
+        use child = Process.Start info
+        let output = child.StandardOutput.ReadToEnd()
+        let error = child.StandardError.ReadToEnd()
+        child.WaitForExit()
+        Assert.NotEqual(0, child.ExitCode)
+        Assert.Contains("QQ-ROOT-EXECUTABLE-CLOSURE", output + error)
+    finally
+        scratch.Delete true
 
 [<Fact>]
 let ``missing or over budget measurements are rejected before reuse`` () =

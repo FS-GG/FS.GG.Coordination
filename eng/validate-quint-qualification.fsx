@@ -1,5 +1,6 @@
 open System
 open System.Collections.Generic
+open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text
@@ -70,9 +71,9 @@ let validateDocument root (document: JsonObject) =
                 Regex.Match(sourceText, $"(?ms)^module\\s+%s{Regex.Escape main}\\s*\\{{(.*?)(?=^module\\s+|\\z)")
             if not moduleMatch.Success then Set.empty
             else
-                Regex.Matches(moduleMatch.Groups[1].Value, "(?m)^\\s*import\\s+CoordinationProtocol\\.([A-Za-z][A-Za-z0-9_]*|\\*)")
+                Regex.Matches(moduleMatch.Groups[1].Value, "(?m)^\\s*import\\s+([A-Za-z][A-Za-z0-9_]*)\\.([A-Za-z][A-Za-z0-9_]*|\\*)")
                 |> Seq.cast<Match>
-                |> Seq.map (fun item -> item.Groups[1].Value)
+                |> Seq.map (fun item -> $"%s{item.Groups[1].Value}.%s{item.Groups[2].Value}")
                 |> Set.ofSeq
 
         let rec closure visiting moduleId =
@@ -222,6 +223,53 @@ let rootsForOracles (document: JsonObject) oracleIds =
         |> Set.ofList
     reverseSelection document modules
 
+let pinnedQuint () =
+    let expected = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+    let explicit = Environment.GetEnvironmentVariable "FSGG_QUINT_BIN"
+    let cache = Environment.GetEnvironmentVariable "FSGG_QUINT_CACHE"
+    let candidates =
+        [ if not (String.IsNullOrWhiteSpace explicit) then yield explicit
+          if not (String.IsNullOrWhiteSpace cache) then yield Path.Combine(cache, "objects", expected) ]
+    candidates
+    |> List.tryFind (fun path ->
+        File.Exists path && sha256 (File.ReadAllBytes path) = expected)
+
+let extractQuintSource (markdown: string) =
+    let lines = markdown.Replace("\r\n", "\n").Split('\n')
+    let output = ResizeArray<string>()
+    let mutable inside = false
+    for line in lines do
+        if not inside && (line.StartsWith("```quint ", StringComparison.Ordinal) || line = "```quint-test") then
+            inside <- true
+        elif inside && line = "```" then
+            inside <- false
+            output.Add ""
+        elif inside then output.Add line
+    if inside || output.Count = 0 then None else Some(String.Join("\n", output))
+
+let typecheckProposalSource sourcePath =
+    match pinnedQuint (), extractQuintSource (File.ReadAllText sourcePath) with
+    | None, _ -> fail "QQ-PROPOSAL-COMPILER-UNAVAILABLE" "pinned Quint binary is required"
+    | _, None -> fail "QQ-PROPOSAL-TYPECHECK" "canonical literate Quint fences are missing or malformed"
+    | Some quint, Some source ->
+        let temporary = Path.Combine(Path.GetTempPath(), $"fsgg-quint-proposal-{Guid.NewGuid():N}.qnt")
+        try
+            File.WriteAllText(temporary, source)
+            let info = ProcessStartInfo(quint)
+            info.UseShellExecute <- false
+            info.RedirectStandardOutput <- true
+            info.RedirectStandardError <- true
+            info.ArgumentList.Add "typecheck"
+            info.ArgumentList.Add temporary
+            use child = Process.Start info
+            let output = child.StandardOutput.ReadToEnd()
+            let error = child.StandardError.ReadToEnd()
+            child.WaitForExit()
+            if child.ExitCode = 0 then Ok()
+            else fail "QQ-PROPOSAL-TYPECHECK" (sha256 (Encoding.UTF8.GetBytes(output + "\n" + error)))
+        finally
+            File.Delete temporary
+
 let validateProposalCompilerReceipt root expectedReceiptPath sourceSha (proposal: JsonObject) =
     try
         let configured = text proposal "compilerReceipt"
@@ -277,6 +325,7 @@ let validateProposal root (document: JsonObject) (proposal: JsonObject) =
         let proposedDefinition name =
             Regex.IsMatch(proposedSource, $"(?m)^\\s*(pure\\s+)?(val|def|run|action)\\s+%s{Regex.Escape name}(\\s|\\(|=)")
         let proposedRoot = text proposal "root"
+        let proposalTypecheck = lazy (typecheckProposalSource sourcePath)
         if actualFields <> requiredFields then fail "QQ-PROPOSAL-FIELDS" ($"%A{actualFields}")
         elif text proposal "schema" <> "fsgg.coordination.quint-proposal/1" then fail "QQ-PROPOSAL-SCHEMA" "unsupported"
         elif not (Regex.IsMatch(text proposal "owner", "^[a-z][a-z0-9-]*$")) || Set.contains (text proposal "owner") modules then fail "QQ-PROPOSAL-OWNER" "invalid-or-existing"
@@ -287,6 +336,7 @@ let validateProposal root (document: JsonObject) (proposal: JsonObject) =
         elif not (Regex.IsMatch(text proposal "compilerReceiptSha256", "^[0-9a-f]{64}$")) then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "digest-shape"
         elif validateProposalCompilerReceipt root canonicalCompilerReceiptPath (text proposal "behaviorSha256") proposal |> Result.isError then
             validateProposalCompilerReceipt root canonicalCompilerReceiptPath (text proposal "behaviorSha256") proposal
+        elif proposalTypecheck.Value |> Result.isError then proposalTypecheck.Value
         elif (identifiers "imports" |> Set.ofList |> fun actual -> Set.isEmpty actual || not (Set.isSubset actual modules)) then fail "QQ-PROPOSAL-IMPORTS" "empty-or-unknown"
         elif not (namesAreValid (identifiers "invariants")) || not (namesAreValid (identifiers "witnesses")) then fail "QQ-PROPOSAL-EXECUTABLES" "invalid"
         elif (identifiers "invariants" @ identifiers "witnesses" |> List.exists (proposedDefinition >> not)) then fail "QQ-PROPOSAL-EXECUTABLES" "missing-from-source"
@@ -383,6 +433,22 @@ let runSelfTests root original =
         match validateDocument root candidate with
         | Ok _ -> failwith $"QQ-SELF-TEST: mutation %s{name} passed"
         | Error _ -> ()
+    match pinnedQuint () with
+    | None -> ()
+    | Some _ ->
+        let canonicalSource = Path.Combine(root, text original "source")
+        match typecheckProposalSource canonicalSource with
+        | Error error -> failwith $"QQ-SELF-TEST: canonical proposal typecheck failed: %s{error}"
+        | Ok () -> ()
+        let forgedSource = Path.Combine(Path.GetTempPath(), $"fsgg-forged-proposal-{Guid.NewGuid():N}.md")
+        try
+            File.WriteAllText(forgedSource, "```quint forged.qnt +=\nmodule Forged { val witness = true !!! }\n```\n")
+            match typecheckProposalSource forgedSource with
+            | Ok () -> failwith "QQ-SELF-TEST: forged invalid proposal passed pinned typecheck"
+            | Error error when error.StartsWith("QQ-PROPOSAL-TYPECHECK", StringComparison.Ordinal) -> ()
+            | Error error -> failwith $"QQ-SELF-TEST: wrong forged-proposal failure: %s{error}"
+        finally
+            File.Delete forgedSource
     mutations.Length
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--") |> Array.toList

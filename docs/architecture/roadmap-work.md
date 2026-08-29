@@ -167,7 +167,9 @@ roots expose authority, lifecycle, relation, and protocol-stream transitions whi
 importing only their enumerated canonical types, values, and pure definitions. The
 validator extracts those imports from the executable module bodies and compares them
 directly with each root's retained executable closure; there is no JSON-authored
-executable DAG that can agree with itself while the Quint source says something else.
+executable DAG that can agree with itself while the Quint source says something else,
+and every imported module/definition pair participates rather than only imports from
+the canonical module.
 Their valid steps
 reach positive and adversarial witnesses, while separate invalid parameter actions
 must violate the root invariant without rewriting the invariant or its witness;
@@ -183,7 +185,9 @@ routing metadata only and is never presented as executable topology. Proposed fu
 behavior must already be present in the canonical behavior-digest-bound literate source;
 its declared root, invariants, and witnesses must match the schema-checked admission
 payload, and those exact source bytes must match the canonical observed
-extraction-and-typecheck receipt from the pinned Quint toolchain,
+extraction-and-typecheck receipt from the pinned Quint toolchain. Admission then
+re-extracts the canonical literate fences and executes the digest-pinned Quint binary;
+a receipt is retained evidence, never a substitute for reproducing typecheck,
 and main, acceptance, freeze, and release checkpoints use the full inventory.
 
 `eng/validate-quint-qualification.fsx` is the separately authored black-box
