@@ -195,8 +195,8 @@ let ``qualification subject changes for independently mutated tree bytes mode or
         QualificationReuse.createSubject [ file ] (Encoding.UTF8.GetBytes "plan") (Encoding.UTF8.GetBytes "workflow") (Encoding.UTF8.GetBytes "environment") (Encoding.UTF8.GetBytes "review")
     let baseline = create (tracked "100644" "a.txt" "value")
     let mutated = create (tracked mode path contents)
-    Assert.NotEqual(baseline.TreeSha256, mutated.TreeSha256)
-    Assert.NotEqual(baseline.SubjectSha256, mutated.SubjectSha256)
+    Assert.NotEqual<string>(baseline.TreeSha256, mutated.TreeSha256)
+    Assert.NotEqual<string>(baseline.SubjectSha256, mutated.SubjectSha256)
 
 [<Fact>]
 let ``qualification subject rejects duplicate unsafe and unsupported tracked identities`` () =
