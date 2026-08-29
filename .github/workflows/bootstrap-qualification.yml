@@ -65,7 +65,7 @@ jobs:
       - name: Run compiler-facing unit tests
         run: dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
       - name: Run architecture and negative-control tests
-        run: dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=architecture-tests.trx" --results-directory artifacts/test-results/66-gs2-02-11-deterministic-identity
+        run: dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=architecture-tests.trx" --results-directory artifacts/test-results/70-gs2-03-1-qualification-manifest
       - name: Qualify the Linux user and network namespace sandbox
         run: |
           if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
@@ -77,7 +77,7 @@ jobs:
       - name: Stage compiler and test evidence
         run: |
           mkdir -p "$RUNNER_TEMP/compiler-and-tests"
-          cp artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx "$RUNNER_TEMP/compiler-and-tests/architecture.trx"
+          cp artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx "$RUNNER_TEMP/compiler-and-tests/architecture.trx"
       - name: Upload compiler and test evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

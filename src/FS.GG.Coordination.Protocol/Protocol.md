@@ -1,4 +1,4 @@
-# GS2-02.11 canonical coordination protocol
+# GS2-03.1 canonical coordination protocol
 
 This document is the sole authored source for the coordination protocol baseline. Every behavioral
 fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
@@ -12,8 +12,9 @@ ordered resumable durable plans. This unit adds closed desired-state families an
 apply-intent, and verify classification for GitHub configuration. This unit adds a closed catalogue
 of deterministic compiled-contract output families and typed qualification of their identity,
 content, completeness, support, freshness, and order. This unit binds canonical typed-effect behavior
-to an exact five-part version tuple and stable semantic-diff projection. No network writer or production
-mutation authority is defined here.
+to an exact five-part version tuple and stable semantic-diff projection. GS2-03.1 adds the closed
+qualification-manifest identity and its candidate, input-set, freshness, independence, result, and
+review bindings. No network writer or production mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -253,7 +254,7 @@ module CoordinationProtocol {
     { id: "COUT-Specification", kind: "compiledOutputSpecification",
       familyContract: "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory",
       identityContract: "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content",
-      qualificationContract: "supported|complete|fresh",
+      qualificationContract: "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review",
       projectionViewFormats: "markdown|json", normalizationAuthority: "typed-effect-json",
       refusalContract: "missing|duplicate|substituted|unsupported|incomplete|reordered|stale", versionContract: "fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2", semanticDiffContract: "ordinal|json-pointer|value-sha256" }
   )
@@ -1201,6 +1202,59 @@ module CoordinationProtocolTests {
     supported: true, complete: true, fresh: true,
   }
 
+  type QualificationInputEntry = {
+    id: str, candidateSha: str, producer: str, digest: str, fresh: bool,
+  }
+
+  type QualificationManifest = {
+    schema: str, candidateSha: str, inputSetSha256: str, candidateProducer: str,
+    inputEntries: Set[QualificationInputEntry], generatedProducers: Set[str],
+    independentProducers: Set[str], resultProducers: Set[str], reviewerPrincipals: Set[str],
+    resultCandidateSha: str, resultInputSetSha256: str,
+    reviewCandidateSha: str, reviewInputSetSha256: str,
+    environmentClosed: bool, resultsComplete: bool, reviewsComplete: bool,
+  }
+
+  pure def qualificationManifestIsBound(manifest: QualificationManifest): bool = and {
+    manifest.schema == "fsgg.coordination.qualification-manifest/1",
+    manifest.candidateSha != "", manifest.inputSetSha256 != "",
+    manifest.inputEntries.size() > 0,
+    manifest.inputEntries.forall(entry => and {
+      entry.id != "", entry.digest != "", entry.fresh,
+      entry.candidateSha == manifest.candidateSha,
+    }),
+    manifest.resultCandidateSha == manifest.candidateSha,
+    manifest.reviewCandidateSha == manifest.candidateSha,
+    manifest.resultInputSetSha256 == manifest.inputSetSha256,
+    manifest.reviewInputSetSha256 == manifest.inputSetSha256,
+    manifest.independentProducers.size() > 0,
+    manifest.reviewerPrincipals.size() > 0,
+    manifest.independentProducers.forall(principal => and {
+      principal != manifest.candidateProducer,
+      not(manifest.generatedProducers.contains(principal)),
+    }),
+    manifest.reviewerPrincipals.forall(principal => and {
+      principal != manifest.candidateProducer,
+      not(manifest.resultProducers.contains(principal)),
+    }),
+    manifest.environmentClosed, manifest.resultsComplete, manifest.reviewsComplete,
+  }
+
+  pure val canonicalQualificationManifest = {
+    schema: "fsgg.coordination.qualification-manifest/1",
+    candidateSha: "candidate-a", inputSetSha256: "inputs-a", candidateProducer: "candidate-builder",
+    inputEntries: Set(
+      { id: "source", candidateSha: "candidate-a", producer: "candidate-builder", digest: "source-digest", fresh: true },
+      { id: "generated", candidateSha: "candidate-a", producer: "case-generator", digest: "generated-digest", fresh: true },
+      { id: "independent", candidateSha: "candidate-a", producer: "oracle-author", digest: "oracle-digest", fresh: true }
+    ),
+    generatedProducers: Set("case-generator"), independentProducers: Set("oracle-author"),
+    resultProducers: Set("gate-runner"), reviewerPrincipals: Set("independent-critic"),
+    resultCandidateSha: "candidate-a", resultInputSetSha256: "inputs-a",
+    reviewCandidateSha: "candidate-a", reviewInputSetSha256: "inputs-a",
+    environmentClosed: true, resultsComplete: true, reviewsComplete: true,
+  }
+
   type CompiledOutputFamily = {
     id: str, ordinal: int, contentContract: str, formats: Set[str],
   }
@@ -2001,6 +2055,46 @@ module CoordinationProtocolTests {
       versions: { ...supportedDeterministicVersions, profileVersion: "unsupported-profile" } })),
     not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
       versions: { ...supportedDeterministicVersions, schemaVersion: "unsupported-schema" } })),
+  }
+
+  run testQualificationManifestBindsCandidateInputsResultsAndReview = and {
+    qualificationManifestIsBound(canonicalQualificationManifest),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      resultCandidateSha: "candidate-substituted" })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewInputSetSha256: "inputs-substituted" })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      inputEntries: canonicalQualificationManifest.inputEntries
+        .filter(entry => entry.id != "source")
+        .union(Set({ id: "source", candidateSha: "candidate-substituted", producer: "candidate-builder",
+          digest: "source-digest", fresh: true })) })),
+  }
+
+  run testQualificationManifestRequiresIndependentCasesAndReviewers = and {
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      independentProducers: Set() })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewerPrincipals: Set() })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      independentProducers: Set("candidate-builder") })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      independentProducers: Set("case-generator") })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewerPrincipals: Set("candidate-builder") })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewerPrincipals: Set("gate-runner") })),
+  }
+
+  run testQualificationManifestOmissionsAndStaleInputsFailClosed = and {
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest, inputEntries: Set() })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest, environmentClosed: false })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest, resultsComplete: false })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest, reviewsComplete: false })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      inputEntries: canonicalQualificationManifest.inputEntries
+        .filter(entry => entry.id != "generated")
+        .union(Set({ id: "generated", candidateSha: "candidate-a", producer: "case-generator",
+          digest: "generated-digest", fresh: false })) })),
   }
 }
 ```

@@ -155,7 +155,7 @@ let validate evidenceRoot =
             { Name = stringProperty "name" item; Path = stringProperty "path" item; Schema = stringProperty "schema" item })
     let expectedNames =
         [ "corpus-inputs"; "external-observations"; "independent-oracles"; "generated-cases"
-          "test-results"; "artifact-manifests"; "reviews"; "accepted-receipts" ]
+          "test-results"; "artifact-manifests"; "reviews"; "qualification-inventories"; "qualification-manifests"; "accepted-receipts" ]
     if categories |> List.map _.Name <> expectedNames then fail "ES-CATEGORY-INVENTORY" "category names or order differ"
     if categories |> List.map _.Path |> List.distinct |> List.length <> categories.Length then fail "ES-CATEGORY-DUPLICATE" "duplicate category path"
 

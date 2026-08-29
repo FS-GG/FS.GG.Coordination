@@ -88,7 +88,7 @@ let versionContract = requiredString "versionContract"
 let semanticDiffContract = requiredString "semanticDiffContract"
 
 if identityContract <> "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content" then fail "IDENTITY-CONTRACT" identityContract
-if qualificationContract <> "supported|complete|fresh" then fail "QUALIFICATION-CONTRACT" qualificationContract
+if qualificationContract <> "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review" then fail "QUALIFICATION-CONTRACT" qualificationContract
 if projectionViewFormats <> "markdown|json" then fail "PROJECTION-FORMATS" projectionViewFormats
 if refusalContract <> "missing|duplicate|substituted|unsupported|incomplete|reordered|stale" then
     fail "REFUSAL-CONTRACT" refusalContract
