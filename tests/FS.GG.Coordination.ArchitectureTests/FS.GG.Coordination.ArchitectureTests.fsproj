@@ -10,6 +10,7 @@
     <Compile Include="QualificationManifestArchitectureTests.fs" />
     <Compile Include="BootstrapRecoveryTests.fs" />
     <Compile Include="RepositorySettingsTests.fs" />
+    <Compile Include="GeneratedStructuralTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
