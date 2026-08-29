@@ -51,6 +51,11 @@ let int64Property name value =
     | true, number -> number
     | _ -> fail "ES-JSON-TYPE" $"{name} must be an integer"
 
+let boolProperty name value =
+    let child = property name value
+    if child.ValueKind <> JsonValueKind.True && child.ValueKind <> JsonValueKind.False then fail "ES-JSON-TYPE" $"{name} must be a boolean"
+    child.GetBoolean()
+
 let arrayProperty name value =
     let child = property name value
     if child.ValueKind <> JsonValueKind.Array then fail "ES-JSON-TYPE" $"{name} must be an array"
@@ -144,7 +149,40 @@ let validateRecord categoryName relative (record: JsonElement) =
 
 type Category = { Name: string; Path: string; Schema: string }
 
+let validateFrozenCorpusSchema (root: string) =
+    use schemaDocument = readJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json"))
+    let schema = schemaDocument.RootElement
+    let schemaProperties = property "properties" schema
+    let inputSchema = property "input" schemaProperties
+    let inputProperties = property "properties" inputSchema
+    let expectedBehaviorSchema = property "expectedBehavior" inputProperties
+    let expectedBehaviorProperties = property "properties" expectedBehaviorSchema
+    let expectedBehaviorRequired = arrayProperty "required" expectedBehaviorSchema |> List.map _.GetString()
+    if expectedBehaviorRequired <> [ "decisionClass"; "predicateId"; "authority"; "detail" ] then fail "FC-SCHEMA-CONTRACT" "expectedBehavior required fields differ"
+    if boolProperty "additionalProperties" expectedBehaviorSchema then fail "FC-SCHEMA-CONTRACT" "expectedBehavior must be closed"
+    exactProperties "schema.expectedBehavior.properties" [ "decisionClass"; "predicateId"; "authority"; "detail"; "metrics" ] expectedBehaviorProperties
+    let metricsSchema = property "metrics" expectedBehaviorProperties
+    let metricsRequired = arrayProperty "required" metricsSchema |> List.map _.GetString()
+    let expectedMetrics = [ "windowHours"; "opened"; "closed"; "net"; "commits" ]
+    if metricsRequired <> expectedMetrics || boolProperty "additionalProperties" metricsSchema then fail "FC-SCHEMA-CONTRACT" "metrics shape differs"
+    let metricsProperties = property "properties" metricsSchema
+    exactProperties "schema.expectedBehavior.metrics.properties" expectedMetrics metricsProperties
+    for name in expectedMetrics do
+        let metric = property name metricsProperties
+        exactProperties $"schema.expectedBehavior.metrics.{name}" [ "type" ] metric
+        if stringProperty "type" metric <> "integer" then fail "FC-SCHEMA-CONTRACT" $"metrics.{name} must be integer"
+    let resultSchema = property "currentV1Result" inputProperties
+    let resultProperties = property "properties" resultSchema
+    let observedAtSchema = property "observedAt" resultProperties
+    exactProperties "schema.currentV1Result.observedAt" [ "type"; "format" ] observedAtSchema
+    let observedAtType = property "type" observedAtSchema
+    if observedAtType.ValueKind <> JsonValueKind.Array then fail "FC-SCHEMA-CONTRACT" "observedAt type must be a union"
+    let observedAtTypes = observedAtType.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    if observedAtTypes <> [ "string"; "null" ] || stringProperty "format" observedAtSchema <> "date-time" then
+        fail "FC-SCHEMA-CONTRACT" "observedAt must admit canonical timestamps and explicit absence"
+
 let validateFrozenCorpus (root: string) (entries: JsonElement list) =
+    validateFrozenCorpusSchema root
     let provenanceFiles = [ q0ManifestRelative, q0ManifestSha256; q0EvidenceRelative, q0EvidenceSha256 ]
     for relative, expectedDigest in provenanceFiles do
         if not (safeRelativePath relative) then fail "FC-PROVENANCE-PATH" relative
@@ -231,7 +269,17 @@ let validateFrozenCorpus (root: string) (entries: JsonElement list) =
         if int64Property "ordinal" input <> int64 (ordinal + 1) then fail "FC-ORDER" id
         if stringProperty "kind" input <> stringProperty "kind" expected then fail "FC-KIND" id
         if stringProperty "historicalContext" input <> stringProperty "historicalContext" expected then fail "FC-CONTEXT" id
-        if property "expectedBehavior" input |> _.GetRawText() <> (property "expected" expected |> _.GetRawText()) then fail "FC-EXPECTED-BEHAVIOR" id
+        let expectedBehavior = property "expectedBehavior" input
+        if expectedBehavior.GetRawText() <> (property "expected" expected |> _.GetRawText()) then fail "FC-EXPECTED-BEHAVIOR" id
+        let expectedBehaviorShape =
+            if id = "C-churn" then [ "decisionClass"; "predicateId"; "authority"; "detail"; "metrics" ]
+            else [ "decisionClass"; "predicateId"; "authority"; "detail" ]
+        exactProperties $"{metadataRelative}.expectedBehavior" expectedBehaviorShape expectedBehavior
+        if id = "C-churn" then
+            let metrics = property "metrics" expectedBehavior
+            let expectedMetrics = [ "windowHours"; "opened"; "closed"; "net"; "commits" ]
+            exactProperties $"{metadataRelative}.expectedBehavior.metrics" expectedMetrics metrics
+            for name in expectedMetrics do int64Property name metrics |> ignore
 
         let sourceBinding = property "source" input
         exactProperties metadataRelative [ "repository"; "commit"; "path"; "ref"; "mediaType"; "bytes"; "sha256"; "gitBlobSha1"; "payloadPath" ] sourceBinding
@@ -610,6 +658,9 @@ let selfTest evidenceRoot =
               mutateCorpusJson root "C-rate" (fun node -> setNestedString node [ "input"; "ambiguity" ] "state" "none-recorded")), "FC-AMBIGUITY"
           "frozen-ambiguity-rationale", (fun root ->
               mutateCorpusJson root "C-rate" (fun node -> setNestedString node [ "input"; "ambiguity" ] "rationale" "tampered but nonempty")), "FC-AMBIGUITY"
+          "frozen-schema-observed-at", (fun root ->
+              mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
+                  setNestedString node [ "properties"; "input"; "properties"; "currentV1Result"; "properties"; "observedAt" ] "type" "string")), "FC-SCHEMA-CONTRACT"
           "frozen-unobserved-green", (fun root ->
               mutateCorpusJson root "C-claim" (fun node ->
                   setNestedString node [ "input"; "currentV1Result" ] "state" "observed"
