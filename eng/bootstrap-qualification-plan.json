@@ -1,0 +1,110 @@
+{
+  "schema": "fsgg.coordination.bootstrap-qualification-plan/2",
+  "evidenceSchema": "fsgg.coordination.bootstrap-evidence/2",
+  "actions": {
+    "checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "setupDotnet": "a98b56852c35b8e3190ac28c8c2271da59106c68",
+    "cache": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+    "uploadArtifact": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    "downloadArtifact": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+  },
+  "actionRuntimes": {
+    "checkout": "node24",
+    "setupDotnet": "node24",
+    "cache": "node24",
+    "uploadArtifact": "node24",
+    "downloadArtifact": "node24"
+  },
+  "triggers": ["pull_request", "push:main"],
+  "permissions": ["contents:read"],
+  "concurrency": {
+    "group": "bootstrap-qualification-${{ github.ref }}",
+    "cancelInProgress": true
+  },
+  "cacheKey": "${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}",
+  "cachePath": "/tmp/fsgg-nuget-packages",
+  "requiredProjectCount": 8,
+  "requiredVulnerabilitySources": ["https://api.nuget.org/v3/index.json"],
+  "requiredProjects": [
+    "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj",
+    "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj",
+    "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj",
+    "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj",
+    "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj",
+    "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj",
+    "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj",
+    "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
+  ],
+  "jobs": [
+    {
+      "id": "deterministic-build",
+      "artifact": "deterministic-build/protocol.dll",
+      "timeoutMinutes": 15,
+      "entryPoint": "bash eng/bootstrap-gates/deterministic-build.sh",
+      "cache": true,
+      "fetchDepth": 1,
+      "alwaysUpload": false,
+      "needs": []
+    },
+    {
+      "id": "compiler-and-tests",
+      "artifact": "compiler-and-tests/architecture.trx",
+      "timeoutMinutes": 20,
+      "entryPoint": "bash eng/bootstrap-gates/compiler-and-tests.sh",
+      "cache": true,
+      "fetchDepth": 1,
+      "alwaysUpload": false,
+      "needs": []
+    },
+    {
+      "id": "canonical-quint",
+      "artifact": "canonical-quint/qualification.json",
+      "timeoutMinutes": 25,
+      "entryPoint": "bash eng/bootstrap-gates/canonical-quint.sh",
+      "cache": false,
+      "fetchDepth": 1,
+      "alwaysUpload": true,
+      "needs": []
+    },
+    {
+      "id": "dependency-and-security",
+      "artifact": "dependency-and-security/vulnerability-report.json",
+      "timeoutMinutes": 15,
+      "entryPoint": "bash eng/bootstrap-gates/dependency-and-security.sh",
+      "cache": false,
+      "fetchDepth": 1,
+      "alwaysUpload": false,
+      "needs": []
+    },
+    {
+      "id": "package-install-smoke",
+      "artifact": "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg",
+      "timeoutMinutes": 15,
+      "entryPoint": "bash eng/bootstrap-gates/package-install-smoke.sh",
+      "cache": true,
+      "fetchDepth": 1,
+      "alwaysUpload": false,
+      "needs": []
+    },
+    {
+      "id": "bootstrap-recovery",
+      "artifact": "bootstrap-recovery/result.json",
+      "timeoutMinutes": 25,
+      "entryPoint": "bash eng/bootstrap-gates/bootstrap-recovery.sh",
+      "cache": false,
+      "fetchDepth": 0,
+      "alwaysUpload": false,
+      "needs": []
+    },
+    {
+      "id": "evidence-manifest",
+      "artifact": "evidence-manifest/plan.json",
+      "timeoutMinutes": 10,
+      "entryPoint": "bash eng/bootstrap-gates/evidence-manifest.sh",
+      "cache": false,
+      "fetchDepth": 1,
+      "alwaysUpload": false,
+      "needs": ["deterministic-build", "compiler-and-tests", "canonical-quint", "dependency-and-security", "package-install-smoke", "bootstrap-recovery"]
+    }
+  ]
+}

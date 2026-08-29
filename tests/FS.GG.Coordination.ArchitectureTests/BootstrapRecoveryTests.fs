@@ -30,9 +30,10 @@ let ``recovery runner closes clone cache feed and command overrides`` () =
 [<Fact>]
 let ``recovery receipt contract is compact exact and hosted read only`` () =
     let workflow = File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
-    let contract = File.ReadAllText(Path.Combine(root, "eng/bootstrap-ci-contract.json"))
+    let contract = File.ReadAllText(Path.Combine(root, "eng/bootstrap-qualification-plan.json"))
     Assert.Contains("bootstrap-recovery:", workflow)
-    Assert.Contains("dotnet fsi eng/bootstrap-recovery.fsx -- .", workflow)
+    Assert.Contains("run: bash eng/bootstrap-gates/bootstrap-recovery.sh", workflow)
+    Assert.Contains("dotnet fsi eng/bootstrap-recovery.fsx -- .", File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/bootstrap-recovery.sh")))
     Assert.Contains("bootstrap-recovery/result.json", contract)
     Assert.Contains("permissions:\n  contents: read", workflow.Replace("\r\n", "\n"))
     Assert.DoesNotContain("contents: write", workflow)

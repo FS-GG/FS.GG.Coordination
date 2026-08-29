@@ -1,0 +1,1145 @@
+schemaVersion: 1
+workId: 78-shorten-qualification-critical-path
+stage: evidence
+status: evidenceReady
+sourceSpec: work/78-shorten-qualification-critical-path/spec.md
+sourceClarifications: work/78-shorten-qualification-critical-path/clarifications.md
+sourceChecklist: work/78-shorten-qualification-critical-path/checklist.md
+sourcePlan: work/78-shorten-qualification-critical-path/plan.md
+sourceTasks: work/78-shorten-qualification-critical-path/tasks.yml
+sourceAnalysis: readiness/78-shorten-qualification-critical-path/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/78-shorten-qualification-critical-path/analysis.json
+    digest: 9dc1d550429a2ecf747e96784b9a49302715977fd4a0a27fc0b3368b58ae441e
+    schemaVersion: 1
+  - label: checklist
+    path: work/78-shorten-qualification-critical-path/checklist.md
+    digest: beca79ed85fc343d9de20b80e05f773753328a4b794a7ca1533d07617875efc1
+    schemaVersion: 1
+  - label: clarifications
+    path: work/78-shorten-qualification-critical-path/clarifications.md
+    digest: 091011265c33987f4db10a85b75526d1f82c2a835ec0875b736ac8174c702b3a
+    schemaVersion: 1
+  - label: plan
+    path: work/78-shorten-qualification-critical-path/plan.md
+    digest: 095563253244c026d5003157effb72794498a1296e9e8b401fb8ad4825b7165a
+    schemaVersion: 1
+  - label: spec
+    path: work/78-shorten-qualification-critical-path/spec.md
+    digest: c7556a646f7fa67d219249152be0a55cbd071ae7f252338d4fcd6b1049bf3ea5
+    schemaVersion: 1
+  - label: tasks
+    path: work/78-shorten-qualification-critical-path/tasks.yml
+    digest: f267988d2adf354c9bd0ad907b6a644915beb70fefcd6d2f02913ea67776bfa3
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV004]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV007]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV009]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-001, FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-002, FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV017]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV018]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV019]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV020]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-001, FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV021]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV022]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV023]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-004]
+    obligationRefs: [EV024]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006]
+    obligationRefs: [EV025]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV026]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV027]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-008]
+    obligationRefs: [EV028]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-004]
+    obligationRefs: [EV029]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV030]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV031
+    kind: verification
+    subject:
+      type: task
+      id: T031
+    taskRefs: [T031]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV031]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV032
+    kind: verification
+    subject:
+      type: task
+      id: T032
+    taskRefs: [T032]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV032]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV033
+    kind: verification
+    subject:
+      type: task
+      id: T033
+    taskRefs: [T033]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV033]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV034
+    kind: verification
+    subject:
+      type: task
+      id: T034
+    taskRefs: [T034]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV034]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV035
+    kind: verification
+    subject:
+      type: task
+      id: T035
+    taskRefs: [T035]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV035]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV036
+    kind: verification
+    subject:
+      type: task
+      id: T036
+    taskRefs: [T036]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV036]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV037
+    kind: verification
+    subject:
+      type: task
+      id: T037
+    taskRefs: [T037]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV037]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV038
+    kind: verification
+    subject:
+      type: task
+      id: T038
+    taskRefs: [T038]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV038]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV039
+    kind: verification
+    subject:
+      type: task
+      id: T039
+    taskRefs: [T039]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV039]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV040
+    kind: verification
+    subject:
+      type: task
+      id: T040
+    taskRefs: [T040]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV040]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV041
+    kind: verification
+    subject:
+      type: task
+      id: T041
+    taskRefs: [T041]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV041]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
+      digest: "sha256:ee668f0d27e6939c2bafd245bb4df336b0ba2e7b1744eb1adc075804ad7f33d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 167
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

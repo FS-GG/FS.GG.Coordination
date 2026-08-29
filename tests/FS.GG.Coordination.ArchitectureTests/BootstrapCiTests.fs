@@ -6,6 +6,7 @@ open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json.Nodes
+open FS.GG.Coordination.Qualification.Contracts
 open Xunit
 
 let private repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
@@ -13,21 +14,22 @@ let private verifier = Path.Combine(repositoryRoot, "eng/bootstrap-ci.fsx")
 let private exactHead = String.replicate 40 "a"
 
 let private runBootstrap root arguments =
+    BootstrapCi.execute (arguments @ [ "--root"; root ])
+
+let private runBootstrapAdapter root arguments =
     let startInfo = ProcessStartInfo("dotnet")
     startInfo.ArgumentList.Add("fsi")
     startInfo.ArgumentList.Add(verifier)
     startInfo.ArgumentList.Add("--")
-    arguments |> List.iter startInfo.ArgumentList.Add
-    startInfo.ArgumentList.Add("--root")
-    startInfo.ArgumentList.Add(root)
+    for argument in arguments @ [ "--root"; root ] do startInfo.ArgumentList.Add(argument)
     startInfo.RedirectStandardOutput <- true
     startInfo.RedirectStandardError <- true
     startInfo.UseShellExecute <- false
     use childProcess = Process.Start startInfo
-    let output = childProcess.StandardOutput.ReadToEnd()
-    let error = childProcess.StandardError.ReadToEnd()
+    let output = childProcess.StandardOutput.ReadToEnd().Trim()
+    let error = childProcess.StandardError.ReadToEnd().Trim()
     childProcess.WaitForExit()
-    childProcess.ExitCode, output.Trim(), error.Trim()
+    childProcess.ExitCode, output, error
 
 let private withScratch prefix action =
     let scratch = Directory.CreateTempSubdirectory(prefix)
@@ -36,7 +38,7 @@ let private withScratch prefix action =
 
 let private copyContract root =
     let eng = Directory.CreateDirectory(Path.Combine(root, "eng"))
-    File.Copy(Path.Combine(repositoryRoot, "eng/bootstrap-ci-contract.json"), Path.Combine(eng.FullName, "bootstrap-ci-contract.json"))
+    File.Copy(Path.Combine(repositoryRoot, "eng/bootstrap-qualification-plan.json"), Path.Combine(eng.FullName, "bootstrap-qualification-plan.json"))
 
 let private withWorkflowMutation mutate verify =
     withScratch "fsgg-bootstrap-workflow-" (fun root ->
@@ -44,6 +46,15 @@ let private withWorkflowMutation mutate verify =
         let workflows = Directory.CreateDirectory(Path.Combine(root, ".github/workflows"))
         let target = Path.Combine(workflows.FullName, "bootstrap-qualification.yml")
         File.Copy(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"), target)
+        mutate target
+        verify root)
+
+let private withPlanMutation mutate verify =
+    withScratch "fsgg-bootstrap-plan-" (fun root ->
+        copyContract root
+        let workflows = Directory.CreateDirectory(Path.Combine(root, ".github/workflows"))
+        File.Copy(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"), Path.Combine(workflows.FullName, "bootstrap-qualification.yml"))
+        let target = Path.Combine(root, "eng/bootstrap-qualification-plan.json")
         mutate target
         verify root)
 
@@ -82,12 +93,12 @@ let private createArtifacts root =
           "dependency-and-security/vulnerability-report.json"
           "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
           "bootstrap-recovery/result.json"
-          "evidence-manifest/contract.json" ]
+          "evidence-manifest/plan.json" ]
     for relative in paths do
         let target = Path.Combine(root, relative)
         Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
-        if relative = "evidence-manifest/contract.json" then
-            File.Copy(Path.Combine(repositoryRoot, "eng/bootstrap-ci-contract.json"), target)
+        if relative = "evidence-manifest/plan.json" then
+            File.Copy(Path.Combine(repositoryRoot, "eng/bootstrap-qualification-plan.json"), target)
         elif relative = "bootstrap-recovery/result.json" then
             let packageDigest = String.replicate 64 "b"
             File.WriteAllText(
@@ -145,13 +156,81 @@ let ``bootstrap workflow satisfies the exact seven-job contract`` () =
     Assert.Equal("", error)
 
 [<Fact>]
+let ``production FSI adapter matches the compiled green outcome`` () =
+    Assert.Equal(runBootstrap repositoryRoot [ "workflow" ], runBootstrapAdapter repositoryRoot [ "workflow" ])
+
+[<Fact>]
+let ``production FSI adapter matches the compiled red diagnostic`` () =
+    withWorkflowMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  deterministic-build:", "  deterministic-build-removed:")))
+        (fun root -> Assert.Equal(runBootstrap root [ "workflow" ], runBootstrapAdapter root [ "workflow" ]))
+
+[<Fact>]
+let ``workflow generator reproduces the committed projection`` () =
+    withScratch "fsgg-bootstrap-generator-" (fun root ->
+        copyContract root
+        let output = Path.Combine(root, "generated.yml")
+        let exitCode, _, error = runBootstrap root [ "generate"; "--output"; output ]
+        Assert.Equal(0, exitCode)
+        Assert.Equal("", error)
+        let expected = File.ReadAllBytes(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+        let actual = File.ReadAllBytes output
+        Assert.True(expected.AsSpan().SequenceEqual(actual.AsSpan())))
+
+[<Fact>]
+let ``qualification plan rejects an unreviewed action revision`` () =
+    withPlanMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("3d3c42e5aac5ba805825da76410c181273ba90b1", String.replicate 40 "a")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=qualification-plan-invalid", error))
+
+[<Fact>]
+let ``qualification plan rejects a cache key without the exact lock graph`` () =
+    withPlanMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}", "${{ runner.os }}-nuget")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=qualification-plan-invalid", error))
+
+[<Fact>]
+let ``qualification plan rejects an incomplete terminal dependency edge`` () =
+    withPlanMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("[\"deterministic-build\", \"compiler-and-tests\", \"canonical-quint\", \"dependency-and-security\", \"package-install-smoke\", \"bootstrap-recovery\"]", "[\"compiler-and-tests\", \"canonical-quint\", \"dependency-and-security\", \"package-install-smoke\", \"bootstrap-recovery\"]")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=qualification-plan-invalid", error))
+
+[<Fact>]
+let ``bootstrap control surface stays typed thin and bounded`` () =
+    let lineCount relative = File.ReadAllLines(Path.Combine(repositoryRoot, relative)).Length
+    let gateLines =
+        Directory.GetFiles(Path.Combine(repositoryRoot, "eng/bootstrap-gates"), "*.sh")
+        |> Array.sumBy (File.ReadAllLines >> Array.length)
+    let core = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"))
+    let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 210)
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 180)
+    Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 20)
+    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 600)
+    Assert.InRange(gateLines, 1, 60)
+    Assert.DoesNotContain("requiredRunFragments", core)
+    Assert.DoesNotContain("workflowSha256", core)
+    Assert.DoesNotContain("Text.RegularExpressions", core)
+    Assert.DoesNotContain("NUGET_PACKAGES: ${{ runner.", workflow)
+    Assert.DoesNotContain("FSGG_QUINT_RECEIPT: ${{ runner.", workflow)
+
+[<Fact>]
 let ``bootstrap workflow rejects a missing gate`` () =
     withWorkflowMutation
         (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  deterministic-build:", "  deterministic-build-removed:")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-job-set", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects duplicate job identities`` () =
@@ -160,7 +239,7 @@ let ``bootstrap workflow rejects duplicate job identities`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-job-set", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects mutable action references`` () =
@@ -169,16 +248,16 @@ let ``bootstrap workflow rejects mutable action references`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-action-pin", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects pinned but unapproved actions`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Upload the evidence manifest", "      - name: Unapproved pinned action\n        uses: example/deploy@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      - name: Upload the evidence manifest")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Upload qualification evidence", "      - name: Unapproved pinned action\n        uses: example/deploy@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      - name: Upload qualification evidence")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-byte-contract", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects cross-run artifact downloads`` () =
@@ -187,7 +266,7 @@ let ``bootstrap workflow rejects cross-run artifact downloads`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-byte-contract", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects checkout not bound to the evidence candidate`` () =
@@ -196,7 +275,7 @@ let ``bootstrap workflow rejects checkout not bound to the evidence candidate`` 
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-checkout-candidate", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects authority expansion`` () =
@@ -205,17 +284,16 @@ let ``bootstrap workflow rejects authority expansion`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-permissions", error)
-            Assert.Contains("rule=workflow-authority-ceiling", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
-let ``bootstrap workflow rejects runner context in job environment`` () =
+let ``bootstrap workflow rejects broad cache fallback keys`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("/tmp/fsgg-${{ github.run_id }}-nuget-deterministic-build", "${{ runner.temp }}/nuget-deterministic-build")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}", "          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', '**/packages.lock.json') }}\n          restore-keys: ${{ runner.os }}-nuget-")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-authority-ceiling", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects incomplete triggers`` () =
@@ -224,7 +302,7 @@ let ``bootstrap workflow rejects incomplete triggers`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-trigger", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects trigger children without top-level on`` () =
@@ -233,7 +311,7 @@ let ``bootstrap workflow rejects trigger children without top-level on`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-trigger", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects a vacuous action inventory`` () =
@@ -242,34 +320,34 @@ let ``bootstrap workflow rejects a vacuous action inventory`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-action-pin", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects a missing required command`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        run: dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror", "        run: dotnet build FS.GG.Coordination.sln --configuration Release --no-restore\n        # run: dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        run: bash eng/bootstrap-gates/compiler-and-tests.sh", "        # run: bash eng/bootstrap-gates/compiler-and-tests.sh")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-command-contract", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects shell success suppression`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror", "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror || true")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("run: bash eng/bootstrap-gates/compiler-and-tests.sh", "run: bash eng/bootstrap-gates/compiler-and-tests.sh || true")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-command-contract", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects any unexpected executable command`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          dotnet restore FS.GG.Coordination.sln --locked-mode", "          set +o errexit\n          dotnet restore FS.GG.Coordination.sln --locked-mode")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        run: bash eng/bootstrap-gates/compiler-and-tests.sh", "        run: |\n          set +o errexit\n          bash eng/bootstrap-gates/compiler-and-tests.sh")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-command-contract", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects checkout ref outside with`` () =
@@ -278,34 +356,34 @@ let ``bootstrap workflow rejects checkout ref outside with`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-checkout-candidate", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects conditional gates`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Build with warnings as errors", "      - name: Build with warnings as errors\n        if: false")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Run the stable qualification gate", "      - name: Run the stable qualification gate\n        if: false")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-gate-bypass", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects package override seam`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Pack and consume through a clean project", "      - name: Pack and consume through a clean project\n        env:\n          FSGG_BOOTSTRAP_PACKAGE_OVERRIDE: fake.nupkg")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        run: bash eng/bootstrap-gates/package-install-smoke.sh", "        env:\n          FSGG_BOOTSTRAP_PACKAGE_OVERRIDE: fake.nupkg\n        run: bash eng/bootstrap-gates/package-install-smoke.sh")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-authority-ceiling", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``bootstrap workflow rejects imported v1 completion machinery`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Upload the evidence manifest", "      - name: Forbidden completion route\n        run: scripts/fsgg-coord delivery\n      - name: Upload the evidence manifest")))
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Upload qualification evidence", "      - name: Forbidden completion route\n        run: scripts/fsgg-coord delivery\n      - name: Upload qualification evidence")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-authority-ceiling", error))
+            Assert.Contains("rule=workflow-projection-stale", error))
 
 [<Fact>]
 let ``workflow comments cannot bypass the exact byte contract`` () =
@@ -314,7 +392,7 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
-            Assert.Contains("rule=workflow-byte-contract", error)
+            Assert.Contains("rule=workflow-projection-stale", error)
             Assert.DoesNotContain("rule=workflow-authority-ceiling", error))
 
 [<Fact>]
@@ -573,12 +651,12 @@ let ``evidence rejects missing artifact files`` () =
 let ``evidence rejects malformed manifests and contract digests`` () =
     withEvidence (fun root artifacts manifest ->
         let document = JsonNode.Parse(File.ReadAllText manifest).AsObject()
-        document["contractSha256"] <- JsonValue.Create("wrong")
+        document["planSha256"] <- JsonValue.Create("wrong")
         File.WriteAllText(manifest, document.ToJsonString())
         let digestExit, _, digestError =
             runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
         Assert.NotEqual(0, digestExit)
-        Assert.Contains("rule=evidence-contract-digest", digestError)
+        Assert.Contains("rule=evidence-plan-digest", digestError)
         File.WriteAllText(manifest, "not-json")
         let malformedExit, _, malformedError =
             runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ]
