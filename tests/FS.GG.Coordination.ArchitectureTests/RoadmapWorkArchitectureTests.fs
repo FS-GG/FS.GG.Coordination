@@ -44,11 +44,11 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .", qualification)
     Assert.Contains("quint-linux-amd64", qualification)
     Assert.Contains("sha256sum --check --status", qualification)
-    Assert.Contains("evidence --root . --work 66-gs2-02-11-deterministic-identity", qualification)
-    Assert.Contains("--sync-observed-run artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx", qualification)
-    Assert.Contains("fsgg-sdd\" analyze --root . --work 66-gs2-02-11-deterministic-identity", qualification)
-    Assert.Contains("fsgg-sdd\" verify --root . --work 66-gs2-02-11-deterministic-identity", qualification)
-    Assert.Contains("fsgg-sdd\" ship --root . --work 66-gs2-02-11-deterministic-identity", qualification)
+    Assert.Contains("evidence --root . --work 70-gs2-03-1-qualification-manifest", qualification)
+    Assert.Contains("--sync-observed-run artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx", qualification)
+    Assert.Contains("fsgg-sdd\" analyze --root . --work 70-gs2-03-1-qualification-manifest", qualification)
+    Assert.Contains("fsgg-sdd\" verify --root . --work 70-gs2-03-1-qualification-manifest", qualification)
+    Assert.Contains("fsgg-sdd\" ship --root . --work 70-gs2-03-1-qualification-manifest", qualification)
     Assert.Contains("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0", workflow)
     Assert.Contains("/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true", workflow)
     Assert.Contains("equivalent-named-block-partition", validator)
@@ -58,8 +58,8 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("executedEquivalentVariants.Add name", validator)
     Assert.Contains("EQUIVALENT-AUTHORING-COVERAGE", validator)
 
-    let analyzeCommand = "fsgg-sdd\" analyze --root . --work 66-gs2-02-11-deterministic-identity"
-    let evidenceCommand = "fsgg-sdd\" evidence --root . --work 66-gs2-02-11-deterministic-identity"
+    let analyzeCommand = "fsgg-sdd\" analyze --root . --work 70-gs2-03-1-qualification-manifest"
+    let evidenceCommand = "fsgg-sdd\" evidence --root . --work 70-gs2-03-1-qualification-manifest"
     let firstAnalyze = qualification.IndexOf(analyzeCommand, StringComparison.Ordinal)
     let evidenceSync = qualification.IndexOf(evidenceCommand, StringComparison.Ordinal)
     let refreshedAnalyze = qualification.IndexOf(analyzeCommand, firstAnalyze + analyzeCommand.Length, StringComparison.Ordinal)

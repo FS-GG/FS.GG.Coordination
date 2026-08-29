@@ -103,11 +103,11 @@ export HOME="$qualification_root/home"
 cd "$repo_root"
 dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --compiler-only
 dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .
-"$tool_path/fsgg-sdd" analyze --root . --work 66-gs2-02-11-deterministic-identity --text
-"$tool_path/fsgg-sdd" evidence --root . --work 66-gs2-02-11-deterministic-identity \
-  --sync-observed-run artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx --text
-"$tool_path/fsgg-sdd" analyze --root . --work 66-gs2-02-11-deterministic-identity --text
-"$tool_path/fsgg-sdd" verify --root . --work 66-gs2-02-11-deterministic-identity --text
-"$tool_path/fsgg-sdd" ship --root . --work 66-gs2-02-11-deterministic-identity --text
+"$tool_path/fsgg-sdd" analyze --root . --work 70-gs2-03-1-qualification-manifest --text
+"$tool_path/fsgg-sdd" evidence --root . --work 70-gs2-03-1-qualification-manifest \
+  --sync-observed-run artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx --text
+"$tool_path/fsgg-sdd" analyze --root . --work 70-gs2-03-1-qualification-manifest --text
+"$tool_path/fsgg-sdd" verify --root . --work 70-gs2-03-1-qualification-manifest --text
+"$tool_path/fsgg-sdd" ship --root . --work 70-gs2-03-1-qualification-manifest --text
 
 printf 'CANONICAL_QUINT_HOSTED_QUALIFICATION_OK root=%s\n' "$repo_root"

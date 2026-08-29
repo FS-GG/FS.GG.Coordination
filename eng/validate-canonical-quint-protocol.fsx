@@ -18,13 +18,13 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "6b190fa12ebd883e8131c8f385943ae172da03a4c1856961fe22feb8bfd737d2"
+    "6c02927cd7dfe165a6f3ea23723d3708e10586bd4ababb3e7984144a45f55883"
 
 let expectedContract =
-    "9c89970f289f711a4b58181fd330d914ec339dfb13e3af56da36ca6cf5070a4c"
+    "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
 
 let expectedBehavior =
-    "bd1e92bae8f0ffd1598019b0d9c4510f25f139931b743807944962b89f758883"
+    "7d7dd76d29d4a26555eeed5069215504e188990cfdd15a7ede719c051bd52d1a"
 
 let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
@@ -256,7 +256,7 @@ match compiledOutputEntries with
     let expectedFields =
         [ "familyContract", "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory"
           "identityContract", "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content"
-          "qualificationContract", "supported|complete|fresh"
+          "qualificationContract", "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review"
           "projectionViewFormats", "markdown|json"
           "refusalContract", "missing|duplicate|substituted|unsupported|incomplete|reordered|stale"
           "normalizationAuthority", "typed-effect-json"
@@ -623,7 +623,7 @@ try
     requireEquivalentVariant "equivalent-named-block-partition" partitionedText
 
     let openingFence = "```quint protocol.qnt +=\n"
-    if not (canonicalText.StartsWith("# GS2-02.11", StringComparison.Ordinal) && canonicalText.Contains(openingFence, StringComparison.Ordinal)) then
+    if not (canonicalText.StartsWith("# GS2-03.1", StringComparison.Ordinal) && canonicalText.Contains(openingFence, StringComparison.Ordinal)) then
         fail "EQUIVALENT-AUTHORING" "fence indentation fixture absent"
     let indentedFenceText =
         canonicalText

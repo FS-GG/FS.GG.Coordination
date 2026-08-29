@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <Compile Include="RoadmapWorkTests.fs" />
+    <Compile Include="QualificationManifestTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
 
