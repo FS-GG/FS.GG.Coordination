@@ -275,6 +275,15 @@ let ``qualification plan rejects a legacy action runtime`` () =
             Assert.Contains("rule=qualification-plan-invalid", error))
 
 [<Fact>]
+let ``qualification plan rejects reuse before the reviewed evidence epoch`` () =
+    withPlanMutation
+        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("2026-08-29T13:32:00Z", "2026-01-01T00:00:00Z")))
+        (fun root ->
+            let exitCode, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("rule=qualification-plan-invalid", error))
+
+[<Fact>]
 let ``qualification plan rejects an incomplete terminal dependency edge`` () =
     withPlanMutation
         (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("[\"deterministic-build\", \"compiler-and-tests\", \"canonical-quint\", \"dependency-and-security\", \"package-install-smoke\", \"bootstrap-recovery\"]", "[\"compiler-and-tests\", \"canonical-quint\", \"dependency-and-security\", \"package-install-smoke\", \"bootstrap-recovery\"]")))

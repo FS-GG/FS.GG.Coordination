@@ -40,6 +40,7 @@
     "uploadName": "reuse-decision",
     "workflowPath": ".github/workflows/bootstrap-qualification.yml",
     "maxCandidateArtifacts": 100,
+    "notBefore": "2026-08-29T13:32:00Z",
     "runner": "ubuntu-latest",
     "architecture": "x64",
     "reviewPolicy": "structured-decisions/1"

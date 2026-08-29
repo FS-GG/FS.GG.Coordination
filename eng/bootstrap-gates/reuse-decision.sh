@@ -11,6 +11,7 @@ repository="${FSGG_REPOSITORY:?FSGG_REPOSITORY is required}"
 mkdir -p "$root"
 decision="$root/decision.json"
 candidates="$root/candidates.json"
+not_before="$(jq -er '.reuse.notBefore' eng/bootstrap-qualification-plan.json)"
 
 write_execute() {
   dotnet fsi eng/bootstrap-ci.fsx -- select --root . --head "$candidate" --output "$decision"
@@ -52,9 +53,10 @@ else
       selected=true
       break
     fi
-  done < <(jq -r --arg current "$current_run" '
+  done < <(jq -r --arg current "$current_run" --arg not_before "$not_before" '
       [.artifacts[]
        | select(.expired == false)
+       | select(.created_at >= $not_before)
        | select((.workflow_run.id | tostring) != $current)
        | [.id, .workflow_run.id, .workflow_run.head_sha, .expires_at]]
       | sort_by(.[1], .[0]) | reverse[] | @tsv

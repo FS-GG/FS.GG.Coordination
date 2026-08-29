@@ -36,6 +36,7 @@ type ReuseContract =
       UploadName: string
       WorkflowPath: string
       MaxCandidateArtifacts: int
+      NotBefore: string
       Runner: string
       Architecture: string
       ReviewPolicy: string }
@@ -159,10 +160,11 @@ let private loadContract root =
           UploadName = stringProperty "uploadName" reuseValue |> Option.defaultWith (fun () -> failwith "reuse uploadName is missing")
           WorkflowPath = stringProperty "workflowPath" reuseValue |> Option.defaultWith (fun () -> failwith "reuse workflowPath is missing")
           MaxCandidateArtifacts = reuseValue.GetProperty("maxCandidateArtifacts").GetInt32()
+          NotBefore = stringProperty "notBefore" reuseValue |> Option.defaultWith (fun () -> failwith "reuse notBefore is missing")
           Runner = stringProperty "runner" reuseValue |> Option.defaultWith (fun () -> failwith "reuse runner is missing")
           Architecture = stringProperty "architecture" reuseValue |> Option.defaultWith (fun () -> failwith "reuse architecture is missing")
           ReviewPolicy = stringProperty "reviewPolicy" reuseValue |> Option.defaultWith (fun () -> failwith "reuse reviewPolicy is missing") }
-    if reuse <> { JobId = "reuse-decision"; Artifact = "reuse-decision/decision.json"; TimeoutMinutes = 5; EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"; UploadName = "reuse-decision"; WorkflowPath = ".github/workflows/bootstrap-qualification.yml"; MaxCandidateArtifacts = 100; Runner = "ubuntu-latest"; Architecture = "x64"; ReviewPolicy = "structured-decisions/1" } then
+    if reuse <> { JobId = "reuse-decision"; Artifact = "reuse-decision/decision.json"; TimeoutMinutes = 5; EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"; UploadName = "reuse-decision"; WorkflowPath = ".github/workflows/bootstrap-qualification.yml"; MaxCandidateArtifacts = 100; NotBefore = "2026-08-29T13:32:00Z"; Runner = "ubuntu-latest"; Architecture = "x64"; ReviewPolicy = "structured-decisions/1" } then
         failwith "reuse policy differs from the reviewed fail-closed contract"
     let jobs =
         arrayProperty "jobs" value
