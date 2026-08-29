@@ -3,6 +3,8 @@ module FS.GG.Coordination.QuintQualificationTests
 open System
 open System.Diagnostics
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json.Nodes
 open Xunit
 
@@ -41,16 +43,27 @@ let ``bounded roots classifications selection and admission are complete`` () =
 let ``independent oracles and qualification contracts reject every focused mutation`` () =
     let exitCode, output, error = execute true
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations oracles=11 negativeControls=19", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations oracles=11 negativeControls=20", output)
 
 [<Fact>]
 let ``changed paths surfaces reuse and future proposals bind selection inputs`` () =
     let plan = Path.GetTempFileName()
     let proposal = Path.GetTempFileName()
+    let proposedSource = Path.GetTempFileName()
+    let reuseReceipt = Path.GetTempFileName()
     try
-        File.WriteAllText(proposal, """{
+        File.WriteAllText(proposedSource, """module QualificationFutureAuditRoot {
+          val futureInvariant = true
+          val positiveWitness = true
+          val adversarialWitness = true
+          action invalidStep = true
+        }
+        """)
+        let behaviorSha =
+            SHA256.HashData(File.ReadAllBytes proposedSource) |> Convert.ToHexString |> _.ToLowerInvariant()
+        let proposalText = """{
           "schema":"fsgg.coordination.quint-proposal/1",
-          "owner":"future-audit", "behaviorSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "owner":"future-audit", "source":"SOURCE_PATH", "behaviorSha256":"BEHAVIOR_SHA",
           "imports":["qualification"],
           "invariants":["futureInvariant"], "independentOracles":["abstraction-equivalence"],
           "root":"QualificationFutureAuditRoot",
@@ -58,7 +71,8 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
           "witnesses":["positiveWitness","adversarialWitness","invalidStep"],
           "projections":["qualification-manifest"], "ciImpact":"bounded-state-root",
           "budgetEffect":"within-calibrated-envelope"
-        }""")
+        }"""
+        File.WriteAllText(proposal, proposalText.Replace("SOURCE_PATH", proposedSource).Replace("BEHAVIOR_SHA", behaviorSha))
         let pullExit, pullOutput, pullError =
             executeWith false [ "--mode"; "pull-request"; "--changed-path"; "eng/quint-qualification.json"; "--plan-out"; plan ]
         Assert.True((pullExit = 0), $"%s{pullOutput}\n%s{pullError}")
@@ -72,8 +86,18 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
 
         let configuration = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification.json")))
         let sourceSha = configuration["sourceSha256"].GetValue<string>()
+        let fileSha path =
+            SHA256.HashData(File.ReadAllBytes path) |> Convert.ToHexString |> _.ToLowerInvariant()
+        File.WriteAllText(reuseReceipt, $"""{{
+          "schema":"fsgg.coordination.quint-reuse/1", "sourceSha256":"%s{sourceSha}",
+          "configurationSha256":"%s{fileSha (Path.Combine(root, "eng/quint-qualification.json"))}",
+          "baselineSha256":"%s{fileSha (Path.Combine(root, "eng/quint-qualification-baseline.json"))}",
+          "backendIdentity":"quint-rust-apalache",
+          "toolchainIdentity":"79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486",
+          "selectedRoots":["qualification","relations"]
+        }}""")
         let reuseExit, reuseOutput, reuseError =
-            executeWith false [ "--mode"; "reuse"; "--changed-surface"; "budget:relations"; "--reuse-source-sha256"; sourceSha ]
+            executeWith false [ "--mode"; "reuse"; "--changed-surface"; "budget:relations"; "--reuse-source-sha256"; sourceSha; "--reuse-receipt"; reuseReceipt ]
         Assert.True((reuseExit = 0), $"%s{reuseOutput}\n%s{reuseError}")
         Assert.Contains("selected=qualification,relations", reuseOutput)
 
@@ -81,9 +105,27 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
             executeWith false [ "--mode"; "future-behavior"; "--proposal"; proposal ]
         Assert.True((futureExit = 0), $"%s{futureOutput}\n%s{futureError}")
         Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations", futureOutput)
+
+        File.WriteAllText(proposal, File.ReadAllText(proposal).Replace(behaviorSha, String.replicate 64 "b"))
+        let badFutureExit, badFutureOutput, badFutureError =
+            executeWith false [ "--mode"; "future-behavior"; "--proposal"; proposal ]
+        Assert.NotEqual(0, badFutureExit)
+        Assert.Contains("QQ-PROPOSAL-BEHAVIOR", badFutureOutput + badFutureError)
+
+        let missingPathExit, missingPathOutput, missingPathError =
+            executeWith false [ "--mode"; "pull-request"; "--changed-path"; "eng/does-not-exist.qnt" ]
+        Assert.NotEqual(0, missingPathExit)
+        Assert.Contains("QQ-SELECTION-PATH-MISSING", missingPathOutput + missingPathError)
+
+        let unboundReuseExit, unboundReuseOutput, unboundReuseError =
+            executeWith false [ "--mode"; "reuse"; "--changed-surface"; "budget:relations"; "--reuse-source-sha256"; sourceSha ]
+        Assert.NotEqual(0, unboundReuseExit)
+        Assert.Contains("QQ-SELECTION-INPUT", unboundReuseOutput + unboundReuseError)
     finally
         File.Delete plan
         File.Delete proposal
+        File.Delete proposedSource
+        File.Delete reuseReceipt
 
 [<Fact>]
 let ``missing or over budget measurements are rejected before reuse`` () =

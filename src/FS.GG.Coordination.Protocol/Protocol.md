@@ -2168,116 +2168,127 @@ module CoordinationProtocolTests {
 // the actions and properties needed for one independently qualified closure. Quint flattening
 // therefore retains the used transitive closure instead of the all-actions integration root.
 module QualificationAuthorityRoot {
-  import CoordinationProtocol as canonical
+  import CoordinationProtocol.mutationIntentsConflict
+  import CoordinationProtocol.createIntent
 
   var attemptObserved: bool
   var conflictDetected: bool
   action init = all { attemptObserved' = false, conflictDetected' = false }
   action observeRival = all {
     attemptObserved' = true,
-    conflictDetected' = canonical::mutationIntentsConflict(canonical::createIntent,
-      { ...canonical::createIntent, operationId: "operation-rival" }),
+    conflictDetected' = mutationIntentsConflict(createIntent,
+      { ...createIntent, operationId: "operation-rival" }),
   }
   action idle = all { attemptObserved' = attemptObserved, conflictDetected' = conflictDetected }
   action rootStep = any { observeRival, idle }
   // An exact replay is an invalid parameterization for the rival-claim transition.
   action invalidStep = all {
     attemptObserved' = true,
-    conflictDetected' = canonical::mutationIntentsConflict(canonical::createIntent, canonical::createIntent),
+    conflictDetected' = mutationIntentsConflict(createIntent, createIntent),
   }
   val rootSafety = not(attemptObserved) or conflictDetected
   val positiveWitness = attemptObserved and conflictDetected
   val adversarialWitness = not(attemptObserved) and not(conflictDetected)
-  val invalidParameterWitness = canonical::mutationIntentsConflict(canonical::createIntent, canonical::createIntent)
+  val invalidParameterWitness = mutationIntentsConflict(createIntent, createIntent)
   val qualificationInvariant = rootSafety
 }
 
 module QualificationLifecycleRoot {
-  import CoordinationProtocol as canonical
+  import CoordinationProtocol.deriveLifecycleStatus
+  import CoordinationProtocol.emptyLifecycleFacts
+  import CoordinationProtocol.claimedLifecycleFacts
 
   var claimPresent: bool
   var lifecycleStatus: str
   action init = all {
     claimPresent' = false,
-    lifecycleStatus' = canonical::deriveLifecycleStatus("INTENT-Ready", canonical::emptyLifecycleFacts),
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
   }
   action observeClaim = all {
     claimPresent' = true,
-    lifecycleStatus' = canonical::deriveLifecycleStatus("INTENT-Ready", canonical::claimedLifecycleFacts),
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", claimedLifecycleFacts),
   }
   action idle = all { claimPresent' = claimPresent, lifecycleStatus' = lifecycleStatus }
   action rootStep = any { observeClaim, idle }
   // A claimed fact paired with the empty-facts projection must be rejected.
   action invalidStep = all {
     claimPresent' = true,
-    lifecycleStatus' = canonical::deriveLifecycleStatus("INTENT-Ready", canonical::emptyLifecycleFacts),
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
   }
-  val expectedLifecycleStatus = canonical::deriveLifecycleStatus("INTENT-Ready",
-    if (claimPresent) canonical::claimedLifecycleFacts else canonical::emptyLifecycleFacts)
+  val expectedLifecycleStatus = deriveLifecycleStatus("INTENT-Ready",
+    if (claimPresent) claimedLifecycleFacts else emptyLifecycleFacts)
   val rootSafety = lifecycleStatus == expectedLifecycleStatus
   val positiveWitness = claimPresent and lifecycleStatus == "claimed"
   val adversarialWitness = not(claimPresent) and lifecycleStatus == "ready"
-  val invalidParameterWitness = canonical::deriveLifecycleStatus("INTENT-Ready", canonical::emptyLifecycleFacts) == "claimed"
+  val invalidParameterWitness = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts) == "claimed"
   val qualificationInvariant = rootSafety
 }
 
 module QualificationRelationsRoot {
-  import CoordinationProtocol as canonical
+  import CoordinationProtocol.NativeRelationEdge
+  import CoordinationProtocol.nativeRelationEdgeIsValid
+  import CoordinationProtocol.parentChildEdge
+  import CoordinationProtocol.blockingEdge
 
-  var nativeRelationEdges: Set[canonical::NativeRelationEdge]
+  var nativeRelationEdges: Set[NativeRelationEdge]
   action init = nativeRelationEdges' = Set()
-  action addParentChild = nativeRelationEdges' = nativeRelationEdges.union(Set(canonical::parentChildEdge))
-  action addBlocking = nativeRelationEdges' = nativeRelationEdges.union(Set(canonical::blockingEdge))
-  action removeParentChild = nativeRelationEdges' = nativeRelationEdges.exclude(Set(canonical::parentChildEdge))
+  action addParentChild = nativeRelationEdges' = nativeRelationEdges.union(Set(parentChildEdge))
+  action addBlocking = nativeRelationEdges' = nativeRelationEdges.union(Set(blockingEdge))
+  action removeParentChild = nativeRelationEdges' = nativeRelationEdges.exclude(Set(parentChildEdge))
   action rootStep = any { addParentChild, addBlocking, removeParentChild }
   // Self-relations are outside the canonical native-relation contract.
   action invalidStep = all {
-    nativeRelationEdges' = nativeRelationEdges.union(Set({ ...canonical::parentChildEdge, targetId: "subject-parent" })),
+    nativeRelationEdges' = nativeRelationEdges.union(Set({ ...parentChildEdge, targetId: "subject-parent" })),
   }
-  val rootSafety = nativeRelationEdges.forall(canonical::nativeRelationEdgeIsValid)
-  val positiveWitness = nativeRelationEdges.contains(canonical::parentChildEdge)
-  val adversarialWitness = nativeRelationEdges.contains(canonical::blockingEdge)
-  val invalidParameterWitness = canonical::nativeRelationEdgeIsValid({ ...canonical::parentChildEdge, targetId: "subject-parent" })
+  val rootSafety = nativeRelationEdges.forall(nativeRelationEdgeIsValid)
+  val positiveWitness = nativeRelationEdges.contains(parentChildEdge)
+  val adversarialWitness = nativeRelationEdges.contains(blockingEdge)
+  val invalidParameterWitness = nativeRelationEdgeIsValid({ ...parentChildEdge, targetId: "subject-parent" })
   val qualificationInvariant = rootSafety
 }
 
 module QualificationProtocolStreamsRoot {
-  import CoordinationProtocol as canonical
+  import CoordinationProtocol.ProtocolEnvelope
+  import CoordinationProtocol.protocolEnvelopeShapeIsValid
+  import CoordinationProtocol.protocolEnvelopeIsOrdered
+  import CoordinationProtocol.claimEnvelope
+  import CoordinationProtocol.leaseEnvelope
+  import CoordinationProtocol.reviewCheckpointEnvelope
 
-  var protocolStreamEvents: Set[canonical::ProtocolEnvelope]
-  var durableProtocolCheckpoints: Set[canonical::ProtocolEnvelope]
+  var protocolStreamEvents: Set[ProtocolEnvelope]
+  var durableProtocolCheckpoints: Set[ProtocolEnvelope]
   action init = all { protocolStreamEvents' = Set(), durableProtocolCheckpoints' = Set() }
   action appendClaim = all {
-    protocolStreamEvents' = protocolStreamEvents.union(Set(canonical::claimEnvelope)),
+    protocolStreamEvents' = protocolStreamEvents.union(Set(claimEnvelope)),
     durableProtocolCheckpoints' = durableProtocolCheckpoints,
   }
   action appendLease = all {
-    protocolStreamEvents.contains(canonical::claimEnvelope),
-    protocolStreamEvents' = protocolStreamEvents.union(Set(canonical::leaseEnvelope)),
+    protocolStreamEvents.contains(claimEnvelope),
+    protocolStreamEvents' = protocolStreamEvents.union(Set(leaseEnvelope)),
     durableProtocolCheckpoints' = durableProtocolCheckpoints,
   }
   action appendReview = all {
-    protocolStreamEvents.contains(canonical::claimEnvelope),
-    protocolStreamEvents.contains(canonical::leaseEnvelope),
-    protocolStreamEvents' = protocolStreamEvents.union(Set(canonical::reviewCheckpointEnvelope)),
-    durableProtocolCheckpoints' = durableProtocolCheckpoints.union(Set(canonical::reviewCheckpointEnvelope)),
+    protocolStreamEvents.contains(claimEnvelope),
+    protocolStreamEvents.contains(leaseEnvelope),
+    protocolStreamEvents' = protocolStreamEvents.union(Set(reviewCheckpointEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints.union(Set(reviewCheckpointEnvelope)),
   }
   action rootStep = any { appendClaim, appendLease, appendReview }
   // A lease without its retained claim predecessor is an invalid stream parameterization.
   action invalidStep = all {
-    protocolStreamEvents' = protocolStreamEvents.union(Set(canonical::leaseEnvelope)),
+    protocolStreamEvents' = protocolStreamEvents.union(Set(leaseEnvelope)),
     durableProtocolCheckpoints' = durableProtocolCheckpoints,
   }
   val rootSafety = and {
     durableProtocolCheckpoints.subseteq(protocolStreamEvents),
     protocolStreamEvents.forall(event => and {
-      canonical::protocolEnvelopeShapeIsValid(event),
-      canonical::protocolEnvelopeIsOrdered(event, protocolStreamEvents),
+      protocolEnvelopeShapeIsValid(event),
+      protocolEnvelopeIsOrdered(event, protocolStreamEvents),
     }),
   }
-  val positiveWitness = protocolStreamEvents.contains(canonical::reviewCheckpointEnvelope)
-  val adversarialWitness = protocolStreamEvents.contains(canonical::leaseEnvelope)
-  val invalidParameterWitness = canonical::protocolEnvelopeIsOrdered(canonical::leaseEnvelope, Set(canonical::leaseEnvelope))
+  val positiveWitness = protocolStreamEvents.contains(reviewCheckpointEnvelope)
+  val adversarialWitness = protocolStreamEvents.contains(leaseEnvelope)
+  val invalidParameterWitness = protocolEnvelopeIsOrdered(leaseEnvelope, Set(leaseEnvelope))
   val qualificationInvariant = rootSafety
 }
 ```

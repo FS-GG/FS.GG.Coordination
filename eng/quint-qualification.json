@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "be56c031d00d96d3ce4c3b9031f23dcf67621030f513a51ddfea516fb050822d",
+  "sourceSha256": "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a",
   "modules": [
     { "id": "core", "imports": [] },
     { "id": "authority", "imports": ["core"] },
@@ -54,6 +54,15 @@
     { "id": "desired-state", "main": "CoordinationProtocolTests", "module": "desired-state", "closure": ["core", "protocol-streams", "mutation-saga", "desired-state"], "mode": "test", "match": "^testDesiredState", "positive": "testDesiredStateCataloguesAndSpecificationAreClosed", "adversarial": "testDesiredStateUnsupportedAndPermissionOutcomesFailClosed", "invalid": "testDesiredStateVerificationRejectsPolicySubstitution", "budget": { "depth": 4, "states": 50000, "samples": 200, "elapsedMs": 45000, "peakMiB": 1536, "artifactBytes": 6291456 }, "admission": { "owner": "desired-state", "imports": ["core", "protocol-streams", "mutation-saga", "desired-state"], "invariants": ["testDesiredStateCataloguesAndSpecificationAreClosed"], "independentOracles": ["old-client-fencing", "dual-feed-recovery"], "root": "CoordinationProtocolTests", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["testDesiredStateCataloguesAndSpecificationAreClosed", "testDesiredStateUnsupportedAndPermissionOutcomesFailClosed", "testDesiredStateVerificationRejectsPolicySubstitution"], "projections": ["settings-plans"], "ciImpact": "bounded-test-root", "budgetEffect": "within-calibrated-envelope" } },
     { "id": "qualification", "main": "CoordinationProtocolTests", "module": "qualification", "closure": ["core", "authority", "lifecycle", "relations", "protocol-streams", "mutation-saga", "desired-state", "qualification"], "mode": "test", "match": "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)", "positive": "testQualificationManifestBindsCandidateInputsResultsAndReview", "adversarial": "testCompiledOutputsRejectSubstitutionAndUnqualifiedFacts", "invalid": "testQualificationManifestOmissionsAndStaleInputsFailClosed", "budget": { "depth": 5, "states": 100000, "samples": 200, "elapsedMs": 60000, "peakMiB": 2048, "artifactBytes": 6291456 }, "admission": { "owner": "qualification", "imports": ["core", "authority", "lifecycle", "relations", "protocol-streams", "mutation-saga", "desired-state", "qualification"], "invariants": ["testQualificationManifestBindsCandidateInputsResultsAndReview"], "independentOracles": ["abstraction-equivalence", "scale-envelope"], "root": "CoordinationProtocolTests", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["testQualificationManifestBindsCandidateInputsResultsAndReview", "testCompiledOutputsRejectSubstitutionAndUnqualifiedFacts", "testQualificationManifestOmissionsAndStaleInputsFailClosed"], "projections": ["qualification-manifest", "model-test-inventory"], "ciImpact": "bounded-test-root", "budgetEffect": "within-calibrated-envelope" } }
   ],
+  "executableImports": {
+    "authority": ["createIntent", "mutationIntentsConflict"],
+    "lifecycle": ["claimedLifecycleFacts", "deriveLifecycleStatus", "emptyLifecycleFacts"],
+    "relations": ["NativeRelationEdge", "blockingEdge", "nativeRelationEdgeIsValid", "parentChildEdge"],
+    "protocol-streams": ["ProtocolEnvelope", "claimEnvelope", "leaseEnvelope", "protocolEnvelopeIsOrdered", "protocolEnvelopeShapeIsValid", "reviewCheckpointEnvelope"],
+    "mutation-saga": ["*"],
+    "desired-state": ["*"],
+    "qualification": ["*"]
+  },
   "selection": {
     "pullRequest": "reverse-dependency-closure",
     "protected": ["main", "acceptance", "freeze", "release"],

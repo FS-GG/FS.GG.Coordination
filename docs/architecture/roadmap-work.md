@@ -164,7 +164,9 @@ runtime, publication, or production authority.
 GS2-03.4 keeps the same canonical profile-2 behavior and adds seven bounded
 qualification roots in the adjacent executable Quint fence. Four state-machine
 roots expose authority, lifecycle, relation, and protocol-stream transitions while
-calling the canonical pure definitions through namespaced imports. Their valid steps
+importing only their enumerated canonical types, values, and pure definitions. The
+validator extracts those imports from the executable module bodies and compares them
+with the retained per-root import inventory. Their valid steps
 reach positive and adversarial witnesses, while separate invalid parameter actions
 must violate the root invariant without rewriting the invariant or its witness;
 three test roots isolate mutation/durable-plan, desired-state, and qualification
@@ -173,7 +175,9 @@ and action, closes the acyclic module graph, binds exact root closures, witnesse
 selection modes, budgets, and future-module admission. Ordinary pull requests use
 the complete reverse-dependency closure selected from changed modules, paths,
 oracles, bounds, budgets, backends, and toolchains. Reuse binds the exact source
-identity, proposed future behavior must supply a behavior-digest-bound, schema-checked admission payload,
+identity plus a receipt binding the configuration, baseline, backend, toolchain, and
+selected closure. Proposed future behavior must point to an existing behavior-digest-bound
+source whose declared root, invariants, and witnesses match its schema-checked admission payload,
 and main, acceptance, freeze, and release checkpoints use the full inventory.
 
 `eng/validate-quint-qualification.fsx` is the separately authored black-box

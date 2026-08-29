@@ -122,7 +122,7 @@ let private createArtifacts root =
                 $"{{\"schema\":\"fsgg.coordination.bootstrap-recovery/1\",\"candidate\":\"%s{exactHead}\",\"packageSha256\":\"%s{packageDigest}\",\"publishedSources\":[\"https://api.nuget.org/v3/index.json\"],\"stages\":[\"clone\",\"restore\",\"build\",\"unit-tests\",\"architecture-tests\",\"pack\",\"install\",\"execute\"]}}\n")
         elif relative = "canonical-quint/qualification.json" then
             let preparationDigest = String.replicate 64 "c"
-            let sourceDigest = "be56c031d00d96d3ce4c3b9031f23dcf67621030f513a51ddfea516fb050822d"
+            let sourceDigest = "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a"
             let contractDigest = "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
             let toolchainDigest = "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
             let quintDigest = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"

@@ -20,7 +20,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "be56c031d00d96d3ce4c3b9031f23dcf67621030f513a51ddfea516fb050822d"
+    "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a"
 
 let expectedContract =
     "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
@@ -607,6 +607,7 @@ let changedSurfaces =
     | null | "" -> []
     | value -> value.Split(',', StringSplitOptions.RemoveEmptyEntries ||| StringSplitOptions.TrimEntries) |> Array.toList
 let reuseSource = Environment.GetEnvironmentVariable "FSGG_QUINT_REUSE_SOURCE_SHA256"
+let reuseReceipt = Environment.GetEnvironmentVariable "FSGG_QUINT_REUSE_RECEIPT"
 let proposalPath = Environment.GetEnvironmentVariable "FSGG_QUINT_FUTURE_PROPOSAL"
 let selectionArguments =
     [ "--mode"; qualificationMode; "--protected-mode"; protectedMode; "--plan-out"; selectionPlanPath ]
@@ -614,6 +615,7 @@ let selectionArguments =
     @ (changedPaths |> List.collect (fun path -> [ "--changed-path"; path ]))
     @ (changedSurfaces |> List.collect (fun surface -> [ "--changed-surface"; surface ]))
     @ (if String.IsNullOrWhiteSpace reuseSource then [] else [ "--reuse-source-sha256"; reuseSource ])
+    @ (if String.IsNullOrWhiteSpace reuseReceipt then [] else [ "--reuse-receipt"; reuseReceipt ])
     @ (if String.IsNullOrWhiteSpace proposalPath then [] else [ "--proposal"; proposalPath ])
 
 requireGreen
