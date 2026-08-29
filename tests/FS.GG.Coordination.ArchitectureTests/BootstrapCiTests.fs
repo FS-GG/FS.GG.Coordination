@@ -31,6 +31,22 @@ let private runBootstrapAdapter root arguments =
     childProcess.WaitForExit()
     childProcess.ExitCode, output, error
 
+let private runGateWithoutRepositorySubject gateId root =
+    let startInfo = ProcessStartInfo("bash")
+    startInfo.ArgumentList.Add(Path.Combine(repositoryRoot, $"eng/bootstrap-gates/%s{gateId}.sh"))
+    startInfo.WorkingDirectory <- root
+    startInfo.Environment["RUNNER_TEMP"] <- Path.Combine(root, "runner-temp")
+    startInfo.Environment["FSGG_CANDIDATE_SHA"] <- exactHead
+    startInfo.Environment["FSGG_QUINT_RECEIPT"] <- Path.Combine(root, "runner-temp/canonical-quint/qualification.json")
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use childProcess = Process.Start startInfo
+    let output = childProcess.StandardOutput.ReadToEnd()
+    let error = childProcess.StandardError.ReadToEnd()
+    childProcess.WaitForExit()
+    childProcess.ExitCode, output, error
+
 let private withScratch prefix action =
     let scratch = Directory.CreateTempSubdirectory(prefix)
     try action scratch.FullName
@@ -205,6 +221,72 @@ let ``qualification plan rejects an incomplete terminal dependency edge`` () =
             Assert.Contains("rule=qualification-plan-invalid", error))
 
 [<Fact>]
+let ``representative gate addition changes only the plan and its stable entry point`` () =
+    withPlanMutation
+        (fun path ->
+            let plan = JsonNode.Parse(File.ReadAllText(path)).AsObject()
+            plan["requiredGateCount"] <- JsonValue.Create(8)
+            let jobs = plan["jobs"].AsArray()
+            let gate = JsonObject()
+            gate["id"] <- JsonValue.Create("representative-gate")
+            gate["artifact"] <- JsonValue.Create("representative-gate/result.json")
+            gate["timeoutMinutes"] <- JsonValue.Create(10)
+            gate["entryPoint"] <- JsonValue.Create("bash eng/bootstrap-gates/representative-gate.sh")
+            gate["fetchDepth"] <- JsonValue.Create(1)
+            gate["alwaysUpload"] <- JsonValue.Create(false)
+            gate["downloadArtifacts"] <- JsonValue.Create(false)
+            gate["environment"] <- JsonObject()
+            gate["uploadName"] <- JsonValue.Create("representative-gate")
+            gate["uploadPath"] <- JsonValue.Create("${{ runner.temp }}/representative-gate/result.json")
+            gate["needs"] <- JsonArray()
+            jobs.Insert(jobs.Count - 1, gate)
+            let terminalJob = jobs[jobs.Count - 1]
+            let terminalNeeds = terminalJob["needs"].AsArray()
+            terminalNeeds.Add(JsonValue.Create("representative-gate"))
+            File.WriteAllText(path, plan.ToJsonString()))
+        (fun root ->
+            let output = Path.Combine(root, "representative.yml")
+            let exitCode, _, error = runBootstrap root [ "generate"; "--output"; output ]
+            Assert.Equal(0, exitCode)
+            Assert.Equal("", error)
+            let workflow = File.ReadAllText(output)
+            Assert.Contains("  representative-gate:", workflow)
+            Assert.Contains("run: bash eng/bootstrap-gates/representative-gate.sh", workflow))
+
+[<Theory>]
+[<InlineData("deterministic-build", "FS.GG.Coordination.sln")>]
+[<InlineData("compiler-and-tests", "FS.GG.Coordination.sln")>]
+[<InlineData("canonical-quint", "FS.GG.Coordination.Qualification.Contracts.fsproj")>]
+[<InlineData("dependency-and-security", "FS.GG.Coordination.sln")>]
+[<InlineData("package-install-smoke", "FS.GG.Coordination.Protocol.fsproj")>]
+[<InlineData("bootstrap-recovery", "eng/bootstrap-recovery.fsx")>]
+[<InlineData("evidence-manifest", "eng/bootstrap-qualification-plan.json")>]
+let ``stable gate entry point refuses a removed repository subject`` gateId expectedSubject =
+    withScratch $"fsgg-bootstrap-gate-inversion-%s{gateId}-" (fun root ->
+        let exitCode, output, error = runGateWithoutRepositorySubject gateId root
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains(expectedSubject, output + error))
+
+[<Fact>]
+let ``performance evidence retains five source-linked timing samples and every acceptance threshold`` () =
+    let evaluation =
+        File.ReadAllText(Path.Combine(repositoryRoot, "work/78-shorten-qualification-critical-path/performance-evaluation.md"))
+    let requiredEvidence =
+        [ "actions/runs/33248808361"
+          "actions/runs/33250382392/attempts/1"
+          "actions/runs/33250382392/attempts/2"
+          "actions/runs/33251281115"
+          "actions/runs/33251621507"
+          "| Baseline | 2s | 31s | 1033s | 22s | 1103s | 366s |"
+          "| Receipt-bound cache-free | 49s | 24s | 775s | 24s | 840s | 478s |"
+          "Compiler/tests improvement exceeds 30% in all four candidate attempts."
+          "Aggregate runner-time improvement exceeds 10% in all four candidate attempts."
+          "Cache miss/hit semantics are equal" ]
+    for evidence in requiredEvidence do Assert.Contains(evidence, evaluation)
+    let removedSource = evaluation.Replace("actions/runs/33251281115", "missing-cache-free-run")
+    Assert.DoesNotContain("actions/runs/33251281115", removedSource)
+
+[<Fact>]
 let ``bootstrap control surface stays typed thin and bounded`` () =
     let lineCount relative = File.ReadAllLines(Path.Combine(repositoryRoot, relative)).Length
     let gateLines =
@@ -220,6 +302,9 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
+    Assert.DoesNotContain("expectedIds", core)
+    Assert.DoesNotContain("gate.Id =", core)
+    Assert.DoesNotContain("job.Id =", core)
     Assert.DoesNotContain("NUGET_PACKAGES: ${{ runner.", workflow)
     Assert.DoesNotContain("FSGG_QUINT_RECEIPT: ${{ runner.", workflow)
     Assert.DoesNotContain("actions/cache@", workflow)

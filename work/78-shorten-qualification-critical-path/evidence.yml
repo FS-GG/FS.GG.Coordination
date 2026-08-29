@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -154,18 +154,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV005]
-    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, work/78-shorten-qualification-critical-path/performance-evaluation.md]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+      - kind: verification
+        path: work/78-shorten-qualification-critical-path/performance-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +191,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +218,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +245,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +272,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +299,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -324,10 +326,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -351,10 +353,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -378,10 +380,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -405,10 +407,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -432,10 +434,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -459,10 +461,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -486,10 +488,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -513,10 +515,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -540,10 +542,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -567,10 +569,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -594,10 +596,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -621,10 +623,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -648,10 +650,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -675,10 +677,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -702,10 +704,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -729,10 +731,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -756,10 +758,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -783,10 +785,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -810,10 +812,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -837,10 +839,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -864,10 +866,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -883,18 +885,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV032]
-    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, work/78-shorten-qualification-critical-path/performance-evaluation.md]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+      - kind: verification
+        path: work/78-shorten-qualification-critical-path/performance-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -918,10 +922,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -937,18 +941,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-009]
     obligationRefs: [EV034]
-    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs]
+    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs, work/78-shorten-qualification-critical-path/performance-evaluation.md]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs
+      - kind: verification
+        path: work/78-shorten-qualification-critical-path/performance-evaluation.md
     result: pass
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -972,10 +978,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -999,10 +1005,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -1026,10 +1032,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -1053,10 +1059,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -1080,10 +1086,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -1107,10 +1113,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -1134,10 +1140,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/78-shorten-qualification-critical-path/qualification.trx
-      digest: "sha256:bc4a2bde8067205cb52541a720971c7e5cbb756a4f7d3ea8e58df8867af35e82"
+      digest: "sha256:b1f25cb545d9dc11ab42704bc9a27737236465fb425155d9b91fc63328a3cd3a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 167
+      passed: 176
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]

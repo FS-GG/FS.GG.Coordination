@@ -13,6 +13,11 @@ type GateContract =
       EntryPoint: string
       FetchDepth: int
       AlwaysUpload: bool
+      DownloadArtifacts: bool
+      Environment: (string * string) list
+      UploadName: string
+      UploadPath: string
+      ReceiptKind: string option
       Needs: string list
       Commands: string list }
 
@@ -28,6 +33,7 @@ type BootstrapContract =
       ConcurrencyGroup: string
       CancelInProgress: bool
       RequiredProjectCount: int
+      RequiredGateCount: int
       RequiredProjects: string list
       RequiredVulnerabilitySources: string list
       Jobs: GateContract list
@@ -75,6 +81,17 @@ let private stringArray (name: string) element =
     |> Option.defaultValue []
     |> List.choose (fun item -> if item.ValueKind = JsonValueKind.String then item.GetString() |> Option.ofObj else None)
 
+let private stringProperties (name: string) (element: JsonElement) =
+    let mutable value = Unchecked.defaultof<JsonElement>
+    if element.TryGetProperty(name, &value) && value.ValueKind = JsonValueKind.Object then
+        value.EnumerateObject()
+        |> Seq.map (fun property ->
+            if property.Value.ValueKind <> JsonValueKind.String then failwith $"%s{name} values must be strings"
+            property.Name, property.Value.GetString())
+        |> Seq.toList
+    else
+        []
+
 let private loadContract root =
     let path = Path.Combine(root, "eng/bootstrap-qualification-plan.json")
     let bytes = File.ReadAllBytes path
@@ -112,6 +129,7 @@ let private loadContract root =
     if concurrencyGroup <> "bootstrap-qualification-${{ github.ref }}" || not cancelInProgress then
         failwith "concurrency must cancel superseded attempts within the candidate ref"
     let requiredProjectCount = value.GetProperty("requiredProjectCount").GetInt32()
+    let requiredGateCount = value.GetProperty("requiredGateCount").GetInt32()
     let requiredProjects = stringArray "requiredProjects" value
     if requiredProjects.Length <> requiredProjectCount || (requiredProjects |> List.distinct |> List.length) <> requiredProjectCount then
         failwith "requiredProjects must contain the exact distinct project census"
@@ -129,28 +147,47 @@ let private loadContract root =
               EntryPoint = entryPoint
               FetchDepth = job.GetProperty("fetchDepth").GetInt32()
               AlwaysUpload = boolProperty "alwaysUpload" job |> Option.defaultValue false
+              DownloadArtifacts = boolProperty "downloadArtifacts" job |> Option.defaultValue false
+              Environment = stringProperties "environment" job
+              UploadName = stringProperty "uploadName" job |> Option.defaultWith (fun () -> failwith "job uploadName is missing")
+              UploadPath = stringProperty "uploadPath" job |> Option.defaultWith (fun () -> failwith "job uploadPath is missing")
+              ReceiptKind = stringProperty "receiptKind" job
               Needs = stringArray "needs" job
               Commands = [ entryPoint ] })
-    let expectedIds =
-        set [ "deterministic-build"; "compiler-and-tests"; "canonical-quint"; "dependency-and-security"; "package-install-smoke"; "bootstrap-recovery"; "evidence-manifest" ]
-    if (jobs |> List.map _.Id |> Set.ofList) <> expectedIds || (jobs |> List.map _.Id |> List.distinct |> List.length) <> expectedIds.Count then
-        failwith "jobs must contain the exact seven-gate identity set"
-    let prerequisiteIds = expectedIds.Remove "evidence-manifest"
+    let jobIds = jobs |> List.map _.Id
+    let jobIdSet = Set.ofList jobIds
+    if jobs.Length <> requiredGateCount || requiredGateCount < 2 || jobIdSet.Count <> requiredGateCount then
+        failwith "jobs must match requiredGateCount with distinct identities"
+    let terminalJobs = jobs |> List.filter _.DownloadArtifacts
+    if terminalJobs.Length <> 1 then failwith "exactly one terminal evidence job must download prerequisite artifacts"
+    let terminalJob = terminalJobs.Head
+    let prerequisiteIds = jobIdSet.Remove terminalJob.Id
     for job in jobs do
+        if String.IsNullOrWhiteSpace job.Id || job.Id |> Seq.exists (fun character -> not (Char.IsLower character || Char.IsDigit character || character = '-')) then
+            failwith "job identities must be lowercase kebab-case"
         if job.TimeoutMinutes < 1 || job.TimeoutMinutes > 35 then failwith $"job timeout is outside the bounded policy: %s{job.Id}"
         if job.EntryPoint <> $"bash eng/bootstrap-gates/%s{job.Id}.sh" then failwith $"job entryPoint is not stable: %s{job.Id}"
-        if job.FetchDepth <> (if job.Id = "bootstrap-recovery" then 0 else 1) then failwith $"job fetch depth is invalid: %s{job.Id}"
-        if job.AlwaysUpload <> (job.Id = "canonical-quint") then failwith $"job always-upload policy is invalid: %s{job.Id}"
-        if job.Id = "evidence-manifest" then
+        if job.FetchDepth < 0 || job.FetchDepth > 1 then failwith $"job fetch depth is invalid: %s{job.Id}"
+        if String.IsNullOrWhiteSpace job.UploadName || String.IsNullOrWhiteSpace job.UploadPath then failwith $"job upload contract is incomplete: %s{job.Id}"
+        if job.UploadPath.Contains("${{ runner.") && not (job.UploadPath.StartsWith("${{ runner.temp }}/", StringComparison.Ordinal)) then
+            failwith $"job upload path uses an unavailable runner context: %s{job.Id}"
+        let environmentNames = job.Environment |> List.map fst
+        if environmentNames.Length <> (environmentNames |> List.distinct |> List.length) then failwith $"job environment names must be distinct: %s{job.Id}"
+        if job.Environment |> List.exists (fun (name, environmentValue) -> String.IsNullOrWhiteSpace name || environmentValue.Contains("${{ runner.")) then
+            failwith $"job environment is invalid: %s{job.Id}"
+        if job.DownloadArtifacts then
             if Set.ofList job.Needs <> prerequisiteIds || job.Needs.Length <> prerequisiteIds.Count then
                 failwith "terminal evidence must depend on every prerequisite exactly once"
         elif not (List.isEmpty job.Needs) then
             failwith $"prerequisite gate must remain independently scheduled: %s{job.Id}"
+    let receiptKinds = jobs |> List.choose _.ReceiptKind
+    if receiptKinds.Length <> (receiptKinds |> List.distinct |> List.length) then failwith "receipt kinds must be unique"
     { EvidenceSchema = evidenceSchema
       Actions = actions
       ConcurrencyGroup = concurrencyGroup
       CancelInProgress = cancelInProgress
       RequiredProjectCount = requiredProjectCount
+      RequiredGateCount = requiredGateCount
       RequiredProjects = requiredProjects
       RequiredVulnerabilitySources = requiredVulnerabilitySources
       Jobs = jobs
@@ -194,13 +231,9 @@ let private renderWorkflow (contract: BootstrapContract) =
             line $"    needs: [%s{needs}]"
         line "    runs-on: ubuntu-latest"
         line $"    timeout-minutes: %d{gate.TimeoutMinutes}"
-        if gate.Id = "canonical-quint" || gate.Id = "dependency-and-security" || gate.Id = "evidence-manifest" then
+        if not (List.isEmpty gate.Environment) then
             line "    env:"
-            line ("      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-" + gate.Id)
-            if gate.Id = "canonical-quint" then
-                line "      FSGG_QUINT_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint/qualification.json"
-            if gate.Id = "evidence-manifest" then
-                line "      FSGG_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}"
+            for name, value in gate.Environment do line $"      %s{name}: %s{value}"
         line "    steps:"
         line "      - name: Check out the exact candidate"
         line $"        uses: actions/checkout@%s{contract.Actions.Checkout}"
@@ -211,7 +244,7 @@ let private renderWorkflow (contract: BootstrapContract) =
         line $"        uses: actions/setup-dotnet@%s{contract.Actions.SetupDotnet}"
         line "        with:"
         line "          global-json-file: global.json"
-        if gate.Id = "evidence-manifest" then
+        if gate.DownloadArtifacts then
             line "      - name: Download all prerequisite evidence"
             line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
             line "        with:"
@@ -222,13 +255,8 @@ let private renderWorkflow (contract: BootstrapContract) =
         if gate.AlwaysUpload then line "        if: ${{ always() }}"
         line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
         line "        with:"
-        let uploadName = if gate.Id = "evidence-manifest" then "bootstrap-evidence-manifest" else gate.Id
-        let uploadPath =
-            if gate.Id = "evidence-manifest" then "${{ runner.temp }}/bootstrap-evidence.json"
-            elif gate.Id = "canonical-quint" then "${{ env.FSGG_QUINT_RECEIPT }}"
-            else "${{ runner.temp }}/" + gate.Artifact
-        line $"          name: %s{uploadName}"
-        line $"          path: %s{uploadPath}"
+        line $"          name: %s{gate.UploadName}"
+        line $"          path: %s{gate.UploadPath}"
         line "          if-no-files-found: error"
         line ""
     output.ToString().Replace("\r\n", "\n").TrimEnd() + "\n"
@@ -349,12 +377,12 @@ let private inspectRecoveryReceipt (path: string) (head: string) =
 
 let private inspectRecoveryArtifact (artifactRoot: string) (head: string) (contract: BootstrapContract) =
     contract.Jobs
-    |> List.tryFind (fun job -> job.Id = "bootstrap-recovery")
+    |> List.tryFind (fun job -> job.ReceiptKind = Some "recovery")
     |> Option.map (fun job ->
         match safeArtifactPath artifactRoot job.Artifact with
         | Some path when File.Exists path -> inspectRecoveryReceipt path head
         | _ -> [ violation "recovery-receipt-missing" job.Artifact ])
-    |> Option.defaultValue [ violation "recovery-receipt-contract" "bootstrap-recovery job is absent" ]
+    |> Option.defaultValue [ violation "recovery-receipt-contract" "recovery receipt kind is absent" ]
 
 let private inspectCanonicalQuintReceipt (path: string) =
     try
@@ -420,12 +448,12 @@ let private inspectCanonicalQuintReceipt (path: string) =
 
 let private inspectCanonicalQuintArtifact (artifactRoot: string) (contract: BootstrapContract) =
     contract.Jobs
-    |> List.tryFind (fun job -> job.Id = "canonical-quint")
+    |> List.tryFind (fun job -> job.ReceiptKind = Some "formal")
     |> Option.map (fun job ->
         match safeArtifactPath artifactRoot job.Artifact with
         | Some path when File.Exists path -> inspectCanonicalQuintReceipt path
         | _ -> [ violation "quint-receipt-missing" job.Artifact ])
-    |> Option.defaultValue [ violation "quint-receipt-contract" "canonical-quint job is absent" ]
+    |> Option.defaultValue [ violation "quint-receipt-contract" "formal receipt kind is absent" ]
 
 let private writeEvidence (output: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) =
     if not (isSha head) then failwith "candidate head must be an exact 40-hex SHA"

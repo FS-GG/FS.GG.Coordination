@@ -19,6 +19,7 @@
     "group": "bootstrap-qualification-${{ github.ref }}",
     "cancelInProgress": true
   },
+  "requiredGateCount": 7,
   "requiredProjectCount": 8,
   "requiredVulnerabilitySources": ["https://api.nuget.org/v3/index.json"],
   "requiredProjects": [
@@ -39,6 +40,10 @@
       "entryPoint": "bash eng/bootstrap-gates/deterministic-build.sh",
       "fetchDepth": 1,
       "alwaysUpload": false,
+      "downloadArtifacts": false,
+      "environment": {},
+      "uploadName": "deterministic-build",
+      "uploadPath": "${{ runner.temp }}/deterministic-build/protocol.dll",
       "needs": []
     },
     {
@@ -48,6 +53,10 @@
       "entryPoint": "bash eng/bootstrap-gates/compiler-and-tests.sh",
       "fetchDepth": 1,
       "alwaysUpload": false,
+      "downloadArtifacts": false,
+      "environment": {},
+      "uploadName": "compiler-and-tests",
+      "uploadPath": "${{ runner.temp }}/compiler-and-tests/architecture.trx",
       "needs": []
     },
     {
@@ -57,6 +66,14 @@
       "entryPoint": "bash eng/bootstrap-gates/canonical-quint.sh",
       "fetchDepth": 1,
       "alwaysUpload": true,
+      "downloadArtifacts": false,
+      "environment": {
+        "NUGET_PACKAGES": "/tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint",
+        "FSGG_QUINT_RECEIPT": "/tmp/fsgg-${{ github.run_id }}-canonical-quint/qualification.json"
+      },
+      "uploadName": "canonical-quint",
+      "uploadPath": "${{ env.FSGG_QUINT_RECEIPT }}",
+      "receiptKind": "formal",
       "needs": []
     },
     {
@@ -66,6 +83,12 @@
       "entryPoint": "bash eng/bootstrap-gates/dependency-and-security.sh",
       "fetchDepth": 1,
       "alwaysUpload": false,
+      "downloadArtifacts": false,
+      "environment": {
+        "NUGET_PACKAGES": "/tmp/fsgg-${{ github.run_id }}-nuget-dependency-and-security"
+      },
+      "uploadName": "dependency-and-security",
+      "uploadPath": "${{ runner.temp }}/dependency-and-security/vulnerability-report.json",
       "needs": []
     },
     {
@@ -75,6 +98,10 @@
       "entryPoint": "bash eng/bootstrap-gates/package-install-smoke.sh",
       "fetchDepth": 1,
       "alwaysUpload": false,
+      "downloadArtifacts": false,
+      "environment": {},
+      "uploadName": "package-install-smoke",
+      "uploadPath": "${{ runner.temp }}/package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg",
       "needs": []
     },
     {
@@ -84,6 +111,11 @@
       "entryPoint": "bash eng/bootstrap-gates/bootstrap-recovery.sh",
       "fetchDepth": 0,
       "alwaysUpload": false,
+      "downloadArtifacts": false,
+      "environment": {},
+      "uploadName": "bootstrap-recovery",
+      "uploadPath": "${{ runner.temp }}/bootstrap-recovery/result.json",
+      "receiptKind": "recovery",
       "needs": []
     },
     {
@@ -93,6 +125,13 @@
       "entryPoint": "bash eng/bootstrap-gates/evidence-manifest.sh",
       "fetchDepth": 1,
       "alwaysUpload": false,
+      "downloadArtifacts": true,
+      "environment": {
+        "NUGET_PACKAGES": "/tmp/fsgg-${{ github.run_id }}-nuget-evidence-manifest",
+        "FSGG_CANDIDATE_SHA": "${{ github.event.pull_request.head.sha || github.sha }}"
+      },
+      "uploadName": "bootstrap-evidence-manifest",
+      "uploadPath": "${{ runner.temp }}/bootstrap-evidence.json",
       "needs": ["deterministic-build", "compiler-and-tests", "canonical-quint", "dependency-and-security", "package-install-smoke", "bootstrap-recovery"]
     }
   ]

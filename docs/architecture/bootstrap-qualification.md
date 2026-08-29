@@ -4,7 +4,7 @@ FS.GG.Coordination qualifies an inert bootstrap substrate through six independen
 
 ## Qualification plan
 
-`eng/bootstrap-qualification-plan.json` is the single semantic authority for gate identities, dependency edges, stable entrypoints, artifacts, timeouts, immutable action pins, action runtimes, triggers, permissions, concurrency, and terminal evidence. `eng/generate-bootstrap-workflow.fsx -- --root .` deterministically projects the committed workflow; `eng/bootstrap-ci.fsx workflow --root .` rejects a stale projection. The generated YAML is deliberately thin and requires exactly these jobs:
+`eng/bootstrap-qualification-plan.json` is the single semantic authority for gate identities, dependency edges, stable entrypoints, artifacts, timeouts, job environments, download/upload behavior, typed receipt roles, immutable action pins, action runtimes, triggers, permissions, concurrency, and terminal evidence. The compiled renderer has no parallel gate-identity list or ID-selected workflow branches: a representative ordinary gate addition changes only its plan declaration and stable script. `eng/generate-bootstrap-workflow.fsx -- --root .` deterministically projects the committed workflow; `eng/bootstrap-ci.fsx workflow --root .` rejects a stale projection. The generated YAML is deliberately thin and requires exactly these jobs:
 
 - `deterministic-build`: locked restore and warnings-as-errors Release build.
 - `compiler-and-tests`: unit and architecture suites, retaining architecture TRX.
@@ -24,7 +24,7 @@ The plan pins checkout v7.0.1, setup-dotnet v6.0.0, upload-artifact v7.0.1, and 
 
 ## Performance and complexity budget
 
-The exact-merge baseline run `33248808361` took about 366 seconds end to end. Its compiler/test job took 315 seconds, including a 275-second architecture step. The retained TRX attributed 267.82 aggregate test-seconds to 58 bootstrap validator cases because every case launched a new FSI process. Direct compiled calls preserve those cases and add bounded green/red adapter parity. The focused corpus now completes locally in about 4.3 seconds including both process checks; the complete 167-test architecture suite completes in about 45 seconds on the same host.
+The exact-merge baseline run `33248808361` took about 366 seconds end to end. Its compiler/test job took 315 seconds, including a 275-second architecture step. The retained TRX attributed 267.82 aggregate test-seconds to 58 bootstrap validator cases because every case launched a new FSI process. Direct compiled calls preserve those cases and add bounded green/red adapter parity, representative-gate change amplification, and direct missing-subject inversions for all seven entry points. The focused corpus now completes locally in about five seconds; the complete 176-test architecture suite completes in about 46 seconds on the same host.
 
 Architecture tests cap the generated workflow at 210 lines, the plan at 180, the adapter at 20, the compiled core at 600, and all stable gate scripts together at 60. They also reject reintroduction of workflow byte digests, `requiredRunFragments`, or regular-expression YAML parsing.
 

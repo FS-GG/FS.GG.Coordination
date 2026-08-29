@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "96c21d29ac5a72b4d5d59d87fda7743f83872fc0115c0e729eff5f9a5de8d306"
+        "value": "77c012d3e02327468ffac48ed29e78217ec3d59ea78fdd9b58f41378ac1428e3"
       }
     },
     {
@@ -1688,7 +1688,8 @@
         "FR-005"
       ],
       "artifactRefs": [
-        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs",
+        "work/78-shorten-qualification-critical-path/performance-evaluation.md"
       ],
       "result": "pass",
       "synthetic": false,
@@ -2361,7 +2362,8 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs",
+        "work/78-shorten-qualification-critical-path/performance-evaluation.md"
       ],
       "result": "pass",
       "synthetic": false,
@@ -2409,7 +2411,8 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs",
+        "work/78-shorten-qualification-critical-path/performance-evaluation.md"
       ],
       "result": "pass",
       "synthetic": false,
@@ -2646,7 +2649,7 @@
           "path": "work/78-shorten-qualification-critical-path/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "96c21d29ac5a72b4d5d59d87fda7743f83872fc0115c0e729eff5f9a5de8d306"
+            "value": "77c012d3e02327468ffac48ed29e78217ec3d59ea78fdd9b58f41378ac1428e3"
           },
           "schemaVersion": 1
         },
@@ -2677,7 +2680,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "36337e4f98e92a3bb876e1867dc0afa32b3ea540ab849a6ee1d875704f7e73e4"
+        "value": "ed480c895272a9b386751a923c83d0f1cef7ea0eeda7484b1137a5c4d4c0ad9b"
       },
       "currency": "current"
     }
