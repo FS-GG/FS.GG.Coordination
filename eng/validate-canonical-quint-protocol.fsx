@@ -597,12 +597,15 @@ try
         if File.Exists rawTypedEffect then File.Delete rawTypedEffect
         identity, semanticContent, variantOutputs
 
+    let executedEquivalentVariants = ResizeArray<string>()
+
     let requireEquivalentVariant name sourceText =
         let (variantSource, variantBehavior, variantContract), semanticContent, _ = authorVariant name sourceText
         if variantSource = canonicalSource then fail "EQUIVALENT-AUTHORING" $"{name}: raw source did not change"
         if variantBehavior <> canonicalBehavior then fail "EQUIVALENT-AUTHORING" $"{name}: behavior changed"
         if variantContract <> canonicalContract then fail "EQUIVALENT-AUTHORING" $"{name}: public contract changed"
         if semanticContent <> canonicalSemanticContent then fail "EQUIVALENT-AUTHORING" $"{name}: semantic diff changed"
+        executedEquivalentVariants.Add name
 
     let canonicalText = File.ReadAllText(source, Encoding.UTF8)
     let triviaFixture = "}\n```\n\nThe executable witness"
@@ -630,6 +633,15 @@ try
 
     let crlfText = canonicalText.Replace("\n", "\r\n", StringComparison.Ordinal)
     requireEquivalentVariant "equivalent-crlf" crlfText
+
+    let requiredEquivalentVariants =
+        [ "equivalent-quint-trivia"
+          "equivalent-named-block-partition"
+          "equivalent-fence-indentation"
+          "equivalent-crlf" ]
+
+    if List.ofSeq executedEquivalentVariants <> requiredEquivalentVariants then
+        fail "EQUIVALENT-AUTHORING-COVERAGE" (String.concat "," executedEquivalentVariants)
 
     let proseFixture = "This document is the sole authored source for the coordination protocol baseline."
     if not (canonicalText.Contains(proseFixture, StringComparison.Ordinal)) then fail "PROSE-ONLY" "fixture absent"

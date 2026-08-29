@@ -55,6 +55,16 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("equivalent-fence-indentation", validator)
     Assert.Contains("equivalent-crlf", validator)
     Assert.Contains("equivalent-quint-trivia", validator)
+    Assert.Contains("executedEquivalentVariants.Add name", validator)
+    Assert.Contains("EQUIVALENT-AUTHORING-COVERAGE", validator)
+
+    let analyzeCommand = "fsgg-sdd\" analyze --root . --work 66-gs2-02-11-deterministic-identity"
+    let evidenceCommand = "fsgg-sdd\" evidence --root . --work 66-gs2-02-11-deterministic-identity"
+    let firstAnalyze = qualification.IndexOf(analyzeCommand, StringComparison.Ordinal)
+    let evidenceSync = qualification.IndexOf(evidenceCommand, StringComparison.Ordinal)
+    let refreshedAnalyze = qualification.IndexOf(analyzeCommand, firstAnalyze + analyzeCommand.Length, StringComparison.Ordinal)
+    Assert.True(firstAnalyze >= 0 && firstAnalyze < evidenceSync)
+    Assert.True(evidenceSync < refreshedAnalyze)
 
 [<Fact>]
 let ``hosted canonical Quint gate cannot silently downgrade to static validation`` () =
