@@ -166,18 +166,24 @@ qualification roots in the adjacent executable Quint fence. Four state-machine
 roots expose authority, lifecycle, relation, and protocol-stream transitions while
 importing only their enumerated canonical types, values, and pure definitions. The
 validator extracts those imports from the executable module bodies and compares them
-with the retained per-root import inventory. Their valid steps
+directly with each root's retained executable closure; there is no JSON-authored
+executable DAG that can agree with itself while the Quint source says something else.
+Their valid steps
 reach positive and adversarial witnesses, while separate invalid parameter actions
 must violate the root invariant without rewriting the invariant or its witness;
 three test roots isolate mutation/durable-plan, desired-state, and qualification
 closures. `eng/quint-qualification.json` classifies every canonical state variable
-and action, closes the acyclic module graph, binds exact root closures, witnesses,
+and action, binds exact source-derived root closures and witnesses,
 selection modes, budgets, and future-module admission. Ordinary pull requests use
 the complete reverse-dependency closure selected from changed modules, paths,
 oracles, bounds, budgets, backends, and toolchains. Reuse binds the exact source
 identity plus a receipt binding the configuration, baseline, backend, toolchain, and
-selected closure. Proposed future behavior must point to an existing behavior-digest-bound
-source whose declared root, invariants, and witnesses match its schema-checked admission payload,
+selected closure. The separately named `selectionImports` graph is conservative CI
+routing metadata only and is never presented as executable topology. Proposed future
+behavior must already be present in the canonical behavior-digest-bound literate source;
+its declared root, invariants, and witnesses must match the schema-checked admission
+payload, and those exact source bytes must match the canonical observed
+extraction-and-typecheck receipt from the pinned Quint toolchain,
 and main, acceptance, freeze, and release checkpoints use the full inventory.
 
 `eng/validate-quint-qualification.fsx` is the separately authored black-box

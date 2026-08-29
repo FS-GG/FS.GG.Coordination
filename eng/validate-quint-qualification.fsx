@@ -39,7 +39,9 @@ let validateDocument root (document: JsonObject) =
 
         let modules = objects document "modules"
         let moduleIds = modules |> List.map (fun item -> text item "id")
-        let imports = modules |> List.map (fun item -> text item "id", strings item "imports") |> Map.ofList
+        // This graph is deliberately only a conservative change-selection graph. Executable
+        // topology is read from the Quint modules below and is never inferred from this JSON.
+        let selectionImports = modules |> List.map (fun item -> text item "id", strings item "selectionImports") |> Map.ofList
         let classifications collection =
             objects document collection
             |> List.map (fun item -> text item "name", text item "class", text item "module")
@@ -48,7 +50,6 @@ let validateDocument root (document: JsonObject) =
         let roots = objects document "roots"
         let rootIds = roots |> List.map (fun item -> text item "id")
         let rootModules = roots |> List.map (fun item -> text item "module")
-        let executableImports = document["executableImports"].AsObject()
         let allowedClasses = Set [ "essential"; "derived"; "bookkeeping" ]
         let requiredAdmission =
             Set [ "owner"; "imports"; "invariants"; "independentOracles"; "root"; "bounds"; "witnesses"
@@ -76,15 +77,15 @@ let validateDocument root (document: JsonObject) =
 
         let rec closure visiting moduleId =
             if Set.contains moduleId visiting then fail "QQ-MODULE-CYCLE" moduleId
-            elif not (Map.containsKey moduleId imports) then fail "QQ-MODULE-UNKNOWN" moduleId
+            elif not (Map.containsKey moduleId selectionImports) then fail "QQ-MODULE-UNKNOWN" moduleId
             else
-                imports[moduleId]
+                selectionImports[moduleId]
                 |> List.fold (fun state dependency ->
                     state |> bind (fun found -> closure (Set.add moduleId visiting) dependency |> Result.map (Set.union found))) (Ok Set.empty)
                 |> Result.map (Set.add moduleId)
 
         let rec dependencyDepth moduleId =
-            match imports[moduleId] with
+            match selectionImports[moduleId] with
             | [] -> 1
             | dependencies -> 1 + (dependencies |> List.map dependencyDepth |> List.max)
 
@@ -95,24 +96,20 @@ let validateDocument root (document: JsonObject) =
             |> bind (fun () -> exact "QQ-CLASSIFICATION" kind (Set declaredNames) (rows |> List.map (fun (name, _, _) -> name) |> Set.ofList))
             |> bind (fun () ->
                 rows
-                |> List.tryFind (fun (_, classification, owner) -> not (Set.contains classification allowedClasses) || not (Map.containsKey owner imports))
+                |> List.tryFind (fun (_, classification, owner) -> not (Set.contains classification allowedClasses) || not (Map.containsKey owner selectionImports))
                 |> function None -> Ok() | Some row -> fail "QQ-CLASSIFICATION-SHAPE" ($"%A{row}"))
 
         let rootCheck (item: JsonObject) =
             let id = text item "id"
             let owner = text item "module"
-            let expectedClosure = strings item "closure" |> Set.ofList
+            let expectedExecutableClosure = strings item "closure" |> Set.ofList
+            let actualExecutableClosure = actualCanonicalImports (text item "main")
             closure Set.empty owner
-            |> bind (fun actualClosure -> exact "QQ-ROOT-CLOSURE" id expectedClosure actualClosure)
+            |> bind (fun _ -> exact "QQ-ROOT-EXECUTABLE-CLOSURE" id expectedExecutableClosure actualExecutableClosure)
             |> bind (fun () ->
                 let main = text item "main"
                 if sourceText.Contains($"module %s{main} {{", StringComparison.Ordinal) then Ok()
                 else fail "QQ-ROOT-MAIN" ($"%s{id}:%s{main}"))
-            |> bind (fun () ->
-                if not (executableImports.ContainsKey id) then fail "QQ-ROOT-EXECUTABLE-IMPORTS" ($"%s{id}:missing")
-                else
-                    let expected = strings executableImports id |> Set.ofList
-                    exact "QQ-ROOT-EXECUTABLE-IMPORTS" id expected (actualCanonicalImports (text item "main")))
             |> bind (fun () ->
                 [ "positive"; "adversarial"; "invalid" ]
                 |> List.tryFind (fun field -> not (sourceText.Contains(text item field, StringComparison.Ordinal)))
@@ -130,7 +127,7 @@ let validateDocument root (document: JsonObject) =
                 let expectedWitnesses = Set [ text item "positive"; text item "adversarial"; text item "invalid" ]
                 if actualFields <> requiredAdmission then fail "QQ-ROOT-ADMISSION-FIELDS" id
                 elif text admission "owner" <> owner || text admission "root" <> text item "main" then fail "QQ-ROOT-ADMISSION-IDENTITY" id
-                elif strings admission "imports" |> Set.ofList <> expectedClosure then fail "QQ-ROOT-ADMISSION-IMPORTS" id
+                elif strings admission "imports" |> Set.ofList <> (closure Set.empty owner |> Result.defaultValue Set.empty) then fail "QQ-ROOT-ADMISSION-IMPORTS" id
                 elif strings admission "witnesses" |> Set.ofList <> expectedWitnesses then fail "QQ-ROOT-ADMISSION-WITNESSES" id
                 elif strings admission "bounds" |> Set.ofList <> Set [ "depth"; "states"; "samples"; "elapsedMs"; "peakMiB"; "artifactBytes" ] then fail "QQ-ROOT-ADMISSION-BOUNDS" id
                 elif strings admission "invariants" |> List.exists (declaredDefinition >> not) then fail "QQ-ROOT-ADMISSION-INVARIANT" id
@@ -150,15 +147,14 @@ let validateDocument root (document: JsonObject) =
                 modules
                 |> List.tryPick (fun item ->
                     let id = text item "id"
-                    strings item "imports"
-                    |> List.tryFind (fun dependency -> not (Map.containsKey dependency imports))
+                    strings item "selectionImports"
+                    |> List.tryFind (fun dependency -> not (Map.containsKey dependency selectionImports))
                     |> Option.map (fun dependency -> id, dependency))
                 |> function None -> Ok() | Some(owner, dependency) -> fail "QQ-MODULE-IMPORT" ($"%s{owner}:%s{dependency}"))
             |> bind (fun () -> modules |> List.fold (fun state item -> state |> bind (fun () -> closure Set.empty (text item "id") |> Result.map ignore)) (Ok()))
             |> bind (fun () -> classificationCheck "state" (declared "^\\s*var\\s+([A-Za-z][A-Za-z0-9_]*)") state)
             |> bind (fun () -> classificationCheck "actions" (declared "^\\s*action\\s+([A-Za-z][A-Za-z0-9_]*)") actions)
             |> bind (fun () -> unique "QQ-ROOT-DUPLICATE" "roots" rootIds)
-            |> bind (fun () -> exact "QQ-ROOT-EXECUTABLE-IMPORT-COVERAGE" "roots" (Set rootIds) (executableImports |> Seq.map (fun property -> property.Key) |> Set.ofSeq))
             |> bind (fun () -> exact "QQ-ROOT-COVERAGE" "modules" (Set moduleIds - Set [ "core" ]) (Set rootModules))
             |> bind (fun () -> roots |> List.fold (fun state item -> state |> bind (fun () -> rootCheck item)) (Ok()))
             |> bind (fun () -> exact "QQ-ORACLE-INVENTORY" "oracles" requiredOracles (strings document "oracleIds" |> Set.ofList))
@@ -203,7 +199,7 @@ let validateOracles (sourceText: string) expectedIds =
 
 let reverseSelection (document: JsonObject) changed =
     let modules = objects document "modules"
-    let imports = modules |> List.map (fun item -> text item "id", strings item "imports" |> Set.ofList) |> Map.ofList
+    let imports = modules |> List.map (fun item -> text item "id", strings item "selectionImports" |> Set.ofList) |> Map.ofList
     let rec expand selected =
         let next =
             imports
@@ -226,6 +222,32 @@ let rootsForOracles (document: JsonObject) oracleIds =
         |> Set.ofList
     reverseSelection document modules
 
+let validateProposalCompilerReceipt root expectedReceiptPath sourceSha (proposal: JsonObject) =
+    try
+        let configured = text proposal "compilerReceipt"
+        let receiptPath = if Path.IsPathRooted configured then configured else Path.Combine(root, configured)
+        if Path.GetFullPath receiptPath <> Path.GetFullPath expectedReceiptPath then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "non-canonical"
+        elif not (File.Exists receiptPath) then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "missing"
+        else
+            let receiptBytes = File.ReadAllBytes receiptPath
+            let receipt = JsonNode.Parse(receiptBytes).AsObject()
+            let expectedFields =
+                Set [ "schema"; "sourceSha256"; "fenceManifestSha256"; "generatedModulesSha256"
+                      "toolchainSha256"; "typedEffectSha256"; "contractSha256"
+                      "compilationFingerprint"; "processSteps" ]
+            let actualFields = receipt |> Seq.map (fun property -> property.Key) |> Set.ofSeq
+            if text proposal "compilerReceiptSha256" <> sha256 receiptBytes then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "digest"
+            elif actualFields <> expectedFields then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "shape"
+            elif text receipt "schema" <> "fsgg.quint.observed-compilation-receipt/v2" then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "schema"
+            elif text receipt "sourceSha256" <> sourceSha then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "source"
+            elif text receipt "toolchainSha256" <> "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486" then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "toolchain"
+            elif strings receipt "processSteps" |> Set.ofList <> Set [ "extract"; "typecheck" ] then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "typecheck"
+            elif [ "fenceManifestSha256"; "generatedModulesSha256"; "typedEffectSha256"; "contractSha256"; "compilationFingerprint" ]
+                 |> List.exists (fun field -> not (Regex.IsMatch(text receipt field, "^[0-9a-f]{64}$"))) then
+                fail "QQ-PROPOSAL-COMPILER-RECEIPT" "fingerprint"
+            else Ok()
+    with error -> fail "QQ-PROPOSAL-COMPILER-RECEIPT" error.Message
+
 let validateProposal root (document: JsonObject) (proposal: JsonObject) =
     try
         let modules = objects document "modules" |> List.map (fun item -> text item "id") |> Set.ofList
@@ -235,7 +257,8 @@ let validateProposal root (document: JsonObject) (proposal: JsonObject) =
             |> List.collect (fun root -> strings (root["admission"]) "projections")
             |> Set.ofList
         let requiredFields =
-            Set [ "schema"; "owner"; "source"; "behaviorSha256"; "imports"; "invariants"; "independentOracles"; "root"; "bounds"
+            Set [ "schema"; "owner"; "source"; "behaviorSha256"; "compilerReceipt"; "compilerReceiptSha256"
+                  "imports"; "invariants"; "independentOracles"; "root"; "bounds"
                   "witnesses"; "projections"; "ciImpact"; "budgetEffect" ]
         let actualFields = proposal |> Seq.map (fun property -> property.Key) |> Set.ofSeq
         let identifiers field = strings proposal field
@@ -247,6 +270,8 @@ let validateProposal root (document: JsonObject) (proposal: JsonObject) =
         let sourcePath =
             let configured = text proposal "source"
             if Path.IsPathRooted configured then configured else Path.Combine(root, configured)
+        let canonicalSourcePath = Path.GetFullPath(Path.Combine(root, text document "source"))
+        let canonicalCompilerReceiptPath = Path.GetFullPath(Path.Combine(root, text document "compilerReceipt"))
         let sourceExists = File.Exists sourcePath
         let proposedSource = if sourceExists then File.ReadAllText sourcePath else ""
         let proposedDefinition name =
@@ -255,9 +280,13 @@ let validateProposal root (document: JsonObject) (proposal: JsonObject) =
         if actualFields <> requiredFields then fail "QQ-PROPOSAL-FIELDS" ($"%A{actualFields}")
         elif text proposal "schema" <> "fsgg.coordination.quint-proposal/1" then fail "QQ-PROPOSAL-SCHEMA" "unsupported"
         elif not (Regex.IsMatch(text proposal "owner", "^[a-z][a-z0-9-]*$")) || Set.contains (text proposal "owner") modules then fail "QQ-PROPOSAL-OWNER" "invalid-or-existing"
+        elif Path.GetFullPath sourcePath <> canonicalSourcePath then fail "QQ-PROPOSAL-SOURCE" "canonical-source-required"
         elif not sourceExists then fail "QQ-PROPOSAL-SOURCE" sourcePath
         elif not (Regex.IsMatch(text proposal "behaviorSha256", "^[0-9a-f]{64}$"))
              || text proposal "behaviorSha256" <> sha256 (File.ReadAllBytes sourcePath) then fail "QQ-PROPOSAL-BEHAVIOR" "unbound"
+        elif not (Regex.IsMatch(text proposal "compilerReceiptSha256", "^[0-9a-f]{64}$")) then fail "QQ-PROPOSAL-COMPILER-RECEIPT" "digest-shape"
+        elif validateProposalCompilerReceipt root canonicalCompilerReceiptPath (text proposal "behaviorSha256") proposal |> Result.isError then
+            validateProposalCompilerReceipt root canonicalCompilerReceiptPath (text proposal "behaviorSha256") proposal
         elif (identifiers "imports" |> Set.ofList |> fun actual -> Set.isEmpty actual || not (Set.isSubset actual modules)) then fail "QQ-PROPOSAL-IMPORTS" "empty-or-unknown"
         elif not (namesAreValid (identifiers "invariants")) || not (namesAreValid (identifiers "witnesses")) then fail "QQ-PROPOSAL-EXECUTABLES" "invalid"
         elif (identifiers "invariants" @ identifiers "witnesses" |> List.exists (proposedDefinition >> not)) then fail "QQ-PROPOSAL-EXECUTABLES" "missing-from-source"
@@ -327,21 +356,18 @@ let runSelfTests root original =
     let firstArrayField collection (field: string) value = ((firstObject collection value)[field]).AsArray()
     let firstObjectField collection (field: string) value = ((firstObject collection value)[field]).AsObject()
     let nestedArray (owner: string) (field: string) (value: JsonObject) = (value[owner].AsObject()[field]).AsArray()
-    let executableArray (id: string) (value: JsonObject) =
-        let imports = value["executableImports"].AsObject()
-        imports[id].AsArray()
     let mutations : (string * (JsonObject -> unit)) list =
         [ "source", fun value -> value["sourceSha256"] <- JsonValue.Create(String.replicate 64 "0")
           "state", fun value -> value["state"].AsArray().RemoveAt(0)
           "action", fun value -> value["actions"].AsArray().RemoveAt(0)
-          "cycle", fun value -> (firstArrayField "modules" "imports" value).Add(JsonValue.Create("qualification"))
+          "cycle", fun value -> (firstArrayField "modules" "selectionImports" value).Add(JsonValue.Create("qualification"))
           "closure", fun value -> (firstArrayField "roots" "closure" value).RemoveAt(0)
           "main", fun value -> (firstObject "roots" value)["main"] <- JsonValue.Create("MissingRoot")
           "witness", fun value -> (firstObject "roots" value)["invalid"] <- JsonValue.Create("missingWitness")
           "budget", fun value -> (firstObjectField "roots" "budget" value)["states"] <- JsonValue.Create(0)
           "oracle", fun value -> value["oracleIds"].AsArray().RemoveAt(0)
           "selection", fun value -> value["selection"]["pullRequest"] <- JsonValue.Create("changed-only")
-          "executable-import", fun value -> (executableArray "authority" value).RemoveAt(0)
+          "executable-import", fun value -> (firstArrayField "roots" "closure" value).RemoveAt(0)
           "protected", fun value -> (nestedArray "selection" "protected" value).RemoveAt(0)
           "admission", fun value -> (nestedArray "admission" "required" value).RemoveAt(0)
           "root-admission-owner", fun value -> (firstObject "roots" value).["admission"].["owner"] <- JsonValue.Create("wrong-owner")

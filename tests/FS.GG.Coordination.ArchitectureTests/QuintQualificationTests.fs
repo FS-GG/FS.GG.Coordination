@@ -49,30 +49,34 @@ let ``independent oracles and qualification contracts reject every focused mutat
 let ``changed paths surfaces reuse and future proposals bind selection inputs`` () =
     let plan = Path.GetTempFileName()
     let proposal = Path.GetTempFileName()
-    let proposedSource = Path.GetTempFileName()
+    let invalidProposedSource = Path.GetTempFileName()
+    let proposedSource = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
+    let compilerReceipt = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/receipt.json")
     let reuseReceipt = Path.GetTempFileName()
     try
-        File.WriteAllText(proposedSource, """module QualificationFutureAuditRoot {
-          val futureInvariant = true
-          val positiveWitness = true
-          val adversarialWitness = true
-          action invalidStep = true
-        }
-        """)
         let behaviorSha =
             SHA256.HashData(File.ReadAllBytes proposedSource) |> Convert.ToHexString |> _.ToLowerInvariant()
+        let compilerReceiptSha =
+            SHA256.HashData(File.ReadAllBytes compilerReceipt) |> Convert.ToHexString |> _.ToLowerInvariant()
         let proposalText = """{
           "schema":"fsgg.coordination.quint-proposal/1",
           "owner":"future-audit", "source":"SOURCE_PATH", "behaviorSha256":"BEHAVIOR_SHA",
+          "compilerReceipt":"COMPILER_RECEIPT", "compilerReceiptSha256":"COMPILER_RECEIPT_SHA",
           "imports":["qualification"],
-          "invariants":["futureInvariant"], "independentOracles":["abstraction-equivalence"],
-          "root":"QualificationFutureAuditRoot",
+          "invariants":["mutationIntentsConflict"], "independentOracles":["abstraction-equivalence"],
+          "root":"CoordinationProtocol",
           "bounds":{"depth":6,"states":100000,"samples":200,"elapsedMs":60000,"peakMiB":2048,"artifactBytes":6291456},
-          "witnesses":["positiveWitness","adversarialWitness","invalidStep"],
+          "witnesses":["createIntent","parentChildEdge","init"],
           "projections":["qualification-manifest"], "ciImpact":"bounded-state-root",
           "budgetEffect":"within-calibrated-envelope"
         }"""
-        File.WriteAllText(proposal, proposalText.Replace("SOURCE_PATH", proposedSource).Replace("BEHAVIOR_SHA", behaviorSha))
+        let validProposal =
+            proposalText
+                .Replace("SOURCE_PATH", proposedSource)
+                .Replace("BEHAVIOR_SHA", behaviorSha)
+                .Replace("COMPILER_RECEIPT_SHA", compilerReceiptSha)
+                .Replace("COMPILER_RECEIPT", compilerReceipt)
+        File.WriteAllText(proposal, validProposal)
         let pullExit, pullOutput, pullError =
             executeWith false [ "--mode"; "pull-request"; "--changed-path"; "eng/quint-qualification.json"; "--plan-out"; plan ]
         Assert.True((pullExit = 0), $"%s{pullOutput}\n%s{pullError}")
@@ -112,6 +116,15 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
         Assert.NotEqual(0, badFutureExit)
         Assert.Contains("QQ-PROPOSAL-BEHAVIOR", badFutureOutput + badFutureError)
 
+        File.WriteAllText(invalidProposedSource, "module QualificationFutureAuditRoot { !!! invalid Quint !!! }")
+        let invalidBehaviorSha =
+            SHA256.HashData(File.ReadAllBytes invalidProposedSource) |> Convert.ToHexString |> _.ToLowerInvariant()
+        File.WriteAllText(proposal, validProposal.Replace(proposedSource, invalidProposedSource).Replace(behaviorSha, invalidBehaviorSha))
+        let invalidFutureExit, invalidFutureOutput, invalidFutureError =
+            executeWith false [ "--mode"; "future-behavior"; "--proposal"; proposal ]
+        Assert.NotEqual(0, invalidFutureExit)
+        Assert.Contains("QQ-PROPOSAL-SOURCE", invalidFutureOutput + invalidFutureError)
+
         let missingPathExit, missingPathOutput, missingPathError =
             executeWith false [ "--mode"; "pull-request"; "--changed-path"; "eng/does-not-exist.qnt" ]
         Assert.NotEqual(0, missingPathExit)
@@ -124,7 +137,7 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
     finally
         File.Delete plan
         File.Delete proposal
-        File.Delete proposedSource
+        File.Delete invalidProposedSource
         File.Delete reuseReceipt
 
 [<Fact>]
