@@ -13,11 +13,23 @@ let shaPattern = Text.RegularExpressions.Regex("^[0-9a-f]{64}$")
 let revisionPattern = Text.RegularExpressions.Regex("^[0-9a-f]{40}$")
 let unitPattern = Text.RegularExpressions.Regex("^GS2-[0-9]{2}\.[0-9]+$")
 let canonicalTimePattern = Text.RegularExpressions.Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+let blobPattern = Text.RegularExpressions.Regex("^[0-9a-f]{40}$")
+let q0Revision = "15aba28c76551d31b00bac9ff990703f9e61f57d"
+let q0SourceCommit = "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e"
+let q0ManifestRelative = "corpus/provenance/q0-corpus-originals.source"
+let q0EvidenceRelative = "corpus/provenance/q0-evidence.source"
+let q0ManifestSha256 = "5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"
+let q0EvidenceSha256 = "3a0a73d81823c1667f61f9493c1611aa89b85e24d3e1580cd922d309e2f12f87"
+let frozenAggregateSha256 = "bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753"
 
 let fail code detail = failwith $"{code}: {detail}"
 
 let sha256 (bytes: byte array) =
     bytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+let gitBlobSha1 (bytes: byte array) =
+    let header = Encoding.UTF8.GetBytes($"blob {bytes.Length}\000")
+    Array.append header bytes |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
 let property (name: string) (value: JsonElement) =
     let mutable child = Unchecked.defaultof<JsonElement>
@@ -128,6 +140,157 @@ let validateRecord categoryName relative (record: JsonElement) =
     | _ -> ()
 
 type Category = { Name: string; Path: string; Schema: string }
+
+let validateFrozenCorpus (root: string) (entries: JsonElement list) =
+    let provenanceFiles = [ q0ManifestRelative, q0ManifestSha256; q0EvidenceRelative, q0EvidenceSha256 ]
+    for relative, expectedDigest in provenanceFiles do
+        if not (safeRelativePath relative) then fail "FC-PROVENANCE-PATH" relative
+        ensureNoSymlink root relative
+        let path = Path.Combine(root, relative)
+        if not (File.Exists path) then fail "FC-PROVENANCE-MISSING" relative
+        if sha256 (File.ReadAllBytes path) <> expectedDigest then fail "FC-PROVENANCE-DIGEST" relative
+
+    let provenanceDirectory = Path.Combine(root, "corpus/provenance")
+    let observedProvenance =
+        Directory.EnumerateFiles(provenanceDirectory, "*", SearchOption.TopDirectoryOnly)
+        |> Seq.map (fun path -> Path.GetRelativePath(root, path).Replace('\\', '/'))
+        |> Set.ofSeq
+    let expectedProvenance = provenanceFiles |> List.map fst |> Set.ofList
+    if observedProvenance <> expectedProvenance then fail "FC-PROVENANCE-INVENTORY" "provenance inventory differs"
+
+    use manifestDocument = readJson (Path.Combine(root, q0ManifestRelative))
+    use evidenceDocument = readJson (Path.Combine(root, q0EvidenceRelative))
+    let manifest = manifestDocument.RootElement
+    let evidence = evidenceDocument.RootElement
+    exactProperties "q0-manifest" [ "schema"; "sourceCommit"; "entries" ] manifest
+    if stringProperty "schema" manifest <> "fsgg.github-substrate.q0-corpus-originals/v2" then fail "FC-PROVENANCE-SCHEMA" "manifest"
+    if stringProperty "sourceCommit" manifest <> q0SourceCommit then fail "FC-SOURCE-COMMIT" "manifest"
+    if stringProperty "schema" evidence <> "fsgg.github-substrate.q0-evidence/v1" then fail "FC-PROVENANCE-SCHEMA" "evidence"
+    if stringProperty "sourceBase" evidence <> q0SourceCommit then fail "FC-SOURCE-COMMIT" "evidence"
+    let sources = arrayProperty "entries" manifest
+    let expectations = arrayProperty "corpus" evidence
+    if sources.Length <> 21 || expectations.Length <> 21 then fail "FC-COUNT" "Q0 provenance must contain exactly 21 cases"
+    let expectedById =
+        expectations
+        |> List.map (fun item -> stringProperty "id" item, item)
+        |> Map.ofList
+    if expectedById.Count <> 21 then fail "FC-Q0-DUPLICATE" "duplicate Q0 evidence identity"
+
+    let aggregateText =
+        sources
+        |> List.map (fun item ->
+            String.concat "\t" [ stringProperty "id" item; stringProperty "sha256" item; stringProperty "gitBlobSha1" item; string (int64Property "byteLength" item) ])
+        |> String.concat "\n"
+        |> fun value -> value + "\n"
+    if sha256 (Encoding.UTF8.GetBytes aggregateText) <> frozenAggregateSha256 then fail "FC-AGGREGATE" "Q0 ordered identity aggregate differs"
+
+    let corpusIndexEntries =
+        entries
+        |> List.filter (fun entry -> stringProperty "category" entry = "corpus-inputs")
+    if corpusIndexEntries.Length <> 21 then fail "FC-INDEX-COUNT" $"expected 21 corpus index rows; observed {corpusIndexEntries.Length}"
+
+    let expectedIds = sources |> List.map (stringProperty "id")
+    let indexedIds = corpusIndexEntries |> List.map (stringProperty "id")
+    let expectedIndexedIds = expectedIds |> List.map (fun id -> "corpus-" + id) |> List.sort
+    if indexedIds <> expectedIndexedIds then fail "FC-INDEX-INVENTORY" "corpus index identities differ"
+
+    let originalsDirectory = Path.Combine(root, "corpus/originals")
+    ensureNoSymlink root "corpus/originals"
+    let observedOriginals =
+        Directory.EnumerateFiles(originalsDirectory, "*", SearchOption.TopDirectoryOnly)
+        |> Seq.map (fun path -> Path.GetRelativePath(root, path).Replace('\\', '/'))
+        |> Set.ofSeq
+    let expectedOriginals = expectedIds |> List.map (fun id -> $"corpus/originals/{id}.source") |> Set.ofList
+    if observedOriginals <> expectedOriginals then fail "FC-PAYLOAD-INVENTORY" "raw payload inventory differs"
+
+    let metadataIds = HashSet<string>(StringComparer.Ordinal)
+    let mutable observedCount = 0
+    let mutable unobservedCount = 0
+    for ordinal, source in sources |> List.indexed do
+        exactProperties "q0-source" [ "id"; "mediaType"; "path"; "sourceRef"; "gitBlobSha1"; "sha256"; "byteLength" ] source
+        let id = stringProperty "id" source
+        if not (metadataIds.Add id) then fail "FC-Q0-DUPLICATE" id
+        let expected = expectedById |> Map.tryFind id |> Option.defaultWith (fun () -> fail "FC-Q0-JOIN" id)
+        exactProperties "q0-evidence-case" [ "id"; "kind"; "source"; "historicalContext"; "expected"; "artifact"; "originalBytesSha256" ] expected
+        if stringProperty "sourceRef" source <> stringProperty "source" expected then fail "FC-Q0-SOURCE-REF" id
+        if stringProperty "sha256" source <> stringProperty "originalBytesSha256" expected then fail "FC-Q0-SHA" id
+        if stringProperty "artifact" expected <> $"q0-corpus-originals.json#{id}" then fail "FC-Q0-ARTIFACT" id
+
+        let metadataRelative = $"corpus/{id}.json"
+        use metadataDocument = readJson (Path.Combine(root, metadataRelative))
+        let record = metadataDocument.RootElement
+        exactProperties metadataRelative [ "schema"; "id"; "input"; "sha256" ] record
+        if stringProperty "schema" record <> "fsgg.coordination.corpus-input/1" then fail "FC-METADATA-SCHEMA" id
+        if stringProperty "id" record <> id then fail "FC-METADATA-ID" id
+        let input = property "input" record
+        exactProperties metadataRelative [ "schema"; "ordinal"; "kind"; "source"; "historicalContext"; "expectedBehavior"; "ambiguity"; "currentV1Result"; "provenance" ] input
+        if stringProperty "schema" input <> "fsgg.coordination.frozen-corpus-case/1" then fail "FC-INPUT-SCHEMA" id
+        if int64Property "ordinal" input <> int64 (ordinal + 1) then fail "FC-ORDER" id
+        if stringProperty "kind" input <> stringProperty "kind" expected then fail "FC-KIND" id
+        if stringProperty "historicalContext" input <> stringProperty "historicalContext" expected then fail "FC-CONTEXT" id
+        if property "expectedBehavior" input |> _.GetRawText() <> (property "expected" expected |> _.GetRawText()) then fail "FC-EXPECTED-BEHAVIOR" id
+
+        let sourceBinding = property "source" input
+        exactProperties metadataRelative [ "repository"; "commit"; "path"; "ref"; "mediaType"; "bytes"; "sha256"; "gitBlobSha1"; "payloadPath" ] sourceBinding
+        let sourcePath = stringProperty "path" source
+        let sourceRef = stringProperty "sourceRef" source
+        let payloadRelative = $"corpus/originals/{id}.source"
+        if stringProperty "repository" sourceBinding <> "FS-GG/.github" then fail "FC-SOURCE-REPOSITORY" id
+        if stringProperty "commit" sourceBinding <> q0SourceCommit then fail "FC-SOURCE-COMMIT" id
+        if stringProperty "path" sourceBinding <> sourcePath || not (safeRelativePath sourcePath) then fail "FC-SOURCE-PATH" id
+        if stringProperty "ref" sourceBinding <> sourceRef || sourceRef <> $"git:{q0SourceCommit}:{sourcePath}" then fail "FC-SOURCE-REF" id
+        if stringProperty "mediaType" sourceBinding <> stringProperty "mediaType" source then fail "FC-SOURCE-MEDIA" id
+        if stringProperty "payloadPath" sourceBinding <> payloadRelative || not (safeRelativePath payloadRelative) then fail "FC-PAYLOAD-PATH" id
+        ensureNoSymlink root payloadRelative
+        let payloadPath = Path.Combine(root, payloadRelative)
+        if not (File.Exists payloadPath) then fail "FC-PAYLOAD-MISSING" id
+        let payload = File.ReadAllBytes payloadPath
+        let expectedLength = int64Property "byteLength" source
+        let expectedSha = stringProperty "sha256" source
+        let expectedBlob = stringProperty "gitBlobSha1" source
+        if expectedLength < 1L || int64 payload.Length <> expectedLength || int64Property "bytes" sourceBinding <> expectedLength then fail "FC-PAYLOAD-LENGTH" id
+        if not (shaPattern.IsMatch expectedSha) || sha256 payload <> expectedSha || stringProperty "sha256" sourceBinding <> expectedSha || stringProperty "sha256" record <> expectedSha then fail "FC-PAYLOAD-SHA256" id
+        if not (blobPattern.IsMatch expectedBlob) || gitBlobSha1 payload <> expectedBlob || stringProperty "gitBlobSha1" sourceBinding <> expectedBlob then fail "FC-PAYLOAD-BLOB" id
+
+        let ambiguity = property "ambiguity" input
+        exactProperties metadataRelative [ "state"; "rationale" ] ambiguity
+        let expectedAmbiguity = if id = "C-rate" || id = "C-partial" then "explicit-indeterminate" else "none-recorded"
+        if stringProperty "state" ambiguity <> expectedAmbiguity || String.IsNullOrWhiteSpace(stringProperty "rationale" ambiguity) then fail "FC-AMBIGUITY" id
+        let decisionClass = property "expected" expected |> stringProperty "decisionClass"
+        if (expectedAmbiguity = "explicit-indeterminate") <> (decisionClass = "Indeterminate") then fail "FC-AMBIGUITY-CONTRADICTION" id
+
+        let result = property "currentV1Result" input
+        exactProperties metadataRelative [ "state"; "outcome"; "evidence"; "headSha"; "observedAt"; "detail" ] result
+        if stringProperty "headSha" result <> q0SourceCommit then fail "FC-RESULT-HEAD" id
+        validateTime id (stringProperty "observedAt" result)
+        nonEmpty id (stringProperty "detail" result)
+        let outcome = property "outcome" result
+        match id with
+        | "C-pagination" | "C-stale" ->
+            observedCount <- observedCount + 1
+            let expectedUrl, expectedTime =
+                if id = "C-pagination" then "https://github.com/FS-GG/.github/actions/runs/32908004312", "2026-08-25T22:50:19Z"
+                else "https://github.com/FS-GG/.github/actions/runs/32908004500", "2026-08-25T22:50:35Z"
+            if stringProperty "state" result <> "observed" || outcome.ValueKind <> JsonValueKind.String || outcome.GetString() <> "passed" then fail "FC-RESULT-STATE" id
+            if stringProperty "evidence" result <> expectedUrl || stringProperty "observedAt" result <> expectedTime then fail "FC-RESULT-EVIDENCE" id
+        | _ ->
+            unobservedCount <- unobservedCount + 1
+            if stringProperty "state" result <> "not-atomically-observed" || outcome.ValueKind <> JsonValueKind.Null then fail "FC-RESULT-STATE" id
+            if stringProperty "evidence" result <> $"git:{q0Revision}:work/2953-gh-modernization-m0-invariants/q0-evidence.json#corpus/{id}" then fail "FC-RESULT-EVIDENCE" id
+
+        let provenance = property "provenance" input
+        exactProperties metadataRelative [ "q0Revision"; "q0ManifestPath"; "q0ManifestSha256"; "q0EvidencePath"; "q0EvidenceSha256"; "importedByUnit" ] provenance
+        let provenanceValues =
+            [ "q0Revision", q0Revision
+              "q0ManifestPath", "work/2953-gh-modernization-m0-invariants/q0-corpus-originals.json"
+              "q0ManifestSha256", q0ManifestSha256
+              "q0EvidencePath", "work/2953-gh-modernization-m0-invariants/q0-evidence.json"
+              "q0EvidenceSha256", q0EvidenceSha256
+              "importedByUnit", "GS2-03.2" ]
+        if provenanceValues |> List.exists (fun (name, value) -> stringProperty name provenance <> value) then fail "FC-PROVENANCE-BINDING" id
+
+    if metadataIds.Count <> 21 then fail "FC-METADATA-COUNT" "metadata identity count differs"
+    $"frozenCorpusCases=21 observed={observedCount} unobserved={unobservedCount} aggregate={frozenAggregateSha256}"
 
 let validate evidenceRoot =
     let root = Path.GetFullPath evidenceRoot
@@ -265,7 +428,8 @@ let validate evidenceRoot =
         let stale = Set.difference indexed discovered |> String.concat ","
         fail "ES-INDEX-COVERAGE" $"unindexed={missing}; missing={stale}"
 
-    $"EVIDENCE_STORAGE_OK categories={categories.Length} entries={entries.Length} maxTrackedBytes={maxBytes}"
+    let frozenSummary = validateFrozenCorpus root entries
+    $"EVIDENCE_STORAGE_OK categories={categories.Length} entries={entries.Length} maxTrackedBytes={maxBytes} {frozenSummary}"
 
 let copyDirectory source destination =
     Directory.CreateDirectory destination |> ignore
@@ -303,6 +467,31 @@ let addTrackedJson (root: string) (id: string) (category: string) (path: string)
             |> Seq.toArray
         entries.Clear()
         for item in ordered do entries.Add item)
+
+let refreshIndexedJson (root: string) (relative: string) =
+    let bytes = File.ReadAllBytes(Path.Combine(root, relative))
+    mutateJson (Path.Combine(root, "index.json")) (fun node ->
+        let entry =
+            node["entries"].AsArray()
+            |> Seq.find (fun item -> item["path"].GetValue<string>() = relative)
+        entry["bytes"] <- bytes.Length
+        entry["sha256"] <- sha256 bytes)
+
+let mutateCorpusJson (root: string) (id: string) mutation =
+    let relative = $"corpus/{id}.json"
+    mutateJson (Path.Combine(root, relative)) mutation
+    refreshIndexedJson root relative
+
+let nestedObject (node: JsonNode) (path: string list) =
+    path |> List.fold (fun (current: JsonObject) name -> current[name].AsObject()) (node.AsObject())
+
+let setNestedString (node: JsonNode) (path: string list) (name: string) (value: string) =
+    let target = nestedObject node path
+    target[name] <- JsonValue.Create value
+
+let setNestedInt (node: JsonNode) (path: string list) (name: string) (value: int) =
+    let target = nestedObject node path
+    target[name] <- JsonValue.Create value
 
 let selfTest evidenceRoot =
     let validManifest =
@@ -383,7 +572,55 @@ let selfTest evidenceRoot =
               addTrackedJson root "manifest-empty-id" "artifact-manifests" "artifact-manifests/empty-id.json" content), "ES-RECORD-VALUE"
           "receipt-invalid-unit-and-artifacts", (fun root ->
               let content = "{\"schema\":\"fsgg.coordination.unit-acceptance/1\",\"unitId\":\"x\",\"state\":\"accepted\",\"unitContractSha256\":\"" + String('a', 64) + "\",\"sourceRevision\":\"" + String('a', 40) + "\",\"artifacts\":[],\"acceptedAt\":\"2026-08-27T00:00:00Z\",\"digest\":\"" + String('a', 64) + "\"}"
-              addTrackedJson root "accepted-invalid" "accepted-receipts" "accepted/invalid.json" content), "ES-RECEIPT-UNIT" ]
+              addTrackedJson root "accepted-invalid" "accepted-receipts" "accepted/invalid.json" content), "ES-RECEIPT-UNIT"
+          "frozen-payload-byte", (fun root ->
+              let path = Path.Combine(root, "corpus/originals/C-claim.source")
+              let bytes = File.ReadAllBytes path
+              bytes[0] <- bytes[0] ^^^ 0x01uy
+              File.WriteAllBytes(path, bytes)), "FC-PAYLOAD-SHA256"
+          "frozen-stale-length", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedInt node [ "input"; "source" ] "bytes" 1)), "FC-PAYLOAD-LENGTH"
+          "frozen-stale-sha", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "source" ] "sha256" (String('0', 64)))), "FC-PAYLOAD-SHA256"
+          "frozen-stale-blob", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "source" ] "gitBlobSha1" (String('0', 40)))), "FC-PAYLOAD-BLOB"
+          "frozen-source-repository", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "source" ] "repository" "FS-GG/elsewhere")), "FC-SOURCE-REPOSITORY"
+          "frozen-source-commit", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "source" ] "commit" (String('0', 40)))), "FC-SOURCE-COMMIT"
+          "frozen-source-path", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "source" ] "path" "tests/other.py")), "FC-SOURCE-PATH"
+          "frozen-source-ref", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "source" ] "ref" "git:main:mutable")), "FC-SOURCE-REF"
+          "frozen-payload-path-traversal", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "source" ] "payloadPath" "../escape")), "FC-PAYLOAD-PATH"
+          "frozen-expected-behavior", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "expectedBehavior" ] "decisionClass" "Accept")), "FC-EXPECTED-BEHAVIOR"
+          "frozen-ambiguity", (fun root ->
+              mutateCorpusJson root "C-rate" (fun node -> setNestedString node [ "input"; "ambiguity" ] "state" "none-recorded")), "FC-AMBIGUITY"
+          "frozen-unobserved-green", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node ->
+                  setNestedString node [ "input"; "currentV1Result" ] "state" "observed"
+                  setNestedString node [ "input"; "currentV1Result" ] "outcome" "passed")), "FC-RESULT-STATE"
+          "frozen-observed-evidence", (fun root ->
+              mutateCorpusJson root "C-pagination" (fun node -> setNestedString node [ "input"; "currentV1Result" ] "evidence" "https://example.invalid/run")), "FC-RESULT-EVIDENCE"
+          "frozen-order", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedInt node [ "input" ] "ordinal" 2)), "FC-ORDER"
+          "frozen-input-schema", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input" ] "schema" "fsgg.coordination.frozen-corpus-case/2")), "FC-INPUT-SCHEMA"
+          "frozen-unknown-field", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> (nestedObject node [ "input" ]).Add("unknown", true))), "ES-JSON-SHAPE"
+          "frozen-extra-payload", (fun root ->
+              File.WriteAllText(Path.Combine(root, "corpus/originals/extra.source"), "extra")), "FC-PAYLOAD-INVENTORY"
+          "frozen-provenance-byte", (fun root ->
+              File.AppendAllText(Path.Combine(root, q0ManifestRelative), " ")), "FC-PROVENANCE-DIGEST"
+          "frozen-payload-symlink", (fun root ->
+              let payload = Path.Combine(root, "corpus/originals/C-claim.source")
+              let target = Path.Combine(root, "corpus/originals/C-touch-set.source")
+              File.Delete payload
+              File.CreateSymbolicLink(payload, target) |> ignore), "ES-PATH-SYMLINK"
+          "frozen-provenance-binding", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "provenance" ] "importedByUnit" "GS2-03.3")), "FC-PROVENANCE-BINDING" ]
     for name, mutate, expected in cases do
         let temp = Path.Combine(Path.GetTempPath(), $"fsgg-evidence-{Guid.NewGuid():N}")
         try
