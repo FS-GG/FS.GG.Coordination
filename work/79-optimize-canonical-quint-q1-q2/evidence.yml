@@ -11,7 +11,7 @@ sourceAnalysis: readiness/79-optimize-canonical-quint-q1-q2/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/79-optimize-canonical-quint-q1-q2/analysis.json
-    digest: e8ac71b14d7a47d10c2cbd4dd8d85ebd80951be38cd65d7ae863ece23874697b
+    digest: abc2b7c0ba2f00aeffe639b86fb6cdbac48f87145338c942e02207fd981317e6
     schemaVersion: 1
   - label: checklist
     path: work/79-optimize-canonical-quint-q1-q2/checklist.md
@@ -23,11 +23,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/79-optimize-canonical-quint-q1-q2/plan.md
-    digest: 0000d6d3038d62699beaa3935f6b3b971452efd0d9350d0c087895a679e9d610
+    digest: 3601f3ed12dc9a5f5d5706844710d9e7ad9d4cf5131f72fbf4a51800f602db04
     schemaVersion: 1
   - label: spec
     path: work/79-optimize-canonical-quint-q1-q2/spec.md
-    digest: 430508aa2892714c446008111143a8b79f8b3eb2ea0eaf703172081f9e6eb4d9
+    digest: 9a08bdc225120130f4e2d07c6ac12faa89059c85f310f2b0cc7aa4ab101c000e
     schemaVersion: 1
   - label: tasks
     path: work/79-optimize-canonical-quint-q1-q2/tasks.yml
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -486,10 +486,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -513,10 +513,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -540,10 +540,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -567,10 +567,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -594,10 +594,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -621,10 +621,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -648,10 +648,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -675,10 +675,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -702,10 +702,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -729,10 +729,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -756,10 +756,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -783,10 +783,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -810,10 +810,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -837,10 +837,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -864,10 +864,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -891,10 +891,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -918,10 +918,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -945,10 +945,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -972,10 +972,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -999,10 +999,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/79-optimize-canonical-quint-q1-q2/architecture-tests.trx
-      digest: "sha256:6f400957e7b193d1c32c0e16b64e8fbe2008f055091a9f94ad83e0666f3cf52f"
+      digest: "sha256:2e2ff6d3bf4bbe65b113d567f526062651445cd19f628fcb8d7e7c519e4ac666"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 156
+      passed: 160
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]

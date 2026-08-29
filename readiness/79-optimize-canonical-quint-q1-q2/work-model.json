@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "722b9d046af9a0a79d014467707796393b89e25cdc6c3dc428a271e7c7897bde"
+        "value": "df5bd6941abb5e0fb551808e1c81d47e202c0f2f68aa06d1ab91a64a01fc58a9"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "0000d6d3038d62699beaa3935f6b3b971452efd0d9350d0c087895a679e9d610"
+        "value": "3601f3ed12dc9a5f5d5706844710d9e7ad9d4cf5131f72fbf4a51800f602db04"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "430508aa2892714c446008111143a8b79f8b3eb2ea0eaf703172081f9e6eb4d9"
+        "value": "9a08bdc225120130f4e2d07c6ac12faa89059c85f310f2b0cc7aa4ab101c000e"
       }
     },
     {
@@ -260,8 +260,8 @@
     },
     {
       "id": "FR-007",
-      "title": "The runner MUST emit a schema-versioned machine-readable receipt on success and failure containing phase-aware Q1/Q2 outcomes, derived completed inventories, phase durations, direct external/Quint and Apalache-verify invocation counts, pinned tool identities, canonical input digests, optional preparation digest, hashed failure detail, and a result digest. (Stories: US-002, US-003; Acceptance: AC-003, AC-005)",
-      "text": "The runner MUST emit a schema-versioned machine-readable receipt on success and failure containing phase-aware Q1/Q2 outcomes, derived completed inventories, phase durations, direct external/Quint and Apalache-verify invocation counts, pinned tool identities, canonical input digests, optional preparation digest, hashed failure detail, and a result digest. (Stories: US-002, US-003; Acceptance: AC-003, AC-005)",
+      "title": "The runner MUST emit a schema-versioned machine-readable receipt on success and failure containing phase-aware Q1/Q2 outcomes, derived completed inventories, phase durations, direct external/Quint and Apalache-verify invocation counts, pinned tool identities, canonical input digests, optional preparation digest, hashed failure detail, and a result digest that binds the process counts as well as the outcome inventories. (Stories: US-002, US-003; Acceptance: AC-003, AC-005)",
+      "text": "The runner MUST emit a schema-versioned machine-readable receipt on success and failure containing phase-aware Q1/Q2 outcomes, derived completed inventories, phase durations, direct external/Quint and Apalache-verify invocation counts, pinned tool identities, canonical input digests, optional preparation digest, hashed failure detail, and a result digest that binds the process counts as well as the outcome inventories. (Stories: US-002, US-003; Acceptance: AC-003, AC-005)",
       "acceptanceCriteria": [
         "AC-003",
         "AC-005"
@@ -2484,7 +2484,7 @@
           "path": "work/79-optimize-canonical-quint-q1-q2/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "722b9d046af9a0a79d014467707796393b89e25cdc6c3dc428a271e7c7897bde"
+            "value": "df5bd6941abb5e0fb551808e1c81d47e202c0f2f68aa06d1ab91a64a01fc58a9"
           },
           "schemaVersion": 1
         },
@@ -2492,7 +2492,7 @@
           "path": "work/79-optimize-canonical-quint-q1-q2/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "0000d6d3038d62699beaa3935f6b3b971452efd0d9350d0c087895a679e9d610"
+            "value": "3601f3ed12dc9a5f5d5706844710d9e7ad9d4cf5131f72fbf4a51800f602db04"
           },
           "schemaVersion": 1
         },
@@ -2500,7 +2500,7 @@
           "path": "work/79-optimize-canonical-quint-q1-q2/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "430508aa2892714c446008111143a8b79f8b3eb2ea0eaf703172081f9e6eb4d9"
+            "value": "9a08bdc225120130f4e2d07c6ac12faa89059c85f310f2b0cc7aa4ab101c000e"
           },
           "schemaVersion": 1
         },
@@ -2515,7 +2515,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "ce3f836e02289fe351c172bf021acb18f7454cb7e795fef1e6c523f531d21e59"
+        "value": "f7e3ebf392f94224027ced6784c973ffc5ef165e0ee02d3be9b4080653d46382"
       },
       "currency": "current"
     }

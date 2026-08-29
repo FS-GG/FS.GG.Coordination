@@ -85,3 +85,19 @@ below baseline. The ordinary fully concurrent candidate workflow completed in
 509s, 43.7% below the 904s baseline median. Only one full-topology candidate
 sample exists because the four measurement reruns intentionally isolated the
 formal job; no multi-sample workflow p95 is claimed.
+
+## Retained-route review repair
+
+Independent review removed the single retained `QUINT-RUN` positive route from
+an exact-head clone. Before repair, the complete qualification still passed:
+the receipt inventories fell from 85/61/14 to 84/60/14, but acceptance checked
+only that process counts were positive and did not bind them into
+`resultSha256`. The repaired producer and independent evidence consumer now
+require the exact 85 external / 61 Quint / 14 Apalache tuple and include it in
+the result digest. An executable 84/60/14 producer near-miss and independent
+receipt mutations for each count prove the two enforcement boundaries red.
+
+The repaired full local qualification passed with 8 positive invariants, 56
+rejected controls, and the exact 85/61/14 process tuple in 175.086 seconds
+(35.484 seconds preparation, 139.602 seconds Q2). This repair changes only
+acceptance strength; it does not alter the hosted performance cohort above.

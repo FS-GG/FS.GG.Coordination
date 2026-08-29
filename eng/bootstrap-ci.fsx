@@ -363,7 +363,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
         let toolProperties = tools.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let inputProperties = inputs.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let preparationDigest = stringProperty "preparationSha256" root |> Option.defaultValue ""
-        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|56|%s{preparationDigest}|none|none"))
+        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|56|85|61|14|%s{preparationDigest}|none|none"))
         let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
         let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
         let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
@@ -377,10 +377,10 @@ let private inspectCanonicalQuintReceipt (path: string) =
               yield violation "quint-receipt-inventory" "expected eight positive invariants and 56 observed negative-control rejections"
           if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
               yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
-          if int64Property "external" processCounts |> Option.defaultValue 0L <= 0L
-             || int64Property "quintCli" processCounts |> Option.defaultValue 0L <= 0L
-             || int64Property "apalacheVerify" processCounts |> Option.defaultValue 0L <= 0L then
-              yield violation "quint-receipt-process-count" "process counts must be positive"
+          if int64Property "external" processCounts <> Some 85L
+             || int64Property "quintCli" processCounts <> Some 61L
+             || int64Property "apalacheVerify" processCounts <> Some 14L then
+              yield violation "quint-receipt-process-count" "expected exact retained process inventory 85/61/14"
           if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
               yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
           if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then

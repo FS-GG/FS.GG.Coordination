@@ -32,6 +32,9 @@ let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
+let expectedExternalProcessCount = 85
+let expectedQuintProcessCount = 61
+let expectedApalacheVerifyInvocationCount = 14
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -176,7 +179,7 @@ let writeQualificationReceipt failure =
 
     let resultSha256 =
         sha256Text
-            ($"%s{q1Outcome}|%s{q2Outcome}|%d{verifiedPositiveInvariantCount}|%d{quintRejectedProcessCount}|%s{preparationValue}|%s{failureCode}|%s{failureDetailSha256}")
+            ($"%s{q1Outcome}|%s{q2Outcome}|%d{verifiedPositiveInvariantCount}|%d{quintRejectedProcessCount}|%d{externalProcessCount}|%d{quintProcessCount}|%d{apalacheVerifyInvocationCount}|%s{preparationValue}|%s{failureCode}|%s{failureDetailSha256}")
 
     let outputDirectory = Path.GetDirectoryName qualificationOutput
 
@@ -241,6 +244,16 @@ failureReceiptWriter <-
 
         writeQualificationReceipt (Some(code, detail)))
 
+let requireCompletedProcessInventory () =
+    if
+        externalProcessCount <> expectedExternalProcessCount
+        || quintProcessCount <> expectedQuintProcessCount
+        || apalacheVerifyInvocationCount <> expectedApalacheVerifyInvocationCount
+    then
+        fail
+            "PROCESS-INVENTORY-COVERAGE"
+            ($"expected=%d{expectedExternalProcessCount}/%d{expectedQuintProcessCount}/%d{expectedApalacheVerifyInvocationCount}; actual=%d{externalProcessCount}/%d{quintProcessCount}/%d{apalacheVerifyInvocationCount}")
+
 match receiptFailurePhase with
 | Some "q1" -> fail "RECEIPT-SELF-TEST-Q1" "exercise q1 failure receipt"
 | Some "q2" ->
@@ -249,6 +262,17 @@ match receiptFailurePhase with
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
     fail "RECEIPT-SELF-TEST-Q2" "exercise q2 failure receipt"
+| Some "process-inventory" ->
+    q1Outcome <- "passed"
+    currentPhase <- "q2"
+    verifiedPositiveInvariantCount <- 8
+    quintRejectedProcessCount <- 56
+    externalProcessCount <- 84
+    quintProcessCount <- 60
+    apalacheVerifyInvocationCount <- 14
+    preparationDurationMs <- qualificationClock.ElapsedMilliseconds
+    preparationDigest <- Some(String.replicate 64 "0")
+    requireCompletedProcessInventory ()
 | Some value -> fail "ARGUMENT" ($"invalid failure receipt phase: %s{value}")
 | None -> ()
 
@@ -1780,6 +1804,8 @@ try
 
     if quintRejectedProcessCount <> 56 then
         fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=56; actual=%d{quintRejectedProcessCount}")
+
+    requireCompletedProcessInventory ()
 
     q2Outcome <- "passed"
     writeQualificationReceipt None
