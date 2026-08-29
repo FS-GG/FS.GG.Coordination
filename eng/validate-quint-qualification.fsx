@@ -56,7 +56,9 @@ let validateDocument root (document: JsonObject) =
         let requiredFormalTestIds =
             Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback" ]
         let requiredFormalFields =
-            Set [ "id"; "main"; "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"; "backend"; "counterexample"; "budget" ]
+            Set [ "id"; "main"; "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"
+                  "removedStep"; "violatedTemporal"; "blockedInvariant"; "backend"; "counterexample"; "counterexampleTrace"
+                  "counterexampleManifest"; "budget" ]
         let allowedClasses = Set [ "essential"; "derived"; "bookkeeping" ]
         let requiredAdmission =
             Set [ "owner"; "imports"; "invariants"; "independentOracles"; "root"; "bounds"; "witnesses"
@@ -147,14 +149,19 @@ let validateDocument root (document: JsonObject) =
         let formalTestCheck (item: JsonObject) =
             let id = text item "id"
             let fields = item |> Seq.map (fun property -> property.Key) |> Set.ofSeq
-            let executableFields = [ "init"; "step"; "invariant"; "witness"; "temporal"; "invalid" ]
+            let executableFields =
+                [ "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"; "removedStep"; "violatedTemporal"; "blockedInvariant" ]
             let budget = item["budget"].AsObject()
-            let budgetFields = Set [ "depth"; "states"; "samples"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
+            let budgetFields = Set [ "depth"; "states"; "transitions"; "samples"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
             if fields <> requiredFormalFields then fail "QQ-FORMAL-FIELDS" id
             elif text item "main" <> "CoordinationProtocolTests" then fail "QQ-FORMAL-MAIN" id
             elif text item "backend" <> "tlc" then fail "QQ-FORMAL-BACKEND" id
             elif text item "counterexample" <> $"work/96-gs2-03-5-native-quint-formal-tests/counterexamples/%s{id}.itf.json" then
                 fail "QQ-FORMAL-COUNTEREXAMPLE" id
+            elif text item "counterexampleTrace" <> $"work/96-gs2-03-5-native-quint-formal-tests/counterexamples/%s{id}.quint-trace.json" then
+                fail "QQ-FORMAL-COUNTEREXAMPLE-TRACE" id
+            elif text item "counterexampleManifest" <> $"work/96-gs2-03-5-native-quint-formal-tests/counterexamples/%s{id}.manifest.json" then
+                fail "QQ-FORMAL-COUNTEREXAMPLE-MANIFEST" id
             elif executableFields |> List.exists (fun field -> not (declaredDefinition (text item field))) then
                 fail "QQ-FORMAL-EXECUTABLE" id
             elif (budget |> Seq.map (fun property -> property.Key) |> Set.ofSeq) <> budgetFields then
@@ -408,6 +415,7 @@ let validateBaseline root configBytes (document: JsonObject) =
         let measuredIds = measurements |> List.map (fun item -> text item "root")
         let measuredFormalIds = formalMeasurements |> List.map (fun item -> text item "id")
         if text baseline "schema" <> "fsgg.coordination.quint-qualification-baseline/1" then fail "QQ-BASELINE-SCHEMA" "unsupported"
+        elif text baseline "formalMeasurementMethod" <> "canonical-runner-observed-tlc-and-rust-v1" then fail "QQ-BASELINE-FORMAL-METHOD" "unsupported"
         elif text baseline "sourceSha256" <> sha256 (File.ReadAllBytes sourcePath) then fail "QQ-BASELINE-SOURCE" "stale"
         elif text baseline "configurationSha256" <> sha256 configBytes then fail "QQ-BASELINE-CONFIG" "stale"
         elif Set measuredIds <> Set (Map.keys roots) then fail "QQ-BASELINE-COVERAGE" ($"%A{measuredIds}")
@@ -434,10 +442,11 @@ let validateBaseline root configBytes (document: JsonObject) =
                 |> List.tryPick (fun item ->
                     let id = text item "id"
                     let budget = (formalTests[id]["budget"]).AsObject()
-                    let fields = [ "stateCount"; "sampleCount"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
+                    let fields = [ "stateCount"; "transitionCount"; "sampleCount"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
                     if fields |> List.exists (fun field -> number item field < 0) || number item "sampleCount" = 0 then
                         Some("QQ-BASELINE-FORMAL-METRIC", id)
                     elif number item "stateCount" > number budget "states"
+                         || number item "transitionCount" > number budget "transitions"
                          || number item "sampleCount" > number budget "samples"
                          || number item "elapsedMs" > number budget "elapsedMs"
                          || number item "peakMiB" > number budget "peakMiB"

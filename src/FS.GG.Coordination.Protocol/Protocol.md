@@ -2200,6 +2200,10 @@ module CoordinationProtocolTests {
     formalClaimObserve.weakFair(Set(formalClaimStage)),
     formalClaimElect.weakFair(Set(formalClaimStage)),
   }.implies(eventually(formalClaimReached))
+  temporal formalClaimEventuallyReached: bool = eventually(formalClaimReached)
+  val formalClaimBlockedInvariant = formalClaimStage != 1
+  action formalClaimWithoutElection =
+    if (formalClaimStage == 0) formalClaimObserve else formalClaimStutter
 
   var formalRelationStage: int
   var formalRelationEdges: Set[NativeRelationEdge]
@@ -2227,6 +2231,10 @@ module CoordinationProtocolTests {
     formalRelationAdd.weakFair(Set(formalRelationStage)),
     formalRelationRemove.weakFair(Set(formalRelationStage)),
   }.implies(eventually(formalRelationStage == 2))
+  temporal formalRelationEventuallyRemoved: bool = eventually(formalRelationStage == 2)
+  val formalRelationBlockedInvariant = formalRelationStage != 1
+  action formalRelationWithoutRemove =
+    if (formalRelationStage == 0) formalRelationAdd else formalRelationStutter
 
   pure val formalDeliveredLifecycleFacts: LifecycleFacts = {
     ...claimedLifecycleFacts, deliveryOutcomeId: "OBS-Observed", delivered: true,
@@ -2259,6 +2267,10 @@ module CoordinationProtocolTests {
     formalLifecycleClaim.weakFair(Set(formalLifecycleStage)),
     formalLifecycleDeliver.weakFair(Set(formalLifecycleStage)),
   }.implies(eventually(formalLifecycleReached))
+  temporal formalLifecycleEventuallyDelivered: bool = eventually(formalLifecycleReached)
+  val formalLifecycleBlockedInvariant = formalLifecycleStage != 1
+  action formalLifecycleWithoutDeliver =
+    if (formalLifecycleStage == 0) formalLifecycleClaim else formalLifecycleStutter
 
   var formalSagaStage: int
   var formalSagaValid: bool
@@ -2283,6 +2295,10 @@ module CoordinationProtocolTests {
     formalSagaBegin.weakFair(Set(formalSagaStage)),
     formalSagaAdvance.weakFair(Set(formalSagaStage)),
   }.implies(eventually(formalSagaReached))
+  temporal formalSagaEventuallyDisposed: bool = eventually(formalSagaReached)
+  val formalSagaBlockedInvariant = formalSagaStage != 1
+  action formalSagaWithoutAdvance =
+    if (formalSagaStage == 0) formalSagaBegin else formalSagaStutter
 
   pure val formalNextEpochEnvelope: ProtocolEnvelope = {
     ...operationLockEnvelope, generation: 2, eventId: "operation-lock-epoch-2",
@@ -2328,6 +2344,12 @@ module CoordinationProtocolTests {
     formalEpochElect.weakFair(Set(formalEpochStage)),
     formalEpochAdvance.weakFair(Set(formalEpochStage)),
   }.implies(eventually(formalEpochReached))
+  temporal formalEpochEventuallyAdvanced: bool = eventually(formalEpochReached)
+  val formalEpochBlockedInvariant = formalEpochStage != 2
+  action formalEpochWithoutAdvance =
+    if (formalEpochStage == 0) formalEpochBegin
+    else if (formalEpochStage == 1) formalEpochElect
+    else formalEpochStutter
 
   var formalRollbackStage: int
   var formalRollbackValid: bool
@@ -2355,6 +2377,10 @@ module CoordinationProtocolTests {
     formalRollbackApply.weakFair(Set(formalRollbackStage)),
     formalRollbackCompensate.weakFair(Set(formalRollbackStage)),
   }.implies(eventually(formalRollbackReached))
+  temporal formalRollbackEventuallyCompensated: bool = eventually(formalRollbackReached)
+  val formalRollbackBlockedInvariant = formalRollbackStage != 1
+  action formalRollbackWithoutCompensate =
+    if (formalRollbackStage == 0) formalRollbackApply else formalRollbackStutter
 
   // TLC requires every variable in the selected module to have a legal initial value. All six
   // independently selected scenarios therefore share this complete initialization action.
@@ -2435,6 +2461,30 @@ module CoordinationProtocolTests {
   }
   action formalRollbackTlcInvalid = all {
     formalRollbackInvalid, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+  }
+  action formalClaimTlcWithoutElection = all {
+    formalClaimWithoutElection, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalRelationTlcWithoutRemove = all {
+    formalRelationWithoutRemove, formalClaimStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalLifecycleTlcWithoutDeliver = all {
+    formalLifecycleWithoutDeliver, formalClaimStutter, formalRelationStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalSagaTlcWithoutAdvance = all {
+    formalSagaWithoutAdvance, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalEpochTlcWithoutAdvance = all {
+    formalEpochWithoutAdvance, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+  }
+  action formalRollbackTlcWithoutCompensate = all {
+    formalRollbackWithoutCompensate, formalClaimStutter, formalRelationStutter,
     formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
   }
 }

@@ -11,7 +11,7 @@ sourceAnalysis: readiness/96-gs2-03-5-native-quint-formal-tests/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/96-gs2-03-5-native-quint-formal-tests/analysis.json
-    digest: fab777c90c84f13f799c5f86cc5a299a9a345e9ff0a416ad552588fb1858daac
+    digest: 42ee3c0fa29dadea966b103a6e72eb6a264079d9820d9540f1eda583209cbcc4
     schemaVersion: 1
   - label: checklist
     path: work/96-gs2-03-5-native-quint-formal-tests/checklist.md
@@ -53,11 +53,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      source: work/96-gs2-03-5-native-quint-formal-tests/test-results/catalogue.trx
+      digest: "sha256:78604450170a5aa37ea3f76548de3137aa5750eeea03b09e541c362ce38cf3ae"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 226
+      passed: 1
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -127,18 +127,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/QuintQualificationTests.fs, work/96-gs2-03-5-native-quint-formal-tests/qualification.json]
+    artifacts: [eng/quint-qualification.json, src/FS.GG.Coordination.Protocol/Protocol.md, work/96-gs2-03-5-native-quint-formal-tests/qualification.json]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/QuintQualificationTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      source: work/96-gs2-03-5-native-quint-formal-tests/test-results/counterexamples.trx
+      digest: "sha256:ac201588287e07cd359f08afc19cc53a60546c9f193e1386fdf49f063b0aec33"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 226
+      passed: 1
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -154,18 +154,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/QuintQualificationTests.fs, work/96-gs2-03-5-native-quint-formal-tests/qualification.json]
+    artifacts: [eng/quint-qualification-baseline.json, eng/validate-canonical-quint-protocol.fsx, work/96-gs2-03-5-native-quint-formal-tests/qualification.json]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/QuintQualificationTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      source: work/96-gs2-03-5-native-quint-formal-tests/test-results/budgets.trx
+      digest: "sha256:777df82a7cce11e75270fa9ad2139e07b88f5dd347beea448155e948301bfdcd"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 226
+      passed: 1
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -181,18 +181,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/QuintQualificationTests.fs, work/96-gs2-03-5-native-quint-formal-tests/qualification.json]
+    artifacts: [work/96-gs2-03-5-native-quint-formal-tests/counterexamples/claim-election.itf.json, work/96-gs2-03-5-native-quint-formal-tests/counterexamples/claim-election.manifest.json, work/96-gs2-03-5-native-quint-formal-tests/counterexamples/claim-election.quint-trace.json, work/96-gs2-03-5-native-quint-formal-tests/qualification.json]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/QuintQualificationTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      source: work/96-gs2-03-5-native-quint-formal-tests/test-results/counterexamples.trx
+      digest: "sha256:ac201588287e07cd359f08afc19cc53a60546c9f193e1386fdf49f063b0aec33"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 226
+      passed: 1
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -208,18 +208,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV007]
-    artifacts: [tests/FS.GG.Coordination.ArchitectureTests/QuintQualificationTests.fs, work/96-gs2-03-5-native-quint-formal-tests/qualification.json]
+    artifacts: [evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json, src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs, work/96-gs2-03-5-native-quint-formal-tests/qualification.json]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/QuintQualificationTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      source: work/96-gs2-03-5-native-quint-formal-tests/test-results/receipt-binding.trx
+      digest: "sha256:700537841c5b388290d72d835394747bc63fa3556b4dcb2b2e36c091dae00b0b"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 226
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -378,7 +378,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -405,7 +405,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -432,7 +432,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -459,7 +459,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -486,7 +486,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -513,7 +513,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -540,7 +540,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -567,7 +567,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -594,7 +594,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -621,7 +621,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -648,7 +648,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226
@@ -675,7 +675,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/96-gs2-03-5-native-quint-formal-tests/test-results/qualification.trx
-      digest: "sha256:f7a4a8631c4a2e3d90aaf825963fc2697f832de03853bd287722a014c3dea29e"
+      digest: "sha256:d5bcdf2ba95ad4d7db343cc17f752f90ec853c8d27664d4d0786f3c7718121ed"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 226

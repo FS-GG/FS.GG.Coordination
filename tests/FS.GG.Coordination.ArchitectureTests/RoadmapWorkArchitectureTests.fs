@@ -70,16 +70,17 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     let receiptSchema =
         File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json"))
     Assert.Contains("fsgg.coordination.canonical-quint-qualification/1", receiptSchema)
-    Assert.Contains("\"negativeControlCount\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":83}", receiptSchema)
+    Assert.Contains("\"negativeControlCount\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":101}", receiptSchema)
+    Assert.Contains("\"formalCounterexamples\"", receiptSchema)
     Assert.Contains("\"apalacheVerify\"", receiptSchema)
     Assert.Contains("ParallelOptions(MaxDegreeOfParallelism = 2)", validator)
     Assert.Contains("if: ${{ always() }}", workflow)
     Assert.Contains("q1Outcome <- \"failed\"", validator)
     Assert.Contains("q2Outcome <- \"failed\"", validator)
     Assert.Contains("requireCompletedProcessInventory ()", validator)
-    Assert.Contains("expectedExternalProcessCount = 133", validator)
-    Assert.Contains("expectedQuintProcessCount = 108", validator)
-    Assert.Contains("expectedApalacheVerifyInvocationCount = 20", validator)
+    Assert.Contains("expectedExternalProcessCount = 151", validator)
+    Assert.Contains("expectedQuintProcessCount = 126", validator)
+    Assert.Contains("expectedApalacheVerifyInvocationCount = 32", validator)
 
 [<Fact>]
 let ``hosted canonical Quint gate cannot silently downgrade to static validation`` () =
@@ -624,12 +625,12 @@ let ``canonical Quint retained process inventory near miss fails closed`` () =
 
         Assert.NotEqual(0, exitCode)
         Assert.Contains("code=PROCESS-INVENTORY-COVERAGE", error)
-        Assert.Contains("expected=133/108/20; actual=132/107/20", error)
+        Assert.Contains("expected=151/126/32; actual=150/125/32", error)
         use document = JsonDocument.Parse(File.ReadAllBytes receipt)
         let value = document.RootElement
         Assert.Equal("passed", value.GetProperty("q1Outcome").GetString())
         Assert.Equal("failed", value.GetProperty("q2Outcome").GetString())
-        Assert.Equal(132, value.GetProperty("processCounts").GetProperty("external").GetInt32())
+        Assert.Equal(150, value.GetProperty("processCounts").GetProperty("external").GetInt32())
         Assert.Equal("PROCESS-INVENTORY-COVERAGE", value.GetProperty("failure").GetProperty("code").GetString())
     finally
         if File.Exists receipt then File.Delete receipt

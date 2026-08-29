@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="70f6ff04-e934-4961-8c83-8940799a9319" name="@780ae460ce3c 2026-08-30 00:52:46" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-30T00:52:46.4885557+02:00" queuing="2026-08-30T00:52:46.4885557+02:00" start="2026-08-30T00:52:44.6960721+02:00" finish="2026-08-30T00:52:46.4914811+02:00" />
+  <TestSettings name="default" id="b896389f-487b-4ead-8893-aa7aa2a4ded4">
+    <Deployment runDeploymentRoot="_780ae460ce3c_2026-08-30_00_52_46" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="5ede0dab-6f68-4836-88c0-f7d69e839da2" testId="5fc45aed-a1dd-483a-a85a-b5591ce2a04c" testName="FS.GG.Coordination.QuintQualificationTests.missing or over budget measurements are rejected before reuse" computerName="780ae460ce3c" duration="00:00:01.4377328" startTime="2026-08-30T00:52:44.9996429+02:00" endTime="2026-08-30T00:52:46.4400185+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5ede0dab-6f68-4836-88c0-f7d69e839da2" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.QuintQualificationTests.missing or over budget measurements are rejected before reuse" storage="/tmp/fsgg-coordination-96-cgkomh/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="5fc45aed-a1dd-483a-a85a-b5591ce2a04c">
+      <Execution id="5ede0dab-6f68-4836-88c0-f7d69e839da2" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-96-cgkOmh/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.QuintQualificationTests" name="missing or over budget measurements are rejected before reuse" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="5fc45aed-a1dd-483a-a85a-b5591ce2a04c" executionId="5ede0dab-6f68-4836-88c0-f7d69e839da2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.09]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.11]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:01.56]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

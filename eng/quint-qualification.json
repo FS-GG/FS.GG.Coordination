@@ -1,75 +1,799 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "90b7b37fd85afc49e4cd32c9ddf3ae5f1b15fdcc7ce01c3d0e689f1958f9b351",
+  "sourceSha256": "cb6f4f5203d8c5bd87abcbc6cf03d37824f8e7fe5db209c9b029f9a2e334c223",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
-    { "id": "core", "selectionImports": [] },
-    { "id": "authority", "selectionImports": ["core"] },
-    { "id": "lifecycle", "selectionImports": ["authority"] },
-    { "id": "relations", "selectionImports": ["core"] },
-    { "id": "protocol-streams", "selectionImports": ["core"] },
-    { "id": "mutation-saga", "selectionImports": ["core", "protocol-streams"] },
-    { "id": "desired-state", "selectionImports": ["core", "mutation-saga"] },
-    { "id": "qualification", "selectionImports": ["authority", "desired-state", "lifecycle", "relations"] }
+    {
+      "id": "core",
+      "selectionImports": []
+    },
+    {
+      "id": "authority",
+      "selectionImports": [
+        "core"
+      ]
+    },
+    {
+      "id": "lifecycle",
+      "selectionImports": [
+        "authority"
+      ]
+    },
+    {
+      "id": "relations",
+      "selectionImports": [
+        "core"
+      ]
+    },
+    {
+      "id": "protocol-streams",
+      "selectionImports": [
+        "core"
+      ]
+    },
+    {
+      "id": "mutation-saga",
+      "selectionImports": [
+        "core",
+        "protocol-streams"
+      ]
+    },
+    {
+      "id": "desired-state",
+      "selectionImports": [
+        "core",
+        "mutation-saga"
+      ]
+    },
+    {
+      "id": "qualification",
+      "selectionImports": [
+        "authority",
+        "desired-state",
+        "lifecycle",
+        "relations"
+      ]
+    }
   ],
   "state": [
-    { "name": "evidenceObserved", "class": "essential", "module": "authority" },
-    { "name": "acceptedVocabulary", "class": "essential", "module": "authority" },
-    { "name": "authorityObservation", "class": "bookkeeping", "module": "authority" },
-    { "name": "authorityObservationAvailable", "class": "bookkeeping", "module": "authority" },
-    { "name": "acceptedAuthorityObservations", "class": "essential", "module": "authority" },
-    { "name": "acceptedObservationKnowledge", "class": "derived", "module": "authority" },
-    { "name": "humanIntentId", "class": "essential", "module": "lifecycle" },
-    { "name": "authorizedHumanIntentId", "class": "bookkeeping", "module": "lifecycle" },
-    { "name": "lifecycleFacts", "class": "essential", "module": "lifecycle" },
-    { "name": "lifecycleStatus", "class": "derived", "module": "lifecycle" },
-    { "name": "lifecycleStatusCurrent", "class": "bookkeeping", "module": "lifecycle" },
-    { "name": "nativeRelationEdges", "class": "essential", "module": "relations" },
-    { "name": "authorizedNativeRelationEdges", "class": "bookkeeping", "module": "relations" },
-    { "name": "protocolStreamEvents", "class": "essential", "module": "protocol-streams" },
-    { "name": "authorizedDurableProtocolCheckpoints", "class": "derived", "module": "protocol-streams" }
+    {
+      "name": "evidenceObserved",
+      "class": "essential",
+      "module": "authority"
+    },
+    {
+      "name": "acceptedVocabulary",
+      "class": "essential",
+      "module": "authority"
+    },
+    {
+      "name": "authorityObservation",
+      "class": "bookkeeping",
+      "module": "authority"
+    },
+    {
+      "name": "authorityObservationAvailable",
+      "class": "bookkeeping",
+      "module": "authority"
+    },
+    {
+      "name": "acceptedAuthorityObservations",
+      "class": "essential",
+      "module": "authority"
+    },
+    {
+      "name": "acceptedObservationKnowledge",
+      "class": "derived",
+      "module": "authority"
+    },
+    {
+      "name": "humanIntentId",
+      "class": "essential",
+      "module": "lifecycle"
+    },
+    {
+      "name": "authorizedHumanIntentId",
+      "class": "bookkeeping",
+      "module": "lifecycle"
+    },
+    {
+      "name": "lifecycleFacts",
+      "class": "essential",
+      "module": "lifecycle"
+    },
+    {
+      "name": "lifecycleStatus",
+      "class": "derived",
+      "module": "lifecycle"
+    },
+    {
+      "name": "lifecycleStatusCurrent",
+      "class": "bookkeeping",
+      "module": "lifecycle"
+    },
+    {
+      "name": "nativeRelationEdges",
+      "class": "essential",
+      "module": "relations"
+    },
+    {
+      "name": "authorizedNativeRelationEdges",
+      "class": "bookkeeping",
+      "module": "relations"
+    },
+    {
+      "name": "protocolStreamEvents",
+      "class": "essential",
+      "module": "protocol-streams"
+    },
+    {
+      "name": "authorizedDurableProtocolCheckpoints",
+      "class": "derived",
+      "module": "protocol-streams"
+    }
   ],
   "actions": [
-    { "name": "init", "class": "bookkeeping", "module": "core" },
-    { "name": "observeProtocolEvidence", "class": "essential", "module": "authority" },
-    { "name": "acceptVocabularyIdentity", "class": "essential", "module": "authority" },
-    { "name": "observeAuthority", "class": "essential", "module": "authority" },
-    { "name": "acceptObservedAuthority", "class": "essential", "module": "authority" },
-    { "name": "acceptObservationKnowledge", "class": "derived", "module": "authority" },
-    { "name": "setHumanIntent", "class": "essential", "module": "lifecycle" },
-    { "name": "observeLifecycleFacts", "class": "essential", "module": "lifecycle" },
-    { "name": "refreshLifecycleStatus", "class": "derived", "module": "lifecycle" },
-    { "name": "addNativeRelation", "class": "essential", "module": "relations" },
-    { "name": "removeNativeRelation", "class": "essential", "module": "relations" },
-    { "name": "appendProtocolEnvelope", "class": "essential", "module": "protocol-streams" },
-    { "name": "compactEphemeralProtocolEnvelope", "class": "derived", "module": "protocol-streams" },
-    { "name": "step", "class": "bookkeeping", "module": "qualification" }
+    {
+      "name": "init",
+      "class": "bookkeeping",
+      "module": "core"
+    },
+    {
+      "name": "observeProtocolEvidence",
+      "class": "essential",
+      "module": "authority"
+    },
+    {
+      "name": "acceptVocabularyIdentity",
+      "class": "essential",
+      "module": "authority"
+    },
+    {
+      "name": "observeAuthority",
+      "class": "essential",
+      "module": "authority"
+    },
+    {
+      "name": "acceptObservedAuthority",
+      "class": "essential",
+      "module": "authority"
+    },
+    {
+      "name": "acceptObservationKnowledge",
+      "class": "derived",
+      "module": "authority"
+    },
+    {
+      "name": "setHumanIntent",
+      "class": "essential",
+      "module": "lifecycle"
+    },
+    {
+      "name": "observeLifecycleFacts",
+      "class": "essential",
+      "module": "lifecycle"
+    },
+    {
+      "name": "refreshLifecycleStatus",
+      "class": "derived",
+      "module": "lifecycle"
+    },
+    {
+      "name": "addNativeRelation",
+      "class": "essential",
+      "module": "relations"
+    },
+    {
+      "name": "removeNativeRelation",
+      "class": "essential",
+      "module": "relations"
+    },
+    {
+      "name": "appendProtocolEnvelope",
+      "class": "essential",
+      "module": "protocol-streams"
+    },
+    {
+      "name": "compactEphemeralProtocolEnvelope",
+      "class": "derived",
+      "module": "protocol-streams"
+    },
+    {
+      "name": "step",
+      "class": "bookkeeping",
+      "module": "qualification"
+    }
   ],
   "roots": [
-    { "id": "authority", "main": "QualificationAuthorityRoot", "module": "authority", "closure": ["CoordinationProtocol.createIntent", "CoordinationProtocol.mutationIntentsConflict"], "mode": "state", "positive": "positiveWitness", "adversarial": "adversarialWitness", "invalid": "invalidStep", "budget": { "depth": 2, "states": 10000, "samples": 200, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 }, "admission": { "owner": "authority", "imports": ["core", "authority"], "invariants": ["qualificationInvariant"], "independentOracles": ["claim-exclusion", "exact-head-review"], "root": "QualificationAuthorityRoot", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["positiveWitness", "adversarialWitness", "invalidStep"], "projections": ["typed-authority", "compiled-contract"], "ciImpact": "bounded-state-root", "budgetEffect": "within-calibrated-envelope" } },
-    { "id": "lifecycle", "main": "QualificationLifecycleRoot", "module": "lifecycle", "closure": ["CoordinationProtocol.claimedLifecycleFacts", "CoordinationProtocol.deriveLifecycleStatus", "CoordinationProtocol.emptyLifecycleFacts"], "mode": "state", "positive": "positiveWitness", "adversarial": "adversarialWitness", "invalid": "invalidStep", "budget": { "depth": 3, "states": 10000, "samples": 200, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 }, "admission": { "owner": "lifecycle", "imports": ["core", "authority", "lifecycle"], "invariants": ["qualificationInvariant"], "independentOracles": ["stale-projection", "post-merge-verification"], "root": "QualificationLifecycleRoot", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["positiveWitness", "adversarialWitness", "invalidStep"], "projections": ["lifecycle-status"], "ciImpact": "bounded-state-root", "budgetEffect": "within-calibrated-envelope" } },
-    { "id": "relations", "main": "QualificationRelationsRoot", "module": "relations", "closure": ["CoordinationProtocol.NativeRelationEdge", "CoordinationProtocol.blockingEdge", "CoordinationProtocol.nativeRelationEdgeIsValid", "CoordinationProtocol.parentChildEdge"], "mode": "state", "positive": "positiveWitness", "adversarial": "adversarialWitness", "invalid": "invalidStep", "budget": { "depth": 2, "states": 10000, "samples": 200, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 }, "admission": { "owner": "relations", "imports": ["core", "relations"], "invariants": ["qualificationInvariant"], "independentOracles": ["dependency-concurrency"], "root": "QualificationRelationsRoot", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["positiveWitness", "adversarialWitness", "invalidStep"], "projections": ["native-relations"], "ciImpact": "bounded-state-root", "budgetEffect": "within-calibrated-envelope" } },
-    { "id": "protocol-streams", "main": "QualificationProtocolStreamsRoot", "module": "protocol-streams", "closure": ["CoordinationProtocol.ProtocolEnvelope", "CoordinationProtocol.claimEnvelope", "CoordinationProtocol.leaseEnvelope", "CoordinationProtocol.protocolEnvelopeIsOrdered", "CoordinationProtocol.protocolEnvelopeShapeIsValid", "CoordinationProtocol.reviewCheckpointEnvelope"], "mode": "state", "positive": "positiveWitness", "adversarial": "adversarialWitness", "invalid": "invalidStep", "budget": { "depth": 2, "states": 50000, "samples": 200, "elapsedMs": 45000, "peakMiB": 1536, "artifactBytes": 6291456 }, "admission": { "owner": "protocol-streams", "imports": ["core", "protocol-streams"], "invariants": ["qualificationInvariant"], "independentOracles": ["ledger-tamper"], "root": "QualificationProtocolStreamsRoot", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["positiveWitness", "adversarialWitness", "invalidStep"], "projections": ["protocol-stream"], "ciImpact": "bounded-state-root", "budgetEffect": "within-calibrated-envelope" } },
-    { "id": "mutation-saga", "main": "CoordinationProtocolTests", "module": "mutation-saga", "closure": ["CoordinationProtocol.*"], "mode": "test", "match": "^test(Mutation|DurablePlan)", "positive": "testMutationExactReplayIsIdempotent", "adversarial": "testMutationStaleRevisionIsConflict", "invalid": "testMutationIdempotencyBindingsRejectSubstitution", "budget": { "depth": 3, "states": 50000, "samples": 200, "elapsedMs": 45000, "peakMiB": 1536, "artifactBytes": 6291456 }, "admission": { "owner": "mutation-saga", "imports": ["core", "protocol-streams", "mutation-saga"], "invariants": ["testMutationExactReplayIsIdempotent"], "independentOracles": ["partial-operation"], "root": "CoordinationProtocolTests", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["testMutationExactReplayIsIdempotent", "testMutationStaleRevisionIsConflict", "testMutationIdempotencyBindingsRejectSubstitution"], "projections": ["mutation-census"], "ciImpact": "bounded-test-root", "budgetEffect": "within-calibrated-envelope" } },
-    { "id": "desired-state", "main": "CoordinationProtocolTests", "module": "desired-state", "closure": ["CoordinationProtocol.*"], "mode": "test", "match": "^testDesiredState", "positive": "testDesiredStateCataloguesAndSpecificationAreClosed", "adversarial": "testDesiredStateUnsupportedAndPermissionOutcomesFailClosed", "invalid": "testDesiredStateVerificationRejectsPolicySubstitution", "budget": { "depth": 4, "states": 50000, "samples": 200, "elapsedMs": 45000, "peakMiB": 1536, "artifactBytes": 6291456 }, "admission": { "owner": "desired-state", "imports": ["core", "protocol-streams", "mutation-saga", "desired-state"], "invariants": ["testDesiredStateCataloguesAndSpecificationAreClosed"], "independentOracles": ["old-client-fencing", "dual-feed-recovery"], "root": "CoordinationProtocolTests", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["testDesiredStateCataloguesAndSpecificationAreClosed", "testDesiredStateUnsupportedAndPermissionOutcomesFailClosed", "testDesiredStateVerificationRejectsPolicySubstitution"], "projections": ["settings-plans"], "ciImpact": "bounded-test-root", "budgetEffect": "within-calibrated-envelope" } },
-    { "id": "qualification", "main": "CoordinationProtocolTests", "module": "qualification", "closure": ["CoordinationProtocol.*"], "mode": "test", "match": "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)", "positive": "testQualificationManifestBindsCandidateInputsResultsAndReview", "adversarial": "testCompiledOutputsRejectSubstitutionAndUnqualifiedFacts", "invalid": "testQualificationManifestOmissionsAndStaleInputsFailClosed", "budget": { "depth": 5, "states": 100000, "samples": 200, "elapsedMs": 60000, "peakMiB": 2048, "artifactBytes": 6291456 }, "admission": { "owner": "qualification", "imports": ["core", "authority", "lifecycle", "relations", "protocol-streams", "mutation-saga", "desired-state", "qualification"], "invariants": ["testQualificationManifestBindsCandidateInputsResultsAndReview"], "independentOracles": ["abstraction-equivalence", "scale-envelope"], "root": "CoordinationProtocolTests", "bounds": ["depth", "states", "samples", "elapsedMs", "peakMiB", "artifactBytes"], "witnesses": ["testQualificationManifestBindsCandidateInputsResultsAndReview", "testCompiledOutputsRejectSubstitutionAndUnqualifiedFacts", "testQualificationManifestOmissionsAndStaleInputsFailClosed"], "projections": ["qualification-manifest", "model-test-inventory"], "ciImpact": "bounded-test-root", "budgetEffect": "within-calibrated-envelope" } }
+    {
+      "id": "authority",
+      "main": "QualificationAuthorityRoot",
+      "module": "authority",
+      "closure": [
+        "CoordinationProtocol.createIntent",
+        "CoordinationProtocol.mutationIntentsConflict"
+      ],
+      "mode": "state",
+      "positive": "positiveWitness",
+      "adversarial": "adversarialWitness",
+      "invalid": "invalidStep",
+      "budget": {
+        "depth": 2,
+        "states": 10000,
+        "samples": 200,
+        "elapsedMs": 30000,
+        "peakMiB": 1024,
+        "artifactBytes": 6291456
+      },
+      "admission": {
+        "owner": "authority",
+        "imports": [
+          "core",
+          "authority"
+        ],
+        "invariants": [
+          "qualificationInvariant"
+        ],
+        "independentOracles": [
+          "claim-exclusion",
+          "exact-head-review"
+        ],
+        "root": "QualificationAuthorityRoot",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "positiveWitness",
+          "adversarialWitness",
+          "invalidStep"
+        ],
+        "projections": [
+          "typed-authority",
+          "compiled-contract"
+        ],
+        "ciImpact": "bounded-state-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "lifecycle",
+      "main": "QualificationLifecycleRoot",
+      "module": "lifecycle",
+      "closure": [
+        "CoordinationProtocol.claimedLifecycleFacts",
+        "CoordinationProtocol.deriveLifecycleStatus",
+        "CoordinationProtocol.emptyLifecycleFacts"
+      ],
+      "mode": "state",
+      "positive": "positiveWitness",
+      "adversarial": "adversarialWitness",
+      "invalid": "invalidStep",
+      "budget": {
+        "depth": 3,
+        "states": 10000,
+        "samples": 200,
+        "elapsedMs": 30000,
+        "peakMiB": 1024,
+        "artifactBytes": 6291456
+      },
+      "admission": {
+        "owner": "lifecycle",
+        "imports": [
+          "core",
+          "authority",
+          "lifecycle"
+        ],
+        "invariants": [
+          "qualificationInvariant"
+        ],
+        "independentOracles": [
+          "stale-projection",
+          "post-merge-verification"
+        ],
+        "root": "QualificationLifecycleRoot",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "positiveWitness",
+          "adversarialWitness",
+          "invalidStep"
+        ],
+        "projections": [
+          "lifecycle-status"
+        ],
+        "ciImpact": "bounded-state-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "relations",
+      "main": "QualificationRelationsRoot",
+      "module": "relations",
+      "closure": [
+        "CoordinationProtocol.NativeRelationEdge",
+        "CoordinationProtocol.blockingEdge",
+        "CoordinationProtocol.nativeRelationEdgeIsValid",
+        "CoordinationProtocol.parentChildEdge"
+      ],
+      "mode": "state",
+      "positive": "positiveWitness",
+      "adversarial": "adversarialWitness",
+      "invalid": "invalidStep",
+      "budget": {
+        "depth": 2,
+        "states": 10000,
+        "samples": 200,
+        "elapsedMs": 30000,
+        "peakMiB": 1024,
+        "artifactBytes": 6291456
+      },
+      "admission": {
+        "owner": "relations",
+        "imports": [
+          "core",
+          "relations"
+        ],
+        "invariants": [
+          "qualificationInvariant"
+        ],
+        "independentOracles": [
+          "dependency-concurrency"
+        ],
+        "root": "QualificationRelationsRoot",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "positiveWitness",
+          "adversarialWitness",
+          "invalidStep"
+        ],
+        "projections": [
+          "native-relations"
+        ],
+        "ciImpact": "bounded-state-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "protocol-streams",
+      "main": "QualificationProtocolStreamsRoot",
+      "module": "protocol-streams",
+      "closure": [
+        "CoordinationProtocol.ProtocolEnvelope",
+        "CoordinationProtocol.claimEnvelope",
+        "CoordinationProtocol.leaseEnvelope",
+        "CoordinationProtocol.protocolEnvelopeIsOrdered",
+        "CoordinationProtocol.protocolEnvelopeShapeIsValid",
+        "CoordinationProtocol.reviewCheckpointEnvelope"
+      ],
+      "mode": "state",
+      "positive": "positiveWitness",
+      "adversarial": "adversarialWitness",
+      "invalid": "invalidStep",
+      "budget": {
+        "depth": 2,
+        "states": 50000,
+        "samples": 200,
+        "elapsedMs": 45000,
+        "peakMiB": 1536,
+        "artifactBytes": 6291456
+      },
+      "admission": {
+        "owner": "protocol-streams",
+        "imports": [
+          "core",
+          "protocol-streams"
+        ],
+        "invariants": [
+          "qualificationInvariant"
+        ],
+        "independentOracles": [
+          "ledger-tamper"
+        ],
+        "root": "QualificationProtocolStreamsRoot",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "positiveWitness",
+          "adversarialWitness",
+          "invalidStep"
+        ],
+        "projections": [
+          "protocol-stream"
+        ],
+        "ciImpact": "bounded-state-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "mutation-saga",
+      "main": "CoordinationProtocolTests",
+      "module": "mutation-saga",
+      "closure": [
+        "CoordinationProtocol.*"
+      ],
+      "mode": "test",
+      "match": "^test(Mutation|DurablePlan)",
+      "positive": "testMutationExactReplayIsIdempotent",
+      "adversarial": "testMutationStaleRevisionIsConflict",
+      "invalid": "testMutationIdempotencyBindingsRejectSubstitution",
+      "budget": {
+        "depth": 3,
+        "states": 50000,
+        "samples": 200,
+        "elapsedMs": 45000,
+        "peakMiB": 1536,
+        "artifactBytes": 6291456
+      },
+      "admission": {
+        "owner": "mutation-saga",
+        "imports": [
+          "core",
+          "protocol-streams",
+          "mutation-saga"
+        ],
+        "invariants": [
+          "testMutationExactReplayIsIdempotent"
+        ],
+        "independentOracles": [
+          "partial-operation"
+        ],
+        "root": "CoordinationProtocolTests",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "testMutationExactReplayIsIdempotent",
+          "testMutationStaleRevisionIsConflict",
+          "testMutationIdempotencyBindingsRejectSubstitution"
+        ],
+        "projections": [
+          "mutation-census"
+        ],
+        "ciImpact": "bounded-test-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "desired-state",
+      "main": "CoordinationProtocolTests",
+      "module": "desired-state",
+      "closure": [
+        "CoordinationProtocol.*"
+      ],
+      "mode": "test",
+      "match": "^testDesiredState",
+      "positive": "testDesiredStateCataloguesAndSpecificationAreClosed",
+      "adversarial": "testDesiredStateUnsupportedAndPermissionOutcomesFailClosed",
+      "invalid": "testDesiredStateVerificationRejectsPolicySubstitution",
+      "budget": {
+        "depth": 4,
+        "states": 50000,
+        "samples": 200,
+        "elapsedMs": 45000,
+        "peakMiB": 1536,
+        "artifactBytes": 6291456
+      },
+      "admission": {
+        "owner": "desired-state",
+        "imports": [
+          "core",
+          "protocol-streams",
+          "mutation-saga",
+          "desired-state"
+        ],
+        "invariants": [
+          "testDesiredStateCataloguesAndSpecificationAreClosed"
+        ],
+        "independentOracles": [
+          "old-client-fencing",
+          "dual-feed-recovery"
+        ],
+        "root": "CoordinationProtocolTests",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "testDesiredStateCataloguesAndSpecificationAreClosed",
+          "testDesiredStateUnsupportedAndPermissionOutcomesFailClosed",
+          "testDesiredStateVerificationRejectsPolicySubstitution"
+        ],
+        "projections": [
+          "settings-plans"
+        ],
+        "ciImpact": "bounded-test-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "qualification",
+      "main": "CoordinationProtocolTests",
+      "module": "qualification",
+      "closure": [
+        "CoordinationProtocol.*"
+      ],
+      "mode": "test",
+      "match": "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)",
+      "positive": "testQualificationManifestBindsCandidateInputsResultsAndReview",
+      "adversarial": "testCompiledOutputsRejectSubstitutionAndUnqualifiedFacts",
+      "invalid": "testQualificationManifestOmissionsAndStaleInputsFailClosed",
+      "budget": {
+        "depth": 5,
+        "states": 100000,
+        "samples": 200,
+        "elapsedMs": 60000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      },
+      "admission": {
+        "owner": "qualification",
+        "imports": [
+          "core",
+          "authority",
+          "lifecycle",
+          "relations",
+          "protocol-streams",
+          "mutation-saga",
+          "desired-state",
+          "qualification"
+        ],
+        "invariants": [
+          "testQualificationManifestBindsCandidateInputsResultsAndReview"
+        ],
+        "independentOracles": [
+          "abstraction-equivalence",
+          "scale-envelope"
+        ],
+        "root": "CoordinationProtocolTests",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "testQualificationManifestBindsCandidateInputsResultsAndReview",
+          "testCompiledOutputsRejectSubstitutionAndUnqualifiedFacts",
+          "testQualificationManifestOmissionsAndStaleInputsFailClosed"
+        ],
+        "projections": [
+          "qualification-manifest",
+          "model-test-inventory"
+        ],
+        "ciImpact": "bounded-test-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    }
   ],
   "formalTests": [
-    { "id": "claim-election", "main": "CoordinationProtocolTests", "init": "formalInit", "step": "formalClaimTlcStep", "invariant": "formalClaimSafety", "witness": "formalClaimReached", "temporal": "formalClaimProgress", "invalid": "formalClaimTlcInvalid", "backend": "tlc", "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/claim-election.itf.json", "budget": { "depth": 4, "states": 10000, "samples": 100, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 } },
-    { "id": "relation-mutation", "main": "CoordinationProtocolTests", "init": "formalInit", "step": "formalRelationTlcStep", "invariant": "formalRelationSafety", "witness": "formalRelationReached", "temporal": "formalRelationProgress", "invalid": "formalRelationTlcInvalid", "backend": "tlc", "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/relation-mutation.itf.json", "budget": { "depth": 4, "states": 10000, "samples": 100, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 } },
-    { "id": "lifecycle", "main": "CoordinationProtocolTests", "init": "formalInit", "step": "formalLifecycleTlcStep", "invariant": "formalLifecycleSafety", "witness": "formalLifecycleReached", "temporal": "formalLifecycleProgress", "invalid": "formalLifecycleTlcInvalid", "backend": "tlc", "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/lifecycle.itf.json", "budget": { "depth": 4, "states": 10000, "samples": 100, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 } },
-    { "id": "operation-saga", "main": "CoordinationProtocolTests", "init": "formalInit", "step": "formalSagaTlcStep", "invariant": "formalSagaSafety", "witness": "formalSagaReached", "temporal": "formalSagaProgress", "invalid": "formalSagaTlcInvalid", "backend": "tlc", "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/operation-saga.itf.json", "budget": { "depth": 4, "states": 10000, "samples": 100, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 } },
-    { "id": "epoch", "main": "CoordinationProtocolTests", "init": "formalInit", "step": "formalEpochTlcStep", "invariant": "formalEpochSafety", "witness": "formalEpochReached", "temporal": "formalEpochProgress", "invalid": "formalEpochTlcInvalid", "backend": "tlc", "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/epoch.itf.json", "budget": { "depth": 5, "states": 10000, "samples": 100, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 } },
-    { "id": "rollback", "main": "CoordinationProtocolTests", "init": "formalInit", "step": "formalRollbackTlcStep", "invariant": "formalRollbackSafety", "witness": "formalRollbackReached", "temporal": "formalRollbackProgress", "invalid": "formalRollbackTlcInvalid", "backend": "tlc", "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/rollback.itf.json", "budget": { "depth": 4, "states": 10000, "samples": 100, "elapsedMs": 30000, "peakMiB": 1024, "artifactBytes": 6291456 } }
+    {
+      "id": "claim-election",
+      "main": "CoordinationProtocolTests",
+      "init": "formalInit",
+      "step": "formalClaimTlcStep",
+      "invariant": "formalClaimSafety",
+      "witness": "formalClaimReached",
+      "temporal": "formalClaimProgress",
+      "invalid": "formalClaimTlcInvalid",
+      "removedStep": "formalClaimTlcWithoutElection",
+      "violatedTemporal": "formalClaimEventuallyReached",
+      "blockedInvariant": "formalClaimBlockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/claim-election.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/claim-election.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/claim-election.manifest.json",
+      "budget": {
+        "depth": 4,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 30000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "relation-mutation",
+      "main": "CoordinationProtocolTests",
+      "init": "formalInit",
+      "step": "formalRelationTlcStep",
+      "invariant": "formalRelationSafety",
+      "witness": "formalRelationReached",
+      "temporal": "formalRelationProgress",
+      "invalid": "formalRelationTlcInvalid",
+      "removedStep": "formalRelationTlcWithoutRemove",
+      "violatedTemporal": "formalRelationEventuallyRemoved",
+      "blockedInvariant": "formalRelationBlockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/relation-mutation.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/relation-mutation.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/relation-mutation.manifest.json",
+      "budget": {
+        "depth": 4,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 30000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "lifecycle",
+      "main": "CoordinationProtocolTests",
+      "init": "formalInit",
+      "step": "formalLifecycleTlcStep",
+      "invariant": "formalLifecycleSafety",
+      "witness": "formalLifecycleReached",
+      "temporal": "formalLifecycleProgress",
+      "invalid": "formalLifecycleTlcInvalid",
+      "removedStep": "formalLifecycleTlcWithoutDeliver",
+      "violatedTemporal": "formalLifecycleEventuallyDelivered",
+      "blockedInvariant": "formalLifecycleBlockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/lifecycle.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/lifecycle.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/lifecycle.manifest.json",
+      "budget": {
+        "depth": 4,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 30000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "operation-saga",
+      "main": "CoordinationProtocolTests",
+      "init": "formalInit",
+      "step": "formalSagaTlcStep",
+      "invariant": "formalSagaSafety",
+      "witness": "formalSagaReached",
+      "temporal": "formalSagaProgress",
+      "invalid": "formalSagaTlcInvalid",
+      "removedStep": "formalSagaTlcWithoutAdvance",
+      "violatedTemporal": "formalSagaEventuallyDisposed",
+      "blockedInvariant": "formalSagaBlockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/operation-saga.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/operation-saga.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/operation-saga.manifest.json",
+      "budget": {
+        "depth": 4,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 30000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "epoch",
+      "main": "CoordinationProtocolTests",
+      "init": "formalInit",
+      "step": "formalEpochTlcStep",
+      "invariant": "formalEpochSafety",
+      "witness": "formalEpochReached",
+      "temporal": "formalEpochProgress",
+      "invalid": "formalEpochTlcInvalid",
+      "removedStep": "formalEpochTlcWithoutAdvance",
+      "violatedTemporal": "formalEpochEventuallyAdvanced",
+      "blockedInvariant": "formalEpochBlockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/epoch.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/epoch.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/epoch.manifest.json",
+      "budget": {
+        "depth": 5,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 30000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "rollback",
+      "main": "CoordinationProtocolTests",
+      "init": "formalInit",
+      "step": "formalRollbackTlcStep",
+      "invariant": "formalRollbackSafety",
+      "witness": "formalRollbackReached",
+      "temporal": "formalRollbackProgress",
+      "invalid": "formalRollbackTlcInvalid",
+      "removedStep": "formalRollbackTlcWithoutCompensate",
+      "violatedTemporal": "formalRollbackEventuallyCompensated",
+      "blockedInvariant": "formalRollbackBlockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/rollback.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/rollback.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/rollback.manifest.json",
+      "budget": {
+        "depth": 4,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 30000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    }
   ],
   "selection": {
     "pullRequest": "reverse-dependency-closure",
-    "protected": ["main", "acceptance", "freeze", "release"],
+    "protected": [
+      "main",
+      "acceptance",
+      "freeze",
+      "release"
+    ],
     "protectedPolicy": "full-inventory"
   },
-  "oracleIds": ["claim-exclusion", "stale-projection", "dependency-concurrency", "partial-operation", "old-client-fencing", "ledger-tamper", "exact-head-review", "post-merge-verification", "dual-feed-recovery", "abstraction-equivalence", "scale-envelope"],
+  "oracleIds": [
+    "claim-exclusion",
+    "stale-projection",
+    "dependency-concurrency",
+    "partial-operation",
+    "old-client-fencing",
+    "ledger-tamper",
+    "exact-head-review",
+    "post-merge-verification",
+    "dual-feed-recovery",
+    "abstraction-equivalence",
+    "scale-envelope"
+  ],
   "admission": {
-    "required": ["owner", "imports", "invariants", "independentOracles", "root", "bounds", "witnesses", "projections", "ciImpact", "budgetEffect"]
+    "required": [
+      "owner",
+      "imports",
+      "invariants",
+      "independentOracles",
+      "root",
+      "bounds",
+      "witnesses",
+      "projections",
+      "ciImpact",
+      "budgetEffect"
+    ]
   }
 }
