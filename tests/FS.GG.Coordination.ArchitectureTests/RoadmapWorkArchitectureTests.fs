@@ -68,6 +68,7 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("fsgg.coordination.canonical-quint-qualification/1", receiptSchema)
     Assert.Contains("\"negativeControlCount\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":56}", receiptSchema)
     Assert.Contains("\"apalacheVerify\"", receiptSchema)
+    Assert.Contains("ParallelOptions(MaxDegreeOfParallelism = 2)", validator)
     Assert.Contains("if: ${{ always() }}", workflow)
     Assert.Contains("q1Outcome <- \"failed\"", validator)
     Assert.Contains("q2Outcome <- \"failed\"", validator)
@@ -494,6 +495,40 @@ let ``canonical Quint authority passes the independent static gate`` () =
     Assert.Equal(0, exitCode)
     Assert.StartsWith("CANONICAL_QUINT_PROTOCOL_STATIC_OK", output)
     Assert.Equal("", error)
+
+[<Theory>]
+[<InlineData("q1", "failed", "not-run", "RECEIPT-SELF-TEST-Q1", JsonValueKind.Null)>]
+[<InlineData("q2", "passed", "failed", "RECEIPT-SELF-TEST-Q2", JsonValueKind.String)>]
+let ``canonical Quint failure receipts retain the failed phase`` phase q1 q2 code preparationKind =
+    let receipt =
+        Path.Combine(Path.GetTempPath(), $"fsgg-quint-failure-%s{phase}-" + Guid.NewGuid().ToString("N") + ".json")
+
+    try
+        let exitCode, _, error =
+            run
+                "dotnet"
+                [ "fsi"
+                  "eng/validate-canonical-quint-protocol.fsx"
+                  "--"
+                  "--root"
+                  "."
+                  "--output"
+                  receipt
+                  "--exercise-failure-receipt"
+                  phase ]
+
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains($"code=%s{code}", error)
+        use document = JsonDocument.Parse(File.ReadAllBytes receipt)
+        let value = document.RootElement
+        Assert.Equal(q1, value.GetProperty("q1Outcome").GetString())
+        Assert.Equal(q2, value.GetProperty("q2Outcome").GetString())
+        Assert.Equal(code, value.GetProperty("failure").GetProperty("code").GetString())
+        Assert.Equal(preparationKind, value.GetProperty("preparationSha256").ValueKind)
+        Assert.Equal(0, value.GetProperty("positiveInvariantCount").GetInt32())
+        Assert.Equal(0, value.GetProperty("negativeControlCount").GetInt32())
+    finally
+        if File.Exists receipt then File.Delete receipt
 
 [<Fact>]
 let ``canonical Quint authority mutations fail closed`` () =

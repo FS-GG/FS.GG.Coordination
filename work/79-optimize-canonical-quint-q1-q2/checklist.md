@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/79-optimize-canonical-quint-q1-q2/clarifications.md
 
 ## Source Snapshot
-- spec: work/79-optimize-canonical-quint-q1-q2/spec.md sha256:b7ed7b4ee23e7ade0a8fa9276592a3a9e64c0b830f48ea204081e00c86ba9045 schemaVersion:1
-- clarifications: work/79-optimize-canonical-quint-q1-q2/clarifications.md sha256:bae387547f1f4b667bbd13232624833c714555272a7bb5f1f8edfa1ed98f2581 schemaVersion:1
+- spec: work/79-optimize-canonical-quint-q1-q2/spec.md sha256:430508aa2892714c446008111143a8b79f8b3eb2ea0eaf703172081f9e6eb4d9 schemaVersion:1
+- clarifications: work/79-optimize-canonical-quint-q1-q2/clarifications.md sha256:445de0058bd200c1694a41d5fa73af9bee27eabb3eecec99edf549e282c796a8 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

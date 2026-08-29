@@ -29,7 +29,7 @@ policyPointers:
 
 ## Scope Boundaries
 - Optimize canonical Quint Q1/Q2 preparation, execution topology, phase attribution, and retained evidence.
-- Preserve the eight positive invariants and all 51 mutation controls, including the exact pinned toolchain and bounded execution behavior.
+- Preserve the eight positive invariants and the execution-derived inventory of 56 rejected Quint mutation processes, including the exact pinned toolchain and bounded execution behavior.
 - Permit a dedicated hosted Quint job so formal qualification can start independently of build and architecture tests.
 - Exclude inductive-invariant mode, qualification reuse across workflow runs, and the broader terminal-check consolidation owned by follow-on items.
 - Keep SDD lifecycle ownership separate from the reusable formal qualification runner.

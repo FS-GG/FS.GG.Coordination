@@ -5,6 +5,8 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
+open System.Threading
+open System.Threading.Tasks
 
 let expectedPackage = "FS.GG.SDD.Artifacts/1.5.0"
 let expectedProfile = "fsgg-quint-profile/2"
@@ -101,15 +103,15 @@ let requireFile code path =
         fail code path
 
 let run workingDirectory (executable: string) arguments environment =
-    externalProcessCount <- externalProcessCount + 1
+    Interlocked.Increment(&externalProcessCount) |> ignore
 
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
 
     if isQuint then
-        quintProcessCount <- quintProcessCount + 1
+        Interlocked.Increment(&quintProcessCount) |> ignore
 
         match arguments with
-        | "verify" :: _ -> apalacheVerifyInvocationCount <- apalacheVerifyInvocationCount + 1
+        | "verify" :: _ -> Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
         | _ -> ()
 
     let info = ProcessStartInfo(executable)
@@ -130,7 +132,7 @@ let run workingDirectory (executable: string) arguments environment =
     child.WaitForExit()
 
     if isQuint && child.ExitCode <> 0 then
-        quintRejectedProcessCount <- quintRejectedProcessCount + 1
+        Interlocked.Increment(&quintRejectedProcessCount) |> ignore
 
     child.ExitCode, output.Result.Trim(), error.Result.Trim()
 
@@ -144,17 +146,18 @@ let requireGreen code workingDirectory executable arguments environment =
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 
-let rec parse root staticOnly compilerOnly output remaining =
+let rec parse root staticOnly compilerOnly output receiptFailurePhase remaining =
     match remaining with
-    | [] -> root, staticOnly, compilerOnly, output
-    | "--root" :: value :: tail -> parse (Path.GetFullPath value) staticOnly compilerOnly output tail
-    | "--static-only" :: tail -> parse root true compilerOnly output tail
-    | "--compiler-only" :: tail -> parse root staticOnly true output tail
-    | "--output" :: value :: tail -> parse root staticOnly compilerOnly (Some value) tail
+    | [] -> root, staticOnly, compilerOnly, output, receiptFailurePhase
+    | "--root" :: value :: tail -> parse (Path.GetFullPath value) staticOnly compilerOnly output receiptFailurePhase tail
+    | "--static-only" :: tail -> parse root true compilerOnly output receiptFailurePhase tail
+    | "--compiler-only" :: tail -> parse root staticOnly true output receiptFailurePhase tail
+    | "--output" :: value :: tail -> parse root staticOnly compilerOnly (Some value) receiptFailurePhase tail
+    | "--exercise-failure-receipt" :: value :: tail -> parse root staticOnly compilerOnly output (Some value) tail
     | value :: _ -> fail "ARGUMENT" value
 
-let root, staticOnly, compilerOnly, outputOption =
-    parse (Path.GetFullPath ".") false false None arguments
+let root, staticOnly, compilerOnly, outputOption, receiptFailurePhase =
+    parse (Path.GetFullPath ".") false false None None arguments
 
 let qualificationOutput =
     outputOption
@@ -237,6 +240,17 @@ failureReceiptWriter <-
             q2Outcome <- "failed"
 
         writeQualificationReceipt (Some(code, detail)))
+
+match receiptFailurePhase with
+| Some "q1" -> fail "RECEIPT-SELF-TEST-Q1" "exercise q1 failure receipt"
+| Some "q2" ->
+    q1Outcome <- "passed"
+    currentPhase <- "q2"
+    preparationDurationMs <- qualificationClock.ElapsedMilliseconds
+    preparationDigest <- Some(String.replicate 64 "0")
+    fail "RECEIPT-SELF-TEST-Q2" "exercise q2 failure receipt"
+| Some value -> fail "ARGUMENT" ($"invalid failure receipt phase: %s{value}")
+| None -> ()
 
 let source = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
 
@@ -995,27 +1009,32 @@ try
 
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
     let originalQnt = File.ReadAllText q2Qnt
+    let rustMutationChecks = ResizeArray<unit -> unit>()
 
-    let requireMutationRed (name: string) (fixture: string) (replacement: string) =
+    let enqueueRustMutation code filePrefix testMatch (name: string) (fixture: string) (replacement: string) =
         if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
-            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
+            fail code ($"%s{name}: fixture absent")
 
-        let mutant = Path.Combine(scratch, $"protocol-mutation-%s{name}.qnt")
+        let mutant = Path.Combine(scratch, $"%s{filePrefix}-%s{name}.qnt")
         File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
 
-        let exitCode, output, error =
-            run
-                scratch
-                quint
-                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testMutation"; "--verbosity"; "0" ]
-                []
+        rustMutationChecks.Add(fun () ->
+            let exitCode, output, error =
+                run
+                    scratch
+                    quint
+                    [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+                      "--match"; testMatch; "--verbosity"; "0" ]
+                    []
 
-        if exitCode = 0 then
-            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
+            if exitCode = 0 then
+                fail code ($"%s{name}: mutant passed")
 
-        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
-            fail "MUTATION-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+            if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
+                fail code ($"%s{name}: no failed witness; %s{output}; %s{error}"))
+
+    let requireMutationRed (name: string) (fixture: string) (replacement: string) =
+        enqueueRustMutation "MUTATION-NEGATIVE-CONTROL" "protocol-mutation" "^testMutation" name fixture replacement
 
     requireMutationRed
         "idempotency-key-binding"
@@ -1073,25 +1092,7 @@ try
         "      existing == intent,"
 
     let requireDurablePlanRed (name: string) (fixture: string) (replacement: string) =
-        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
-            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
-
-        let mutant = Path.Combine(scratch, $"protocol-durable-plan-%s{name}.qnt")
-        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
-
-        let exitCode, output, error =
-            run
-                scratch
-                quint
-                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testDurablePlan"; "--verbosity"; "0" ]
-                []
-
-        if exitCode = 0 then
-            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
-
-        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
-            fail "DURABLE-PLAN-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+        enqueueRustMutation "DURABLE-PLAN-NEGATIVE-CONTROL" "protocol-durable-plan" "^testDurablePlan" name fixture replacement
 
     requireDurablePlanRed
         "predecessor-binding"
@@ -1144,25 +1145,7 @@ try
         "    true,"
 
     let requireDesiredStateRed (name: string) (fixture: string) (replacement: string) =
-        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
-            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
-
-        let mutant = Path.Combine(scratch, $"protocol-desired-state-%s{name}.qnt")
-        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
-
-        let exitCode, output, error =
-            run
-                scratch
-                quint
-                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testDesiredState"; "--verbosity"; "0" ]
-                []
-
-        if exitCode = 0 then
-            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
-
-        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
-            fail "DESIRED-STATE-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+        enqueueRustMutation "DESIRED-STATE-NEGATIVE-CONTROL" "protocol-desired-state" "^testDesiredState" name fixture replacement
 
     requireDesiredStateRed
         "family-completeness"
@@ -1225,25 +1208,7 @@ try
         "      true,"
 
     let requireCompiledOutputRed (name: string) (fixture: string) (replacement: string) =
-        if not (originalQnt.Contains(fixture, StringComparison.Ordinal)) then
-            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: fixture absent")
-
-        let mutant = Path.Combine(scratch, $"protocol-compiled-output-%s{name}.qnt")
-        File.WriteAllText(mutant, originalQnt.Replace(fixture, replacement))
-
-        let exitCode, output, error =
-            run
-                scratch
-                quint
-                [ "test"; mutant; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
-                  "--match"; "^testCompiledOutput"; "--verbosity"; "0" ]
-                []
-
-        if exitCode = 0 then
-            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: mutant passed")
-
-        if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
-            fail "COMPILED-OUTPUT-NEGATIVE-CONTROL" ($"%s{name}: no failed witness; %s{output}; %s{error}")
+        enqueueRustMutation "COMPILED-OUTPUT-NEGATIVE-CONTROL" "protocol-compiled-output" "^testCompiledOutput" name fixture replacement
 
     requireCompiledOutputRed
         "duplicate-family"
@@ -1286,6 +1251,12 @@ try
         "projection-formats"
         "      family.contentContract == output.contentContract, family.formats == output.formats,"
         "      family.contentContract == output.contentContract, true,"
+
+    if rustMutationChecks.Count <> 41 then
+        fail "RUST-MUTATION-INVENTORY" ($"expected=41; actual=%d{rustMutationChecks.Count}")
+
+    let parallelOptions = ParallelOptions(MaxDegreeOfParallelism = 2)
+    Parallel.ForEach(rustMutationChecks, parallelOptions, fun check -> check ()) |> ignore
 
     let guard = "    evidenceObserved,\n    evidenceObserved' = evidenceObserved,"
 

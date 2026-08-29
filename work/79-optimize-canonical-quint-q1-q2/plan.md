@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/79-optimize-canonical-quint-q1-q2/spec.md sha256:b7ed7b4ee23e7ade0a8fa9276592a3a9e64c0b830f48ea204081e00c86ba9045 schemaVersion:1
-- clarifications: work/79-optimize-canonical-quint-q1-q2/clarifications.md sha256:bae387547f1f4b667bbd13232624833c714555272a7bb5f1f8edfa1ed98f2581 schemaVersion:1
-- checklist: work/79-optimize-canonical-quint-q1-q2/checklist.md sha256:6194d9dcf3ad9879e36c31cc72906560916af460bdeb0fa6e160a07cbd09f622 schemaVersion:1
+- spec: work/79-optimize-canonical-quint-q1-q2/spec.md sha256:430508aa2892714c446008111143a8b79f8b3eb2ea0eaf703172081f9e6eb4d9 schemaVersion:1
+- clarifications: work/79-optimize-canonical-quint-q1-q2/clarifications.md sha256:445de0058bd200c1694a41d5fa73af9bee27eabb3eecec99edf549e282c796a8 schemaVersion:1
+- checklist: work/79-optimize-canonical-quint-q1-q2/checklist.md sha256:5ca29c587b0df00cf5de0942703a8865c8f480d881481707c7b5f8f5ac568c91 schemaVersion:1
 
 ## Plan Scope
 - Work item 79-optimize-canonical-quint-q1-q2 is planned from the current specification, clarification, and checklist facts.
@@ -30,7 +30,7 @@ Prose status: planned
 - PD-001 [AC-001] [FR-001] [DEC-004] complete: Refactor the formal validator so extraction, compilation, generated-module validation, and typechecking form one timed preparation that produces a deterministic digest reused by Q1 and Q2.
 - PD-002 [AC-001] [AC-003] [FR-002] [FR-005] [DEC-004] complete: Emit Q1 after preparation and Q2 after the full suite, retaining stable human markers plus explicit fail-closed fields in one final receipt.
 - PD-003 [AC-002] [FR-003] [DEC-001] complete: Replace eight separate positive verifier launches with one pinned Quint multi-invariant invocation only after proving equivalent pass/fail behavior.
-- PD-004 [AC-002] [FR-004] [DEC-002] complete: Preserve the complete 51-control mutation inventory; evaluate explicit bounded concurrency at 1, 2, and 4 without changing expected diagnostics or cardinality.
+- PD-004 [AC-002] [FR-004] [DEC-002] complete: Derive and enforce the complete 56-rejection Quint mutation inventory; evaluate explicit bounded concurrency at 1, 2, and 4 without changing expected diagnostics or cardinality.
 - PD-005 [AC-003] [FR-005] complete: Write the receipt atomically only after required data is available and treat missing, malformed, incomplete, or failed phase evidence as qualification failure.
 - PD-006 [AC-004] [FR-006] complete: Move canonical Quint into a sibling hosted job with no dependency on compiler-and-tests; make evidence-manifest depend on and authenticate artifacts from both jobs.
 - PD-007 [AC-003] [AC-005] [FR-007] [DEC-005] complete: Add a v1 JSON schema and validator coverage for phase durations, process counts, tool identities, input/preparation/result digests, and Q1/Q2 outcomes.
@@ -43,19 +43,17 @@ Prose status: planned
 - PC-001 [PD-001] [PD-002] formal runner: `eng/validate-canonical-quint-protocol.fsx` performs one preparation, preserves stable Q1/Q2 markers, and emits one canonical receipt.
 - PC-002 [PD-006] [PD-010] workflow topology: `.github/workflows/bootstrap-qualification.yml` adds an independently scheduled canonical-Quint job and the evidence-manifest dependency closes both qualification paths.
 - PC-003 [PD-007] [PD-010] evidence receipt: `fsgg.coordination.canonical-quint-qualification/1` is a closed, versioned JSON contract validated before retention.
-- PC-004 [PD-003] [PD-004] qualification inventory: the eight positive invariants and 51 named controls remain the exact semantic acceptance set.
+- PC-004 [PD-003] [PD-004] qualification inventory: the eight positive invariants and 56 observed rejected Quint mutation processes form the exact executable acceptance inventory.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PD-002] [PD-003] [PD-004] [PC-001] [PC-004] semanticEquivalence: Run the pinned full formal suite, prove one preparation, eight equivalent positive properties, exactly 51 expected mutation rejections, and separate green Q1/Q2 outcomes.
+- VO-001 [PD-001] [PD-002] [PD-003] [PD-004] [PC-001] [PC-004] semanticEquivalence: Run the pinned full formal suite, prove one preparation, eight equivalent positive properties, exactly 56 execution-derived mutation rejections, and separate green Q1/Q2 outcomes.
 - VO-002 [PD-005] [PD-007] [PC-003] receiptIntegrity: Validate a positive receipt and mutations for missing phase, false success, wrong digest, wrong process count, malformed duration, unknown field, and incomplete result inventory.
 - VO-003 [PD-006] [PD-010] [PC-002] workflowClosure: Architecture tests prove the sibling-job topology, exact pins/timeouts/permissions, closed dependencies, retained receipt artifact, and fail-closed evidence join.
 - VO-004 [PD-008] [PD-011] performanceComparison: Compare hosted baseline and candidate samples, recording median, p95, phase durations, process counts, and any rejected optimization with its measured reason.
 - VO-005 [PD-009] [PC-001] lifecycleSeparation: Static and execution evidence prove the formal runner contains no hard-coded SDD work identity while this work item's lifecycle reaches verified ship readiness.
 
 ## Performance Intent
-- Reduce hosted canonical-Quint critical-path duration by eliminating the duplicate preparation and architecture-test wait.
-- Measure at least five hosted samples when feasible and report median and p95; treat smaller samples as provisional.
-- Server reuse requires at least 10% median improvement; bounded parallelism must retain stable memory and completion behavior.
+No performance intent is declared for this work item.
 
 ## Migration Posture
 - PM-001 [PC-001] [PC-002] atomicCutover: Land the runner, receipt contract, workflow topology, validator, tests, and documentation together; retain the existing human Q1/Q2 markers for operator compatibility.

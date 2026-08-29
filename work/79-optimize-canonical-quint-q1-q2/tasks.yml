@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/79-optimize-canonical-quint-q1-q2/spec.md
-    digest: b7ed7b4ee23e7ade0a8fa9276592a3a9e64c0b830f48ea204081e00c86ba9045
+    digest: 430508aa2892714c446008111143a8b79f8b3eb2ea0eaf703172081f9e6eb4d9
     schemaVersion: 1
   - label: clarifications
     path: work/79-optimize-canonical-quint-q1-q2/clarifications.md
-    digest: bae387547f1f4b667bbd13232624833c714555272a7bb5f1f8edfa1ed98f2581
+    digest: 445de0058bd200c1694a41d5fa73af9bee27eabb3eecec99edf549e282c796a8
     schemaVersion: 1
   - label: checklist
     path: work/79-optimize-canonical-quint-q1-q2/checklist.md
-    digest: 6194d9dcf3ad9879e36c31cc72906560916af460bdeb0fa6e160a07cbd09f622
+    digest: 5ca29c587b0df00cf5de0942703a8865c8f480d881481707c7b5f8f5ac568c91
     schemaVersion: 1
   - label: plan
     path: work/79-optimize-canonical-quint-q1-q2/plan.md
-    digest: 91f410549182a4b8839aa3972e75a34d4c5e414380233c2e4c9fd800e84f1a1f
+    digest: 0000d6d3038d62699beaa3935f6b3b971452efd0d9350d0c087895a679e9d610
     schemaVersion: 1
 tasks:
   - id: T001
