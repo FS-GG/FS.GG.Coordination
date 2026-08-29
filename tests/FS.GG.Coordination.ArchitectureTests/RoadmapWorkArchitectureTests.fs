@@ -39,9 +39,13 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     let validator =
         File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
 
+    let gate =
+        File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/canonical-quint.sh"))
+
     Assert.Contains("  canonical-quint:", workflow)
     Assert.Contains("needs: [deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, bootstrap-recovery]", workflow)
-    Assert.Contains("run: bash eng/qualify-canonical-quint.sh", workflow)
+    Assert.Contains("run: bash eng/bootstrap-gates/canonical-quint.sh", workflow)
+    Assert.Contains("bash eng/qualify-canonical-quint.sh", gate)
     let validatorInvocation = "dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output"
     Assert.Contains(validatorInvocation, qualification)
     Assert.Equal(
@@ -52,8 +56,8 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("quint-linux-amd64", qualification)
     Assert.Contains("sha256sum --check --status", qualification)
     Assert.DoesNotContain("70-gs2-03-1-qualification-manifest", qualification)
-    Assert.Contains("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0", workflow)
-    Assert.Contains("/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true", workflow)
+    Assert.Contains("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0", gate)
+    Assert.Contains("/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true", gate)
     Assert.Contains("equivalent-named-block-partition", validator)
     Assert.Contains("equivalent-fence-indentation", validator)
     Assert.Contains("equivalent-crlf", validator)

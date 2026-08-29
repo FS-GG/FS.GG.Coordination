@@ -2,9 +2,9 @@
 
 FS.GG.Coordination qualifies an inert bootstrap substrate through six independently scheduled, read-only prerequisite jobs and one evidence join. The workflow runs for pull requests and pushes to `main`; every third-party action is pinned to an immutable commit and the workflow receives only `contents: read`.
 
-## Gate contract
+## Qualification plan
 
-The machine-readable contract is `eng/bootstrap-ci-contract.json`. `eng/bootstrap-ci.fsx workflow --root .` requires exactly these jobs:
+`eng/bootstrap-qualification-plan.json` is the single semantic authority for gate identities, dependency edges, stable entrypoints, artifacts, timeouts, job environments, download/upload behavior, typed receipt roles, immutable action pins, action runtimes, triggers, permissions, concurrency, and terminal evidence. The compiled renderer has no parallel gate-identity list or ID-selected workflow branches: a representative ordinary gate addition changes only its plan declaration and stable script. `eng/generate-bootstrap-workflow.fsx -- --root .` deterministically projects the committed workflow; `eng/bootstrap-ci.fsx workflow --root .` rejects a stale projection. The generated YAML is deliberately thin and requires exactly these jobs:
 
 - `deterministic-build`: locked restore and warnings-as-errors Release build.
 - `compiler-and-tests`: unit and architecture suites, retaining architecture TRX.
@@ -14,16 +14,28 @@ The machine-readable contract is `eng/bootstrap-ci-contract.json`. `eng/bootstra
 - `bootstrap-recovery`: reconstruction and clean-consumer execution from committed bytes.
 - `evidence-manifest`: an exact-head manifest assembled only after all six prerequisite jobs pass.
 
-The validator rejects missing or extra jobs, mutable action references, expanded permissions, release/deployment routes, live GitHub write authority, and imported v1 coordination completion machinery. The readable semantic rules are backed by an exact workflow-byte digest in the reviewed contract, so unreviewed action steps, inputs, environments, commands, or YAML structure cannot sit outside the declared surface.
+Each job invokes one script under `eng/bootstrap-gates/`; command mechanics live behind those stable entrypoints rather than inside YAML. The renderer cannot emit mutable action references, expanded permissions, release/deployment routes, live GitHub write authority, or imported v1 completion machinery. Any manual YAML change is stale by construction.
+
+The validator and evidence implementation compile into `FS.GG.Coordination.Qualification.Contracts.BootstrapCi`. `eng/bootstrap-ci.fsx` is only the production argument/stdout adapter. Architecture tests call the compiled decisions directly and retain bounded green/red process-level parity tests for the adapter.
+
+NuGet action caching was measured and rejected. On exact-head run `33250382392`, the cold miss and warm exact-key hit both left restore at roughly the same scale while the cache action added restore/post overhead; deterministic and package jobs were a few seconds slower on the warm attempt, and compiler timing remained dominated by architecture-runner variance. The dependency set is only about 5.8 MB and locked restore is already short, so retaining the cache would add a fifth action and extra plan/workflow branches without moving the critical path. Every gate keeps locked restore; dependency/security, recovery, and canonical Quint keep their isolated cold paths. Job-level environment values use literals or the `github` context; `runner.temp` is confined to step inputs and runtime shell variables where that context is available.
+
+The plan pins checkout v7.0.1, setup-dotnet v6.0.0, upload-artifact v7.0.1, and download-artifact v8.0.1 by exact commit. Their official `action.yml` manifests were resolved at those commits on 2026-08-29 and each declares `using: node24`; the plan records and validates that runtime inventory.
+
+## Performance and complexity budget
+
+The exact-merge baseline run `33248808361` took about 366 seconds end to end. Its compiler/test job took 315 seconds, including a 275-second architecture step. The retained TRX attributed 267.82 aggregate test-seconds to 58 bootstrap validator cases because every case launched a new FSI process. Direct compiled calls preserve those cases and add bounded green/red adapter parity, representative-gate change amplification, and direct missing-subject inversions for all seven entry points. The focused corpus now completes locally in about five seconds; the complete 176-test architecture suite completes in about 46 seconds on the same host.
+
+Architecture tests cap the generated workflow at 210 lines, the plan at 180, the adapter at 20, the compiled core at 600, and all stable gate scripts together at 60. They also reject reintroduction of workflow byte digests, `requiredRunFragments`, or regular-expression YAML parsing.
 
 ## Evidence binding
 
-The final job downloads each prerequisite artifact and copies the reviewed contract bytes into its evidence tree. It then emits `fsgg.coordination.bootstrap-evidence/1`, binding:
+The final job downloads each prerequisite artifact and copies the reviewed plan bytes into its evidence tree. It then emits `fsgg.coordination.bootstrap-evidence/2`, binding:
 
 - the exact 40-hex candidate revision;
 - the exact seven gate identities;
-- each gate's reviewed command fragments and artifact path;
-- SHA-256 of the contract and every gate artifact.
+- each gate's stable entrypoint and artifact path;
+- SHA-256 of the plan and every gate artifact.
 
 Validation recomputes all digests from downloaded bytes and fails closed on a stale candidate, absent/duplicate/unknown gate, altered command contract, unsafe path, missing artifact, or digest mismatch.
 

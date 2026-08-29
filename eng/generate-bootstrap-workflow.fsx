@@ -9,12 +9,7 @@ let arguments =
     |> Array.filter ((<>) "--")
     |> Array.toList
 
-let exitCode, output, error = BootstrapCi.execute arguments
-
-if not (String.IsNullOrWhiteSpace output) then
-    printfn "%s" output
-
-if not (String.IsNullOrWhiteSpace error) then
-    eprintfn "%s" error
-
+let exitCode, output, error = BootstrapCi.execute ("generate" :: arguments)
+if not (String.IsNullOrWhiteSpace output) then printfn "%s" output
+if not (String.IsNullOrWhiteSpace error) then eprintfn "%s" error
 exit exitCode
