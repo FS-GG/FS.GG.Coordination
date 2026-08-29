@@ -114,28 +114,35 @@ let tryProperty (name: string) (value: JsonElement) =
     if value.ValueKind = JsonValueKind.Object && value.TryGetProperty(name, &child) then Some child else None
 
 let rec validateSchemaVocabulary (path: string) (schema: JsonElement) =
-    let supported =
-        set [ "$schema"; "$id"; "$defs"; "$ref"; "category"; "type"; "const"; "enum"; "minLength"; "pattern"; "format"
-              "minimum"; "maximum"; "minItems"; "uniqueItems"; "items"; "required"; "properties"; "additionalProperties" ]
-    for keyword in schema.EnumerateObject() do
-        if not (supported.Contains keyword.Name) then fail "ES-SCHEMA-KEYWORD" $"{path}: unsupported keyword {keyword.Name}"
-    match tryProperty "properties" schema with
-    | Some properties ->
-        for declared in properties.EnumerateObject() do validateSchemaVocabulary $"{path}.properties.{declared.Name}" declared.Value
-    | None -> ()
-    match tryProperty "$defs" schema with
-    | Some definitions ->
-        for declared in definitions.EnumerateObject() do validateSchemaVocabulary $"{path}.$defs.{declared.Name}" declared.Value
-    | None -> ()
-    match tryProperty "items" schema with
-    | Some items when items.ValueKind = JsonValueKind.Object -> validateSchemaVocabulary $"{path}.items" items
-    | _ -> ()
-    match tryProperty "additionalProperties" schema with
-    | Some additional when additional.ValueKind = JsonValueKind.Object -> validateSchemaVocabulary $"{path}.additionalProperties" additional
-    | _ -> ()
+    match schema.ValueKind with
+    | JsonValueKind.True | JsonValueKind.False -> ()
+    | JsonValueKind.Object ->
+        let supported =
+            set [ "$schema"; "$id"; "$defs"; "$ref"; "category"; "type"; "const"; "enum"; "minLength"; "pattern"; "format"
+                  "minimum"; "maximum"; "minItems"; "uniqueItems"; "items"; "required"; "properties"; "additionalProperties" ]
+        for keyword in schema.EnumerateObject() do
+            if not (supported.Contains keyword.Name) then fail "ES-SCHEMA-KEYWORD" $"{path}: unsupported keyword {keyword.Name}"
+        match tryProperty "properties" schema with
+        | Some properties ->
+            for declared in properties.EnumerateObject() do validateSchemaVocabulary $"{path}.properties.{declared.Name}" declared.Value
+        | None -> ()
+        match tryProperty "$defs" schema with
+        | Some definitions ->
+            for declared in definitions.EnumerateObject() do validateSchemaVocabulary $"{path}.$defs.{declared.Name}" declared.Value
+        | None -> ()
+        match tryProperty "items" schema with
+        | Some items -> validateSchemaVocabulary $"{path}.items" items
+        | None -> ()
+        match tryProperty "additionalProperties" schema with
+        | Some additional -> validateSchemaVocabulary $"{path}.additionalProperties" additional
+        | None -> ()
+    | _ -> fail "ES-SCHEMA-KEYWORD" $"{path}: schema must be an object or boolean"
 
 let rec validateJsonSchema (rootSchema: JsonElement) (path: string) (schema: JsonElement) (instance: JsonElement) =
     let schemaFail detail = fail "ES-SCHEMA-VALIDATION" $"{path}: {detail}"
+    if schema.ValueKind = JsonValueKind.False then schemaFail "boolean schema is false"
+    elif schema.ValueKind = JsonValueKind.True then ()
+    elif schema.ValueKind <> JsonValueKind.Object then schemaFail "schema must be an object or boolean"
     match tryProperty "$ref" schema with
     | Some reference ->
         let value = reference.GetString()
@@ -165,7 +172,7 @@ let rec validateJsonSchema (rootSchema: JsonElement) (path: string) (schema: Jso
             | JsonValueKind.Array -> declared.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
             | _ -> schemaFail "type must be a string or array"
         if not (declaredTypes |> List.exists matches) then schemaFail $"type is {instance.ValueKind}"
-        if declaredTypes = [ "integer" ] && instance.ValueKind = JsonValueKind.Number then
+        if declaredTypes |> List.contains "integer" && not (declaredTypes |> List.contains "number") && instance.ValueKind = JsonValueKind.Number then
             let mutable integer = 0L
             if not (instance.TryGetInt64(&integer)) then schemaFail "number is not an integer"
     | None -> ()
@@ -188,6 +195,7 @@ let rec validateJsonSchema (rootSchema: JsonElement) (path: string) (schema: Jso
         match tryProperty "format" schema with
         | Some format when format.GetString() = "date-time" ->
             try validateTime path value with _ -> schemaFail "invalid date-time"
+        | Some format -> fail "ES-SCHEMA-KEYWORD" $"{path}: unsupported format {format.GetString()}"
         | _ -> ()
 
     if instance.ValueKind = JsonValueKind.Number then
@@ -233,7 +241,12 @@ let rec validateJsonSchema (rootSchema: JsonElement) (path: string) (schema: Jso
                 for field in instance.EnumerateObject() do
                     if not (declared.Contains field.Name) then validateJsonSchema rootSchema $"{path}.{field.Name}" additional field.Value
             | _ -> ()
-        | None -> ()
+        | None ->
+            match tryProperty "additionalProperties" schema with
+            | Some additional when additional.ValueKind = JsonValueKind.False && not observed.IsEmpty -> schemaFail "object properties are forbidden"
+            | Some additional when additional.ValueKind <> JsonValueKind.True ->
+                for field in instance.EnumerateObject() do validateJsonSchema rootSchema $"{path}.{field.Name}" additional field.Value
+            | _ -> ()
 
 let validateRecord categoryName relative (record: JsonElement) =
     let require schema properties =
@@ -279,6 +292,8 @@ let validateFrozenCorpusSchema (root: string) =
     use schemaDocument = readJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json"))
     let schema = schemaDocument.RootElement
     validateSchemaVocabulary "schema.corpus-inputs" schema
+    if stringProperty "$schema" schema <> "https://json-schema.org/draft/2020-12/schema" then
+        fail "ES-SCHEMA-DIALECT" "corpus-inputs must bind Draft 2020-12"
     let schemaProperties = property "properties" schema
     let inputSchema = property "input" schemaProperties
     let inputProperties = property "properties" inputSchema
@@ -799,6 +814,12 @@ let selfTest evidenceRoot =
           "frozen-schema-unsupported-keyword", (fun root ->
               mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
                   setNestedInt node [ "properties"; "id" ] "maxLength" 1)), "ES-SCHEMA-KEYWORD"
+          "frozen-schema-additional-properties-without-properties", (fun root ->
+              mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
+                  (nestedObject node [ "properties"; "input"; "properties"; "source" ]).Remove("properties") |> ignore)), "ES-SCHEMA-VALIDATION"
+          "frozen-schema-dialect", (fun root ->
+              mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
+                  node["$schema"] <- "https://example.invalid/unknown-dialect")), "ES-SCHEMA-DIALECT"
           "frozen-metadata-noncanonical", (fun root ->
               let relative = "corpus/C-claim.json"
               let path = Path.Combine(root, relative)
