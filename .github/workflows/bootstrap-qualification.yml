@@ -46,7 +46,7 @@ jobs:
   compiler-and-tests:
     name: compiler-and-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-compiler-and-tests
     steps:
@@ -65,7 +65,19 @@ jobs:
       - name: Run compiler-facing unit tests
         run: dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
       - name: Run architecture and negative-control tests
-        run: dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=architecture.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests"
+        run: dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=architecture-tests.trx" --results-directory artifacts/test-results/66-gs2-02-11-deterministic-identity
+      - name: Qualify the Linux user and network namespace sandbox
+        run: |
+          if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          /usr/bin/unshare --user --map-root-user --net -- /usr/bin/true
+      - name: Run exact-head canonical Quint Q1 and Q2
+        run: bash eng/qualify-canonical-quint.sh
+      - name: Stage compiler and test evidence
+        run: |
+          mkdir -p "$RUNNER_TEMP/compiler-and-tests"
+          cp artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx "$RUNNER_TEMP/compiler-and-tests/architecture.trx"
       - name: Upload compiler and test evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

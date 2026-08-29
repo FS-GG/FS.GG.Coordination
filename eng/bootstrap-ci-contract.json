@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.bootstrap-ci-contract/1",
   "evidenceSchema": "fsgg.coordination.bootstrap-evidence/1",
-  "workflowSha256": "83c69cd8abe4fcc428cdc8c7ef1fe637b5caecb8b9e73805008ce0c271a887bf",
+  "workflowSha256": "7df508b73d945be3a72cd83241bd1f9f3cc21d3fc2cf62ace371bb14f1b7f22c",
   "requiredProjectCount": 8,
   "requiredVulnerabilitySources": [
     "https://api.nuget.org/v3/index.json"
@@ -34,7 +34,14 @@
         "dotnet restore FS.GG.Coordination.sln --locked-mode",
         "dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror",
         "dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore",
-        "dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger \"trx;LogFileName=architecture.trx\" --results-directory \"$RUNNER_TEMP/compiler-and-tests\""
+        "dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger \"trx;LogFileName=architecture-tests.trx\" --results-directory artifacts/test-results/66-gs2-02-11-deterministic-identity",
+        "if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then",
+        "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
+        "fi",
+        "/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true",
+        "bash eng/qualify-canonical-quint.sh",
+        "mkdir -p \"$RUNNER_TEMP/compiler-and-tests\"",
+        "cp artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx \"$RUNNER_TEMP/compiler-and-tests/architecture.trx\""
       ]
     },
     {

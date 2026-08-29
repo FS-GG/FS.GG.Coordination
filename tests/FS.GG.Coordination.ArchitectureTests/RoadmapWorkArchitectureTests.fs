@@ -29,6 +29,51 @@ let private runAt workingDirectory executable arguments =
 let private run executable arguments = runAt root executable arguments
 
 [<Fact>]
+let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject`` () =
+    let workflow =
+        File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
+
+    let qualification =
+        File.ReadAllText(Path.Combine(root, "eng/qualify-canonical-quint.sh"))
+
+    let validator =
+        File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+
+    Assert.Contains("run: bash eng/qualify-canonical-quint.sh", workflow)
+    Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --compiler-only", qualification)
+    Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .", qualification)
+    Assert.Contains("quint-linux-amd64", qualification)
+    Assert.Contains("sha256sum --check --status", qualification)
+    Assert.Contains("evidence --root . --work 66-gs2-02-11-deterministic-identity", qualification)
+    Assert.Contains("--sync-observed-run artifacts/test-results/66-gs2-02-11-deterministic-identity/architecture-tests.trx", qualification)
+    Assert.Contains("fsgg-sdd\" analyze --root . --work 66-gs2-02-11-deterministic-identity", qualification)
+    Assert.Contains("fsgg-sdd\" verify --root . --work 66-gs2-02-11-deterministic-identity", qualification)
+    Assert.Contains("fsgg-sdd\" ship --root . --work 66-gs2-02-11-deterministic-identity", qualification)
+    Assert.Contains("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0", workflow)
+    Assert.Contains("/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true", workflow)
+    Assert.Contains("equivalent-named-block-partition", validator)
+    Assert.Contains("equivalent-fence-indentation", validator)
+    Assert.Contains("equivalent-crlf", validator)
+    Assert.Contains("equivalent-quint-trivia", validator)
+    Assert.Contains("executedEquivalentVariants.Add name", validator)
+    Assert.Contains("EQUIVALENT-AUTHORING-COVERAGE", validator)
+
+    let analyzeCommand = "fsgg-sdd\" analyze --root . --work 66-gs2-02-11-deterministic-identity"
+    let evidenceCommand = "fsgg-sdd\" evidence --root . --work 66-gs2-02-11-deterministic-identity"
+    let firstAnalyze = qualification.IndexOf(analyzeCommand, StringComparison.Ordinal)
+    let evidenceSync = qualification.IndexOf(evidenceCommand, StringComparison.Ordinal)
+    let refreshedAnalyze = qualification.IndexOf(analyzeCommand, firstAnalyze + analyzeCommand.Length, StringComparison.Ordinal)
+    Assert.True(firstAnalyze >= 0 && firstAnalyze < evidenceSync)
+    Assert.True(evidenceSync < refreshedAnalyze)
+
+[<Fact>]
+let ``hosted canonical Quint gate cannot silently downgrade to static validation`` () =
+    let qualification =
+        File.ReadAllText(Path.Combine(root, "eng/qualify-canonical-quint.sh"))
+
+    Assert.DoesNotContain("--static-only", qualification)
+
+[<Fact>]
 let ``roadmap work skill satisfies its independent structure ceiling`` () =
     let exitCode, output, error =
         run

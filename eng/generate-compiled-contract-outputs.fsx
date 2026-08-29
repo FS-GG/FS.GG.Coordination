@@ -28,6 +28,8 @@ let rec parse root output remaining =
 let root, outputOption = parse (Path.GetFullPath ".") None arguments
 let sourcePath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
 let contractPath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/contract.json")
+let authorityPath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/typed-authority.json")
+let receiptPath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/receipt.json")
 
 let outputRoot =
     outputOption
@@ -38,12 +40,18 @@ let outputRoot =
 
 if not (File.Exists sourcePath) then fail "SOURCE-MISSING" sourcePath
 if not (File.Exists contractPath) then fail "CONTRACT-MISSING" contractPath
+if not (File.Exists authorityPath) then fail "AUTHORITY-MISSING" authorityPath
+if not (File.Exists receiptPath) then fail "RECEIPT-MISSING" receiptPath
 
 let sourceText = File.ReadAllText(sourcePath, Encoding.UTF8)
 let sourceSha256 = sha256File sourcePath
 let contractSha256 = sha256File contractPath
 let contractDocument = JsonDocument.Parse(File.ReadAllBytes contractPath)
 let contract = contractDocument.RootElement
+let authorityDocument = JsonDocument.Parse(File.ReadAllBytes authorityPath)
+let authority = authorityDocument.RootElement
+let receiptDocument = JsonDocument.Parse(File.ReadAllBytes receiptPath)
+let receipt = receiptDocument.RootElement
 
 if contract.GetProperty("schema").GetString() <> "fsgg.quint.compiled-contract/v2" then
     fail "CONTRACT-SCHEMA" "wrong"
@@ -75,12 +83,42 @@ let identityContract = requiredString "identityContract"
 let qualificationContract = requiredString "qualificationContract"
 let projectionViewFormats = requiredString "projectionViewFormats"
 let refusalContract = requiredString "refusalContract"
+let normalizationAuthority = requiredString "normalizationAuthority"
+let versionContract = requiredString "versionContract"
+let semanticDiffContract = requiredString "semanticDiffContract"
 
-if identityContract <> "family|ordinal|source|profile|contract|content" then fail "IDENTITY-CONTRACT" identityContract
+if identityContract <> "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content" then fail "IDENTITY-CONTRACT" identityContract
 if qualificationContract <> "supported|complete|fresh" then fail "QUALIFICATION-CONTRACT" qualificationContract
 if projectionViewFormats <> "markdown|json" then fail "PROJECTION-FORMATS" projectionViewFormats
 if refusalContract <> "missing|duplicate|substituted|unsupported|incomplete|reordered|stale" then
     fail "REFUSAL-CONTRACT" refusalContract
+if normalizationAuthority <> "typed-effect-json" then fail "NORMALIZATION-AUTHORITY" normalizationAuthority
+if semanticDiffContract <> "ordinal|json-pointer|value-sha256" then fail "SEMANTIC-DIFF-CONTRACT" semanticDiffContract
+
+let versionParts = versionContract.Split('|')
+
+if versionParts.Length <> 5 then fail "VERSION-CONTRACT" versionContract
+
+let sourceVersion, extractorVersion, quintVersion, profileVersion, schemaVersion =
+    versionParts[0], versionParts[1], versionParts[2], versionParts[3], versionParts[4]
+
+if sourceVersion <> "fsgg.quint.literate-source/1" then fail "SOURCE-VERSION" sourceVersion
+if extractorVersion <> "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0" then fail "EXTRACTOR-VERSION" extractorVersion
+if quintVersion <> "sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f" then fail "QUINT-VERSION" quintVersion
+if profileVersion <> profile then fail "PROFILE-VERSION" profileVersion
+if schemaVersion <> contract.GetProperty("schema").GetString() then fail "SCHEMA-VERSION" schemaVersion
+
+if authority.GetProperty("backend").GetString() <> "quint-specification-v1" then fail "AUTHORITY-BACKEND" "wrong"
+if authority.GetProperty("packageIdentity").GetString() <> "FS.GG.SDD.Artifacts/1.5.0" then fail "AUTHORITY-PACKAGE" "wrong"
+if authority.GetProperty("profileIdentity").GetString() <> profileVersion then fail "AUTHORITY-PROFILE" "wrong"
+if receipt.GetProperty("schema").GetString() <> "fsgg.quint.observed-compilation-receipt/v2" then fail "RECEIPT-SCHEMA" "wrong"
+if receipt.GetProperty("sourceSha256").GetString() <> sourceSha256 then fail "RECEIPT-SOURCE" "mismatch"
+if receipt.GetProperty("contractSha256").GetString() <> contractSha256 then fail "RECEIPT-CONTRACT" "mismatch"
+
+let behavioralSha256 = receipt.GetProperty("typedEffectSha256").GetString()
+
+if String.IsNullOrWhiteSpace behavioralSha256 || behavioralSha256.Length <> 64 then
+    fail "BEHAVIORAL-IDENTITY" behavioralSha256
 
 let familyId name =
     match name with
@@ -113,14 +151,38 @@ let clone (value: JsonElement) = JsonNode.Parse(value.GetRawText())
 let array (values: seq<JsonNode>) = JsonArray(values |> Seq.toArray)
 let stringNode (value: string) = JsonValue.Create(value) :> JsonNode
 
+let versionsNode () =
+    let versions = JsonObject()
+    versions.Add("source", sourceVersion)
+    versions.Add("extractor", extractorVersion)
+    versions.Add("quint", quintVersion)
+    versions.Add("profile", profileVersion)
+    versions.Add("schema", schemaVersion)
+    versions
+
+let identityNode () =
+    let identity = JsonObject()
+    identity.Add("schema", "fsgg.quint.deterministic-identity/1")
+    identity.Add("sourceSha256", sourceSha256)
+    identity.Add("behavioralSha256", behavioralSha256)
+    identity.Add("contractSha256", contractSha256)
+    identity.Add("normalizationAuthority", normalizationAuthority)
+    identity.Add("versions", versionsNode ())
+    identity.Add("supported", true)
+    identity.Add("complete", true)
+    identity.Add("fresh", true)
+    identity
+
 let common (family: string) (ordinal: int) (content: JsonNode) =
     let root = JsonObject()
     root.Add("schema", "fsgg.quint.compiled-output/1")
     root.Add("family", family)
     root.Add("ordinal", ordinal)
     root.Add("sourceSha256", sourceSha256)
+    root.Add("behavioralSha256", behavioralSha256)
     root.Add("profile", profile)
     root.Add("contractSha256", contractSha256)
+    root.Add("identity", identityNode ())
     root.Add("supported", true)
     root.Add("complete", true)
     root.Add("fresh", true)
@@ -215,6 +277,42 @@ semanticDiffContent.Add("qualificationFields", qualificationContract.Split('|') 
 semanticDiffContent.Add("refusalKinds", refusalContract.Split('|') |> Seq.map stringNode |> array)
 semanticDiffContent.Add("familyOrder", families |> Seq.map (fun (_, _, id) -> stringNode id) |> array)
 
+let pointerEscape (value: string) = value.Replace("~", "~0").Replace("/", "~1")
+
+let rec semanticLeaves path (value: JsonElement) =
+    seq {
+        match value.ValueKind with
+        | JsonValueKind.Object ->
+            let properties = value.EnumerateObject() |> Seq.sortBy (fun property -> property.Name) |> Seq.toList
+            if List.isEmpty properties then yield path, value.GetRawText()
+            else
+                for property in properties do
+                    yield! semanticLeaves ($"{path}/{pointerEscape property.Name}") property.Value
+        | JsonValueKind.Array ->
+            let items = value.EnumerateArray() |> Seq.toList
+            if List.isEmpty items then yield path, value.GetRawText()
+            else
+                for index, item in items |> List.indexed do
+                    yield! semanticLeaves ($"{path}/{index}") item
+        | _ -> yield path, value.GetRawText()
+    }
+
+let semanticRows =
+    seq {
+        yield "/behavioralSha256", JsonSerializer.Serialize(behavioralSha256)
+        yield! semanticLeaves "" contract
+    }
+    |> Seq.sortBy fst
+    |> Seq.mapi (fun index (path, rawValue) ->
+        let row = JsonObject()
+        row.Add("ordinal", JsonValue.Create(index + 1))
+        row.Add("path", JsonValue.Create(if String.IsNullOrEmpty path then "/" else path))
+        row.Add("valueSha256", JsonValue.Create(Encoding.UTF8.GetBytes(rawValue) |> sha256Bytes))
+        row :> JsonNode)
+    |> array
+
+semanticDiffContent.Add("rows", semanticRows)
+
 let relationshipLines =
     contract.GetProperty("relationships").EnumerateArray()
     |> Seq.map (fun edge ->
@@ -226,7 +324,7 @@ let relationshipLines =
     |> String.concat "\n"
 
 let diagrams =
-    $"# Compiled contract diagrams\n\nSource: `{sourceSha256}`  \nContract: `{contractSha256}`\n\n```mermaid\ngraph LR\n{relationshipLines}\n```\n\n```mermaid\nflowchart LR\n  Inspect --> Plan\n  Plan --> Apply\n  Plan --> Verify\n  Apply --> Verify\n```\n"
+    $"# Compiled contract diagrams\n\nSource: `{sourceSha256}`\n\nBehavior: `{behavioralSha256}`\n\nContract: `{contractSha256}`\n\n```mermaid\ngraph LR\n{relationshipLines}\n```\n\n```mermaid\nflowchart LR\n  Inspect --> Plan\n  Plan --> Apply\n  Plan --> Verify\n  Apply --> Verify\n```\n"
 
 let testNames =
     Regex.Matches(sourceText, "\\brun\\s+(test[A-Za-z0-9_]+)\\s*=", RegexOptions.CultureInvariant)
@@ -248,7 +346,7 @@ let relationshipCount = contract.GetProperty("relationships").GetArrayLength()
 let verificationCount = contract.GetProperty("verificationProfiles").GetArrayLength()
 let boundCount = contract.GetProperty("bounds").GetArrayLength()
 let projectionMarkdown =
-    $"# Compiled contract projection\n\nSource: `{sourceSha256}`  \nProfile: `{profile}`  \nContract: `{contractSha256}`\n\n- Catalogue entries: {catalogue.Length}\n- Actions: {actionCount}\n- Relationships: {relationshipCount}\n- Verification profiles: {verificationCount}\n- Bounds: {boundCount}\n"
+    $"# Compiled contract projection\n\nSource: `{sourceSha256}`\n\nBehavior: `{behavioralSha256}`\n\nProfile: `{profile}`\n\nContract: `{contractSha256}`\n\n- Catalogue entries: {catalogue.Length}\n- Actions: {actionCount}\n- Relationships: {relationshipCount}\n- Verification profiles: {verificationCount}\n- Bounds: {boundCount}\n"
 
 let outputs =
     [ ("COUT-Schemas", 1, [ ("schemas.json", writeJson "schemas.json" (common "COUT-Schemas" 1 schemasContent)) ])
@@ -273,8 +371,10 @@ let manifestEntries =
         row.Add("family", family)
         row.Add("ordinal", ordinal)
         row.Add("sourceSha256", sourceSha256)
+        row.Add("behavioralSha256", behavioralSha256)
         row.Add("profile", profile)
         row.Add("contractSha256", contractSha256)
+        row.Add("identity", identityNode ())
         row.Add("supported", true)
         row.Add("complete", true)
         row.Add("fresh", true)
@@ -294,8 +394,10 @@ let manifestEntries =
 let manifest = JsonObject()
 manifest.Add("schema", "fsgg.quint.compiled-output-manifest/1")
 manifest.Add("sourceSha256", sourceSha256)
+manifest.Add("behavioralSha256", behavioralSha256)
 manifest.Add("profile", profile)
 manifest.Add("contractSha256", contractSha256)
+manifest.Add("identity", identityNode ())
 manifest.Add("identityContract", identityContract)
 manifest.Add("qualificationContract", qualificationContract)
 manifest.Add("refusalContract", refusalContract)
