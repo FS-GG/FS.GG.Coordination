@@ -11,7 +11,7 @@ sourceAnalysis: readiness/70-gs2-03-1-qualification-manifest/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/70-gs2-03-1-qualification-manifest/analysis.json
-    digest: e2d74d02ef70280c031292427c37463a41ef6a630460364af61b4c54ea9d3c1c
+    digest: 88cbd5e98d3a03dc0b72e9a1964b949891f92d7ce8eef716bf64eb1c29075725
     schemaVersion: 1
   - label: checklist
     path: work/70-gs2-03-1-qualification-manifest/checklist.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/70-gs2-03-1-qualification-manifest/plan.md
-    digest: a88e67c6c7b4cc426ef79a758ab81a41475694560324c0f3a297edfdc8d64755
+    digest: 0f2ad6591837f02cd5a54518bc2d4a808239565b1d991bae9b6f3a47aef0830b
     schemaVersion: 1
   - label: spec
     path: work/70-gs2-03-1-qualification-manifest/spec.md
-    digest: f88f47fc59758a692701f7421605e9a5fd7fc2003167131bd2b6476b97210f51
+    digest: 554d5f987ecbd20a1b0b5e725efcecce560933709d648929154832066978f34e
     schemaVersion: 1
   - label: tasks
     path: work/70-gs2-03-1-qualification-manifest/tasks.yml
-    digest: e6dfa4670bbc92292955d9ea3d06edda603d2c37736c561157ecf4e064cbf2da
+    digest: fc5519282d02ce6b664dc16e2dcc583d826d138262728de37079bfc8e237f864
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -378,7 +378,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -405,7 +405,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -432,7 +432,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -459,7 +459,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -486,7 +486,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -513,7 +513,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -540,7 +540,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -567,7 +567,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -594,7 +594,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146
@@ -621,7 +621,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx
-      digest: "sha256:231bc070a92d13e9a7c00c557ac313a0a08286fc92adb3cc10a15c119eefe010"
+      digest: "sha256:8fb5ba2d033296c83dd357f9a887c5c9cced81f47c7150f6fc0c8e24f370b6a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 146

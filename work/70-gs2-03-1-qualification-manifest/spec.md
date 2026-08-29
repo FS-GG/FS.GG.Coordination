@@ -17,7 +17,7 @@ Reviewers can prove that one exact candidate was qualified from complete, fresh,
 
 ## Scope
 - SB-001: Define one repository-local canonical qualification-manifest schema, deterministic generator, strict validator, retained example, CLI boundary, and Q1/Q2/Q7 qualification evidence.
-- SB-002: Bind exact candidate identity plus complete closed sets for source, model, compiler, dependencies, generated cases, independent cases, external fixtures, package bytes, environment, results, and reviewers.
+- SB-002: Bind exact candidate identity plus complete closed sets for source, model, compiler, dependencies, generated cases, independent cases, external fixtures, package bytes, environment, results, and reviewers against a separately supplied, content-addressed expected-inventory contract.
 - SB-003: Preserve the canonical literate Quint protocol as the sole behavioral authority; manifest vocabulary and validation facts are typed protocol projections, not an independent behavioral model.
 
 ## Non-Goals
@@ -32,15 +32,15 @@ Reviewers can prove that one exact candidate was qualified from complete, fresh,
 
 ## Acceptance Scenarios
 - AC-001 [US-001] [US-004] [FR-001] [FR-002]: Given the same complete inputs in different discovery orders, when the manifest is generated, then canonical bytes, self-digest, candidate binding, and ordered entry identities are identical.
-- AC-002 [US-001] [FR-003]: Given one complete manifest, when it is validated, then every required category has its exact closed identity set and all digests, sizes, media types, provenance, timestamps, and candidate bindings agree.
+- AC-002 [US-001] [FR-003]: Given one complete manifest and its independently supplied expected inventory, when they are validated, then the manifest binds the exact inventory bytes, every required category has its exact closed identity set, and all digests, sizes, media types, provenance, timestamps, and candidate bindings agree.
 - AC-003 [US-002] [FR-004]: Given generated cases and results but no independently authored cases or a reviewer who is also the producer, when validation runs, then it refuses generated-only or self-reviewed evidence with distinct findings.
-- AC-004 [US-003] [FR-005]: Given any required category is missing, duplicated, stale, substituted, truncated, malformed, unsupported, or bound to another candidate, when validation runs, then it fails closed with the category and exact path identified.
+- AC-004 [US-003] [FR-005]: Given any required category is missing, duplicated, stale, substituted, truncated, malformed, unsupported, bound to another candidate, or removed together with its manifest-embedded expected ID, when validation runs against the unchanged independent inventory, then it fails closed with the category and exact path identified.
 - AC-005 [US-004] [FR-006]: Given one semantic manifest input changes, when generation is repeated, then the self-digest changes; given only discovery order or JSON presentation changes before canonicalization, the digest does not change.
 - AC-006 [US-001] [US-003] [FR-007]: Given the retained example and every validator class inversion, when Q1, pure Q2, and Q7 controls run, then the example is green and each inversion is red without network or production authority.
 
 ## Functional Requirements
 - FR-001: The manifest MUST bind schema version; source/model/compiler identities; exact candidate commit, tree, and compiled-contract identities; and one canonical UTC creation instant. (Stories: US-001, US-004; Acceptance: AC-001)
-- FR-002: Every category MUST be a duplicate-free, ordinally sorted closed set whose entries carry stable IDs, role/kind, immutable SHA-256, byte length where bytes exist, media type where applicable, producer/provenance identity, and candidate relationship. (Stories: US-001, US-004; Acceptance: AC-001, AC-002)
+- FR-002: Every category MUST be a duplicate-free, ordinally sorted closed set whose entries carry stable IDs, role/kind, immutable SHA-256, byte length where bytes exist, media type where applicable, producer/provenance identity, and candidate relationship. Its expected ID set MUST come from separately supplied canonical inventory bytes, and the manifest MUST bind those exact bytes by SHA-256. (Stories: US-001, US-004; Acceptance: AC-001, AC-002)
 - FR-003: The validator MUST require the exact category vocabulary: sources, model, compiler, dependencies, generated cases, independent cases, external fixtures, packages, environment, results, and reviewers; unknown properties, categories, roles, schema versions, digest forms, or mutable references MUST fail closed. (Stories: US-001, US-003; Acceptance: AC-002, AC-004)
 - FR-004: Generated and independent evidence MUST carry distinct authorship/provenance roles; at least one independent case and one independent reviewer MUST exist; a reviewer identity MUST differ from the producer identities of the candidate and reviewed results. (Stories: US-002; Acceptance: AC-003)
 - FR-005: Results and reviews MUST bind the exact candidate and the exact input-set digest, name their Q gate or review role, record a terminal accepted outcome, and use canonical timestamps that are not earlier than their inputs or later than manifest creation. (Stories: US-001, US-003; Acceptance: AC-002, AC-004)

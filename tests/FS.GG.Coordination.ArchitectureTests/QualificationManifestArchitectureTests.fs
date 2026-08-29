@@ -9,9 +9,10 @@ open FS.GG.Coordination.Qualification.Contracts
 
 let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 let private retained = Path.Combine(root, "evidence/github-substrate-v2/qualification-manifests/GS2-03.1.json")
+let private inventory = Path.Combine(root, "evidence/github-substrate-v2/qualification-inventories/GS2-03.1.json")
 
 let private findings bytes =
-    match QualificationManifest.validate (ReadOnlyMemory<byte>(bytes)) with
+    match QualificationManifest.validate (ReadOnlyMemory<byte>(File.ReadAllBytes inventory)) (ReadOnlyMemory<byte>(bytes)) with
     | Ok _ -> Set.empty
     | Error values -> values |> List.map _.Code |> Set.ofList
 
@@ -37,7 +38,7 @@ let ``retained qualification manifest rejects a substituted candidate`` () =
 let ``qualification manifest CLI validates the retained artifact read only`` () =
     let startInfo = ProcessStartInfo("dotnet")
     startInfo.ArgumentList.Add(Path.Combine(root, "src/FS.GG.Coordination.Cli/bin/Release/net10.0/FS.GG.Coordination.Cli.dll"))
-    for argument in [ "qualification-manifest"; "validate"; "--file"; retained; "--text" ] do
+    for argument in [ "qualification-manifest"; "validate"; "--file"; retained; "--inventory"; inventory; "--text" ] do
         startInfo.ArgumentList.Add argument
     startInfo.WorkingDirectory <- root
     startInfo.RedirectStandardOutput <- true

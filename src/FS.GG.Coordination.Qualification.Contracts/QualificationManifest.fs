@@ -48,8 +48,21 @@ type QualificationManifestReview =
       Principal: string
       CompletedAt: DateTimeOffset }
 
+type QualificationManifestExpectedInventory =
+    { Sources: string list
+      Model: string list
+      Compiler: string list
+      Dependencies: string list
+      GeneratedCases: string list
+      IndependentCases: string list
+      ExternalFixtures: string list
+      Packages: string list
+      Results: string list
+      Reviewers: string list }
+
 type QualificationManifestInput =
     { Candidate: QualificationManifestCandidate
+      Expected: QualificationManifestExpectedInventory
       CreatedAt: DateTimeOffset
       Sources: QualificationManifestContent list
       Model: QualificationManifestContent list
@@ -121,6 +134,26 @@ module QualificationManifest =
         let result = JsonArray()
         values |> List.sort |> List.iter (fun value -> result.Add(JsonValue.Create value))
         result
+
+    let private expectedPairs (expected: QualificationManifestExpectedInventory) =
+        [ "compiler", expected.Compiler; "dependencies", expected.Dependencies
+          "externalFixtures", expected.ExternalFixtures; "generatedCases", expected.GeneratedCases
+          "independentCases", expected.IndependentCases; "model", expected.Model
+          "packages", expected.Packages; "results", expected.Results
+          "reviewers", expected.Reviewers; "sources", expected.Sources ]
+
+    let private expectedIdsNode expected =
+        let node = JsonObject()
+        for name, ids in expectedPairs expected do node.Add(name, idArray ids)
+        node
+
+    let private inventoryNode expected =
+        let root = expectedIdsNode expected
+        root.Add("schema", JsonValue.Create "fsgg.coordination.qualification-inventory/1")
+        root
+
+    let private inventoryCanonicalBytes expected =
+        Array.append (inventoryNode expected |> canonicalBytes) [| byte '\n' |]
 
     let private contentNode kind candidateSha (entry: QualificationManifestContent) =
         let node = JsonObject()
@@ -195,18 +228,9 @@ module QualificationManifest =
         addString candidate "contractSha256" input.Candidate.ContractSha256
         addString candidate "producer" input.Candidate.Producer
         addString candidate "treeSha256" input.Candidate.TreeSha256
-        let expectedIds = JsonObject()
-        expectedIds.Add("compiler", input.Compiler |> List.map _.Id |> idArray)
-        expectedIds.Add("dependencies", input.Dependencies |> List.map _.Id |> idArray)
-        expectedIds.Add("externalFixtures", input.ExternalFixtures |> List.map _.Id |> idArray)
-        expectedIds.Add("generatedCases", input.GeneratedCases |> List.map _.Id |> idArray)
-        expectedIds.Add("independentCases", input.IndependentCases |> List.map _.Id |> idArray)
-        expectedIds.Add("model", input.Model |> List.map _.Id |> idArray)
-        expectedIds.Add("packages", input.Packages |> List.map _.Id |> idArray)
-        expectedIds.Add("results", input.Results |> List.map _.Id |> idArray)
-        expectedIds.Add("reviewers", input.Reviewers |> List.map _.Id |> idArray)
-        expectedIds.Add("sources", input.Sources |> List.map _.Id |> idArray)
+        let expectedIds = expectedIdsNode input.Expected
         candidate.Add("expectedIds", expectedIds)
+        addString candidate "inventorySha256" (inventoryCanonicalBytes input.Expected |> sha256)
         root.Add("candidate", candidate)
         root.Add("compiler", contentArray "compiler" input.Candidate.CommitSha input.Compiler)
         root.Add("dependencies", contentArray "dependency" input.Candidate.CommitSha input.Dependencies)
@@ -269,6 +293,46 @@ module QualificationManifest =
         | Some child -> [], finding code (path + "/" + name) "array" (child.ValueKind.ToString()) :: findings
         | None -> [], finding code (path + "/" + name) "present array" "missing" :: findings
 
+    let private parseInventory (inventory: ReadOnlyMemory<byte>) =
+        try
+            use document = JsonDocument.Parse inventory
+            let root = document.RootElement
+            let names =
+                [ "compiler"; "dependencies"; "externalFixtures"; "generatedCases"; "independentCases"
+                  "model"; "packages"; "results"; "reviewers"; "schema"; "sources" ]
+            let mutable findings = exactProperties "QM-INVENTORY-SHAPE" "/inventory" names root
+            let schema, next = stringProperty "QM-INVENTORY-SCHEMA" "/inventory" "schema" root findings
+            findings <- next
+            if schema <> "fsgg.coordination.qualification-inventory/1" then
+                findings <- finding "QM-INVENTORY-SCHEMA" "/inventory/schema" "fsgg.coordination.qualification-inventory/1" (if isNull schema then "<missing>" else schema) :: findings
+            let mutable values = Map.empty
+            for name in names |> List.filter ((<>) "schema") do
+                let elements, next = arrayProperty "QM-INVENTORY-IDS" "/inventory" name root findings
+                findings <- next
+                let ids =
+                    elements
+                    |> List.choose (fun value -> if value.ValueKind = JsonValueKind.String then Some(value.GetString()) else None)
+                if ids.Length <> elements.Length || List.isEmpty ids || ids |> List.exists (isId >> not) || ids <> List.sort ids || ids.Length <> (ids |> List.distinct).Length then
+                    findings <- finding "QM-INVENTORY-IDS" ("/inventory/" + name) "nonempty sorted unique stable identifiers" (String.concat "," ids) :: findings
+                values <- values.Add(name, ids)
+            let node = JsonNode.Parse(inventory.Span)
+            let canonical = Array.append (canonicalBytes node) [| byte '\n' |]
+            if not (inventory.Span.SequenceEqual(ReadOnlySpan<byte>(canonical))) then
+                findings <- finding "QM-INVENTORY-CANONICAL" "/inventory" "canonical JSON bytes" "non-canonical bytes" :: findings
+            match findings |> List.rev |> List.distinct with
+            | [] ->
+                Ok(
+                    { Sources = values["sources"]; Model = values["model"]; Compiler = values["compiler"]
+                      Dependencies = values["dependencies"]; GeneratedCases = values["generatedCases"]
+                      IndependentCases = values["independentCases"]; ExternalFixtures = values["externalFixtures"]
+                      Packages = values["packages"]; Results = values["results"]; Reviewers = values["reviewers"] },
+                    canonical)
+            | errors -> Error errors
+        with
+        | :? JsonException as error -> Error [ finding "QM-INVENTORY-JSON" "/inventory" "valid JSON" error.Message ]
+        | :? InvalidOperationException as error -> Error [ finding "QM-INVENTORY-TYPE" "/inventory" "valid inventory types" error.Message ]
+        | :? NullReferenceException as error -> Error [ finding "QM-INVENTORY-TYPE" "/inventory" "complete inventory" error.Message ]
+
     type private ObservedEntry =
         { Id: string; Producer: string; ObservedAt: DateTimeOffset option }
 
@@ -316,7 +380,7 @@ module QualificationManifest =
             observed.Add { Id = id; Producer = producer; ObservedAt = parsed })
         List.ofSeq observed, current
 
-    let validate (manifest: ReadOnlyMemory<byte>) =
+    let private validateManifest (expected: QualificationManifestExpectedInventory) expectedInventoryDigest (manifest: ReadOnlyMemory<byte>) =
         try
             use document = JsonDocument.Parse manifest
             let root = document.RootElement
@@ -333,7 +397,7 @@ module QualificationManifest =
             let createdAt = parseTime createdAtRaw
             if createdAt.IsNone then findings <- finding "QM-TIME" "/createdAt" "canonical UTC second" (if isNull createdAtRaw then "<missing>" else createdAtRaw) :: findings
             let candidateElement = tryProperty "candidate" root |> Option.defaultValue Unchecked.defaultof<JsonElement>
-            findings <- exactProperties "QM-CANDIDATE-SHAPE" "/candidate" [ "commitSha"; "contractSha256"; "expectedIds"; "inputSetSha256"; "producer"; "treeSha256" ] candidateElement @ findings
+            findings <- exactProperties "QM-CANDIDATE-SHAPE" "/candidate" [ "commitSha"; "contractSha256"; "expectedIds"; "inputSetSha256"; "inventorySha256"; "producer"; "treeSha256" ] candidateElement @ findings
             let commit, next = stringProperty "QM-CANDIDATE" "/candidate" "commitSha" candidateElement findings
             findings <- next
             let tree, next = stringProperty "QM-CANDIDATE" "/candidate" "treeSha256" candidateElement findings
@@ -342,19 +406,22 @@ module QualificationManifest =
             findings <- next
             let statedInputs, next = stringProperty "QM-INPUT-SET" "/candidate" "inputSetSha256" candidateElement findings
             findings <- next
+            let statedInventory, next = stringProperty "QM-INVENTORY-BINDING" "/candidate" "inventorySha256" candidateElement findings
+            findings <- next
             let candidateProducer, next = stringProperty "QM-CANDIDATE" "/candidate" "producer" candidateElement findings
             findings <- next
             if not (isRevision commit) then findings <- finding "QM-CANDIDATE" "/candidate/commitSha" "lowercase 40-hex revision" (if isNull commit then "<missing>" else commit) :: findings
             if not (isSha tree) then findings <- finding "QM-CANDIDATE" "/candidate/treeSha256" "lowercase SHA-256" (if isNull tree then "<missing>" else tree) :: findings
             if not (isSha contract) then findings <- finding "QM-CANDIDATE" "/candidate/contractSha256" "lowercase SHA-256" (if isNull contract then "<missing>" else contract) :: findings
             if not (isSha statedInputs) then findings <- finding "QM-INPUT-SET" "/candidate/inputSetSha256" "lowercase SHA-256" (if isNull statedInputs then "<missing>" else statedInputs) :: findings
+            if statedInventory <> expectedInventoryDigest then findings <- finding "QM-INVENTORY-BINDING" "/candidate/inventorySha256" expectedInventoryDigest (if isNull statedInventory then "<missing>" else statedInventory) :: findings
             if not (isId candidateProducer) then findings <- finding "QM-CANDIDATE" "/candidate/producer" "stable principal id" (if isNull candidateProducer then "<missing>" else candidateProducer) :: findings
             let expectedNames =
                 [ "compiler"; "dependencies"; "externalFixtures"; "generatedCases"; "independentCases"
                   "model"; "packages"; "results"; "reviewers"; "sources" ]
             let expectedElement = tryProperty "expectedIds" candidateElement |> Option.defaultValue Unchecked.defaultof<JsonElement>
             findings <- exactProperties "QM-EXPECTED-SHAPE" "/candidate/expectedIds" expectedNames expectedElement @ findings
-            let mutable expectedByCategory = Map.empty
+            let mutable embeddedByCategory = Map.empty
             for name in expectedNames do
                 let values, next = arrayProperty "QM-EXPECTED-IDS" "/candidate/expectedIds" name expectedElement findings
                 findings <- next
@@ -367,7 +434,13 @@ module QualificationManifest =
                 let ids = List.rev ids
                 if List.isEmpty ids || ids |> List.exists (isId >> not) || ids <> List.sort ids || ids.Length <> (ids |> List.distinct).Length then
                     findings <- finding "QM-EXPECTED-IDS" ("/candidate/expectedIds/" + name) "nonempty sorted unique stable identifiers" (String.concat "," ids) :: findings
-                expectedByCategory <- expectedByCategory.Add(name, ids)
+                embeddedByCategory <- embeddedByCategory.Add(name, ids)
+            let expectedByCategory = expectedPairs expected |> List.map (fun (name, ids) -> name, List.sort ids) |> Map.ofList
+            for name in expectedNames do
+                let embeddedIds = embeddedByCategory.TryFind name |> Option.defaultValue []
+                let authoritativeIds = expectedByCategory.TryFind name |> Option.defaultValue [] |> List.sort
+                if embeddedIds <> authoritativeIds then
+                    findings <- finding "QM-INVENTORY-BINDING" ("/candidate/expectedIds/" + name) (String.concat "," authoritativeIds) (String.concat "," embeddedIds) :: findings
             let categories =
                 [ "sources", "source"; "model", "quint-model"; "compiler", "compiler"
                   "dependencies", "dependency"; "generatedCases", "generated-case"
@@ -524,11 +597,23 @@ module QualificationManifest =
         | :? InvalidOperationException as error -> Error [ finding "QM-TYPE" "/" "valid manifest types" error.Message ]
         | :? NullReferenceException as error -> Error [ finding "QM-TYPE" "/" "complete manifest" error.Message ]
 
-    let generate input =
+    let generateInventory (expected: QualificationManifestExpectedInventory) =
+        let bytes = inventoryCanonicalBytes expected
+        match parseInventory (ReadOnlyMemory<byte>(bytes)) with
+        | Ok _ -> Ok bytes
+        | Error findings -> Error findings
+
+    let validate inventory manifest =
+        match parseInventory inventory with
+        | Ok(expected, canonical) -> validateManifest expected (sha256 canonical) manifest
+        | Error findings -> Error findings
+
+    let generate (input: QualificationManifestInput) =
+        let inventory = inventoryCanonicalBytes input.Expected
         let root = manifestNode input
         let digest = cloneWithoutDigest root |> canonicalBytes |> sha256
         addString root "digest" digest
         let bytes = Array.append (canonicalBytes root) [| byte '\n' |]
-        match validate (ReadOnlyMemory<byte>(bytes)) with
+        match validate (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(bytes)) with
         | Ok _ -> Ok bytes
         | Error findings -> Error findings

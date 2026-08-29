@@ -40,8 +40,21 @@ type QualificationManifestReview =
       Principal: string
       CompletedAt: DateTimeOffset }
 
+type QualificationManifestExpectedInventory =
+    { Sources: string list
+      Model: string list
+      Compiler: string list
+      Dependencies: string list
+      GeneratedCases: string list
+      IndependentCases: string list
+      ExternalFixtures: string list
+      Packages: string list
+      Results: string list
+      Reviewers: string list }
+
 type QualificationManifestInput =
     { Candidate: QualificationManifestCandidate
+      Expected: QualificationManifestExpectedInventory
       CreatedAt: DateTimeOffset
       Sources: QualificationManifestContent list
       Model: QualificationManifestContent list
@@ -67,5 +80,7 @@ module QualificationManifest =
     val Schema: string = "fsgg.coordination.qualification-manifest/1"
     val generate:
         input: QualificationManifestInput -> Result<byte array, QualificationManifestFinding list>
+    val generateInventory:
+        expected: QualificationManifestExpectedInventory -> Result<byte array, QualificationManifestFinding list>
     val validate:
-        manifest: ReadOnlyMemory<byte> -> Result<byte array, QualificationManifestFinding list>
+        inventory: ReadOnlyMemory<byte> -> manifest: ReadOnlyMemory<byte> -> Result<byte array, QualificationManifestFinding list>

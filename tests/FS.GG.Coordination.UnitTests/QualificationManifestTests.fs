@@ -20,20 +20,34 @@ let private content id producer minute =
       ObservedAt = time minute }
 
 let private validInput () =
+    let sources = [ content "source-a" "candidate-builder" 1; content "source-b" "candidate-builder" 1 ]
+    let model = [ content "model-a" "model-compiler" 1 ]
+    let compiler = [ content "compiler-a" "model-compiler" 1 ]
+    let dependencies = [ content "dependencies-a" "dependency-reader" 1 ]
+    let generatedCases = [ content "generated-a" "case-generator" 2 ]
+    let independentCases = [ content "independent-a" "oracle-author" 2 ]
+    let externalFixtures = [ content "fixture-a" "fixture-curator" 2 ]
+    let packages = [ content "package-a" "package-builder" 3 ]
+    let results =
+        [ { Id = "result-q1"; QGate = "Q1"; Sha256 = digest 'd'; Producer = "gate-runner"; CompletedAt = time 5 }
+          { Id = "result-q2"; QGate = "Q2"; Sha256 = digest 'e'; Producer = "gate-runner"; CompletedAt = time 6 }
+          { Id = "result-q7"; QGate = "Q7"; Sha256 = digest 'f'; Producer = "gate-runner"; CompletedAt = time 7 } ]
+    let reviewers =
+        [ { Id = "review-architecture"; Role = "architecture"; Sha256 = digest '1'; Principal = "independent-critic"; CompletedAt = time 8 } ]
     { Candidate =
         { CommitSha = String('a', 40)
           TreeSha256 = digest 'b'
           ContractSha256 = digest 'c'
           Producer = "candidate-builder" }
+      Expected =
+        { Sources = sources |> List.map _.Id; Model = model |> List.map _.Id; Compiler = compiler |> List.map _.Id
+          Dependencies = dependencies |> List.map _.Id; GeneratedCases = generatedCases |> List.map _.Id
+          IndependentCases = independentCases |> List.map _.Id; ExternalFixtures = externalFixtures |> List.map _.Id
+          Packages = packages |> List.map _.Id; Results = results |> List.map _.Id; Reviewers = reviewers |> List.map _.Id }
       CreatedAt = time 10
-      Sources = [ content "source-a" "candidate-builder" 1; content "source-b" "candidate-builder" 1 ]
-      Model = [ content "model-a" "model-compiler" 1 ]
-      Compiler = [ content "compiler-a" "model-compiler" 1 ]
-      Dependencies = [ content "dependencies-a" "dependency-reader" 1 ]
-      GeneratedCases = [ content "generated-a" "case-generator" 2 ]
-      IndependentCases = [ content "independent-a" "oracle-author" 2 ]
-      ExternalFixtures = [ content "fixture-a" "fixture-curator" 2 ]
-      Packages = [ content "package-a" "package-builder" 3 ]
+      Sources = sources; Model = model; Compiler = compiler; Dependencies = dependencies
+      GeneratedCases = generatedCases; IndependentCases = independentCases
+      ExternalFixtures = externalFixtures; Packages = packages
       Environment =
         { Os = "linux"
           Architecture = "x64"
@@ -43,16 +57,7 @@ let private validInput () =
           NetworkMode = "isolated"
           Producer = "environment-observer"
           ObservedAt = time 3 }
-      Results =
-        [ { Id = "result-q1"; QGate = "Q1"; Sha256 = digest 'd'; Producer = "gate-runner"; CompletedAt = time 5 }
-          { Id = "result-q2"; QGate = "Q2"; Sha256 = digest 'e'; Producer = "gate-runner"; CompletedAt = time 6 }
-          { Id = "result-q7"; QGate = "Q7"; Sha256 = digest 'f'; Producer = "gate-runner"; CompletedAt = time 7 } ]
-      Reviewers =
-        [ { Id = "review-architecture"
-            Role = "architecture"
-            Sha256 = digest '1'
-            Principal = "independent-critic"
-            CompletedAt = time 8 } ] }
+      Results = results; Reviewers = reviewers }
 
 let private generated input =
     match QualificationManifest.generate input with
@@ -60,7 +65,11 @@ let private generated input =
     | Error findings -> failwith (String.concat "; " (findings |> List.map (fun item -> item.Code + "@" + item.Path)))
 
 let private codes bytes =
-    match QualificationManifest.validate (ReadOnlyMemory<byte>(bytes)) with
+    let inventory =
+        match QualificationManifest.generateInventory (validInput ()).Expected with
+        | Ok value -> value
+        | Error findings -> failwithf "%A" findings
+    match QualificationManifest.validate (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(bytes)) with
     | Ok _ -> Set.empty
     | Error findings -> findings |> List.map _.Code |> Set.ofList
 
@@ -138,15 +147,25 @@ let ``resealed truncation of every closed inventory remains red`` () =
     for category in [ "compiler"; "dependencies"; "externalFixtures"; "generatedCases"; "independentCases"; "model"; "packages"; "sources" ] do
         let root = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
         let entries = root[category].AsArray()
+        let removedId = (entries[entries.Count - 1].AsObject()["id"]).GetValue<string>()
         entries.RemoveAt(entries.Count - 1)
+        let candidate = root["candidate"].AsObject()
+        let expectedIds = candidate["expectedIds"].AsObject()
+        let declared = expectedIds[category].AsArray()
+        declared.Remove(declared |> Seq.find (fun value -> value.GetValue<string>() = removedId)) |> ignore
         let observed = reseal root |> codes
-        Assert.Contains("QM-CATEGORY-CLOSED", observed)
+        Assert.Contains("QM-INVENTORY-BINDING", observed)
         Assert.DoesNotContain("QM-INPUT-SET", observed)
         Assert.DoesNotContain("QM-SELF-DIGEST", observed)
-    for category, expected in [ "results", "QM-RESULTS-CLOSED"; "reviewers", "QM-REVIEWS-CLOSED" ] do
+    for category in [ "results"; "reviewers" ] do
         let root = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
         let entries = root[category].AsArray()
+        let removedId = (entries[entries.Count - 1].AsObject()["id"]).GetValue<string>()
         entries.RemoveAt(entries.Count - 1)
+        let candidate = root["candidate"].AsObject()
+        let expectedIds = candidate["expectedIds"].AsObject()
+        let declared = expectedIds[category].AsArray()
+        declared.Remove(declared |> Seq.find (fun value -> value.GetValue<string>() = removedId)) |> ignore
         let observed = reseal root |> codes
-        Assert.Contains(expected, observed)
+        Assert.Contains("QM-INVENTORY-BINDING", observed)
         Assert.DoesNotContain("QM-SELF-DIGEST", observed)

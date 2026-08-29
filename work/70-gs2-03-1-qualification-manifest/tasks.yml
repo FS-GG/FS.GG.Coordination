@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/70-gs2-03-1-qualification-manifest/spec.md
-    digest: f88f47fc59758a692701f7421605e9a5fd7fc2003167131bd2b6476b97210f51
+    digest: 554d5f987ecbd20a1b0b5e725efcecce560933709d648929154832066978f34e
     schemaVersion: 1
   - label: clarifications
     path: work/70-gs2-03-1-qualification-manifest/clarifications.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/70-gs2-03-1-qualification-manifest/plan.md
-    digest: a88e67c6c7b4cc426ef79a758ab81a41475694560324c0f3a297edfdc8d64755
+    digest: 0f2ad6591837f02cd5a54518bc2d4a808239565b1d991bae9b6f3a47aef0830b
     schemaVersion: 1
 tasks:
   - id: T001
