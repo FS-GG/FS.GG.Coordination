@@ -34,6 +34,10 @@ let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
 
+let qualificationClock = Stopwatch.StartNew()
+let mutable externalProcessCount = 0
+let mutable quintProcessCount = 0
+
 let fail code detail =
     eprintfn "CANONICAL_QUINT_PROTOCOL_RED code=%s detail=%s" code detail
     exit 1
@@ -69,7 +73,12 @@ let requireFile code path =
     if not (File.Exists path) then
         fail code path
 
-let run workingDirectory executable arguments environment =
+let run workingDirectory (executable: string) arguments environment =
+    externalProcessCount <- externalProcessCount + 1
+
+    if executable.EndsWith(expectedQuint, StringComparison.Ordinal) then
+        quintProcessCount <- quintProcessCount + 1
+
     let info = ProcessStartInfo(executable)
     info.WorkingDirectory <- workingDirectory
     info.UseShellExecute <- false
@@ -98,16 +107,22 @@ let requireGreen code workingDirectory executable arguments environment =
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 
-let rec parse root staticOnly compilerOnly remaining =
+let rec parse root staticOnly compilerOnly output remaining =
     match remaining with
-    | [] -> root, staticOnly, compilerOnly
-    | "--root" :: value :: tail -> parse (Path.GetFullPath value) staticOnly compilerOnly tail
-    | "--static-only" :: tail -> parse root true compilerOnly tail
-    | "--compiler-only" :: tail -> parse root staticOnly true tail
+    | [] -> root, staticOnly, compilerOnly, output
+    | "--root" :: value :: tail -> parse (Path.GetFullPath value) staticOnly compilerOnly output tail
+    | "--static-only" :: tail -> parse root true compilerOnly output tail
+    | "--compiler-only" :: tail -> parse root staticOnly true output tail
+    | "--output" :: value :: tail -> parse root staticOnly compilerOnly (Some value) tail
     | value :: _ -> fail "ARGUMENT" value
 
-let root, staticOnly, compilerOnly =
-    parse (Path.GetFullPath ".") false false arguments
+let root, staticOnly, compilerOnly, outputOption =
+    parse (Path.GetFullPath ".") false false None arguments
+
+let qualificationOutput =
+    outputOption
+    |> Option.map Path.GetFullPath
+    |> Option.defaultValue (Path.Combine(root, "artifacts/canonical-quint/qualification.json"))
 
 let source = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
 
@@ -752,15 +767,21 @@ try
     File.WriteAllText(q2Qnt, q2Source)
     requireGreen "QUINT-Q2-TYPECHECK" scratch quint [ "typecheck"; q2Qnt ] [] |> ignore
 
+    let preparationDurationMs = qualificationClock.ElapsedMilliseconds
+
+    let preparationSha256 =
+        sha256Text ($"%s{sha256 qnt}|%s{sha256 q2Qnt}|%s{expectedToolchain}")
+
+    printfn
+        "CANONICAL_QUINT_COMPILER_OK contract=%s source=%s profile=%s preparation=%s durationMs=%d"
+        expectedContract
+        expectedSource
+        expectedProfile
+        preparationSha256
+        preparationDurationMs
+
     if compilerOnly then
         Directory.Delete(scratch, true)
-
-        printfn
-            "CANONICAL_QUINT_COMPILER_OK contract=%s source=%s profile=%s"
-            expectedContract
-            expectedSource
-            expectedProfile
-
         exit 0
 
     requireGreen
@@ -832,7 +853,7 @@ try
           + Environment.GetEnvironmentVariable("PATH") ]
 
     requireGreen
-        "QUINT-VERIFY"
+        "QUINT-POSITIVE-INVARIANTS-VERIFY"
         scratch
         quint
         [ "verify"
@@ -843,154 +864,14 @@ try
           "init"
           "--step"
           "step"
-          "--invariant"
+          "--invariants"
           "acceptedVocabularyIsQualified"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-AUTHORITY-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
           "acceptedAuthoritiesAreQualified"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-LIFECYCLE-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
           "humanIntentIsObservationIndependent"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-LIFECYCLE-DERIVATION-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
           "lifecycleStatusIsDerived"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-RELATION-VALIDITY-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
           "nativeRelationEdgesAreValid"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-RELATION-PRESERVATION-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
           "relationChangesPreserveUnrelatedEdges"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-PROTOCOL-STREAM-ORDERING-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
           "protocolEnvelopesAreValidAndOrdered"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
-        environment
-    |> ignore
-
-    requireGreen
-        "QUINT-PROTOCOL-STREAM-RETENTION-VERIFY"
-        scratch
-        quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariant"
           "durableProtocolCheckpointsArePreserved"
           "--max-steps"
           "4"
@@ -1810,11 +1691,59 @@ try
     requireAuthorityRed "omitted-family" (mutateStep "nativeGitHubObservation") (fun text ->
         text.Replace(omittedFamilyRow, ""))
 
+    let totalDurationMs = qualificationClock.ElapsedMilliseconds
+    let q2DurationMs = totalDurationMs - preparationDurationMs
+
+    let resultSha256 =
+        sha256Text ($"passed|passed|8|51|%s{preparationSha256}")
+
+    let outputDirectory = Path.GetDirectoryName qualificationOutput
+
+    if not (String.IsNullOrWhiteSpace outputDirectory) then
+        Directory.CreateDirectory outputDirectory |> ignore
+
+    let temporaryOutput = qualificationOutput + "." + Guid.NewGuid().ToString("N") + ".tmp"
+
+    do
+        use outputStream = File.Create temporaryOutput
+        use writer = new Utf8JsonWriter(outputStream, JsonWriterOptions(Indented = true))
+        writer.WriteStartObject()
+        writer.WriteString("schema", "fsgg.coordination.canonical-quint-qualification/1")
+        writer.WriteString("q1Outcome", "passed")
+        writer.WriteString("q2Outcome", "passed")
+        writer.WriteNumber("positiveInvariantCount", 8)
+        writer.WriteNumber("negativeControlCount", 51)
+        writer.WriteNumber("preparationDurationMs", preparationDurationMs)
+        writer.WriteNumber("q2DurationMs", q2DurationMs)
+        writer.WriteNumber("totalDurationMs", totalDurationMs)
+        writer.WriteStartObject("processCounts")
+        writer.WriteNumber("external", externalProcessCount)
+        writer.WriteNumber("quint", quintProcessCount)
+        writer.WriteEndObject()
+        writer.WriteStartObject("tools")
+        writer.WriteString("toolchainSha256", expectedToolchain)
+        writer.WriteString("quintSha256", expectedQuint)
+        writer.WriteString("apalacheJarSha256", expectedApalacheJar)
+        writer.WriteEndObject()
+        writer.WriteStartObject("inputs")
+        writer.WriteString("sourceSha256", expectedSource)
+        writer.WriteString("contractSha256", expectedContract)
+        writer.WriteEndObject()
+        writer.WriteString("preparationSha256", preparationSha256)
+        writer.WriteString("resultSha256", resultSha256)
+        writer.WriteEndObject()
+        writer.Flush()
+        outputStream.Flush(true)
+
+    File.Move(temporaryOutput, qualificationOutput, true)
+
     printfn
-        "CANONICAL_QUINT_PROTOCOL_OK contract=%s source=%s profile=%s"
+        "CANONICAL_QUINT_PROTOCOL_OK contract=%s source=%s profile=%s receipt=%s durationMs=%d"
         expectedContract
         expectedSource
         expectedProfile
+        qualificationOutput
+        totalDurationMs
 finally
     if Directory.Exists scratch then
         Directory.Delete(scratch, true)

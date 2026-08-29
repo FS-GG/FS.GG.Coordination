@@ -66,14 +66,6 @@ jobs:
         run: dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
       - name: Run architecture and negative-control tests
         run: dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=architecture-tests.trx" --results-directory artifacts/test-results/70-gs2-03-1-qualification-manifest
-      - name: Qualify the Linux user and network namespace sandbox
-        run: |
-          if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-          /usr/bin/unshare --user --map-root-user --net -- /usr/bin/true
-      - name: Run exact-head canonical Quint Q1 and Q2
-        run: bash eng/qualify-canonical-quint.sh
       - name: Stage compiler and test evidence
         run: |
           mkdir -p "$RUNNER_TEMP/compiler-and-tests"
@@ -83,6 +75,39 @@ jobs:
         with:
           name: compiler-and-tests
           path: ${{ runner.temp }}/compiler-and-tests/architecture.trx
+          if-no-files-found: error
+
+  canonical-quint:
+    name: canonical-quint
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint
+      FSGG_QUINT_RECEIPT: ${{ runner.temp }}/canonical-quint/qualification.json
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Restore the formal qualification dependency
+        run: dotnet restore src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj --locked-mode
+      - name: Qualify the Linux user and network namespace sandbox
+        run: |
+          if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          /usr/bin/unshare --user --map-root-user --net -- /usr/bin/true
+      - name: Run one exact-head canonical Quint Q1 and Q2 attempt
+        run: bash eng/qualify-canonical-quint.sh
+      - name: Upload canonical Quint evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-quint
+          path: ${{ runner.temp }}/canonical-quint/qualification.json
           if-no-files-found: error
 
   dependency-and-security:
@@ -176,7 +201,7 @@ jobs:
 
   evidence-manifest:
     name: evidence-manifest
-    needs: [deterministic-build, compiler-and-tests, dependency-and-security, package-install-smoke, bootstrap-recovery]
+    needs: [deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, bootstrap-recovery]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:

@@ -43,6 +43,14 @@ let private arrayProperty (name: string) (element: JsonElement) =
     else
         None
 
+let private int64Property (name: string) (element: JsonElement) =
+    let mutable value = Unchecked.defaultof<JsonElement>
+    let mutable number = 0L
+    if element.TryGetProperty(name, &value) && value.ValueKind = JsonValueKind.Number && value.TryGetInt64(&number) then
+        Some number
+    else
+        None
+
 let private stringArray (name: string) element =
     arrayProperty name element
     |> Option.defaultValue []
@@ -338,6 +346,74 @@ let private inspectRecoveryArtifact (artifactRoot: string) (head: string) (contr
         | _ -> [ violation "recovery-receipt-missing" job.Artifact ])
     |> Option.defaultValue [ violation "recovery-receipt-contract" "bootstrap-recovery job is absent" ]
 
+let private inspectCanonicalQuintReceipt (path: string) =
+    try
+        use document = JsonDocument.Parse(File.ReadAllBytes path)
+        let root = document.RootElement
+        let properties = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        let expectedProperties =
+            [ "schema"; "q1Outcome"; "q2Outcome"; "positiveInvariantCount"; "negativeControlCount"
+              "preparationDurationMs"; "q2DurationMs"; "totalDurationMs"; "processCounts"; "tools"; "inputs"
+              "preparationSha256"; "resultSha256" ]
+        let processCounts = root.GetProperty("processCounts")
+        let tools = root.GetProperty("tools")
+        let inputs = root.GetProperty("inputs")
+        let processProperties = processCounts.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        let toolProperties = tools.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        let inputProperties = inputs.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        let preparationDigest = stringProperty "preparationSha256" root |> Option.defaultValue ""
+        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|51|%s{preparationDigest}"))
+        let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
+        let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
+        let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
+        [ if root.ValueKind <> JsonValueKind.Object || properties <> expectedProperties then
+              yield violation "quint-receipt-properties" (String.concat "," properties)
+          if stringProperty "schema" root <> Some "fsgg.coordination.canonical-quint-qualification/1" then
+              yield violation "quint-receipt-schema" "unsupported or absent schema"
+          if stringProperty "q1Outcome" root <> Some "passed" || stringProperty "q2Outcome" root <> Some "passed" then
+              yield violation "quint-receipt-outcome" "Q1 and Q2 must both pass"
+          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 51L then
+              yield violation "quint-receipt-inventory" "expected eight positive invariants and 51 negative controls"
+          if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
+              yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
+          if int64Property "external" processCounts |> Option.defaultValue 0L <= 0L
+             || int64Property "quint" processCounts |> Option.defaultValue 0L <= 0L then
+              yield violation "quint-receipt-process-count" "process counts must be positive"
+          if processProperties <> [ "external"; "quint" ] then
+              yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
+          if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then
+              yield violation "quint-receipt-tool-properties" (String.concat "," toolProperties)
+          if inputProperties <> [ "sourceSha256"; "contractSha256" ] then
+              yield violation "quint-receipt-input-properties" (String.concat "," inputProperties)
+          let expectedTools =
+              [ "toolchainSha256", "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
+                "quintSha256", "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+                "apalacheJarSha256", "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b" ]
+          for name, expected in expectedTools do
+              if stringProperty name tools <> Some expected then
+                  yield violation "quint-receipt-tool-digest" name
+          let expectedInputs =
+              [ "sourceSha256", "b82983e10324c241cef1187cf58ce2ec5222ab4d7e253d53179d5343927c518a"
+                "contractSha256", "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76" ]
+          for name, expected in expectedInputs do
+              if stringProperty name inputs <> Some expected then
+                  yield violation "quint-receipt-input-digest" name
+          if not (isLowerSha256 preparationDigest) then
+              yield violation "quint-receipt-preparation-digest" preparationDigest
+          if stringProperty "resultSha256" root <> Some expectedResult then
+              yield violation "quint-receipt-result-digest" "result digest does not bind the outcomes and inventories" ]
+    with exceptionValue ->
+        [ violation "quint-receipt-unreadable" exceptionValue.Message ]
+
+let private inspectCanonicalQuintArtifact (artifactRoot: string) (contract: BootstrapContract) =
+    contract.Jobs
+    |> List.tryFind (fun job -> job.Id = "canonical-quint")
+    |> Option.map (fun job ->
+        match safeArtifactPath artifactRoot job.Artifact with
+        | Some path when File.Exists path -> inspectCanonicalQuintReceipt path
+        | _ -> [ violation "quint-receipt-missing" job.Artifact ])
+    |> Option.defaultValue [ violation "quint-receipt-contract" "canonical-quint job is absent" ]
+
 let private writeEvidence (output: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) =
     if not (isSha head) then failwith "candidate head must be an exact 40-hex SHA"
     let artifacts =
@@ -375,6 +451,7 @@ let private inspectEvidence (path: string) (head: string) (artifactRoot: string)
         let expected = contract.Jobs |> List.map (fun gate -> gate.Id, gate) |> Map.ofList
         let ids = gates |> List.choose (stringProperty "id")
         [ yield! inspectRecoveryArtifact artifactRoot head contract
+          yield! inspectCanonicalQuintArtifact artifactRoot contract
           if stringProperty "schema" root <> Some contract.EvidenceSchema then
               yield violation "evidence-schema" "unsupported or absent schema"
           if stringProperty "candidate" root <> Some(head.ToLowerInvariant()) then
@@ -419,10 +496,12 @@ let result =
             match optionValue "--head" arguments, optionValue "--artifacts" arguments, optionValue "--output" arguments with
             | Some head, Some artifacts, Some output when isSha head ->
                 let artifactRoot = Path.GetFullPath artifacts
-                let recoveryViolations = inspectRecoveryArtifact artifactRoot head contract
-                if List.isEmpty recoveryViolations then
+                let qualificationViolations =
+                    inspectRecoveryArtifact artifactRoot head contract
+                    @ inspectCanonicalQuintArtifact artifactRoot contract
+                if List.isEmpty qualificationViolations then
                     writeEvidence (Path.GetFullPath output) head artifactRoot contract
-                recoveryViolations
+                qualificationViolations
             | _ -> [ violation "argument" "collect requires --head, --artifacts, and --output" ]
         | "evidence" ->
             match optionValue "--head" arguments, optionValue "--artifacts" arguments, optionValue "--file" arguments with

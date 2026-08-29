@@ -3,6 +3,8 @@ module FS.GG.Coordination.BootstrapCiTests
 open System
 open System.Diagnostics
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json.Nodes
 open Xunit
 
@@ -76,6 +78,7 @@ let private createArtifacts root =
     let paths =
         [ "deterministic-build/protocol.dll"
           "compiler-and-tests/architecture.trx"
+          "canonical-quint/qualification.json"
           "dependency-and-security/vulnerability-report.json"
           "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
           "bootstrap-recovery/result.json"
@@ -90,6 +93,20 @@ let private createArtifacts root =
             File.WriteAllText(
                 target,
                 $"{{\"schema\":\"fsgg.coordination.bootstrap-recovery/1\",\"candidate\":\"%s{exactHead}\",\"packageSha256\":\"%s{packageDigest}\",\"publishedSources\":[\"https://api.nuget.org/v3/index.json\"],\"stages\":[\"clone\",\"restore\",\"build\",\"unit-tests\",\"architecture-tests\",\"pack\",\"install\",\"execute\"]}}\n")
+        elif relative = "canonical-quint/qualification.json" then
+            let preparationDigest = String.replicate 64 "c"
+            let sourceDigest = "b82983e10324c241cef1187cf58ce2ec5222ab4d7e253d53179d5343927c518a"
+            let contractDigest = "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
+            let toolchainDigest = "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
+            let quintDigest = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+            let apalacheDigest = "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
+            let resultDigest =
+                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|51|%s{preparationDigest}"))
+                |> Convert.ToHexString
+                |> _.ToLowerInvariant()
+            File.WriteAllText(
+                target,
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":51,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":70,\"quint\":60}},\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"resultSha256\":\"%s{resultDigest}\"}}")
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
 
@@ -121,7 +138,7 @@ let private runPackageSmoke scratch packageOverride =
     childProcess.ExitCode, output.Trim(), error.Trim()
 
 [<Fact>]
-let ``bootstrap workflow satisfies the exact six-job contract`` () =
+let ``bootstrap workflow satisfies the exact seven-job contract`` () =
     let exitCode, output, error = runBootstrap repositoryRoot [ "workflow" ]
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=workflow", output)
@@ -398,6 +415,30 @@ let private mutateRecoveryReceipt mutate =
         let path = Path.Combine(artifacts, "bootstrap-recovery/result.json")
         mutate path
         runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ])
+
+let private mutateCanonicalQuintReceipt mutate =
+    withEvidence (fun root artifacts manifest ->
+        let path = Path.Combine(artifacts, "canonical-quint/qualification.json")
+        mutate path
+        runBootstrap root [ "evidence"; "--head"; exactHead; "--artifacts"; artifacts; "--file"; manifest ])
+
+[<Theory>]
+[<InlineData("\"q1Outcome\":\"passed\"", "\"q1Outcome\":\"failed\"", "quint-receipt-outcome")>]
+[<InlineData("\"positiveInvariantCount\":8", "\"positiveInvariantCount\":7", "quint-receipt-inventory")>]
+[<InlineData("\"totalDurationMs\":300", "\"totalDurationMs\":301", "quint-receipt-timing")>]
+[<InlineData("\"quint\":60", "\"quint\":0", "quint-receipt-process-count")>]
+[<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
+let ``canonical Quint receipt rejects incomplete or contradictory evidence`` (original: string) (replacement: string) (rule: string) =
+    let exitCode, _, error =
+        mutateCanonicalQuintReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace(original, replacement)))
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains($"rule=%s{rule}", error)
+
+[<Fact>]
+let ``canonical Quint receipt rejects malformed JSON`` () =
+    let exitCode, _, error = mutateCanonicalQuintReceipt (fun path -> File.WriteAllText(path, "not-json"))
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=quint-receipt-unreadable", error)
 
 [<Fact>]
 let ``recovery evidence rejects malformed JSON`` () =

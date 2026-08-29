@@ -101,13 +101,7 @@ export JAVA_HOME="$java_home"
 export HOME="$qualification_root/home"
 
 cd "$repo_root"
-dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --compiler-only
-dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .
-"$tool_path/fsgg-sdd" analyze --root . --work 70-gs2-03-1-qualification-manifest --text
-"$tool_path/fsgg-sdd" evidence --root . --work 70-gs2-03-1-qualification-manifest \
-  --sync-observed-run artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx --text
-"$tool_path/fsgg-sdd" analyze --root . --work 70-gs2-03-1-qualification-manifest --text
-"$tool_path/fsgg-sdd" verify --root . --work 70-gs2-03-1-qualification-manifest --text
-"$tool_path/fsgg-sdd" ship --root . --work 70-gs2-03-1-qualification-manifest --text
+qualification_receipt="${FSGG_QUINT_RECEIPT:-$repo_root/artifacts/canonical-quint/qualification.json}"
+dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output "$qualification_receipt"
 
-printf 'CANONICAL_QUINT_HOSTED_QUALIFICATION_OK root=%s\n' "$repo_root"
+printf 'CANONICAL_QUINT_HOSTED_QUALIFICATION_OK root=%s receipt=%s\n' "$repo_root" "$qualification_receipt"

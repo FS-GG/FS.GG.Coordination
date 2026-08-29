@@ -39,16 +39,19 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     let validator =
         File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
 
+    Assert.Contains("  canonical-quint:", workflow)
+    Assert.Contains("needs: [deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, bootstrap-recovery]", workflow)
     Assert.Contains("run: bash eng/qualify-canonical-quint.sh", workflow)
-    Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --compiler-only", qualification)
-    Assert.Contains("dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root .", qualification)
+    let validatorInvocation = "dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output"
+    Assert.Contains(validatorInvocation, qualification)
+    Assert.Equal(
+        qualification.IndexOf(validatorInvocation, StringComparison.Ordinal),
+        qualification.LastIndexOf(validatorInvocation, StringComparison.Ordinal)
+    )
+    Assert.DoesNotContain("--compiler-only", qualification)
     Assert.Contains("quint-linux-amd64", qualification)
     Assert.Contains("sha256sum --check --status", qualification)
-    Assert.Contains("evidence --root . --work 70-gs2-03-1-qualification-manifest", qualification)
-    Assert.Contains("--sync-observed-run artifacts/test-results/70-gs2-03-1-qualification-manifest/architecture-tests.trx", qualification)
-    Assert.Contains("fsgg-sdd\" analyze --root . --work 70-gs2-03-1-qualification-manifest", qualification)
-    Assert.Contains("fsgg-sdd\" verify --root . --work 70-gs2-03-1-qualification-manifest", qualification)
-    Assert.Contains("fsgg-sdd\" ship --root . --work 70-gs2-03-1-qualification-manifest", qualification)
+    Assert.DoesNotContain("70-gs2-03-1-qualification-manifest", qualification)
     Assert.Contains("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0", workflow)
     Assert.Contains("/usr/bin/unshare --user --map-root-user --net -- /usr/bin/true", workflow)
     Assert.Contains("equivalent-named-block-partition", validator)
@@ -57,14 +60,13 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("equivalent-quint-trivia", validator)
     Assert.Contains("executedEquivalentVariants.Add name", validator)
     Assert.Contains("EQUIVALENT-AUTHORING-COVERAGE", validator)
+    Assert.Contains("\"--invariants\"", validator)
+    Assert.Contains("fsgg.coordination.canonical-quint-qualification/1", validator)
 
-    let analyzeCommand = "fsgg-sdd\" analyze --root . --work 70-gs2-03-1-qualification-manifest"
-    let evidenceCommand = "fsgg-sdd\" evidence --root . --work 70-gs2-03-1-qualification-manifest"
-    let firstAnalyze = qualification.IndexOf(analyzeCommand, StringComparison.Ordinal)
-    let evidenceSync = qualification.IndexOf(evidenceCommand, StringComparison.Ordinal)
-    let refreshedAnalyze = qualification.IndexOf(analyzeCommand, firstAnalyze + analyzeCommand.Length, StringComparison.Ordinal)
-    Assert.True(firstAnalyze >= 0 && firstAnalyze < evidenceSync)
-    Assert.True(evidenceSync < refreshedAnalyze)
+    let receiptSchema =
+        File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json"))
+    Assert.Contains("fsgg.coordination.canonical-quint-qualification/1", receiptSchema)
+    Assert.Contains("\"negativeControlCount\":{\"const\":51}", receiptSchema)
 
 [<Fact>]
 let ``hosted canonical Quint gate cannot silently downgrade to static validation`` () =
