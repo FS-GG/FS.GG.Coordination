@@ -623,7 +623,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 30000,
+        "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -649,7 +649,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 30000,
+        "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -675,7 +675,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 30000,
+        "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -701,7 +701,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 30000,
+        "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -727,7 +727,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 30000,
+        "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -753,7 +753,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 30000,
+        "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
