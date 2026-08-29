@@ -117,6 +117,11 @@ module QualificationManifest =
     let private addString (target: JsonObject) (name: string) (value: string) = target.Add(name, JsonValue.Create value)
     let private addInt64 (target: JsonObject) (name: string) (value: int64) = target.Add(name, JsonValue.Create value)
 
+    let private idArray (values: string list) =
+        let result = JsonArray()
+        values |> List.sort |> List.iter (fun value -> result.Add(JsonValue.Create value))
+        result
+
     let private contentNode kind candidateSha (entry: QualificationManifestContent) =
         let node = JsonObject()
         addInt64 node "bytes" entry.Bytes
@@ -190,6 +195,18 @@ module QualificationManifest =
         addString candidate "contractSha256" input.Candidate.ContractSha256
         addString candidate "producer" input.Candidate.Producer
         addString candidate "treeSha256" input.Candidate.TreeSha256
+        let expectedIds = JsonObject()
+        expectedIds.Add("compiler", input.Compiler |> List.map _.Id |> idArray)
+        expectedIds.Add("dependencies", input.Dependencies |> List.map _.Id |> idArray)
+        expectedIds.Add("externalFixtures", input.ExternalFixtures |> List.map _.Id |> idArray)
+        expectedIds.Add("generatedCases", input.GeneratedCases |> List.map _.Id |> idArray)
+        expectedIds.Add("independentCases", input.IndependentCases |> List.map _.Id |> idArray)
+        expectedIds.Add("model", input.Model |> List.map _.Id |> idArray)
+        expectedIds.Add("packages", input.Packages |> List.map _.Id |> idArray)
+        expectedIds.Add("results", input.Results |> List.map _.Id |> idArray)
+        expectedIds.Add("reviewers", input.Reviewers |> List.map _.Id |> idArray)
+        expectedIds.Add("sources", input.Sources |> List.map _.Id |> idArray)
+        candidate.Add("expectedIds", expectedIds)
         root.Add("candidate", candidate)
         root.Add("compiler", contentArray "compiler" input.Candidate.CommitSha input.Compiler)
         root.Add("dependencies", contentArray "dependency" input.Candidate.CommitSha input.Dependencies)
@@ -316,7 +333,7 @@ module QualificationManifest =
             let createdAt = parseTime createdAtRaw
             if createdAt.IsNone then findings <- finding "QM-TIME" "/createdAt" "canonical UTC second" (if isNull createdAtRaw then "<missing>" else createdAtRaw) :: findings
             let candidateElement = tryProperty "candidate" root |> Option.defaultValue Unchecked.defaultof<JsonElement>
-            findings <- exactProperties "QM-CANDIDATE-SHAPE" "/candidate" [ "commitSha"; "contractSha256"; "inputSetSha256"; "producer"; "treeSha256" ] candidateElement @ findings
+            findings <- exactProperties "QM-CANDIDATE-SHAPE" "/candidate" [ "commitSha"; "contractSha256"; "expectedIds"; "inputSetSha256"; "producer"; "treeSha256" ] candidateElement @ findings
             let commit, next = stringProperty "QM-CANDIDATE" "/candidate" "commitSha" candidateElement findings
             findings <- next
             let tree, next = stringProperty "QM-CANDIDATE" "/candidate" "treeSha256" candidateElement findings
@@ -332,6 +349,25 @@ module QualificationManifest =
             if not (isSha contract) then findings <- finding "QM-CANDIDATE" "/candidate/contractSha256" "lowercase SHA-256" (if isNull contract then "<missing>" else contract) :: findings
             if not (isSha statedInputs) then findings <- finding "QM-INPUT-SET" "/candidate/inputSetSha256" "lowercase SHA-256" (if isNull statedInputs then "<missing>" else statedInputs) :: findings
             if not (isId candidateProducer) then findings <- finding "QM-CANDIDATE" "/candidate/producer" "stable principal id" (if isNull candidateProducer then "<missing>" else candidateProducer) :: findings
+            let expectedNames =
+                [ "compiler"; "dependencies"; "externalFixtures"; "generatedCases"; "independentCases"
+                  "model"; "packages"; "results"; "reviewers"; "sources" ]
+            let expectedElement = tryProperty "expectedIds" candidateElement |> Option.defaultValue Unchecked.defaultof<JsonElement>
+            findings <- exactProperties "QM-EXPECTED-SHAPE" "/candidate/expectedIds" expectedNames expectedElement @ findings
+            let mutable expectedByCategory = Map.empty
+            for name in expectedNames do
+                let values, next = arrayProperty "QM-EXPECTED-IDS" "/candidate/expectedIds" name expectedElement findings
+                findings <- next
+                let mutable ids = []
+                for index, value in values |> List.indexed do
+                    if value.ValueKind <> JsonValueKind.String then
+                        findings <- finding "QM-EXPECTED-IDS" $"/candidate/expectedIds/%s{name}/%d{index}" "stable identifier" (value.ValueKind.ToString()) :: findings
+                    else
+                        ids <- value.GetString() :: ids
+                let ids = List.rev ids
+                if List.isEmpty ids || ids |> List.exists (isId >> not) || ids <> List.sort ids || ids.Length <> (ids |> List.distinct).Length then
+                    findings <- finding "QM-EXPECTED-IDS" ("/candidate/expectedIds/" + name) "nonempty sorted unique stable identifiers" (String.concat "," ids) :: findings
+                expectedByCategory <- expectedByCategory.Add(name, ids)
             let categories =
                 [ "sources", "source"; "model", "quint-model"; "compiler", "compiler"
                   "dependencies", "dependency"; "generatedCases", "generated-case"
@@ -342,6 +378,10 @@ module QualificationManifest =
                 let observed, next = validateContent category kind commit root findings
                 findings <- next
                 observedByCategory <- observedByCategory.Add(category, observed)
+                let observedIds = observed |> List.map _.Id
+                let expectedIds = expectedByCategory.TryFind category |> Option.defaultValue []
+                if observedIds <> expectedIds then
+                    findings <- finding "QM-CATEGORY-CLOSED" ("/" + category) (String.concat "," expectedIds) (String.concat "," observedIds) :: findings
             let environment = tryProperty "environment" root |> Option.defaultValue Unchecked.defaultof<JsonElement>
             findings <- exactProperties "QM-ENVIRONMENT-SHAPE" "/environment" [ "architecture"; "candidateSha"; "locale"; "networkMode"; "observedAt"; "os"; "producer"; "runtime"; "timezone" ] environment @ findings
             let environmentNames = [ "architecture"; "locale"; "networkMode"; "os"; "producer"; "runtime"; "timezone" ]
@@ -373,6 +413,7 @@ module QualificationManifest =
             let resultProducers = HashSet<string>(StringComparer.Ordinal)
             let resultTimes = ResizeArray<DateTimeOffset>()
             let resultIds = HashSet<string>(StringComparer.Ordinal)
+            let observedResultIds = ResizeArray<string>()
             let mutable previousResult = ""
             resultElements |> List.iteri (fun index entry ->
                 let path = $"/results/%d{index}"
@@ -396,6 +437,7 @@ module QualificationManifest =
                 if not (isId id) || not (resultIds.Add id) then findings <- finding "QM-RESULT-ID" (path + "/id") "unique stable identifier" (if isNull id then "<missing>" else id) :: findings
                 if index > 0 && String.CompareOrdinal(previousResult, id) >= 0 then findings <- finding "QM-RESULT-ORDER" (path + "/id") "ordinal id order" id :: findings
                 previousResult <- if isNull id then previousResult else id
+                if not (isNull id) then observedResultIds.Add id
                 if not (stringPattern "^Q(?:[0-9]|10)$" gate) then findings <- finding "QM-RESULT-GATE" (path + "/qGate") "Q0..Q10" (if isNull gate then "<missing>" else gate) :: findings
                 if outcome <> "passed" then findings <- finding "QM-RESULT-OUTCOME" (path + "/outcome") "passed" (if isNull outcome then "<missing>" else outcome) :: findings
                 if not (isSha digest) then findings <- finding "QM-RESULT-DIGEST" (path + "/sha256") "lowercase SHA-256" (if isNull digest then "<missing>" else digest) :: findings
@@ -405,11 +447,15 @@ module QualificationManifest =
                 match parseTime completedRaw with
                 | Some value -> resultTimes.Add value
                 | None -> findings <- finding "QM-TIME" (path + "/completedAt") "canonical UTC second" (if isNull completedRaw then "<missing>" else completedRaw) :: findings)
+            let expectedResultIds = expectedByCategory.TryFind "results" |> Option.defaultValue []
+            if List.ofSeq observedResultIds <> expectedResultIds then
+                findings <- finding "QM-RESULTS-CLOSED" "/results" (String.concat "," expectedResultIds) (String.concat "," observedResultIds) :: findings
             let reviewElements, next = arrayProperty "QM-REVIEWS" "" "reviewers" root findings
             findings <- next
             if List.isEmpty reviewElements then findings <- finding "QM-REVIEWS-EMPTY" "/reviewers" "at least one independent reviewer" "empty" :: findings
             let reviewTimes = ResizeArray<DateTimeOffset>()
             let reviewIds = HashSet<string>(StringComparer.Ordinal)
+            let observedReviewIds = ResizeArray<string>()
             let mutable previousReview = ""
             reviewElements |> List.iteri (fun index entry ->
                 let path = $"/reviewers/%d{index}"
@@ -433,6 +479,7 @@ module QualificationManifest =
                 if not (isId id) || not (reviewIds.Add id) then findings <- finding "QM-REVIEW-ID" (path + "/id") "unique stable identifier" (if isNull id then "<missing>" else id) :: findings
                 if index > 0 && String.CompareOrdinal(previousReview, id) >= 0 then findings <- finding "QM-REVIEW-ORDER" (path + "/id") "ordinal id order" id :: findings
                 previousReview <- if isNull id then previousReview else id
+                if not (isNull id) then observedReviewIds.Add id
                 if not ([ "adapter"; "architecture"; "cutover"; "migration"; "security" ] |> List.contains role) then findings <- finding "QM-REVIEW-ROLE" (path + "/role") "closed review role" (if isNull role then "<missing>" else role) :: findings
                 if outcome <> "accepted" then findings <- finding "QM-REVIEW-OUTCOME" (path + "/outcome") "accepted" (if isNull outcome then "<missing>" else outcome) :: findings
                 if not (isSha digest) then findings <- finding "QM-REVIEW-DIGEST" (path + "/sha256") "lowercase SHA-256" (if isNull digest then "<missing>" else digest) :: findings
@@ -443,6 +490,9 @@ module QualificationManifest =
                 match parseTime completedRaw with
                 | Some value -> reviewTimes.Add value
                 | None -> findings <- finding "QM-TIME" (path + "/completedAt") "canonical UTC second" (if isNull completedRaw then "<missing>" else completedRaw) :: findings)
+            let expectedReviewIds = expectedByCategory.TryFind "reviewers" |> Option.defaultValue []
+            if List.ofSeq observedReviewIds <> expectedReviewIds then
+                findings <- finding "QM-REVIEWS-CLOSED" "/reviewers" (String.concat "," expectedReviewIds) (String.concat "," observedReviewIds) :: findings
             let generatedProducers = observedByCategory.TryFind "generatedCases" |> Option.defaultValue [] |> List.map _.Producer |> Set.ofList
             let independent = observedByCategory.TryFind "independentCases" |> Option.defaultValue []
             if independent |> List.exists (fun entry -> entry.Producer = candidateProducer || generatedProducers.Contains entry.Producer) then

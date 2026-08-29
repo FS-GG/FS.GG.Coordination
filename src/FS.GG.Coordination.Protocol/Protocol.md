@@ -1227,6 +1227,8 @@ module CoordinationProtocolTests {
     manifest.reviewCandidateSha == manifest.candidateSha,
     manifest.resultInputSetSha256 == manifest.inputSetSha256,
     manifest.reviewInputSetSha256 == manifest.inputSetSha256,
+    manifest.independentProducers.size() > 0,
+    manifest.reviewerPrincipals.size() > 0,
     manifest.independentProducers.forall(principal => and {
       principal != manifest.candidateProducer,
       not(manifest.generatedProducers.contains(principal)),
@@ -2069,6 +2071,10 @@ module CoordinationProtocolTests {
   }
 
   run testQualificationManifestRequiresIndependentCasesAndReviewers = and {
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      independentProducers: Set() })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewerPrincipals: Set() })),
     not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
       independentProducers: Set("candidate-builder") })),
     not(qualificationManifestIsBound({ ...canonicalQualificationManifest,

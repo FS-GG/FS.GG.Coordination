@@ -95,6 +95,22 @@ let private mutate (bytes: byte array) (action: JsonObject -> unit) =
     action root
     Text.Encoding.UTF8.GetBytes(root.ToJsonString(JsonSerializerOptions(WriteIndented = false)))
 
+let private sha256 (bytes: byte array) =
+    SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+let private reseal (root: JsonObject) =
+    let inputs = JsonObject()
+    for name in [ "compiler"; "dependencies"; "environment"; "externalFixtures"; "generatedCases"; "independentCases"; "model"; "packages"; "sources" ] do
+        inputs.Add(name, root[name].DeepClone())
+    let inputDigest = inputs.ToJsonString() |> Encoding.UTF8.GetBytes |> sha256
+    root["candidate"].AsObject()["inputSetSha256"] <- inputDigest
+    for name in [ "results"; "reviewers" ] do
+        for item in root[name].AsArray() do item.AsObject()["inputSetSha256"] <- inputDigest
+    let unsigned = root.DeepClone().AsObject()
+    unsigned.Remove("digest") |> ignore
+    root["digest"] <- (unsigned.ToJsonString() |> Encoding.UTF8.GetBytes |> sha256)
+    Encoding.UTF8.GetBytes(root.ToJsonString() + "\n")
+
 [<Fact>]
 let ``qualification manifest omissions substitutions and independence failures are red`` () =
     let baseline = generated (validInput ())
@@ -115,3 +131,22 @@ let ``qualification manifest omissions substitutions and independence failures a
     for expected, mutation in cases do
         let observed = mutate baseline mutation |> codes
         Assert.Contains(expected, observed)
+
+[<Fact>]
+let ``resealed truncation of every closed inventory remains red`` () =
+    let baseline = generated (validInput ())
+    for category in [ "compiler"; "dependencies"; "externalFixtures"; "generatedCases"; "independentCases"; "model"; "packages"; "sources" ] do
+        let root = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
+        let entries = root[category].AsArray()
+        entries.RemoveAt(entries.Count - 1)
+        let observed = reseal root |> codes
+        Assert.Contains("QM-CATEGORY-CLOSED", observed)
+        Assert.DoesNotContain("QM-INPUT-SET", observed)
+        Assert.DoesNotContain("QM-SELF-DIGEST", observed)
+    for category, expected in [ "results", "QM-RESULTS-CLOSED"; "reviewers", "QM-REVIEWS-CLOSED" ] do
+        let root = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
+        let entries = root[category].AsArray()
+        entries.RemoveAt(entries.Count - 1)
+        let observed = reseal root |> codes
+        Assert.Contains(expected, observed)
+        Assert.DoesNotContain("QM-SELF-DIGEST", observed)
