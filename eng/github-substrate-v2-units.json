@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "812ae41f981e659e450b8562c4feae9dbf6fe97b",
+    "revision": "584d60fc30f82598dee00036c75a7355c128527f",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "3fa47fea88b82ac687ca5f900109b7c960fe64d5338b921257ebf427ddbde910"
+    "sha256": "e1621fce3a4e86a22391490cacd17ab0b4e8b911a9eba518e43d110d042427fc"
   },
   "units": [
     {
@@ -318,6 +318,23 @@
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
       "contractSha256": "4d492fb04e73c30f81ad8b96426afc13bc784595336c5a07e866da2e057cf804"
+    },
+    {
+      "id": "GS2-03.4",
+      "title": "Add independent black-box oracles",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-03.3"],
+      "permissionCeiling": ["repository-local canonical Quint decomposition and abstraction, independently authored black-box oracles, bounded verification-root selection, performance budgets, future-module admission contracts, validation, and evidence", "no network, GitHub mutation, external fault injection, deployment, publication, production write, or successor-unit implementation authority"],
+      "exitGate": "three ordered packages are separately evidenced: 03.4a decomposes the canonical protocol into bounded executable verification roots with behavior-preservation and anti-vacuity witnesses; 03.4b independently proves claim exclusion, stale projections, dependency concurrency, partial operations, old-client fencing, ledger tamper, exact-head review, post-merge verification, dual-feed recovery, and abstraction safety; 03.4c fails closed on incomplete module closure, qualification selection, evidence reuse, budgets, or future admission under Q1, Q2, and Q7",
+      "qGates": ["Q1", "Q2", "Q7"],
+      "gateCommands": ["canonical-quint-compiler", "canonical-quint-pure-model", "architecture-tests", "evidence-storage-contract"],
+      "gateContracts": [
+        { "id": "canonical-quint-compiler", "qGate": "Q1", "commandSha256": "ab29099d8e0be9da2bc6611c94acb8706eb15f36158651b8ed6b5e3829bb62a1" },
+        { "id": "canonical-quint-pure-model", "qGate": "Q2", "commandSha256": "e8ecb1f706a1f0eeb0c8381aa7f69354a79894a8b88619cc5a7dd7e5815a7acc" },
+        { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" },
+        { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
+      ],
+      "contractSha256": "5bb145e01da91b70207e3fcd02274235b2d8ec6883a68bdc4e21cfae18523e6c"
     }
   ]
 }
