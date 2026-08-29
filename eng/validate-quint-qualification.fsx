@@ -52,6 +52,17 @@ let validateDocument root (document: JsonObject) =
         let requiredAdmission =
             Set [ "owner"; "imports"; "invariants"; "independentOracles"; "root"; "bounds"; "witnesses"
                   "projections"; "ciImpact"; "budgetEffect" ]
+        let requiredOracles =
+            Set [ "claim-exclusion"; "stale-projection"; "dependency-concurrency"; "partial-operation"
+                  "old-client-fencing"; "ledger-tamper"; "exact-head-review"; "post-merge-verification"
+                  "dual-feed-recovery"; "abstraction-equivalence"; "scale-envelope" ]
+        let knownProjections =
+            Set [ "typed-authority"; "compiled-contract"; "lifecycle-status"; "native-relations"
+                  "protocol-stream"; "mutation-census"; "settings-plans"; "qualification-manifest"
+                  "model-test-inventory" ]
+        let allowedCiImpact = Set [ "bounded-state-root"; "bounded-test-root" ]
+        let declaredDefinition name =
+            Regex.IsMatch(sourceText, $"(?m)^\\s*(pure\\s+)?(val|def|run|action)\\s+%s{Regex.Escape name}(\\s|\\(|=)")
 
         let rec closure visiting moduleId =
             if Set.contains moduleId visiting then fail "QQ-MODULE-CYCLE" moduleId
@@ -107,17 +118,13 @@ let validateDocument root (document: JsonObject) =
                 elif strings admission "imports" |> Set.ofList <> expectedClosure then fail "QQ-ROOT-ADMISSION-IMPORTS" id
                 elif strings admission "witnesses" |> Set.ofList <> expectedWitnesses then fail "QQ-ROOT-ADMISSION-WITNESSES" id
                 elif strings admission "bounds" |> Set.ofList <> Set [ "depth"; "states"; "samples"; "elapsedMs"; "peakMiB"; "artifactBytes" ] then fail "QQ-ROOT-ADMISSION-BOUNDS" id
-                elif List.isEmpty (strings admission "invariants")
-                     || List.isEmpty (strings admission "independentOracles")
-                     || List.isEmpty (strings admission "projections")
-                     || String.IsNullOrWhiteSpace(text admission "ciImpact")
-                     || String.IsNullOrWhiteSpace(text admission "budgetEffect") then fail "QQ-ROOT-ADMISSION-EMPTY" id
+                elif strings admission "invariants" |> List.exists (declaredDefinition >> not) then fail "QQ-ROOT-ADMISSION-INVARIANT" id
+                elif strings admission "witnesses" |> List.exists (declaredDefinition >> not) then fail "QQ-ROOT-ADMISSION-WITNESS" id
+                elif (strings admission "independentOracles" |> Set.ofList |> fun actual -> not (Set.isSubset actual requiredOracles)) then fail "QQ-ROOT-ADMISSION-ORACLE" id
+                elif (strings admission "projections" |> Set.ofList |> fun actual -> not (Set.isSubset actual knownProjections)) then fail "QQ-ROOT-ADMISSION-PROJECTION" id
+                elif not (Set.contains (text admission "ciImpact") allowedCiImpact) then fail "QQ-ROOT-ADMISSION-CI" id
+                elif text admission "budgetEffect" <> "within-calibrated-envelope" then fail "QQ-ROOT-ADMISSION-BUDGET-EFFECT" id
                 else Ok())
-
-        let requiredOracles =
-            Set [ "claim-exclusion"; "stale-projection"; "dependency-concurrency"; "partial-operation"
-                  "old-client-fencing"; "ledger-tamper"; "exact-head-review"; "post-merge-verification"
-                  "dual-feed-recovery"; "abstraction-equivalence"; "scale-envelope" ]
         let selection = document["selection"].AsObject()
 
         if text document "schema" <> "fsgg.coordination.quint-qualification/1" then fail "QQ-SCHEMA" "unsupported"
@@ -194,6 +201,50 @@ let reverseSelection (document: JsonObject) changed =
     |> List.choose (fun root -> if Set.contains (text root "module") affected then Some(text root "id") else None)
     |> Set.ofList
 
+let rootsForOracles (document: JsonObject) oracleIds =
+    let modules =
+        objects document "roots"
+        |> List.choose (fun root ->
+        let admitted = strings (root["admission"]) "independentOracles" |> Set.ofList
+        if Set.isEmpty (Set.intersect admitted oracleIds) then None else Some(text root "module"))
+        |> Set.ofList
+    reverseSelection document modules
+
+let validateProposal (document: JsonObject) (proposal: JsonObject) =
+    try
+        let modules = objects document "modules" |> List.map (fun item -> text item "id") |> Set.ofList
+        let oracleIds = strings document "oracleIds" |> Set.ofList
+        let projections =
+            objects document "roots"
+            |> List.collect (fun root -> strings (root["admission"]) "projections")
+            |> Set.ofList
+        let requiredFields =
+            Set [ "schema"; "owner"; "behaviorSha256"; "imports"; "invariants"; "independentOracles"; "root"; "bounds"
+                  "witnesses"; "projections"; "ciImpact"; "budgetEffect" ]
+        let actualFields = proposal |> Seq.map (fun property -> property.Key) |> Set.ofSeq
+        let identifiers field = strings proposal field
+        let namesAreValid (values: string list) =
+            not (List.isEmpty values)
+            && values |> List.forall (fun value -> Regex.IsMatch(value, "^[A-Za-z][A-Za-z0-9_-]*$"))
+        let bounds = proposal["bounds"].AsObject()
+        let boundFields = Set [ "depth"; "states"; "samples"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
+        if actualFields <> requiredFields then fail "QQ-PROPOSAL-FIELDS" ($"%A{actualFields}")
+        elif text proposal "schema" <> "fsgg.coordination.quint-proposal/1" then fail "QQ-PROPOSAL-SCHEMA" "unsupported"
+        elif not (Regex.IsMatch(text proposal "owner", "^[a-z][a-z0-9-]*$")) || Set.contains (text proposal "owner") modules then fail "QQ-PROPOSAL-OWNER" "invalid-or-existing"
+        elif not (Regex.IsMatch(text proposal "behaviorSha256", "^[0-9a-f]{64}$")) then fail "QQ-PROPOSAL-BEHAVIOR" "unbound"
+        elif (identifiers "imports" |> Set.ofList |> fun actual -> Set.isEmpty actual || not (Set.isSubset actual modules)) then fail "QQ-PROPOSAL-IMPORTS" "empty-or-unknown"
+        elif not (namesAreValid (identifiers "invariants")) || not (namesAreValid (identifiers "witnesses")) then fail "QQ-PROPOSAL-EXECUTABLES" "invalid"
+        elif (identifiers "independentOracles" |> Set.ofList |> fun actual -> Set.isEmpty actual || not (Set.isSubset actual oracleIds)) then fail "QQ-PROPOSAL-ORACLES" "unknown"
+        elif not (Regex.IsMatch(text proposal "root", "^[A-Za-z][A-Za-z0-9_]*$")) then fail "QQ-PROPOSAL-ROOT" "invalid"
+        elif (bounds |> Seq.map (fun property -> property.Key) |> Set.ofSeq) <> boundFields then fail "QQ-PROPOSAL-BOUNDS" "fields"
+        elif boundFields |> Set.exists (fun field -> number bounds field <= 0) then fail "QQ-PROPOSAL-BOUNDS" "non-positive"
+        elif number bounds "depth" <= (identifiers "imports").Length then fail "QQ-PROPOSAL-BOUNDS" "insufficient-depth"
+        elif (identifiers "projections" |> Set.ofList |> fun actual -> Set.isEmpty actual || not (Set.isSubset actual projections)) then fail "QQ-PROPOSAL-PROJECTIONS" "unknown"
+        elif not (Set.contains (text proposal "ciImpact") (Set [ "bounded-state-root"; "bounded-test-root" ])) then fail "QQ-PROPOSAL-CI" "unsupported"
+        elif text proposal "budgetEffect" <> "within-calibrated-envelope" then fail "QQ-PROPOSAL-BUDGET" "unsupported"
+        else Ok()
+    with error -> fail "QQ-PROPOSAL-MALFORMED" error.Message
+
 let validateBaseline root configBytes (document: JsonObject) =
     try
         let baselinePath = Path.Combine(root, "eng/quint-qualification-baseline.json")
@@ -245,7 +296,11 @@ let runSelfTests root original =
           "admission", fun value -> (nestedArray "admission" "required" value).RemoveAt(0)
           "root-admission-owner", fun value -> (firstObject "roots" value).["admission"].["owner"] <- JsonValue.Create("wrong-owner")
           "root-admission-oracle", fun value -> ((firstObject "roots" value).["admission"].["independentOracles"]).AsArray().RemoveAt(0)
-          "root-admission-witness", fun value -> ((firstObject "roots" value).["admission"].["witnesses"]).AsArray().RemoveAt(0) ]
+          "root-admission-witness", fun value -> ((firstObject "roots" value).["admission"].["witnesses"]).AsArray().RemoveAt(0)
+          "root-admission-invariant", fun value -> ((firstObject "roots" value).["admission"].["invariants"])[0] <- JsonValue.Create("missingInvariant")
+          "root-admission-projection", fun value -> ((firstObject "roots" value).["admission"].["projections"])[0] <- JsonValue.Create("unknown-projection")
+          "root-admission-ci", fun value -> (firstObject "roots" value).["admission"].["ciImpact"] <- JsonValue.Create("unbounded")
+          "root-admission-budget-effect", fun value -> (firstObject "roots" value).["admission"].["budgetEffect"] <- JsonValue.Create("unknown") ]
     for name, mutate in mutations do
         let candidate = clone original
         mutate candidate
@@ -255,21 +310,24 @@ let runSelfTests root original =
     mutations.Length
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--") |> Array.toList
-let rec parse selfTest root config mode changed protectedMode reuseSource planOut remaining =
+let rec parse selfTest root config mode changed changedPaths changedSurfaces protectedMode reuseSource proposalPath planOut remaining =
     match remaining with
-    | [] -> selfTest, Path.GetFullPath root, config, mode, changed, protectedMode, reuseSource, planOut
-    | "--self-test" :: tail -> parse true root config mode changed protectedMode reuseSource planOut tail
-    | "--root" :: value :: tail -> parse selfTest value config mode changed protectedMode reuseSource planOut tail
-    | "--config" :: value :: tail -> parse selfTest root value mode changed protectedMode reuseSource planOut tail
-    | "--mode" :: value :: tail -> parse selfTest root config value changed protectedMode reuseSource planOut tail
-    | "--changed-module" :: value :: tail -> parse selfTest root config mode (Set.add value changed) protectedMode reuseSource planOut tail
-    | "--protected-mode" :: value :: tail -> parse selfTest root config mode changed value reuseSource planOut tail
-    | "--reuse-source-sha256" :: value :: tail -> parse selfTest root config mode changed protectedMode (Some value) planOut tail
-    | "--plan-out" :: value :: tail -> parse selfTest root config mode changed protectedMode reuseSource (Some value) tail
+    | [] -> selfTest, Path.GetFullPath root, config, mode, changed, changedPaths, changedSurfaces, protectedMode, reuseSource, proposalPath, planOut
+    | "--self-test" :: tail -> parse true root config mode changed changedPaths changedSurfaces protectedMode reuseSource proposalPath planOut tail
+    | "--root" :: value :: tail -> parse selfTest value config mode changed changedPaths changedSurfaces protectedMode reuseSource proposalPath planOut tail
+    | "--config" :: value :: tail -> parse selfTest root value mode changed changedPaths changedSurfaces protectedMode reuseSource proposalPath planOut tail
+    | "--mode" :: value :: tail -> parse selfTest root config value changed changedPaths changedSurfaces protectedMode reuseSource proposalPath planOut tail
+    | "--changed-module" :: value :: tail -> parse selfTest root config mode (Set.add value changed) changedPaths changedSurfaces protectedMode reuseSource proposalPath planOut tail
+    | "--changed-path" :: value :: tail -> parse selfTest root config mode changed (Set.add value changedPaths) changedSurfaces protectedMode reuseSource proposalPath planOut tail
+    | "--changed-surface" :: value :: tail -> parse selfTest root config mode changed changedPaths (Set.add value changedSurfaces) protectedMode reuseSource proposalPath planOut tail
+    | "--protected-mode" :: value :: tail -> parse selfTest root config mode changed changedPaths changedSurfaces value reuseSource proposalPath planOut tail
+    | "--reuse-source-sha256" :: value :: tail -> parse selfTest root config mode changed changedPaths changedSurfaces protectedMode (Some value) proposalPath planOut tail
+    | "--proposal" :: value :: tail -> parse selfTest root config mode changed changedPaths changedSurfaces protectedMode reuseSource (Some value) planOut tail
+    | "--plan-out" :: value :: tail -> parse selfTest root config mode changed changedPaths changedSurfaces protectedMode reuseSource proposalPath (Some value) tail
     | value :: _ -> eprintfn "QQ-ARGUMENT: %s" value; exit 2
 
-let selfTest, root, config, mode, changed, protectedMode, reuseSource, planOut =
-    parse false "." "eng/quint-qualification.json" "protected" Set.empty "main" None None arguments
+let selfTest, root, config, mode, changed, changedPaths, changedSurfaces, protectedMode, reuseSource, proposalPath, planOut =
+    parse false "." "eng/quint-qualification.json" "protected" Set.empty Set.empty Set.empty "main" None None None arguments
 
 let configPath = if Path.IsPathRooted config then config else Path.Combine(root, config)
 let bytes = File.ReadAllBytes configPath
@@ -288,14 +346,54 @@ match validateDocument root document with
             eprintfn "QQ-SELECTION-CLOSURE: %A" authoritySelection
             exit 1
         let allRoots = objects document "roots" |> List.map (fun item -> text item "id") |> Set.ofList
+        let moduleIds = objects document "modules" |> List.map (fun item -> text item "id") |> Set.ofList
+        let rootsById = objects document "roots" |> List.map (fun item -> text item "id", item) |> Map.ofList
+        let rootsFromPaths =
+            changedPaths
+            |> Set.fold (fun selected path ->
+                let normalized = path.Replace('\\', '/')
+                if normalized = text document "source"
+                   || normalized = config.Replace('\\', '/')
+                   || normalized.EndsWith("quint-qualification-baseline.json", StringComparison.Ordinal)
+                   || normalized.Contains("validate-quint-qualification", StringComparison.Ordinal)
+                   || normalized.Contains("validate-canonical-quint-protocol", StringComparison.Ordinal)
+                   || normalized.Contains("qualify-canonical-quint", StringComparison.Ordinal) then Set.union selected allRoots
+                else
+                    let matched = moduleIds |> Set.filter (fun moduleId -> normalized.Contains(moduleId, StringComparison.Ordinal))
+                    if Set.isEmpty matched then eprintfn "QQ-SELECTION-PATH: %s" path; exit 1
+                    Set.union selected (reverseSelection document matched)) Set.empty
+        let rootsFromSurfaces =
+            changedSurfaces
+            |> Set.fold (fun selected surface ->
+                match surface.Split(':', 2) with
+                | [| kind |] when kind = "backend" || kind = "toolchain" -> Set.union selected allRoots
+                | [| "oracle"; oracleId |] when strings document "oracleIds" |> List.contains oracleId ->
+                    Set.union selected (rootsForOracles document (Set [ oracleId ]))
+                | [| kind; owner |] when kind = "bound" || kind = "budget" ->
+                    let ownerModule =
+                        if Set.contains owner moduleIds then owner
+                        elif Map.containsKey owner rootsById then text rootsById[owner] "module"
+                        else eprintfn "QQ-SELECTION-SURFACE: %s" surface; exit 1
+                    Set.union selected (reverseSelection document (Set [ ownerModule ]))
+                | _ -> eprintfn "QQ-SELECTION-SURFACE: %s" surface; exit 1) Set.empty
+        let changedSelection =
+            Set.unionMany [ reverseSelection document changed; rootsFromPaths; rootsFromSurfaces ]
+        let proposal =
+            proposalPath
+            |> Option.map (fun path ->
+                let absolute = if Path.IsPathRooted path then path else Path.Combine(root, path)
+                let proposal = JsonNode.Parse(File.ReadAllBytes absolute).AsObject()
+                match validateProposal document proposal with
+                | Ok () -> proposal
+                | Error error -> eprintfn "%s" error; exit 1)
         let protectedModes = strings (document["selection"]) "protected" |> Set.ofList
         let selected =
             match mode with
             | "protected" when Set.contains protectedMode protectedModes -> allRoots
-            | "pull-request" when not (Set.isEmpty changed) -> reverseSelection document changed
-            | "reuse" when reuseSource = Some(text document "sourceSha256") -> reverseSelection document changed
-            | "future-behavior" -> allRoots
-            | _ -> eprintfn "QQ-SELECTION-INPUT: mode=%s changed=%A protected=%s" mode changed protectedMode; exit 1
+            | "pull-request" when not (Set.isEmpty changedSelection) -> changedSelection
+            | "reuse" when reuseSource = Some(text document "sourceSha256") && not (Set.isEmpty changedSelection) -> changedSelection
+            | "future-behavior" when Option.isSome proposal -> allRoots
+            | _ -> eprintfn "QQ-SELECTION-INPUT: mode=%s changed=%A paths=%A surfaces=%A protected=%s" mode changed changedPaths changedSurfaces protectedMode; exit 1
         if Set.isEmpty selected && mode <> "reuse" then
             eprintfn "QQ-SELECTION-EMPTY: mode=%s" mode
             exit 1
@@ -305,6 +403,11 @@ match validateDocument root document with
             output["schema"] <- JsonValue.Create("fsgg.coordination.quint-selection/1")
             output["mode"] <- JsonValue.Create(mode)
             output["sourceSha256"] <- JsonValue.Create(text document "sourceSha256")
+            output["changedModules"] <- JsonArray(changed |> Set.toArray |> Array.map JsonValue.Create |> Array.map (fun value -> value :> JsonNode))
+            output["changedPaths"] <- JsonArray(changedPaths |> Set.toArray |> Array.map JsonValue.Create |> Array.map (fun value -> value :> JsonNode))
+            output["changedSurfaces"] <- JsonArray(changedSurfaces |> Set.toArray |> Array.map JsonValue.Create |> Array.map (fun value -> value :> JsonNode))
+            reuseSource |> Option.iter (fun value -> output["reuseSourceSha256"] <- JsonValue.Create(value))
+            proposal |> Option.iter (fun value -> output["proposalSha256"] <- JsonValue.Create(sha256 (Encoding.UTF8.GetBytes(value.ToJsonString()))))
             output["roots"] <- JsonArray(selected |> Set.toArray |> Array.map JsonValue.Create |> Array.map (fun value -> value :> JsonNode))
             File.WriteAllText(Path.GetFullPath path, output.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
         | None -> ()
