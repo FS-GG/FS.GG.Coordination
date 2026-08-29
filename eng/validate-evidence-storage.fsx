@@ -21,6 +21,9 @@ let q0EvidenceRelative = "corpus/provenance/q0-evidence.source"
 let q0ManifestSha256 = "5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"
 let q0EvidenceSha256 = "3a0a73d81823c1667f61f9493c1611aa89b85e24d3e1580cd922d309e2f12f87"
 let frozenAggregateSha256 = "bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753"
+let explicitIndeterminateRationale = "Q0 deliberately classifies this expected decision as Indeterminate; the import preserves that ambiguity without selecting a fallback outcome."
+let noneRecordedRationale = "Q0 records no case-level ambiguity for this artifact; the import preserves that absence without inferring additional certainty."
+let unobservedDetail = "Q0 froze these multi-case source bytes and their expected behavior but did not bind an atomic runtime result to this individual artifact; no green result is inferred."
 
 let fail code detail = failwith $"{code}: {detail}"
 
@@ -255,28 +258,35 @@ let validateFrozenCorpus (root: string) (entries: JsonElement list) =
         let ambiguity = property "ambiguity" input
         exactProperties metadataRelative [ "state"; "rationale" ] ambiguity
         let expectedAmbiguity = if id = "C-rate" || id = "C-partial" then "explicit-indeterminate" else "none-recorded"
-        if stringProperty "state" ambiguity <> expectedAmbiguity || String.IsNullOrWhiteSpace(stringProperty "rationale" ambiguity) then fail "FC-AMBIGUITY" id
+        let expectedRationale = if expectedAmbiguity = "explicit-indeterminate" then explicitIndeterminateRationale else noneRecordedRationale
+        if stringProperty "state" ambiguity <> expectedAmbiguity || stringProperty "rationale" ambiguity <> expectedRationale then fail "FC-AMBIGUITY" id
         let decisionClass = property "expected" expected |> stringProperty "decisionClass"
         if (expectedAmbiguity = "explicit-indeterminate") <> (decisionClass = "Indeterminate") then fail "FC-AMBIGUITY-CONTRADICTION" id
 
         let result = property "currentV1Result" input
         exactProperties metadataRelative [ "state"; "outcome"; "evidence"; "headSha"; "observedAt"; "detail" ] result
         if stringProperty "headSha" result <> q0SourceCommit then fail "FC-RESULT-HEAD" id
-        validateTime id (stringProperty "observedAt" result)
-        nonEmpty id (stringProperty "detail" result)
+        let observedAt = property "observedAt" result
         let outcome = property "outcome" result
         match id with
         | "C-pagination" | "C-stale" ->
             observedCount <- observedCount + 1
-            let expectedUrl, expectedTime =
-                if id = "C-pagination" then "https://github.com/FS-GG/.github/actions/runs/32908004312", "2026-08-25T22:50:19Z"
-                else "https://github.com/FS-GG/.github/actions/runs/32908004500", "2026-08-25T22:50:35Z"
+            let expectedUrl, expectedTime, expectedDetail =
+                if id = "C-pagination" then
+                    "https://github.com/FS-GG/.github/actions/runs/32908004312", "2026-08-25T22:50:19Z", "The exact-source-head recipe-pagination workflow directly executed the frozen pagination artifact and completed successfully."
+                else
+                    "https://github.com/FS-GG/.github/actions/runs/32908004500", "2026-08-25T22:50:35Z", "The exact-source-head engine-freshness workflow directly executed the frozen stale-read artifact and completed successfully."
             if stringProperty "state" result <> "observed" || outcome.ValueKind <> JsonValueKind.String || outcome.GetString() <> "passed" then fail "FC-RESULT-STATE" id
-            if stringProperty "evidence" result <> expectedUrl || stringProperty "observedAt" result <> expectedTime then fail "FC-RESULT-EVIDENCE" id
+            if observedAt.ValueKind <> JsonValueKind.String || observedAt.GetString() <> expectedTime then fail "FC-RESULT-TIME" id
+            validateTime id (observedAt.GetString())
+            if stringProperty "evidence" result <> expectedUrl then fail "FC-RESULT-EVIDENCE" id
+            if stringProperty "detail" result <> expectedDetail then fail "FC-RESULT-DETAIL" id
         | _ ->
             unobservedCount <- unobservedCount + 1
             if stringProperty "state" result <> "not-atomically-observed" || outcome.ValueKind <> JsonValueKind.Null then fail "FC-RESULT-STATE" id
+            if observedAt.ValueKind <> JsonValueKind.Null then fail "FC-RESULT-TIME" id
             if stringProperty "evidence" result <> $"git:{q0Revision}:work/2953-gh-modernization-m0-invariants/q0-evidence.json#corpus/{id}" then fail "FC-RESULT-EVIDENCE" id
+            if stringProperty "detail" result <> unobservedDetail then fail "FC-RESULT-DETAIL" id
 
         let provenance = property "provenance" input
         exactProperties metadataRelative [ "q0Revision"; "q0ManifestPath"; "q0ManifestSha256"; "q0EvidencePath"; "q0EvidenceSha256"; "importedByUnit" ] provenance
@@ -598,12 +608,20 @@ let selfTest evidenceRoot =
               mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "expectedBehavior" ] "decisionClass" "Accept")), "FC-EXPECTED-BEHAVIOR"
           "frozen-ambiguity", (fun root ->
               mutateCorpusJson root "C-rate" (fun node -> setNestedString node [ "input"; "ambiguity" ] "state" "none-recorded")), "FC-AMBIGUITY"
+          "frozen-ambiguity-rationale", (fun root ->
+              mutateCorpusJson root "C-rate" (fun node -> setNestedString node [ "input"; "ambiguity" ] "rationale" "tampered but nonempty")), "FC-AMBIGUITY"
           "frozen-unobserved-green", (fun root ->
               mutateCorpusJson root "C-claim" (fun node ->
                   setNestedString node [ "input"; "currentV1Result" ] "state" "observed"
                   setNestedString node [ "input"; "currentV1Result" ] "outcome" "passed")), "FC-RESULT-STATE"
+          "frozen-unobserved-time", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "currentV1Result" ] "observedAt" "2026-08-25T22:00:00Z")), "FC-RESULT-TIME"
+          "frozen-unobserved-detail", (fun root ->
+              mutateCorpusJson root "C-claim" (fun node -> setNestedString node [ "input"; "currentV1Result" ] "detail" "tampered but nonempty")), "FC-RESULT-DETAIL"
           "frozen-observed-evidence", (fun root ->
               mutateCorpusJson root "C-pagination" (fun node -> setNestedString node [ "input"; "currentV1Result" ] "evidence" "https://example.invalid/run")), "FC-RESULT-EVIDENCE"
+          "frozen-observed-detail", (fun root ->
+              mutateCorpusJson root "C-pagination" (fun node -> setNestedString node [ "input"; "currentV1Result" ] "detail" "tampered but nonempty")), "FC-RESULT-DETAIL"
           "frozen-order", (fun root ->
               mutateCorpusJson root "C-claim" (fun node -> setNestedInt node [ "input" ] "ordinal" 2)), "FC-ORDER"
           "frozen-input-schema", (fun root ->

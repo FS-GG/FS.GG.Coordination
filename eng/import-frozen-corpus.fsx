@@ -12,6 +12,9 @@ let q0ManifestRelative = "work/2953-gh-modernization-m0-invariants/q0-corpus-ori
 let q0EvidenceRelative = "work/2953-gh-modernization-m0-invariants/q0-evidence.json"
 let q0ManifestSha256 = "5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"
 let q0EvidenceSha256 = "3a0a73d81823c1667f61f9493c1611aa89b85e24d3e1580cd922d309e2f12f87"
+let explicitIndeterminateRationale = "Q0 deliberately classifies this expected decision as Indeterminate; the import preserves that ambiguity without selecting a fallback outcome."
+let noneRecordedRationale = "Q0 records no case-level ambiguity for this artifact; the import preserves that absence without inferring additional certainty."
+let unobservedDetail = "Q0 froze these multi-case source bytes and their expected behavior but did not bind an atomic runtime result to this individual artifact; no green result is inferred."
 
 let fail code detail = failwith $"{code}: {detail}"
 
@@ -136,10 +139,10 @@ for ordinal, sourceEntry in sourceEntries |> Array.indexed do
     let ambiguity = JsonObject()
     if expectedDecision = "Indeterminate" then
         addString ambiguity "state" "explicit-indeterminate"
-        addString ambiguity "rationale" "Q0 deliberately classifies this expected decision as Indeterminate; the import preserves that ambiguity without selecting a fallback outcome."
+        addString ambiguity "rationale" explicitIndeterminateRationale
     else
         addString ambiguity "state" "none-recorded"
-        addString ambiguity "rationale" "Q0 records no case-level ambiguity for this artifact; the import preserves that absence without inferring additional certainty."
+        addString ambiguity "rationale" noneRecordedRationale
 
     let currentResult = JsonObject()
     let observed =
@@ -162,8 +165,8 @@ for ordinal, sourceEntry in sourceEntries |> Array.indexed do
         currentResult.Add("outcome", null)
         addString currentResult "evidence" $"git:{q0Revision}:{q0EvidenceRelative}#corpus/{id}"
         addString currentResult "headSha" sourceCommit
-        addString currentResult "observedAt" "2026-08-25T22:00:00Z"
-        addString currentResult "detail" "Q0 froze these multi-case source bytes and their expected behavior but did not bind an atomic runtime result to this individual artifact; no green result is inferred."
+        currentResult.Add("observedAt", null)
+        addString currentResult "detail" unobservedDetail
 
     let provenance = JsonObject()
     addString provenance "q0Revision" q0Revision
