@@ -1,0 +1,264 @@
+# `.github#1794`'s ELEVEN-LEG MUTATION MATRIX, filed as a spec rather than left in a scratch directory.
+#
+# WHAT IT ADJUDICATES. `#1794` closed a fail-open in `Reads.openIssues`: an element with no numeric
+# `number` was DROPPED SILENTLY, and an absent or ill-typed `body` was read as `""` — which parses to
+# `Undeclared`, a confident *"this issue declares nothing"* about a row nobody could read. Since `#1779`
+# that read is the `#353` collision gate's candidate set, where a wrong `DISJOINT` is FINAL: there is no
+# CAS on a file, so nothing re-decides it and nothing detects it. Each leg below reverts ONE of those
+# guards and requires the corpus to say so.
+#
+# WHY IT IS HERE AND NOT IN A SCRATCHPAD — `.github#1825` AC4, decided YES. `#1825` left the question
+# open and called it "the more valuable half of the work". A matrix that lives in one worker's scratch
+# directory cannot be re-run by the next person to touch `Reads.openIssues`, which is exactly when it is
+# worth running; and `#1794`'s own account of it (a table in a merged PR body) is not a thing anybody can
+# execute. It is here, and it is a SPEC rather than a script, because the script it would have been
+# already landed: `scripts/gate-mutate.py` over `scripts/lib/mutation.py` (`.github#1810`, per `#1808`).
+#
+#     scripts/gate-mutate.py --specs tests/coord-engine-mutation/specs.yml
+#
+# ON "IS THIS ABSORBED BY #1810's HARNESS?" — the answer is: the LIBRARY yes, the CORPUS no, and the two
+# were worth separating. `#1810`'s `tests/gate-mutation/specs.yml` mutates a GATE's subject and asserts a
+# workflow's selftest fires; this mutates ENGINE SOURCE and asserts the unit + parity legs fire. Different
+# subjects, different plumbing, and `#1825`'s dispatcher was right that generalising ACROSS that boundary
+# is more work than running eleven legs. But the four-point specification, the three-valued verdict, the
+# producer-integrity hash and the restore-in-`finally` are exactly the same mechanism, and re-typing them
+# here would have been the fifth harness in three days to ship an anchor check with a defect in it. So:
+# this corpus, that library.
+#
+# THE COMMAND IS `tests/coord-engine-mutation/leg.sh` FOR ALL ELEVEN LEGS, and it is the anchor's producer.
+# It rebuilds the engine (the mutations edit F# source; the parity corpus drives a COMPILED binary), runs
+# both unit projects that carry `#1794` surface, runs the 641-assertion parity corpus, and prints ONE
+# tally. It is never a mutation target, so no mutation here can delete the evidence that it ran —
+# specification point 3, which `scripts/lib/mutation.py` REFUSES a spec for violating and re-checks by
+# hashing the producer either side of every edit.
+#
+# ANCHORS INSIDE THE PARITY CORPUS ARE A SEPARATE FIX, IN THE SAME PR. `#1794`'s `refute` legs anchored on
+# `"could not be read"` — the text the guard itself emits — so M2/M3 deleted the anchor along with the
+# guard and the leg read NOT MEASURED exactly where it should have read FAIL. See the block above
+# `refute()` in `tests/coord-engine-parity/run.sh`. Both halves had to land together: re-measuring under
+# repaired anchors is the only way the verdicts below describe the harness that produced them.
+
+mutations:
+  # ===================================================================================================
+  # M1-M4 — `Reads.openIssues`: the parse arms. RE-MEASURED here, not quoted from `#1794`.
+  # ===================================================================================================
+  - id: M1/element-dropped-again
+    gate: "#1794 Reads.openIssues: an unidentifiable element refuses the read"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/Reads.fs
+    find: |-
+      | true, n when n.ValueKind <> JsonValueKind.Number ->
+                                  Error(
+                                      Malformed(
+                                          subject,
+                                          $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                      )
+                                  )
+                              | false, _ ->
+                                  Error(
+                                      Malformed(
+                                          subject,
+                                          $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                      )
+                                  )
+    replace: |-
+      | true, n when n.ValueKind <> JsonValueKind.Number -> Ok None
+                              | false, _ -> Ok None
+    breaks: >-
+      an element with no numeric `number` is silently discarded again, so the issue vanishes from the
+      claim scan, its lock reserves nothing, and every claim on it reads as free — the #1150 fail-open
+      one function over, and the one this read shipped with
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  - id: M2/absent-body-reads-empty
+    gate: "#1794 Reads.openIssues: an absent `body` is BodyUnread, not an empty declaration"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/Reads.fs
+    find: '| false, _ -> BodyUnread "the element carries no `body` field"'
+    replace: '| false, _ -> BodyRead ""'
+    breaks: >-
+      an element carrying no `body` key reads as an empty body, which `TouchSet.parse` answers
+      `Undeclared` and `TouchSet.conflicts` clears against everything — asserting "this issue declares
+      nothing" about a row nobody read
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  - id: M3/illtyped-body-reads-empty
+    gate: "#1794 Reads.openIssues: an ill-typed `body` is BodyUnread, not an empty declaration"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/Reads.fs
+    find: 'BodyUnread $"the `body` field is a %A{b.ValueKind}, not a string or null"'
+    replace: 'BodyRead ""'
+    breaks: >-
+      a `body` that is an object/number/array reads as an empty body and clears against everything —
+      the same false "declares nothing" as M2, reached by a JSON kind change rather than an absence
+    note: >-
+      THIS IS THE LEG THAT FOUND THE ANCHOR RULE. Under the pre-#1825 harness the parity `refute` legs
+      reported NOT MEASURED here rather than FAIL, because their positive anchor was the guard's own
+      output. Re-measured under the repaired anchor.
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  - id: M4/null-body-becomes-unreadable
+    gate: "#1794 Reads.openIssues: `body: null` stays a SUCCESSFUL read (the over-correction leg)"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/Reads.fs
+    find: '| true, b when b.ValueKind = JsonValueKind.Null -> BodyRead ""'
+    replace: '| true, b when b.ValueKind = JsonValueKind.Null -> BodyUnread "M4: the over-correction — a real, observed, empty body read as one nobody could read"'
+    breaks: >-
+      GitHub's `"body": null` for a description-less issue becomes UNREADABLE rather than empty, which
+      would red the scheduler for every issue on the board that nobody wrote a description for
+    note: >-
+      The one leg guarding against OVER-correction rather than under-correction. #1794 measured it
+      KILLED BY EXACTLY ONE CHECK and said so; that thinness is worth re-confirming, not smoothing over.
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  # ===================================================================================================
+  # M5-M7 — `Client.activeCollisions`: what the scan DOES with a row it could not read.
+  # ===================================================================================================
+  - id: M5/unreadable-row-discarded-by-token-filter
+    gate: "#1794 activeCollisions: an unreadable row survives the token filter as UNDETERMINED"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: '| Reads.BodyUnread reason -> Some(other, Choice2Of2 reason)'
+    replace: '| Reads.BodyUnread _ -> None'
+    breaks: >-
+      a row whose body could not be read is dropped by the pure token filter, before any marker is read
+      — so it can never be compared and is therefore CLEARED, which is the fail-open, because the only
+      thing downstream of this function is a DISJOINT that nothing re-decides
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  - id: M6/held-unreadable-row-skipped-not-refused
+    gate: "#1794 activeCollisions: a HELD unreadable row REFUSES rather than being skipped"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: |-
+      | Choice2Of2 reason ->
+                                          Error(
+                                              Errors.Malformed(
+                                                  $"%s{ref.Short}'s collision scan",
+                                                  $"%s{other.Short} is held by %s{m.Worker.Value} and its touch-set could not be read (%s{reason}) — refusing to report DISJOINT over a live reservation whose surface is unknown (#1794/#266)"
+                                              )
+                                          )
+    replace: '| Choice2Of2 _ -> scan acc rest'
+    breaks: >-
+      a row that IS held, whose touch-set could not be read, is skipped instead of refusing — so the
+      scan answers DISJOINT over a live reservation whose surface nobody saw. #266's "I could not look"
+      turned back into "I looked and it was fine", on the one arm where the answer is final
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  - id: M7/refuses-on-any-unreadable-row
+    gate: "#1794 activeCollisions: an UNHELD unreadable row does NOT red the scan (the over-correction leg)"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.Cli/Client.fs
+    find: |-
+      match Reads.reserver opts.LeaseMinutes markers with
+                              | None -> scan acc rest
+    replace: |-
+      match Reads.reserver opts.LeaseMinutes markers with
+                              | None when (match verdict with
+                                           | Choice2Of2 _ -> false
+                                           | _ -> true) -> scan acc rest
+                              | None ->
+                                  Error(
+                                      Errors.Malformed(
+                                          $"%s{ref.Short}'s collision scan",
+                                          $"%s{other.Short} has a touch-set that could not be read — M7: refusing over a row NOBODY holds"
+                                      )
+                                  )
+    breaks: >-
+      the scan refuses on ANY unreadable row, held or not — so one anomaly on an issue nobody is
+      standing in reds `widen`/`overlap`/`set-paths` for the whole repo. Fail-closed became
+      fail-loud-everywhere, which is the failure that gets a correct guard reverted
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  # ===================================================================================================
+  # M8-M9 — the two routes that reach the same read from somewhere else.
+  # ===================================================================================================
+  - id: M8/offboard-sweep-reserves-nothing
+    gate: "#1794 Scan.snapshot's off-board sweep: an unreadable body is RvUnreadable, not nothing"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/Scan.fs
+    find: '| Reads.BodyUnread reason -> Some(RvUnreadable reason)'
+    replace: '| Reads.BodyUnread _ -> None'
+    breaks: >-
+      the off-board sweep lets an unreadable body reserve NOTHING, so a live claim on a row nobody could
+      read stops reserving and a candidate overlapping its real files is handed the tree its holder is
+      standing in — #1150's own fail-open, on the arm #1150 did not reach
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  - id: M9/pagination-disabled-in-the-engine
+    gate: "#1794 Transport.Send: `openIssues` is PAGINATED, and the promise is kept"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: src/FS.GG.Coord.GitHub/Transport.fs
+    find: 'follow first first.NextLink 100'
+    replace: 'follow first None 100'
+    breaks: >-
+      the transport stops following `Link: rel=next`, so every collection truncates at page one and the
+      claim scan reports every lock past it as FREE
+    note: >-
+      THE ONLY LEG THAT MUTATES THE ENGINE RATHER THAN THE FIXTURE to disable pagination. `OIP_NO_LINK=1`
+      is the fixture-side negative control and it lives in the parity corpus; this is the stronger form,
+      because a fixture that withholds a header cannot show that the ENGINE would have followed one.
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  # ===================================================================================================
+  # M10 — THE LEG THAT MUTATES THE FIXTURE. Specification point 4 (`#1808`), and it is not optional:
+  # without it `refute` is an untested guard guarding against untested guards.
+  # ===================================================================================================
+  - id: M10/fixture-cannot-bind
+    gate: "#1794/#1815 refute(): a leg whose command never ran reports NOT MEASURED, never PASS"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: tests/coord-engine-parity/openissuespage_server.py
+    find: 'srv = ThreadingHTTPServer(("127.0.0.1", 0), H)'
+    replace: 'srv = ThreadingHTTPServer(("203.0.113.1", 0), H)'
+    breaks: >-
+      the fixture binds an address that is not local (TEST-NET-3, RFC 5737) and therefore cannot bind at
+      all, so it prints no port, the engine is never invoked, and every `#1794` refutation is made over
+      an output that does not exist
+    note: >-
+      THE VERDICT TO READ CAREFULLY. This leg does not assert that the ENGINE noticed anything — the
+      engine never runs. It asserts that the HARNESS did: `refute` must report NOT MEASURED (and red the
+      suite) rather than observe that the forbidden string is absent and call that a pass. The first
+      draft of these legs had exactly that defect five times over, and no assertion about the happy path
+      can see it, because the happy path is where the fixture DOES run.
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
+
+  # ===================================================================================================
+  # M11 — #1849's migrated corpus, proved on one of the 26 formerly raw absence conclusions.
+  # ===================================================================================================
+  - id: M11/migrated-refute-has-no-measurement
+    gate: "#1849 refute(): a migrated raw absence leg reports NOT MEASURED when its output disappears"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: tests/coord-engine-parity/run.sh
+    find: 'l73="$(printf ''%s'' "$err" | grep ''FS.GG.SDD#73'')"'
+    replace: 'l73="" # M11: erase the command output that anchors the migrated #428 refutation'
+    breaks: >-
+      the migrated #428 negative leg receives no batch-member verdict at all. Its forbidden holder text
+      is therefore absent, exactly as it was in the old raw `*) ok` arm, but the new positive anchor
+      cannot match and the leg must report NOT-MEASURED instead of PASS
+    note: >-
+      This mutates the parity fixture rather than engine behavior deliberately: the acceptance property
+      is the harness's third verdict when a command produces no evidence. The mutation leg preserves
+      the parity log's `NOT-MEASURED #428` line and counts it as a fired assertion in its terminal tally.
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh
