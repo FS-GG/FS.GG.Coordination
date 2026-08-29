@@ -11,7 +11,7 @@ sourceAnalysis: readiness/74-gs2-03-2-frozen-corpus/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/74-gs2-03-2-frozen-corpus/analysis.json
-    digest: 193110cf6bbb958b1a6d31e4f788208e25690be06f758a5faac054b49a81dfcc
+    digest: d88d650c126ea86137588d75ad4b407d232610226f4b2bb5b0fa27ccc6eceb0c
     schemaVersion: 1
   - label: checklist
     path: work/74-gs2-03-2-frozen-corpus/checklist.md
