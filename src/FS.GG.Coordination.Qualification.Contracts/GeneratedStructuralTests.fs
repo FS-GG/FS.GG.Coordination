@@ -130,6 +130,41 @@ let private uniqueBy code label keyOf values =
     | Some duplicate -> Error $"%s{code}: duplicate %s{label} %s{keyOf duplicate}"
     | None -> Ok values
 
+let private compiledOutputFamilies contract =
+    let pascalCase (value: string) =
+        value.Split('-', StringSplitOptions.RemoveEmptyEntries)
+        |> Array.map (fun part -> part.Substring(0, 1).ToUpperInvariant() + part.Substring(1))
+        |> String.concat ""
+
+    match arrayProperty "GST-INPUT-SCHEMA" "catalogue" contract with
+    | Error error -> Error error
+    | Ok catalogue ->
+        match catalogue |> List.tryFind (fun item -> stringProperty "GST-INPUT-SCHEMA" "id" item = Ok "COUT-Specification") with
+        | None -> Error "GST-INPUT-SCHEMA: missing COUT-Specification"
+        | Some specification ->
+            match tryProperty "value" specification |> Option.bind (tryProperty "fields") with
+            | Some fields when fields.ValueKind = JsonValueKind.Array ->
+                match fields.EnumerateArray() |> Seq.tryFind (fun field -> stringProperty "GST-INPUT-SCHEMA" "name" field = Ok "familyContract") with
+                | None -> Error "GST-INPUT-SCHEMA: missing compiled-output familyContract"
+                | Some field ->
+                    match tryProperty "value" field |> Option.bind (tryProperty "value") with
+                    | Some value when value.ValueKind = JsonValueKind.String ->
+                        value.GetString().Split('|', StringSplitOptions.RemoveEmptyEntries)
+                        |> Array.toList
+                        |> List.map (fun entry ->
+                            match entry.Split(':', 2) with
+                            | [| ordinal; name |] ->
+                                match Int32.TryParse ordinal with
+                                | true, number -> Ok(number, "COUT-" + pascalCase name)
+                                | _ -> Error $"GST-INPUT-SCHEMA: invalid compiled-output ordinal %s{ordinal}"
+                            | _ -> Error $"GST-INPUT-SCHEMA: invalid compiled-output family %s{entry}")
+                        |> fun results ->
+                            match results |> List.tryPick (function Error error -> Some error | Ok _ -> None) with
+                            | Some error -> Error error
+                            | None -> Ok(results |> List.choose (function Ok value -> Some value | Error _ -> None))
+                    | _ -> Error "GST-INPUT-SCHEMA: malformed compiled-output familyContract"
+            | _ -> Error "GST-INPUT-SCHEMA: malformed COUT-Specification fields"
+
 let private jsonRelative family =
     match family with
     | "COUT-CommandMetadata" -> Some "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/command-metadata.json"
@@ -160,18 +195,28 @@ let private loadQualified root =
                 match requireEqual "GST-INPUT-SCHEMA" "contract schema" "fsgg.quint.compiled-contract/v2" contractSchema,
                       requireEqual "GST-INPUT-SCHEMA" "manifest schema" "fsgg.quint.compiled-output-manifest/1" manifestSchema,
                       requireEqual "GST-INPUT-DIGEST" "compiled contract digest" contractSha (sha256 contractBytes),
-                      uniqueBy "GST-SOURCE-DUPLICATE" "compiled-output family" (fun output -> stringProperty "GST-INPUT-MANIFEST" "family" output |> Result.defaultValue "") outputs with
-                | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error
-                | Ok (), Ok (), Ok (), Ok uniqueOutputs ->
+                      uniqueBy "GST-SOURCE-DUPLICATE" "compiled-output family" (fun output -> stringProperty "GST-INPUT-MANIFEST" "family" output |> Result.defaultValue "") outputs,
+                      compiledOutputFamilies contract with
+                | Error error, _, _, _, _
+                | _, Error error, _, _, _
+                | _, _, Error error, _, _
+                | _, _, _, Error error, _
+                | _, _, _, _, Error error -> Error error
+                | Ok (), Ok (), Ok (), Ok uniqueOutputs, Ok expectedFamilies ->
                     let sortedOutputs =
                         uniqueOutputs
                         |> List.sortBy (fun output -> intProperty "GST-INPUT-MANIFEST" "ordinal" output |> Result.defaultValue Int32.MaxValue)
 
                     let expectedOrdinals = [ 1 .. sortedOutputs.Length ]
                     let observedOrdinals = sortedOutputs |> List.map (intProperty "GST-INPUT-MANIFEST" "ordinal" >> Result.defaultValue -1)
+                    let observedFamilies =
+                        sortedOutputs
+                        |> List.map (fun output ->
+                            intProperty "GST-INPUT-MANIFEST" "ordinal" output |> Result.defaultValue -1,
+                            stringProperty "GST-INPUT-MANIFEST" "family" output |> Result.defaultValue "")
 
-                    if observedOrdinals <> expectedOrdinals then
-                        Error "GST-INPUT-MANIFEST: compiled-output ordinals are incomplete or non-canonical"
+                    if observedOrdinals <> expectedOrdinals || observedFamilies <> expectedFamilies then
+                        Error "GST-INPUT-MANIFEST: compiled-output families or ordinals differ from COUT-Specification"
                     else
                         let validateOutput output =
                             match stringProperty "GST-INPUT-MANIFEST" "family" output,
@@ -199,9 +244,12 @@ let private loadQualified root =
                                             | Ok () ->
                                                 match stringProperty "GST-INPUT-MANIFEST" "path" file, stringProperty "GST-INPUT-MANIFEST" "contentSha256" file with
                                                 | Ok path, Ok expectedSha ->
-                                                    match readBytes root (outputRoot + "/" + path) with
-                                                    | Error error -> Error error
-                                                    | Ok bytes -> requireEqual "GST-INPUT-DIGEST" path expectedSha (sha256 bytes)
+                                                    if Path.IsPathRooted path || path <> Path.GetFileName path || path = "." || path = ".." then
+                                                        Error $"GST-INPUT-MANIFEST: unsafe compiled-output path %s{path}"
+                                                    else
+                                                        match readBytes root (outputRoot + "/" + path) with
+                                                        | Error error -> Error error
+                                                        | Ok bytes -> requireEqual "GST-INPUT-DIGEST" path expectedSha (sha256 bytes)
                                                 | Error error, _ | _, Error error -> Error error) (Ok())
                             | Error error, _, _, _, _, _, _, _
                             | _, Error error, _, _, _, _, _, _

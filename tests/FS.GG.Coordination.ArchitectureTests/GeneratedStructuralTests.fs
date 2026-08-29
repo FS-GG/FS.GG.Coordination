@@ -184,6 +184,28 @@ let ``unregistered command mutation and projection changes are rejected`` () =
         (output["content"]["catalogue"]).AsArray().RemoveAt(0))
 
 [<Fact>]
+let ``compiled output family contract and safe paths are authoritative`` () =
+    let assertManifestMutation expectedCode mutate =
+        withQualifiedCopy (fun scratch ->
+            let manifestPath = Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/manifest.json")
+            let manifest = parseObject manifestPath
+            mutate manifest
+            File.WriteAllText(manifestPath, manifest.ToJsonString() + "\n", UTF8Encoding(false))
+            match GeneratedStructuralTests.check scratch artifactRelative with
+            | Ok _ -> failwith "compiled output manifest mutation unexpectedly validated"
+            | Error error -> Assert.StartsWith(expectedCode, error))
+    assertManifestMutation "GST-INPUT-MANIFEST" (fun manifest ->
+        let outputs = manifest["outputs"].AsArray()
+        let invented = outputs[0].DeepClone().AsObject()
+        setString invented "family" "COUT-Invented"
+        setInteger invented "ordinal" 10
+        outputs.Add invented)
+    assertManifestMutation "GST-INPUT-MANIFEST" (fun manifest ->
+        let firstOutput = ((manifest["outputs"].AsArray())[0]).AsObject()
+        let firstFile = ((firstOutput["files"].AsArray())[0]).AsObject()
+        setString firstFile "path" "../contract.json")
+
+[<Fact>]
 let ``stable generator and validator adapters execute the committed artifact`` () =
     let generatorExit, generatorOutput, generatorError =
         runScript "eng/generate-generated-structural-tests.fsx" [ "--root"; "."; "--check"; artifactRelative ]
