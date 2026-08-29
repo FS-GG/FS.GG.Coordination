@@ -69,3 +69,7 @@ The retained baseline TRX attributed 267.82 aggregate test-seconds to 58 bootstr
 - The final cache-free run reduces aggregate runner time by 21.9%, compiler/tests by 47.6%, and recovery by 48.8%.
 - Cache miss/hit semantics are equal and the non-beneficial cache is absent from the final projection.
 - Overall settled latency is disclosed as canonical-Quint-bound; #80 owns any later exact-evidence reuse that can remove repeated formal qualification from that path.
+
+## Review repair provenance
+
+Independent review identified that `BootstrapRecoveryTests.fs`—changed when recovery validation moved from the FSI adapter to the compiled core—was omitted from the live issue and route touch sets. The held declaration was widened in place, route decision revision 3 (`96000776c1aa3d0fab7ced039b03b52661ad7a30514a4955dd5e7b66d98efe7b`) records the same SDD route with that path added, and the live `verify-paths` command now reports `FSGG-PATHS OK`. This is an authority/provenance repair; it changes no qualification behavior or timing claim.
