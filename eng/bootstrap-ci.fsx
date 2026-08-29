@@ -218,7 +218,8 @@ let private inspectWorkflow root (contract: BootstrapContract) =
                   yield violation "workflow-authority-ceiling" token
           for line in lines do
               let trimmed = line.TrimStart()
-              if trimmed.StartsWith("if:", StringComparison.Ordinal)
+              if (trimmed.StartsWith("if:", StringComparison.Ordinal)
+                  && trimmed <> "if: ${{ always() }}")
                  || trimmed.StartsWith("continue-on-error:", StringComparison.Ordinal) then
                   yield violation "workflow-gate-bypass" trimmed
           for job in contract.Jobs do
@@ -354,7 +355,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
         let expectedProperties =
             [ "schema"; "q1Outcome"; "q2Outcome"; "positiveInvariantCount"; "negativeControlCount"
               "preparationDurationMs"; "q2DurationMs"; "totalDurationMs"; "processCounts"; "tools"; "inputs"
-              "preparationSha256"; "resultSha256" ]
+              "preparationSha256"; "failure"; "resultSha256" ]
         let processCounts = root.GetProperty("processCounts")
         let tools = root.GetProperty("tools")
         let inputs = root.GetProperty("inputs")
@@ -362,7 +363,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
         let toolProperties = tools.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let inputProperties = inputs.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let preparationDigest = stringProperty "preparationSha256" root |> Option.defaultValue ""
-        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|51|%s{preparationDigest}"))
+        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|56|%s{preparationDigest}|none|none"))
         let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
         let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
         let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
@@ -372,14 +373,15 @@ let private inspectCanonicalQuintReceipt (path: string) =
               yield violation "quint-receipt-schema" "unsupported or absent schema"
           if stringProperty "q1Outcome" root <> Some "passed" || stringProperty "q2Outcome" root <> Some "passed" then
               yield violation "quint-receipt-outcome" "Q1 and Q2 must both pass"
-          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 51L then
-              yield violation "quint-receipt-inventory" "expected eight positive invariants and 51 negative controls"
+          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 56L then
+              yield violation "quint-receipt-inventory" "expected eight positive invariants and 56 observed negative-control rejections"
           if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
               yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
           if int64Property "external" processCounts |> Option.defaultValue 0L <= 0L
-             || int64Property "quint" processCounts |> Option.defaultValue 0L <= 0L then
+             || int64Property "quintCli" processCounts |> Option.defaultValue 0L <= 0L
+             || int64Property "apalacheVerify" processCounts |> Option.defaultValue 0L <= 0L then
               yield violation "quint-receipt-process-count" "process counts must be positive"
-          if processProperties <> [ "external"; "quint" ] then
+          if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
               yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
           if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then
               yield violation "quint-receipt-tool-properties" (String.concat "," toolProperties)
@@ -400,6 +402,8 @@ let private inspectCanonicalQuintReceipt (path: string) =
                   yield violation "quint-receipt-input-digest" name
           if not (isLowerSha256 preparationDigest) then
               yield violation "quint-receipt-preparation-digest" preparationDigest
+          if root.GetProperty("failure").ValueKind <> JsonValueKind.Null then
+              yield violation "quint-receipt-failure" "a passing receipt must not carry a failure"
           if stringProperty "resultSha256" root <> Some expectedResult then
               yield violation "quint-receipt-result-digest" "result digest does not bind the outcomes and inventories" ]
     with exceptionValue ->

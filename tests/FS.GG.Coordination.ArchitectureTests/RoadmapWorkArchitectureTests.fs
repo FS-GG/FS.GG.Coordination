@@ -66,7 +66,11 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     let receiptSchema =
         File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/schemas/v1/canonical-quint-qualifications.schema.json"))
     Assert.Contains("fsgg.coordination.canonical-quint-qualification/1", receiptSchema)
-    Assert.Contains("\"negativeControlCount\":{\"const\":51}", receiptSchema)
+    Assert.Contains("\"negativeControlCount\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":56}", receiptSchema)
+    Assert.Contains("\"apalacheVerify\"", receiptSchema)
+    Assert.Contains("if: ${{ always() }}", workflow)
+    Assert.Contains("q1Outcome <- \"failed\"", validator)
+    Assert.Contains("q2Outcome <- \"failed\"", validator)
 
 [<Fact>]
 let ``hosted canonical Quint gate cannot silently downgrade to static validation`` () =
@@ -515,6 +519,7 @@ let ``canonical Quint authority mutations fail closed`` () =
         Assert.Equal(0, cloneExit)
         Assert.Equal("", cloneError)
         mutate clone
+        let failureReceipt = Path.Combine(clone, "failure-receipt.json")
 
         let exitCode, _, error =
             runAt
@@ -525,10 +530,18 @@ let ``canonical Quint authority mutations fail closed`` () =
                   "--"
                   "--root"
                   "."
-                  "--static-only" ]
+                  "--static-only"
+                  "--output"
+                  failureReceipt ]
 
         Assert.NotEqual(0, exitCode)
         Assert.Contains($"code={expectedCode}", error)
+        Assert.True(File.Exists failureReceipt)
+        use receipt = JsonDocument.Parse(File.ReadAllBytes failureReceipt)
+        Assert.Equal("failed", receipt.RootElement.GetProperty("q1Outcome").GetString())
+        Assert.Equal("not-run", receipt.RootElement.GetProperty("q2Outcome").GetString())
+        Assert.Equal(expectedCode, receipt.RootElement.GetProperty("failure").GetProperty("code").GetString())
+        Assert.Equal(JsonValueKind.Null, receipt.RootElement.GetProperty("preparationSha256").ValueKind)
 
     try
         runMutation

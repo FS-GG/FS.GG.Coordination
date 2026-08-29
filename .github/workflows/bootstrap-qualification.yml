@@ -104,6 +104,7 @@ jobs:
       - name: Run one exact-head canonical Quint Q1 and Q2 attempt
         run: bash eng/qualify-canonical-quint.sh
       - name: Upload canonical Quint evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: canonical-quint

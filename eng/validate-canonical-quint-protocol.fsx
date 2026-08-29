@@ -37,9 +37,36 @@ let expectedApalacheJar =
 let qualificationClock = Stopwatch.StartNew()
 let mutable externalProcessCount = 0
 let mutable quintProcessCount = 0
+let mutable quintRejectedProcessCount = 0
+let mutable apalacheVerifyInvocationCount = 0
+let mutable verifiedPositiveInvariantCount = 0
+let mutable q1Outcome = "not-run"
+let mutable q2Outcome = "not-run"
+let mutable currentPhase = "q1"
+let mutable preparationDurationMs = 0L
+let mutable preparationDigest: string option = None
+let mutable failureReceiptWriter: (string -> string -> unit) option = None
+
+let positiveInvariants =
+    [ "acceptedVocabularyIsQualified"
+      "acceptedAuthoritiesAreQualified"
+      "humanIntentIsObservationIndependent"
+      "lifecycleStatusIsDerived"
+      "nativeRelationEdgesAreValid"
+      "relationChangesPreserveUnrelatedEdges"
+      "protocolEnvelopesAreValidAndOrdered"
+      "durableProtocolCheckpointsArePreserved" ]
 
 let fail code detail =
     eprintfn "CANONICAL_QUINT_PROTOCOL_RED code=%s detail=%s" code detail
+
+    match failureReceiptWriter with
+    | Some writer ->
+        try writer code detail
+        with exceptionValue ->
+            eprintfn "CANONICAL_QUINT_RECEIPT_RED code=WRITE detail=%s" exceptionValue.Message
+    | None -> ()
+
     exit 1
 
 let sha256 path =
@@ -76,8 +103,14 @@ let requireFile code path =
 let run workingDirectory (executable: string) arguments environment =
     externalProcessCount <- externalProcessCount + 1
 
-    if executable.EndsWith(expectedQuint, StringComparison.Ordinal) then
+    let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
+
+    if isQuint then
         quintProcessCount <- quintProcessCount + 1
+
+        match arguments with
+        | "verify" :: _ -> apalacheVerifyInvocationCount <- apalacheVerifyInvocationCount + 1
+        | _ -> ()
 
     let info = ProcessStartInfo(executable)
     info.WorkingDirectory <- workingDirectory
@@ -95,6 +128,10 @@ let run workingDirectory (executable: string) arguments environment =
     let output = child.StandardOutput.ReadToEndAsync()
     let error = child.StandardError.ReadToEndAsync()
     child.WaitForExit()
+
+    if isQuint && child.ExitCode <> 0 then
+        quintRejectedProcessCount <- quintRejectedProcessCount + 1
+
     child.ExitCode, output.Result.Trim(), error.Result.Trim()
 
 let requireGreen code workingDirectory executable arguments environment =
@@ -123,6 +160,83 @@ let qualificationOutput =
     outputOption
     |> Option.map Path.GetFullPath
     |> Option.defaultValue (Path.Combine(root, "artifacts/canonical-quint/qualification.json"))
+
+let writeQualificationReceipt failure =
+    let totalDurationMs = qualificationClock.ElapsedMilliseconds
+    let q2DurationMs = Math.Max(0L, totalDurationMs - preparationDurationMs)
+    let preparationValue = preparationDigest |> Option.defaultValue "none"
+
+    let failureCode, failureDetailSha256 =
+        match failure with
+        | Some(code, detail) -> code, sha256Text detail
+        | None -> "none", "none"
+
+    let resultSha256 =
+        sha256Text
+            ($"%s{q1Outcome}|%s{q2Outcome}|%d{verifiedPositiveInvariantCount}|%d{quintRejectedProcessCount}|%s{preparationValue}|%s{failureCode}|%s{failureDetailSha256}")
+
+    let outputDirectory = Path.GetDirectoryName qualificationOutput
+
+    if not (String.IsNullOrWhiteSpace outputDirectory) then
+        Directory.CreateDirectory outputDirectory |> ignore
+
+    let temporaryOutput = qualificationOutput + "." + Guid.NewGuid().ToString("N") + ".tmp"
+
+    do
+        use outputStream = File.Create temporaryOutput
+        use writer = new Utf8JsonWriter(outputStream, JsonWriterOptions(Indented = true))
+        writer.WriteStartObject()
+        writer.WriteString("schema", "fsgg.coordination.canonical-quint-qualification/1")
+        writer.WriteString("q1Outcome", q1Outcome)
+        writer.WriteString("q2Outcome", q2Outcome)
+        writer.WriteNumber("positiveInvariantCount", verifiedPositiveInvariantCount)
+        writer.WriteNumber("negativeControlCount", quintRejectedProcessCount)
+        writer.WriteNumber("preparationDurationMs", preparationDurationMs)
+        writer.WriteNumber("q2DurationMs", q2DurationMs)
+        writer.WriteNumber("totalDurationMs", totalDurationMs)
+        writer.WriteStartObject("processCounts")
+        writer.WriteNumber("external", externalProcessCount)
+        writer.WriteNumber("quintCli", quintProcessCount)
+        writer.WriteNumber("apalacheVerify", apalacheVerifyInvocationCount)
+        writer.WriteEndObject()
+        writer.WriteStartObject("tools")
+        writer.WriteString("toolchainSha256", expectedToolchain)
+        writer.WriteString("quintSha256", expectedQuint)
+        writer.WriteString("apalacheJarSha256", expectedApalacheJar)
+        writer.WriteEndObject()
+        writer.WriteStartObject("inputs")
+        writer.WriteString("sourceSha256", expectedSource)
+        writer.WriteString("contractSha256", expectedContract)
+        writer.WriteEndObject()
+
+        match preparationDigest with
+        | Some digest -> writer.WriteString("preparationSha256", digest)
+        | None -> writer.WriteNull("preparationSha256")
+
+        match failure with
+        | Some(code, _) ->
+            writer.WriteStartObject("failure")
+            writer.WriteString("code", code)
+            writer.WriteString("detailSha256", failureDetailSha256)
+            writer.WriteEndObject()
+        | None -> writer.WriteNull("failure")
+
+        writer.WriteString("resultSha256", resultSha256)
+        writer.WriteEndObject()
+        writer.Flush()
+        outputStream.Flush(true)
+
+    File.Move(temporaryOutput, qualificationOutput, true)
+
+failureReceiptWriter <-
+    Some(fun code detail ->
+        if currentPhase = "q1" then
+            q1Outcome <- "failed"
+            q2Outcome <- "not-run"
+        else
+            q2Outcome <- "failed"
+
+        writeQualificationReceipt (Some(code, detail)))
 
 let source = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
 
@@ -767,10 +881,14 @@ try
     File.WriteAllText(q2Qnt, q2Source)
     requireGreen "QUINT-Q2-TYPECHECK" scratch quint [ "typecheck"; q2Qnt ] [] |> ignore
 
-    let preparationDurationMs = qualificationClock.ElapsedMilliseconds
+    preparationDurationMs <- qualificationClock.ElapsedMilliseconds
 
     let preparationSha256 =
         sha256Text ($"%s{sha256 qnt}|%s{sha256 q2Qnt}|%s{expectedToolchain}")
+
+    preparationDigest <- Some preparationSha256
+    q1Outcome <- "passed"
+    currentPhase <- "q2"
 
     printfn
         "CANONICAL_QUINT_COMPILER_OK contract=%s source=%s profile=%s preparation=%s durationMs=%d"
@@ -856,29 +974,24 @@ try
         "QUINT-POSITIVE-INVARIANTS-VERIFY"
         scratch
         quint
-        [ "verify"
-          qnt
-          "--main"
-          "CoordinationProtocol"
-          "--init"
-          "init"
-          "--step"
-          "step"
-          "--invariants"
-          "acceptedVocabularyIsQualified"
-          "acceptedAuthoritiesAreQualified"
-          "humanIntentIsObservationIndependent"
-          "lifecycleStatusIsDerived"
-          "nativeRelationEdgesAreValid"
-          "relationChangesPreserveUnrelatedEdges"
-          "protocolEnvelopesAreValidAndOrdered"
-          "durableProtocolCheckpointsArePreserved"
-          "--max-steps"
-          "4"
-          "--verbosity"
-          "1" ]
+        ([ "verify"
+           qnt
+           "--main"
+           "CoordinationProtocol"
+           "--init"
+           "init"
+           "--step"
+           "step"
+           "--invariants" ]
+         @ positiveInvariants
+         @ [ "--max-steps"
+             "4"
+             "--verbosity"
+             "1" ])
         environment
     |> ignore
+
+    verifiedPositiveInvariantCount <- positiveInvariants.Length
 
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
     let originalQnt = File.ReadAllText q2Qnt
@@ -1691,51 +1804,15 @@ try
     requireAuthorityRed "omitted-family" (mutateStep "nativeGitHubObservation") (fun text ->
         text.Replace(omittedFamilyRow, ""))
 
+    if verifiedPositiveInvariantCount <> 8 then
+        fail "POSITIVE-INVARIANT-COVERAGE" ($"expected=8; actual=%d{verifiedPositiveInvariantCount}")
+
+    if quintRejectedProcessCount <> 56 then
+        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=56; actual=%d{quintRejectedProcessCount}")
+
+    q2Outcome <- "passed"
+    writeQualificationReceipt None
     let totalDurationMs = qualificationClock.ElapsedMilliseconds
-    let q2DurationMs = totalDurationMs - preparationDurationMs
-
-    let resultSha256 =
-        sha256Text ($"passed|passed|8|51|%s{preparationSha256}")
-
-    let outputDirectory = Path.GetDirectoryName qualificationOutput
-
-    if not (String.IsNullOrWhiteSpace outputDirectory) then
-        Directory.CreateDirectory outputDirectory |> ignore
-
-    let temporaryOutput = qualificationOutput + "." + Guid.NewGuid().ToString("N") + ".tmp"
-
-    do
-        use outputStream = File.Create temporaryOutput
-        use writer = new Utf8JsonWriter(outputStream, JsonWriterOptions(Indented = true))
-        writer.WriteStartObject()
-        writer.WriteString("schema", "fsgg.coordination.canonical-quint-qualification/1")
-        writer.WriteString("q1Outcome", "passed")
-        writer.WriteString("q2Outcome", "passed")
-        writer.WriteNumber("positiveInvariantCount", 8)
-        writer.WriteNumber("negativeControlCount", 51)
-        writer.WriteNumber("preparationDurationMs", preparationDurationMs)
-        writer.WriteNumber("q2DurationMs", q2DurationMs)
-        writer.WriteNumber("totalDurationMs", totalDurationMs)
-        writer.WriteStartObject("processCounts")
-        writer.WriteNumber("external", externalProcessCount)
-        writer.WriteNumber("quint", quintProcessCount)
-        writer.WriteEndObject()
-        writer.WriteStartObject("tools")
-        writer.WriteString("toolchainSha256", expectedToolchain)
-        writer.WriteString("quintSha256", expectedQuint)
-        writer.WriteString("apalacheJarSha256", expectedApalacheJar)
-        writer.WriteEndObject()
-        writer.WriteStartObject("inputs")
-        writer.WriteString("sourceSha256", expectedSource)
-        writer.WriteString("contractSha256", expectedContract)
-        writer.WriteEndObject()
-        writer.WriteString("preparationSha256", preparationSha256)
-        writer.WriteString("resultSha256", resultSha256)
-        writer.WriteEndObject()
-        writer.Flush()
-        outputStream.Flush(true)
-
-    File.Move(temporaryOutput, qualificationOutput, true)
 
     printfn
         "CANONICAL_QUINT_PROTOCOL_OK contract=%s source=%s profile=%s receipt=%s durationMs=%d"
