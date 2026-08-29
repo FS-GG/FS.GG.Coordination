@@ -20,7 +20,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a"
+    "90b7b37fd85afc49e4cd32c9ddf3ae5f1b15fdcc7ce01c3d0e689f1958f9b351"
 
 let expectedContract =
     "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
@@ -32,9 +32,9 @@ let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
-let mutable expectedExternalProcessCount = 109
-let mutable expectedQuintProcessCount = 84
-let expectedApalacheVerifyInvocationCount = 14
+let mutable expectedExternalProcessCount = 133
+let mutable expectedQuintProcessCount = 108
+let expectedApalacheVerifyInvocationCount = 20
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -267,9 +267,9 @@ match receiptFailurePhase with
     currentPhase <- "q2"
     verifiedPositiveInvariantCount <- 8
     quintRejectedProcessCount <- 70
-    externalProcessCount <- 108
-    quintProcessCount <- 83
-    apalacheVerifyInvocationCount <- 14
+    externalProcessCount <- 132
+    quintProcessCount <- 107
+    apalacheVerifyInvocationCount <- 20
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
     requireCompletedProcessInventory ()
@@ -632,8 +632,8 @@ let selectedRootIds =
     |> Seq.map _.GetString()
     |> Set.ofSeq
 File.Delete selectionPlanPath
-expectedExternalProcessCount <- 102 + selectedRootIds.Count
-expectedQuintProcessCount <- 77 + selectedRootIds.Count
+expectedExternalProcessCount <- 126 + selectedRootIds.Count
+expectedQuintProcessCount <- 101 + selectedRootIds.Count
 
 if staticOnly then
     printfn "CANONICAL_QUINT_PROTOCOL_STATIC_OK contract=%s profile=%s" expectedContract expectedProfile
@@ -981,6 +981,22 @@ try
         |> Seq.map (fun item ->
             item.GetProperty("id").GetString(), item.GetProperty("budget").GetProperty("artifactBytes").GetInt32())
         |> Map.ofSeq
+    let formalTests =
+        qualificationConfigurationDocument.RootElement.GetProperty("formalTests").EnumerateArray()
+        |> Seq.map (fun item ->
+            item.GetProperty("id").GetString(),
+            item.GetProperty("main").GetString(),
+            item.GetProperty("init").GetString(),
+            item.GetProperty("step").GetString(),
+            item.GetProperty("invariant").GetString(),
+            item.GetProperty("witness").GetString(),
+            item.GetProperty("temporal").GetString(),
+            item.GetProperty("invalid").GetString(),
+            item.GetProperty("counterexample").GetString(),
+            item.GetProperty("budget").GetProperty("depth").GetInt32(),
+            item.GetProperty("budget").GetProperty("samples").GetInt32(),
+            item.GetProperty("budget").GetProperty("artifactBytes").GetInt32())
+        |> Seq.toList
     let rootArtifactDirectory = Path.Combine(scratch, "root-artifacts")
     Directory.CreateDirectory rootArtifactDirectory |> ignore
     let rootArtifactDigests = ResizeArray<string * string>()
@@ -1058,6 +1074,26 @@ try
     if not (List.isEmpty duplicateRootArtifacts) then
         fail "QUINT-ROOT-ARTIFACT-IDENTITY" ($"duplicates=%A{duplicateRootArtifacts |> List.map fst}")
 
+    let formalArtifactDirectory = Path.Combine(scratch, "formal-test-artifacts")
+    Directory.CreateDirectory formalArtifactDirectory |> ignore
+
+    for formalId, main, init, step, invariantName, witness, _, _, _, depth, samples, artifactBudget in formalTests do
+        let artifactPath = Path.Combine(formalArtifactDirectory, $"%s{formalId}-simulation.json")
+        requireGreen
+            "QUINT-FORMAL-SIMULATION"
+            scratch
+            quint
+            [ "run"; q2Qnt; "--main"; main; "--init"; init; "--step"; step
+              "--invariant"; invariantName; "--witnesses"; witness
+              "--max-steps"; string depth; "--max-samples"; string samples
+              "--seed"; "1"; "--verbosity"; "0"; "--out"; artifactPath ]
+            []
+        |> ignore
+        let length = FileInfo(artifactPath).Length
+        if length <= 0L || length > int64 artifactBudget then
+            fail "QUINT-FORMAL-ARTIFACT-BUDGET" ($"%s{formalId}: bytes=%d{length}; budget=%d{artifactBudget}")
+        printfn "QUINT_FORMAL_SIMULATION id=%s bytes=%d sha256=%s" formalId length (sha256 artifactPath)
+
     requireGreen
         "QUINT-INDEPENDENT-ORACLES"
         scratch
@@ -1134,6 +1170,54 @@ try
           Path.GetDirectoryName(java)
           + string Path.PathSeparator
           + Environment.GetEnvironmentVariable("PATH") ]
+
+    let normalizeItf path =
+        let document = JsonNode.Parse(File.ReadAllBytes path).AsObject()
+        let metadata = document["#meta"].AsObject()
+        metadata.Remove("description") |> ignore
+        metadata.Remove("timestamp") |> ignore
+        metadata.Remove("source") |> ignore
+        if metadata["format"].GetValue<string>() <> "ITF" || metadata["status"].GetValue<string>() <> "violation" then
+            fail "QUINT-FORMAL-COUNTEREXAMPLE-SHAPE" path
+        if document["states"].AsArray().Count < 2 then fail "QUINT-FORMAL-COUNTEREXAMPLE-TRACE" path
+        document.ToJsonString(JsonSerializerOptions(WriteIndented = false))
+
+    for formalId, main, init, step, invariantName, _, temporalName, invalid, retainedCounterexample, depth, _, artifactBudget in formalTests do
+        requireGreen
+            "QUINT-FORMAL-TEMPORAL"
+            scratch
+            quint
+            [ "verify"; q2Qnt; "--main"; main; "--init"; init; "--step"; step
+              "--invariant"; invariantName; "--temporal"; temporalName
+              "--max-steps"; string depth; "--backend"; "tlc"; "--verbosity"; "1" ]
+            environment
+        |> ignore
+
+        let runCounterexample ordinal =
+            let pattern = Path.Combine(formalArtifactDirectory, $"%s{formalId}-counterexample-%d{ordinal}-{{seq}}.itf.json")
+            let exitCode, output, error =
+                run scratch quint
+                    [ "run"; q2Qnt; "--main"; main; "--init"; init; "--step"; invalid
+                      "--invariant"; invariantName; "--max-steps"; "2"; "--max-samples"; "1"
+                      "--seed"; "1"; "--verbosity"; "0"; "--out-itf"; pattern ] []
+            if exitCode = 0 || not ((output + "\n" + error).Contains("Invariant violated", StringComparison.Ordinal)) then
+                fail "QUINT-FORMAL-COUNTEREXAMPLE" ($"%s{formalId}: run=%d{ordinal}; exit=%d{exitCode}; stdout=%s{output}; stderr=%s{error}")
+            let path = pattern.Replace("{seq}", "0", StringComparison.Ordinal)
+            requireFile "QUINT-FORMAL-COUNTEREXAMPLE-MISSING" path
+            path, normalizeItf path
+
+        let firstPath, first = runCounterexample 1
+        let _, second = runCounterexample 2
+        if first <> second then fail "QUINT-FORMAL-COUNTEREXAMPLE-NONDETERMINISTIC" formalId
+        let retainedCounterexamplePath = Path.Combine(root, retainedCounterexample)
+        requireFile "QUINT-FORMAL-COUNTEREXAMPLE-RETAINED" retainedCounterexamplePath
+        if File.ReadAllText(retainedCounterexamplePath, Encoding.UTF8) <> first then
+            fail "QUINT-FORMAL-COUNTEREXAMPLE-STALE" formalId
+        File.WriteAllText(firstPath, first, UTF8Encoding(false))
+        let length = FileInfo(firstPath).Length
+        if length <= 0L || length > int64 artifactBudget then
+            fail "QUINT-FORMAL-COUNTEREXAMPLE-BUDGET" ($"%s{formalId}: bytes=%d{length}; budget=%d{artifactBudget}")
+        printfn "QUINT_FORMAL_TEST id=%s backend=tlc temporal=%s counterexampleBytes=%d counterexampleSha256=%s" formalId temporalName length (sha256 firstPath)
 
     requireGreen
         "QUINT-POSITIVE-INVARIANTS-VERIFY"
@@ -2037,8 +2121,8 @@ try
     if verifiedPositiveInvariantCount <> 8 then
         fail "POSITIVE-INVARIANT-COVERAGE" ($"expected=8; actual=%d{verifiedPositiveInvariantCount}")
 
-    if quintRejectedProcessCount <> 71 then
-        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=71; actual=%d{quintRejectedProcessCount}")
+    if quintRejectedProcessCount <> 83 then
+        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=83; actual=%d{quintRejectedProcessCount}")
 
     requireCompletedProcessInventory ()
 

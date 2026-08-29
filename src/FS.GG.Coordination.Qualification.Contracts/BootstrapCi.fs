@@ -531,7 +531,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
         let toolProperties = tools.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let inputProperties = inputs.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let preparationDigest = stringProperty "preparationSha256" root |> Option.defaultValue ""
-        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|71|109|84|14|%s{preparationDigest}|none|none"))
+        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|83|133|108|20|%s{preparationDigest}|none|none"))
         let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
         let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
         let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
@@ -541,14 +541,14 @@ let private inspectCanonicalQuintReceipt (path: string) =
               yield violation "quint-receipt-schema" "unsupported or absent schema"
           if stringProperty "q1Outcome" root <> Some "passed" || stringProperty "q2Outcome" root <> Some "passed" then
               yield violation "quint-receipt-outcome" "Q1 and Q2 must both pass"
-          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 71L then
-              yield violation "quint-receipt-inventory" "expected eight positive invariants and 71 observed negative-control rejections"
+          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 83L then
+              yield violation "quint-receipt-inventory" "expected eight positive invariants and 83 observed negative-control rejections"
           if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
               yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
-          if int64Property "external" processCounts <> Some 109L
-             || int64Property "quintCli" processCounts <> Some 84L
-             || int64Property "apalacheVerify" processCounts <> Some 14L then
-              yield violation "quint-receipt-process-count" "expected exact retained process inventory 109/84/14"
+          if int64Property "external" processCounts <> Some 133L
+             || int64Property "quintCli" processCounts <> Some 108L
+             || int64Property "apalacheVerify" processCounts <> Some 20L then
+              yield violation "quint-receipt-process-count" "expected exact retained process inventory 133/108/20"
           if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
               yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
           if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then
@@ -563,7 +563,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
               if stringProperty name tools <> Some expected then
                   yield violation "quint-receipt-tool-digest" name
           let expectedInputs =
-              [ "sourceSha256", "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a"
+              [ "sourceSha256", "90b7b37fd85afc49e4cd32c9ddf3ae5f1b15fdcc7ce01c3d0e689f1958f9b351"
                 "contractSha256", "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76" ]
           for name, expected in expectedInputs do
               if stringProperty name inputs <> Some expected then

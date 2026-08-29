@@ -203,6 +203,20 @@ the evidence index binds the independent oracle implementation and both retained
 contracts. These surfaces are repository-local and grant no network, GitHub
 mutation, deployment, publication, or production-write authority.
 
+GS2-03.5 adds six native formal state spaces to the same canonical
+`CoordinationProtocolTests` module: claim/election, relation mutation, lifecycle,
+operation saga, epoch transition, and rollback. Each entry has a complete shared
+initializer, a scenario-specific transition closure, a safety invariant, a reachable
+witness, an explicit weak-fair temporal progress property, and an invalid transition.
+The pinned runner performs deterministic Rust simulation, TLC safety-plus-temporal
+model checking, and two seeded invalid-transition runs. It removes only volatile ITF
+metadata, requires the two normalized traces to be byte-identical, and byte-compares
+the result with the retained work-package ITF fixture. Catalogue and
+baseline validation require exact six-domain coverage, positive budgets, executable
+symbols, the TLC backend, and the retained counterexample path; focused mutants make
+each field fail closed. The formal scenarios consume canonical functions and fixtures
+inside the canonical test module and do not introduce a second production model.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

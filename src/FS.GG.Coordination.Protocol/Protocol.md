@@ -2162,6 +2162,281 @@ module CoordinationProtocolTests {
         .union(Set({ id: "generated", candidateSha: "candidate-a", producer: "case-generator",
           digest: "generated-digest", fresh: false })) })),
   }
+
+  // GS2-03.5 native formal scenarios share this canonical test module so Quint's bounded
+  // verifier observes the exact protocol definitions and fixtures without a parallel model.
+  var formalClaimStage: int
+  var formalClaimEvents: Set[ProtocolEnvelope]
+  var formalClaimValid: bool
+  action formalClaimInit = all {
+    formalClaimStage' = 0, formalClaimEvents' = Set(), formalClaimValid' = true,
+  }
+  action formalClaimObserve = all {
+    formalClaimStage == 0, protocolAppendIsValid(operationLockEnvelope, formalClaimEvents),
+    formalClaimStage' = 1,
+    formalClaimEvents' = formalClaimEvents.union(Set(operationLockEnvelope)),
+    formalClaimValid' = true,
+  }
+  action formalClaimElect = all {
+    formalClaimStage == 1, protocolAppendIsValid(electionCheckpointEnvelope, formalClaimEvents),
+    formalClaimStage' = 2,
+    formalClaimEvents' = formalClaimEvents.union(Set(electionCheckpointEnvelope)),
+    formalClaimValid' = true,
+  }
+  action formalClaimHold = all {
+    formalClaimStage == 2, formalClaimStage' = formalClaimStage,
+    formalClaimEvents' = formalClaimEvents, formalClaimValid' = formalClaimValid,
+  }
+  action formalClaimStep = any { formalClaimObserve, formalClaimElect, formalClaimHold }
+  action formalClaimInvalid = all {
+    formalClaimStage' = 2, formalClaimEvents' = Set(electionCheckpointEnvelope),
+    formalClaimValid' = protocolAppendIsValid(electionCheckpointEnvelope, Set()),
+  }
+  val formalClaimSafety = formalClaimValid
+    and formalClaimEvents.forall(event => protocolEnvelopeIsOrdered(event, formalClaimEvents))
+  val formalClaimReached = formalClaimStage == 2
+    and formalClaimEvents.contains(electionCheckpointEnvelope)
+  temporal formalClaimProgress: bool = and {
+    formalClaimObserve.weakFair(Set(formalClaimStage)),
+    formalClaimElect.weakFair(Set(formalClaimStage)),
+  }.implies(eventually(formalClaimReached))
+
+  var formalRelationStage: int
+  var formalRelationEdges: Set[NativeRelationEdge]
+  action formalRelationInit = all { formalRelationStage' = 0, formalRelationEdges' = Set() }
+  action formalRelationAdd = all {
+    formalRelationStage == 0, nativeRelationEdgeIsValid(parentChildEdge),
+    formalRelationStage' = 1, formalRelationEdges' = formalRelationEdges.union(Set(parentChildEdge)),
+  }
+  action formalRelationRemove = all {
+    formalRelationStage == 1, formalRelationStage' = 2,
+    formalRelationEdges' = formalRelationEdges.exclude(Set(parentChildEdge)),
+  }
+  action formalRelationHold = all {
+    formalRelationStage == 2, formalRelationStage' = formalRelationStage,
+    formalRelationEdges' = formalRelationEdges,
+  }
+  action formalRelationStep = any { formalRelationAdd, formalRelationRemove, formalRelationHold }
+  action formalRelationInvalid = all {
+    formalRelationStage' = 1,
+    formalRelationEdges' = Set({ ...parentChildEdge, targetId: parentChildEdge.sourceId }),
+  }
+  val formalRelationSafety = formalRelationEdges.forall(nativeRelationEdgeIsValid)
+  val formalRelationReached = formalRelationStage >= 1
+  temporal formalRelationProgress: bool = and {
+    formalRelationAdd.weakFair(Set(formalRelationStage)),
+    formalRelationRemove.weakFair(Set(formalRelationStage)),
+  }.implies(eventually(formalRelationStage == 2))
+
+  pure val formalDeliveredLifecycleFacts: LifecycleFacts = {
+    ...claimedLifecycleFacts, deliveryOutcomeId: "OBS-Observed", delivered: true,
+  }
+  var formalLifecycleStage: int
+  var formalLifecycleStatus: str
+  action formalLifecycleInit = all {
+    formalLifecycleStage' = 0,
+    formalLifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
+  }
+  action formalLifecycleClaim = all {
+    formalLifecycleStage == 0, formalLifecycleStage' = 1,
+    formalLifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", claimedLifecycleFacts),
+  }
+  action formalLifecycleDeliver = all {
+    formalLifecycleStage == 1, formalLifecycleStage' = 2,
+    formalLifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", formalDeliveredLifecycleFacts),
+  }
+  action formalLifecycleHold = all {
+    formalLifecycleStage == 2, formalLifecycleStage' = formalLifecycleStage,
+    formalLifecycleStatus' = formalLifecycleStatus,
+  }
+  action formalLifecycleStep = any { formalLifecycleClaim, formalLifecycleDeliver, formalLifecycleHold }
+  action formalLifecycleInvalid = all { formalLifecycleStage' = 2, formalLifecycleStatus' = "ready" }
+  val formalLifecycleSafety = formalLifecycleStatus ==
+    if (formalLifecycleStage == 0) "ready"
+    else if (formalLifecycleStage == 1) "claimed" else "delivered"
+  val formalLifecycleReached = formalLifecycleStage == 2 and formalLifecycleStatus == "delivered"
+  temporal formalLifecycleProgress: bool = and {
+    formalLifecycleClaim.weakFair(Set(formalLifecycleStage)),
+    formalLifecycleDeliver.weakFair(Set(formalLifecycleStage)),
+  }.implies(eventually(formalLifecycleReached))
+
+  var formalSagaStage: int
+  var formalSagaValid: bool
+  action formalSagaInit = all { formalSagaStage' = 0, formalSagaValid' = true }
+  action formalSagaBegin = all {
+    formalSagaStage == 0, formalSagaStage' = 1,
+    formalSagaValid' = durablePlanStepShapeIsValid(planCreateStep),
+  }
+  action formalSagaAdvance = all {
+    formalSagaStage == 1, formalSagaStage' = 2,
+    formalSagaValid' = formalSagaValid and durablePlanStepMayFollow(planCreateStep, planAppendStep),
+  }
+  action formalSagaHold = all {
+    formalSagaStage == 2, formalSagaStage' = formalSagaStage,
+    formalSagaValid' = formalSagaValid,
+  }
+  action formalSagaStep = any { formalSagaBegin, formalSagaAdvance, formalSagaHold }
+  action formalSagaInvalid = all { formalSagaStage' = 2, formalSagaValid' = false }
+  val formalSagaSafety = formalSagaValid
+  val formalSagaReached = formalSagaStage == 2 and formalSagaValid
+  temporal formalSagaProgress: bool = and {
+    formalSagaBegin.weakFair(Set(formalSagaStage)),
+    formalSagaAdvance.weakFair(Set(formalSagaStage)),
+  }.implies(eventually(formalSagaReached))
+
+  pure val formalNextEpochEnvelope: ProtocolEnvelope = {
+    ...operationLockEnvelope, generation: 2, eventId: "operation-lock-epoch-2",
+  }
+  var formalEpochStage: int
+  var formalEpochEvents: Set[ProtocolEnvelope]
+  var formalEpochValid: bool
+  action formalEpochInit = all {
+    formalEpochStage' = 0, formalEpochEvents' = Set(), formalEpochValid' = true,
+  }
+  action formalEpochBegin = all {
+    formalEpochStage == 0, formalEpochStage' = 1,
+    formalEpochValid' = protocolAppendIsValid(operationLockEnvelope, formalEpochEvents),
+    formalEpochEvents' = formalEpochEvents.union(Set(operationLockEnvelope)),
+  }
+  action formalEpochElect = all {
+    formalEpochStage == 1, formalEpochStage' = 2,
+    formalEpochValid' = formalEpochValid
+      and protocolAppendIsValid(electionCheckpointEnvelope, formalEpochEvents),
+    formalEpochEvents' = formalEpochEvents.union(Set(electionCheckpointEnvelope)),
+  }
+  action formalEpochAdvance = all {
+    formalEpochStage == 2, formalEpochStage' = 3,
+    formalEpochValid' = formalEpochValid
+      and protocolAppendIsValid(formalNextEpochEnvelope, formalEpochEvents),
+    formalEpochEvents' = formalEpochEvents.union(Set(formalNextEpochEnvelope)),
+  }
+  action formalEpochHold = all {
+    formalEpochStage == 3, formalEpochStage' = formalEpochStage,
+    formalEpochEvents' = formalEpochEvents, formalEpochValid' = formalEpochValid,
+  }
+  action formalEpochStep = any { formalEpochBegin, formalEpochElect, formalEpochAdvance, formalEpochHold }
+  action formalEpochInvalid = all {
+    formalEpochStage' = 4, formalEpochEvents' = Set(formalNextEpochEnvelope),
+    formalEpochValid' = protocolAppendIsValid(formalNextEpochEnvelope, Set()),
+  }
+  val formalEpochSafety = formalEpochValid
+    and (formalEpochStage >= 3 implies formalEpochEvents.contains(operationLockEnvelope))
+  val formalEpochReached = formalEpochStage == 3
+    and formalEpochEvents.contains(formalNextEpochEnvelope)
+  temporal formalEpochProgress: bool = and {
+    formalEpochBegin.weakFair(Set(formalEpochStage)),
+    formalEpochElect.weakFair(Set(formalEpochStage)),
+    formalEpochAdvance.weakFair(Set(formalEpochStage)),
+  }.implies(eventually(formalEpochReached))
+
+  var formalRollbackStage: int
+  var formalRollbackValid: bool
+  action formalRollbackInit = all { formalRollbackStage' = 0, formalRollbackValid' = true }
+  action formalRollbackApply = all {
+    formalRollbackStage == 0, formalRollbackStage' = 1,
+    formalRollbackValid' = durablePlanStepShapeIsValid(planCreateStep),
+  }
+  action formalRollbackCompensate = all {
+    formalRollbackStage == 1, formalRollbackStage' = 2,
+    formalRollbackValid' = formalRollbackValid and durablePlanCompensationIsValid(
+      planCompensationStep, planCreateStep, createAppliedResult, Set(planCreateStep), Set()),
+  }
+  action formalRollbackHold = all {
+    formalRollbackStage == 2, formalRollbackStage' = formalRollbackStage,
+    formalRollbackValid' = formalRollbackValid,
+  }
+  action formalRollbackStep = any {
+    formalRollbackApply, formalRollbackCompensate, formalRollbackHold,
+  }
+  action formalRollbackInvalid = all { formalRollbackStage' = 2, formalRollbackValid' = false }
+  val formalRollbackSafety = formalRollbackValid
+  val formalRollbackReached = formalRollbackStage == 2 and formalRollbackValid
+  temporal formalRollbackProgress: bool = and {
+    formalRollbackApply.weakFair(Set(formalRollbackStage)),
+    formalRollbackCompensate.weakFair(Set(formalRollbackStage)),
+  }.implies(eventually(formalRollbackReached))
+
+  // TLC requires every variable in the selected module to have a legal initial value. All six
+  // independently selected scenarios therefore share this complete initialization action.
+  action formalInit = all {
+    formalClaimStage' = 0, formalClaimEvents' = Set(), formalClaimValid' = true,
+    formalRelationStage' = 0, formalRelationEdges' = Set(),
+    formalLifecycleStage' = 0,
+    formalLifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
+    formalSagaStage' = 0, formalSagaValid' = true,
+    formalEpochStage' = 0, formalEpochEvents' = Set(), formalEpochValid' = true,
+    formalRollbackStage' = 0, formalRollbackValid' = true,
+  }
+
+  action formalClaimStutter = all {
+    formalClaimStage' = formalClaimStage, formalClaimEvents' = formalClaimEvents,
+    formalClaimValid' = formalClaimValid,
+  }
+  action formalRelationStutter = all {
+    formalRelationStage' = formalRelationStage, formalRelationEdges' = formalRelationEdges,
+  }
+  action formalLifecycleStutter = all {
+    formalLifecycleStage' = formalLifecycleStage, formalLifecycleStatus' = formalLifecycleStatus,
+  }
+  action formalSagaStutter = all {
+    formalSagaStage' = formalSagaStage, formalSagaValid' = formalSagaValid,
+  }
+  action formalEpochStutter = all {
+    formalEpochStage' = formalEpochStage, formalEpochEvents' = formalEpochEvents,
+    formalEpochValid' = formalEpochValid,
+  }
+  action formalRollbackStutter = all {
+    formalRollbackStage' = formalRollbackStage, formalRollbackValid' = formalRollbackValid,
+  }
+
+  action formalClaimTlcStep = all {
+    formalClaimStep, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalClaimTlcInvalid = all {
+    formalClaimInvalid, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalRelationTlcStep = all {
+    formalRelationStep, formalClaimStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalRelationTlcInvalid = all {
+    formalRelationInvalid, formalClaimStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalLifecycleTlcStep = all {
+    formalLifecycleStep, formalClaimStutter, formalRelationStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalLifecycleTlcInvalid = all {
+    formalLifecycleInvalid, formalClaimStutter, formalRelationStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalSagaTlcStep = all {
+    formalSagaStep, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalSagaTlcInvalid = all {
+    formalSagaInvalid, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalEpochTlcStep = all {
+    formalEpochStep, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+  }
+  action formalEpochTlcInvalid = all {
+    formalEpochInvalid, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+  }
+  action formalRollbackTlcStep = all {
+    formalRollbackStep, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+  }
+  action formalRollbackTlcInvalid = all {
+    formalRollbackInvalid, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+  }
 }
 
 // GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only
@@ -2291,4 +2566,5 @@ module QualificationProtocolStreamsRoot {
   val invalidParameterWitness = protocolEnvelopeIsOrdered(leaseEnvelope, Set(leaseEnvelope))
   val qualificationInvariant = rootSafety
 }
+
 ```

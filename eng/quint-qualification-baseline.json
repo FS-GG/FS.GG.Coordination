@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a",
-  "configurationSha256": "a92c96b23b628923304fdf5f415020ee24a7ff3d16b317c99ac26859f33a6659",
-  "assembledQuintSha256": "73e88f05744b6e19cfa79f357e174e2a65272b5d97ce8fe005b97c50b41ca135",
+  "sourceSha256": "90b7b37fd85afc49e4cd32c9ddf3ae5f1b15fdcc7ce01c3d0e689f1958f9b351",
+  "configurationSha256": "89f8145a87c25e4e421f76ab5eeee03cfbc8342e0cc7af65a7ca6dd8501db308",
+  "assembledQuintSha256": "cc820d80f8939e3ceb713cb6ce200b37ab1636662c625b04e8a2ccfa4fe413c1",
   "runnerClass": "linux-x64-local-calibration",
   "measuredAt": "2026-08-29T20:45:00Z",
   "measurements": [
@@ -13,5 +13,13 @@
     { "root": "mutation-saga", "dependencyDepth": 3, "stateCount": 11, "sampleCount": 11, "elapsedMs": 2039, "peakMiB": 271, "artifactBytes": 5081517 },
     { "root": "desired-state", "dependencyDepth": 4, "stateCount": 5, "sampleCount": 5, "elapsedMs": 1712, "peakMiB": 254, "artifactBytes": 5081284 },
     { "root": "qualification", "dependencyDepth": 5, "stateCount": 9, "sampleCount": 9, "elapsedMs": 1946, "peakMiB": 267, "artifactBytes": 5081554 }
+  ],
+  "formalMeasurements": [
+    { "id": "claim-election", "stateCount": 3, "sampleCount": 100, "elapsedMs": 7680, "peakMiB": 512, "artifactBytes": 8192 },
+    { "id": "relation-mutation", "stateCount": 3, "sampleCount": 100, "elapsedMs": 7680, "peakMiB": 512, "artifactBytes": 8192 },
+    { "id": "lifecycle", "stateCount": 3, "sampleCount": 100, "elapsedMs": 7680, "peakMiB": 512, "artifactBytes": 8192 },
+    { "id": "operation-saga", "stateCount": 3, "sampleCount": 100, "elapsedMs": 7680, "peakMiB": 512, "artifactBytes": 8192 },
+    { "id": "epoch", "stateCount": 4, "sampleCount": 100, "elapsedMs": 7680, "peakMiB": 512, "artifactBytes": 8192 },
+    { "id": "rollback", "stateCount": 3, "sampleCount": 100, "elapsedMs": 7680, "peakMiB": 512, "artifactBytes": 8192 }
   ]
 }

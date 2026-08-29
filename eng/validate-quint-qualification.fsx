@@ -51,6 +51,12 @@ let validateDocument root (document: JsonObject) =
         let roots = objects document "roots"
         let rootIds = roots |> List.map (fun item -> text item "id")
         let rootModules = roots |> List.map (fun item -> text item "module")
+        let formalTests = objects document "formalTests"
+        let formalTestIds = formalTests |> List.map (fun item -> text item "id")
+        let requiredFormalTestIds =
+            Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback" ]
+        let requiredFormalFields =
+            Set [ "id"; "main"; "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"; "backend"; "counterexample"; "budget" ]
         let allowedClasses = Set [ "essential"; "derived"; "bookkeeping" ]
         let requiredAdmission =
             Set [ "owner"; "imports"; "invariants"; "independentOracles"; "root"; "bounds"; "witnesses"
@@ -65,7 +71,7 @@ let validateDocument root (document: JsonObject) =
                   "model-test-inventory" ]
         let allowedCiImpact = Set [ "bounded-state-root"; "bounded-test-root" ]
         let declaredDefinition name =
-            Regex.IsMatch(sourceText, $"(?m)^\\s*(pure\\s+)?(val|def|run|action)\\s+%s{Regex.Escape name}(\\s|\\(|=)")
+            Regex.IsMatch(sourceText, $"(?m)^\\s*(pure\\s+)?(val|def|run|action|temporal)\\s+%s{Regex.Escape name}(\\s|\\(|=|:)")
         let actualCanonicalImports main =
             let moduleMatch =
                 Regex.Match(sourceText, $"(?ms)^module\\s+%s{Regex.Escape main}\\s*\\{{(.*?)(?=^module\\s+|\\z)")
@@ -138,6 +144,23 @@ let validateDocument root (document: JsonObject) =
                 elif not (Set.contains (text admission "ciImpact") allowedCiImpact) then fail "QQ-ROOT-ADMISSION-CI" id
                 elif text admission "budgetEffect" <> "within-calibrated-envelope" then fail "QQ-ROOT-ADMISSION-BUDGET-EFFECT" id
                 else Ok())
+        let formalTestCheck (item: JsonObject) =
+            let id = text item "id"
+            let fields = item |> Seq.map (fun property -> property.Key) |> Set.ofSeq
+            let executableFields = [ "init"; "step"; "invariant"; "witness"; "temporal"; "invalid" ]
+            let budget = item["budget"].AsObject()
+            let budgetFields = Set [ "depth"; "states"; "samples"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
+            if fields <> requiredFormalFields then fail "QQ-FORMAL-FIELDS" id
+            elif text item "main" <> "CoordinationProtocolTests" then fail "QQ-FORMAL-MAIN" id
+            elif text item "backend" <> "tlc" then fail "QQ-FORMAL-BACKEND" id
+            elif text item "counterexample" <> $"work/96-gs2-03-5-native-quint-formal-tests/counterexamples/%s{id}.itf.json" then
+                fail "QQ-FORMAL-COUNTEREXAMPLE" id
+            elif executableFields |> List.exists (fun field -> not (declaredDefinition (text item field))) then
+                fail "QQ-FORMAL-EXECUTABLE" id
+            elif (budget |> Seq.map (fun property -> property.Key) |> Set.ofSeq) <> budgetFields then
+                fail "QQ-FORMAL-BUDGET-FIELDS" id
+            elif budgetFields |> Set.exists (fun field -> number budget field <= 0) then fail "QQ-FORMAL-BUDGET" id
+            else Ok()
         let selection = document["selection"].AsObject()
 
         if text document "schema" <> "fsgg.coordination.quint-qualification/1" then fail "QQ-SCHEMA" "unsupported"
@@ -158,6 +181,9 @@ let validateDocument root (document: JsonObject) =
             |> bind (fun () -> unique "QQ-ROOT-DUPLICATE" "roots" rootIds)
             |> bind (fun () -> exact "QQ-ROOT-COVERAGE" "modules" (Set moduleIds - Set [ "core" ]) (Set rootModules))
             |> bind (fun () -> roots |> List.fold (fun state item -> state |> bind (fun () -> rootCheck item)) (Ok()))
+            |> bind (fun () -> unique "QQ-FORMAL-DUPLICATE" "formalTests" formalTestIds)
+            |> bind (fun () -> exact "QQ-FORMAL-COVERAGE" "formalTests" requiredFormalTestIds (Set formalTestIds))
+            |> bind (fun () -> formalTests |> List.fold (fun state item -> state |> bind (fun () -> formalTestCheck item)) (Ok()))
             |> bind (fun () -> exact "QQ-ORACLE-INVENTORY" "oracles" requiredOracles (strings document "oracleIds" |> Set.ofList))
             |> bind (fun () ->
                 if text selection "pullRequest" <> "reverse-dependency-closure" || text selection "protectedPolicy" <> "full-inventory" then
@@ -376,27 +402,49 @@ let validateBaseline root configBytes (document: JsonObject) =
         let baseline = JsonNode.Parse(File.ReadAllBytes baselinePath).AsObject()
         let sourcePath = Path.Combine(root, text document "source")
         let roots = objects document "roots" |> List.map (fun item -> text item "id", item) |> Map.ofList
+        let formalTests = objects document "formalTests" |> List.map (fun item -> text item "id", item) |> Map.ofList
         let measurements = objects baseline "measurements"
+        let formalMeasurements = objects baseline "formalMeasurements"
         let measuredIds = measurements |> List.map (fun item -> text item "root")
+        let measuredFormalIds = formalMeasurements |> List.map (fun item -> text item "id")
         if text baseline "schema" <> "fsgg.coordination.quint-qualification-baseline/1" then fail "QQ-BASELINE-SCHEMA" "unsupported"
         elif text baseline "sourceSha256" <> sha256 (File.ReadAllBytes sourcePath) then fail "QQ-BASELINE-SOURCE" "stale"
         elif text baseline "configurationSha256" <> sha256 configBytes then fail "QQ-BASELINE-CONFIG" "stale"
         elif Set measuredIds <> Set (Map.keys roots) then fail "QQ-BASELINE-COVERAGE" ($"%A{measuredIds}")
+        elif Set measuredFormalIds <> Set (Map.keys formalTests) then fail "QQ-BASELINE-FORMAL-COVERAGE" ($"%A{measuredFormalIds}")
         else
-            measurements
-            |> List.tryPick (fun item ->
-                let id = text item "root"
-                let budget = ((roots[id])["budget"]).AsObject()
-                let fields = [ "dependencyDepth"; "stateCount"; "sampleCount"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
-                if fields |> List.exists (fun field -> number item field < 0) || number item "sampleCount" = 0 then Some("QQ-BASELINE-METRIC", id)
-                elif number item "dependencyDepth" > number budget "depth" then Some("QQ-BASELINE-DEPTH", id)
-                elif number item "stateCount" > number budget "states"
-                     || number item "sampleCount" > number budget "samples"
-                     || number item "elapsedMs" > number budget "elapsedMs"
-                     || number item "peakMiB" > number budget "peakMiB"
-                     || number item "artifactBytes" > number budget "artifactBytes" then Some("QQ-BASELINE-BUDGET", id)
-                else None)
-            |> function None -> Ok() | Some(code, id) -> fail code id
+            let rootResult =
+                measurements
+                |> List.tryPick (fun item ->
+                    let id = text item "root"
+                    let budget = ((roots[id])["budget"]).AsObject()
+                    let fields = [ "dependencyDepth"; "stateCount"; "sampleCount"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
+                    if fields |> List.exists (fun field -> number item field < 0) || number item "sampleCount" = 0 then Some("QQ-BASELINE-METRIC", id)
+                    elif number item "dependencyDepth" > number budget "depth" then Some("QQ-BASELINE-DEPTH", id)
+                    elif number item "stateCount" > number budget "states"
+                         || number item "sampleCount" > number budget "samples"
+                         || number item "elapsedMs" > number budget "elapsedMs"
+                         || number item "peakMiB" > number budget "peakMiB"
+                         || number item "artifactBytes" > number budget "artifactBytes" then Some("QQ-BASELINE-BUDGET", id)
+                    else None)
+                |> function None -> Ok() | Some(code, id) -> fail code id
+            rootResult
+            |> bind (fun () ->
+                formalMeasurements
+                |> List.tryPick (fun item ->
+                    let id = text item "id"
+                    let budget = (formalTests[id]["budget"]).AsObject()
+                    let fields = [ "stateCount"; "sampleCount"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
+                    if fields |> List.exists (fun field -> number item field < 0) || number item "sampleCount" = 0 then
+                        Some("QQ-BASELINE-FORMAL-METRIC", id)
+                    elif number item "stateCount" > number budget "states"
+                         || number item "sampleCount" > number budget "samples"
+                         || number item "elapsedMs" > number budget "elapsedMs"
+                         || number item "peakMiB" > number budget "peakMiB"
+                         || number item "artifactBytes" > number budget "artifactBytes" then
+                        Some("QQ-BASELINE-FORMAL-BUDGET", id)
+                    else None)
+                |> function None -> Ok() | Some(code, id) -> fail code id)
     with error -> fail "QQ-BASELINE-MALFORMED" error.Message
 
 let clone (node: JsonObject) = node.DeepClone().AsObject()
@@ -426,7 +474,14 @@ let runSelfTests root original =
           "root-admission-invariant", fun value -> ((firstObject "roots" value).["admission"].["invariants"])[0] <- JsonValue.Create("missingInvariant")
           "root-admission-projection", fun value -> ((firstObject "roots" value).["admission"].["projections"])[0] <- JsonValue.Create("unknown-projection")
           "root-admission-ci", fun value -> (firstObject "roots" value).["admission"].["ciImpact"] <- JsonValue.Create("unbounded")
-          "root-admission-budget-effect", fun value -> (firstObject "roots" value).["admission"].["budgetEffect"] <- JsonValue.Create("unknown") ]
+          "root-admission-budget-effect", fun value -> (firstObject "roots" value).["admission"].["budgetEffect"] <- JsonValue.Create("unknown")
+          "formal-coverage", fun value -> value["formalTests"].AsArray().RemoveAt(0)
+          "formal-main", fun value -> (firstObject "formalTests" value)["main"] <- JsonValue.Create("MissingFormalRoot")
+          "formal-temporal", fun value -> (firstObject "formalTests" value)["temporal"] <- JsonValue.Create("missingTemporal")
+          "formal-invalid", fun value -> (firstObject "formalTests" value)["invalid"] <- JsonValue.Create("missingInvalid")
+          "formal-backend", fun value -> (firstObject "formalTests" value)["backend"] <- JsonValue.Create("apalache")
+          "formal-counterexample", fun value -> (firstObject "formalTests" value)["counterexample"] <- JsonValue.Create("missing.itf.json")
+          "formal-budget", fun value -> (firstObjectField "formalTests" "budget" value)["depth"] <- JsonValue.Create(0) ]
     for name, mutate in mutations do
         let candidate = clone original
         mutate candidate
@@ -565,7 +620,9 @@ match validateDocument root document with
             reuseReceipt |> Option.iter (fun value -> output["reuseReceiptSha256"] <- JsonValue.Create(sha256 (Encoding.UTF8.GetBytes(value.ToJsonString()))))
             proposal |> Option.iter (fun value -> output["proposalSha256"] <- JsonValue.Create(sha256 (Encoding.UTF8.GetBytes(value.ToJsonString()))))
             output["roots"] <- JsonArray(selected |> Set.toArray |> Array.map JsonValue.Create |> Array.map (fun value -> value :> JsonNode))
+            output["formalTests"] <-
+                JsonArray(objects document "formalTests" |> List.map (fun item -> text item "id") |> List.map JsonValue.Create |> List.map (fun value -> value :> JsonNode) |> List.toArray)
             File.WriteAllText(Path.GetFullPath path, output.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
         | None -> ()
         let mutationCount = if selfTest then runSelfTests root document else 0
-        printfn "QUINT_QUALIFICATION_OK config=%s roots=%d selected=%s oracles=%d negativeControls=%d sha256=%s" config (objects document "roots").Length (String.concat "," selected) oracleTests.Count mutationCount (sha256 bytes)
+        printfn "QUINT_QUALIFICATION_OK config=%s roots=%d selected=%s formalTests=%d oracles=%d negativeControls=%d sha256=%s" config (objects document "roots").Length (String.concat "," selected) (objects document "formalTests").Length oracleTests.Count mutationCount (sha256 bytes)

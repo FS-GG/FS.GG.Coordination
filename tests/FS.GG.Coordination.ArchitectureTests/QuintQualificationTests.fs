@@ -41,13 +41,35 @@ let private execute selfTest = executeWith selfTest []
 let ``bounded roots classifications selection and admission are complete`` () =
     let exitCode, output, error = execute false
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations oracles=11 negativeControls=0", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=6 oracles=11 negativeControls=0", output)
 
 [<Fact>]
 let ``independent oracles and qualification contracts reject every focused mutation`` () =
     let exitCode, output, error = execute true
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations oracles=11 negativeControls=20", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=6 oracles=11 negativeControls=27", output)
+
+[<Fact>]
+let ``native formal catalogue covers all domains and retains normalized ITF counterexamples`` () =
+    let configuration =
+        JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification.json"))).AsObject()
+    let source = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
+    let tests = configuration["formalTests"].AsArray() |> Seq.map _.AsObject() |> Seq.toList
+    let ids = tests |> List.map (fun item -> item["id"].GetValue<string>()) |> Set.ofList
+    let expectedIds = Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback" ]
+    if ids <> expectedIds then failwithf "unexpected formal-test catalogue: %A" ids
+    for item in tests do
+        Assert.Equal("tlc", item["backend"].GetValue<string>())
+        for field in [ "init"; "step"; "invariant"; "witness"; "temporal"; "invalid" ] do
+            Assert.Contains(item[field].GetValue<string>(), source)
+        let counterexample = Path.Combine(root, item["counterexample"].GetValue<string>())
+        let itf = JsonNode.Parse(File.ReadAllBytes counterexample).AsObject()
+        let metadata = itf["#meta"].AsObject()
+        Assert.Equal("ITF", metadata["format"].GetValue<string>())
+        Assert.Equal("violation", metadata["status"].GetValue<string>())
+        Assert.Null(metadata["timestamp"])
+        Assert.Null(metadata["source"])
+        Assert.True(itf["states"].AsArray().Count >= 2)
 
 [<Fact>]
 let ``changed paths surfaces reuse and future proposals bind selection inputs`` () =
