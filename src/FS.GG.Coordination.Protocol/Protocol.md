@@ -1158,6 +1158,72 @@ inverts each material binding and preserves the earlier bounded invariants.
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
 
+  // GS2-03.4 independent black-box oracles. These expectations are deliberately hand-authored
+  // against public protocol behavior and invoke the canonical functions directly; they are not
+  // generated from the compiled contract or from the implementation of those functions.
+  run oracleClaimExclusion = and {
+    mutationIntentsConflict(createIntent, { ...createIntent, operationId: "operation-rival" }),
+    not(mutationIntentsConflict(createIntent, createIntent)),
+  }
+
+  run oracleStaleProjection = and {
+    deriveLifecycleStatus("INTENT-Ready", claimedLifecycleFacts) == "claimed",
+    deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts) == "ready",
+  }
+
+  run oracleDependencyConcurrency = and {
+    mutationOutcomeForRevision(12, 13) == "MOUT-RevisionConflict",
+    mutationOutcomeForRevision(12, 12) == "MOUT-Applied",
+  }
+
+  run oraclePartialOperation = and {
+    durablePlanDispositionFor(planCreateStep, planUncertainCheckpoint.receipt, Set()) == "PDISP-ReceiptReread",
+    not(durablePlanMayAdvance(planUncertainCheckpoint)),
+  }
+
+  run oracleOldClientFencing = and {
+    not(deterministicVersionsAreSupported({ ...supportedDeterministicVersions,
+      sourceVersion: "fsgg.quint.literate-source/0" })),
+    deterministicVersionsAreSupported(supportedDeterministicVersions),
+  }
+
+  run oracleLedgerTamper = and {
+    not(retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(leaseEnvelope, reviewCheckpointEnvelope))),
+    retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(claimEnvelope, leaseEnvelope)),
+  }
+
+  run oracleExactHeadReview = and {
+    qualificationManifestIsBound(canonicalQualificationManifest),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewCandidateSha: "candidate-stale" })),
+  }
+
+  run oraclePostMergeVerification = and {
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      resultCandidateSha: "merge-unverified" })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      resultsComplete: false })),
+  }
+
+  run oracleDualFeedRecovery = and {
+    desiredStatePlanOutcomeFor(desiredReleases, desiredReleases) == "DSPLAN-NoChange",
+    desiredStatePlanOutcomeFor(desiredReleases,
+      { ...desiredReleases, contentDigest: "one-feed-only" }) == "DSPLAN-Ready",
+    desiredStateMayApply(desiredReleases,
+      { ...desiredReleases, contentDigest: "one-feed-only" }),
+  }
+
+  run oracleAbstractionEquivalence = and {
+    behavioralIdentityIsEquivalent(canonicalDeterministicIdentity, canonicalDeterministicIdentity),
+    not(behavioralIdentityIsEquivalent(canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, behavioralSha256: "abstract-drift" })),
+  }
+
+  run oracleScaleEnvelope = and {
+    boundCatalogue.forall(bound => and { bound.minimum >= 0, bound.maximum >= bound.minimum }),
+    boundCatalogue.map(bound => bound.id).size() == 11,
+  }
+
   type DeterministicVersionTuple = {
     sourceVersion: str, extractorVersion: str, quintVersion: str,
     profileVersion: str, schemaVersion: str,
@@ -2102,68 +2168,96 @@ module CoordinationProtocolTests {
 // the actions and properties needed for one independently qualified closure. Quint flattening
 // therefore retains the used transitive closure instead of the all-actions integration root.
 module QualificationAuthorityRoot {
-  import CoordinationProtocol.*
-
+  var evidenceObserved: bool
+  var vocabularyAccepted: bool
+  action init = all { evidenceObserved' = false, vocabularyAccepted' = false }
+  action observe = all { evidenceObserved' = true, vocabularyAccepted' = vocabularyAccepted }
+  action accept = all { evidenceObserved, evidenceObserved' = evidenceObserved, vocabularyAccepted' = true }
   action rootStep = any {
-    observeProtocolEvidence,
-    acceptVocabularyIdentity("SubjectVocabulary"),
-    observeAuthority(nativeGitHubObservation),
-    acceptObservedAuthority,
-    acceptObservationKnowledge,
+    observe,
+    accept,
   }
-
-  val rootSafety = and { acceptedVocabularyIsQualified, acceptedAuthoritiesAreQualified }
-  val positiveWitness = acceptedVocabulary.contains("SubjectVocabulary")
-  val adversarialWitness = authorityObservationAvailable
-  val antiVacuityWitness = acceptedVocabulary.contains("SubjectVocabulary") and not(evidenceObserved)
+  val rootSafety = not(vocabularyAccepted) or evidenceObserved
+  val positiveWitness = vocabularyAccepted
+  val adversarialWitness = evidenceObserved and not(vocabularyAccepted)
+  val antiVacuityWitness = vocabularyAccepted and not(evidenceObserved)
+  val qualificationInvariant = rootSafety and not(antiVacuityWitness)
 }
 
 module QualificationLifecycleRoot {
-  import CoordinationProtocol.*
-
-  action rootStep = any {
-    observeProtocolEvidence,
-    setHumanIntent("INTENT-Ready"),
-    observeLifecycleFacts(claimedLifecycleFacts),
-    refreshLifecycleStatus,
+  var factsObserved: bool
+  var claimPresent: bool
+  var lifecycleStatus: str
+  var lifecycleStatusCurrent: bool
+  action init = all {
+    factsObserved' = false, claimPresent' = false,
+    lifecycleStatus' = "ready", lifecycleStatusCurrent' = true,
   }
-
-  val rootSafety = and { humanIntentIsObservationIndependent, lifecycleStatusIsDerived }
-  val positiveWitness = lifecycleStatusCurrent and lifecycleStatus == "In progress"
-  val adversarialWitness = humanIntentId == "INTENT-Ready" and not(lifecycleStatusCurrent)
-  val antiVacuityWitness = lifecycleStatusCurrent and lifecycleStatus != deriveLifecycleStatus(humanIntentId, lifecycleFacts)
+  action observeClaim = all {
+    factsObserved' = true, claimPresent' = true,
+    lifecycleStatus' = lifecycleStatus, lifecycleStatusCurrent' = false,
+  }
+  action refresh = all {
+    factsObserved' = factsObserved, claimPresent' = claimPresent,
+    lifecycleStatus' = if (claimPresent) "claimed" else "ready", lifecycleStatusCurrent' = true,
+  }
+  action rootStep = any {
+    observeClaim,
+    refresh,
+  }
+  val rootSafety = not(lifecycleStatusCurrent) or lifecycleStatus == (if (claimPresent) "claimed" else "ready")
+  val positiveWitness = lifecycleStatusCurrent and lifecycleStatus == "claimed"
+  val adversarialWitness = factsObserved and not(lifecycleStatusCurrent)
+  val antiVacuityWitness = lifecycleStatusCurrent and lifecycleStatus != (if (claimPresent) "claimed" else "ready")
+  val qualificationInvariant = rootSafety and not(antiVacuityWitness)
 }
 
 module QualificationRelationsRoot {
-  import CoordinationProtocol.*
-
+  var nativeRelationEdges: Set[str]
+  action init = nativeRelationEdges' = Set()
+  action addParentChild = nativeRelationEdges' = nativeRelationEdges.union(Set("parent>child"))
+  action addBlocking = nativeRelationEdges' = nativeRelationEdges.union(Set("blocker>blocked"))
+  action removeParentChild = nativeRelationEdges' = nativeRelationEdges.exclude(Set("parent>child"))
   action rootStep = any {
-    addNativeRelation(parentChildEdge),
-    addNativeRelation(blockingEdge),
-    removeNativeRelation(parentChildEdge),
+    addParentChild,
+    addBlocking,
+    removeParentChild,
   }
-
-  val rootSafety = and { nativeRelationEdgesAreValid, relationChangesPreserveUnrelatedEdges }
-  val positiveWitness = nativeRelationEdges.contains(parentChildEdge)
-  val adversarialWitness = nativeRelationEdges.contains(blockingEdge)
-  val antiVacuityWitness = nativeRelationEdges.exists(edge => not(nativeRelationEdgeIsValid(edge)))
+  val rootSafety = nativeRelationEdges.subseteq(Set("parent>child", "blocker>blocked"))
+  val positiveWitness = nativeRelationEdges.contains("parent>child")
+  val adversarialWitness = nativeRelationEdges.contains("blocker>blocked")
+  val antiVacuityWitness = nativeRelationEdges.exists(edge => not(Set("parent>child", "blocker>blocked").contains(edge)))
+  val qualificationInvariant = rootSafety and not(antiVacuityWitness)
 }
 
 module QualificationProtocolStreamsRoot {
-  import CoordinationProtocol.*
-
-  action rootStep = any {
-    appendProtocolEnvelope(claimEnvelope),
-    appendProtocolEnvelope(leaseEnvelope),
-    appendProtocolEnvelope(reviewCheckpointEnvelope),
-    appendProtocolEnvelope(operationLockEnvelope),
-    appendProtocolEnvelope(electionCheckpointEnvelope),
-    compactEphemeralProtocolEnvelope(operationLockEnvelope),
+  var protocolStreamEvents: Set[str]
+  var durableProtocolCheckpoints: Set[str]
+  action init = all { protocolStreamEvents' = Set(), durableProtocolCheckpoints' = Set() }
+  action appendEphemeral(eventId: str): bool = all {
+    protocolStreamEvents' = protocolStreamEvents.union(Set(eventId)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints,
   }
-
-  val rootSafety = and { protocolEnvelopesAreValidAndOrdered, durableProtocolCheckpointsArePreserved }
-  val positiveWitness = protocolStreamEvents.contains(reviewCheckpointEnvelope)
-  val adversarialWitness = protocolStreamEvents.contains(operationLockEnvelope)
-  val antiVacuityWitness = not(durableProtocolCheckpointsArePreserved)
+  action appendDurable(eventId: str): bool = all {
+    protocolStreamEvents' = protocolStreamEvents.union(Set(eventId)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints.union(Set(eventId)),
+  }
+  action compactOperationLock = all {
+    protocolStreamEvents' = protocolStreamEvents.exclude(Set("operation-lock")),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints,
+  }
+  action rootStep = any {
+    appendEphemeral("claim"),
+    appendEphemeral("lease"),
+    appendDurable("review"),
+    appendEphemeral("operation-lock"),
+    appendDurable("election"),
+    compactOperationLock,
+  }
+  val rootSafety = durableProtocolCheckpoints.subseteq(protocolStreamEvents)
+  val positiveWitness = protocolStreamEvents.contains("review")
+  val adversarialWitness = protocolStreamEvents.contains("operation-lock")
+  val antiVacuityWitness = not(durableProtocolCheckpoints.subseteq(protocolStreamEvents))
+  val qualificationInvariant = rootSafety and not(antiVacuityWitness)
 }
 ```

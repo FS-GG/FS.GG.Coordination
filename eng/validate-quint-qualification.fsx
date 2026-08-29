@@ -49,6 +49,9 @@ let validateDocument root (document: JsonObject) =
         let rootIds = roots |> List.map (fun item -> text item "id")
         let rootModules = roots |> List.map (fun item -> text item "module")
         let allowedClasses = Set [ "essential"; "derived"; "bookkeeping" ]
+        let requiredAdmission =
+            Set [ "owner"; "imports"; "invariants"; "independentOracles"; "root"; "bounds"; "witnesses"
+                  "projections"; "ciImpact"; "budgetEffect" ]
 
         let rec closure visiting moduleId =
             if Set.contains moduleId visiting then fail "QQ-MODULE-CYCLE" moduleId
@@ -95,14 +98,26 @@ let validateDocument root (document: JsonObject) =
                 if fields |> List.exists (fun field -> number budget field <= 0) then fail "QQ-BUDGET" id
                 elif number budget "depth" < actualDepth then fail "QQ-BUDGET-DEPTH" id
                 else Ok())
+            |> bind (fun () ->
+                let admission = item["admission"].AsObject()
+                let actualFields = admission |> Seq.map (fun property -> property.Key) |> Set.ofSeq
+                let expectedWitnesses = Set [ text item "positive"; text item "adversarial"; text item "invalid" ]
+                if actualFields <> requiredAdmission then fail "QQ-ROOT-ADMISSION-FIELDS" id
+                elif text admission "owner" <> owner || text admission "root" <> text item "main" then fail "QQ-ROOT-ADMISSION-IDENTITY" id
+                elif strings admission "imports" |> Set.ofList <> expectedClosure then fail "QQ-ROOT-ADMISSION-IMPORTS" id
+                elif strings admission "witnesses" |> Set.ofList <> expectedWitnesses then fail "QQ-ROOT-ADMISSION-WITNESSES" id
+                elif strings admission "bounds" |> Set.ofList <> Set [ "depth"; "states"; "samples"; "elapsedMs"; "peakMiB"; "artifactBytes" ] then fail "QQ-ROOT-ADMISSION-BOUNDS" id
+                elif List.isEmpty (strings admission "invariants")
+                     || List.isEmpty (strings admission "independentOracles")
+                     || List.isEmpty (strings admission "projections")
+                     || String.IsNullOrWhiteSpace(text admission "ciImpact")
+                     || String.IsNullOrWhiteSpace(text admission "budgetEffect") then fail "QQ-ROOT-ADMISSION-EMPTY" id
+                else Ok())
 
         let requiredOracles =
             Set [ "claim-exclusion"; "stale-projection"; "dependency-concurrency"; "partial-operation"
                   "old-client-fencing"; "ledger-tamper"; "exact-head-review"; "post-merge-verification"
                   "dual-feed-recovery"; "abstraction-equivalence"; "scale-envelope" ]
-        let requiredAdmission =
-            Set [ "owner"; "imports"; "invariants"; "independentOracles"; "root"; "bounds"; "witnesses"
-                  "projections"; "ciImpact"; "budgetEffect" ]
         let selection = document["selection"].AsObject()
 
         if text document "schema" <> "fsgg.coordination.quint-qualification/1" then fail "QQ-SCHEMA" "unsupported"
@@ -129,42 +144,39 @@ let validateDocument root (document: JsonObject) =
                     fail "QQ-SELECTION-POLICY" "unsupported"
                 else exact "QQ-PROTECTED-MODES" "protected" (Set [ "main"; "acceptance"; "freeze"; "release" ]) (strings selection "protected" |> Set.ofList))
             |> bind (fun () -> exact "QQ-ADMISSION" "required" requiredAdmission (strings (document["admission"]) "required" |> Set.ofList))
+            |> bind (fun () ->
+                roots
+                |> List.collect (fun root -> strings (root["admission"]) "independentOracles")
+                |> Set.ofList
+                |> exact "QQ-ROOT-ORACLE-ADMISSION" "oracles" requiredOracles)
     with error -> fail "QQ-MALFORMED" error.Message
 
-type OracleCase = { Id: string; Correct: unit -> string; Mutated: unit -> string; Expected: string }
+let oracleTests =
+    Map [ "claim-exclusion", "oracleClaimExclusion"
+          "stale-projection", "oracleStaleProjection"
+          "dependency-concurrency", "oracleDependencyConcurrency"
+          "partial-operation", "oraclePartialOperation"
+          "old-client-fencing", "oracleOldClientFencing"
+          "ledger-tamper", "oracleLedgerTamper"
+          "exact-head-review", "oracleExactHeadReview"
+          "post-merge-verification", "oraclePostMergeVerification"
+          "dual-feed-recovery", "oracleDualFeedRecovery"
+          "abstraction-equivalence", "oracleAbstractionEquivalence"
+          "scale-envelope", "oracleScaleEnvelope" ]
 
-let oracle id expected correct mutated = { Id = id; Correct = correct; Mutated = mutated; Expected = expected }
-
-let oracleCases =
-    [ oracle "claim-exclusion" "exclusive"
-          (fun () -> if Set.count (Set [ "worker-a"; "worker-a" ]) = 1 then "exclusive" else "conflict")
-          (fun () -> if Set.count (Set [ "worker-a"; "worker-b" ]) = 1 then "exclusive" else "conflict")
-      oracle "stale-projection" "stale" (fun () -> if 8 < 9 then "stale" else "current") (fun () -> if 9 < 9 then "stale" else "current")
-      oracle "dependency-concurrency" "revision-conflict" (fun () -> if 12 <> 13 then "revision-conflict" else "apply") (fun () -> if 13 <> 13 then "revision-conflict" else "apply")
-      oracle "partial-operation" "receipt-reread" (fun () -> if 2 < 3 then "receipt-reread" else "advance") (fun () -> if 3 < 3 then "receipt-reread" else "advance")
-      oracle "old-client-fencing" "fenced" (fun () -> if 4 < 5 then "fenced" else "accepted") (fun () -> if 5 < 5 then "fenced" else "accepted")
-      oracle "ledger-tamper" "tamper" (fun () -> if "parent-a" <> "parent-b" then "tamper" else "valid") (fun () -> if "parent-a" <> "parent-a" then "tamper" else "valid")
-      oracle "exact-head-review" "review-stale" (fun () -> if "head-a" <> "head-b" then "review-stale" else "accepted") (fun () -> if "head-a" <> "head-a" then "review-stale" else "accepted")
-      oracle "post-merge-verification" "pending-verification" (fun () -> if true && not false then "pending-verification" else "done") (fun () -> if true && not true then "pending-verification" else "done")
-      oracle "dual-feed-recovery" "complete"
-          (fun () -> if Set.count (Set [ "candidate"; "candidate" ]) = 1 then "complete" else "recover")
-          (fun () -> if Set.count (Set [ "candidate"; "different" ]) = 1 then "complete" else "recover")
-      oracle "abstraction-equivalence" "equivalent"
-          (fun () -> if Set [ "success"; "refusal"; "rollback" ] = Set [ "rollback"; "refusal"; "success" ] then "equivalent" else "drift")
-          (fun () -> if Set [ "success"; "refusal"; "rollback" ] = Set [ "refusal"; "success" ] then "equivalent" else "drift")
-      oracle "scale-envelope" "within-budget"
-          (fun () -> if 4097 <= 50000 && 207 <= 1536 && 4130000 <= 4194304 then "within-budget" else "over-budget")
-          (fun () -> if 50001 <= 50000 && 207 <= 1536 && 4130000 <= 4194304 then "within-budget" else "over-budget") ]
-
-let validateOracles expectedIds =
-    oracleCases
-    |> List.map _.Id
-    |> Set.ofList
+let validateOracles (sourceText: string) expectedIds =
+    oracleTests
+    |> Map.keys
+    |> Set.ofSeq
     |> exact "QQ-ORACLE-COVERAGE" "cases" expectedIds
     |> bind (fun () ->
-        oracleCases
-        |> List.tryFind (fun test -> test.Correct() <> test.Expected || test.Mutated() = test.Expected)
-        |> function None -> Ok() | Some test -> fail "QQ-ORACLE-MUTATION" test.Id)
+        oracleTests
+        |> Map.toList
+        |> List.tryFind (fun (_, testName) ->
+            not (Regex.IsMatch(sourceText, $"(?m)^\\s*run\\s+%s{Regex.Escape testName}\\s*=")))
+        |> function
+            | None -> Ok()
+            | Some(id, testName) -> fail "QQ-ORACLE-EXECUTABLE" ($"%s{id}:%s{testName}"))
 
 let reverseSelection (document: JsonObject) changed =
     let modules = objects document "modules"
@@ -230,7 +242,10 @@ let runSelfTests root original =
           "oracle", fun value -> value["oracleIds"].AsArray().RemoveAt(0)
           "selection", fun value -> value["selection"]["pullRequest"] <- JsonValue.Create("changed-only")
           "protected", fun value -> (nestedArray "selection" "protected" value).RemoveAt(0)
-          "admission", fun value -> (nestedArray "admission" "required" value).RemoveAt(0) ]
+          "admission", fun value -> (nestedArray "admission" "required" value).RemoveAt(0)
+          "root-admission-owner", fun value -> (firstObject "roots" value).["admission"].["owner"] <- JsonValue.Create("wrong-owner")
+          "root-admission-oracle", fun value -> ((firstObject "roots" value).["admission"].["independentOracles"]).AsArray().RemoveAt(0)
+          "root-admission-witness", fun value -> ((firstObject "roots" value).["admission"].["witnesses"]).AsArray().RemoveAt(0) ]
     for name, mutate in mutations do
         let candidate = clone original
         mutate candidate
@@ -240,11 +255,21 @@ let runSelfTests root original =
     mutations.Length
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--") |> Array.toList
-let selfTest, root, config =
-    match arguments with
-    | [ "--root"; root; "--config"; config ] -> false, Path.GetFullPath root, config
-    | [ "--self-test"; "--root"; root; "--config"; config ] -> true, Path.GetFullPath root, config
-    | _ -> eprintfn "usage: dotnet fsi eng/validate-quint-qualification.fsx -- [--self-test] --root ROOT --config FILE"; exit 2
+let rec parse selfTest root config mode changed protectedMode reuseSource planOut remaining =
+    match remaining with
+    | [] -> selfTest, Path.GetFullPath root, config, mode, changed, protectedMode, reuseSource, planOut
+    | "--self-test" :: tail -> parse true root config mode changed protectedMode reuseSource planOut tail
+    | "--root" :: value :: tail -> parse selfTest value config mode changed protectedMode reuseSource planOut tail
+    | "--config" :: value :: tail -> parse selfTest root value mode changed protectedMode reuseSource planOut tail
+    | "--mode" :: value :: tail -> parse selfTest root config value changed protectedMode reuseSource planOut tail
+    | "--changed-module" :: value :: tail -> parse selfTest root config mode (Set.add value changed) protectedMode reuseSource planOut tail
+    | "--protected-mode" :: value :: tail -> parse selfTest root config mode changed value reuseSource planOut tail
+    | "--reuse-source-sha256" :: value :: tail -> parse selfTest root config mode changed protectedMode (Some value) planOut tail
+    | "--plan-out" :: value :: tail -> parse selfTest root config mode changed protectedMode reuseSource (Some value) tail
+    | value :: _ -> eprintfn "QQ-ARGUMENT: %s" value; exit 2
+
+let selfTest, root, config, mode, changed, protectedMode, reuseSource, planOut =
+    parse false "." "eng/quint-qualification.json" "protected" Set.empty "main" None None arguments
 
 let configPath = if Path.IsPathRooted config then config else Path.Combine(root, config)
 let bytes = File.ReadAllBytes configPath
@@ -254,12 +279,34 @@ match validateDocument root document with
 | Error error -> eprintfn "%s" error; exit 1
 | Ok () ->
     let ids = strings document "oracleIds" |> Set.ofList
-    match validateOracles ids |> bind (fun () -> validateBaseline root bytes document) with
+    let sourceText = File.ReadAllText(Path.Combine(root, text document "source"))
+    match validateOracles sourceText ids |> bind (fun () -> validateBaseline root bytes document) with
     | Error error -> eprintfn "%s" error; exit 1
     | Ok () ->
         let authoritySelection = reverseSelection document (Set [ "authority" ])
         if authoritySelection <> Set [ "authority"; "lifecycle"; "qualification" ] then
             eprintfn "QQ-SELECTION-CLOSURE: %A" authoritySelection
             exit 1
+        let allRoots = objects document "roots" |> List.map (fun item -> text item "id") |> Set.ofList
+        let protectedModes = strings (document["selection"]) "protected" |> Set.ofList
+        let selected =
+            match mode with
+            | "protected" when Set.contains protectedMode protectedModes -> allRoots
+            | "pull-request" when not (Set.isEmpty changed) -> reverseSelection document changed
+            | "reuse" when reuseSource = Some(text document "sourceSha256") -> reverseSelection document changed
+            | "future-behavior" -> allRoots
+            | _ -> eprintfn "QQ-SELECTION-INPUT: mode=%s changed=%A protected=%s" mode changed protectedMode; exit 1
+        if Set.isEmpty selected && mode <> "reuse" then
+            eprintfn "QQ-SELECTION-EMPTY: mode=%s" mode
+            exit 1
+        match planOut with
+        | Some path ->
+            let output = JsonObject()
+            output["schema"] <- JsonValue.Create("fsgg.coordination.quint-selection/1")
+            output["mode"] <- JsonValue.Create(mode)
+            output["sourceSha256"] <- JsonValue.Create(text document "sourceSha256")
+            output["roots"] <- JsonArray(selected |> Set.toArray |> Array.map JsonValue.Create |> Array.map (fun value -> value :> JsonNode))
+            File.WriteAllText(Path.GetFullPath path, output.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+        | None -> ()
         let mutationCount = if selfTest then runSelfTests root document else 0
-        printfn "QUINT_QUALIFICATION_OK config=%s roots=%d oracles=%d negativeControls=%d sha256=%s" config (objects document "roots").Length oracleCases.Length mutationCount (sha256 bytes)
+        printfn "QUINT_QUALIFICATION_OK config=%s roots=%d selected=%s oracles=%d negativeControls=%d sha256=%s" config (objects document "roots").Length (String.concat "," selected) oracleTests.Count mutationCount (sha256 bytes)

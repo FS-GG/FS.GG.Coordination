@@ -32,13 +32,13 @@ let private execute selfTest =
 let ``bounded roots classifications selection and admission are complete`` () =
     let exitCode, output, error = execute false
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 oracles=11 negativeControls=0", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations oracles=11 negativeControls=0", output)
 
 [<Fact>]
 let ``independent oracles and qualification contracts reject every focused mutation`` () =
     let exitCode, output, error = execute true
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 oracles=11 negativeControls=12", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations oracles=11 negativeControls=15", output)
 
 [<Fact>]
 let ``missing or over budget measurements are rejected before reuse`` () =
