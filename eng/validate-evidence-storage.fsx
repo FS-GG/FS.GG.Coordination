@@ -109,6 +109,111 @@ let validateTime path (value: string) =
 let validateRevision path (value: string) =
     if isNull value || not (revisionPattern.IsMatch value) then fail "ES-RECORD-CANDIDATE" path
 
+let tryProperty (name: string) (value: JsonElement) =
+    let mutable child = Unchecked.defaultof<JsonElement>
+    if value.ValueKind = JsonValueKind.Object && value.TryGetProperty(name, &child) then Some child else None
+
+let rec validateJsonSchema (rootSchema: JsonElement) (path: string) (schema: JsonElement) (instance: JsonElement) =
+    let schemaFail detail = fail "ES-SCHEMA-VALIDATION" $"{path}: {detail}"
+    match tryProperty "$ref" schema with
+    | Some reference ->
+        let value = reference.GetString()
+        let prefix = "#/$defs/"
+        if isNull value || not (value.StartsWith(prefix, StringComparison.Ordinal)) then schemaFail "unsupported reference"
+        let name = value.Substring(prefix.Length)
+        let resolved = property name (property "$defs" rootSchema)
+        validateJsonSchema rootSchema path resolved instance
+    | None -> ()
+
+    match tryProperty "type" schema with
+    | Some declared ->
+        let matches value =
+            match value, instance.ValueKind with
+            | "object", JsonValueKind.Object
+            | "array", JsonValueKind.Array
+            | "string", JsonValueKind.String
+            | "integer", JsonValueKind.Number
+            | "number", JsonValueKind.Number
+            | "boolean", JsonValueKind.True
+            | "boolean", JsonValueKind.False
+            | "null", JsonValueKind.Null -> true
+            | _ -> false
+        let declaredTypes =
+            match declared.ValueKind with
+            | JsonValueKind.String -> [ declared.GetString() ]
+            | JsonValueKind.Array -> declared.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+            | _ -> schemaFail "type must be a string or array"
+        if not (declaredTypes |> List.exists matches) then schemaFail $"type is {instance.ValueKind}"
+        if declaredTypes = [ "integer" ] && instance.ValueKind = JsonValueKind.Number then
+            let mutable integer = 0L
+            if not (instance.TryGetInt64(&integer)) then schemaFail "number is not an integer"
+    | None -> ()
+
+    match tryProperty "const" schema with
+    | Some expected when expected.GetRawText() <> instance.GetRawText() -> schemaFail "const differs"
+    | _ -> ()
+    match tryProperty "enum" schema with
+    | Some values when values.EnumerateArray() |> Seq.exists (fun value -> value.GetRawText() = instance.GetRawText()) |> not -> schemaFail "value is outside enum"
+    | _ -> ()
+
+    if instance.ValueKind = JsonValueKind.String then
+        let value = instance.GetString()
+        match tryProperty "minLength" schema with
+        | Some minimum when value.Length < minimum.GetInt32() -> schemaFail "string is too short"
+        | _ -> ()
+        match tryProperty "pattern" schema with
+        | Some pattern when not (Text.RegularExpressions.Regex(pattern.GetString()).IsMatch value) -> schemaFail "string does not match pattern"
+        | _ -> ()
+        match tryProperty "format" schema with
+        | Some format when format.GetString() = "date-time" ->
+            try validateTime path value with _ -> schemaFail "invalid date-time"
+        | _ -> ()
+
+    if instance.ValueKind = JsonValueKind.Number then
+        let value = instance.GetDecimal()
+        match tryProperty "minimum" schema with
+        | Some minimum when value < minimum.GetDecimal() -> schemaFail "number is below minimum"
+        | _ -> ()
+        match tryProperty "maximum" schema with
+        | Some maximum when value > maximum.GetDecimal() -> schemaFail "number exceeds maximum"
+        | _ -> ()
+
+    if instance.ValueKind = JsonValueKind.Array then
+        let items = instance.EnumerateArray() |> Seq.toList
+        match tryProperty "minItems" schema with
+        | Some minimum when items.Length < minimum.GetInt32() -> schemaFail "array is too short"
+        | _ -> ()
+        match tryProperty "uniqueItems" schema with
+        | Some unique when unique.GetBoolean() && (items |> List.map _.GetRawText() |> List.distinct |> List.length) <> items.Length -> schemaFail "array items are not unique"
+        | _ -> ()
+        match tryProperty "items" schema with
+        | Some itemSchema -> items |> List.iteri (fun index item -> validateJsonSchema rootSchema $"{path}[{index}]" itemSchema item)
+        | None -> ()
+
+    if instance.ValueKind = JsonValueKind.Object then
+        let observed = instance.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+        match tryProperty "required" schema with
+        | Some required ->
+            for name in required.EnumerateArray() |> Seq.map _.GetString() do
+                if not (observed.Contains name) then schemaFail $"missing required property {name}"
+        | None -> ()
+        match tryProperty "properties" schema with
+        | Some properties ->
+            let declared = properties.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+            for field in instance.EnumerateObject() do
+                match tryProperty field.Name properties with
+                | Some fieldSchema -> validateJsonSchema rootSchema $"{path}.{field.Name}" fieldSchema field.Value
+                | None ->
+                    match tryProperty "additionalProperties" schema with
+                    | Some additional when additional.ValueKind = JsonValueKind.False -> schemaFail $"additional property {field.Name}"
+                    | _ -> ()
+            match tryProperty "additionalProperties" schema with
+            | Some additional when additional.ValueKind <> JsonValueKind.True && additional.ValueKind <> JsonValueKind.False ->
+                for field in instance.EnumerateObject() do
+                    if not (declared.Contains field.Name) then validateJsonSchema rootSchema $"{path}.{field.Name}" additional field.Value
+            | _ -> ()
+        | None -> ()
+
 let validateRecord categoryName relative (record: JsonElement) =
     let require schema properties =
         exactProperties relative properties record
@@ -183,6 +288,8 @@ let validateFrozenCorpusSchema (root: string) =
 
 let validateFrozenCorpus (root: string) (entries: JsonElement list) =
     validateFrozenCorpusSchema root
+    use corpusSchemaDocument = readJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json"))
+    let corpusSchema = corpusSchemaDocument.RootElement
     let provenanceFiles = [ q0ManifestRelative, q0ManifestSha256; q0EvidenceRelative, q0EvidenceSha256 ]
     for relative, expectedDigest in provenanceFiles do
         if not (safeRelativePath relative) then fail "FC-PROVENANCE-PATH" relative
@@ -258,7 +365,9 @@ let validateFrozenCorpus (root: string) (entries: JsonElement list) =
         if stringProperty "artifact" expected <> $"q0-corpus-originals.json#{id}" then fail "FC-Q0-ARTIFACT" id
 
         let metadataRelative = $"corpus/{id}.json"
-        use metadataDocument = readJson (Path.Combine(root, metadataRelative))
+        let metadataPath = Path.Combine(root, metadataRelative)
+        if not (isCanonicalJson metadataPath) then fail "ES-JSON-CANONICAL" metadataRelative
+        use metadataDocument = readJson metadataPath
         let record = metadataDocument.RootElement
         exactProperties metadataRelative [ "schema"; "id"; "input"; "sha256" ] record
         if stringProperty "schema" record <> "fsgg.coordination.corpus-input/1" then fail "FC-METADATA-SCHEMA" id
@@ -346,6 +455,7 @@ let validateFrozenCorpus (root: string) (entries: JsonElement list) =
               "q0EvidenceSha256", q0EvidenceSha256
               "importedByUnit", "GS2-03.2" ]
         if provenanceValues |> List.exists (fun (name, value) -> stringProperty name provenance <> value) then fail "FC-PROVENANCE-BINDING" id
+        validateJsonSchema corpusSchema metadataRelative corpusSchema record
 
     if metadataIds.Count <> 21 then fail "FC-METADATA-COUNT" "metadata identity count differs"
     $"frozenCorpusCases=21 observed={observedCount} unobserved={unobservedCount} aggregate={frozenAggregateSha256}"
@@ -661,6 +771,15 @@ let selfTest evidenceRoot =
           "frozen-schema-observed-at", (fun root ->
               mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
                   setNestedString node [ "properties"; "input"; "properties"; "currentV1Result"; "properties"; "observedAt" ] "type" "string")), "FC-SCHEMA-CONTRACT"
+          "frozen-schema-id-pattern", (fun root ->
+              mutateJson (Path.Combine(root, "schemas/v1/corpus-inputs.schema.json")) (fun node ->
+                  setNestedString node [ "properties"; "id" ] "pattern" "^Z-[a-z0-9-]+$")), "ES-SCHEMA-VALIDATION"
+          "frozen-metadata-noncanonical", (fun root ->
+              let relative = "corpus/C-claim.json"
+              let path = Path.Combine(root, relative)
+              let content = File.ReadAllText path
+              File.WriteAllText(path, content.Insert(1, " "), UTF8Encoding(false))
+              refreshIndexedJson root relative), "ES-JSON-CANONICAL"
           "frozen-unobserved-green", (fun root ->
               mutateCorpusJson root "C-claim" (fun node ->
                   setNestedString node [ "input"; "currentV1Result" ] "state" "observed"
