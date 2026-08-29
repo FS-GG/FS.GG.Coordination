@@ -161,6 +161,48 @@ witness within the compiler's fixed graph ceiling. This unit remains repository-
 and stops before deterministic deployment identity or any writer, network, hosted
 runtime, publication, or production authority.
 
+GS2-03.4 keeps the same canonical profile-2 behavior and adds seven bounded
+qualification roots in the adjacent executable Quint fence. Four state-machine
+roots expose authority, lifecycle, relation, and protocol-stream transitions while
+importing only their enumerated canonical types, values, and pure definitions. The
+validator extracts those imports from the executable module bodies and compares them
+directly with each root's retained executable closure; there is no JSON-authored
+executable DAG that can agree with itself while the Quint source says something else,
+and every imported module/definition pair participates rather than only imports from
+the canonical module.
+Their valid steps
+reach positive and adversarial witnesses, while separate invalid parameter actions
+must violate the root invariant without rewriting the invariant or its witness;
+three test roots isolate mutation/durable-plan, desired-state, and qualification
+closures. `eng/quint-qualification.json` classifies every canonical state variable
+and action, binds exact source-derived root closures and witnesses,
+selection modes, budgets, and future-module admission. Ordinary pull requests use
+the complete reverse-dependency closure selected from changed modules, paths,
+oracles, bounds, budgets, backends, and toolchains. Reuse binds the exact source
+identity plus a receipt binding the configuration, baseline, backend, toolchain, and
+selected closure. The separately named `selectionImports` graph is conservative CI
+routing metadata only and is never presented as executable topology. Proposed future
+behavior must already be present in the canonical behavior-digest-bound literate source;
+its declared root, invariants, and witnesses must match the schema-checked admission
+payload, and those exact source bytes must match the canonical observed
+extraction-and-typecheck receipt from the pinned Quint toolchain. Admission then
+re-extracts the canonical literate fences and executes the digest-pinned Quint binary;
+a receipt is retained evidence, never a substitute for reproducing typecheck,
+and main, acceptance, freeze, and release checkpoints use the full inventory.
+
+`eng/validate-quint-qualification.fsx` is the separately authored black-box
+observer for claim exclusion, stale projection, dependency concurrency, partial
+operation, old-client fencing, ledger tamper, exact-head review, post-merge
+verification, dual-feed recovery, bounded concrete/abstract equivalence, and the
+scale envelope. Every oracle has a subject mutation that must change its outcome.
+The validator also rejects cycles, incomplete closure, missing witnesses, stale
+identity, missing or exceeded measurements, unsound selection, and incomplete
+future admission. `eng/quint-qualification-baseline.json` retains the runner-class
+calibration and all required depth/state/sample/time/memory/artifact measurements;
+the evidence index binds the independent oracle implementation and both retained
+contracts. These surfaces are repository-local and grant no network, GitHub
+mutation, deployment, publication, or production-write authority.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

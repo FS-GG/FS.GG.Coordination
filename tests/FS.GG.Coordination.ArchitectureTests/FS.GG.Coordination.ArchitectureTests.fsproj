@@ -11,6 +11,7 @@
     <Compile Include="BootstrapRecoveryTests.fs" />
     <Compile Include="RepositorySettingsTests.fs" />
     <Compile Include="GeneratedStructuralTests.fs" />
+    <Compile Include="QuintQualificationTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

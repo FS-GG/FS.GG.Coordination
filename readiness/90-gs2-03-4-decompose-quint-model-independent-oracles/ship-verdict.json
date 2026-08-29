@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "90-gs2-03-4-decompose-quint-model-independent-oracles",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "aa9993cc923f085ffebaf40ed616e2137c44e220abffe29f9e48325a714749bc"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 30,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 30
+  },
+  "disposition": {
+    "state": "advisory",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

@@ -20,7 +20,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "b82983e10324c241cef1187cf58ce2ec5222ab4d7e253d53179d5343927c518a"
+    "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a"
 
 let expectedContract =
     "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
@@ -32,8 +32,8 @@ let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
-let expectedExternalProcessCount = 85
-let expectedQuintProcessCount = 61
+let mutable expectedExternalProcessCount = 109
+let mutable expectedQuintProcessCount = 84
 let expectedApalacheVerifyInvocationCount = 14
 
 let expectedApalacheJar =
@@ -266,9 +266,9 @@ match receiptFailurePhase with
     q1Outcome <- "passed"
     currentPhase <- "q2"
     verifiedPositiveInvariantCount <- 8
-    quintRejectedProcessCount <- 56
-    externalProcessCount <- 84
-    quintProcessCount <- 60
+    quintRejectedProcessCount <- 70
+    externalProcessCount <- 108
+    quintProcessCount <- 83
     apalacheVerifyInvocationCount <- 14
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
@@ -288,6 +288,9 @@ let binding = Path.Combine(retained, "Protocol.Generated.fs")
 let sourceMap = Path.Combine(retained, "source-map.json")
 let receipt = Path.Combine(retained, "receipt.json")
 let outputGenerator = Path.Combine(root, "eng/generate-compiled-contract-outputs.fsx")
+let qualificationValidator = Path.Combine(root, "eng/validate-quint-qualification.fsx")
+let qualificationConfiguration = Path.Combine(root, "eng/quint-qualification.json")
+let qualificationBaseline = Path.Combine(root, "eng/quint-qualification-baseline.json")
 let compiledOutputs = Path.Combine(retained, "compiled-outputs")
 let compiledOutputManifest = Path.Combine(compiledOutputs, "manifest.json")
 
@@ -300,6 +303,9 @@ for code, path in
       "SOURCE-MAP-MISSING", sourceMap
       "RECEIPT-MISSING", receipt
       "OUTPUT-GENERATOR-MISSING", outputGenerator
+      "QUALIFICATION-VALIDATOR-MISSING", qualificationValidator
+      "QUALIFICATION-CONFIG-MISSING", qualificationConfiguration
+      "QUALIFICATION-BASELINE-MISSING", qualificationBaseline
       "COMPILED-OUTPUT-MANIFEST-MISSING", compiledOutputManifest ] do
     requireFile code path
 
@@ -578,6 +584,56 @@ for rival in
       "type ObservationPlan =" ] do
     if authoredFsharp.Contains(rival, StringComparison.Ordinal) then
         fail "PARALLEL-AST" rival
+
+let selectionPlanPath = Path.Combine(Path.GetTempPath(), $"fsgg-quint-selection-{Guid.NewGuid():N}.json")
+let qualificationMode =
+    match Environment.GetEnvironmentVariable "FSGG_QUINT_QUALIFICATION_MODE" with
+    | null | "" -> "protected"
+    | value -> value
+let protectedMode =
+    match Environment.GetEnvironmentVariable "FSGG_QUINT_PROTECTED_MODE" with
+    | null | "" -> "main"
+    | value -> value
+let changedModules =
+    match Environment.GetEnvironmentVariable "FSGG_QUINT_CHANGED_MODULES" with
+    | null | "" -> []
+    | value -> value.Split(',', StringSplitOptions.RemoveEmptyEntries ||| StringSplitOptions.TrimEntries) |> Array.toList
+let changedPaths =
+    match Environment.GetEnvironmentVariable "FSGG_QUINT_CHANGED_PATHS" with
+    | null | "" -> []
+    | value -> value.Split(',', StringSplitOptions.RemoveEmptyEntries ||| StringSplitOptions.TrimEntries) |> Array.toList
+let changedSurfaces =
+    match Environment.GetEnvironmentVariable "FSGG_QUINT_CHANGED_SURFACES" with
+    | null | "" -> []
+    | value -> value.Split(',', StringSplitOptions.RemoveEmptyEntries ||| StringSplitOptions.TrimEntries) |> Array.toList
+let reuseSource = Environment.GetEnvironmentVariable "FSGG_QUINT_REUSE_SOURCE_SHA256"
+let reuseReceipt = Environment.GetEnvironmentVariable "FSGG_QUINT_REUSE_RECEIPT"
+let proposalPath = Environment.GetEnvironmentVariable "FSGG_QUINT_FUTURE_PROPOSAL"
+let selectionArguments =
+    [ "--mode"; qualificationMode; "--protected-mode"; protectedMode; "--plan-out"; selectionPlanPath ]
+    @ (changedModules |> List.collect (fun moduleId -> [ "--changed-module"; moduleId ]))
+    @ (changedPaths |> List.collect (fun path -> [ "--changed-path"; path ]))
+    @ (changedSurfaces |> List.collect (fun surface -> [ "--changed-surface"; surface ]))
+    @ (if String.IsNullOrWhiteSpace reuseSource then [] else [ "--reuse-source-sha256"; reuseSource ])
+    @ (if String.IsNullOrWhiteSpace reuseReceipt then [] else [ "--reuse-receipt"; reuseReceipt ])
+    @ (if String.IsNullOrWhiteSpace proposalPath then [] else [ "--proposal"; proposalPath ])
+
+requireGreen
+    "QUINT-QUALIFICATION-CONTRACT"
+    root
+    "dotnet"
+    ([ "fsi"; qualificationValidator; "--"; "--self-test"; "--root"; root; "--config"; qualificationConfiguration ] @ selectionArguments)
+    []
+|> ignore
+
+let selectionDocument = JsonDocument.Parse(File.ReadAllBytes selectionPlanPath)
+let selectedRootIds =
+    selectionDocument.RootElement.GetProperty("roots").EnumerateArray()
+    |> Seq.map _.GetString()
+    |> Set.ofSeq
+File.Delete selectionPlanPath
+expectedExternalProcessCount <- 102 + selectedRootIds.Count
+expectedQuintProcessCount <- 77 + selectedRootIds.Count
 
 if staticOnly then
     printfn "CANONICAL_QUINT_PROTOCOL_STATIC_OK contract=%s profile=%s" expectedContract expectedProfile
@@ -919,6 +975,24 @@ try
     File.WriteAllText(q2Qnt, q2Source)
     requireGreen "QUINT-Q2-TYPECHECK" scratch quint [ "typecheck"; q2Qnt ] [] |> ignore
 
+    use qualificationConfigurationDocument = JsonDocument.Parse(File.ReadAllBytes qualificationConfiguration)
+    let artifactBudgets =
+        qualificationConfigurationDocument.RootElement.GetProperty("roots").EnumerateArray()
+        |> Seq.map (fun item ->
+            item.GetProperty("id").GetString(), item.GetProperty("budget").GetProperty("artifactBytes").GetInt32())
+        |> Map.ofSeq
+    let rootArtifactDirectory = Path.Combine(scratch, "root-artifacts")
+    Directory.CreateDirectory rootArtifactDirectory |> ignore
+    let rootArtifactDigests = ResizeArray<string * string>()
+    let recordRootArtifact rootId path =
+        requireFile "QUINT-ROOT-ARTIFACT-MISSING" path
+        let length = FileInfo(path).Length
+        if length <= 0L || length > int64 artifactBudgets[rootId] then
+            fail "QUINT-ROOT-ARTIFACT-BUDGET" ($"%s{rootId}: bytes=%d{length}; budget=%d{artifactBudgets[rootId]}")
+        let digest = sha256 path
+        rootArtifactDigests.Add(rootId, digest)
+        printfn "QUINT_ROOT_ARTIFACT root=%s bytes=%d sha256=%s" rootId length digest
+
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
 
     let preparationSha256 =
@@ -939,6 +1013,59 @@ try
     if compilerOnly then
         Directory.Delete(scratch, true)
         exit 0
+
+    let stateRoots =
+        [ "authority", "QualificationAuthorityRoot"
+          "lifecycle", "QualificationLifecycleRoot"
+          "relations", "QualificationRelationsRoot"
+          "protocol-streams", "QualificationProtocolStreamsRoot" ]
+
+    for rootId, rootModule in stateRoots |> List.filter (fun (rootId, _) -> Set.contains rootId selectedRootIds) do
+        let artifactPath = Path.Combine(rootArtifactDirectory, $"%s{rootId}.json")
+        requireGreen
+            "QUINT-BOUNDED-ROOT"
+            scratch
+            quint
+            [ "run"; q2Qnt; "--main"; rootModule; "--init"; "init"; "--step"; "rootStep"
+              "--invariant"; "qualificationInvariant"; "--witnesses"; "positiveWitness"; "adversarialWitness"
+              "--max-steps"; "8"; "--max-samples"; "100"; "--seed"; "1"; "--verbosity"; "0"; "--out"; artifactPath ]
+            []
+        |> ignore
+        recordRootArtifact rootId artifactPath
+
+    let testRoots =
+        [ "mutation-saga", "^test(Mutation|DurablePlan)"
+          "desired-state", "^testDesiredState"
+          "qualification", "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)" ]
+
+    for rootId, rootPattern in testRoots |> List.filter (fun (rootId, _) -> Set.contains rootId selectedRootIds) do
+        let artifactPath = Path.Combine(rootArtifactDirectory, $"%s{rootId}.json")
+        requireGreen
+            "QUINT-BOUNDED-TEST-ROOT"
+            scratch
+            quint
+            [ "test"; q2Qnt; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+              "--match"; rootPattern; "--verbosity"; "0"; "--out"; artifactPath ]
+            []
+        |> ignore
+        recordRootArtifact rootId artifactPath
+
+    let duplicateRootArtifacts =
+        rootArtifactDigests
+        |> Seq.groupBy snd
+        |> Seq.filter (fun (_, rows) -> Seq.length rows > 1)
+        |> Seq.toList
+    if not (List.isEmpty duplicateRootArtifacts) then
+        fail "QUINT-ROOT-ARTIFACT-IDENTITY" ($"duplicates=%A{duplicateRootArtifacts |> List.map fst}")
+
+    requireGreen
+        "QUINT-INDEPENDENT-ORACLES"
+        scratch
+        quint
+        [ "test"; q2Qnt; "--main"; "CoordinationProtocolTests"; "--backend"; "rust"
+          "--match"; "^oracle"; "--verbosity"; "0" ]
+        []
+    |> ignore
 
     requireGreen
         "QUINT-RUN"
@@ -1056,6 +1183,114 @@ try
 
             if not ((output + "\n" + error).Contains("failed", StringComparison.OrdinalIgnoreCase)) then
                 fail code ($"%s{name}: no failed witness; %s{output}; %s{error}"))
+
+    // Every independent oracle owns a focused mutation of the canonical subject it observes.
+    // The mutation is run only against that oracle, so a broad generated test cannot mask a
+    // disconnected or self-confirming oracle implementation.
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleClaimExclusion$"
+        "claim-exclusion"
+        "    left != right,\n    left.operationId == right.operationId or left.idempotencyKey == right.idempotencyKey,"
+        "    true,\n    left.operationId == right.operationId or left.idempotencyKey == right.idempotencyKey,"
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleStaleProjection$"
+        "lifecycle-claim-status"
+        "else if (facts.claimPresent) \"claimed\""
+        "else if (facts.claimPresent) \"ready\""
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleDependencyConcurrency$"
+        "dependency-concurrency"
+        "if (expectedRevision == observedRevision) \"MOUT-Applied\" else \"MOUT-RevisionConflict\""
+        "\"MOUT-Applied\""
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oraclePartialOperation$"
+        "partial-operation"
+        "else if (mutationOutcomeIsUncertain(receipt.outcomeId)) \"PDISP-ReceiptReread\""
+        "else if (mutationOutcomeIsUncertain(receipt.outcomeId)) \"PDISP-Advance\""
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleOldClientFencing$"
+        "old-client-fencing"
+        "versions == supportedDeterministicVersions"
+        "true"
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleLedgerTamper$"
+        "ledger-tamper"
+        "pure def retainedProtocolEnvelopeHasPredecessor(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =\n    if (envelope.sequence == 1)"
+        "pure def retainedProtocolEnvelopeHasPredecessor(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =\n    if (true)"
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleExactHeadReview$"
+        "exact-head-review"
+        "    manifest.reviewCandidateSha == manifest.candidateSha,"
+        "    true,"
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oraclePostMergeVerification$"
+        "post-merge-verification"
+        "    manifest.resultCandidateSha == manifest.candidateSha,"
+        "    true,"
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleDualFeedRecovery$"
+        "dual-feed-recovery"
+        "if (desired.contentDigest == observed.contentDigest) \"DSPLAN-NoChange\" else \"DSPLAN-Ready\""
+        "\"DSPLAN-NoChange\""
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleAbstractionEquivalence$"
+        "abstraction-equivalence"
+        "    left.behavioralSha256 == right.behavioralSha256,"
+        "    true,"
+
+    enqueueRustMutation
+        "INDEPENDENT-ORACLE-NEGATIVE-CONTROL"
+        "protocol-independent-oracle"
+        "^oracleScaleEnvelope$"
+        "scale-envelope"
+        "{ id: \"BOUND-TraceSteps\", kind: \"bound\", minimum: 0, maximum: 4 }"
+        "{ id: \"BOUND-TraceSteps\", kind: \"bound\", minimum: 5, maximum: 4 }"
+
+    let enqueueInvalidParameterRed (rootId: string) (rootModule: string) =
+        rustMutationChecks.Add(fun () ->
+            let exitCode, output, error =
+                run scratch quint
+                    [ "run"; q2Qnt; "--main"; rootModule; "--init"; "init"; "--step"; "invalidStep"
+                      "--invariant"; "qualificationInvariant"; "--max-steps"; "8"; "--max-samples"; "100"
+                      "--seed"; "1"; "--verbosity"; "0" ] []
+            if exitCode = 0 then
+                fail "ANTI-VACUITY-NEGATIVE-CONTROL" ($"%s{rootId}: invalid parameterization passed")
+            if not ((output + "\n" + error).Contains("Invariant", StringComparison.OrdinalIgnoreCase)) then
+                fail "ANTI-VACUITY-NEGATIVE-CONTROL" ($"%s{rootId}: no invariant violation; %s{output}; %s{error}"))
+
+    enqueueInvalidParameterRed "authority" "QualificationAuthorityRoot"
+    enqueueInvalidParameterRed "lifecycle" "QualificationLifecycleRoot"
+    enqueueInvalidParameterRed "relations" "QualificationRelationsRoot"
+    enqueueInvalidParameterRed "protocol-streams" "QualificationProtocolStreamsRoot"
 
     let requireMutationRed (name: string) (fixture: string) (replacement: string) =
         enqueueRustMutation "MUTATION-NEGATIVE-CONTROL" "protocol-mutation" "^testMutation" name fixture replacement
@@ -1276,8 +1511,8 @@ try
         "      family.contentContract == output.contentContract, family.formats == output.formats,"
         "      family.contentContract == output.contentContract, true,"
 
-    if rustMutationChecks.Count <> 41 then
-        fail "RUST-MUTATION-INVENTORY" ($"expected=41; actual=%d{rustMutationChecks.Count}")
+    if rustMutationChecks.Count <> 56 then
+        fail "RUST-MUTATION-INVENTORY" ($"expected=56; actual=%d{rustMutationChecks.Count}")
 
     let parallelOptions = ParallelOptions(MaxDegreeOfParallelism = 2)
     Parallel.ForEach(rustMutationChecks, parallelOptions, fun check -> check ()) |> ignore
@@ -1802,8 +2037,8 @@ try
     if verifiedPositiveInvariantCount <> 8 then
         fail "POSITIVE-INVARIANT-COVERAGE" ($"expected=8; actual=%d{verifiedPositiveInvariantCount}")
 
-    if quintRejectedProcessCount <> 56 then
-        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=56; actual=%d{quintRejectedProcessCount}")
+    if quintRejectedProcessCount <> 71 then
+        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=71; actual=%d{quintRejectedProcessCount}")
 
     requireCompletedProcessInventory ()
 

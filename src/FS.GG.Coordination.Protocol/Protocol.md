@@ -1158,6 +1158,72 @@ inverts each material binding and preserves the earlier bounded invariants.
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
 
+  // GS2-03.4 independent black-box oracles. These expectations are deliberately hand-authored
+  // against public protocol behavior and invoke the canonical functions directly; they are not
+  // generated from the compiled contract or from the implementation of those functions.
+  run oracleClaimExclusion = and {
+    mutationIntentsConflict(createIntent, { ...createIntent, operationId: "operation-rival" }),
+    not(mutationIntentsConflict(createIntent, createIntent)),
+  }
+
+  run oracleStaleProjection = and {
+    deriveLifecycleStatus("INTENT-Ready", claimedLifecycleFacts) == "claimed",
+    deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts) == "ready",
+  }
+
+  run oracleDependencyConcurrency = and {
+    mutationOutcomeForRevision(12, 13) == "MOUT-RevisionConflict",
+    mutationOutcomeForRevision(12, 12) == "MOUT-Applied",
+  }
+
+  run oraclePartialOperation = and {
+    durablePlanDispositionFor(planCreateStep, planUncertainCheckpoint.receipt, Set()) == "PDISP-ReceiptReread",
+    not(durablePlanMayAdvance(planUncertainCheckpoint)),
+  }
+
+  run oracleOldClientFencing = and {
+    not(deterministicVersionsAreSupported({ ...supportedDeterministicVersions,
+      sourceVersion: "fsgg.quint.literate-source/0" })),
+    deterministicVersionsAreSupported(supportedDeterministicVersions),
+  }
+
+  run oracleLedgerTamper = and {
+    not(retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(leaseEnvelope, reviewCheckpointEnvelope))),
+    retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(claimEnvelope, leaseEnvelope)),
+  }
+
+  run oracleExactHeadReview = and {
+    qualificationManifestIsBound(canonicalQualificationManifest),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewCandidateSha: "candidate-stale" })),
+  }
+
+  run oraclePostMergeVerification = and {
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      resultCandidateSha: "merge-unverified" })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      resultsComplete: false })),
+  }
+
+  run oracleDualFeedRecovery = and {
+    desiredStatePlanOutcomeFor(desiredReleases, desiredReleases) == "DSPLAN-NoChange",
+    desiredStatePlanOutcomeFor(desiredReleases,
+      { ...desiredReleases, contentDigest: "one-feed-only" }) == "DSPLAN-Ready",
+    desiredStateMayApply(desiredReleases,
+      { ...desiredReleases, contentDigest: "one-feed-only" }),
+  }
+
+  run oracleAbstractionEquivalence = and {
+    behavioralIdentityIsEquivalent(canonicalDeterministicIdentity, canonicalDeterministicIdentity),
+    not(behavioralIdentityIsEquivalent(canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, behavioralSha256: "abstract-drift" })),
+  }
+
+  run oracleScaleEnvelope = and {
+    boundCatalogue.forall(bound => and { bound.minimum >= 0, bound.maximum >= bound.minimum }),
+    boundCatalogue.map(bound => bound.id).size() == 11,
+  }
+
   type DeterministicVersionTuple = {
     sourceVersion: str, extractorVersion: str, quintVersion: str,
     profileVersion: str, schemaVersion: str,
@@ -2096,5 +2162,133 @@ module CoordinationProtocolTests {
         .union(Set({ id: "generated", candidateSha: "candidate-a", producer: "case-generator",
           digest: "generated-digest", fresh: false })) })),
   }
+}
+
+// GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only
+// the actions and properties needed for one independently qualified closure. Quint flattening
+// therefore retains the used transitive closure instead of the all-actions integration root.
+module QualificationAuthorityRoot {
+  import CoordinationProtocol.mutationIntentsConflict
+  import CoordinationProtocol.createIntent
+
+  var attemptObserved: bool
+  var conflictDetected: bool
+  action init = all { attemptObserved' = false, conflictDetected' = false }
+  action observeRival = all {
+    attemptObserved' = true,
+    conflictDetected' = mutationIntentsConflict(createIntent,
+      { ...createIntent, operationId: "operation-rival" }),
+  }
+  action idle = all { attemptObserved' = attemptObserved, conflictDetected' = conflictDetected }
+  action rootStep = any { observeRival, idle }
+  // An exact replay is an invalid parameterization for the rival-claim transition.
+  action invalidStep = all {
+    attemptObserved' = true,
+    conflictDetected' = mutationIntentsConflict(createIntent, createIntent),
+  }
+  val rootSafety = not(attemptObserved) or conflictDetected
+  val positiveWitness = attemptObserved and conflictDetected
+  val adversarialWitness = not(attemptObserved) and not(conflictDetected)
+  val invalidParameterWitness = mutationIntentsConflict(createIntent, createIntent)
+  val qualificationInvariant = rootSafety
+}
+
+module QualificationLifecycleRoot {
+  import CoordinationProtocol.deriveLifecycleStatus
+  import CoordinationProtocol.emptyLifecycleFacts
+  import CoordinationProtocol.claimedLifecycleFacts
+
+  var claimPresent: bool
+  var lifecycleStatus: str
+  action init = all {
+    claimPresent' = false,
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
+  }
+  action observeClaim = all {
+    claimPresent' = true,
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", claimedLifecycleFacts),
+  }
+  action idle = all { claimPresent' = claimPresent, lifecycleStatus' = lifecycleStatus }
+  action rootStep = any { observeClaim, idle }
+  // A claimed fact paired with the empty-facts projection must be rejected.
+  action invalidStep = all {
+    claimPresent' = true,
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
+  }
+  val expectedLifecycleStatus = deriveLifecycleStatus("INTENT-Ready",
+    if (claimPresent) claimedLifecycleFacts else emptyLifecycleFacts)
+  val rootSafety = lifecycleStatus == expectedLifecycleStatus
+  val positiveWitness = claimPresent and lifecycleStatus == "claimed"
+  val adversarialWitness = not(claimPresent) and lifecycleStatus == "ready"
+  val invalidParameterWitness = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts) == "claimed"
+  val qualificationInvariant = rootSafety
+}
+
+module QualificationRelationsRoot {
+  import CoordinationProtocol.NativeRelationEdge
+  import CoordinationProtocol.nativeRelationEdgeIsValid
+  import CoordinationProtocol.parentChildEdge
+  import CoordinationProtocol.blockingEdge
+
+  var nativeRelationEdges: Set[NativeRelationEdge]
+  action init = nativeRelationEdges' = Set()
+  action addParentChild = nativeRelationEdges' = nativeRelationEdges.union(Set(parentChildEdge))
+  action addBlocking = nativeRelationEdges' = nativeRelationEdges.union(Set(blockingEdge))
+  action removeParentChild = nativeRelationEdges' = nativeRelationEdges.exclude(Set(parentChildEdge))
+  action rootStep = any { addParentChild, addBlocking, removeParentChild }
+  // Self-relations are outside the canonical native-relation contract.
+  action invalidStep = all {
+    nativeRelationEdges' = nativeRelationEdges.union(Set({ ...parentChildEdge, targetId: "subject-parent" })),
+  }
+  val rootSafety = nativeRelationEdges.forall(nativeRelationEdgeIsValid)
+  val positiveWitness = nativeRelationEdges.contains(parentChildEdge)
+  val adversarialWitness = nativeRelationEdges.contains(blockingEdge)
+  val invalidParameterWitness = nativeRelationEdgeIsValid({ ...parentChildEdge, targetId: "subject-parent" })
+  val qualificationInvariant = rootSafety
+}
+
+module QualificationProtocolStreamsRoot {
+  import CoordinationProtocol.ProtocolEnvelope
+  import CoordinationProtocol.protocolEnvelopeShapeIsValid
+  import CoordinationProtocol.protocolEnvelopeIsOrdered
+  import CoordinationProtocol.claimEnvelope
+  import CoordinationProtocol.leaseEnvelope
+  import CoordinationProtocol.reviewCheckpointEnvelope
+
+  var protocolStreamEvents: Set[ProtocolEnvelope]
+  var durableProtocolCheckpoints: Set[ProtocolEnvelope]
+  action init = all { protocolStreamEvents' = Set(), durableProtocolCheckpoints' = Set() }
+  action appendClaim = all {
+    protocolStreamEvents' = protocolStreamEvents.union(Set(claimEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints,
+  }
+  action appendLease = all {
+    protocolStreamEvents.contains(claimEnvelope),
+    protocolStreamEvents' = protocolStreamEvents.union(Set(leaseEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints,
+  }
+  action appendReview = all {
+    protocolStreamEvents.contains(claimEnvelope),
+    protocolStreamEvents.contains(leaseEnvelope),
+    protocolStreamEvents' = protocolStreamEvents.union(Set(reviewCheckpointEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints.union(Set(reviewCheckpointEnvelope)),
+  }
+  action rootStep = any { appendClaim, appendLease, appendReview }
+  // A lease without its retained claim predecessor is an invalid stream parameterization.
+  action invalidStep = all {
+    protocolStreamEvents' = protocolStreamEvents.union(Set(leaseEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints,
+  }
+  val rootSafety = and {
+    durableProtocolCheckpoints.subseteq(protocolStreamEvents),
+    protocolStreamEvents.forall(event => and {
+      protocolEnvelopeShapeIsValid(event),
+      protocolEnvelopeIsOrdered(event, protocolStreamEvents),
+    }),
+  }
+  val positiveWitness = protocolStreamEvents.contains(reviewCheckpointEnvelope)
+  val adversarialWitness = protocolStreamEvents.contains(leaseEnvelope)
+  val invalidParameterWitness = protocolEnvelopeIsOrdered(leaseEnvelope, Set(leaseEnvelope))
+  val qualificationInvariant = rootSafety
 }
 ```

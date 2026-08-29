@@ -1,0 +1,17 @@
+{
+  "schema": "fsgg.coordination.quint-qualification-baseline/1",
+  "sourceSha256": "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a",
+  "configurationSha256": "a92c96b23b628923304fdf5f415020ee24a7ff3d16b317c99ac26859f33a6659",
+  "assembledQuintSha256": "73e88f05744b6e19cfa79f357e174e2a65272b5d97ce8fe005b97c50b41ca135",
+  "runnerClass": "linux-x64-local-calibration",
+  "measuredAt": "2026-08-29T20:45:00Z",
+  "measurements": [
+    { "root": "authority", "dependencyDepth": 2, "stateCount": 2, "sampleCount": 100, "elapsedMs": 1575, "peakMiB": 251, "artifactBytes": 5084525 },
+    { "root": "lifecycle", "dependencyDepth": 3, "stateCount": 2, "sampleCount": 100, "elapsedMs": 1507, "peakMiB": 252, "artifactBytes": 5084771 },
+    { "root": "relations", "dependencyDepth": 2, "stateCount": 4, "sampleCount": 100, "elapsedMs": 1503, "peakMiB": 252, "artifactBytes": 5086230 },
+    { "root": "protocol-streams", "dependencyDepth": 2, "stateCount": 8, "sampleCount": 100, "elapsedMs": 1510, "peakMiB": 254, "artifactBytes": 5108480 },
+    { "root": "mutation-saga", "dependencyDepth": 3, "stateCount": 11, "sampleCount": 11, "elapsedMs": 2039, "peakMiB": 271, "artifactBytes": 5081517 },
+    { "root": "desired-state", "dependencyDepth": 4, "stateCount": 5, "sampleCount": 5, "elapsedMs": 1712, "peakMiB": 254, "artifactBytes": 5081284 },
+    { "root": "qualification", "dependencyDepth": 5, "stateCount": 9, "sampleCount": 9, "elapsedMs": 1946, "peakMiB": 267, "artifactBytes": 5081554 }
+  ]
+}
