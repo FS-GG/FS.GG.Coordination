@@ -211,11 +211,19 @@ let ``reuse decision distinguishes hit miss and incomplete authority`` () =
     let subject = String.replicate 64 "a"
     let prior: QualificationReuse.PriorRun =
         { Head = String.replicate 40 "b"; RunId = 42L; Attempt = 1
-          EvidenceSha256 = String.replicate 64 "c"; ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = 14M }
+          EvidenceSha256 = String.replicate 64 "c"; ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
     Assert.Equal(QualificationReuse.Reuse, (QualificationReuse.decide exactHead subject (Some prior) (Some subject)).Kind)
     Assert.Equal(QualificationReuse.Execute, (QualificationReuse.decide exactHead subject None None).Kind)
     Assert.Equal(QualificationReuse.Execute, (QualificationReuse.decide exactHead subject (Some prior) (Some(String.replicate 64 "d"))).Kind)
     Assert.Equal(QualificationReuse.Refuse, (QualificationReuse.decide exactHead subject (Some prior) None).Kind)
+    let unmeasured = { prior with RunnerMinutes = None }
+    let measuredDecision = QualificationReuse.decide exactHead subject (Some prior) (Some subject)
+    let unmeasuredDecision = QualificationReuse.decide exactHead subject (Some unmeasured) (Some subject)
+    Assert.Equal(QualificationReuse.Reuse, unmeasuredDecision.Kind)
+    Assert.NotEqual<string>(measuredDecision.SelfSha256, unmeasuredDecision.SelfSha256)
+    Assert.Equal(Ok unmeasuredDecision, QualificationReuse.decisionBytes unmeasuredDecision |> QualificationReuse.parseDecision)
+    let invalid = { prior with RunnerMinutes = Some -1M }
+    Assert.Throws<ArgumentException>(fun () -> QualificationReuse.decide exactHead subject (Some invalid) (Some subject) |> ignore) |> ignore
 
 [<Fact>]
 let ``reuse receipt round trips canonical bytes and rejects tampering`` () =
@@ -233,6 +241,13 @@ let ``bootstrap workflow satisfies the reuse decision plus exact seven-gate cont
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=workflow", output)
     Assert.Equal("", error)
+
+[<Fact>]
+let ``reuse telemetry measures completed runner jobs without becoming route authority`` () =
+    let entryPoint = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/reuse-decision.sh"))
+    Assert.Contains("actions/runs/$run_id/jobs?filter=latest&per_page=100", entryPoint)
+    Assert.Contains("runner_minutes=\"\"", entryPoint)
+    Assert.Contains("select_args+=(--runner-minutes \"$runner_minutes\")", entryPoint)
 
 [<Fact>]
 let ``production FSI adapter matches the compiled green outcome`` () =
@@ -358,6 +373,21 @@ let ``performance evidence retains five source-linked timing samples and every a
     for evidence in requiredEvidence do Assert.Contains(evidence, evaluation)
     let removedSource = evaluation.Replace("actions/runs/33251281115", "missing-cache-free-run")
     Assert.DoesNotContain("actions/runs/33251281115", removedSource)
+
+[<Fact>]
+let ``reuse performance evidence retains the exact execute hit pair and thresholds`` () =
+    let evaluation =
+        File.ReadAllText(Path.Combine(repositoryRoot, "work/80-digest-bound-exact-head-qualification-reuse/performance-evaluation.md"))
+    let requiredEvidence =
+        [ "actions/runs/33255549867"
+          "actions/runs/33255929882"
+          "30c9b48940f9a598af170183049bde9f0494693c"
+          "saved 467 wall-seconds (89.5%) and 873 runner-seconds (94.7%, 14m33s)"
+          "settled in 55 seconds, below the 180-second target"
+          "added 78 wall-seconds over the comparable cohort median, below the 90-second ceiling"
+          "represents an unavailable measurement as `null`"
+          "route selection remains unchanged for measured versus unavailable telemetry" ]
+    for evidence in requiredEvidence do Assert.Contains(evidence, evaluation)
 
 [<Fact>]
 let ``bootstrap control surface stays typed thin and bounded`` () =
@@ -662,7 +692,7 @@ let ``reuse revalidates prior execution artifacts and emits current-head evidenc
         let evidenceDigest = SHA256.HashData(File.ReadAllBytes priorManifest) |> Convert.ToHexString |> _.ToLowerInvariant()
         let prior: QualificationReuse.PriorRun =
             { Head = exactHead; RunId = 42L; Attempt = 1; EvidenceSha256 = evidenceDigest
-              ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = 14M }
+              ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
         let currentHead = String.replicate 40 "e"
         let currentDecision = QualificationReuse.decide currentHead (String.replicate 64 "d") (Some prior) (Some(String.replicate 64 "d"))
         let decisionPath = Path.Combine(root, "reuse.json")
@@ -694,7 +724,7 @@ let ``reuse refuses a selected prior manifest whose bytes changed`` () =
         let originalDigest = SHA256.HashData(File.ReadAllBytes retainedManifest) |> Convert.ToHexString |> _.ToLowerInvariant()
         let prior: QualificationReuse.PriorRun =
             { Head = exactHead; RunId = 42L; Attempt = 1; EvidenceSha256 = originalDigest
-              ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = 14M }
+              ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
         let currentHead = String.replicate 40 "e"
         let decision = QualificationReuse.decide currentHead (String.replicate 64 "d") (Some prior) (Some(String.replicate 64 "d"))
         let decisionPath = Path.Combine(root, "reuse.json")

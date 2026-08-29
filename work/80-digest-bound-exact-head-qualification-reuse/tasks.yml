@@ -17,20 +17,20 @@ sources:
     schemaVersion: 1
   - label: clarifications
     path: work/80-digest-bound-exact-head-qualification-reuse/clarifications.md
-    digest: 472327572becc0981d81baf71d4e218e488316f2a0c7b5fd080cc1d98de3db2e
+    digest: 371067962ee235a92410dc4dd1aa0051fcd9c1ea0005a9cef06b7fd951bafc65
     schemaVersion: 1
   - label: checklist
     path: work/80-digest-bound-exact-head-qualification-reuse/checklist.md
-    digest: 9ed486cbdc8e6f00d49adc500e8231ae520bb5d7421fd496b24e756b71b32656
+    digest: 6414c017247b235a68165fe5e62c4a51a7ebbdac3ec9dfcee21744f17ac7987a
     schemaVersion: 1
   - label: plan
     path: work/80-digest-bound-exact-head-qualification-reuse/plan.md
-    digest: 9982de369fd5f647c1c93fae5dcfcf857815a87a8ee053e46b421ad09c59d1f5
+    digest: 11b37faf0f4867444516eca1e3022fe6185a52ca094a804e71c25cd4c5e6a6a9
     schemaVersion: 1
 tasks:
   - id: T001
     title: Implement requirement FR-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-001]
@@ -40,7 +40,7 @@ tasks:
     requiredEvidence: [EV001]
   - id: T002
     title: Implement requirement FR-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-002]
@@ -50,7 +50,7 @@ tasks:
     requiredEvidence: [EV002]
   - id: T003
     title: Implement requirement FR-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-003]
@@ -60,7 +60,7 @@ tasks:
     requiredEvidence: [EV003]
   - id: T004
     title: Implement requirement FR-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-004]
@@ -70,7 +70,7 @@ tasks:
     requiredEvidence: [EV004]
   - id: T005
     title: Implement requirement FR-005
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-005]
@@ -80,7 +80,7 @@ tasks:
     requiredEvidence: [EV005]
   - id: T006
     title: Implement requirement FR-006
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-006]
@@ -90,7 +90,7 @@ tasks:
     requiredEvidence: [EV006]
   - id: T007
     title: Implement requirement FR-007
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-007]
@@ -100,7 +100,7 @@ tasks:
     requiredEvidence: [EV007]
   - id: T008
     title: Implement requirement FR-008
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-008]
@@ -110,7 +110,7 @@ tasks:
     requiredEvidence: [EV008]
   - id: T009
     title: Implement requirement FR-009
-    status: pending
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-009]
@@ -120,7 +120,7 @@ tasks:
     requiredEvidence: [EV009]
   - id: T010
     title: Implement clarification decision DEC-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -130,7 +130,7 @@ tasks:
     requiredEvidence: [EV010]
   - id: T011
     title: Implement clarification decision DEC-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -140,7 +140,7 @@ tasks:
     requiredEvidence: [EV011]
   - id: T012
     title: Implement clarification decision DEC-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -150,7 +150,7 @@ tasks:
     requiredEvidence: [EV012]
   - id: T013
     title: Implement clarification decision DEC-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -160,7 +160,7 @@ tasks:
     requiredEvidence: [EV013]
   - id: T014
     title: Implement clarification decision DEC-005
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -170,7 +170,7 @@ tasks:
     requiredEvidence: [EV014]
   - id: T015
     title: Implement clarification decision DEC-006
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -180,7 +180,7 @@ tasks:
     requiredEvidence: [EV015]
   - id: T016
     title: Implement clarification decision DEC-007
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -190,7 +190,7 @@ tasks:
     requiredEvidence: [EV016]
   - id: T017
     title: Implement plan decision PD-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -200,7 +200,7 @@ tasks:
     requiredEvidence: [EV017]
   - id: T018
     title: Implement plan decision PD-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -210,7 +210,7 @@ tasks:
     requiredEvidence: [EV018]
   - id: T019
     title: Implement plan decision PD-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -220,7 +220,7 @@ tasks:
     requiredEvidence: [EV019]
   - id: T020
     title: Implement plan decision PD-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -230,7 +230,7 @@ tasks:
     requiredEvidence: [EV020]
   - id: T021
     title: Implement plan decision PD-005
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -240,7 +240,7 @@ tasks:
     requiredEvidence: [EV021]
   - id: T022
     title: Implement plan decision PD-006
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -250,7 +250,7 @@ tasks:
     requiredEvidence: [EV022]
   - id: T023
     title: Implement plan decision PD-007
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -260,7 +260,7 @@ tasks:
     requiredEvidence: [EV023]
   - id: T024
     title: Implement plan decision PD-008
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -270,7 +270,7 @@ tasks:
     requiredEvidence: [EV024]
   - id: T025
     title: Update contract surface PC-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -280,7 +280,7 @@ tasks:
     requiredEvidence: [EV025]
   - id: T026
     title: Update contract surface PC-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -290,7 +290,7 @@ tasks:
     requiredEvidence: [EV026]
   - id: T027
     title: Update contract surface PC-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -300,7 +300,7 @@ tasks:
     requiredEvidence: [EV027]
   - id: T028
     title: Update contract surface PC-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -310,7 +310,7 @@ tasks:
     requiredEvidence: [EV028]
   - id: T029
     title: Update contract surface PC-005
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -320,7 +320,7 @@ tasks:
     requiredEvidence: [EV029]
   - id: T030
     title: Record verification evidence VO-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -330,7 +330,7 @@ tasks:
     requiredEvidence: [EV030]
   - id: T031
     title: Record verification evidence VO-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -340,7 +340,7 @@ tasks:
     requiredEvidence: [EV031]
   - id: T032
     title: Record verification evidence VO-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -350,7 +350,7 @@ tasks:
     requiredEvidence: [EV032]
   - id: T033
     title: Record verification evidence VO-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -360,7 +360,7 @@ tasks:
     requiredEvidence: [EV033]
   - id: T034
     title: Record verification evidence VO-005
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -370,7 +370,7 @@ tasks:
     requiredEvidence: [EV034]
   - id: T035
     title: Record verification evidence VO-006
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -380,7 +380,7 @@ tasks:
     requiredEvidence: [EV035]
   - id: T036
     title: Record verification evidence VO-007
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -390,7 +390,7 @@ tasks:
     requiredEvidence: [EV036]
   - id: T037
     title: Record verification evidence VO-008
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -400,7 +400,7 @@ tasks:
     requiredEvidence: [EV037]
   - id: T038
     title: Handle migration posture PM-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -410,7 +410,7 @@ tasks:
     requiredEvidence: [EV038]
   - id: T039
     title: Handle migration posture PM-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -420,7 +420,7 @@ tasks:
     requiredEvidence: [EV039]
   - id: T040
     title: Handle migration posture PM-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -430,7 +430,7 @@ tasks:
     requiredEvidence: [EV040]
   - id: T041
     title: Refresh generated view impact GV-001
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -440,7 +440,7 @@ tasks:
     requiredEvidence: [EV041]
   - id: T042
     title: Refresh generated view impact GV-002
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -450,7 +450,7 @@ tasks:
     requiredEvidence: [EV042]
   - id: T043
     title: Refresh generated view impact GV-003
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -460,7 +460,7 @@ tasks:
     requiredEvidence: [EV043]
   - id: T044
     title: Refresh generated view impact GV-004
-    status: pending
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []

@@ -28,7 +28,7 @@ type PriorRun =
       Attempt: int
       EvidenceSha256: string
       ArtifactExpiresAt: string
-      RunnerMinutes: decimal }
+      RunnerMinutes: decimal option }
 
 type DecisionKind =
     | Reuse
@@ -168,7 +168,9 @@ let private payloadBytes (kind: DecisionKind) (reason: string) (candidate: strin
             writer.WriteNumber("attempt", value.Attempt)
             writer.WriteString("evidenceSha256", value.EvidenceSha256)
             writer.WriteString("artifactExpiresAt", value.ArtifactExpiresAt)
-            writer.WriteNumber("runnerMinutes", value.RunnerMinutes)
+            match value.RunnerMinutes with
+            | Some minutes -> writer.WriteNumber("runnerMinutes", minutes)
+            | None -> writer.WriteNull("runnerMinutes")
             writer.WriteEndObject()
         writer.WriteEndObject())
 
@@ -184,6 +186,9 @@ let private make (kind: DecisionKind) (reason: string) (candidate: string) (subj
     |> Option.iter (fun value ->
         if not (isHead value.Head) || value.RunId <= 0L || value.Attempt <= 0 || not (isLowerSha256 value.EvidenceSha256) then
             invalidArg (nameof prior) "prior run identity is invalid"
+        value.RunnerMinutes
+        |> Option.iter (fun minutes ->
+            if minutes < 0M then invalidArg (nameof prior) "prior runner minutes cannot be negative")
         match DateTimeOffset.TryParse value.ArtifactExpiresAt with
         | true, _ -> ()
         | _ -> invalidArg (nameof prior) "prior artifact expiry is invalid")
@@ -224,7 +229,9 @@ let decisionBytes decision =
                 writer.WriteNumber("attempt", value.Attempt)
                 writer.WriteString("evidenceSha256", value.EvidenceSha256)
                 writer.WriteString("artifactExpiresAt", value.ArtifactExpiresAt)
-                writer.WriteNumber("runnerMinutes", value.RunnerMinutes)
+                match value.RunnerMinutes with
+                | Some minutes -> writer.WriteNumber("runnerMinutes", minutes)
+                | None -> writer.WriteNull("runnerMinutes")
                 writer.WriteEndObject()
             writer.WriteString("selfSha256", decision.SelfSha256)
             writer.WriteEndObject()))
@@ -266,7 +273,11 @@ let parseDecision (bytes: byte array) =
                           Attempt = priorElement.GetProperty("attempt").GetInt32()
                           EvidenceSha256 = stringProperty "evidenceSha256" priorElement |> Option.defaultWith (fun () -> failwith "prior evidence digest is missing")
                           ArtifactExpiresAt = stringProperty "artifactExpiresAt" priorElement |> Option.defaultWith (fun () -> failwith "prior expiry is missing")
-                          RunnerMinutes = priorElement.GetProperty("runnerMinutes").GetDecimal() }
+                          RunnerMinutes =
+                              let minutes = priorElement.GetProperty("runnerMinutes")
+                              if minutes.ValueKind = JsonValueKind.Null then None
+                              elif minutes.ValueKind = JsonValueKind.Number then Some(minutes.GetDecimal())
+                              else failwith "prior runner minutes must be a number or null" }
                 else failwith "reuse prior must be an object or null"
             let parsed = make kind reason candidate subject prior
             let self = stringProperty "selfSha256" root |> Option.defaultWith (fun () -> failwith "reuse self digest is missing")

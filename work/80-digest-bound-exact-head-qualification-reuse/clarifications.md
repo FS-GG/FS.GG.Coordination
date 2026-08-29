@@ -29,13 +29,13 @@ publicOrToolFacingImpact: true
 - CQ-005: The semantic environment contract is the plan-declared runner label and architecture, least-privilege permissions, exact action pins/runtimes, global SDK manifest, dependency manifests, gate environment variables, and tool/backend identities already contained in the complete tree and exposed as component digests. Ephemeral runner instance/image patch identifiers are operational provenance, not semantic inputs; fresh full runs already tolerate them and reuse cannot claim a stronger equivalence than execution provides.
 
 ## Decisions
-- DEC-001 [CQ:CQ-001] [AMB:AMB-001] resolved: Use the complete tracked-tree canonical SHA-256 as the closed semantic boundary; expose named component digests without creating a second authority.
-- DEC-002 [CQ:CQ-002] [AMB:AMB-002] resolved: Re-read exact run and artifact liveness at terminal acceptance; preserve current-head review as separate exact-head delivery evidence.
-- DEC-003 [CQ:CQ-003] [AMB:AMB-003] resolved: Use `execute` only before a candidate is selected; any contradiction or loss after selection is fail-closed `refuse`.
-- DEC-004 [CQ:CQ-004] [AMB:AMB-004] resolved: Discover immutable workflow artifacts through the Actions read API and validate their owning workflow run; never use cache lookup as authority.
-- DEC-005 [CQ:CQ-005] [AMB:AMB-005] resolved: Bind the reviewed runner/environment contract and tool identities, not ephemeral host allocation details.
-- DEC-006 resolved: Keep `evidence-manifest` as the terminal required check. Full gate jobs may be conditionally skipped only from a successful decision job; the terminal job runs under `always()`, downloads and re-hashes either current-run or selected prior-run artifacts, and is red on `refuse` or missing decision evidence.
-- DEC-007 resolved: Prove the hosted hit path with a provenance-only commit that has a new commit SHA and byte-identical tree after an exact-head full-execution run; do not manufacture a cache hit by weakening the subject.
+- DEC-001: [CQ:CQ-001] [AMB:AMB-001] resolved. Use the complete tracked-tree canonical SHA-256 as the closed semantic boundary; expose named component digests without creating a second authority.
+- DEC-002: [CQ:CQ-002] [AMB:AMB-002] resolved. Re-read exact run and artifact liveness at terminal acceptance; preserve current-head review as separate exact-head delivery evidence.
+- DEC-003: [CQ:CQ-003] [AMB:AMB-003] resolved. Use `execute` only before a candidate is selected; any contradiction or loss after selection is fail-closed `refuse`.
+- DEC-004: [CQ:CQ-004] [AMB:AMB-004] resolved. Discover immutable workflow artifacts through the Actions read API and validate their owning workflow run; never use cache lookup as authority.
+- DEC-005: [CQ:CQ-005] [AMB:AMB-005] resolved. Bind the reviewed runner/environment contract and tool identities, not ephemeral host allocation details.
+- DEC-006: resolved. Keep `evidence-manifest` as the terminal required check. Full gate jobs may be conditionally skipped only from a successful decision job; the terminal job runs under `always()`, downloads and re-hashes either current-run or selected prior-run artifacts, and is red on `refuse` or missing decision evidence.
+- DEC-007: resolved. Prove the hosted hit path with a provenance-only commit that has a new commit SHA and byte-identical tree after an exact-head full-execution run; do not manufacture a cache hit by weakening the subject.
 
 ## Accepted Deferrals
 No accepted deferrals recorded.

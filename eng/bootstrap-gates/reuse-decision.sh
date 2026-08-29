@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 test -f eng/bootstrap-qualification-plan.json || { echo "missing qualification subject: eng/bootstrap-qualification-plan.json" >&2; exit 1; }
 test -f eng/bootstrap-ci.fsx || { echo "missing qualification subject: eng/bootstrap-ci.fsx" >&2; exit 1; }
-
 root="${FSGG_RUNNER_TEMP:?FSGG_RUNNER_TEMP is required}"
 candidate="${FSGG_CANDIDATE_SHA:?FSGG_CANDIDATE_SHA is required}"
 current_run="${FSGG_CURRENT_RUN_ID:?FSGG_CURRENT_RUN_ID is required}"
@@ -35,6 +33,15 @@ else
       continue
     fi
     attempt="$(jq -er '.run_attempt' "$run_json")"
+    jobs_json="$root/run-$run_id-jobs.json"
+    runner_minutes=""
+    if gh api "repos/$repository/actions/runs/$run_id/jobs?filter=latest&per_page=100" >"$jobs_json"; then
+      runner_minutes="$(jq -er '
+        if .total_count > 0 and .total_count <= 100 and .total_count == (.jobs | length)
+           and (.jobs | all(.status == "completed" and .conclusion == "success" and .started_at != null and .completed_at != null))
+        then ([.jobs[] | ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601))] | add / 60 * 1000000 | round / 1000000)
+        else empty end' "$jobs_json" 2>/dev/null || true)"
+    fi
     archive="$root/artifact-$artifact_id.zip"
     extracted="$root/artifact-$artifact_id"
     if ! gh api "repos/$repository/actions/artifacts/$artifact_id/zip" >"$archive"; then
@@ -46,9 +53,10 @@ else
     fi
     manifest="$extracted/bootstrap-evidence.json"
     [ -f "$manifest" ] || continue
-    if dotnet fsi eng/bootstrap-ci.fsx -- select --root . --head "$candidate" --output "$decision" \
-        --prior-manifest "$manifest" --prior-head "$prior_head" --prior-run "$run_id" \
-        --prior-attempt "$attempt" --expires "$expires_at" >/dev/null 2>&1 \
+    select_args=(select --root . --head "$candidate" --output "$decision" --prior-manifest "$manifest"
+      --prior-head "$prior_head" --prior-run "$run_id" --prior-attempt "$attempt" --expires "$expires_at")
+    if [ -n "$runner_minutes" ]; then select_args+=(--runner-minutes "$runner_minutes"); fi
+    if dotnet fsi eng/bootstrap-ci.fsx -- "${select_args[@]}" >/dev/null 2>&1 \
        && [ "$(jq -er '.decision' "$decision")" = "reuse" ]; then
       selected=true
       break

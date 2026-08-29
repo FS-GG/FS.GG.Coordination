@@ -2,6 +2,7 @@ module FS.GG.Coordination.Qualification.Contracts.BootstrapCi
 
 open System
 open System.Diagnostics
+open System.Globalization
 open System.IO
 open System.Security.Cryptography
 open System.Text
@@ -720,6 +721,14 @@ let private requiredInt name arguments =
     if value > int64 Int32.MaxValue then failwith $"%s{name} is too large"
     int value
 
+let private optionalNonNegativeDecimal name arguments =
+    match optionValue name arguments with
+    | None -> None
+    | Some value ->
+        match Decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture) with
+        | true, parsed when parsed >= 0M -> Some parsed
+        | _ -> failwith $"%s{name} must be a non-negative invariant decimal"
+
 let execute (arguments: string list) =
     let arguments = arguments |> List.filter ((<>) "--")
     let mode = arguments |> List.tryHead |> Option.defaultValue "workflow"
@@ -769,7 +778,7 @@ let execute (arguments: string list) =
                                       Attempt = requiredInt "--prior-attempt" arguments
                                       EvidenceSha256 = evidenceDigest
                                       ArtifactExpiresAt = optionValue "--expires" arguments |> Option.defaultWith (fun () -> failwith "--expires is required")
-                                      RunnerMinutes = 0M }
+                                      RunnerMinutes = optionalNonNegativeDecimal "--runner-minutes" arguments }
                                 let priorSubject = selectPriorManifest (Path.GetFullPath manifest) prior.Head contract
                                 QualificationReuse.decide head subject.SubjectSha256 (Some prior) (Some priorSubject)
                             | _ -> QualificationReuse.refuse head subject.SubjectSha256 "incomplete-prior-selection"

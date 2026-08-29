@@ -22,7 +22,7 @@ type PriorRun =
       Attempt: int
       EvidenceSha256: string
       ArtifactExpiresAt: string
-      RunnerMinutes: decimal }
+      RunnerMinutes: decimal option }
 
 type DecisionKind =
     | Reuse

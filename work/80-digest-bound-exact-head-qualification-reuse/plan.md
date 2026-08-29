@@ -17,8 +17,8 @@ Prose status: planned
 
 ## Source Snapshot
 - spec: work/80-digest-bound-exact-head-qualification-reuse/spec.md sha256:4c9e514eb812a9837b77a6168b31df4cae2e096609854cf895f08b65f450e0c4 schemaVersion:1
-- clarifications: work/80-digest-bound-exact-head-qualification-reuse/clarifications.md sha256:472327572becc0981d81baf71d4e218e488316f2a0c7b5fd080cc1d98de3db2e schemaVersion:1
-- checklist: work/80-digest-bound-exact-head-qualification-reuse/checklist.md sha256:9ed486cbdc8e6f00d49adc500e8231ae520bb5d7421fd496b24e756b71b32656 schemaVersion:1
+- clarifications: work/80-digest-bound-exact-head-qualification-reuse/clarifications.md sha256:371067962ee235a92410dc4dd1aa0051fcd9c1ea0005a9cef06b7fd951bafc65 schemaVersion:1
+- checklist: work/80-digest-bound-exact-head-qualification-reuse/checklist.md sha256:6414c017247b235a68165fe5e62c4a51a7ebbdac3ec9dfcee21744f17ac7987a schemaVersion:1
 
 ## Plan Scope
 - Work item 80-digest-bound-exact-head-qualification-reuse is planned from the current specification, clarification, and checklist facts.
@@ -55,7 +55,7 @@ Prose status: planned
 - VO-008 [PD-009] performanceComparison: Report settled wall time, runner minutes, decision/setup/transfer/validation time, avoided minutes, and hit/miss/refusal reason without using telemetry as authority.
 
 ## Performance Intent
-- A valid reuse route should settle within 180 seconds and avoid at least 10 runner-minutes relative to the current comparable full-execution cohort; a miss must add no more than 90 seconds to full execution. These are adoption thresholds, not permission to weaken validation.
+No performance intent is declared for this work item.
 
 ## Migration Posture
 - PM-001 [PC-001] [PC-002] additiveProof: Add subject/receipt validation and a decision artifact while legacy full execution remains the only selectable route; prove all inversions before enabling conditional execution.

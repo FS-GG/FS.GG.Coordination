@@ -22,7 +22,7 @@ Prose status: checklistReady
 
 ## Source Snapshot
 - spec: work/80-digest-bound-exact-head-qualification-reuse/spec.md sha256:4c9e514eb812a9837b77a6168b31df4cae2e096609854cf895f08b65f450e0c4 schemaVersion:1
-- clarifications: work/80-digest-bound-exact-head-qualification-reuse/clarifications.md sha256:472327572becc0981d81baf71d4e218e488316f2a0c7b5fd080cc1d98de3db2e schemaVersion:1
+- clarifications: work/80-digest-bound-exact-head-qualification-reuse/clarifications.md sha256:371067962ee235a92410dc4dd1aa0051fcd9c1ea0005a9cef06b7fd951bafc65 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.
