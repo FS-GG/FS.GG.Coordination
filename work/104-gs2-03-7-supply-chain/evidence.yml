@@ -11,7 +11,7 @@ sourceAnalysis: readiness/104-gs2-03-7-supply-chain/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/104-gs2-03-7-supply-chain/analysis.json
-    digest: f7c47773cc90bbd339ec39d4111f5ac5e2f7fea33e52d5a63f1520af69f2086c
+    digest: c1a89d86ee2a708aa883a84926c50dbc5f8b1e22cccfb83a897632e444a4beaa
     schemaVersion: 1
   - label: checklist
     path: work/104-gs2-03-7-supply-chain/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/104-gs2-03-7-supply-chain/plan.md
-    digest: cc87331f1bdcad16672ceb2179470741394c1468be2624ebf63cf2b5584626c5
+    digest: 1d2bfa7e95fdbf259a91b04a5787b1a8bb7865b5fd4b3fa027de1835193401d2
     schemaVersion: 1
   - label: spec
     path: work/104-gs2-03-7-supply-chain/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/104-gs2-03-7-supply-chain/tasks.yml
-    digest: 83badfd39744f497f872cac63d6e31909039417083b01b2fc1a6308a22e6ad83
+    digest: af6ee0378fdfbf95d02d161687b105409fb8cf2514de0275ff8aa09a57051b9b
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -53,7 +53,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -80,7 +80,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -107,7 +107,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -134,7 +134,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -161,7 +161,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -188,7 +188,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -215,7 +215,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -242,7 +242,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -269,7 +269,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -296,14 +296,14 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
       failed: 0
       skipped: 0
-    notes: [A passing machine-readable architecture test report is registered below.]
+    notes: [A passing machine-readable architecture test report is tracked inside this work package and is independently available in a clean clone.]
   - id: EV011
     kind: verification
     subject:
@@ -323,7 +323,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed
@@ -350,7 +350,7 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
       digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
       digestContract: exact-bytes-v1
       outcome: passed

@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/104-gs2-03-7-supply-chain/plan.md
-    digest: cc87331f1bdcad16672ceb2179470741394c1468be2624ebf63cf2b5584626c5
+    digest: 1d2bfa7e95fdbf259a91b04a5787b1a8bb7865b5fd4b3fa027de1835193401d2
     schemaVersion: 1
 tasks:
   - id: T001
@@ -154,3 +154,4 @@ advisoryNotes:
   - "Optional Governance pointers remain compatibility facts only."
 lifecycleNotes:
   - "Next lifecycle action: fsgg-sdd analyze --work 104-gs2-03-7-supply-chain."
+  - "Tracked verification authority is work/104-gs2-03-7-supply-chain/evidence/architecture.trx; ignored artifacts are not evidence inputs."
