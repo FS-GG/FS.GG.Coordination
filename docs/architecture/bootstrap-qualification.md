@@ -9,7 +9,7 @@ FS.GG.Coordination qualifies an inert bootstrap substrate through one read-only 
 - `reuse-decision`: construct the complete-tree qualification subject; search a bounded census of retained terminal artifacts; validate the owning workflow run and prior manifest; emit a canonical `reuse`, `execute`, or `refuse` receipt.
 
 - `deterministic-build`: locked restore and warnings-as-errors Release build.
-- `compiler-and-tests`: unit and architecture suites, retaining architecture TRX.
+- `compiler-and-tests`: unit and architecture suites, retaining architecture TRX. This is an identity-bound full-qualification partition: it refuses an uncommitted or dirty checkout before restore. Use focused tests during editing, then commit the candidate before invoking the full gate.
 - `canonical-quint`: one shared deterministic preparation followed by separately attributable Q1 and Q2 qualification, retaining a versioned JSON receipt.
 - `dependency-and-security`: evaluated dependency policy plus a complete NuGet vulnerability report from the HTTPS public feed.
 - `package-install-smoke`: a CI-only Protocol package restored and executed by a fresh consumer.

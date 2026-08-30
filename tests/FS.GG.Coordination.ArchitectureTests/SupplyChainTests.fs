@@ -76,6 +76,7 @@ let ``candidate workflow is manual exact-sha and pre-production only`` () =
 [<Fact>]
 let ``candidate implementation has one pack call and two clean consumers`` () =
     let implementation = File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
+    let qualification = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/compiler-and-tests.sh"))
     let packToken = "\"pack\"; packageProject"
     Assert.Equal(1, implementation.Split(packToken, StringSplitOptions.None).Length - 1)
     Assert.Contains("SPDX-2.3", implementation)
@@ -98,6 +99,8 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("requireServedRoute", implementation)
     Assert.Equal(3, implementation.Split("--disable-build-servers", StringSplitOptions.None).Length - 1)
     Assert.Contains("projectTrackedSource", implementation)
+    Assert.Contains("git status --porcelain --untracked-files=all", qualification)
+    Assert.Contains("identity-bound qualification requires a clean committed candidate", qualification)
     Assert.Contains("\"archive\"; \"--format=zip\"", implementation)
     Assert.Contains("tracked-source", implementation)
     Assert.Contains("SequenceEqual", implementation)
