@@ -65,6 +65,7 @@ jobs:
           "$CANDIDATE_OUTPUT/FS.GG.Coordination.Protocol.${{ steps.identity.outputs.version }}.nupkg"
           --api-key "${{ secrets.GITHUB_TOKEN }}"
           --source https://nuget.pkg.github.com/FS-GG/index.json
+          --no-symbols
           --skip-duplicate
       - name: Independently download the served exact bytes
         id: download
@@ -98,6 +99,7 @@ jobs:
           path: |
             ${{ env.CANDIDATE_OUTPUT }}/candidate.json
             ${{ env.CANDIDATE_OUTPUT }}/FS.GG.Coordination.Protocol.*.nupkg
+            ${{ env.CANDIDATE_OUTPUT }}/FS.GG.Coordination.Protocol.*.snupkg
             ${{ env.CANDIDATE_OUTPUT }}/sbom.spdx.json
             ${{ env.CANDIDATE_OUTPUT }}/provenance.intoto.json
             ${{ env.SERVED_OUTPUT }}/verification/verification.intoto.json

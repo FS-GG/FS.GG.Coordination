@@ -10,8 +10,8 @@ open System.Text.Json.Nodes
 open System.Text.RegularExpressions
 open System.Xml.Linq
 
-let schema = "fsgg.coordination.supply-chain-candidate/1"
-let verificationSchema = "fsgg.coordination.supply-chain-verification/1"
+let schema = "fsgg.coordination.supply-chain-candidate/2"
+let verificationSchema = "fsgg.coordination.supply-chain-verification/2"
 let packageId = "FS.GG.Coordination.Protocol"
 let channel = "github-packages-candidate"
 let githubPackagesSource = "https://nuget.pkg.github.com/FS-GG/index.json"
@@ -194,7 +194,7 @@ let validateWorkflowText (workflow: string) =
     let publicationCommands = Regex.Matches(normalized, "\\b(?:dotnet[ \\t\\r\\n]+)?nuget[ \\t\\r\\n]+push\\b", RegexOptions.IgnoreCase ||| RegexOptions.CultureInvariant).Count
     require (publicationCommands = 1) "candidate workflow must contain exactly one active NuGet publication command"
     let compact = Regex.Replace(normalized, "\\s+", " ").Trim()
-    let expectedPublication = "dotnet nuget push \"$CANDIDATE_OUTPUT/FS.GG.Coordination.Protocol.${{ steps.identity.outputs.version }}.nupkg\" --api-key \"${{ secrets.GITHUB_TOKEN }}\" --source https://nuget.pkg.github.com/FS-GG/index.json --skip-duplicate"
+    let expectedPublication = "dotnet nuget push \"$CANDIDATE_OUTPUT/FS.GG.Coordination.Protocol.${{ steps.identity.outputs.version }}.nupkg\" --api-key \"${{ secrets.GITHUB_TOKEN }}\" --source https://nuget.pkg.github.com/FS-GG/index.json --no-symbols --skip-duplicate"
     require (occurrenceCount expectedPublication compact = 1) "candidate publication invocation is not exactly bound to the allowed endpoint and arguments"
     require (occurrenceCount "--source" compact = 1) "candidate workflow has an ambiguous publication source argument"
     require (occurrenceCount "https://nuget.pkg.github.com/FS-GG/index.json" normalized = 1) "candidate workflow has an ambiguous publication endpoint"
@@ -228,17 +228,29 @@ let nuspecDependencies packagePath =
     |> Seq.sortBy (fun dependency -> dependency.id, dependency.version)
     |> Seq.toArray
 
-let createPreparedEvidence repo candidate sourceTree version commitTime toolchain packagePath output =
+let packageEntryDigest packagePath suffix =
+    let entries = zipEntries packagePath |> Array.filter (fun entry -> entry.path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+    require (entries.Length = 1) $"candidate archive must contain exactly one {suffix} entry"
+    entries[0].path, entries[0].sha256
+
+let createPreparedEvidence (repo: string) (candidate: string) (sourceTree: string) (version: string) (commitTime: string) toolchain (packagePath: string) (symbolPath: string) (output: string) =
     requireIdentity candidate version channel
     require (File.Exists packagePath) "candidate package does not exist"
     require (File.Exists(Path.Combine(repo, packageLock))) "Protocol lock file does not exist"
     Directory.CreateDirectory output |> ignore
     let expectedName = $"{packageId}.{version}.nupkg"
+    let expectedSymbolName = $"{packageId}.{version}.snupkg"
     require (Path.GetFileName packagePath = expectedName) "candidate package filename does not bind package identity"
+    require (Path.GetFileName symbolPath = expectedSymbolName) "candidate symbol filename does not bind package identity"
     let packageTarget = Path.Combine(output, expectedName)
+    let symbolTarget = Path.Combine(output, expectedSymbolName)
     if canonicalFullPath packagePath <> canonicalFullPath packageTarget then File.Copy(packagePath, packageTarget, true)
+    if canonicalFullPath symbolPath <> canonicalFullPath symbolTarget then File.Copy(symbolPath, symbolTarget, true)
     let packageDigest = sha256File packageTarget
+    let symbolDigest = sha256File symbolTarget
     let entries = zipEntries packageTarget
+    let assemblyPath, assemblyDigest = packageEntryDigest packageTarget "/FS.GG.Coordination.Protocol.dll"
+    let portablePdbPath, portablePdbDigest = packageEntryDigest symbolTarget "/FS.GG.Coordination.Protocol.pdb"
     let dependencies = nuspecDependencies packageTarget
     let lockDigest = sha256File(Path.Combine(repo, packageLock))
     let spdxFiles =
@@ -261,13 +273,16 @@ let createPreparedEvidence repo candidate sourceTree version commitTime toolchai
            files = spdxFiles; relationships = relationships
            fsgg =
              {| candidate = candidate; sourceTree = sourceTree; sourceProjection = "git-archive-zip-v1"
-                packageSize = FileInfo(packageTarget).Length; lockPath = packageLock; lockSha256 = lockDigest; dependencies = dependencies |} |}
+                packageSize = FileInfo(packageTarget).Length; symbolPackageSha256 = symbolDigest
+                portablePdbPath = portablePdbPath; portablePdbSha256 = portablePdbDigest
+                assemblyPath = assemblyPath; assemblySha256 = assemblyDigest
+                lockPath = packageLock; lockSha256 = lockDigest; dependencies = dependencies |} |}
     let sbomPath = Path.Combine(output, "sbom.spdx.json")
     writeJson sbomPath sbom
     let sbomDigest = sha256File sbomPath
     let provenance =
         {| ``_type`` = "https://in-toto.io/Statement/v1"
-           subject = [| {| name = expectedName; digest = {| sha256 = packageDigest |} |} |]
+           subject = [| {| name = expectedName; digest = {| sha256 = packageDigest |} |}; {| name = expectedSymbolName; digest = {| sha256 = symbolDigest |} |} |]
            predicateType = "https://slsa.dev/provenance/v1"
            predicate =
              {| buildDefinition =
@@ -275,7 +290,8 @@ let createPreparedEvidence repo candidate sourceTree version commitTime toolchai
                      externalParameters = {| repository = "FS-GG/FS.GG.Coordination"; candidate = candidate; sourceTree = sourceTree; packageId = packageId; version = version; channel = channel; packInvocations = 1 |}
                      internalParameters =
                        {| configuration = "Release"; project = packageProject; sourceProjection = "git-archive-zip-v1"
-                          buildServers = "disabled"; sharedCompilation = false; debugType = "none"; debugSymbols = false
+                          buildServers = "disabled"; sharedCompilation = false; debugType = "portable"; debugSymbols = true
+                          symbolPackageFormat = "snupkg"; reproducibleIntermediate = $"/tmp/fsgg-gs2-03-7-{candidate}"
                           dotnetSdkVersion = toolchain.DotnetSdkVersion; dotnetRuntimeVersion = toolchain.DotnetRuntimeVersion
                           fsharpCompilerSha256 = toolchain.FSharpCompilerSha256 |}
                      resolvedDependencies = [| {| uri = packageLock; digest = {| sha256 = lockDigest |} |}; {| uri = "spdx:sbom.spdx.json"; digest = {| sha256 = sbomDigest |} |} |] |}
@@ -286,6 +302,9 @@ let createPreparedEvidence repo candidate sourceTree version commitTime toolchai
     let manifestWithoutDigest =
         {| schema = schema; repository = "FS-GG/FS.GG.Coordination"; candidate = candidate; commitTime = commitTime
            package = {| id = packageId; version = version; file = expectedName; size = FileInfo(packageTarget).Length; sha256 = packageDigest; packInvocations = 1 |}
+           symbols = {| file = expectedSymbolName; format = "snupkg"; size = FileInfo(symbolTarget).Length; sha256 = symbolDigest
+                        portablePdbPath = portablePdbPath; portablePdbSha256 = portablePdbDigest |}
+           assembly = {| path = assemblyPath; sha256 = assemblyDigest |}
            channel = {| id = channel; source = githubPackagesSource; stable = false; production = false |}
            sbom = {| file = "sbom.spdx.json"; schema = "SPDX-2.3"; sha256 = sbomDigest |}
            attestations = [| {| file = "provenance.intoto.json"; predicateType = "https://slsa.dev/provenance/v1"; sha256 = provenanceDigest |} |]
@@ -319,6 +338,8 @@ let verifyPrepared manifestPath =
     require (stringAt payload "schema" = schema) "unsupported candidate manifest schema"
     let candidate = stringAt payload "candidate"
     let package = payload["package"]
+    let symbols = payload["symbols"]
+    let assembly = payload["assembly"]
     let channelNode = payload["channel"]
     let sourceNode = payload["source"]
     let version = stringAt package "version"
@@ -338,7 +359,14 @@ let verifyPrepared manifestPath =
         require (sha256File path = stringAt node "sha256") $"bound artifact digest mismatch: {path}"
         path
     let packagePath = verifyFile package
+    let symbolPath = verifyFile symbols
     require (FileInfo(packagePath).Length = package["size"].GetValue<int64>()) "candidate package length mismatch"
+    require (FileInfo(symbolPath).Length = symbols["size"].GetValue<int64>()) "candidate symbol package length mismatch"
+    require (stringAt symbols "format" = "snupkg") "candidate symbol package format is unsupported"
+    let observedAssemblyPath, observedAssemblyDigest = packageEntryDigest packagePath "/FS.GG.Coordination.Protocol.dll"
+    let observedPdbPath, observedPdbDigest = packageEntryDigest symbolPath "/FS.GG.Coordination.Protocol.pdb"
+    require (observedAssemblyPath = stringAt assembly "path" && observedAssemblyDigest = stringAt assembly "sha256") "candidate assembly digest mismatch"
+    require (observedPdbPath = stringAt symbols "portablePdbPath" && observedPdbDigest = stringAt symbols "portablePdbSha256") "candidate portable PDB digest mismatch"
     let sbomPath = verifyFile payload["sbom"]
     let attestations = payload["attestations"].AsArray()
     require (attestations.Count >= 1) "candidate manifest has no attestation"
@@ -362,14 +390,15 @@ let verifyPrepared manifestPath =
     require (stringAt internalParameters "sourceProjection" = "git-archive-zip-v1") "provenance source projection does not match"
     require (stringAt internalParameters "buildServers" = "disabled") "provenance build-server boundary does not match"
     require (not (internalParameters["sharedCompilation"].GetValue<bool>())) "provenance shared-compilation boundary does not match"
-    require (stringAt internalParameters "debugType" = "none") "provenance debug-information boundary does not match"
-    require (not (internalParameters["debugSymbols"].GetValue<bool>())) "provenance debug-symbol boundary does not match"
+    require (stringAt internalParameters "debugType" = "portable") "provenance debug-information boundary does not match"
+    require (internalParameters["debugSymbols"].GetValue<bool>()) "provenance debug-symbol boundary does not match"
+    require (stringAt internalParameters "symbolPackageFormat" = "snupkg") "provenance symbol-package boundary does not match"
     require (stringAt internalParameters "dotnetSdkVersion" = pinnedDotnetSdkVersion) "provenance .NET SDK pin does not match"
     require (stringAt internalParameters "dotnetRuntimeVersion" = pinnedDotnetRuntimeVersion) "provenance .NET runtime pin does not match"
     require (stringAt internalParameters "fsharpCompilerSha256" = pinnedFSharpCompilerSha256) "provenance F# compiler pin does not match"
     let payloadBytes = JsonSerializer.SerializeToUtf8Bytes(payload, jsonOptions)
     require (stringAt manifest "selfSha256" = sha256Bytes payloadBytes) "candidate manifest self digest mismatch"
-    packagePath, candidate, version, stringAt package "sha256", stringAt payload "commitTime"
+    packagePath, candidate, version, stringAt package "sha256", stringAt assembly "sha256", stringAt payload "commitTime"
 
 let cleanGitCandidate repo expected protectedRef =
     let head = run repo "git" [ "rev-parse"; "HEAD" ] []
@@ -398,7 +427,9 @@ let prepare values =
     let sourceRoot = projectTrackedSource repo candidate (Path.Combine(output, "tracked-source"))
     validateWorkflow sourceRoot
     let buildRoot = Path.Combine(output, "isolated-build")
-    let intermediate = Path.Combine(buildRoot, "obj") + string Path.DirectorySeparatorChar
+    let reproducibleRoot = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-03-7-{candidate}")
+    require (not (Directory.Exists reproducibleRoot) && not (File.Exists reproducibleRoot)) "candidate reproducible intermediate path is already occupied"
+    let intermediate = Path.Combine(reproducibleRoot, "obj") + string Path.DirectorySeparatorChar
     let binaries = Path.Combine(buildRoot, "bin") + string Path.DirectorySeparatorChar
     Directory.CreateDirectory buildRoot |> ignore
     let deterministicProperties =
@@ -406,25 +437,31 @@ let prepare values =
           "-p:Deterministic=true"
           "-p:DeterministicSourcePaths=true"
           "-p:UseSharedCompilation=false"
-          "-p:DebugType=None"
-          "-p:DebugSymbols=false"
-          $"-p:PathMap={sourceRoot}=/_/%%2C{buildRoot}=/_build/"
+          "-p:DebugType=portable"
+          "-p:DebugSymbols=true"
+          $"-p:PathMap={sourceRoot}=/_/%%2C{reproducibleRoot}=/_build/"
           $"-p:BaseIntermediateOutputPath={intermediate}"
           $"-p:BaseOutputPath={binaries}" ]
-    run sourceRoot "dotnet" ([ "restore"; packageProject; "--locked-mode"; "--disable-build-servers" ] @ deterministicProperties) [] |> ignore
-    run sourceRoot "dotnet" ([ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror"; "--disable-build-servers" ] @ deterministicProperties) [] |> ignore
-    let packOutput = Path.Combine(output, "pack")
-    Directory.CreateDirectory packOutput |> ignore
-    run sourceRoot "dotnet" ([ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--disable-build-servers"; "--output"; packOutput; "-p:IsPackable=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] @ deterministicProperties) [] |> ignore
-    let packages = Directory.GetFiles(packOutput, "*.nupkg", SearchOption.TopDirectoryOnly)
-    require (packages.Length = 1) "exactly one candidate package must be produced"
-    canonicalizePackage packages[0]
-    let manifest = createPreparedEvidence sourceRoot candidate sourceTree version commitTime toolchain packages[0] output
-    verifyPrepared manifest |> ignore
-    Directory.Delete(packOutput, true)
-    Directory.Delete(buildRoot, true)
-    Directory.Delete(sourceRoot, true)
-    printfn "SUPPLY_CHAIN_PREPARED manifest=%s" manifest
+    try
+        run sourceRoot "dotnet" ([ "restore"; packageProject; "--locked-mode"; "--disable-build-servers" ] @ deterministicProperties) [] |> ignore
+        run sourceRoot "dotnet" ([ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror"; "--disable-build-servers" ] @ deterministicProperties) [] |> ignore
+        let packOutput = Path.Combine(output, "pack")
+        Directory.CreateDirectory packOutput |> ignore
+        run sourceRoot "dotnet" ([ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--disable-build-servers"; "--output"; packOutput; "-p:IsPackable=true"; "-p:IncludeSymbols=true"; "-p:SymbolPackageFormat=snupkg"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] @ deterministicProperties) [] |> ignore
+        let packages = Directory.GetFiles(packOutput, "*.nupkg", SearchOption.TopDirectoryOnly)
+        let symbols = Directory.GetFiles(packOutput, "*.snupkg", SearchOption.TopDirectoryOnly)
+        require (packages.Length = 1) "exactly one candidate package must be produced"
+        require (symbols.Length = 1) "exactly one candidate symbol package must be produced"
+        canonicalizePackage packages[0]
+        canonicalizePackage symbols[0]
+        let manifest = createPreparedEvidence sourceRoot candidate sourceTree version commitTime toolchain packages[0] symbols[0] output
+        verifyPrepared manifest |> ignore
+        Directory.Delete(packOutput, true)
+        Directory.Delete(buildRoot, true)
+        Directory.Delete(sourceRoot, true)
+        printfn "SUPPLY_CHAIN_PREPARED manifest=%s" manifest
+    finally
+        if Directory.Exists reproducibleRoot then Directory.Delete(reproducibleRoot, true)
 
 let writeConsumerConfig path feed =
     File.WriteAllText(path,
@@ -465,7 +502,7 @@ let verifyServed values =
     let served = required "--served" values |> canonicalFullPath
     let output = required "--output" values |> canonicalFullPath
     let servedUrl = required "--served-url" values
-    let packagePath, candidate, version, expectedDigest, commitTime = verifyPrepared manifestPath
+    let packagePath, candidate, version, expectedDigest, expectedAssemblyDigest, commitTime = verifyPrepared manifestPath
     let preparedPayload = readJson manifestPath |> payloadRoot
     let preparedChannel = preparedPayload["channel"]
     require (File.Exists served) "served package does not exist"
@@ -496,9 +533,12 @@ let verifyServed values =
         require (File.Exists cachedPackage) "clean consumer cache does not retain the served candidate nupkg"
         require (sha256File cachedPackage = expectedDigest) "clean consumer did not use the served exact package"
         run consumer "dotnet" [ "build"; project; "--configuration"; "Release"; "--no-restore"; "--warnaserror"; $"-p:CoordinationCandidateVersion={version}" ] environment |> ignore
+        let installedAssembly = Directory.GetFiles(Path.Combine(consumer, "bin", "Release"), "FS.GG.Coordination.Protocol.dll", SearchOption.AllDirectories) |> Array.exactlyOne
+        let installedAssemblyDigest = sha256File installedAssembly
+        require (installedAssemblyDigest = expectedAssemblyDigest) "clean consumer installed assembly digest does not match the candidate"
         let actual = run consumer "dotnet" [ "run"; "--project"; project; "--configuration"; "Release"; "--no-build"; "--no-restore"; $"-p:CoordinationCandidateVersion={version}" ] environment
         require (actual = expectedOutput) $"clean consumer output mismatch for {fixture}"
-        results.Add {| fixture = fixture; output = actual; packageSha256 = sha256File cachedPackage |}
+        results.Add {| fixture = fixture; output = actual; packageSha256 = sha256File cachedPackage; installedAssemblySha256 = installedAssemblyDigest |}
     let manifestDigest = sha256File manifestPath
     let verification =
         {| ``_type`` = "https://in-toto.io/Statement/v1"
@@ -525,6 +565,17 @@ let createFakePackage (path: string) (version: string) =
         writer.Write content
     add $"{packageId}.nuspec" $"<package><metadata><id>{packageId}</id><version>{version}</version><dependencies><group targetFramework=\"net10.0\"><dependency id=\"FSharp.Core\" version=\"[10.1.302, )\" /></group></dependencies></metadata></package>"
     add "lib/net10.0/FS.GG.Coordination.Protocol.dll" "deterministic-fixture"
+
+let createFakeSymbolPackage (path: string) (version: string) =
+    use file = new FileStream(path, FileMode.Create, FileAccess.Write)
+    use archive = new ZipArchive(file, ZipArchiveMode.Create)
+    let add (name: string) (content: string) =
+        let entry = archive.CreateEntry(name, CompressionLevel.NoCompression)
+        entry.LastWriteTime <- DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        use writer = new StreamWriter(entry.Open(), UTF8Encoding(false))
+        writer.Write content
+    add $"{packageId}.nuspec" $"<package><metadata><id>{packageId}</id><version>{version}</version><packageTypes><packageType name=\"SymbolsPackage\" /></packageTypes></metadata></package>"
+    add "lib/net10.0/FS.GG.Coordination.Protocol.pdb" "deterministic-portable-pdb-fixture"
 
 let expectRefusal (action: unit -> unit) =
     try action (); false with :? InvalidOperationException -> true
@@ -567,7 +618,9 @@ let selfTest values =
         let sourceTree = String.replicate 40 "b"
         let version = "0.0.0-gs2-03-7." + candidate.Substring(0, 12)
         let package = Path.Combine(scratch, $"{packageId}.{version}.nupkg")
+        let symbols = Path.Combine(scratch, $"{packageId}.{version}.snupkg")
         createFakePackage package version
+        createFakeSymbolPackage symbols version
         let secondPackage = Path.Combine(scratch, $"second-{packageId}.{version}.nupkg")
         createFakePackage secondPackage version
         use secondArchive = ZipFile.Open(secondPackage, ZipArchiveMode.Update)
@@ -576,26 +629,31 @@ let selfTest values =
         secondArchive.Dispose()
         canonicalizePackage package
         canonicalizePackage secondPackage
+        canonicalizePackage symbols
         require (File.ReadAllBytes(package).AsSpan().SequenceEqual(File.ReadAllBytes(secondPackage).AsSpan())) "canonical package bytes differ across ZIP metadata"
         let output = Path.Combine(scratch, "prepared")
-        let manifest = createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package output
+        let manifest = createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package symbols output
         verifyPrepared manifest |> ignore
         let negative = ResizeArray<string>()
         let mutatedPackage = Path.Combine(output, Path.GetFileName package)
         File.AppendAllText(mutatedPackage, "tamper")
         if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "package-tamper"
         File.Copy(package, mutatedPackage, true)
+        let mutatedSymbols = Path.Combine(output, Path.GetFileName symbols)
+        File.AppendAllText(mutatedSymbols, "tamper")
+        if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "symbol-tamper"
+        File.Copy(symbols, mutatedSymbols, true)
         let sbomPath = Path.Combine(output, "sbom.spdx.json")
         File.AppendAllText(sbomPath, "tamper")
         if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "sbom-tamper"
-        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package output |> ignore
+        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package symbols output |> ignore
         let projectionNode = readJson manifest
         let projectionPayload = projectionNode["payload"]
         let projectionSource = projectionPayload["source"]
         projectionSource["ignoredWorktreeArtifactsIncluded"] <- JsonValue.Create(true)
         writeJson manifest projectionNode
         if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "source-projection-tamper"
-        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package output |> ignore
+        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package symbols output |> ignore
         if expectRefusal (fun () -> requireIdentity candidate version "nuget-org") then negative.Add "channel-substitution"
         if expectRefusal (fun () -> requireIdentity candidate "1.0.0" channel) then negative.Add "stable-version"
         let node = readJson manifest
@@ -604,6 +662,13 @@ let selfTest values =
         packageNode["packInvocations"] <- JsonValue.Create(2)
         writeJson manifest node
         if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "repack-count"
+        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package symbols output |> ignore
+        let assemblyNode = readJson manifest
+        let assemblyPayload = assemblyNode["payload"]
+        let assemblyEvidence = assemblyPayload["assembly"]
+        assemblyEvidence["sha256"] <- JsonValue.Create(String.replicate 64 "0")
+        writeJson manifest assemblyNode
+        if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "assembly-digest-tamper"
         let workflow = File.ReadAllText(Path.Combine(repo, ".github", "workflows", "candidate-supply-chain.yml"))
         if expectRefusal (fun () -> validateWorkflowText (workflow + "\n      - run: dotnet nuget push candidate.nupkg --source https://api.nuget.org/v3/index.json\n")) then negative.Add "workflow-channel-substitution"
         if expectRefusal (fun () -> validateWorkflowText (workflow.Replace("      - name: Publish only", "      - continue-on-error: true\n      - name: Publish only"))) then negative.Add "workflow-bypass"
@@ -630,8 +695,30 @@ let selfTest values =
             if expectRefusal (fun () -> requireServedRoute route channel githubPackagesSource version fileName) then negative.Add caseName
         if expectRefusal (fun () -> requireServedRoute validRoute "wrong-channel" githubPackagesSource version fileName) then negative.Add "served-route-channel-binding"
         if expectRefusal (fun () -> requireServedRoute validRoute channel "https://example.invalid/index.json" version fileName) then negative.Add "served-route-source-binding"
-        require (negative.Count = 24) "self-test did not exercise every negative control"
+        require (negative.Count = 26) "self-test did not exercise every negative control"
         printfn "SUPPLY_CHAIN_SELFTEST_OK positive=3 negative=%d cases=%s" negative.Count (String.concat "," negative)
+    finally
+        if Directory.Exists scratch then Directory.Delete(scratch, true)
+
+let reproducibilityTest values =
+    let repo = required "--repo" values |> canonicalFullPath
+    let candidate = run repo "git" [ "rev-parse"; "HEAD" ] []
+    let version = "0.0.0-gs2-03-7." + candidate.Substring(0, 12)
+    let scratch = Path.Combine(Path.GetTempPath(), "fsgg-supply-chain-reprotest-" + Guid.NewGuid().ToString("N"))
+    let first = Path.Combine(scratch, "a")
+    let second = Path.Combine(scratch, "a-much-longer-independent-output-root")
+    try
+        prepare (Map [ "--repo", repo; "--candidate", candidate; "--version", version; "--output", first ])
+        prepare (Map [ "--repo", repo; "--candidate", candidate; "--version", version; "--output", second ])
+        let file extension root = Path.Combine(root, $"{packageId}.{version}.{extension}")
+        let artifacts = [ "nupkg"; "snupkg" ]
+        for extension in artifacts do
+            require (File.ReadAllBytes(file extension first).AsSpan().SequenceEqual(File.ReadAllBytes(file extension second).AsSpan())) $"{extension} bytes differ across independent output roots"
+        let firstPayload = readJson(Path.Combine(first, "candidate.json")) |> payloadRoot
+        let secondPayload = readJson(Path.Combine(second, "candidate.json")) |> payloadRoot
+        for field in [ "package"; "symbols"; "assembly" ] do
+            require (firstPayload[field].ToJsonString() = secondPayload[field].ToJsonString()) $"{field} identity differs across independent output roots"
+        printfn "SUPPLY_CHAIN_REPRODUCIBLE package=%s symbols=%s assembly=%s pdb=%s" (stringAt firstPayload["package"] "sha256") (stringAt firstPayload["symbols"] "sha256") (stringAt firstPayload["assembly"] "sha256") (stringAt firstPayload["symbols"] "portablePdbSha256")
     finally
         if Directory.Exists scratch then Directory.Delete(scratch, true)
 
@@ -651,6 +738,7 @@ try
         printfn "SUPPLY_CHAIN_VERIFIED manifest=%s" (canonicalFullPath manifest)
     | "verify-served" -> verifyServed values
     | "selftest" -> selfTest values
+    | "reprotest" -> reproducibilityTest values
     | _ -> usage ()
 with error ->
     eprintfn "SUPPLY_CHAIN_REFUSED %s" error.Message
