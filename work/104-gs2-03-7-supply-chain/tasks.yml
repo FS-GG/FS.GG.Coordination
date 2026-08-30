@@ -1,0 +1,156 @@
+schemaVersion: 1
+work:
+  id: 104-gs2-03-7-supply-chain
+  title: "Gs2 03 7 Supply Chain"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/104-gs2-03-7-supply-chain/spec.md
+  sourceClarifications: work/104-gs2-03-7-supply-chain/clarifications.md
+  sourceChecklist: work/104-gs2-03-7-supply-chain/checklist.md
+  sourcePlan: work/104-gs2-03-7-supply-chain/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/104-gs2-03-7-supply-chain/spec.md
+    digest: 214700b83c3ae982489a5697c3018d1ff850ee1913d0ada7b423e71f344bac20
+    schemaVersion: 1
+  - label: clarifications
+    path: work/104-gs2-03-7-supply-chain/clarifications.md
+    digest: cc09ac8459ba709aba3f5d333ddd493e23c5c37c7630dd1c45ba4b3a7206272e
+    schemaVersion: 1
+  - label: checklist
+    path: work/104-gs2-03-7-supply-chain/checklist.md
+    digest: 12fc69dd9bb8c82a84279c6084049f5515d7b52ab7283251b8305756fe5bd024
+    schemaVersion: 1
+  - label: plan
+    path: work/104-gs2-03-7-supply-chain/plan.md
+    digest: 6be92f674e72698a1aea0f6a279c09c1283e158e92ef74f659e3a16add9f1c19
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-001, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement requirement FR-006
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-006]
+    decisions: []
+    sourceIds: [AC-001, FR-006, PD-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement requirement FR-007
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-007]
+    decisions: []
+    sourceIds: [AC-001, FR-007, PD-007]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement requirement FR-008
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-008]
+    decisions: []
+    sourceIds: [AC-001, FR-008, PD-008]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Update contract surface PC-001
+    status: done
+    owner: codex
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Record verification evidence VO-001
+    status: done
+    owner: codex
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Handle migration posture PM-001
+    status: done
+    owner: codex
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: codex
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV012]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 104-gs2-03-7-supply-chain."
