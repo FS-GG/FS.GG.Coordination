@@ -39,7 +39,7 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV001]
   - id: T002
-    title: Implement requirement FR-002
+    title: Implement reproducibility with tracked projection, no-debug PE output, and pinned toolchain provenance
     status: done
     owner: codex
     dependencies: []
@@ -79,7 +79,7 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV005]
   - id: T006
-    title: Implement requirement FR-006
+    title: Verify exact served bytes and exact channel-bound package download route
     status: done
     owner: codex
     dependencies: []

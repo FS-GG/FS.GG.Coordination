@@ -10,8 +10,14 @@ output-owned source tree before the first SDK command. Restore, build, and pack 
 projection plus fresh output-owned intermediate and binary directories, and map the projected
 source and isolated build roots to stable compiler paths. Build-server reuse and shared
 compilation are disabled so no prior compiler process can carry environment-local state.
-Ignored project-local `bin`/`obj`
-state in the original checkout is therefore absent before SDK evaluation. The manifest, SBOM,
+Release candidate compilation also disables PDB/debug-symbol emission. F#'s PE writer sizes the
+CodeView/debug region from the original absolute PDB path before `PathMap` rewrites the visible
+path; different-length worker roots therefore produced identical logical PDB identities but
+different PE padding. Removing that unused candidate debug record eliminates the ambient root-length
+input. Preparation fails closed unless it observes .NET SDK 10.0.400, .NET runtime 10.0.11, and the
+pinned SHA-256 of that SDK's `fsc.dll`; provenance records all three values plus the no-debug policy.
+Ignored project-local `bin`/`obj` state in the original checkout is therefore absent before SDK
+evaluation. The manifest, SBOM,
 and provenance bind the Git tree plus the `git-archive-zip-v1` projection method. The workflow performs
 exactly one `dotnet pack`, then canonicalizes the archive entry order
 and timestamps without rebuilding or repacking the project. That canonical package is the sole byte source for
@@ -29,6 +35,11 @@ post-merge obligation and run it once against the exact protected merge. Before 
 the workflow fetches protected `main` and proves the selected commit is in that history; an
 arbitrary feature commit is refused.
 
+Served verification parses the download URI and requires HTTPS, the exact GitHub Packages host,
+the `fs-gg/download/<lowercase-package-id>/<exact-version>/<exact-lowercase-file>` route, the default
+port, and no query, fragment, or extra segment. That route is accepted only when the prepared
+manifest still binds `github-packages-candidate` to the sole allowed NuGet source.
+
 `eng/supply-chain-candidate.fsx` owns preparation and verification. It produces canonical
 compact JSON for a candidate manifest, SPDX SBOM, provenance statement, verification
 statement, and terminal receipt. Every document binds the package SHA-256 and source
@@ -37,7 +48,8 @@ source projection and proves package, SBOM, and projection-binding tamper, chann
 substitution, any pack count other than one, additional or bypassed publication commands
 (including inline commands with dynamically selected sources or an allowed endpoint detached
 into inert metadata),
-unreadable workflow input, and missing protected-history binding are red. The validator reads
+unreadable workflow input, missing protected-history binding, route owner/package/version/file
+substitution, query/fragment/segment smuggling, and detached channel/source binding are red. The validator reads
 the production workflow itself, and its positive and negative controls execute in the architecture suite.
 
 After publication, the workflow downloads the package through GitHub Packages' authenticated

@@ -15,8 +15,13 @@ let verificationSchema = "fsgg.coordination.supply-chain-verification/1"
 let packageId = "FS.GG.Coordination.Protocol"
 let channel = "github-packages-candidate"
 let githubPackagesSource = "https://nuget.pkg.github.com/FS-GG/index.json"
+let githubPackagesDownloadHost = "nuget.pkg.github.com"
+let githubPackagesOwner = "fs-gg"
 let packageProject = "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
 let packageLock = "src/FS.GG.Coordination.Protocol/packages.lock.json"
+let pinnedDotnetSdkVersion = "10.0.400"
+let pinnedDotnetRuntimeVersion = "10.0.11"
+let pinnedFSharpCompilerSha256 = "3e82a7fb4fb386f645b538dd56b73e02eb77d12f453915c5ae029421343d5d18"
 let versionPattern = Regex("^0\\.0\\.0-gs2-03-7\\.([0-9a-f]{12})$", RegexOptions.CultureInvariant)
 let shaPattern = Regex("^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
 let jsonOptions = JsonSerializerOptions(WriteIndented = false)
@@ -40,6 +45,11 @@ let require condition message = if not condition then fail message
 
 let canonicalFullPath path = Path.GetFullPath path
 
+type ToolchainIdentity =
+    { DotnetSdkVersion: string
+      DotnetRuntimeVersion: string
+      FSharpCompilerSha256: string }
+
 let isWithin root candidate =
     let relative = Path.GetRelativePath(root, candidate)
     relative <> ".."
@@ -62,6 +72,24 @@ let run workingDirectory executable arguments environment =
         let renderedArguments = String.concat " " arguments
         fail $"command failed ({child.ExitCode}): {executable} {renderedArguments}\n{output}{error}"
     output.Trim()
+
+let resolvePinnedToolchain workingDirectory =
+    let sdkVersion = run workingDirectory "dotnet" [ "--version" ] []
+    require (sdkVersion = pinnedDotnetSdkVersion) $"candidate build requires .NET SDK {pinnedDotnetSdkVersion}, observed {sdkVersion}"
+    let runtimeVersion = Environment.Version.ToString()
+    require (runtimeVersion = pinnedDotnetRuntimeVersion) $"candidate build requires .NET runtime {pinnedDotnetRuntimeVersion}, observed {runtimeVersion}"
+    let sdkLines = run workingDirectory "dotnet" [ "--list-sdks" ] [] |> _.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+    let prefix = pinnedDotnetSdkVersion + " ["
+    let matching = sdkLines |> Array.filter (fun line -> line.StartsWith(prefix, StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
+    require (matching.Length = 1) "candidate build cannot resolve the one pinned .NET SDK installation"
+    let sdkBase = matching[0].Substring(prefix.Length, matching[0].Length - prefix.Length - 1)
+    let compiler = Path.Combine(sdkBase, pinnedDotnetSdkVersion, "FSharp", "fsc.dll")
+    require (File.Exists compiler) "candidate build cannot resolve the pinned F# compiler"
+    let compilerDigest = sha256File compiler
+    require (compilerDigest = pinnedFSharpCompilerSha256) "candidate build F# compiler digest differs from the pinned compiler"
+    { DotnetSdkVersion = sdkVersion
+      DotnetRuntimeVersion = runtimeVersion
+      FSharpCompilerSha256 = compilerDigest }
 
 let copyDirectory source target =
     Directory.CreateDirectory target |> ignore
@@ -200,7 +228,7 @@ let nuspecDependencies packagePath =
     |> Seq.sortBy (fun dependency -> dependency.id, dependency.version)
     |> Seq.toArray
 
-let createPreparedEvidence repo candidate sourceTree version commitTime packagePath output =
+let createPreparedEvidence repo candidate sourceTree version commitTime toolchain packagePath output =
     requireIdentity candidate version channel
     require (File.Exists packagePath) "candidate package does not exist"
     require (File.Exists(Path.Combine(repo, packageLock))) "Protocol lock file does not exist"
@@ -247,7 +275,9 @@ let createPreparedEvidence repo candidate sourceTree version commitTime packageP
                      externalParameters = {| repository = "FS-GG/FS.GG.Coordination"; candidate = candidate; sourceTree = sourceTree; packageId = packageId; version = version; channel = channel; packInvocations = 1 |}
                      internalParameters =
                        {| configuration = "Release"; project = packageProject; sourceProjection = "git-archive-zip-v1"
-                          buildServers = "disabled"; sharedCompilation = false |}
+                          buildServers = "disabled"; sharedCompilation = false; debugType = "none"; debugSymbols = false
+                          dotnetSdkVersion = toolchain.DotnetSdkVersion; dotnetRuntimeVersion = toolchain.DotnetRuntimeVersion
+                          fsharpCompilerSha256 = toolchain.FSharpCompilerSha256 |}
                      resolvedDependencies = [| {| uri = packageLock; digest = {| sha256 = lockDigest |} |}; {| uri = "spdx:sbom.spdx.json"; digest = {| sha256 = sbomDigest |} |} |] |}
                 runDetails = {| builder = {| id = "https://github.com/FS-GG/FS.GG.Coordination/.github/workflows/candidate-supply-chain.yml" |}; metadata = {| invocationId = candidate; startedOn = commitTime; finishedOn = commitTime |} |} |} |}
     let provenancePath = Path.Combine(output, "provenance.intoto.json")
@@ -332,6 +362,11 @@ let verifyPrepared manifestPath =
     require (stringAt internalParameters "sourceProjection" = "git-archive-zip-v1") "provenance source projection does not match"
     require (stringAt internalParameters "buildServers" = "disabled") "provenance build-server boundary does not match"
     require (not (internalParameters["sharedCompilation"].GetValue<bool>())) "provenance shared-compilation boundary does not match"
+    require (stringAt internalParameters "debugType" = "none") "provenance debug-information boundary does not match"
+    require (not (internalParameters["debugSymbols"].GetValue<bool>())) "provenance debug-symbol boundary does not match"
+    require (stringAt internalParameters "dotnetSdkVersion" = pinnedDotnetSdkVersion) "provenance .NET SDK pin does not match"
+    require (stringAt internalParameters "dotnetRuntimeVersion" = pinnedDotnetRuntimeVersion) "provenance .NET runtime pin does not match"
+    require (stringAt internalParameters "fsharpCompilerSha256" = pinnedFSharpCompilerSha256) "provenance F# compiler pin does not match"
     let payloadBytes = JsonSerializer.SerializeToUtf8Bytes(payload, jsonOptions)
     require (stringAt manifest "selfSha256" = sha256Bytes payloadBytes) "candidate manifest self digest mismatch"
     packagePath, candidate, version, stringAt package "sha256", stringAt payload "commitTime"
@@ -357,6 +392,7 @@ let prepare values =
     requireIdentity candidate version channel
     let commitTime = cleanGitCandidate repo candidate (optional "--protected-ref" values)
     let sourceTree = run repo "git" [ "rev-parse"; candidate + "^{tree}" ] []
+    let toolchain = resolvePinnedToolchain repo
     require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "output directory must be empty"
     Directory.CreateDirectory output |> ignore
     let sourceRoot = projectTrackedSource repo candidate (Path.Combine(output, "tracked-source"))
@@ -370,6 +406,8 @@ let prepare values =
           "-p:Deterministic=true"
           "-p:DeterministicSourcePaths=true"
           "-p:UseSharedCompilation=false"
+          "-p:DebugType=None"
+          "-p:DebugSymbols=false"
           $"-p:PathMap={sourceRoot}=/_/%%2C{buildRoot}=/_build/"
           $"-p:BaseIntermediateOutputPath={intermediate}"
           $"-p:BaseOutputPath={binaries}" ]
@@ -381,7 +419,7 @@ let prepare values =
     let packages = Directory.GetFiles(packOutput, "*.nupkg", SearchOption.TopDirectoryOnly)
     require (packages.Length = 1) "exactly one candidate package must be produced"
     canonicalizePackage packages[0]
-    let manifest = createPreparedEvidence sourceRoot candidate sourceTree version commitTime packages[0] output
+    let manifest = createPreparedEvidence sourceRoot candidate sourceTree version commitTime toolchain packages[0] output
     verifyPrepared manifest |> ignore
     Directory.Delete(packOutput, true)
     Directory.Delete(buildRoot, true)
@@ -404,6 +442,20 @@ let writeConsumerConfig path feed =
 </configuration>
 """, UTF8Encoding(false))
 
+let requireServedRoute (servedUrl: string) (selectedChannel: string) (selectedSource: string) (version: string) (fileName: string) =
+    require (selectedChannel = channel) "served route is not bound to the prepared channel"
+    require (selectedSource = githubPackagesSource) "served route is not bound to the prepared source"
+    let mutable parsed = Unchecked.defaultof<Uri>
+    require (Uri.TryCreate(servedUrl, UriKind.Absolute, &parsed)) "served URL is not an absolute URI"
+    require (parsed.Scheme = Uri.UriSchemeHttps) "served URL does not use HTTPS"
+    require (String.Equals(parsed.Host, githubPackagesDownloadHost, StringComparison.OrdinalIgnoreCase)) "served URL host is outside the allowed channel"
+    require parsed.IsDefaultPort "served URL uses a non-default port"
+    require (String.IsNullOrEmpty parsed.Query && String.IsNullOrEmpty parsed.Fragment) "served URL contains query or fragment data"
+    let segments = parsed.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries)
+    let expected = [| githubPackagesOwner; "download"; packageId.ToLowerInvariant(); version; fileName.ToLowerInvariant() |]
+    require (segments.Length = expected.Length) "served URL route has an unexpected segment count"
+    require (Array.forall2 (fun actual wanted -> String.Equals(actual, wanted, StringComparison.Ordinal)) segments expected) "served URL route does not exactly bind owner, package, version, and file"
+
 let verifyServed values =
     let repo = required "--repo" values |> canonicalFullPath
     let manifestPath = required "--manifest" values |> canonicalFullPath
@@ -411,10 +463,12 @@ let verifyServed values =
     let output = required "--output" values |> canonicalFullPath
     let servedUrl = required "--served-url" values
     let packagePath, candidate, version, expectedDigest, commitTime = verifyPrepared manifestPath
+    let preparedPayload = readJson manifestPath |> payloadRoot
+    let preparedChannel = preparedPayload["channel"]
     require (File.Exists served) "served package does not exist"
     require (sha256File served = expectedDigest) "served package digest does not match prepared candidate"
     require (File.ReadAllBytes(packagePath).AsSpan().SequenceEqual(File.ReadAllBytes(served).AsSpan())) "served package is not byte-for-byte identical"
-    require (servedUrl.StartsWith("https://nuget.pkg.github.com/fs-gg/download/", StringComparison.Ordinal)) "served URL is outside the allowed channel"
+    requireServedRoute servedUrl (stringAt preparedChannel "id") (stringAt preparedChannel "source") version (Path.GetFileName packagePath)
     Directory.CreateDirectory output |> ignore
     let feed = Path.Combine(output, "served-feed")
     Directory.CreateDirectory feed |> ignore
@@ -505,6 +559,7 @@ let selfTest values =
     Directory.CreateDirectory scratch |> ignore
     try
         proveTrackedProjection scratch
+        let toolchain = resolvePinnedToolchain repo
         let candidate = String.replicate 40 "a"
         let sourceTree = String.replicate 40 "b"
         let version = "0.0.0-gs2-03-7." + candidate.Substring(0, 12)
@@ -520,7 +575,7 @@ let selfTest values =
         canonicalizePackage secondPackage
         require (File.ReadAllBytes(package).AsSpan().SequenceEqual(File.ReadAllBytes(secondPackage).AsSpan())) "canonical package bytes differ across ZIP metadata"
         let output = Path.Combine(scratch, "prepared")
-        let manifest = createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" package output
+        let manifest = createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package output
         verifyPrepared manifest |> ignore
         let negative = ResizeArray<string>()
         let mutatedPackage = Path.Combine(output, Path.GetFileName package)
@@ -530,14 +585,14 @@ let selfTest values =
         let sbomPath = Path.Combine(output, "sbom.spdx.json")
         File.AppendAllText(sbomPath, "tamper")
         if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "sbom-tamper"
-        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" package output |> ignore
+        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package output |> ignore
         let projectionNode = readJson manifest
         let projectionPayload = projectionNode["payload"]
         let projectionSource = projectionPayload["source"]
         projectionSource["ignoredWorktreeArtifactsIncluded"] <- JsonValue.Create(true)
         writeJson manifest projectionNode
         if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "source-projection-tamper"
-        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" package output |> ignore
+        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" toolchain package output |> ignore
         if expectRefusal (fun () -> requireIdentity candidate version "nuget-org") then negative.Add "channel-substitution"
         if expectRefusal (fun () -> requireIdentity candidate "1.0.0" channel) then negative.Add "stable-version"
         let node = readJson manifest
@@ -554,8 +609,23 @@ let selfTest values =
         if expectRefusal (fun () -> validateWorkflowText (workflow + "\n      - run: dotnet nuget push candidate.nupkg --source \"$UNTRUSTED_SOURCE\"\n")) then negative.Add "workflow-dynamic-source"
         let detachedSource = workflow.Replace("--source https://nuget.pkg.github.com/FS-GG/index.json", "--source \"$UNTRUSTED_SOURCE\"") + "\nenv:\n  PUBLISH_POLICY_NOTE: https://nuget.pkg.github.com/FS-GG/index.json\n"
         if expectRefusal (fun () -> validateWorkflowText detachedSource) then negative.Add "workflow-detached-source"
-        require (negative.Count = 12) "self-test did not exercise every negative control"
-        printfn "SUPPLY_CHAIN_SELFTEST_OK positive=2 negative=%d cases=%s" negative.Count (String.concat "," negative)
+        let fileName = $"{packageId}.{version}.nupkg"
+        let validRoute = $"https://{githubPackagesDownloadHost}/{githubPackagesOwner}/download/{packageId.ToLowerInvariant()}/{version}/{fileName.ToLowerInvariant()}"
+        requireServedRoute validRoute channel githubPackagesSource version fileName
+        let routeCases =
+            [ "served-route-owner", validRoute.Replace("/fs-gg/", "/wrong/")
+              "served-route-package", validRoute.Replace("/fs.gg.coordination.protocol/", "/wrong.id/")
+              "served-route-version", validRoute.Replace("/" + version + "/", "/wrong-version/")
+              "served-route-file", validRoute.Replace(fileName.ToLowerInvariant(), "wrong.nupkg")
+              "served-route-query", validRoute + "?redirect=wrong"
+              "served-route-fragment", validRoute + "#wrong"
+              "served-route-extra-segment", validRoute + "/extra" ]
+        for caseName, route in routeCases do
+            if expectRefusal (fun () -> requireServedRoute route channel githubPackagesSource version fileName) then negative.Add caseName
+        if expectRefusal (fun () -> requireServedRoute validRoute "wrong-channel" githubPackagesSource version fileName) then negative.Add "served-route-channel-binding"
+        if expectRefusal (fun () -> requireServedRoute validRoute channel "https://example.invalid/index.json" version fileName) then negative.Add "served-route-source-binding"
+        require (negative.Count = 21) "self-test did not exercise every negative control"
+        printfn "SUPPLY_CHAIN_SELFTEST_OK positive=3 negative=%d cases=%s" negative.Count (String.concat "," negative)
     finally
         if Directory.Exists scratch then Directory.Delete(scratch, true)
 
