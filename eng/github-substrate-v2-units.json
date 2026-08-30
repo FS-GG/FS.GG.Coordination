@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "8872061033e4d8068426379f5ca6cd13588f6190",
+    "revision": "e5ef3ee5fd15fc1e06ec13a5a58613c0c2ec5a65",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "186917f36b60c6cb50f4b12a2e15e297c2a5e8eb566b21bcdb83698415e4ee63"
+    "sha256": "ce404b7b1893387aebd0fe407bbf43e71826fd10c44760d7ec735ca3787864fb"
   },
   "units": [
     {
@@ -351,6 +351,21 @@
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
       "contractSha256": "1d7e6539bf45ade0a565c194e34c1b6d108f2206ebc45fdd56f42c9ed6f0abe1"
+    },
+    {
+      "id": "GS2-03.6",
+      "title": "Add fault injection",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-03.5"],
+      "permissionCeiling": ["repository-local deterministic fault-injection fixtures, harnesses, convergence checks, typed-refusal checks, validation, and evidence across modeled external-step boundaries", "no network, live GitHub mutation, deployment, publication, production write, or successor-unit implementation authority"],
+      "exitGate": "deterministic injection before and after every modeled external step, lost responses, duplicate and reordered events, partial pages, exhausted rate budgets, revoked permission, and concurrent revision mutation each demonstrate convergence or an exact typed refusal under Q7 architecture and evidence-storage controls",
+      "qGates": ["Q7"],
+      "gateCommands": ["architecture-tests", "evidence-storage-contract"],
+      "gateContracts": [
+        { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" },
+        { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
+      ],
+      "contractSha256": "26d5605dd8cb35d0e26a8038c23b094874ce20fbcba47adc773c928e97e2a610"
     }
   ]
 }

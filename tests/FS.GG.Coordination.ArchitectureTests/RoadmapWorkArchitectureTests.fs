@@ -104,7 +104,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-03-5 without the rejected runtime branch`` () =
+let ``roadmap unit index advances through GS2-03-6 without successor implementation`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -138,7 +138,8 @@ let ``roadmap unit index advances through GS2-03-5 without the rejected runtime 
              "GS2-03.2"
              "GS2-03.3"
              "GS2-03.4"
-             "GS2-03.5" ]
+             "GS2-03.5"
+             "GS2-03.6" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -414,6 +415,45 @@ let ``roadmap unit index advances through GS2-03-5 without the rejected runtime 
           "rollback"
           "Quint/ITF counterexamples" ] do
         Assert.Contains(requiredTerm, nativeQuintExitGate)
+
+    let faultInjectionUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-03.6")
+
+    Assert.Equal<string list>(
+        [ "GS2-03.5" ],
+        faultInjectionUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "architecture-tests"; "evidence-storage-contract" ],
+        faultInjectionUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "Q7" ],
+        faultInjectionUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let faultInjectionExitGate = faultInjectionUnit.GetProperty("exitGate").GetString()
+
+    for requiredTerm in
+        [ "before and after every modeled external step"
+          "lost responses"
+          "duplicate and reordered events"
+          "partial pages"
+          "exhausted rate budgets"
+          "revoked permission"
+          "concurrent revision mutation"
+          "convergence"
+          "typed refusal" ] do
+        Assert.Contains(requiredTerm, faultInjectionExitGate)
 
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
