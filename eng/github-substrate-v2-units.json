@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "828fc02907edc1c3577b68568f57112e3ed1d1d3",
+    "revision": "8a420401b3cf53a51d06b4298e797355f64bf58a",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "a615d7f67ddfaa7fd08e3becb8e1587ce1ba5b220d2eab73f8f049a3b5e64bc0"
+    "sha256": "a3b6718b829960bd42ee011b5b9cf889f5e065e940c3e440132118ce12248326"
   },
   "units": [
     {
@@ -382,6 +382,21 @@
         { "id": "bootstrap-recovery", "qGate": "Q7", "commandSha256": "2accc796d33ab16872f170d98f5a271ba9cc7026a22a98786b906eff5a93d91e" }
       ],
       "contractSha256": "9aafa686e23439c3c0c8535855f5a871903b53ece25eb196b7cf14595bab8b24"
+    },
+    {
+      "id": "GS2-03.8",
+      "title": "Add review gates",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-03.7"],
+      "permissionCeiling": ["repository-local typed architecture, security, adapter, migration, and cutover critique findings, exact-candidate and exact-evidence binding, deterministic roll-up derivation, validation, and evidence", "no external or multiple authorization requirement, network, live GitHub mutation, deployment, publication, production write, or successor-unit implementation authority"],
+      "exitGate": "architecture, security, adapter, migration, and cutover perspectives each produce an independently identified typed finding bound to the exact candidate and evidence fingerprints, and green is derived only when every required finding is present, current, bound, and green; a self-authored or prose-only green roll-up cannot satisfy Q7",
+      "qGates": ["Q7"],
+      "gateCommands": ["architecture-tests", "evidence-storage-contract"],
+      "gateContracts": [
+        { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" },
+        { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
+      ],
+      "contractSha256": "b969195e59ceb0d363d76259f53952e092a40a1ad21c163f5b00d8e93785613a"
     }
   ]
 }
