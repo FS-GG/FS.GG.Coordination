@@ -7,6 +7,8 @@
     <Compile Include="QualificationReuse.fs" />
     <Compile Include="GeneratedStructuralTests.fsi" />
     <Compile Include="GeneratedStructuralTests.fs" />
+    <Compile Include="FaultInjection.fsi" />
+    <Compile Include="FaultInjection.fs" />
     <Compile Include="BootstrapCi.fsi" />
     <Compile Include="BootstrapCi.fs" />
     <Compile Include="RoadmapWork.fsi" />
