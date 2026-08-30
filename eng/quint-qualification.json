@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "cb6f4f5203d8c5bd87abcbc6cf03d37824f8e7fe5db209c9b029f9a2e334c223",
+  "sourceSha256": "5e4797762f8fe2fa26f184926ccc22ee8df949217700e97036887b48b6ced3a0",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
@@ -224,7 +224,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "authority",
@@ -280,7 +280,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "lifecycle",
@@ -337,7 +337,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "relations",
@@ -394,7 +394,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "protocol-streams",
@@ -447,7 +447,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "mutation-saga",
@@ -501,7 +501,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "desired-state",
@@ -557,7 +557,7 @@
         "samples": 200,
         "elapsedMs": 60000,
         "peakMiB": 2048,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "qualification",
@@ -750,6 +750,32 @@
       "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/rollback.manifest.json",
       "budget": {
         "depth": 4,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 60000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "journal-reconciliation",
+      "main": "CoordinationProtocolTests",
+      "init": "formalInit",
+      "step": "formalJournalTlcStep",
+      "invariant": "formalJournalSafety",
+      "witness": "formalJournalReached",
+      "temporal": "formalJournalProgress",
+      "invalid": "formalJournalTlcInvalid",
+      "removedStep": "formalJournalTlcWithoutAudit",
+      "violatedTemporal": "formalJournalEventuallyReconciled",
+      "blockedInvariant": "formalJournalBlockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-reconciliation.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-reconciliation.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-reconciliation.manifest.json",
+      "budget": {
+        "depth": 6,
         "states": 10000,
         "transitions": 10000,
         "samples": 100,

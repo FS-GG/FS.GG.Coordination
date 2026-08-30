@@ -54,7 +54,8 @@ let validateDocument root (document: JsonObject) =
         let formalTests = objects document "formalTests"
         let formalTestIds = formalTests |> List.map (fun item -> text item "id")
         let requiredFormalTestIds =
-            Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback" ]
+            Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback"
+                  "journal-reconciliation" ]
         let requiredFormalFields =
             Set [ "id"; "main"; "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"
                   "removedStep"; "violatedTemporal"; "blockedInvariant"; "backend"; "counterexample"; "counterexampleTrace"

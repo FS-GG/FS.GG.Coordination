@@ -14,7 +14,7 @@ of deterministic compiled-contract output families and typed qualification of th
 content, completeness, support, freshness, and order. This unit binds canonical typed-effect behavior
 to an exact five-part version tuple and stable semantic-diff projection. GS2-03.1 adds the closed
 qualification-manifest identity and its candidate, input-set, freshness, independence, result, and
-review bindings. No network writer or production mutation authority is defined here.
+review bindings. GS2-03.10 replaces comment authority with fenced Git journals, snapshot epochs, shared reconciliation, and observe-before-contract cutover. No network writer or production mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -155,7 +155,7 @@ module CoordinationProtocol {
   pure val authorityCatalogue = Set(
     { id: "AUTH-NativeGitHub", kind: "authorityBinding", family: "native-github", revisionKind: "github-object-version", revisionValue: "node-id-and-updated-at", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-NativeGitHub-Evidence" },
     { id: "AUTH-RepositoryRegistry", kind: "authorityBinding", family: "repository-registry", revisionKind: "registry-document-sha256", revisionValue: "canonical-document-digest", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-RepositoryRegistry-Evidence" },
-    { id: "AUTH-ProtocolStream", kind: "authorityBinding", family: "protocol-stream", revisionKind: "protocol-contract-sha256", revisionValue: "compiled-contract-digest", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-ProtocolStream-Evidence" },
+    { id: "AUTH-ProtocolStream", kind: "authorityBinding", family: "protected-sharded-git-journal", revisionKind: "git-expected-parent-and-generation", revisionValue: "journal-commit-and-fencing-generation", completenessContract: "complete-ancestry-snapshot-and-terminal-checkpoint", evidenceRelationship: "REL-AUTH-ProtocolStream-Evidence" },
     { id: "AUTH-GitLedger", kind: "authorityBinding", family: "git-ledger", revisionKind: "git-commit-sha", revisionValue: "commit-object-id", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-GitLedger-Evidence" },
     { id: "AUTH-Actions", kind: "authorityBinding", family: "actions", revisionKind: "workflow-run-attempt", revisionValue: "run-id-and-attempt", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-Actions-Evidence" },
     { id: "AUTH-PackageFeed", kind: "authorityBinding", family: "package-feed", revisionKind: "package-content-sha256", revisionValue: "package-bytes-digest", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-PackageFeed-Evidence" },
@@ -187,9 +187,9 @@ module CoordinationProtocol {
   )
 
   pure val protocolStreamKindCatalogue = Set(
-    { id: "STREAM-Claim", kind: "protocolStreamKind", family: "claim-lease-touch-set" },
-    { id: "STREAM-OperationLock", kind: "protocolStreamKind", family: "operation-lock-election" },
-    { id: "STREAM-Review", kind: "protocolStreamKind", family: "review" },
+    { id: "STREAM-Claim", kind: "protocolStreamKind", family: "journal-cas-claim-lease-touch-set-fenced" },
+    { id: "STREAM-OperationLock", kind: "protocolStreamKind", family: "journal-cas-operation-election-fenced" },
+    { id: "STREAM-Review", kind: "protocolStreamKind", family: "journal-cas-full-snapshot-review-epoch" },
     { id: "STREAM-Delivery", kind: "protocolStreamKind", family: "delivery" },
     { id: "STREAM-OperationReceipt", kind: "protocolStreamKind", family: "operation-receipt" }
   )
@@ -330,7 +330,7 @@ module CoordinationProtocol {
   )
 
   pure val compatibilityCatalogue = Set(
-    { id: "COMPAT-Profile2", kind: "compatibility", surface: "fsgg-quint-profile/2", requirement: "exact", detail: "Consumer-defined structural profile; profile 1 remains frozen." }
+    { id: "COMPAT-Profile2", kind: "compatibility", surface: "fsgg-quint-profile/2", requirement: "exact", detail: "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, fencing generations, full snapshot review epochs, shared reconciliation with audit repair, and OpenV2>ObservingV2>ContractingV1>OperatingV2; profile 1 remains frozen." }
   )
 
   pure val propertyCatalogue = Set(
@@ -815,7 +815,7 @@ module CoordinationProtocol {
       "AUTH-Actions", "AUTH-PackageFeed", "AUTH-ClassifiedExternal"
     ),
     authorityCatalogue.map(binding => binding.family) == Set(
-      "native-github", "repository-registry", "protocol-stream", "git-ledger",
+      "native-github", "repository-registry", "protected-sharded-git-journal", "git-ledger",
       "actions", "package-feed", "classified-external"
     ),
   }
@@ -1158,6 +1158,100 @@ inverts each material binding and preserves the earlier bounded invariants.
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
 
+  // GS2-03.10 keeps the amendment's executable architecture types adjacent to the independent tests.
+  // The compiled contract exposes the corresponding authority/retention strings without exceeding the
+  // profile-2 4,096-node projection ceiling.
+  type JournalHead = {
+    aggregateId: str, journalKind: str, commitSha: str, parentCommitSha: str,
+    generation: int, snapshotSha256: str, terminal: bool,
+  }
+  type FencedGrant = {
+    aggregateId: str, journalCommitSha: str, generation: int, ownerId: str, leaseActive: bool,
+  }
+  type ReviewEpoch = {
+    chainId: str, epochKey: str, snapshotSha256: str, criticSeat: str, verdict: str,
+  }
+  type ReconcileInput = {
+    subjectId: str, triggerKind: str, authorityComplete: bool, authorityFresh: bool,
+    observedSnapshotSha256: str, plannedSnapshotSha256: str, planSealed: bool,
+  }
+  type CutoverState = {
+    phase: str, observationDay: int, v1WritersFenced: bool, destructiveDeletionStarted: bool,
+  }
+
+  pure def journalHeadShapeIsValid(journal: JournalHead): bool = and {
+    journal.aggregateId != "",
+    Set("claim", "review", "operation", "cutover").contains(journal.journalKind),
+    journal.commitSha != "", journal.generation >= 1, journal.snapshotSha256 != "",
+  }
+  pure def journalAdvanceIsCas(current: JournalHead, proposed: JournalHead): bool = and {
+    journalHeadShapeIsValid(current), journalHeadShapeIsValid(proposed),
+    current.aggregateId == proposed.aggregateId, current.journalKind == proposed.journalKind,
+    not(current.terminal), proposed.parentCommitSha == current.commitSha,
+    proposed.commitSha != current.commitSha, proposed.generation == current.generation + 1,
+  }
+  pure def grantMatchesJournalHead(journal: JournalHead, grant: FencedGrant): bool = and {
+    journalHeadShapeIsValid(journal), grant.aggregateId == journal.aggregateId,
+    grant.journalCommitSha == journal.commitSha, grant.generation == journal.generation,
+    grant.ownerId != "", grant.leaseActive,
+  }
+  pure def legacyLeaseAndCommentOrderMayAuthorize(grant: FencedGrant): bool = and {
+    grant.ownerId != "", grant.leaseActive,
+  }
+  pure def reviewEpochMayAuthorize(
+    epoch: ReviewEpoch, currentSnapshotSha256: str, expectedCriticSeat: str): bool = and {
+    epoch.chainId != "", epoch.epochKey != "", epoch.snapshotSha256 == currentSnapshotSha256,
+    epoch.criticSeat == expectedCriticSeat, epoch.verdict == "pass",
+  }
+  pure def reconcileMayApply(input: ReconcileInput): bool = and {
+    input.subjectId != "", Set("command", "webhook", "audit").contains(input.triggerKind),
+    input.authorityComplete, input.authorityFresh, input.observedSnapshotSha256 != "",
+    input.observedSnapshotSha256 == input.plannedSnapshotSha256, input.planSealed,
+  }
+  pure def cutoverTransitionIsLegal(current: CutoverState, proposed: CutoverState): bool = or {
+    and { current.phase == "VerifiedV2", proposed.phase == "OpenV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "OpenV2", proposed.phase == "ObservingV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted), proposed.observationDay == 0 },
+    and { current.phase == "ObservingV2", proposed.phase == "ObservingV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
+      proposed.observationDay >= current.observationDay, proposed.observationDay <= 30 },
+    and { current.phase == "ObservingV2", current.observationDay >= 30,
+      proposed.phase == "ContractingV1", proposed.v1WritersFenced,
+      proposed.destructiveDeletionStarted },
+    and { current.phase == "ContractingV1", proposed.phase == "OperatingV2",
+      proposed.v1WritersFenced, proposed.destructiveDeletionStarted },
+  }
+
+  pure val claimJournalHead: JournalHead = {
+    aggregateId: "claim:subject-work", journalKind: "claim", commitSha: "commit-claim-1",
+    parentCommitSha: "commit-root", generation: 1, snapshotSha256: "snapshot-claim-1", terminal: false,
+  }
+  pure val successorClaimJournalHead: JournalHead = {
+    ...claimJournalHead, commitSha: "commit-claim-2", parentCommitSha: claimJournalHead.commitSha,
+    generation: 2,
+  }
+  pure val initialClaimGrant: FencedGrant = {
+    aggregateId: claimJournalHead.aggregateId, journalCommitSha: claimJournalHead.commitSha,
+    generation: claimJournalHead.generation, ownerId: "worker-a", leaseActive: true,
+  }
+  pure val successorClaimGrant: FencedGrant = {
+    ...initialClaimGrant, journalCommitSha: successorClaimJournalHead.commitSha,
+    generation: successorClaimJournalHead.generation, ownerId: "worker-b",
+  }
+  pure val acceptedReviewEpoch: ReviewEpoch = {
+    chainId: "review:subject-work", epochKey: "epoch:snapshot-a", snapshotSha256: "snapshot-a",
+    criticSeat: "critic-seat-a", verdict: "pass",
+  }
+  pure val webhookReconcileInput: ReconcileInput = {
+    subjectId: "subject-work", triggerKind: "webhook", authorityComplete: true, authorityFresh: true,
+    observedSnapshotSha256: "snapshot-a", plannedSnapshotSha256: "snapshot-a", planSealed: true,
+  }
+  pure val observingDay30: CutoverState = {
+    phase: "ObservingV2", observationDay: 30, v1WritersFenced: true,
+    destructiveDeletionStarted: false,
+  }
+
   // GS2-03.4 independent black-box oracles. These expectations are deliberately hand-authored
   // against public protocol behavior and invoke the canonical functions directly; they are not
   // generated from the compiled contract or from the implementation of those functions.
@@ -1222,6 +1316,53 @@ module CoordinationProtocolTests {
   run oracleScaleEnvelope = and {
     boundCatalogue.forall(bound => and { bound.minimum >= 0, bound.maximum >= bound.minimum }),
     boundCatalogue.map(bound => bound.id).size() == 11,
+  }
+
+  // GS2-03.10 architecture-amendment oracles. These name the failures that ordered comments and
+  // leases alone cannot exclude.
+  run testMutationJournalExpectedParentAndFencingRejectStaleOwner = and {
+    journalAdvanceIsCas(claimJournalHead, successorClaimJournalHead),
+    grantMatchesJournalHead(claimJournalHead, initialClaimGrant),
+    grantMatchesJournalHead(successorClaimJournalHead, successorClaimGrant),
+    not(grantMatchesJournalHead(successorClaimJournalHead, initialClaimGrant)),
+    legacyLeaseAndCommentOrderMayAuthorize(initialClaimGrant),
+    not(journalAdvanceIsCas(claimJournalHead,
+      { ...successorClaimJournalHead, parentCommitSha: "concurrent-sibling" })),
+  }
+
+  run testMutationReviewEpochRejectsPassAfterSnapshotOrSeatChange = and {
+    reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-a", "critic-seat-a"),
+    not(reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-b", "critic-seat-a")),
+    not(reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-a", "critic-seat-b")),
+  }
+
+  run testMutationReconcilerRequiresFreshCompleteSealedSnapshot = and {
+    reconcileMayApply(webhookReconcileInput),
+    not(reconcileMayApply({ ...webhookReconcileInput, authorityComplete: false })),
+    not(reconcileMayApply({ ...webhookReconcileInput, authorityFresh: false })),
+    not(reconcileMayApply({ ...webhookReconcileInput, plannedSnapshotSha256: "snapshot-stale" })),
+    not(reconcileMayApply({ ...webhookReconcileInput, planSealed: false })),
+    reconcileMayApply({ ...webhookReconcileInput, triggerKind: "audit" }),
+  }
+
+  run testMutationCutoverObservesBeforeDestructiveContraction = and {
+    cutoverTransitionIsLegal(
+      { phase: "VerifiedV2", observationDay: 0, v1WritersFenced: false,
+        destructiveDeletionStarted: false },
+      { phase: "OpenV2", observationDay: 0, v1WritersFenced: true,
+        destructiveDeletionStarted: false }),
+    cutoverTransitionIsLegal(
+      { phase: "OpenV2", observationDay: 0, v1WritersFenced: true,
+        destructiveDeletionStarted: false },
+      { phase: "ObservingV2", observationDay: 0, v1WritersFenced: true,
+        destructiveDeletionStarted: false }),
+    not(cutoverTransitionIsLegal(
+      { ...observingDay30, observationDay: 14 },
+      { phase: "ContractingV1", observationDay: 14, v1WritersFenced: true,
+        destructiveDeletionStarted: true })),
+    cutoverTransitionIsLegal(observingDay30,
+      { phase: "ContractingV1", observationDay: 30, v1WritersFenced: true,
+        destructiveDeletionStarted: true }),
   }
 
   type DeterministicVersionTuple = {
@@ -2382,7 +2523,82 @@ module CoordinationProtocolTests {
   action formalRollbackWithoutCompensate =
     if (formalRollbackStage == 0) formalRollbackApply else formalRollbackStutter
 
-  // TLC requires every variable in the selected module to have a legal initial value. All six
+  // GS2-03.10 stateful shared-journal model. Webhooks may be lost, but a fair complete audit
+  // converges the projection. A worker from generation 1 may attempt a write after generation 2
+  // owns the journal, but the fencing rule never commits it.
+  type FormalJournalState = {
+    stage: int, generation: int, owner: str, projectedGeneration: int,
+    appliedGeneration: int, webhookPending: bool, auditDue: bool,
+    staleAttempted: bool, staleCommitted: bool, auditRepaired: bool,
+  }
+  var formalJournalState: FormalJournalState
+  action formalJournalAdvance = all {
+    formalJournalState.stage == 0,
+    formalJournalState' = {
+      ...formalJournalState, stage: 1, generation: 2, owner: "worker-b",
+      webhookPending: true, auditDue: true,
+    },
+  }
+  action formalJournalRejectStaleOwner = all {
+    formalJournalState.stage == 1,
+    formalJournalState' = {
+      ...formalJournalState, stage: 2, staleAttempted: true, staleCommitted: false,
+    },
+  }
+  action formalJournalDropWebhook = all {
+    formalJournalState.stage == 2, formalJournalState.webhookPending,
+    formalJournalState' = { ...formalJournalState, stage: 3, webhookPending: false },
+  }
+  action formalJournalAuditReconcile = all {
+    formalJournalState.stage == 3, formalJournalState.auditDue,
+    formalJournalState' = {
+      ...formalJournalState, stage: 4,
+      projectedGeneration: formalJournalState.generation,
+      appliedGeneration: formalJournalState.generation,
+      auditDue: false, auditRepaired: true,
+    },
+  }
+  action formalJournalHold = all {
+    formalJournalState.stage == 4,
+    formalJournalState' = formalJournalState,
+  }
+  action formalJournalStep = any {
+    formalJournalAdvance, formalJournalRejectStaleOwner,
+    formalJournalDropWebhook, formalJournalAuditReconcile, formalJournalHold,
+  }
+  action formalJournalInvalid = all {
+    formalJournalState' = {
+      ...formalJournalState, stage: 4, generation: 2, owner: "worker-b",
+      staleAttempted: true, staleCommitted: true,
+    },
+  }
+  val formalJournalSafety = and {
+    not(formalJournalState.staleCommitted),
+    formalJournalState.projectedGeneration <= formalJournalState.generation,
+    formalJournalState.appliedGeneration <= formalJournalState.generation,
+    formalJournalState.generation == 2 implies formalJournalState.owner == "worker-b",
+  }
+  val formalJournalReached = and {
+    formalJournalState.stage == 4, formalJournalState.staleAttempted,
+    not(formalJournalState.staleCommitted), formalJournalState.auditRepaired,
+    formalJournalState.appliedGeneration == formalJournalState.generation,
+  }
+  temporal formalJournalProgress: bool = and {
+    formalJournalAdvance.weakFair(Set(formalJournalState)),
+    formalJournalRejectStaleOwner.weakFair(Set(formalJournalState)),
+    formalJournalDropWebhook.weakFair(Set(formalJournalState)),
+    formalJournalAuditReconcile.weakFair(Set(formalJournalState)),
+  }.implies(eventually(formalJournalReached))
+  temporal formalJournalEventuallyReconciled: bool = eventually(formalJournalReached)
+  val formalJournalBlockedInvariant = formalJournalState.stage != 3
+  action formalJournalStall = formalJournalState' = formalJournalState
+  action formalJournalWithoutAudit =
+    if (formalJournalState.stage == 0) formalJournalAdvance
+    else if (formalJournalState.stage == 1) formalJournalRejectStaleOwner
+    else if (formalJournalState.stage == 2) formalJournalDropWebhook
+    else formalJournalStall
+
+  // TLC requires every variable in the selected module to have a legal initial value. All seven
   // independently selected scenarios therefore share this complete initialization action.
   action formalInit = all {
     formalClaimStage' = 0, formalClaimEvents' = Set(), formalClaimValid' = true,
@@ -2392,6 +2608,11 @@ module CoordinationProtocolTests {
     formalSagaStage' = 0, formalSagaValid' = true,
     formalEpochStage' = 0, formalEpochEvents' = Set(), formalEpochValid' = true,
     formalRollbackStage' = 0, formalRollbackValid' = true,
+    formalJournalState' = {
+      stage: 0, generation: 1, owner: "worker-a", projectedGeneration: 1,
+      appliedGeneration: 1, webhookPending: false, auditDue: false,
+      staleAttempted: false, staleCommitted: false, auditRepaired: false,
+    },
   }
 
   action formalClaimStutter = all {
@@ -2414,78 +2635,91 @@ module CoordinationProtocolTests {
   action formalRollbackStutter = all {
     formalRollbackStage' = formalRollbackStage, formalRollbackValid' = formalRollbackValid,
   }
+  action formalJournalStutter = formalJournalState' = formalJournalState
 
   action formalClaimTlcStep = all {
     formalClaimStep, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalClaimTlcInvalid = all {
     formalClaimInvalid, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalRelationTlcStep = all {
     formalRelationStep, formalClaimStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalRelationTlcInvalid = all {
     formalRelationInvalid, formalClaimStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalLifecycleTlcStep = all {
     formalLifecycleStep, formalClaimStutter, formalRelationStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalLifecycleTlcInvalid = all {
     formalLifecycleInvalid, formalClaimStutter, formalRelationStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalSagaTlcStep = all {
     formalSagaStep, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalSagaTlcInvalid = all {
     formalSagaInvalid, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalEpochTlcStep = all {
     formalEpochStep, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalEpochTlcInvalid = all {
     formalEpochInvalid, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalRollbackTlcStep = all {
     formalRollbackStep, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter, formalJournalStutter,
   }
   action formalRollbackTlcInvalid = all {
     formalRollbackInvalid, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter, formalJournalStutter,
   }
   action formalClaimTlcWithoutElection = all {
     formalClaimWithoutElection, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalRelationTlcWithoutRemove = all {
     formalRelationWithoutRemove, formalClaimStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalLifecycleTlcWithoutDeliver = all {
     formalLifecycleWithoutDeliver, formalClaimStutter, formalRelationStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalSagaTlcWithoutAdvance = all {
     formalSagaWithoutAdvance, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalEpochTlcWithoutAdvance = all {
     formalEpochWithoutAdvance, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter, formalJournalStutter,
   }
   action formalRollbackTlcWithoutCompensate = all {
     formalRollbackWithoutCompensate, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter, formalJournalStutter,
+  }
+  action formalJournalTlcStep = all {
+    formalJournalStep, formalClaimStutter, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalJournalTlcInvalid = all {
+    formalJournalInvalid, formalClaimStutter, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalJournalTlcWithoutAudit = all {
+    formalJournalWithoutAudit, formalClaimStutter, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
 }
 

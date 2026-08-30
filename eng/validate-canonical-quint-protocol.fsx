@@ -30,21 +30,21 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "cb6f4f5203d8c5bd87abcbc6cf03d37824f8e7fe5db209c9b029f9a2e334c223"
+    "5e4797762f8fe2fa26f184926ccc22ee8df949217700e97036887b48b6ced3a0"
 
 let expectedContract =
-    "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
+    "947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e"
 
 let expectedBehavior =
-    "7d7dd76d29d4a26555eeed5069215504e188990cfdd15a7ede719c051bd52d1a"
+    "c60fb49e78385bbd50e21b20bc90a1d682f967de8c2825690aca81d25d3db132"
 
 let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
-let mutable expectedExternalProcessCount = 151
-let mutable expectedQuintProcessCount = 126
-let expectedApalacheVerifyInvocationCount = 32
+let mutable expectedExternalProcessCount = 158
+let mutable expectedQuintProcessCount = 133
+let mutable expectedApalacheVerifyInvocationCount = 35
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -351,9 +351,9 @@ match receiptFailurePhase with
     currentPhase <- "q2"
     verifiedPositiveInvariantCount <- 8
     quintRejectedProcessCount <- 100
-    externalProcessCount <- 150
-    quintProcessCount <- 125
-    apalacheVerifyInvocationCount <- 32
+    externalProcessCount <- expectedExternalProcessCount - 1
+    quintProcessCount <- expectedQuintProcessCount - 1
+    apalacheVerifyInvocationCount <- expectedApalacheVerifyInvocationCount - 1
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
     requireCompletedProcessInventory ()
@@ -716,8 +716,12 @@ let selectedRootIds =
     |> Seq.map _.GetString()
     |> Set.ofSeq
 File.Delete selectionPlanPath
-expectedExternalProcessCount <- 144 + selectedRootIds.Count
-expectedQuintProcessCount <- 119 + selectedRootIds.Count
+let processInventoryConfiguration = JsonDocument.Parse(File.ReadAllBytes qualificationConfiguration)
+let declaredFormalTestCount =
+    processInventoryConfiguration.RootElement.GetProperty("formalTests").GetArrayLength()
+expectedExternalProcessCount <- 102 + selectedRootIds.Count + (7 * declaredFormalTestCount)
+expectedQuintProcessCount <- 77 + selectedRootIds.Count + (7 * declaredFormalTestCount)
+expectedApalacheVerifyInvocationCount <- 14 + (3 * declaredFormalTestCount)
 
 if staticOnly then
     printfn "CANONICAL_QUINT_PROTOCOL_STATIC_OK contract=%s profile=%s" expectedContract expectedProfile
@@ -2330,8 +2334,8 @@ try
     if verifiedPositiveInvariantCount <> 8 then
         fail "POSITIVE-INVARIANT-COVERAGE" ($"expected=8; actual=%d{verifiedPositiveInvariantCount}")
 
-    if quintRejectedProcessCount <> 101 then
-        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=101; actual=%d{quintRejectedProcessCount}")
+    if quintRejectedProcessCount <> 106 then
+        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=106; actual=%d{quintRejectedProcessCount}")
 
     requireCompletedProcessInventory ()
 
