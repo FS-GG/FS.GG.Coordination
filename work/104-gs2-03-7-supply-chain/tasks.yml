@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/104-gs2-03-7-supply-chain/spec.md
-    digest: 214700b83c3ae982489a5697c3018d1ff850ee1913d0ada7b423e71f344bac20
+    digest: 2b7f429d293adea4c226f83d9719d3b3fcc1f99f88518366d05447c1ac015862
     schemaVersion: 1
   - label: clarifications
     path: work/104-gs2-03-7-supply-chain/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/104-gs2-03-7-supply-chain/checklist.md
-    digest: 12fc69dd9bb8c82a84279c6084049f5515d7b52ab7283251b8305756fe5bd024
+    digest: 07b69407280be71b10e08e300a14fcc8b3caa9a29ed6a471a6eeb2b25a8ef7f5
     schemaVersion: 1
   - label: plan
     path: work/104-gs2-03-7-supply-chain/plan.md
-    digest: 1d2bfa7e95fdbf259a91b04a5787b1a8bb7865b5fd4b3fa027de1835193401d2
+    digest: 9d870add74d96705d829e43f1da3c3de3d5bc11160aafd5ebb79c8676d19fefb
     schemaVersion: 1
 tasks:
   - id: T001

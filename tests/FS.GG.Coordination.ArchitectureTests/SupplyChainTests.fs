@@ -22,14 +22,36 @@ let private runSelfTest () =
     child.WaitForExit()
     child.ExitCode, output.Trim(), error.Trim()
 
+let private runReproducibilityTest () =
+    let info = ProcessStartInfo("dotnet")
+    info.WorkingDirectory <- root
+    info.UseShellExecute <- false
+    info.RedirectStandardOutput <- true
+    info.RedirectStandardError <- true
+    for argument in [ "fsi"; "eng/supply-chain-candidate.fsx"; "--"; "reprotest"; "--repo"; "." ] do
+        info.ArgumentList.Add argument
+    use child = Process.Start info
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    child.ExitCode, output.Trim(), error.Trim()
+
 [<Fact>]
 let ``candidate supply chain proves positive and independent negative controls`` () =
     let exitCode, output, error = runSelfTest ()
     Assert.Equal(0, exitCode)
     Assert.Equal("", error)
-    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=3 negative=24", output)
-    for caseName in [ "package-tamper"; "sbom-tamper"; "source-projection-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected"; "workflow-dynamic-source"; "workflow-detached-source"; "served-route-owner"; "served-route-package"; "served-route-version"; "served-route-file"; "served-route-query"; "served-route-fragment"; "served-route-extra-segment"; "served-route-trailing-slash"; "served-route-double-slash"; "served-route-percent-encoding"; "served-route-channel-binding"; "served-route-source-binding" ] do
+    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=3 negative=26", output)
+    for caseName in [ "package-tamper"; "symbol-tamper"; "assembly-digest-tamper"; "sbom-tamper"; "source-projection-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected"; "workflow-dynamic-source"; "workflow-detached-source"; "served-route-owner"; "served-route-package"; "served-route-version"; "served-route-file"; "served-route-query"; "served-route-fragment"; "served-route-extra-segment"; "served-route-trailing-slash"; "served-route-double-slash"; "served-route-percent-encoding"; "served-route-channel-binding"; "served-route-source-binding" ] do
         Assert.Contains(caseName, output)
+
+[<Fact>]
+let ``candidate package portable symbols assembly and pdb are reproducible across unequal roots`` () =
+    let exitCode, output, error = runReproducibilityTest ()
+    Assert.Equal(0, exitCode)
+    Assert.Equal("", error)
+    Assert.Contains("SUPPLY_CHAIN_REPRODUCIBLE package=", output)
+    for field in [ "symbols="; "assembly="; "pdb=" ] do Assert.Contains(field, output)
 
 [<Fact>]
 let ``candidate workflow is manual exact-sha and pre-production only`` () =
@@ -43,6 +65,8 @@ let ``candidate workflow is manual exact-sha and pre-production only`` () =
     Assert.Contains("https://nuget.pkg.github.com/FS-GG/index.json", workflow)
     Assert.Contains("https://nuget.pkg.github.com/fs-gg/download/", workflow)
     Assert.Contains("dotnet fsi eng/supply-chain-candidate.fsx -- verify-served", workflow)
+    Assert.Contains("--no-symbols", workflow)
+    Assert.Contains("FS.GG.Coordination.Protocol.*.snupkg", workflow)
     Assert.Contains("retention-days: 90", workflow)
     Assert.DoesNotContain("nuget.org", workflow.ToLowerInvariant())
     Assert.DoesNotContain("gh release", workflow)
@@ -61,8 +85,13 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("-p:PathMap=", implementation)
     Assert.Contains("BaseIntermediateOutputPath", implementation)
     Assert.Contains("UseSharedCompilation=false", implementation)
-    Assert.Contains("-p:DebugType=None", implementation)
-    Assert.Contains("-p:DebugSymbols=false", implementation)
+    Assert.Contains("-p:DebugType=portable", implementation)
+    Assert.Contains("-p:DebugSymbols=true", implementation)
+    Assert.Contains("-p:IncludeSymbols=true", implementation)
+    Assert.Contains("-p:SymbolPackageFormat=snupkg", implementation)
+    Assert.Contains("portablePdbSha256", implementation)
+    Assert.Contains("installedAssemblySha256", implementation)
+    Assert.Contains("fsgg-gs2-03-7-", implementation)
     Assert.Contains("pinnedDotnetSdkVersion", implementation)
     Assert.Contains("pinnedDotnetRuntimeVersion", implementation)
     Assert.Contains("pinnedFSharpCompilerSha256", implementation)

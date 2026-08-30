@@ -493,6 +493,8 @@ let ``roadmap unit index advances through GS2-03-7 without successor implementat
     for requiredTerm in
         [ "packed once"
           "byte-for-byte reproducibly"
+          "portable-symbol package"
+          "installed-assembly digests"
           "SBOM"
           "attestations"
           "allowed pre-production channel"

@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/104-gs2-03-7-supply-chain/clarifications.md
 
 ## Source Snapshot
-- spec: work/104-gs2-03-7-supply-chain/spec.md sha256:214700b83c3ae982489a5697c3018d1ff850ee1913d0ada7b423e71f344bac20 schemaVersion:1
+- spec: work/104-gs2-03-7-supply-chain/spec.md sha256:2b7f429d293adea4c226f83d9719d3b3fcc1f99f88518366d05447c1ac015862 schemaVersion:1
 - clarifications: work/104-gs2-03-7-supply-chain/clarifications.md sha256:cc09ac8459ba709aba3f5d333ddd493e23c5c37c7630dd1c45ba4b3a7206272e schemaVersion:1
 
 ## Checklist Items

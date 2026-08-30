@@ -372,8 +372,8 @@
       "title": "Add reproducibility and supply-chain checks",
       "owner": "FS.GG.Coordination",
       "prerequisites": ["GS2-03.6"],
-      "permissionCeiling": ["repository-local reproducible pack comparison, SBOM and attestation generation, allowed pre-production candidate publication, clean-consumer installation checks, validation, and evidence", "network access is limited to the explicitly allowed pre-production candidate channel; no stable or production publication, deployment, unrelated live GitHub mutation, production write, or successor-unit implementation authority"],
-      "exitGate": "one exact candidate is packed once and compared byte-for-byte reproducibly, produces digest-bound SBOM and attestations, is published only to the allowed pre-production channel, and installs and executes from served exact bytes in clean consumers under Q7 architecture, bootstrap-recovery, and evidence-storage controls",
+      "permissionCeiling": ["repository-local reproducible package and portable-symbol comparison, SBOM and attestation generation, allowed pre-production candidate publication, clean-consumer installation checks, validation, and evidence", "network access is limited to the explicitly allowed pre-production candidate channel; no stable or production publication, deployment, unrelated live GitHub mutation, production write, or successor-unit implementation authority"],
+      "exitGate": "one exact candidate is packed once and compared byte-for-byte reproducibly, retains package, canonical portable-symbol package, SBOM, attestations, served-download, and installed-assembly digests, is published only to the allowed pre-production channel, and installs and executes from served exact bytes in clean consumers under Q7 architecture, bootstrap-recovery, and evidence-storage controls",
       "qGates": ["Q7"],
       "gateCommands": ["architecture-tests", "evidence-storage-contract", "bootstrap-recovery"],
       "gateContracts": [
@@ -381,7 +381,7 @@
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" },
         { "id": "bootstrap-recovery", "qGate": "Q7", "commandSha256": "2accc796d33ab16872f170d98f5a271ba9cc7026a22a98786b906eff5a93d91e" }
       ],
-      "contractSha256": "eed53ae3396d2aee754f7b9f3b1d9d755ee1e56e6538ef642655e9fea26fbbdd"
+      "contractSha256": "9aafa686e23439c3c0c8535855f5a871903b53ece25eb196b7cf14595bab8b24"
     }
   ]
 }
