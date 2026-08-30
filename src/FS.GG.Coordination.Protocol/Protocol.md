@@ -1155,13 +1155,16 @@ the evidence guard must make the invariant red in the bounded negative control.
 The journal is an append-only Git object graph; issues, pull-request comments, labels, workflow
 runs, and webhooks are projections or wake-up hints. An aggregate identifier is encoded as
 lower-case UTF-8, length-prefixed before hashing, and mapped to shard
-`lower-hex(sha256(canonicalAggregateId))[0..1]`. Its only mutable locator is
-`refs/fsgg/v2/journal/<journal-kind>/<shard>`. Aggregate records cannot move between shards and a
+`lower-hex(sha256(canonicalAggregateId))[0..1]`. Journal authority lives in a dedicated repository
+whose only mutable locators are branches named
+`refs/heads/fsgg/v2/journal/<journal-kind>/<shard>`. Aggregate records cannot move between shards and a
 collision in the canonical identifier digest is a hard integrity failure, never last-writer-wins.
-The ref namespace is protected by a repository ruleset: deletion, non-fast-forward update, and
-direct user pushes are denied. Only the journal GitHub App may update it, and that App's bypass is
-restricted to the expected-parent API path and is audited. Workflow tokens and personal tokens
-have no bypass.
+An active branch ruleset targets `fsgg/v2/journal/**`, restricts creation, updates, and deletion,
+blocks force pushes, and grants always-bypass only to a dedicated journal GitHub App installed on
+that repository. Administrators do not bypass it; workflow and personal tokens are absent from the
+bypass list. Bootstrap and periodic audit read both the ruleset and the branch's effective rules
+through GitHub's rules APIs and fail closed on drift. Repository isolation, rather than a fictional
+API-path-scoped bypass, bounds the App's contents-write authority.
 
 Each journal commit has exactly one parent except the documented shard root. Its tree contains
 `aggregates/<aggregate-digest>/head.json`, immutable
@@ -1174,8 +1177,11 @@ and writer operation id. A snapshot binds the complete event ancestry it replace
 high-water generation, and its content digest. Readers reject missing parents, duplicate
 generations, digest mismatch, shard mismatch, and unknown schema versions.
 
-Mutation is compare-and-swap: read ref and aggregate head; construct blobs, tree, and a single-parent
-commit; then update the ref only if its current object id equals the observed ref object id. A
+Mutation is compare-and-swap: fetch the branch and aggregate head; construct blobs, tree, and a
+single-parent commit; then push the exact refspec with
+`--force-with-lease=<ref>:<observed-object-id>`. Git receive-pack compares the advertised old object
+id with the current ref before accepting the fast-forward update; the ruleset still rejects an
+actual non-fast-forward or forced history rewrite. A
 successful update assigns the committed aggregate generation as the fencing token. A rejected
 expected parent means no authority changed and the worker must reread. A transport failure or lost
 success response is ambiguous: reread the ref, accept success only when the exact operation id,
@@ -1223,7 +1229,9 @@ module CoordinationProtocolTests {
     observedSnapshotSha256: str, plannedSnapshotSha256: str, planSealed: bool,
   }
   type CutoverState = {
-    phase: str, successfulObservationDays: Set[int], v1WritersFenced: bool,
+    phase: str, successfulObservationDays: Set[int], freshObservationDays: Set[int],
+    currentSnapshotSha256: str, observationSnapshotSha256: str, observationClockDay: int,
+    v1WritersFenced: bool,
     destructiveDeletionStarted: bool,
   }
 
@@ -1256,22 +1264,30 @@ module CoordinationProtocolTests {
     input.authorityComplete, input.authorityFresh, input.observedSnapshotSha256 != "",
     input.observedSnapshotSha256 == input.plannedSnapshotSha256, input.planSealed,
   }
+  pure def cutoverEvidenceIsValid(state: CutoverState): bool = and {
+    state.successfulObservationDays == state.freshObservationDays,
+    state.currentSnapshotSha256 != "",
+    state.observationSnapshotSha256 == state.currentSnapshotSha256,
+  }
   pure def cutoverTransitionIsLegal(current: CutoverState, proposed: CutoverState): bool = or {
     and { current.phase == "VerifiedV2", proposed.phase == "OpenV2",
       proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
     and { current.phase == "OpenV2", proposed.phase == "ObservingV2",
       proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
-      proposed.successfulObservationDays == Set(0) },
+      proposed.successfulObservationDays == Set(0), proposed.observationClockDay == 0,
+      cutoverEvidenceIsValid(proposed) },
     and { current.phase == "ObservingV2", proposed.phase == "ObservingV2",
       proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
+      cutoverEvidenceIsValid(proposed),
       or {
         proposed.successfulObservationDays == current.successfulObservationDays,
-        and { current.successfulObservationDays == Set(0), proposed.successfulObservationDays == Set(0, 7) },
-        and { current.successfulObservationDays == Set(0, 7), proposed.successfulObservationDays == Set(0, 7, 14) },
-        and { current.successfulObservationDays == Set(0, 7, 14), proposed.successfulObservationDays == Set(0, 7, 14, 30) },
+        and { current.successfulObservationDays == Set(0), proposed.successfulObservationDays == Set(0, 7), proposed.observationClockDay == 7 },
+        and { current.successfulObservationDays == Set(0, 7), proposed.successfulObservationDays == Set(0, 7, 14), proposed.observationClockDay == 14 },
+        and { current.successfulObservationDays == Set(0, 7, 14), proposed.successfulObservationDays == Set(0, 7, 14, 30), proposed.observationClockDay == 30 },
       } },
     and { current.phase == "ObservingV2",
       current.successfulObservationDays == Set(0, 7, 14, 30),
+      current.observationClockDay == 30, cutoverEvidenceIsValid(current),
       proposed.phase == "ContractingV1", proposed.v1WritersFenced,
       proposed.destructiveDeletionStarted },
     and { current.phase == "ContractingV1", proposed.phase == "OperatingV2",
@@ -1303,7 +1319,9 @@ module CoordinationProtocolTests {
     observedSnapshotSha256: "snapshot-a", plannedSnapshotSha256: "snapshot-a", planSealed: true,
   }
   pure val observingDay30: CutoverState = {
-    phase: "ObservingV2", successfulObservationDays: Set(0, 7, 14, 30), v1WritersFenced: true,
+    phase: "ObservingV2", successfulObservationDays: Set(0, 7, 14, 30),
+    freshObservationDays: Set(0, 7, 14, 30), currentSnapshotSha256: "cutover-snapshot",
+    observationSnapshotSha256: "cutover-snapshot", observationClockDay: 30, v1WritersFenced: true,
     destructiveDeletionStarted: false,
   }
 
@@ -1403,20 +1421,29 @@ module CoordinationProtocolTests {
   run testMutationCutoverObservesBeforeDestructiveContraction = and {
     cutoverTransitionIsLegal(
       { phase: "VerifiedV2", successfulObservationDays: Set(), v1WritersFenced: false,
-        destructiveDeletionStarted: false },
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false },
       { phase: "OpenV2", successfulObservationDays: Set(), v1WritersFenced: true,
-        destructiveDeletionStarted: false }),
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false }),
     cutoverTransitionIsLegal(
       { phase: "OpenV2", successfulObservationDays: Set(), v1WritersFenced: true,
-        destructiveDeletionStarted: false },
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false },
       { phase: "ObservingV2", successfulObservationDays: Set(0), v1WritersFenced: true,
+        freshObservationDays: Set(0), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "cutover-snapshot", observationClockDay: 0,
         destructiveDeletionStarted: false }),
     not(cutoverTransitionIsLegal(
       { ...observingDay30, successfulObservationDays: Set(30) },
       { phase: "ContractingV1", successfulObservationDays: Set(30), v1WritersFenced: true,
+        freshObservationDays: Set(30), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "wrong-snapshot", observationClockDay: 30,
         destructiveDeletionStarted: true })),
     cutoverTransitionIsLegal(observingDay30,
       { phase: "ContractingV1", successfulObservationDays: Set(0, 7, 14, 30), v1WritersFenced: true,
+        freshObservationDays: Set(0, 7, 14, 30), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "cutover-snapshot", observationClockDay: 30,
         destructiveDeletionStarted: true }),
   }
 
@@ -2765,6 +2792,20 @@ module GS20310JournalModel {
     else if (state.firstOwner == 0) casA
     else if (not(state.conflictObserved)) observeConflict
     else hold
+  val fencingReached = and { state.retryAccepted, state.staleEffectAttempted, state.effectOwner == 0 }
+  temporal fencingProgress: bool = and {
+    prepareSiblings.weakFair(Set(state)), casA.weakFair(Set(state)), casB.weakFair(Set(state)),
+    observeConflict.weakFair(Set(state)), retryLoser.weakFair(Set(state)),
+    attemptStaleEffect.weakFair(Set(state)),
+  }.implies(eventually(fencingReached))
+  temporal eventuallyFenced: bool = eventually(fencingReached)
+  val fencingBlockedInvariant = not(state.retryAccepted)
+  action withoutFence =
+    if (not(state.proposalsReady)) prepareSiblings
+    else if (state.firstOwner == 0) casA
+    else if (not(state.conflictObserved)) observeConflict
+    else if (not(state.retryAccepted)) retryLoser
+    else hold
   action unsafeExpectedParent = all {
     state' = { ...state, head0: 12, generation0: 2, proposalsReady: true,
       observedA: 10, observedB: 10, acceptedA: true, acceptedB: true,
@@ -2785,12 +2826,14 @@ module GS20310ReconcileModel {
     authorityVersion: int, page1: bool, page2: bool, terminal: bool,
     highWater: int, sealedSnapshot: int, sealedHighWater: int,
     projectionVersion: int, hintCount: int, page2WasFirst: bool,
+    authorityChangedDuringRead: bool,
   }
   var state: ReconcileModelState
   action init = state' = {
     authorityVersion: 1, page1: false, page2: false, terminal: false,
     highWater: 0, sealedSnapshot: 0, sealedHighWater: 0,
     projectionVersion: 0, hintCount: 0, page2WasFirst: false,
+    authorityChangedDuringRead: false,
   }
   action duplicateHint = all {
     state.hintCount < 2,
@@ -2801,7 +2844,21 @@ module GS20310ReconcileModel {
     state' = { ...state, page2: true, terminal: true,
       highWater: state.authorityVersion, page2WasFirst: not(state.page1) },
   }
-  action readPage1 = all { not(state.page1), state' = { ...state, page1: true } }
+  action readPage1 = all {
+    not(state.page1),
+    not(and { state.page2WasFirst, state.authorityVersion == 1,
+      not(state.authorityChangedDuringRead) }),
+    state' = { ...state, page1: true },
+  }
+  action changeAuthorityDuringRead = all {
+    state.authorityVersion == 1, state.page2WasFirst, state.page2, not(state.page1),
+    state' = { ...state, authorityVersion: 2, authorityChangedDuringRead: true },
+  }
+  action restartIncompleteAudit = all {
+    state.highWater != 0, state.highWater != state.authorityVersion,
+    state' = { ...state, page1: false, page2: false, terminal: false,
+      highWater: 0, sealedSnapshot: 0, sealedHighWater: 0 },
+  }
   action sealPlan = all {
     state.page1, state.page2, state.terminal, state.highWater == state.authorityVersion,
     state' = { ...state, sealedSnapshot: state.authorityVersion,
@@ -2813,18 +2870,21 @@ module GS20310ReconcileModel {
     state' = { ...state, projectionVersion: state.sealedSnapshot },
   }
   action hold = state' = state
-  action step = any { duplicateHint, readPage2, readPage1, sealPlan, applyPlan, hold }
+  action step = any { duplicateHint, readPage2, readPage1, changeAuthorityDuringRead,
+    restartIncompleteAudit, sealPlan, applyPlan, hold }
   val safety = state.projectionVersion == 0 or and {
     state.page1, state.page2, state.terminal,
     state.highWater == state.authorityVersion,
     state.sealedSnapshot == state.authorityVersion,
     state.sealedHighWater == state.authorityVersion,
   }
-  val reached = and { state.projectionVersion == state.authorityVersion, state.hintCount == 2 }
-  val reorderedWitness = and { reached, state.page2WasFirst }
+  val reached = state.projectionVersion == state.authorityVersion
+  val reorderedWitness = and { reached, state.page2WasFirst,
+    state.authorityChangedDuringRead, state.hintCount == 0 }
   temporal progress: bool = and {
-    duplicateHint.weakFair(Set(state)), readPage2.weakFair(Set(state)),
+    readPage2.weakFair(Set(state)),
     readPage1.weakFair(Set(state)), sealPlan.weakFair(Set(state)),
+    changeAuthorityDuringRead.weakFair(Set(state)), restartIncompleteAudit.weakFair(Set(state)),
     applyPlan.weakFair(Set(state)),
   }.implies(eventually(reached))
   temporal eventuallyReached: bool = eventually(reached)
@@ -2841,7 +2901,8 @@ module GS20310ReviewEpochModel {
   type ReviewModelState = {
     authorityVersion: int, complete: bool, fresh: bool,
     epochSnapshot: int, seat: int, verdictSnapshot: int, verdictSeat: int,
-    changedAfterVerdict: bool, effectVersion: int,
+    changedAfterVerdict: bool, effectVersion: int, effectWasCurrent: bool,
+    staleEffectRejected: bool, staleEffectAccepted: bool,
   }
   var state: ReviewModelState
   pure def accepted(s: ReviewModelState): bool = and {
@@ -2852,10 +2913,12 @@ module GS20310ReviewEpochModel {
   action init = state' = {
     authorityVersion: 1, complete: true, fresh: true,
     epochSnapshot: 0, seat: 0, verdictSnapshot: 0, verdictSeat: 0,
-    changedAfterVerdict: false, effectVersion: 0,
+    changedAfterVerdict: false, effectVersion: 0, effectWasCurrent: false,
+    staleEffectRejected: false, staleEffectAccepted: false,
   }
   action openEpoch = all {
     state.complete, state.fresh, state.epochSnapshot != state.authorityVersion,
+    not(state.changedAfterVerdict) or state.staleEffectRejected,
     state' = { ...state, epochSnapshot: state.authorityVersion, seat: 0,
       verdictSnapshot: 0, verdictSeat: 0 },
   }
@@ -2868,73 +2931,116 @@ module GS20310ReviewEpochModel {
     state' = { ...state, verdictSnapshot: state.epochSnapshot, verdictSeat: state.seat },
   }
   action changeAuthority = all {
-    accepted(state), not(state.changedAfterVerdict), state.effectVersion == 0,
+    accepted(state), not(state.changedAfterVerdict), state.effectWasCurrent,
     state' = { ...state, authorityVersion: state.authorityVersion + 1,
       changedAfterVerdict: true },
   }
   action applyCurrentEffect = all {
-    accepted(state), state.effectVersion == 0,
-    state' = { ...state, effectVersion: state.authorityVersion },
+    accepted(state), not(state.effectWasCurrent),
+    state' = { ...state, effectVersion: state.authorityVersion, effectWasCurrent: true },
+  }
+  action rejectStaleEffect = all {
+    state.changedAfterVerdict, not(accepted(state)), not(state.staleEffectRejected),
+    state' = { ...state, staleEffectRejected: true },
   }
   action hold = state' = state
-  action step = any { openEpoch, grantSeat, recordPass, changeAuthority, hold }
-  val safety = state.effectVersion == 0 or and {
-    accepted(state), state.effectVersion == state.authorityVersion,
-  }
-  val reached = and { state.changedAfterVerdict, not(accepted(state)), state.effectVersion == 0 }
+  action step = any { openEpoch, grantSeat, recordPass, applyCurrentEffect,
+    changeAuthority, rejectStaleEffect, hold }
+  val safety = and { not(state.staleEffectAccepted),
+    state.effectVersion == 0 or state.effectWasCurrent }
+  val reached = and { state.changedAfterVerdict, not(accepted(state)),
+    state.effectWasCurrent, state.staleEffectRejected, not(state.staleEffectAccepted) }
   temporal progress: bool = and {
     openEpoch.weakFair(Set(state)), grantSeat.weakFair(Set(state)),
-    recordPass.weakFair(Set(state)), changeAuthority.weakFair(Set(state)),
+    recordPass.weakFair(Set(state)), applyCurrentEffect.weakFair(Set(state)),
+    changeAuthority.weakFair(Set(state)), rejectStaleEffect.weakFair(Set(state)),
   }.implies(eventually(reached))
   temporal eventuallyReached: bool = eventually(reached)
   // Projection-only assertion: a pass can be recorded while snapshot-change progress is absent.
-  val blockedInvariant = state.verdictSnapshot == 0
+  val blockedInvariant = not(state.effectWasCurrent)
   action withoutSnapshotChange =
     if (state.epochSnapshot == 0) openEpoch
     else if (state.seat == 0) grantSeat
     else if (state.verdictSnapshot == 0) recordPass
+    else if (not(state.effectWasCurrent)) applyCurrentEffect
     else hold
   action unsafeStaleReviewEffect = state' = {
     authorityVersion: 2, complete: true, fresh: true,
     epochSnapshot: 1, seat: 1, verdictSnapshot: 1, verdictSeat: 1,
-    changedAfterVerdict: true, effectVersion: 1,
+    changedAfterVerdict: true, effectVersion: 1, effectWasCurrent: false,
+    staleEffectRejected: false, staleEffectAccepted: true,
   }
 }
 
 // GS2-03.10 model 4: destructive contraction is authorized by successful observations at
 // four ordered readings, not elapsed wall time. Day 30 alone is not evidence for days 0/7/14.
 module GS20310CutoverModel {
-  type CutoverModelState = { readings: Set[int], v1Fenced: bool, contracted: bool }
+  type CutoverModelState = {
+    clockDay: int, readings: Set[int], successful: Set[int], fresh: Set[int],
+    currentSnapshot: int, evidenceSnapshot: int,
+    failedRejected: bool, staleRejected: bool, wrongSnapshotRejected: bool,
+    v1Fenced: bool, contracted: bool,
+  }
   var state: CutoverModelState
-  action init = state' = { readings: Set(), v1Fenced: false, contracted: false }
-  action observe0 = all { not(state.readings.contains(0)), state' = { ...state, readings: state.readings.union(Set(0)) } }
-  action observe7 = all { state.readings.contains(0), not(state.readings.contains(7)),
-    state' = { ...state, readings: state.readings.union(Set(7)) } }
-  action observe14 = all { state.readings.contains(7), not(state.readings.contains(14)),
-    state' = { ...state, readings: state.readings.union(Set(14)) } }
-  action observe30 = all { state.readings.contains(14), not(state.readings.contains(30)),
-    state' = { ...state, readings: state.readings.union(Set(30)) } }
+  action init = state' = {
+    clockDay: 0, readings: Set(), successful: Set(), fresh: Set(),
+    currentSnapshot: 7, evidenceSnapshot: 7,
+    failedRejected: false, staleRejected: false, wrongSnapshotRejected: false,
+    v1Fenced: false, contracted: false,
+  }
+  action rejectFailed = all { not(state.failedRejected), state' = { ...state, failedRejected: true } }
+  action rejectStale = all { not(state.staleRejected), state' = { ...state, staleRejected: true } }
+  action rejectWrongSnapshot = all {
+    not(state.wrongSnapshotRejected), state' = { ...state, wrongSnapshotRejected: true },
+  }
+  action observe0 = all { state.clockDay == 0, not(state.readings.contains(0)),
+    state' = { ...state, readings: state.readings.union(Set(0)),
+      successful: state.successful.union(Set(0)), fresh: state.fresh.union(Set(0)) } }
+  action advance7 = all { state.readings.contains(0), state.clockDay == 0, state' = { ...state, clockDay: 7 } }
+  action observe7 = all { state.clockDay == 7, not(state.readings.contains(7)),
+    state' = { ...state, readings: state.readings.union(Set(7)),
+      successful: state.successful.union(Set(7)), fresh: state.fresh.union(Set(7)) } }
+  action advance14 = all { state.readings.contains(7), state.clockDay == 7, state' = { ...state, clockDay: 14 } }
+  action observe14 = all { state.clockDay == 14, not(state.readings.contains(14)),
+    state' = { ...state, readings: state.readings.union(Set(14)),
+      successful: state.successful.union(Set(14)), fresh: state.fresh.union(Set(14)) } }
+  action advance30 = all { state.readings.contains(14), state.clockDay == 14, state' = { ...state, clockDay: 30 } }
+  action observe30 = all { state.clockDay == 30, not(state.readings.contains(30)),
+    state' = { ...state, readings: state.readings.union(Set(30)),
+      successful: state.successful.union(Set(30)), fresh: state.fresh.union(Set(30)) } }
   action fenceV1 = all { not(state.v1Fenced), state' = { ...state, v1Fenced: true } }
   action contract = all {
-    state.v1Fenced, state.readings == Set(0, 7, 14, 30),
+    state.v1Fenced, state.clockDay == 30,
+    state.readings == Set(0, 7, 14, 30), state.successful == state.readings,
+    state.fresh == state.readings, state.evidenceSnapshot == state.currentSnapshot,
     state' = { ...state, contracted: true },
   }
   action hold = state' = state
-  action step = any { observe0, observe7, observe14, observe30, fenceV1, contract, hold }
+  action step = any { rejectFailed, rejectStale, rejectWrongSnapshot,
+    observe0, advance7, observe7, advance14, observe14, advance30, observe30,
+    fenceV1, contract, hold }
   val safety = not(state.contracted) or and {
-    state.v1Fenced, state.readings == Set(0, 7, 14, 30),
+    state.v1Fenced, state.clockDay == 30,
+    state.readings == Set(0, 7, 14, 30), state.successful == state.readings,
+    state.fresh == state.readings, state.evidenceSnapshot == state.currentSnapshot,
   }
-  val reached = state.contracted
+  val reached = and { state.contracted, state.failedRejected,
+    state.staleRejected, state.wrongSnapshotRejected }
   temporal progress: bool = and {
-    observe0.weakFair(Set(state)), observe7.weakFair(Set(state)),
-    observe14.weakFair(Set(state)), observe30.weakFair(Set(state)),
+    rejectFailed.weakFair(Set(state)), rejectStale.weakFair(Set(state)),
+    rejectWrongSnapshot.weakFair(Set(state)), observe0.weakFair(Set(state)),
+    advance7.weakFair(Set(state)), observe7.weakFair(Set(state)),
+    advance14.weakFair(Set(state)), observe14.weakFair(Set(state)),
+    advance30.weakFair(Set(state)), observe30.weakFair(Set(state)),
     fenceV1.weakFair(Set(state)), contract.weakFair(Set(state)),
   }.implies(eventually(reached))
   temporal eventuallyReached: bool = eventually(reached)
   // Projection-only assertion: fencing alone can occur while every observation is absent.
   val blockedInvariant = not(state.v1Fenced)
   action withoutObservations = if (not(state.v1Fenced)) fenceV1 else hold
-  action unsafeDay30Jump = state' = { ...state, readings: Set(30), v1Fenced: true, contracted: true }
+  action unsafeDay30Jump = state' = { ...state, clockDay: 30, readings: Set(30),
+    successful: Set(), fresh: Set(30), evidenceSnapshot: 8,
+    v1Fenced: true, contracted: true }
 }
 
 // GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only

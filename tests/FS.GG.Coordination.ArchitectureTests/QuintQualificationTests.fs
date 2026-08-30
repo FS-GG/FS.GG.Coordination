@@ -102,7 +102,7 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         let measurement = measurements[item["id"].GetValue<string>()]
         Assert.True(measurement["stateCount"].GetValue<int>() > 0)
         Assert.True(measurement["transitionCount"].GetValue<int>() > 0)
-        Assert.Equal(100, measurement["sampleCount"].GetValue<int>())
+        Assert.Equal((item["budget"].AsObject()["samples"]).GetValue<int>(), measurement["sampleCount"].GetValue<int>())
         Assert.True(measurement["elapsedMs"].GetValue<int>() > 0)
         Assert.True(measurement["peakMiB"].GetValue<int>() > 0)
         Assert.True(measurement["artifactBytes"].GetValue<int>() > 0)

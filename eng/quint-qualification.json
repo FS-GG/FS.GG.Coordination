@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "1b68e99361f6ed3cc5762f31d3e32c7c6fa8bc4a0a06a127aa8ce94886cb9528",
+  "sourceSha256": "e18d4209e6159ac6cf19b04b89d79017f0f34cbd2aac8fc1d4fc9eeca117bff3",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
@@ -790,12 +790,12 @@
       "init": "init",
       "step": "step",
       "invariant": "safety",
-      "witness": "reached",
-      "temporal": "progress",
+      "witness": "fencingReached",
+      "temporal": "fencingProgress",
       "invalid": "unsafeFence",
-      "removedStep": "withoutRetry",
-      "violatedTemporal": "eventuallyReached",
-      "blockedInvariant": "blockedInvariant",
+      "removedStep": "withoutFence",
+      "violatedTemporal": "eventuallyFenced",
+      "blockedInvariant": "fencingBlockedInvariant",
       "backend": "tlc",
       "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-fencing.itf.json",
       "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-fencing.quint-trace.json",
@@ -827,10 +827,10 @@
       "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/authority-reconciliation.quint-trace.json",
       "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/authority-reconciliation.manifest.json",
       "budget": {
-        "depth": 7,
+        "depth": 10,
         "states": 10000,
         "transitions": 10000,
-        "samples": 100,
+        "samples": 1000,
         "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
@@ -853,7 +853,7 @@
       "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/review-epoch.quint-trace.json",
       "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/review-epoch.manifest.json",
       "budget": {
-        "depth": 6,
+        "depth": 8,
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
@@ -879,10 +879,10 @@
       "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/cutover-observation.quint-trace.json",
       "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/cutover-observation.manifest.json",
       "budget": {
-        "depth": 7,
+        "depth": 14,
         "states": 10000,
         "transitions": 10000,
-        "samples": 100,
+        "samples": 10000,
         "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456

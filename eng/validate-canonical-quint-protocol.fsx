@@ -30,7 +30,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "1b68e99361f6ed3cc5762f31d3e32c7c6fa8bc4a0a06a127aa8ce94886cb9528"
+    "e18d4209e6159ac6cf19b04b89d79017f0f34cbd2aac8fc1d4fc9eeca117bff3"
 
 let expectedContract =
     "947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e"
@@ -58,7 +58,7 @@ let mutable preparationDurationMs = 0L
 let mutable preparationDigest: string option = None
 let mutable failureReceiptWriter: (string -> string -> unit) option = None
 let formalCounterexampleReceipts = ResizeArray<string * string * string * string>()
-let actualInvocationInventory = System.Collections.Generic.Dictionary<string, int>()
+let actualInvocationInventory = System.Collections.Concurrent.ConcurrentDictionary<string, int>()
 let expectedInvocationInventory = System.Collections.Generic.Dictionary<string, int>()
 let mutable formalSafeSteps = Set.empty<string * string>
 let mutable formalInvalidSteps = Set.empty<string * string>
@@ -66,9 +66,7 @@ let mutable formalRemovedSteps = Set.empty<string * string>
 let mutable formalInventoryReady = false
 
 let incrementInvocation label =
-    match actualInvocationInventory.TryGetValue label with
-    | true, count -> actualInvocationInventory[label] <- count + 1
-    | false, _ -> actualInvocationInventory[label] <- 1
+    actualInvocationInventory.AddOrUpdate(label, 1, fun _ count -> count + 1) |> ignore
 
 let argumentValue name arguments =
     arguments

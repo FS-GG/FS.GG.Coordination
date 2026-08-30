@@ -79,6 +79,8 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("q2Outcome <- \"failed\"", validator)
     Assert.Contains("requireCompletedProcessInventory ()", validator)
     Assert.Contains("expectedInvocationInventory", validator)
+    Assert.Contains("ConcurrentDictionary<string, int>", validator)
+    Assert.Contains("actualInvocationInventory.AddOrUpdate", validator)
     Assert.Contains("quint/formal-safety-mutant", validator)
     Assert.Contains("actual <> expected", validator)
 

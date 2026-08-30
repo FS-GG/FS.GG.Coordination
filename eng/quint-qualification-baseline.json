@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "1b68e99361f6ed3cc5762f31d3e32c7c6fa8bc4a0a06a127aa8ce94886cb9528",
-  "configurationSha256": "eec508aef627c92b3567d591d8c50d0395848610692b1228a3f59d2064553ec8",
-  "assembledQuintSha256": "9ca0fee3a16cca45c992a5ccce7abcfbf1b6e9b4fecfaa08d7343320295e9693",
+  "sourceSha256": "e18d4209e6159ac6cf19b04b89d79017f0f34cbd2aac8fc1d4fc9eeca117bff3",
+  "configurationSha256": "865bedaeb74fdc45e731c63fa4297c341b9aa2c41a83fdfa5e9687a242523ec8",
+  "assembledQuintSha256": "90a7d0f9c23309bb4f1850d51f62e63a16482df81856ac29e4aebb15b5c7855c",
   "runnerClass": "linux-x64-local-calibration",
   "measuredAt": "2026-08-30T03:30:00Z",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v1",
@@ -23,9 +23,9 @@
     { "id": "epoch", "stateCount": 4, "transitionCount": 4, "sampleCount": 100, "elapsedMs": 28882, "peakMiB": 1108, "artifactBytes": 9392 },
     { "id": "rollback", "stateCount": 3, "transitionCount": 3, "sampleCount": 100, "elapsedMs": 29253, "peakMiB": 1123, "artifactBytes": 4582 },
     { "id": "journal-reconciliation", "stateCount": 20, "transitionCount": 48, "sampleCount": 100, "elapsedMs": 28378, "peakMiB": 878, "artifactBytes": 7536 },
-    { "id": "journal-fencing", "stateCount": 20, "transitionCount": 48, "sampleCount": 100, "elapsedMs": 27931, "peakMiB": 897, "artifactBytes": 7529 },
-    { "id": "authority-reconciliation", "stateCount": 27, "transitionCount": 87, "sampleCount": 100, "elapsedMs": 27944, "peakMiB": 890, "artifactBytes": 4264 },
-    { "id": "review-epoch", "stateCount": 8, "transitionCount": 17, "sampleCount": 100, "elapsedMs": 28058, "peakMiB": 877, "artifactBytes": 5013 },
-    { "id": "cutover-observation", "stateCount": 11, "transitionCount": 26, "sampleCount": 100, "elapsedMs": 28426, "peakMiB": 871, "artifactBytes": 2037 }
+    { "id": "journal-fencing", "stateCount": 20, "transitionCount": 48, "sampleCount": 100, "elapsedMs": 28553, "peakMiB": 902, "artifactBytes": 9097 },
+    { "id": "authority-reconciliation", "stateCount": 51, "transitionCount": 163, "sampleCount": 1000, "elapsedMs": 28554, "peakMiB": 911, "artifactBytes": 4615 },
+    { "id": "review-epoch", "stateCount": 10, "transitionCount": 22, "sampleCount": 100, "elapsedMs": 28588, "peakMiB": 892, "artifactBytes": 7322 },
+    { "id": "cutover-observation", "stateCount": 136, "transitionCount": 532, "sampleCount": 10000, "elapsedMs": 28991, "peakMiB": 936, "artifactBytes": 3412 }
   ]
 }
