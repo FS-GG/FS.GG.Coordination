@@ -108,7 +108,8 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("trap 'rm -rf", runnerTemp)
     for gate in [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"; "deterministic-build"; "evidence-manifest"; "package-install-smoke"; "workflow-static" ] do
         let source = File.ReadAllText(Path.Combine(root, $"eng/bootstrap-gates/{gate}.sh"))
-        Assert.Contains("source eng/bootstrap-gates/runner-temp.sh", source)
+        Assert.Contains("${BASH_SOURCE[0]}", source)
+        Assert.Contains("runner-temp.sh", source)
         Assert.Contains("fsgg_resolve_runner_temp", source)
     Assert.Contains("\"archive\"; \"--format=zip\"", implementation)
     Assert.Contains("tracked-source", implementation)

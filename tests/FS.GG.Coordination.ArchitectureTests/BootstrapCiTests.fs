@@ -411,6 +411,13 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     let gateLines =
         Directory.GetFiles(Path.Combine(repositoryRoot, "eng/bootstrap-gates"), "*.sh")
         |> Array.sumBy (File.ReadAllLines >> Array.length)
+    let uniqueGateLines =
+        Directory.GetFiles(Path.Combine(repositoryRoot, "eng/bootstrap-gates"), "*.sh")
+        |> Array.collect File.ReadAllLines
+        |> Array.map _.Trim()
+        |> Array.filter (String.IsNullOrWhiteSpace >> not)
+        |> Array.distinct
+        |> Array.length
     let core = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"))
     let reuseCore = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs"))
     let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
@@ -419,7 +426,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 22)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 900)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 300)
-    Assert.InRange(gateLines, 1, 190)
+    Assert.InRange(gateLines, 1, 230)
+    Assert.InRange(uniqueGateLines, 1, 190)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)

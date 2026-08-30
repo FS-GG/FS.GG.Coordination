@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source eng/bootstrap-gates/runner-temp.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/runner-temp.sh"
 fsgg_resolve_runner_temp
 decision="$RUNNER_TEMP/bootstrap-decision/decision.json"
 route="$(jq -er '.decision' "$decision")"
