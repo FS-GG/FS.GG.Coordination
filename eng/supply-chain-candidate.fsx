@@ -324,7 +324,7 @@ let prepare values =
         [ "-p:ContinuousIntegrationBuild=true"
           "-p:Deterministic=true"
           "-p:DeterministicSourcePaths=true"
-          $"-p:PathMap={repo}=/_/,{buildRoot}=/_build/"
+          $"-p:PathMap={repo}=/_/%2C{buildRoot}=/_build/"
           $"-p:BaseIntermediateOutputPath={intermediate}"
           $"-p:BaseOutputPath={binaries}" ]
     run repo "dotnet" ([ "restore"; packageProject; "--locked-mode" ] @ deterministicProperties) [] |> ignore
