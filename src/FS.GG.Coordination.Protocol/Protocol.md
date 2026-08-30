@@ -1155,16 +1155,27 @@ the evidence guard must make the invariant red in the bounded negative control.
 The journal is an append-only Git object graph; issues, pull-request comments, labels, workflow
 runs, and webhooks are projections or wake-up hints. An aggregate identifier is encoded as
 lower-case UTF-8, length-prefixed before hashing, and mapped to shard
-`lower-hex(sha256(canonicalAggregateId))[0..1]`. Journal authority lives in a dedicated repository
-whose only mutable locators are branches named
+`lower-hex(sha256(canonicalAggregateId))[0..1]`. Journal authority lives in the dedicated public
+`FS-GG/FS.GG.Coordination.Authority` repository (GitHub repository id `1351660651`), whose only
+mutable protocol locators are branches named
 `refs/heads/fsgg/v2/journal/<journal-kind>/<shard>`. Aggregate records cannot move between shards and a
 collision in the canonical identifier digest is a hard integrity failure, never last-writer-wins.
-An active branch ruleset targets `fsgg/v2/journal/**`, restricts creation, updates, and deletion,
-blocks force pushes, and grants always-bypass only to a dedicated journal GitHub App installed on
-that repository. Administrators do not bypass it; workflow and personal tokens are absent from the
-bypass list. Bootstrap and periodic audit read both the ruleset and the branch's effective rules
-through GitHub's rules APIs and fail closed on drift. Repository isolation, rather than a fictional
-API-path-scoped bypass, bounds the App's contents-write authority.
+Two active branch rulesets target the exact fnmatch
+`refs/heads/fsgg/v2/journal/**/*`; the trailing `/**/*` is load-bearing because GitHub evaluates
+branch patterns with `File::FNM_PATHNAME` and `refs/heads/fsgg/v2/journal/**` does not match the
+required two-segment `<journal-kind>/<shard>` suffix. `v2-journal-writer` (ruleset `21872113`)
+restricts creation and update and grants always-bypass only to the
+`fs-gg-cross-repo-dispatch` GitHub App (App id `4166418`).
+`v2-journal-integrity` (ruleset `21872115`) separately rejects deletion and non-fast-forward updates
+and has no bypass actors, so the writer App cannot bypass history integrity. Administrators,
+workflow tokens, and personal tokens are absent from both bypass lists. Runtime qualification mints
+an App installation token limited to `FS.GG.Coordination.Authority`; the App's broader installation
+remains an administrative control-plane finding and is not treated as repository-scoped authority.
+Before production authority is enabled, GS2-08.2 must either replace it with a contents-only,
+selected-repository journal App or record an explicit security acceptance of the shared App boundary.
+Bootstrap and periodic audit read both rulesets and the branch's effective rules through GitHub's
+rules APIs and fail closed on drift. This split replaces the unenforceable earlier claim that one
+bypassed ruleset could both admit writer updates and constrain that same writer's deletion or rewrite.
 
 Each journal commit has exactly one parent except the documented shard root. Its tree contains
 `aggregates/<aggregate-digest>/head.json`, immutable

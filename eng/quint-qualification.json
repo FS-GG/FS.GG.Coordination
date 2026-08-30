@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "e18d4209e6159ac6cf19b04b89d79017f0f34cbd2aac8fc1d4fc9eeca117bff3",
+  "sourceSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
