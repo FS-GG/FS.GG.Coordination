@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "cb6f4f5203d8c5bd87abcbc6cf03d37824f8e7fe5db209c9b029f9a2e334c223",
+  "sourceSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
@@ -224,7 +224,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "authority",
@@ -280,7 +280,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "lifecycle",
@@ -337,7 +337,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "relations",
@@ -394,7 +394,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "protocol-streams",
@@ -447,7 +447,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "mutation-saga",
@@ -501,7 +501,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "desired-state",
@@ -557,7 +557,7 @@
         "samples": 200,
         "elapsedMs": 60000,
         "peakMiB": 2048,
-        "artifactBytes": 6291456
+        "artifactBytes": 7340032
       },
       "admission": {
         "owner": "qualification",
@@ -753,6 +753,136 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
+        "elapsedMs": 60000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "journal-reconciliation",
+      "main": "GS20310JournalModel",
+      "init": "init",
+      "step": "step",
+      "invariant": "safety",
+      "witness": "reached",
+      "temporal": "progress",
+      "invalid": "unsafeExpectedParent",
+      "removedStep": "withoutRetry",
+      "violatedTemporal": "eventuallyReached",
+      "blockedInvariant": "blockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-reconciliation.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-reconciliation.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-reconciliation.manifest.json",
+      "budget": {
+        "depth": 8,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 60000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "journal-fencing",
+      "main": "GS20310JournalModel",
+      "init": "init",
+      "step": "step",
+      "invariant": "safety",
+      "witness": "fencingReached",
+      "temporal": "fencingProgress",
+      "invalid": "unsafeFence",
+      "removedStep": "withoutFence",
+      "violatedTemporal": "eventuallyFenced",
+      "blockedInvariant": "fencingBlockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-fencing.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-fencing.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/journal-fencing.manifest.json",
+      "budget": {
+        "depth": 8,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 60000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "authority-reconciliation",
+      "main": "GS20310ReconcileModel",
+      "init": "init",
+      "step": "step",
+      "invariant": "safety",
+      "witness": "reorderedWitness",
+      "temporal": "progress",
+      "invalid": "unsafeIncompleteApply",
+      "removedStep": "withoutAudit",
+      "violatedTemporal": "eventuallyReached",
+      "blockedInvariant": "blockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/authority-reconciliation.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/authority-reconciliation.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/authority-reconciliation.manifest.json",
+      "budget": {
+        "depth": 10,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 1000,
+        "elapsedMs": 60000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "review-epoch",
+      "main": "GS20310ReviewEpochModel",
+      "init": "init",
+      "step": "step",
+      "invariant": "safety",
+      "witness": "reached",
+      "temporal": "progress",
+      "invalid": "unsafeStaleReviewEffect",
+      "removedStep": "withoutSnapshotChange",
+      "violatedTemporal": "eventuallyReached",
+      "blockedInvariant": "blockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/review-epoch.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/review-epoch.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/review-epoch.manifest.json",
+      "budget": {
+        "depth": 8,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 100,
+        "elapsedMs": 60000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "cutover-observation",
+      "main": "GS20310CutoverModel",
+      "init": "init",
+      "step": "step",
+      "invariant": "safety",
+      "witness": "reached",
+      "temporal": "progress",
+      "invalid": "unsafeDay30Jump",
+      "removedStep": "withoutObservations",
+      "violatedTemporal": "eventuallyReached",
+      "blockedInvariant": "blockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/cutover-observation.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/cutover-observation.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/cutover-observation.manifest.json",
+      "budget": {
+        "depth": 14,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 10000,
         "elapsedMs": 60000,
         "peakMiB": 2048,
         "artifactBytes": 6291456

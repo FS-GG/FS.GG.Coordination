@@ -14,7 +14,7 @@ of deterministic compiled-contract output families and typed qualification of th
 content, completeness, support, freshness, and order. This unit binds canonical typed-effect behavior
 to an exact five-part version tuple and stable semantic-diff projection. GS2-03.1 adds the closed
 qualification-manifest identity and its candidate, input-set, freshness, independence, result, and
-review bindings. No network writer or production mutation authority is defined here.
+review bindings. GS2-03.10 replaces comment authority with fenced Git journals, snapshot epochs, shared reconciliation, and observe-before-contract cutover. No network writer or production mutation authority is defined here.
 
 ```quint protocol.qnt +=
 module CoordinationProtocol {
@@ -155,7 +155,7 @@ module CoordinationProtocol {
   pure val authorityCatalogue = Set(
     { id: "AUTH-NativeGitHub", kind: "authorityBinding", family: "native-github", revisionKind: "github-object-version", revisionValue: "node-id-and-updated-at", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-NativeGitHub-Evidence" },
     { id: "AUTH-RepositoryRegistry", kind: "authorityBinding", family: "repository-registry", revisionKind: "registry-document-sha256", revisionValue: "canonical-document-digest", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-RepositoryRegistry-Evidence" },
-    { id: "AUTH-ProtocolStream", kind: "authorityBinding", family: "protocol-stream", revisionKind: "protocol-contract-sha256", revisionValue: "compiled-contract-digest", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-ProtocolStream-Evidence" },
+    { id: "AUTH-ProtocolStream", kind: "authorityBinding", family: "protected-sharded-git-journal", revisionKind: "git-expected-parent-and-generation", revisionValue: "journal-commit-and-fencing-generation", completenessContract: "complete-ancestry-snapshot-and-terminal-checkpoint", evidenceRelationship: "REL-AUTH-ProtocolStream-Evidence" },
     { id: "AUTH-GitLedger", kind: "authorityBinding", family: "git-ledger", revisionKind: "git-commit-sha", revisionValue: "commit-object-id", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-GitLedger-Evidence" },
     { id: "AUTH-Actions", kind: "authorityBinding", family: "actions", revisionKind: "workflow-run-attempt", revisionValue: "run-id-and-attempt", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-Actions-Evidence" },
     { id: "AUTH-PackageFeed", kind: "authorityBinding", family: "package-feed", revisionKind: "package-content-sha256", revisionValue: "package-bytes-digest", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-PackageFeed-Evidence" },
@@ -187,9 +187,9 @@ module CoordinationProtocol {
   )
 
   pure val protocolStreamKindCatalogue = Set(
-    { id: "STREAM-Claim", kind: "protocolStreamKind", family: "claim-lease-touch-set" },
-    { id: "STREAM-OperationLock", kind: "protocolStreamKind", family: "operation-lock-election" },
-    { id: "STREAM-Review", kind: "protocolStreamKind", family: "review" },
+    { id: "STREAM-Claim", kind: "protocolStreamKind", family: "journal-cas-claim-lease-touch-set-fenced" },
+    { id: "STREAM-OperationLock", kind: "protocolStreamKind", family: "journal-cas-operation-election-fenced" },
+    { id: "STREAM-Review", kind: "protocolStreamKind", family: "journal-cas-full-snapshot-review-epoch" },
     { id: "STREAM-Delivery", kind: "protocolStreamKind", family: "delivery" },
     { id: "STREAM-OperationReceipt", kind: "protocolStreamKind", family: "operation-receipt" }
   )
@@ -330,7 +330,7 @@ module CoordinationProtocol {
   )
 
   pure val compatibilityCatalogue = Set(
-    { id: "COMPAT-Profile2", kind: "compatibility", surface: "fsgg-quint-profile/2", requirement: "exact", detail: "Consumer-defined structural profile; profile 1 remains frozen." }
+    { id: "COMPAT-Profile2", kind: "compatibility", surface: "fsgg-quint-profile/2", requirement: "exact", detail: "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, fencing generations, full snapshot review epochs, shared reconciliation with audit repair, and OpenV2>ObservingV2>ContractingV1>OperatingV2; profile 1 remains frozen." }
   )
 
   pure val propertyCatalogue = Set(
@@ -815,7 +815,7 @@ module CoordinationProtocol {
       "AUTH-Actions", "AUTH-PackageFeed", "AUTH-ClassifiedExternal"
     ),
     authorityCatalogue.map(binding => binding.family) == Set(
-      "native-github", "repository-registry", "protocol-stream", "git-ledger",
+      "native-github", "repository-registry", "protected-sharded-git-journal", "git-ledger",
       "actions", "package-feed", "classified-external"
     ),
   }
@@ -1150,6 +1150,70 @@ module CoordinationProtocol {
 The executable witness records evidence before accepting the subject vocabulary identity. Removing
 the evidence guard must make the invariant red in the bounded negative control.
 
+### Protected journal storage and mutation contract (GS2-03.10)
+
+The journal is an append-only Git object graph; issues, pull-request comments, labels, workflow
+runs, and webhooks are projections or wake-up hints. An aggregate identifier is encoded as
+lower-case UTF-8, length-prefixed before hashing, and mapped to shard
+`lower-hex(sha256(canonicalAggregateId))[0..1]`. Journal authority lives in the dedicated public
+`FS-GG/FS.GG.Coordination.Authority` repository (GitHub repository id `1351660651`), whose only
+mutable protocol locators are branches named
+`refs/heads/fsgg/v2/journal/<journal-kind>/<shard>`. Aggregate records cannot move between shards and a
+collision in the canonical identifier digest is a hard integrity failure, never last-writer-wins.
+Two active branch rulesets target the exact fnmatch
+`refs/heads/fsgg/v2/journal/**/*`; the trailing `/**/*` is load-bearing because GitHub evaluates
+branch patterns with `File::FNM_PATHNAME` and `refs/heads/fsgg/v2/journal/**` does not match the
+required two-segment `<journal-kind>/<shard>` suffix. `v2-journal-writer` (ruleset `21872113`)
+restricts creation and update and grants always-bypass only to the
+`fs-gg-cross-repo-dispatch` GitHub App (App id `4166418`).
+`v2-journal-integrity` (ruleset `21872115`) separately rejects deletion and non-fast-forward updates
+and has no bypass actors, so the writer App cannot bypass history integrity. Administrators,
+workflow tokens, and personal tokens are absent from both bypass lists. Runtime qualification mints
+an App installation token limited to `FS.GG.Coordination.Authority`; the App's broader installation
+remains an administrative control-plane finding and is not treated as repository-scoped authority.
+Before production authority is enabled, GS2-08.2 must either replace it with a contents-only,
+selected-repository journal App or record an explicit security acceptance of the shared App boundary.
+Bootstrap and periodic audit read both rulesets and the branch's effective rules through GitHub's
+rules APIs and fail closed on drift. This split replaces the unenforceable earlier claim that one
+bypassed ruleset could both admit writer updates and constrain that same writer's deletion or rewrite.
+
+Each journal commit has exactly one parent except the documented shard root. Its tree contains
+`aggregates/<aggregate-digest>/head.json`, immutable
+`events/<generation>-<event-digest>.json`, and, at checkpoint generations,
+`snapshots/<generation>-<snapshot-digest>.json`. JSON is UTF-8, LF, recursively key-sorted, uses
+decimal integers without alternate spellings, and excludes insignificant whitespace. A head binds
+schema version, canonical aggregate id and digest, journal kind, shard, generation, event digest,
+snapshot digest, terminal flag, and prior head digest. The commit message binds the same head digest
+and writer operation id. A snapshot binds the complete event ancestry it replaces, the terminal
+high-water generation, and its content digest. Readers reject missing parents, duplicate
+generations, digest mismatch, shard mismatch, and unknown schema versions.
+
+Mutation is compare-and-swap: fetch the branch and aggregate head; construct blobs, tree, and a
+single-parent commit; then push the exact refspec with
+`--force-with-lease=<ref>:<observed-object-id>`. Git receive-pack compares the advertised old object
+id with the current ref before accepting the fast-forward update; the ruleset still rejects an
+actual non-fast-forward or forced history rewrite. A
+successful update assigns the committed aggregate generation as the fencing token. A rejected
+expected parent means no authority changed and the worker must reread. A transport failure or lost
+success response is ambiguous: reread the ref, accept success only when the exact operation id,
+commit/tree/head digests, and generation are present, otherwise retry from the newly observed parent.
+The worker never infers success from an issue comment or from object existence alone. Server
+outcomes are therefore `accepted`, `parent-conflict`, `definite-refusal`, and
+`response-unknown-requires-reread`.
+
+Every externally visible effect re-reads the authoritative aggregate head immediately before the
+effect and requires its grant's journal commit and generation to equal that head. Terminal heads
+reject new ordinary events. Compaction may append a terminal checkpoint but may not delete reachable
+history until the retention window and independent digest audit have passed; replay from either the
+full ancestry or the retained terminal snapshot must produce the same aggregate digest.
+
+A command touching multiple aggregates first sorts `(journal-kind, shard, aggregate-digest)` and
+acquires grants in that total order. It persists the entire touch set and expected generations in
+the operation journal before the first effect. On conflict it releases unconsumed grants and appends
+idempotent compensations for already-applied effects in reverse order. Compensation is itself a
+fenced journal event and may not erase the original result. This is a saga with deterministic
+acquisition and compensation, not an atomic multi-ref transaction.
+
 The profile-2 compiler has a fixed 4,096-node typed graph ceiling. The executable suite therefore
 uses compact, independently named witnesses for every durable-plan law, while the validator separately
 inverts each material binding and preserves the earlier bounded invariants.
@@ -1157,6 +1221,120 @@ inverts each material binding and preserves the earlier bounded invariants.
 ```quint-test
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
+
+  // GS2-03.10 keeps the amendment's executable architecture types adjacent to the independent tests.
+  // The compiled contract exposes the corresponding authority/retention strings without exceeding the
+  // profile-2 4,096-node projection ceiling.
+  type JournalHead = {
+    aggregateId: str, journalKind: str, commitSha: str, parentCommitSha: str,
+    generation: int, snapshotSha256: str, terminal: bool,
+  }
+  type FencedGrant = {
+    aggregateId: str, journalCommitSha: str, generation: int, ownerId: str, leaseActive: bool,
+  }
+  type ReviewEpoch = {
+    chainId: str, epochKey: str, snapshotSha256: str, criticSeat: str, verdict: str,
+  }
+  type ReconcileInput = {
+    subjectId: str, triggerKind: str, authorityComplete: bool, authorityFresh: bool,
+    observedSnapshotSha256: str, plannedSnapshotSha256: str, planSealed: bool,
+  }
+  type CutoverState = {
+    phase: str, successfulObservationDays: Set[int], freshObservationDays: Set[int],
+    currentSnapshotSha256: str, observationSnapshotSha256: str, observationClockDay: int,
+    v1WritersFenced: bool,
+    destructiveDeletionStarted: bool,
+  }
+
+  pure def journalHeadShapeIsValid(journal: JournalHead): bool = and {
+    journal.aggregateId != "",
+    Set("claim", "review", "operation", "cutover").contains(journal.journalKind),
+    journal.commitSha != "", journal.generation >= 1, journal.snapshotSha256 != "",
+  }
+  pure def journalAdvanceIsCas(current: JournalHead, proposed: JournalHead): bool = and {
+    journalHeadShapeIsValid(current), journalHeadShapeIsValid(proposed),
+    current.aggregateId == proposed.aggregateId, current.journalKind == proposed.journalKind,
+    not(current.terminal), proposed.parentCommitSha == current.commitSha,
+    proposed.commitSha != current.commitSha, proposed.generation == current.generation + 1,
+  }
+  pure def grantMatchesJournalHead(journal: JournalHead, grant: FencedGrant): bool = and {
+    journalHeadShapeIsValid(journal), grant.aggregateId == journal.aggregateId,
+    grant.journalCommitSha == journal.commitSha, grant.generation == journal.generation,
+    grant.ownerId != "", grant.leaseActive,
+  }
+  pure def legacyLeaseAndCommentOrderMayAuthorize(grant: FencedGrant): bool = and {
+    grant.ownerId != "", grant.leaseActive,
+  }
+  pure def reviewEpochMayAuthorize(
+    epoch: ReviewEpoch, currentSnapshotSha256: str, expectedCriticSeat: str): bool = and {
+    epoch.chainId != "", epoch.epochKey != "", epoch.snapshotSha256 == currentSnapshotSha256,
+    epoch.criticSeat == expectedCriticSeat, epoch.verdict == "pass",
+  }
+  pure def reconcileMayApply(input: ReconcileInput): bool = and {
+    input.subjectId != "", Set("command", "webhook", "audit").contains(input.triggerKind),
+    input.authorityComplete, input.authorityFresh, input.observedSnapshotSha256 != "",
+    input.observedSnapshotSha256 == input.plannedSnapshotSha256, input.planSealed,
+  }
+  pure def cutoverEvidenceIsValid(state: CutoverState): bool = and {
+    state.successfulObservationDays == state.freshObservationDays,
+    state.currentSnapshotSha256 != "",
+    state.observationSnapshotSha256 == state.currentSnapshotSha256,
+  }
+  pure def cutoverTransitionIsLegal(current: CutoverState, proposed: CutoverState): bool = or {
+    and { current.phase == "VerifiedV2", proposed.phase == "OpenV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "OpenV2", proposed.phase == "ObservingV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
+      proposed.successfulObservationDays == Set(0), proposed.observationClockDay == 0,
+      cutoverEvidenceIsValid(proposed) },
+    and { current.phase == "ObservingV2", proposed.phase == "ObservingV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
+      cutoverEvidenceIsValid(proposed),
+      or {
+        proposed.successfulObservationDays == current.successfulObservationDays,
+        and { current.successfulObservationDays == Set(0), proposed.successfulObservationDays == Set(0, 7), proposed.observationClockDay == 7 },
+        and { current.successfulObservationDays == Set(0, 7), proposed.successfulObservationDays == Set(0, 7, 14), proposed.observationClockDay == 14 },
+        and { current.successfulObservationDays == Set(0, 7, 14), proposed.successfulObservationDays == Set(0, 7, 14, 30), proposed.observationClockDay == 30 },
+      } },
+    and { current.phase == "ObservingV2",
+      current.successfulObservationDays == Set(0, 7, 14, 30),
+      current.observationClockDay == 30, cutoverEvidenceIsValid(current),
+      proposed.phase == "ContractingV1", proposed.v1WritersFenced,
+      proposed.destructiveDeletionStarted },
+    and { current.phase == "ContractingV1", proposed.phase == "OperatingV2",
+      proposed.v1WritersFenced, proposed.destructiveDeletionStarted },
+  }
+
+  pure val claimJournalHead: JournalHead = {
+    aggregateId: "claim:subject-work", journalKind: "claim", commitSha: "commit-claim-1",
+    parentCommitSha: "commit-root", generation: 1, snapshotSha256: "snapshot-claim-1", terminal: false,
+  }
+  pure val successorClaimJournalHead: JournalHead = {
+    ...claimJournalHead, commitSha: "commit-claim-2", parentCommitSha: claimJournalHead.commitSha,
+    generation: 2,
+  }
+  pure val initialClaimGrant: FencedGrant = {
+    aggregateId: claimJournalHead.aggregateId, journalCommitSha: claimJournalHead.commitSha,
+    generation: claimJournalHead.generation, ownerId: "worker-a", leaseActive: true,
+  }
+  pure val successorClaimGrant: FencedGrant = {
+    ...initialClaimGrant, journalCommitSha: successorClaimJournalHead.commitSha,
+    generation: successorClaimJournalHead.generation, ownerId: "worker-b",
+  }
+  pure val acceptedReviewEpoch: ReviewEpoch = {
+    chainId: "review:subject-work", epochKey: "epoch:snapshot-a", snapshotSha256: "snapshot-a",
+    criticSeat: "critic-seat-a", verdict: "pass",
+  }
+  pure val webhookReconcileInput: ReconcileInput = {
+    subjectId: "subject-work", triggerKind: "webhook", authorityComplete: true, authorityFresh: true,
+    observedSnapshotSha256: "snapshot-a", plannedSnapshotSha256: "snapshot-a", planSealed: true,
+  }
+  pure val observingDay30: CutoverState = {
+    phase: "ObservingV2", successfulObservationDays: Set(0, 7, 14, 30),
+    freshObservationDays: Set(0, 7, 14, 30), currentSnapshotSha256: "cutover-snapshot",
+    observationSnapshotSha256: "cutover-snapshot", observationClockDay: 30, v1WritersFenced: true,
+    destructiveDeletionStarted: false,
+  }
 
   // GS2-03.4 independent black-box oracles. These expectations are deliberately hand-authored
   // against public protocol behavior and invoke the canonical functions directly; they are not
@@ -1222,6 +1400,62 @@ module CoordinationProtocolTests {
   run oracleScaleEnvelope = and {
     boundCatalogue.forall(bound => and { bound.minimum >= 0, bound.maximum >= bound.minimum }),
     boundCatalogue.map(bound => bound.id).size() == 11,
+  }
+
+  // GS2-03.10 architecture-amendment oracles. These name the failures that ordered comments and
+  // leases alone cannot exclude.
+  run testMutationJournalExpectedParentAndFencingRejectStaleOwner = and {
+    journalAdvanceIsCas(claimJournalHead, successorClaimJournalHead),
+    grantMatchesJournalHead(claimJournalHead, initialClaimGrant),
+    grantMatchesJournalHead(successorClaimJournalHead, successorClaimGrant),
+    not(grantMatchesJournalHead(successorClaimJournalHead, initialClaimGrant)),
+    legacyLeaseAndCommentOrderMayAuthorize(initialClaimGrant),
+    not(journalAdvanceIsCas(claimJournalHead,
+      { ...successorClaimJournalHead, parentCommitSha: "concurrent-sibling" })),
+  }
+
+  run testMutationReviewEpochRejectsPassAfterSnapshotOrSeatChange = and {
+    reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-a", "critic-seat-a"),
+    not(reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-b", "critic-seat-a")),
+    not(reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-a", "critic-seat-b")),
+  }
+
+  run testMutationReconcilerRequiresFreshCompleteSealedSnapshot = and {
+    reconcileMayApply(webhookReconcileInput),
+    not(reconcileMayApply({ ...webhookReconcileInput, authorityComplete: false })),
+    not(reconcileMayApply({ ...webhookReconcileInput, authorityFresh: false })),
+    not(reconcileMayApply({ ...webhookReconcileInput, plannedSnapshotSha256: "snapshot-stale" })),
+    not(reconcileMayApply({ ...webhookReconcileInput, planSealed: false })),
+    reconcileMayApply({ ...webhookReconcileInput, triggerKind: "audit" }),
+  }
+
+  run testMutationCutoverObservesBeforeDestructiveContraction = and {
+    cutoverTransitionIsLegal(
+      { phase: "VerifiedV2", successfulObservationDays: Set(), v1WritersFenced: false,
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false },
+      { phase: "OpenV2", successfulObservationDays: Set(), v1WritersFenced: true,
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false }),
+    cutoverTransitionIsLegal(
+      { phase: "OpenV2", successfulObservationDays: Set(), v1WritersFenced: true,
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false },
+      { phase: "ObservingV2", successfulObservationDays: Set(0), v1WritersFenced: true,
+        freshObservationDays: Set(0), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "cutover-snapshot", observationClockDay: 0,
+        destructiveDeletionStarted: false }),
+    not(cutoverTransitionIsLegal(
+      { ...observingDay30, successfulObservationDays: Set(30) },
+      { phase: "ContractingV1", successfulObservationDays: Set(30), v1WritersFenced: true,
+        freshObservationDays: Set(30), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "wrong-snapshot", observationClockDay: 30,
+        destructiveDeletionStarted: true })),
+    cutoverTransitionIsLegal(observingDay30,
+      { phase: "ContractingV1", successfulObservationDays: Set(0, 7, 14, 30), v1WritersFenced: true,
+        freshObservationDays: Set(0, 7, 14, 30), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "cutover-snapshot", observationClockDay: 30,
+        destructiveDeletionStarted: true }),
   }
 
   type DeterministicVersionTuple = {
@@ -2382,8 +2616,8 @@ module CoordinationProtocolTests {
   action formalRollbackWithoutCompensate =
     if (formalRollbackStage == 0) formalRollbackApply else formalRollbackStutter
 
-  // TLC requires every variable in the selected module to have a legal initial value. All six
-  // independently selected scenarios therefore share this complete initialization action.
+  // TLC requires every variable in this legacy integration module to have a legal initial value.
+  // GS2-03.10's concurrency models are separate modules below, with independent state spaces.
   action formalInit = all {
     formalClaimStage' = 0, formalClaimEvents' = Set(), formalClaimValid' = true,
     formalRelationStage' = 0, formalRelationEdges' = Set(),
@@ -2487,6 +2721,337 @@ module CoordinationProtocolTests {
     formalRollbackWithoutCompensate, formalClaimStutter, formalRelationStutter,
     formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
   }
+}
+
+// GS2-03.10 model 1: two workers race sibling commits on shard 0 while shard 1 progresses
+// independently. Expected-parent CAS chooses at most one sibling, retry advances generation,
+// and effect-time fencing rejects the superseded grant. The unsafe actions are semantic mutants:
+// they omit the production comparison or fence instead of assigning a generic failure flag.
+module GS20310JournalModel {
+  type JournalModelState = {
+    head0: int, generation0: int, head1: int, generation1: int,
+    observedA: int, observedB: int, proposalsReady: bool,
+    acceptedA: bool, acceptedB: bool, firstOwner: int,
+    conflictObserved: bool, retryAccepted: bool, currentOwner: int,
+    currentGrant: int, staleEffectAttempted: bool, effectOwner: int,
+    shard1Committed: bool,
+  }
+  var state: JournalModelState
+  action init = state' = {
+    head0: 10, generation0: 1, head1: 20, generation1: 1,
+    observedA: 0, observedB: 0, proposalsReady: false,
+    acceptedA: false, acceptedB: false, firstOwner: 0,
+    conflictObserved: false, retryAccepted: false, currentOwner: 0,
+    currentGrant: 0, staleEffectAttempted: false, effectOwner: 0,
+    shard1Committed: false,
+  }
+  action prepareSiblings = all {
+    not(state.proposalsReady),
+    state' = { ...state, observedA: state.head0, observedB: state.head0, proposalsReady: true },
+  }
+  action casA = all {
+    state.proposalsReady, state.firstOwner == 0, state.observedA == state.head0,
+    state' = { ...state, head0: 11, generation0: 2, acceptedA: true,
+      firstOwner: 1, currentOwner: 1, currentGrant: 2 },
+  }
+  action casB = all {
+    state.proposalsReady, state.firstOwner == 0, state.observedB == state.head0,
+    state' = { ...state, head0: 12, generation0: 2, acceptedB: true,
+      firstOwner: 2, currentOwner: 2, currentGrant: 2 },
+  }
+  action observeConflict = all {
+    state.firstOwner != 0, not(state.conflictObserved),
+    state' = { ...state, conflictObserved: true,
+      observedA: if (state.firstOwner == 2) state.head0 else state.observedA,
+      observedB: if (state.firstOwner == 1) state.head0 else state.observedB },
+  }
+  action retryLoser = all {
+    state.conflictObserved, not(state.retryAccepted),
+    if (state.firstOwner == 1) state.observedB == state.head0 else state.observedA == state.head0,
+    state' = { ...state, head0: state.head0 + 10, generation0: 3,
+      retryAccepted: true, currentOwner: if (state.firstOwner == 1) 2 else 1, currentGrant: 3 },
+  }
+  action attemptStaleEffect = all {
+    state.retryAccepted, not(state.staleEffectAttempted),
+    state' = { ...state, staleEffectAttempted: true,
+      effectOwner: if (state.currentGrant == 2) state.firstOwner else 0 },
+  }
+  action commitShard1 = all {
+    not(state.shard1Committed),
+    state' = { ...state, head1: 21, generation1: 2, shard1Committed: true },
+  }
+  action hold = state' = state
+  action step = any { prepareSiblings, casA, casB, observeConflict, retryLoser,
+    attemptStaleEffect, commitShard1, hold }
+  val safety = and {
+    not(state.acceptedA and state.acceptedB),
+    state.effectOwner == 0 or state.effectOwner == state.currentOwner,
+    state.currentGrant == 0 or state.currentGrant == state.generation0,
+    state.generation0 >= 1, state.generation1 >= 1,
+  }
+  val reached = and { state.retryAccepted, state.staleEffectAttempted,
+    state.effectOwner == 0, state.shard1Committed }
+  temporal progress: bool = and {
+    prepareSiblings.weakFair(Set(state)), casA.weakFair(Set(state)), casB.weakFair(Set(state)),
+    observeConflict.weakFair(Set(state)), retryLoser.weakFair(Set(state)),
+    attemptStaleEffect.weakFair(Set(state)), commitShard1.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  val blockedInvariant = not(state.conflictObserved)
+  action withoutRetry =
+    if (not(state.proposalsReady)) prepareSiblings
+    else if (state.firstOwner == 0) casA
+    else if (not(state.conflictObserved)) observeConflict
+    else hold
+  val fencingReached = and { state.retryAccepted, state.staleEffectAttempted, state.effectOwner == 0 }
+  temporal fencingProgress: bool = and {
+    prepareSiblings.weakFair(Set(state)), casA.weakFair(Set(state)), casB.weakFair(Set(state)),
+    observeConflict.weakFair(Set(state)), retryLoser.weakFair(Set(state)),
+    attemptStaleEffect.weakFair(Set(state)),
+  }.implies(eventually(fencingReached))
+  temporal eventuallyFenced: bool = eventually(fencingReached)
+  val fencingBlockedInvariant = not(state.retryAccepted)
+  action withoutFence =
+    if (not(state.proposalsReady)) prepareSiblings
+    else if (state.firstOwner == 0) casA
+    else if (not(state.conflictObserved)) observeConflict
+    else if (not(state.retryAccepted)) retryLoser
+    else hold
+  action unsafeExpectedParent = all {
+    state' = { ...state, head0: 12, generation0: 2, proposalsReady: true,
+      observedA: 10, observedB: 10, acceptedA: true, acceptedB: true,
+      firstOwner: 2, currentOwner: 2, currentGrant: 2 },
+  }
+  action unsafeFence = all {
+    state' = { ...state, head0: 22, generation0: 3, proposalsReady: true,
+      acceptedA: true, firstOwner: 1, conflictObserved: true, retryAccepted: true,
+      currentOwner: 2, currentGrant: 3, staleEffectAttempted: true, effectOwner: 1 },
+  }
+}
+
+// GS2-03.10 model 2: webhook delivery is only an unordered hint. A shared audit reads both
+// authority pages, observes the terminal high-water mark, seals the exact derived snapshot,
+// and only then applies it. Duplicate/reordered hints cannot manufacture completeness.
+module GS20310ReconcileModel {
+  type ReconcileModelState = {
+    authorityVersion: int, page1: bool, page2: bool, terminal: bool,
+    highWater: int, sealedSnapshot: int, sealedHighWater: int,
+    projectionVersion: int, hintCount: int, page2WasFirst: bool,
+    authorityChangedDuringRead: bool,
+  }
+  var state: ReconcileModelState
+  action init = state' = {
+    authorityVersion: 1, page1: false, page2: false, terminal: false,
+    highWater: 0, sealedSnapshot: 0, sealedHighWater: 0,
+    projectionVersion: 0, hintCount: 0, page2WasFirst: false,
+    authorityChangedDuringRead: false,
+  }
+  action duplicateHint = all {
+    state.hintCount < 2,
+    state' = { ...state, hintCount: state.hintCount + 1 },
+  }
+  action readPage2 = all {
+    not(state.page2),
+    state' = { ...state, page2: true, terminal: true,
+      highWater: state.authorityVersion, page2WasFirst: not(state.page1) },
+  }
+  action readPage1 = all {
+    not(state.page1),
+    not(and { state.page2WasFirst, state.authorityVersion == 1,
+      not(state.authorityChangedDuringRead) }),
+    state' = { ...state, page1: true },
+  }
+  action changeAuthorityDuringRead = all {
+    state.authorityVersion == 1, state.page2WasFirst, state.page2, not(state.page1),
+    state' = { ...state, authorityVersion: 2, authorityChangedDuringRead: true },
+  }
+  action restartIncompleteAudit = all {
+    state.highWater != 0, state.highWater != state.authorityVersion,
+    state' = { ...state, page1: false, page2: false, terminal: false,
+      highWater: 0, sealedSnapshot: 0, sealedHighWater: 0 },
+  }
+  action sealPlan = all {
+    state.page1, state.page2, state.terminal, state.highWater == state.authorityVersion,
+    state' = { ...state, sealedSnapshot: state.authorityVersion,
+      sealedHighWater: state.highWater },
+  }
+  action applyPlan = all {
+    state.sealedSnapshot == state.authorityVersion,
+    state.sealedHighWater == state.authorityVersion,
+    state' = { ...state, projectionVersion: state.sealedSnapshot },
+  }
+  action hold = state' = state
+  action step = any { duplicateHint, readPage2, readPage1, changeAuthorityDuringRead,
+    restartIncompleteAudit, sealPlan, applyPlan, hold }
+  val safety = state.projectionVersion == 0 or and {
+    state.page1, state.page2, state.terminal,
+    state.highWater == state.authorityVersion,
+    state.sealedSnapshot == state.authorityVersion,
+    state.sealedHighWater == state.authorityVersion,
+  }
+  val reached = state.projectionVersion == state.authorityVersion
+  val reorderedWitness = and { reached, state.page2WasFirst,
+    state.authorityChangedDuringRead, state.hintCount == 0 }
+  temporal progress: bool = and {
+    readPage2.weakFair(Set(state)),
+    readPage1.weakFair(Set(state)), sealPlan.weakFair(Set(state)),
+    changeAuthorityDuringRead.weakFair(Set(state)), restartIncompleteAudit.weakFair(Set(state)),
+    applyPlan.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: the deterministic no-audit prefix must become terminally blocked.
+  val blockedInvariant = state.hintCount < 2
+  action withoutAudit = if (state.hintCount < 2) duplicateHint else hold
+  action unsafeIncompleteApply = state' = { ...state, projectionVersion: state.authorityVersion }
+}
+
+// GS2-03.10 model 3: an epoch and critic seat are derived from one complete, fresh authority
+// snapshot. A recorded pass is historical data; changing the authority snapshot makes it
+// inapplicable without deleting it, and an effect must revalidate the current epoch and seat.
+module GS20310ReviewEpochModel {
+  type ReviewModelState = {
+    authorityVersion: int, complete: bool, fresh: bool,
+    epochSnapshot: int, seat: int, verdictSnapshot: int, verdictSeat: int,
+    changedAfterVerdict: bool, effectVersion: int, effectWasCurrent: bool,
+    staleEffectRejected: bool, staleEffectAccepted: bool,
+  }
+  var state: ReviewModelState
+  pure def accepted(s: ReviewModelState): bool = and {
+    s.verdictSnapshot != 0, s.verdictSnapshot == s.authorityVersion,
+    s.verdictSnapshot == s.epochSnapshot, s.verdictSeat == s.seat,
+    s.complete, s.fresh,
+  }
+  action init = state' = {
+    authorityVersion: 1, complete: true, fresh: true,
+    epochSnapshot: 0, seat: 0, verdictSnapshot: 0, verdictSeat: 0,
+    changedAfterVerdict: false, effectVersion: 0, effectWasCurrent: false,
+    staleEffectRejected: false, staleEffectAccepted: false,
+  }
+  action openEpoch = all {
+    state.complete, state.fresh, state.epochSnapshot != state.authorityVersion,
+    not(state.changedAfterVerdict) or state.staleEffectRejected,
+    state' = { ...state, epochSnapshot: state.authorityVersion, seat: 0,
+      verdictSnapshot: 0, verdictSeat: 0 },
+  }
+  action grantSeat = all {
+    state.epochSnapshot == state.authorityVersion, state.seat == 0,
+    state' = { ...state, seat: if (state.authorityVersion == 1) 1 else 2 },
+  }
+  action recordPass = all {
+    state.epochSnapshot == state.authorityVersion, state.seat != 0,
+    state' = { ...state, verdictSnapshot: state.epochSnapshot, verdictSeat: state.seat },
+  }
+  action changeAuthority = all {
+    accepted(state), not(state.changedAfterVerdict), state.effectWasCurrent,
+    state' = { ...state, authorityVersion: state.authorityVersion + 1,
+      changedAfterVerdict: true },
+  }
+  action applyCurrentEffect = all {
+    accepted(state), not(state.effectWasCurrent),
+    state' = { ...state, effectVersion: state.authorityVersion, effectWasCurrent: true },
+  }
+  action rejectStaleEffect = all {
+    state.changedAfterVerdict, not(accepted(state)), not(state.staleEffectRejected),
+    state' = { ...state, staleEffectRejected: true },
+  }
+  action hold = state' = state
+  action step = any { openEpoch, grantSeat, recordPass, applyCurrentEffect,
+    changeAuthority, rejectStaleEffect, hold }
+  val safety = and { not(state.staleEffectAccepted),
+    state.effectVersion == 0 or state.effectWasCurrent }
+  val reached = and { state.changedAfterVerdict, not(accepted(state)),
+    state.effectWasCurrent, state.staleEffectRejected, not(state.staleEffectAccepted) }
+  temporal progress: bool = and {
+    openEpoch.weakFair(Set(state)), grantSeat.weakFair(Set(state)),
+    recordPass.weakFair(Set(state)), applyCurrentEffect.weakFair(Set(state)),
+    changeAuthority.weakFair(Set(state)), rejectStaleEffect.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: a pass can be recorded while snapshot-change progress is absent.
+  val blockedInvariant = not(state.effectWasCurrent)
+  action withoutSnapshotChange =
+    if (state.epochSnapshot == 0) openEpoch
+    else if (state.seat == 0) grantSeat
+    else if (state.verdictSnapshot == 0) recordPass
+    else if (not(state.effectWasCurrent)) applyCurrentEffect
+    else hold
+  action unsafeStaleReviewEffect = state' = {
+    authorityVersion: 2, complete: true, fresh: true,
+    epochSnapshot: 1, seat: 1, verdictSnapshot: 1, verdictSeat: 1,
+    changedAfterVerdict: true, effectVersion: 1, effectWasCurrent: false,
+    staleEffectRejected: false, staleEffectAccepted: true,
+  }
+}
+
+// GS2-03.10 model 4: destructive contraction is authorized by successful observations at
+// four ordered readings, not elapsed wall time. Day 30 alone is not evidence for days 0/7/14.
+module GS20310CutoverModel {
+  type CutoverModelState = {
+    clockDay: int, readings: Set[int], successful: Set[int], fresh: Set[int],
+    currentSnapshot: int, evidenceSnapshot: int,
+    failedRejected: bool, staleRejected: bool, wrongSnapshotRejected: bool,
+    v1Fenced: bool, contracted: bool,
+  }
+  var state: CutoverModelState
+  action init = state' = {
+    clockDay: 0, readings: Set(), successful: Set(), fresh: Set(),
+    currentSnapshot: 7, evidenceSnapshot: 7,
+    failedRejected: false, staleRejected: false, wrongSnapshotRejected: false,
+    v1Fenced: false, contracted: false,
+  }
+  action rejectFailed = all { not(state.failedRejected), state' = { ...state, failedRejected: true } }
+  action rejectStale = all { not(state.staleRejected), state' = { ...state, staleRejected: true } }
+  action rejectWrongSnapshot = all {
+    not(state.wrongSnapshotRejected), state' = { ...state, wrongSnapshotRejected: true },
+  }
+  action observe0 = all { state.clockDay == 0, not(state.readings.contains(0)),
+    state' = { ...state, readings: state.readings.union(Set(0)),
+      successful: state.successful.union(Set(0)), fresh: state.fresh.union(Set(0)) } }
+  action advance7 = all { state.readings.contains(0), state.clockDay == 0, state' = { ...state, clockDay: 7 } }
+  action observe7 = all { state.clockDay == 7, not(state.readings.contains(7)),
+    state' = { ...state, readings: state.readings.union(Set(7)),
+      successful: state.successful.union(Set(7)), fresh: state.fresh.union(Set(7)) } }
+  action advance14 = all { state.readings.contains(7), state.clockDay == 7, state' = { ...state, clockDay: 14 } }
+  action observe14 = all { state.clockDay == 14, not(state.readings.contains(14)),
+    state' = { ...state, readings: state.readings.union(Set(14)),
+      successful: state.successful.union(Set(14)), fresh: state.fresh.union(Set(14)) } }
+  action advance30 = all { state.readings.contains(14), state.clockDay == 14, state' = { ...state, clockDay: 30 } }
+  action observe30 = all { state.clockDay == 30, not(state.readings.contains(30)),
+    state' = { ...state, readings: state.readings.union(Set(30)),
+      successful: state.successful.union(Set(30)), fresh: state.fresh.union(Set(30)) } }
+  action fenceV1 = all { not(state.v1Fenced), state' = { ...state, v1Fenced: true } }
+  action contract = all {
+    state.v1Fenced, state.clockDay == 30,
+    state.readings == Set(0, 7, 14, 30), state.successful == state.readings,
+    state.fresh == state.readings, state.evidenceSnapshot == state.currentSnapshot,
+    state' = { ...state, contracted: true },
+  }
+  action hold = state' = state
+  action step = any { rejectFailed, rejectStale, rejectWrongSnapshot,
+    observe0, advance7, observe7, advance14, observe14, advance30, observe30,
+    fenceV1, contract, hold }
+  val safety = not(state.contracted) or and {
+    state.v1Fenced, state.clockDay == 30,
+    state.readings == Set(0, 7, 14, 30), state.successful == state.readings,
+    state.fresh == state.readings, state.evidenceSnapshot == state.currentSnapshot,
+  }
+  val reached = and { state.contracted, state.failedRejected,
+    state.staleRejected, state.wrongSnapshotRejected }
+  temporal progress: bool = and {
+    rejectFailed.weakFair(Set(state)), rejectStale.weakFair(Set(state)),
+    rejectWrongSnapshot.weakFair(Set(state)), observe0.weakFair(Set(state)),
+    advance7.weakFair(Set(state)), observe7.weakFair(Set(state)),
+    advance14.weakFair(Set(state)), observe14.weakFair(Set(state)),
+    advance30.weakFair(Set(state)), observe30.weakFair(Set(state)),
+    fenceV1.weakFair(Set(state)), contract.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: fencing alone can occur while every observation is absent.
+  val blockedInvariant = not(state.v1Fenced)
+  action withoutObservations = if (not(state.v1Fenced)) fenceV1 else hold
+  action unsafeDay30Jump = state' = { ...state, clockDay: 30, readings: Set(30),
+    successful: Set(), fresh: Set(30), evidenceSnapshot: 8,
+    v1Fenced: true, contracted: true }
 }
 
 // GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only
