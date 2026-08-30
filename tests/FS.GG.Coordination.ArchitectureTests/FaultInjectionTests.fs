@@ -122,3 +122,22 @@ let ``independent oracle accepts the executed subject and rejects every subject 
         match FaultInjectionOracle.validate root mutated with
         | Ok _ -> failwith $"subject defect %A{defect} escaped the independent oracle"
         | Error error -> Assert.StartsWith("FIO-", error)
+
+[<Fact>]
+let ``semantic oracle rejects duplicate and reorder defects even with healthy labels restored`` () =
+    let healthy = FaultInjection.execute root FaultInjection.SubjectDefect.None |> Result.defaultWith failwith
+    let healthyById = healthy |> List.map (fun execution -> execution.Id, execution) |> Map.ofList
+    let probes =
+        [ FaultInjection.SubjectDefect.DuplicateIsApplied, "duplicate-event", "FIO-DUPLICATE"
+          FaultInjection.SubjectDefect.PreserveArrivalOrder, "reordered-events", "FIO-REORDER" ]
+    for defect, id, expected in probes do
+        let forged =
+            FaultInjection.execute root defect
+            |> Result.defaultWith failwith
+            |> List.map (fun execution ->
+                if execution.Id = id then { execution with Trace = healthyById[id].Trace }
+                else execution)
+        Assert.NotEqual(healthyById[id].FinalStateSha256, (forged |> List.find (fun execution -> execution.Id = id)).FinalStateSha256)
+        match FaultInjectionOracle.validate root forged with
+        | Ok _ -> failwith $"semantic defect %A{defect} escaped after trace-label restoration"
+        | Error error -> Assert.StartsWith(expected, error)

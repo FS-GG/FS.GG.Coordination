@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
-      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
+      digest: "sha256:c013d99d58eefeba265df24314c690389ad4a6aa580aaef470ed8028688bb66d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 239
+      passed: 240
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]

@@ -46,9 +46,10 @@ let validate (root: string) (executions: FaultInjection.Execution list) =
             let lost = byId["lost-response"]
             require (lost.Outcome="converged" && has "response-lost" lost && has "idempotent" lost) "FIO-LOST-RESPONSE"
             let duplicate = byId["duplicate-event"]
-            require (duplicate.Outcome="converged" && has "duplicate-delivered" duplicate && has "duplicate-discarded" duplicate) "FIO-DUPLICATE"
+            let healthyState = byId["before/DSPH-Inspect"].FinalStateSha256
+            require (duplicate.Outcome="converged" && has "duplicate-delivered" duplicate && has "duplicate-discarded" duplicate && duplicate.FinalStateSha256=healthyState) "FIO-DUPLICATE"
             let reordered = byId["reordered-events"]
-            require (reordered.Outcome="converged" && has "events-reversed" reordered && has "events-reduced-by-ordinal" reordered) "FIO-REORDER"
+            require (reordered.Outcome="converged" && has "events-reversed" reordered && has "events-reduced-by-ordinal" reordered && reordered.FinalStateSha256=healthyState) "FIO-REORDER"
             for id,code in
                 [ "partial-page","OBS-Incomplete"; "rate-budget-exhausted","MOUT-RateLimited"
                   "permission-revoked","OBS-Unauthorized"; "concurrent-revision","MOUT-RevisionConflict" ] do

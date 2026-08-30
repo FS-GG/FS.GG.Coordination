@@ -180,13 +180,21 @@ let private run inputs defect id fault target =
     for step in inputs.ExternalSteps do if refusal.IsNone then executeStep step
     if refusal.IsNone && fault="duplicate-event" then
         add "duplicate-delivered" target
-        if defect=SubjectDefect.DuplicateIsApplied then state <- { state with Revision=state.Revision+1; Events=Map.add state.NextEvent target state.Events; NextEvent=state.NextEvent+1 }
-        else add "duplicate-discarded" target
+        let firstIdentity, firstStep = state.Events |> Map.toList |> List.head
+        let arrivals = (state.Events |> Map.toList) @ [ firstIdentity, firstStep ]
+        if defect=SubjectDefect.DuplicateIsApplied then
+            state <- { state with Revision=state.Revision+1; Events=Map.add state.NextEvent firstStep state.Events; NextEvent=state.NextEvent+1 }
+        else
+            state <- { state with Events=arrivals |> List.fold (fun reduced (identity,step) -> Map.add identity step reduced) Map.empty }
+            add "duplicate-discarded" target
     if refusal.IsNone && fault="reordered-events" then
+        let reversed = state.Events |> Map.toList |> List.rev
         add "events-reversed" target
         if defect=SubjectDefect.PreserveArrivalOrder then
-            state <- { state with Events=state.Events |> Map.toList |> List.rev |> List.mapi (fun index (_,step) -> index+1,step) |> Map.ofList }
-        else add "events-reduced-by-ordinal" target
+            state <- { state with Events=reversed |> List.mapi (fun index (_,step) -> index+1,step) |> Map.ofList }
+        else
+            state <- { state with Events=reversed |> List.sortBy fst |> Map.ofList }
+            add "events-reduced-by-ordinal" target
     let outcome = if refusal.IsSome then "refused" else "converged"
     { Id=id; Fault=fault; Step=target; Outcome=outcome; RefusalCode=refusal
       InitialStateSha256=stateSha initial; FinalStateSha256=stateSha state; Trace=trace }
