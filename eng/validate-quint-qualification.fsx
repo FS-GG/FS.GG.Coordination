@@ -55,7 +55,11 @@ let validateDocument root (document: JsonObject) =
         let formalTestIds = formalTests |> List.map (fun item -> text item "id")
         let requiredFormalTestIds =
             Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback"
-                  "journal-reconciliation" ]
+                  "journal-reconciliation"; "journal-fencing"; "authority-reconciliation"; "review-epoch"
+                  "cutover-observation" ]
+        let allowedFormalMains =
+            Set [ "CoordinationProtocolTests"; "GS20310JournalModel"; "GS20310ReconcileModel"
+                  "GS20310ReviewEpochModel"; "GS20310CutoverModel" ]
         let requiredFormalFields =
             Set [ "id"; "main"; "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"
                   "removedStep"; "violatedTemporal"; "blockedInvariant"; "backend"; "counterexample"; "counterexampleTrace"
@@ -155,7 +159,7 @@ let validateDocument root (document: JsonObject) =
             let budget = item["budget"].AsObject()
             let budgetFields = Set [ "depth"; "states"; "transitions"; "samples"; "elapsedMs"; "peakMiB"; "artifactBytes" ]
             if fields <> requiredFormalFields then fail "QQ-FORMAL-FIELDS" id
-            elif text item "main" <> "CoordinationProtocolTests" then fail "QQ-FORMAL-MAIN" id
+            elif not (Set.contains (text item "main") allowedFormalMains) then fail "QQ-FORMAL-MAIN" id
             elif text item "backend" <> "tlc" then fail "QQ-FORMAL-BACKEND" id
             elif text item "counterexample" <> $"work/96-gs2-03-5-native-quint-formal-tests/counterexamples/%s{id}.itf.json" then
                 fail "QQ-FORMAL-COUNTEREXAMPLE" id
@@ -635,4 +639,4 @@ match validateDocument root document with
             File.WriteAllText(Path.GetFullPath path, output.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
         | None -> ()
         let mutationCount = if selfTest then runSelfTests root document else 0
-        printfn "QUINT_QUALIFICATION_OK config=%s roots=%d selected=%s formalTests=%d oracles=%d negativeControls=%d sha256=%s" config (objects document "roots").Length (String.concat "," selected) (objects document "formalTests").Length oracleTests.Count mutationCount (sha256 bytes)
+        printfn "QUINT_QUALIFICATION_OK config=%s roots=%d selected=%s formalTests=%d oracles=%d negativeControls=%d semanticMutants=%d sha256=%s" config (objects document "roots").Length (String.concat "," selected) (objects document "formalTests").Length oracleTests.Count mutationCount (objects document "formalTests").Length (sha256 bytes)

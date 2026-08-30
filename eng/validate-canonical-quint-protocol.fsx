@@ -30,7 +30,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "5e4797762f8fe2fa26f184926ccc22ee8df949217700e97036887b48b6ced3a0"
+    "1b68e99361f6ed3cc5762f31d3e32c7c6fa8bc4a0a06a127aa8ce94886cb9528"
 
 let expectedContract =
     "947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e"
@@ -42,10 +42,6 @@ let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
-let mutable expectedExternalProcessCount = 158
-let mutable expectedQuintProcessCount = 133
-let mutable expectedApalacheVerifyInvocationCount = 35
-
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
 
@@ -62,6 +58,46 @@ let mutable preparationDurationMs = 0L
 let mutable preparationDigest: string option = None
 let mutable failureReceiptWriter: (string -> string -> unit) option = None
 let formalCounterexampleReceipts = ResizeArray<string * string * string * string>()
+let actualInvocationInventory = System.Collections.Generic.Dictionary<string, int>()
+let expectedInvocationInventory = System.Collections.Generic.Dictionary<string, int>()
+let mutable formalSafeSteps = Set.empty<string * string>
+let mutable formalInvalidSteps = Set.empty<string * string>
+let mutable formalRemovedSteps = Set.empty<string * string>
+let mutable formalInventoryReady = false
+
+let incrementInvocation label =
+    match actualInvocationInventory.TryGetValue label with
+    | true, count -> actualInvocationInventory[label] <- count + 1
+    | false, _ -> actualInvocationInventory[label] <- 1
+
+let argumentValue name arguments =
+    arguments
+    |> List.tryFindIndex ((=) name)
+    |> Option.bind (fun index -> arguments |> List.tryItem (index + 1))
+
+let classifyInvocation isQuint arguments =
+    if not isQuint then "external/base"
+    elif not formalInventoryReady then
+        if List.tryHead arguments = Some "verify" then "quint/base-verify" else "quint/base-nonverify"
+    else
+        let command = List.tryHead arguments |> Option.defaultValue "missing-command"
+        let main = argumentValue "--main" arguments |> Option.defaultValue ""
+        let step = argumentValue "--step" arguments
+        let isFormal memberSet = step |> Option.exists (fun value -> Set.contains (main, value) memberSet)
+        let output = argumentValue "--out" arguments |> Option.defaultValue ""
+        if output.Contains("root-artifacts", StringComparison.Ordinal) then "quint/selected-root"
+        elif command = "verify" && isFormal formalSafeSteps then
+            "quint/formal-temporal"
+        elif command = "verify" && isFormal formalRemovedSteps then
+            "quint/formal-counterexample-temporal"
+        elif command = "run" && isFormal formalInvalidSteps then
+            "quint/formal-safety-mutant"
+        elif command = "run" && isFormal formalRemovedSteps then
+            "quint/formal-counterexample-projection"
+        elif command = "run" && isFormal formalSafeSteps then
+            "quint/formal-simulation"
+        elif command = "verify" then "quint/base-verify"
+        else "quint/base-nonverify"
 
 let positiveInvariants =
     [ "acceptedVocabularyIsQualified"
@@ -120,6 +156,7 @@ let run workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
 
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
+    incrementInvocation (classifyInvocation isQuint arguments)
 
     if isQuint then
         Interlocked.Increment(&quintProcessCount) |> ignore
@@ -181,6 +218,7 @@ let private processTreeRssBytes rootPid =
 let runMeasured workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
+    incrementInvocation (classifyInvocation isQuint arguments)
     if isQuint then
         Interlocked.Increment(&quintProcessCount) |> ignore
         match arguments with
@@ -329,14 +367,12 @@ failureReceiptWriter <-
         writeQualificationReceipt (Some(code, detail)))
 
 let requireCompletedProcessInventory () =
-    if
-        externalProcessCount <> expectedExternalProcessCount
-        || quintProcessCount <> expectedQuintProcessCount
-        || apalacheVerifyInvocationCount <> expectedApalacheVerifyInvocationCount
-    then
+    let expected = expectedInvocationInventory |> Seq.map (fun row -> row.Key, row.Value) |> Map.ofSeq
+    let actual = actualInvocationInventory |> Seq.map (fun row -> row.Key, row.Value) |> Map.ofSeq
+    if actual <> expected then
         fail
             "PROCESS-INVENTORY-COVERAGE"
-            ($"expected=%d{expectedExternalProcessCount}/%d{expectedQuintProcessCount}/%d{expectedApalacheVerifyInvocationCount}; actual=%d{externalProcessCount}/%d{quintProcessCount}/%d{apalacheVerifyInvocationCount}")
+            ($"expected=%A{expected}; actual=%A{actual}")
 
 match receiptFailurePhase with
 | Some "q1" -> fail "RECEIPT-SELF-TEST-Q1" "exercise q1 failure receipt"
@@ -351,9 +387,7 @@ match receiptFailurePhase with
     currentPhase <- "q2"
     verifiedPositiveInvariantCount <- 8
     quintRejectedProcessCount <- 100
-    externalProcessCount <- expectedExternalProcessCount - 1
-    quintProcessCount <- expectedQuintProcessCount - 1
-    apalacheVerifyInvocationCount <- expectedApalacheVerifyInvocationCount - 1
+    expectedInvocationInventory["exercise-required"] <- 1
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
     requireCompletedProcessInventory ()
@@ -719,9 +753,6 @@ File.Delete selectionPlanPath
 let processInventoryConfiguration = JsonDocument.Parse(File.ReadAllBytes qualificationConfiguration)
 let declaredFormalTestCount =
     processInventoryConfiguration.RootElement.GetProperty("formalTests").GetArrayLength()
-expectedExternalProcessCount <- 102 + selectedRootIds.Count + (7 * declaredFormalTestCount)
-expectedQuintProcessCount <- 77 + selectedRootIds.Count + (7 * declaredFormalTestCount)
-expectedApalacheVerifyInvocationCount <- 14 + (3 * declaredFormalTestCount)
 
 if staticOnly then
     printfn "CANONICAL_QUINT_PROTOCOL_STATIC_OK contract=%s profile=%s" expectedContract expectedProfile
@@ -1094,6 +1125,30 @@ try
             item.GetProperty("budget").GetProperty("peakMiB").GetInt32(),
             item.GetProperty("budget").GetProperty("artifactBytes").GetInt32())
         |> Seq.toList
+
+    formalSafeSteps <- formalTests |> List.map (fun (_, main, _, step, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) -> main, step) |> Set.ofList
+    formalInvalidSteps <- formalTests |> List.map (fun (_, main, _, _, _, _, _, invalid, _, _, _, _, _, _, _, _, _, _, _, _, _) -> main, invalid) |> Set.ofList
+    formalRemovedSteps <- formalTests |> List.map (fun (_, main, _, _, _, _, _, _, removedStep, _, _, _, _, _, _, _, _, _, _, _, _) -> main, removedStep) |> Set.ofList
+    formalInventoryReady <- true
+
+    // This is the executable qualification plan. Each category corresponds to one named
+    // orchestration obligation; completion compares the actual invocation multiset to this plan.
+    // Adding a formal test extends five explicit categories rather than changing opaque totals.
+    for label, count in
+        [ "external/base", 25
+          "quint/base-nonverify", 63
+          "quint/base-verify", 14
+          "quint/selected-root", selectedRootIds.Count
+          "quint/formal-simulation", declaredFormalTestCount
+          "quint/formal-temporal", declaredFormalTestCount
+          "quint/formal-safety-mutant", declaredFormalTestCount
+          "quint/formal-counterexample-temporal", 2 * declaredFormalTestCount
+          "quint/formal-counterexample-projection", 2 * declaredFormalTestCount ] do
+        expectedInvocationInventory[label] <- count
+
+    // The base qualification suite has 71 intentional red outcomes. Every formal scenario
+    // contributes one safety mutant, two TLC reproductions, and two Rust projections.
+    let expectedRejectedProcessCount = 71 + 5 * declaredFormalTestCount
     let rootArtifactDirectory = Path.Combine(scratch, "root-artifacts")
     Directory.CreateDirectory rootArtifactDirectory |> ignore
     let rootArtifactDigests = ResizeArray<string * string>()
@@ -1288,6 +1343,30 @@ try
         if document["states"].AsArray().Count < 2 then fail "QUINT-FORMAL-COUNTEREXAMPLE-TRACE" path
         document.ToJsonString(JsonSerializerOptions(WriteIndented = false))
 
+    // TLC liveness verification is comparatively expensive and cannot emit ITF.  Preflight
+    // one deterministic Rust projection for every declared removed-step model before entering
+    // the TLC loop.  The result is retained as the first of the two reproducibility samples,
+    // so this changes failure order without adding process work.
+    let runProjection formalId main init removedStep blockedInvariant depth ordinal =
+        let pattern = Path.Combine(formalArtifactDirectory, $"%s{formalId}-counterexample-%d{ordinal}-{{seq}}.itf.json")
+        let exitCode, output, error, elapsedMs, peakMiB =
+            runMeasured scratch quint
+                [ "run"; q2Qnt; "--main"; main; "--init"; init; "--step"; removedStep
+                  "--invariant"; blockedInvariant; "--max-steps"; string depth; "--max-samples"; "1"
+                  "--seed"; "1"; "--verbosity"; "0"; "--out-itf"; pattern ] []
+        if exitCode = 0 || not ((output + "\n" + error).Contains("Invariant violated", StringComparison.Ordinal)) then
+            fail "QUINT-FORMAL-ITF-PROJECTION" ($"%s{formalId}: exit=%d{exitCode}; stdout=%s{output}; stderr=%s{error}")
+        let path = pattern.Replace("{seq}", "0", StringComparison.Ordinal)
+        requireFile "QUINT-FORMAL-COUNTEREXAMPLE-MISSING" path
+        path, normalizeItf path, elapsedMs, peakMiB
+
+    let projectionPreflights =
+        formalTests
+        |> List.map (fun (formalId, main, init, _, _, _, _, _, removedStep, _, blockedInvariant,
+                          _, _, _, depth, _, _, _, _, _, _) ->
+            formalId, runProjection formalId main init removedStep blockedInvariant depth 1)
+        |> Map.ofList
+
     for formalId, main, init, step, invariantName, _, temporalName, invalid, removedStep, violatedTemporal, blockedInvariant,
         retainedCounterexample, retainedTrace, retainedManifest, depth, stateBudget, transitionBudget, _,
         elapsedBudget, peakBudget, artifactBudget in formalTests do
@@ -1321,7 +1400,6 @@ try
         measurement.PeakMiB <- Math.Max(measurement.PeakMiB, safetyPeak)
 
         let runCounterexample ordinal =
-            let pattern = Path.Combine(formalArtifactDirectory, $"%s{formalId}-counterexample-%d{ordinal}-{{seq}}.itf.json")
             let temporalExitCode, temporalOutput, temporalError, temporalElapsedMs, temporalPeakMiB =
                 runMeasured scratch quint
                     [ "verify"; q2Qnt; "--main"; main; "--init"; init; "--step"; removedStep
@@ -1336,17 +1414,11 @@ try
             if diagnosticEnd <= diagnosticStart then fail "QUINT-FORMAL-TEMPORAL-DIAGNOSTIC" formalId
             let normalizedDiagnostic = temporalDiagnostic.Substring(diagnosticStart, diagnosticEnd - diagnosticStart).Trim()
 
-            let rustExitCode, rustOutput, rustError, rustElapsedMs, rustPeakMiB =
-                runMeasured scratch quint
-                    [ "run"; q2Qnt; "--main"; main; "--init"; init; "--step"; removedStep
-                      "--invariant"; blockedInvariant; "--max-steps"; string depth; "--max-samples"; "1"
-                      "--seed"; "1"; "--verbosity"; "0"; "--out-itf"; pattern ] []
-            if rustExitCode = 0 || not ((rustOutput + "\n" + rustError).Contains("Invariant violated", StringComparison.Ordinal)) then
-                fail "QUINT-FORMAL-ITF-PROJECTION" ($"%s{formalId}: exit=%d{rustExitCode}; stdout=%s{rustOutput}; stderr=%s{rustError}")
-            let path = pattern.Replace("{seq}", "0", StringComparison.Ordinal)
-            requireFile "QUINT-FORMAL-COUNTEREXAMPLE-MISSING" path
-            path, normalizeItf path, normalizedDiagnostic,
-            temporalElapsedMs + rustElapsedMs, Math.Max(temporalPeakMiB, rustPeakMiB)
+            let path, projection, projectionElapsedMs, projectionPeakMiB =
+                if ordinal = 1 then projectionPreflights[formalId]
+                else runProjection formalId main init removedStep blockedInvariant depth ordinal
+            path, projection, normalizedDiagnostic,
+            temporalElapsedMs + projectionElapsedMs, Math.Max(temporalPeakMiB, projectionPeakMiB)
 
         let firstPath, first, firstDiagnostic, firstElapsed, firstPeak = runCounterexample 1
         let _, second, secondDiagnostic, secondElapsed, secondPeak = runCounterexample 2
@@ -2334,8 +2406,8 @@ try
     if verifiedPositiveInvariantCount <> 8 then
         fail "POSITIVE-INVARIANT-COVERAGE" ($"expected=8; actual=%d{verifiedPositiveInvariantCount}")
 
-    if quintRejectedProcessCount <> 106 then
-        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=106; actual=%d{quintRejectedProcessCount}")
+    if quintRejectedProcessCount <> expectedRejectedProcessCount then
+        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=%d{expectedRejectedProcessCount}; actual=%d{quintRejectedProcessCount}")
 
     requireCompletedProcessInventory ()
 

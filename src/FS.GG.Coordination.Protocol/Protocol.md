@@ -1150,6 +1150,53 @@ module CoordinationProtocol {
 The executable witness records evidence before accepting the subject vocabulary identity. Removing
 the evidence guard must make the invariant red in the bounded negative control.
 
+### Protected journal storage and mutation contract (GS2-03.10)
+
+The journal is an append-only Git object graph; issues, pull-request comments, labels, workflow
+runs, and webhooks are projections or wake-up hints. An aggregate identifier is encoded as
+lower-case UTF-8, length-prefixed before hashing, and mapped to shard
+`lower-hex(sha256(canonicalAggregateId))[0..1]`. Its only mutable locator is
+`refs/fsgg/v2/journal/<journal-kind>/<shard>`. Aggregate records cannot move between shards and a
+collision in the canonical identifier digest is a hard integrity failure, never last-writer-wins.
+The ref namespace is protected by a repository ruleset: deletion, non-fast-forward update, and
+direct user pushes are denied. Only the journal GitHub App may update it, and that App's bypass is
+restricted to the expected-parent API path and is audited. Workflow tokens and personal tokens
+have no bypass.
+
+Each journal commit has exactly one parent except the documented shard root. Its tree contains
+`aggregates/<aggregate-digest>/head.json`, immutable
+`events/<generation>-<event-digest>.json`, and, at checkpoint generations,
+`snapshots/<generation>-<snapshot-digest>.json`. JSON is UTF-8, LF, recursively key-sorted, uses
+decimal integers without alternate spellings, and excludes insignificant whitespace. A head binds
+schema version, canonical aggregate id and digest, journal kind, shard, generation, event digest,
+snapshot digest, terminal flag, and prior head digest. The commit message binds the same head digest
+and writer operation id. A snapshot binds the complete event ancestry it replaces, the terminal
+high-water generation, and its content digest. Readers reject missing parents, duplicate
+generations, digest mismatch, shard mismatch, and unknown schema versions.
+
+Mutation is compare-and-swap: read ref and aggregate head; construct blobs, tree, and a single-parent
+commit; then update the ref only if its current object id equals the observed ref object id. A
+successful update assigns the committed aggregate generation as the fencing token. A rejected
+expected parent means no authority changed and the worker must reread. A transport failure or lost
+success response is ambiguous: reread the ref, accept success only when the exact operation id,
+commit/tree/head digests, and generation are present, otherwise retry from the newly observed parent.
+The worker never infers success from an issue comment or from object existence alone. Server
+outcomes are therefore `accepted`, `parent-conflict`, `definite-refusal`, and
+`response-unknown-requires-reread`.
+
+Every externally visible effect re-reads the authoritative aggregate head immediately before the
+effect and requires its grant's journal commit and generation to equal that head. Terminal heads
+reject new ordinary events. Compaction may append a terminal checkpoint but may not delete reachable
+history until the retention window and independent digest audit have passed; replay from either the
+full ancestry or the retained terminal snapshot must produce the same aggregate digest.
+
+A command touching multiple aggregates first sorts `(journal-kind, shard, aggregate-digest)` and
+acquires grants in that total order. It persists the entire touch set and expected generations in
+the operation journal before the first effect. On conflict it releases unconsumed grants and appends
+idempotent compensations for already-applied effects in reverse order. Compensation is itself a
+fenced journal event and may not erase the original result. This is a saga with deterministic
+acquisition and compensation, not an atomic multi-ref transaction.
+
 The profile-2 compiler has a fixed 4,096-node typed graph ceiling. The executable suite therefore
 uses compact, independently named witnesses for every durable-plan law, while the validator separately
 inverts each material binding and preserves the earlier bounded invariants.
@@ -1176,7 +1223,8 @@ module CoordinationProtocolTests {
     observedSnapshotSha256: str, plannedSnapshotSha256: str, planSealed: bool,
   }
   type CutoverState = {
-    phase: str, observationDay: int, v1WritersFenced: bool, destructiveDeletionStarted: bool,
+    phase: str, successfulObservationDays: Set[int], v1WritersFenced: bool,
+    destructiveDeletionStarted: bool,
   }
 
   pure def journalHeadShapeIsValid(journal: JournalHead): bool = and {
@@ -1212,11 +1260,18 @@ module CoordinationProtocolTests {
     and { current.phase == "VerifiedV2", proposed.phase == "OpenV2",
       proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
     and { current.phase == "OpenV2", proposed.phase == "ObservingV2",
-      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted), proposed.observationDay == 0 },
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
+      proposed.successfulObservationDays == Set(0) },
     and { current.phase == "ObservingV2", proposed.phase == "ObservingV2",
       proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
-      proposed.observationDay >= current.observationDay, proposed.observationDay <= 30 },
-    and { current.phase == "ObservingV2", current.observationDay >= 30,
+      or {
+        proposed.successfulObservationDays == current.successfulObservationDays,
+        and { current.successfulObservationDays == Set(0), proposed.successfulObservationDays == Set(0, 7) },
+        and { current.successfulObservationDays == Set(0, 7), proposed.successfulObservationDays == Set(0, 7, 14) },
+        and { current.successfulObservationDays == Set(0, 7, 14), proposed.successfulObservationDays == Set(0, 7, 14, 30) },
+      } },
+    and { current.phase == "ObservingV2",
+      current.successfulObservationDays == Set(0, 7, 14, 30),
       proposed.phase == "ContractingV1", proposed.v1WritersFenced,
       proposed.destructiveDeletionStarted },
     and { current.phase == "ContractingV1", proposed.phase == "OperatingV2",
@@ -1248,7 +1303,7 @@ module CoordinationProtocolTests {
     observedSnapshotSha256: "snapshot-a", plannedSnapshotSha256: "snapshot-a", planSealed: true,
   }
   pure val observingDay30: CutoverState = {
-    phase: "ObservingV2", observationDay: 30, v1WritersFenced: true,
+    phase: "ObservingV2", successfulObservationDays: Set(0, 7, 14, 30), v1WritersFenced: true,
     destructiveDeletionStarted: false,
   }
 
@@ -1347,21 +1402,21 @@ module CoordinationProtocolTests {
 
   run testMutationCutoverObservesBeforeDestructiveContraction = and {
     cutoverTransitionIsLegal(
-      { phase: "VerifiedV2", observationDay: 0, v1WritersFenced: false,
+      { phase: "VerifiedV2", successfulObservationDays: Set(), v1WritersFenced: false,
         destructiveDeletionStarted: false },
-      { phase: "OpenV2", observationDay: 0, v1WritersFenced: true,
+      { phase: "OpenV2", successfulObservationDays: Set(), v1WritersFenced: true,
         destructiveDeletionStarted: false }),
     cutoverTransitionIsLegal(
-      { phase: "OpenV2", observationDay: 0, v1WritersFenced: true,
+      { phase: "OpenV2", successfulObservationDays: Set(), v1WritersFenced: true,
         destructiveDeletionStarted: false },
-      { phase: "ObservingV2", observationDay: 0, v1WritersFenced: true,
+      { phase: "ObservingV2", successfulObservationDays: Set(0), v1WritersFenced: true,
         destructiveDeletionStarted: false }),
     not(cutoverTransitionIsLegal(
-      { ...observingDay30, observationDay: 14 },
-      { phase: "ContractingV1", observationDay: 14, v1WritersFenced: true,
+      { ...observingDay30, successfulObservationDays: Set(30) },
+      { phase: "ContractingV1", successfulObservationDays: Set(30), v1WritersFenced: true,
         destructiveDeletionStarted: true })),
     cutoverTransitionIsLegal(observingDay30,
-      { phase: "ContractingV1", observationDay: 30, v1WritersFenced: true,
+      { phase: "ContractingV1", successfulObservationDays: Set(0, 7, 14, 30), v1WritersFenced: true,
         destructiveDeletionStarted: true }),
   }
 
@@ -2523,83 +2578,8 @@ module CoordinationProtocolTests {
   action formalRollbackWithoutCompensate =
     if (formalRollbackStage == 0) formalRollbackApply else formalRollbackStutter
 
-  // GS2-03.10 stateful shared-journal model. Webhooks may be lost, but a fair complete audit
-  // converges the projection. A worker from generation 1 may attempt a write after generation 2
-  // owns the journal, but the fencing rule never commits it.
-  type FormalJournalState = {
-    stage: int, generation: int, owner: str, projectedGeneration: int,
-    appliedGeneration: int, webhookPending: bool, auditDue: bool,
-    staleAttempted: bool, staleCommitted: bool, auditRepaired: bool,
-  }
-  var formalJournalState: FormalJournalState
-  action formalJournalAdvance = all {
-    formalJournalState.stage == 0,
-    formalJournalState' = {
-      ...formalJournalState, stage: 1, generation: 2, owner: "worker-b",
-      webhookPending: true, auditDue: true,
-    },
-  }
-  action formalJournalRejectStaleOwner = all {
-    formalJournalState.stage == 1,
-    formalJournalState' = {
-      ...formalJournalState, stage: 2, staleAttempted: true, staleCommitted: false,
-    },
-  }
-  action formalJournalDropWebhook = all {
-    formalJournalState.stage == 2, formalJournalState.webhookPending,
-    formalJournalState' = { ...formalJournalState, stage: 3, webhookPending: false },
-  }
-  action formalJournalAuditReconcile = all {
-    formalJournalState.stage == 3, formalJournalState.auditDue,
-    formalJournalState' = {
-      ...formalJournalState, stage: 4,
-      projectedGeneration: formalJournalState.generation,
-      appliedGeneration: formalJournalState.generation,
-      auditDue: false, auditRepaired: true,
-    },
-  }
-  action formalJournalHold = all {
-    formalJournalState.stage == 4,
-    formalJournalState' = formalJournalState,
-  }
-  action formalJournalStep = any {
-    formalJournalAdvance, formalJournalRejectStaleOwner,
-    formalJournalDropWebhook, formalJournalAuditReconcile, formalJournalHold,
-  }
-  action formalJournalInvalid = all {
-    formalJournalState' = {
-      ...formalJournalState, stage: 4, generation: 2, owner: "worker-b",
-      staleAttempted: true, staleCommitted: true,
-    },
-  }
-  val formalJournalSafety = and {
-    not(formalJournalState.staleCommitted),
-    formalJournalState.projectedGeneration <= formalJournalState.generation,
-    formalJournalState.appliedGeneration <= formalJournalState.generation,
-    formalJournalState.generation == 2 implies formalJournalState.owner == "worker-b",
-  }
-  val formalJournalReached = and {
-    formalJournalState.stage == 4, formalJournalState.staleAttempted,
-    not(formalJournalState.staleCommitted), formalJournalState.auditRepaired,
-    formalJournalState.appliedGeneration == formalJournalState.generation,
-  }
-  temporal formalJournalProgress: bool = and {
-    formalJournalAdvance.weakFair(Set(formalJournalState)),
-    formalJournalRejectStaleOwner.weakFair(Set(formalJournalState)),
-    formalJournalDropWebhook.weakFair(Set(formalJournalState)),
-    formalJournalAuditReconcile.weakFair(Set(formalJournalState)),
-  }.implies(eventually(formalJournalReached))
-  temporal formalJournalEventuallyReconciled: bool = eventually(formalJournalReached)
-  val formalJournalBlockedInvariant = formalJournalState.stage != 3
-  action formalJournalStall = formalJournalState' = formalJournalState
-  action formalJournalWithoutAudit =
-    if (formalJournalState.stage == 0) formalJournalAdvance
-    else if (formalJournalState.stage == 1) formalJournalRejectStaleOwner
-    else if (formalJournalState.stage == 2) formalJournalDropWebhook
-    else formalJournalStall
-
-  // TLC requires every variable in the selected module to have a legal initial value. All seven
-  // independently selected scenarios therefore share this complete initialization action.
+  // TLC requires every variable in this legacy integration module to have a legal initial value.
+  // GS2-03.10's concurrency models are separate modules below, with independent state spaces.
   action formalInit = all {
     formalClaimStage' = 0, formalClaimEvents' = Set(), formalClaimValid' = true,
     formalRelationStage' = 0, formalRelationEdges' = Set(),
@@ -2608,11 +2588,6 @@ module CoordinationProtocolTests {
     formalSagaStage' = 0, formalSagaValid' = true,
     formalEpochStage' = 0, formalEpochEvents' = Set(), formalEpochValid' = true,
     formalRollbackStage' = 0, formalRollbackValid' = true,
-    formalJournalState' = {
-      stage: 0, generation: 1, owner: "worker-a", projectedGeneration: 1,
-      appliedGeneration: 1, webhookPending: false, auditDue: false,
-      staleAttempted: false, staleCommitted: false, auditRepaired: false,
-    },
   }
 
   action formalClaimStutter = all {
@@ -2635,92 +2610,331 @@ module CoordinationProtocolTests {
   action formalRollbackStutter = all {
     formalRollbackStage' = formalRollbackStage, formalRollbackValid' = formalRollbackValid,
   }
-  action formalJournalStutter = formalJournalState' = formalJournalState
 
   action formalClaimTlcStep = all {
     formalClaimStep, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalClaimTlcInvalid = all {
     formalClaimInvalid, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalRelationTlcStep = all {
     formalRelationStep, formalClaimStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalRelationTlcInvalid = all {
     formalRelationInvalid, formalClaimStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalLifecycleTlcStep = all {
     formalLifecycleStep, formalClaimStutter, formalRelationStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalLifecycleTlcInvalid = all {
     formalLifecycleInvalid, formalClaimStutter, formalRelationStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalSagaTlcStep = all {
     formalSagaStep, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalSagaTlcInvalid = all {
     formalSagaInvalid, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalEpochTlcStep = all {
     formalEpochStep, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter, formalJournalStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
   }
   action formalEpochTlcInvalid = all {
     formalEpochInvalid, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter, formalJournalStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
   }
   action formalRollbackTlcStep = all {
     formalRollbackStep, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalEpochStutter, formalJournalStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
   }
   action formalRollbackTlcInvalid = all {
     formalRollbackInvalid, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalEpochStutter, formalJournalStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
   }
   action formalClaimTlcWithoutElection = all {
     formalClaimWithoutElection, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalRelationTlcWithoutRemove = all {
     formalRelationWithoutRemove, formalClaimStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalLifecycleTlcWithoutDeliver = all {
     formalLifecycleWithoutDeliver, formalClaimStutter, formalRelationStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalSagaTlcWithoutAdvance = all {
     formalSagaWithoutAdvance, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter, formalJournalStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
   }
   action formalEpochTlcWithoutAdvance = all {
     formalEpochWithoutAdvance, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter, formalJournalStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
   }
   action formalRollbackTlcWithoutCompensate = all {
     formalRollbackWithoutCompensate, formalClaimStutter, formalRelationStutter,
-    formalLifecycleStutter, formalSagaStutter, formalEpochStutter, formalJournalStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
   }
-  action formalJournalTlcStep = all {
-    formalJournalStep, formalClaimStutter, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+}
+
+// GS2-03.10 model 1: two workers race sibling commits on shard 0 while shard 1 progresses
+// independently. Expected-parent CAS chooses at most one sibling, retry advances generation,
+// and effect-time fencing rejects the superseded grant. The unsafe actions are semantic mutants:
+// they omit the production comparison or fence instead of assigning a generic failure flag.
+module GS20310JournalModel {
+  type JournalModelState = {
+    head0: int, generation0: int, head1: int, generation1: int,
+    observedA: int, observedB: int, proposalsReady: bool,
+    acceptedA: bool, acceptedB: bool, firstOwner: int,
+    conflictObserved: bool, retryAccepted: bool, currentOwner: int,
+    currentGrant: int, staleEffectAttempted: bool, effectOwner: int,
+    shard1Committed: bool,
   }
-  action formalJournalTlcInvalid = all {
-    formalJournalInvalid, formalClaimStutter, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  var state: JournalModelState
+  action init = state' = {
+    head0: 10, generation0: 1, head1: 20, generation1: 1,
+    observedA: 0, observedB: 0, proposalsReady: false,
+    acceptedA: false, acceptedB: false, firstOwner: 0,
+    conflictObserved: false, retryAccepted: false, currentOwner: 0,
+    currentGrant: 0, staleEffectAttempted: false, effectOwner: 0,
+    shard1Committed: false,
   }
-  action formalJournalTlcWithoutAudit = all {
-    formalJournalWithoutAudit, formalClaimStutter, formalRelationStutter, formalLifecycleStutter,
-    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  action prepareSiblings = all {
+    not(state.proposalsReady),
+    state' = { ...state, observedA: state.head0, observedB: state.head0, proposalsReady: true },
   }
+  action casA = all {
+    state.proposalsReady, state.firstOwner == 0, state.observedA == state.head0,
+    state' = { ...state, head0: 11, generation0: 2, acceptedA: true,
+      firstOwner: 1, currentOwner: 1, currentGrant: 2 },
+  }
+  action casB = all {
+    state.proposalsReady, state.firstOwner == 0, state.observedB == state.head0,
+    state' = { ...state, head0: 12, generation0: 2, acceptedB: true,
+      firstOwner: 2, currentOwner: 2, currentGrant: 2 },
+  }
+  action observeConflict = all {
+    state.firstOwner != 0, not(state.conflictObserved),
+    state' = { ...state, conflictObserved: true,
+      observedA: if (state.firstOwner == 2) state.head0 else state.observedA,
+      observedB: if (state.firstOwner == 1) state.head0 else state.observedB },
+  }
+  action retryLoser = all {
+    state.conflictObserved, not(state.retryAccepted),
+    if (state.firstOwner == 1) state.observedB == state.head0 else state.observedA == state.head0,
+    state' = { ...state, head0: state.head0 + 10, generation0: 3,
+      retryAccepted: true, currentOwner: if (state.firstOwner == 1) 2 else 1, currentGrant: 3 },
+  }
+  action attemptStaleEffect = all {
+    state.retryAccepted, not(state.staleEffectAttempted),
+    state' = { ...state, staleEffectAttempted: true,
+      effectOwner: if (state.currentGrant == 2) state.firstOwner else 0 },
+  }
+  action commitShard1 = all {
+    not(state.shard1Committed),
+    state' = { ...state, head1: 21, generation1: 2, shard1Committed: true },
+  }
+  action hold = state' = state
+  action step = any { prepareSiblings, casA, casB, observeConflict, retryLoser,
+    attemptStaleEffect, commitShard1, hold }
+  val safety = and {
+    not(state.acceptedA and state.acceptedB),
+    state.effectOwner == 0 or state.effectOwner == state.currentOwner,
+    state.currentGrant == 0 or state.currentGrant == state.generation0,
+    state.generation0 >= 1, state.generation1 >= 1,
+  }
+  val reached = and { state.retryAccepted, state.staleEffectAttempted,
+    state.effectOwner == 0, state.shard1Committed }
+  temporal progress: bool = and {
+    prepareSiblings.weakFair(Set(state)), casA.weakFair(Set(state)), casB.weakFair(Set(state)),
+    observeConflict.weakFair(Set(state)), retryLoser.weakFair(Set(state)),
+    attemptStaleEffect.weakFair(Set(state)), commitShard1.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  val blockedInvariant = not(state.conflictObserved)
+  action withoutRetry =
+    if (not(state.proposalsReady)) prepareSiblings
+    else if (state.firstOwner == 0) casA
+    else if (not(state.conflictObserved)) observeConflict
+    else hold
+  action unsafeExpectedParent = all {
+    state' = { ...state, head0: 12, generation0: 2, proposalsReady: true,
+      observedA: 10, observedB: 10, acceptedA: true, acceptedB: true,
+      firstOwner: 2, currentOwner: 2, currentGrant: 2 },
+  }
+  action unsafeFence = all {
+    state' = { ...state, head0: 22, generation0: 3, proposalsReady: true,
+      acceptedA: true, firstOwner: 1, conflictObserved: true, retryAccepted: true,
+      currentOwner: 2, currentGrant: 3, staleEffectAttempted: true, effectOwner: 1 },
+  }
+}
+
+// GS2-03.10 model 2: webhook delivery is only an unordered hint. A shared audit reads both
+// authority pages, observes the terminal high-water mark, seals the exact derived snapshot,
+// and only then applies it. Duplicate/reordered hints cannot manufacture completeness.
+module GS20310ReconcileModel {
+  type ReconcileModelState = {
+    authorityVersion: int, page1: bool, page2: bool, terminal: bool,
+    highWater: int, sealedSnapshot: int, sealedHighWater: int,
+    projectionVersion: int, hintCount: int, page2WasFirst: bool,
+  }
+  var state: ReconcileModelState
+  action init = state' = {
+    authorityVersion: 1, page1: false, page2: false, terminal: false,
+    highWater: 0, sealedSnapshot: 0, sealedHighWater: 0,
+    projectionVersion: 0, hintCount: 0, page2WasFirst: false,
+  }
+  action duplicateHint = all {
+    state.hintCount < 2,
+    state' = { ...state, hintCount: state.hintCount + 1 },
+  }
+  action readPage2 = all {
+    not(state.page2),
+    state' = { ...state, page2: true, terminal: true,
+      highWater: state.authorityVersion, page2WasFirst: not(state.page1) },
+  }
+  action readPage1 = all { not(state.page1), state' = { ...state, page1: true } }
+  action sealPlan = all {
+    state.page1, state.page2, state.terminal, state.highWater == state.authorityVersion,
+    state' = { ...state, sealedSnapshot: state.authorityVersion,
+      sealedHighWater: state.highWater },
+  }
+  action applyPlan = all {
+    state.sealedSnapshot == state.authorityVersion,
+    state.sealedHighWater == state.authorityVersion,
+    state' = { ...state, projectionVersion: state.sealedSnapshot },
+  }
+  action hold = state' = state
+  action step = any { duplicateHint, readPage2, readPage1, sealPlan, applyPlan, hold }
+  val safety = state.projectionVersion == 0 or and {
+    state.page1, state.page2, state.terminal,
+    state.highWater == state.authorityVersion,
+    state.sealedSnapshot == state.authorityVersion,
+    state.sealedHighWater == state.authorityVersion,
+  }
+  val reached = and { state.projectionVersion == state.authorityVersion, state.hintCount == 2 }
+  val reorderedWitness = and { reached, state.page2WasFirst }
+  temporal progress: bool = and {
+    duplicateHint.weakFair(Set(state)), readPage2.weakFair(Set(state)),
+    readPage1.weakFair(Set(state)), sealPlan.weakFair(Set(state)),
+    applyPlan.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: the deterministic no-audit prefix must become terminally blocked.
+  val blockedInvariant = state.hintCount < 2
+  action withoutAudit = if (state.hintCount < 2) duplicateHint else hold
+  action unsafeIncompleteApply = state' = { ...state, projectionVersion: state.authorityVersion }
+}
+
+// GS2-03.10 model 3: an epoch and critic seat are derived from one complete, fresh authority
+// snapshot. A recorded pass is historical data; changing the authority snapshot makes it
+// inapplicable without deleting it, and an effect must revalidate the current epoch and seat.
+module GS20310ReviewEpochModel {
+  type ReviewModelState = {
+    authorityVersion: int, complete: bool, fresh: bool,
+    epochSnapshot: int, seat: int, verdictSnapshot: int, verdictSeat: int,
+    changedAfterVerdict: bool, effectVersion: int,
+  }
+  var state: ReviewModelState
+  pure def accepted(s: ReviewModelState): bool = and {
+    s.verdictSnapshot != 0, s.verdictSnapshot == s.authorityVersion,
+    s.verdictSnapshot == s.epochSnapshot, s.verdictSeat == s.seat,
+    s.complete, s.fresh,
+  }
+  action init = state' = {
+    authorityVersion: 1, complete: true, fresh: true,
+    epochSnapshot: 0, seat: 0, verdictSnapshot: 0, verdictSeat: 0,
+    changedAfterVerdict: false, effectVersion: 0,
+  }
+  action openEpoch = all {
+    state.complete, state.fresh, state.epochSnapshot != state.authorityVersion,
+    state' = { ...state, epochSnapshot: state.authorityVersion, seat: 0,
+      verdictSnapshot: 0, verdictSeat: 0 },
+  }
+  action grantSeat = all {
+    state.epochSnapshot == state.authorityVersion, state.seat == 0,
+    state' = { ...state, seat: if (state.authorityVersion == 1) 1 else 2 },
+  }
+  action recordPass = all {
+    state.epochSnapshot == state.authorityVersion, state.seat != 0,
+    state' = { ...state, verdictSnapshot: state.epochSnapshot, verdictSeat: state.seat },
+  }
+  action changeAuthority = all {
+    accepted(state), not(state.changedAfterVerdict), state.effectVersion == 0,
+    state' = { ...state, authorityVersion: state.authorityVersion + 1,
+      changedAfterVerdict: true },
+  }
+  action applyCurrentEffect = all {
+    accepted(state), state.effectVersion == 0,
+    state' = { ...state, effectVersion: state.authorityVersion },
+  }
+  action hold = state' = state
+  action step = any { openEpoch, grantSeat, recordPass, changeAuthority, hold }
+  val safety = state.effectVersion == 0 or and {
+    accepted(state), state.effectVersion == state.authorityVersion,
+  }
+  val reached = and { state.changedAfterVerdict, not(accepted(state)), state.effectVersion == 0 }
+  temporal progress: bool = and {
+    openEpoch.weakFair(Set(state)), grantSeat.weakFair(Set(state)),
+    recordPass.weakFair(Set(state)), changeAuthority.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: a pass can be recorded while snapshot-change progress is absent.
+  val blockedInvariant = state.verdictSnapshot == 0
+  action withoutSnapshotChange =
+    if (state.epochSnapshot == 0) openEpoch
+    else if (state.seat == 0) grantSeat
+    else if (state.verdictSnapshot == 0) recordPass
+    else hold
+  action unsafeStaleReviewEffect = state' = {
+    authorityVersion: 2, complete: true, fresh: true,
+    epochSnapshot: 1, seat: 1, verdictSnapshot: 1, verdictSeat: 1,
+    changedAfterVerdict: true, effectVersion: 1,
+  }
+}
+
+// GS2-03.10 model 4: destructive contraction is authorized by successful observations at
+// four ordered readings, not elapsed wall time. Day 30 alone is not evidence for days 0/7/14.
+module GS20310CutoverModel {
+  type CutoverModelState = { readings: Set[int], v1Fenced: bool, contracted: bool }
+  var state: CutoverModelState
+  action init = state' = { readings: Set(), v1Fenced: false, contracted: false }
+  action observe0 = all { not(state.readings.contains(0)), state' = { ...state, readings: state.readings.union(Set(0)) } }
+  action observe7 = all { state.readings.contains(0), not(state.readings.contains(7)),
+    state' = { ...state, readings: state.readings.union(Set(7)) } }
+  action observe14 = all { state.readings.contains(7), not(state.readings.contains(14)),
+    state' = { ...state, readings: state.readings.union(Set(14)) } }
+  action observe30 = all { state.readings.contains(14), not(state.readings.contains(30)),
+    state' = { ...state, readings: state.readings.union(Set(30)) } }
+  action fenceV1 = all { not(state.v1Fenced), state' = { ...state, v1Fenced: true } }
+  action contract = all {
+    state.v1Fenced, state.readings == Set(0, 7, 14, 30),
+    state' = { ...state, contracted: true },
+  }
+  action hold = state' = state
+  action step = any { observe0, observe7, observe14, observe30, fenceV1, contract, hold }
+  val safety = not(state.contracted) or and {
+    state.v1Fenced, state.readings == Set(0, 7, 14, 30),
+  }
+  val reached = state.contracted
+  temporal progress: bool = and {
+    observe0.weakFair(Set(state)), observe7.weakFair(Set(state)),
+    observe14.weakFair(Set(state)), observe30.weakFair(Set(state)),
+    fenceV1.weakFair(Set(state)), contract.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: fencing alone can occur while every observation is absent.
+  val blockedInvariant = not(state.v1Fenced)
+  action withoutObservations = if (not(state.v1Fenced)) fenceV1 else hold
+  action unsafeDay30Jump = state' = { ...state, readings: Set(30), v1Fenced: true, contracted: true }
 }
 
 // GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only

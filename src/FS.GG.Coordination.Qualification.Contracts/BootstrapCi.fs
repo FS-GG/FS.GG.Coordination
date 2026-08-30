@@ -545,7 +545,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
             formalRows
             |> List.map (fun (id, manifest, trace, itf) -> $"%s{id}|%s{manifest}|%s{trace}|%s{itf}")
             |> String.concat ";"
-        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|101|151|126|32|%s{preparationDigest}|%s{formalIdentity}|none|none"))
+        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|126|186|161|47|%s{preparationDigest}|%s{formalIdentity}|none|none"))
         let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
         let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
         let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
@@ -555,22 +555,23 @@ let private inspectCanonicalQuintReceipt (path: string) =
               yield violation "quint-receipt-schema" "unsupported or absent schema"
           if stringProperty "q1Outcome" root <> Some "passed" || stringProperty "q2Outcome" root <> Some "passed" then
               yield violation "quint-receipt-outcome" "Q1 and Q2 must both pass"
-          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 101L then
-              yield violation "quint-receipt-inventory" "expected eight positive invariants and 101 observed negative-control rejections"
+          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 126L then
+              yield violation "quint-receipt-inventory" "expected eight positive invariants and 126 observed negative-control rejections"
           if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
               yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
-          if int64Property "external" processCounts <> Some 151L
-             || int64Property "quintCli" processCounts <> Some 126L
-             || int64Property "apalacheVerify" processCounts <> Some 32L then
-              yield violation "quint-receipt-process-count" "expected exact retained process inventory 151/126/32"
+          if int64Property "external" processCounts <> Some 186L
+             || int64Property "quintCli" processCounts <> Some 161L
+             || int64Property "apalacheVerify" processCounts <> Some 47L then
+            yield violation "quint-receipt-process-count" "expected labeled retained process inventory 186/161/47"
           if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
               yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
           let expectedFormalIds =
-              [ "claim-election"; "epoch"; "lifecycle"; "operation-saga"; "relation-mutation"; "rollback" ]
+              [ "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "journal-fencing"
+                "journal-reconciliation"; "lifecycle"; "operation-saga"; "relation-mutation"; "review-epoch"; "rollback" ]
           if formalRows |> List.map (fun (id, _, _, _) -> id) <> expectedFormalIds
              || formalRows |> List.exists (fun (_, manifest, trace, itf) ->
                  not (isLowerSha256 manifest && isLowerSha256 trace && isLowerSha256 itf)) then
-              yield violation "quint-receipt-formal-counterexamples" "expected six digest-bound formal counterexamples"
+              yield violation "quint-receipt-formal-counterexamples" "expected eleven digest-bound formal counterexamples"
           if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then
               yield violation "quint-receipt-tool-properties" (String.concat "," toolProperties)
           if inputProperties <> [ "sourceSha256"; "contractSha256" ] then
@@ -583,8 +584,8 @@ let private inspectCanonicalQuintReceipt (path: string) =
               if stringProperty name tools <> Some expected then
                   yield violation "quint-receipt-tool-digest" name
           let expectedInputs =
-              [ "sourceSha256", "cb6f4f5203d8c5bd87abcbc6cf03d37824f8e7fe5db209c9b029f9a2e334c223"
-                "contractSha256", "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76" ]
+              [ "sourceSha256", "1b68e99361f6ed3cc5762f31d3e32c7c6fa8bc4a0a06a127aa8ce94886cb9528"
+                "contractSha256", "947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e" ]
           for name, expected in expectedInputs do
               if stringProperty name inputs <> Some expected then
                   yield violation "quint-receipt-input-digest" name
