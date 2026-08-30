@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source eng/bootstrap-gates/runner-temp.sh
+fsgg_resolve_runner_temp
 
 version="1.7.12"
 archive_sha256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
-tool_root="${RUNNER_TEMP:?RUNNER_TEMP is required}/actionlint-$version"
+tool_root="$RUNNER_TEMP/actionlint-$version"
 archive="$tool_root/actionlint.tar.gz"
 binary="$tool_root/actionlint"
 

@@ -77,6 +77,7 @@ let ``candidate workflow is manual exact-sha and pre-production only`` () =
 let ``candidate implementation has one pack call and two clean consumers`` () =
     let implementation = File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
     let qualification = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/compiler-and-tests.sh"))
+    let runnerTemp = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/runner-temp.sh"))
     let packToken = "\"pack\"; packageProject"
     Assert.Equal(1, implementation.Split(packToken, StringSplitOptions.None).Length - 1)
     Assert.Contains("SPDX-2.3", implementation)
@@ -101,6 +102,14 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("projectTrackedSource", implementation)
     Assert.Contains("git status --porcelain --untracked-files=all", qualification)
     Assert.Contains("identity-bound qualification requires a clean committed candidate", qualification)
+    Assert.Contains("fsgg_resolve_runner_temp", qualification)
+    Assert.Contains("${RUNNER_TEMP:-}", runnerTemp)
+    Assert.Contains("mktemp -d", runnerTemp)
+    Assert.Contains("trap 'rm -rf", runnerTemp)
+    for gate in [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"; "deterministic-build"; "evidence-manifest"; "package-install-smoke"; "workflow-static" ] do
+        let source = File.ReadAllText(Path.Combine(root, $"eng/bootstrap-gates/{gate}.sh"))
+        Assert.Contains("source eng/bootstrap-gates/runner-temp.sh", source)
+        Assert.Contains("fsgg_resolve_runner_temp", source)
     Assert.Contains("\"archive\"; \"--format=zip\"", implementation)
     Assert.Contains("tracked-source", implementation)
     Assert.Contains("SequenceEqual", implementation)

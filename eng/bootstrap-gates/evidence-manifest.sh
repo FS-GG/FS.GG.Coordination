@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source eng/bootstrap-gates/runner-temp.sh
+fsgg_resolve_runner_temp
 decision="$RUNNER_TEMP/bootstrap-decision/decision.json"
 route="$(jq -er '.decision' "$decision")"
 
