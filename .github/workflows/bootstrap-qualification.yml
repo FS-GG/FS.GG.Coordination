@@ -23,6 +23,7 @@ jobs:
     outputs:
       route: ${{ steps.decide.outputs.route }}
       prior-run-id: ${{ steps.decide.outputs.prior-run-id }}
+      subject-sha: ${{ steps.decide.outputs.subject-sha }}
     env:
       GH_TOKEN: ${{ github.token }}
       FSGG_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -209,6 +210,7 @@ jobs:
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-evidence-manifest
       FSGG_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      FSGG_QUALIFICATION_SUBJECT_SHA: ${{ needs.reuse-decision.outputs.subject-sha }}
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -240,6 +242,6 @@ jobs:
       - name: Upload qualification evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: bootstrap-evidence-manifest
+          name: bootstrap-evidence-manifest-${{ needs.reuse-decision.outputs.subject-sha }}
           path: ${{ runner.temp }}/bootstrap-evidence.json
           if-no-files-found: error

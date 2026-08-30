@@ -263,6 +263,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "    outputs:"
     line "      route: ${{ steps.decide.outputs.route }}"
     line "      prior-run-id: ${{ steps.decide.outputs.prior-run-id }}"
+    line "      subject-sha: ${{ steps.decide.outputs.subject-sha }}"
     line "    env:"
     line "      GH_TOKEN: ${{ github.token }}"
     line "      FSGG_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}"
