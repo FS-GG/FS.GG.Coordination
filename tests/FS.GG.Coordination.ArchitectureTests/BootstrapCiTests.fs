@@ -419,7 +419,7 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 22)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 900)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 300)
-    Assert.InRange(gateLines, 1, 140)
+    Assert.InRange(gateLines, 1, 190)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
@@ -430,6 +430,18 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.DoesNotContain("NUGET_PACKAGES: ${{ runner.", workflow)
     Assert.DoesNotContain("FSGG_QUINT_RECEIPT: ${{ runner.", workflow)
     Assert.DoesNotContain("actions/cache@", workflow)
+
+[<Fact>]
+let ``dependency and security gate statically checks every workflow with an inverted context fixture`` () =
+    let entryPoint =
+        File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/dependency-and-security.sh"))
+    let validator =
+        File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/workflow-static.sh"))
+    Assert.Contains("bash eng/bootstrap-gates/workflow-static.sh", entryPoint)
+    Assert.Contains("version=\"1.7.12\"", validator)
+    Assert.Contains("8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8", validator)
+    Assert.Contains("context \"runner\" is not allowed here", validator)
+    Assert.Contains("WORKFLOW_STATIC_MUTATION_SURVIVED", validator)
 
 [<Fact>]
 let ``bootstrap workflow rejects a missing gate`` () =

@@ -22,9 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      CANDIDATE_OUTPUT: ${{ runner.temp }}/candidate
-      SERVED_OUTPUT: ${{ runner.temp }}/served
-      NUGET_PACKAGES: ${{ runner.temp }}/prepare-nuget
+      CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-candidate
+      SERVED_OUTPUT: /tmp/fsgg-${{ github.run_id }}-served
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-prepare-nuget
     steps:
       - name: Check out the exact protected candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
