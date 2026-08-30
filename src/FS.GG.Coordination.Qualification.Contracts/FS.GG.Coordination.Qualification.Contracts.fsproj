@@ -17,6 +17,8 @@
     <Compile Include="RoadmapWork.fs" />
     <Compile Include="QualificationManifest.fsi" />
     <Compile Include="QualificationManifest.fs" />
+    <Compile Include="CritiqueEvidence.fsi" />
+    <Compile Include="CritiqueEvidence.fs" />
   </ItemGroup>
 
   <ItemGroup>

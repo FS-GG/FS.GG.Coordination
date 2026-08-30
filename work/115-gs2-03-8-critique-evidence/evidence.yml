@@ -1,0 +1,475 @@
+schemaVersion: 1
+workId: 115-gs2-03-8-critique-evidence
+stage: evidence
+status: needsEvidenceCorrection
+sourceSpec: work/115-gs2-03-8-critique-evidence/spec.md
+sourceClarifications: work/115-gs2-03-8-critique-evidence/clarifications.md
+sourceChecklist: work/115-gs2-03-8-critique-evidence/checklist.md
+sourcePlan: work/115-gs2-03-8-critique-evidence/plan.md
+sourceTasks: work/115-gs2-03-8-critique-evidence/tasks.yml
+sourceAnalysis: readiness/115-gs2-03-8-critique-evidence/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/115-gs2-03-8-critique-evidence/analysis.json
+    digest: 866d3c9225aea1b374ce9fa36056fef6ff9f6bbc66a0d834d08898b9d44baf57
+    schemaVersion: 1
+  - label: checklist
+    path: work/115-gs2-03-8-critique-evidence/checklist.md
+    digest: 42c6290db6e8fe9d66e535503b96180e2562bd1532950b594cf84b6e6fabde56
+    schemaVersion: 1
+  - label: clarifications
+    path: work/115-gs2-03-8-critique-evidence/clarifications.md
+    digest: db4ce26c7e557323d90829c810c51edaedbe5f9953a7ca2cb88ebdf1d608c807
+    schemaVersion: 1
+  - label: plan
+    path: work/115-gs2-03-8-critique-evidence/plan.md
+    digest: 46efc556014d27bbdf25bcc6583ba5c66146b3c57e8bf970a117aa278bc8202e
+    schemaVersion: 1
+  - label: spec
+    path: work/115-gs2-03-8-critique-evidence/spec.md
+    digest: 4a1854de1a58d66a167f45eca4c9b7ebbe48e7d84c1698a4b6abd56fe0ac9f09
+    schemaVersion: 1
+  - label: tasks
+    path: work/115-gs2-03-8-critique-evidence/tasks.yml
+    digest: 744b69ce554a29fe57561dc7d18d9e94ad8929e5e3f0ad7197000c3a32656ef5
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: missing
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: missing
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: missing
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: missing
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: missing
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: missing
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: missing
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006, PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: missing
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007, PD-008]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: missing
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: missing
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV011
+    kind: missing
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV012
+    kind: missing
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-005]
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV013
+    kind: missing
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-001, FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV014
+    kind: missing
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-003, FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV015
+    kind: missing
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV016
+    kind: missing
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV017
+    kind: missing
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV018
+    kind: missing
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV019
+    kind: missing
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV020
+    kind: missing
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV021
+    kind: missing
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV022
+    kind: missing
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV023
+    kind: missing
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/CritiqueEvidenceArchitectureTests.fs
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
