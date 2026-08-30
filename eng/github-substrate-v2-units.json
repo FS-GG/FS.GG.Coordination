@@ -388,15 +388,15 @@
       "title": "Add critique evidence gates",
       "owner": "FS.GG.Coordination",
       "prerequisites": ["GS2-03.7"],
-      "permissionCeiling": ["repository-local typed architecture, security, adapter, migration, and cutover critique findings, exact-candidate and exact-evidence binding, deterministic roll-up derivation, validation, and evidence", "no external or multiple authorization requirement, network, live GitHub mutation, deployment, publication, production write, or successor-unit implementation authority"],
-      "exitGate": "architecture, security, adapter, migration, and cutover perspectives each produce an independently identified typed finding bound to the exact candidate and evidence fingerprints, and green is derived only when every required finding is present, current, bound, and green; a self-authored or prose-only green roll-up cannot satisfy Q7",
+      "permissionCeiling": ["repository-local typed architecture, security, adapter, migration, and cutover critique findings under distinct phase identities, exact-candidate and exact-evidence binding, deterministic roll-up derivation, validation, and evidence", "one Accountable Delivery Owner may perform every perspective and makes the sole acceptance decision; no external or multiple authorization requirement, network, live GitHub mutation, deployment, publication, production write, or successor-unit implementation authority"],
+      "exitGate": "architecture, security, adapter, migration, and cutover perspectives each produce an independently identified typed finding under a distinct phase identity bound to the exact candidate and evidence fingerprints; the Accountable Delivery Owner makes the sole acceptance decision, and green is derived only when every required finding is present, current, bound, and green; a self-authored or prose-only green roll-up cannot satisfy Q7",
       "qGates": ["Q7"],
       "gateCommands": ["architecture-tests", "evidence-storage-contract"],
       "gateContracts": [
         { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" },
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
-      "contractSha256": "6e2c6c9b1ad49b2eefeeca650bbb8d311af6f6973ab2d043ceb9c46cad403440"
+      "contractSha256": "c38b9ed4a473a99ee1bb6b43dddcafc06c153e6f1b698fbb44f45af018f52920"
     }
   ]
 }

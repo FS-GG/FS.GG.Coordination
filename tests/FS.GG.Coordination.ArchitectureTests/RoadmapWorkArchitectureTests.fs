@@ -507,6 +507,8 @@ let ``roadmap unit index advances through GS2-03-8 without successor implementat
         units
         |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-03.8")
 
+    Assert.Equal("Add critique evidence gates", reviewGatesUnit.GetProperty("title").GetString())
+
     Assert.Equal<string list>(
         [ "GS2-03.7" ],
         reviewGatesUnit.GetProperty("prerequisites").EnumerateArray()
@@ -531,6 +533,9 @@ let ``roadmap unit index advances through GS2-03-8 without successor implementat
           "cutover"
           "exact candidate"
           "evidence fingerprints"
+          "distinct phase identity"
+          "Accountable Delivery Owner"
+          "sole acceptance decision"
           "self-authored"
           "prose-only" ] do
         Assert.Contains(requiredTerm, reviewExitGate)
