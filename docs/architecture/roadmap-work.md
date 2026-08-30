@@ -38,7 +38,10 @@ alternate fractional forms are refused. Its state is only
 `fsgg.coordination.gate-catalog/1`. Catalog commands are `dotnet` plus literal
 argument arrays. Each selected entry must match the unit contract's ordered ID,
 Q gate, and SHA-256 of its executable-plus-arguments identity before any process
-starts. An admitted mutation such as `--list-tests` is therefore refused. There is
+starts. The manifest must bind the exact tracked catalog path and digest as one of
+its artifacts, and gate execution repeats the same receipt-directory prerequisite
+validation used to create the manifest; omitting either input is a pre-execution
+refusal. An admitted mutation such as `--list-tests` is therefore refused. There is
 no shell interpolation or caller override, and an external index cannot redefine
 the selected unit. Gate execution revalidates the manifest, current commit/tree,
 tracked index, and artifacts, runs the selected

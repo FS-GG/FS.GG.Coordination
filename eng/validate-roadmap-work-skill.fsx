@@ -24,6 +24,8 @@ else
               "roadmap-work prerequisites"
               "roadmap-work manifest"
               "roadmap-work gates"
+              "--receipts"
+              "--artifact gate-catalog=eng/github-substrate-v2-gates.json"
               "Stop at the unit boundary"
               "Project status is not authority" ]
         let forbidden =
