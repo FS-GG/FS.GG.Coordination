@@ -262,8 +262,21 @@ let ``bootstrap workflow satisfies the reuse decision plus exact seven-gate cont
 let ``reuse telemetry measures completed runner jobs without becoming route authority`` () =
     let entryPoint = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/reuse-decision.sh"))
     Assert.Contains("actions/runs/$run_id/jobs?filter=latest&per_page=100", entryPoint)
+    Assert.Contains("artifact_name=\"bootstrap-evidence-manifest-$subject\"", entryPoint)
+    Assert.Contains("artifacts?name=$artifact_name&per_page=$max_candidates", entryPoint)
+    Assert.Contains("printf 'subject-sha=%s", entryPoint)
     Assert.Contains("runner_minutes=\"\"", entryPoint)
     Assert.Contains("select_args+=(--runner-minutes \"$runner_minutes\")", entryPoint)
+
+[<Fact>]
+let ``subject indexed terminal evidence is projected and normalized fail closed`` () =
+    let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+    let terminal = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/evidence-manifest.sh"))
+    Assert.Contains("subject-sha: ${{ steps.decide.outputs.subject-sha }}", workflow)
+    Assert.Contains("name: bootstrap-evidence-manifest-${{ needs.reuse-decision.outputs.subject-sha }}", workflow)
+    Assert.Contains("FSGG_QUALIFICATION_SUBJECT_SHA: ${{ needs.reuse-decision.outputs.subject-sha }}", workflow)
+    Assert.Contains("subject-indexed prior evidence is missing or ambiguous", terminal)
+    Assert.Contains("mv \"$subject_manifest\" \"$canonical_manifest\"", terminal)
 
 [<Fact>]
 let ``production FSI adapter matches the compiled green outcome`` () =

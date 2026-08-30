@@ -141,9 +141,10 @@
       "downloadArtifacts": true,
       "environment": {
         "NUGET_PACKAGES": "/tmp/fsgg-${{ github.run_id }}-nuget-evidence-manifest",
-        "FSGG_CANDIDATE_SHA": "${{ github.event.pull_request.head.sha || github.sha }}"
+        "FSGG_CANDIDATE_SHA": "${{ github.event.pull_request.head.sha || github.sha }}",
+        "FSGG_QUALIFICATION_SUBJECT_SHA": "${{ needs.reuse-decision.outputs.subject-sha }}"
       },
-      "uploadName": "bootstrap-evidence-manifest",
+      "uploadName": "bootstrap-evidence-manifest-${{ needs.reuse-decision.outputs.subject-sha }}",
       "uploadPath": "${{ runner.temp }}/bootstrap-evidence.json",
       "needs": ["deterministic-build", "compiler-and-tests", "canonical-quint", "dependency-and-security", "package-install-smoke", "bootstrap-recovery"]
     }

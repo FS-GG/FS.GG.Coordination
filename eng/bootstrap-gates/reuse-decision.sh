@@ -10,13 +10,18 @@ mkdir -p "$root"
 decision="$root/decision.json"
 candidates="$root/candidates.json"
 not_before="$(jq -er '.reuse.notBefore' eng/bootstrap-qualification-plan.json)"
+max_candidates="$(jq -er '.reuse.maxCandidateArtifacts | select(. > 0 and . <= 100)' eng/bootstrap-qualification-plan.json)"
 
 write_execute() {
   dotnet fsi eng/bootstrap-ci.fsx -- select --root . --head "$candidate" --output "$decision"
 }
 
-if ! gh api "repos/$repository/actions/artifacts?name=bootstrap-evidence-manifest&per_page=100" >"$candidates"; then
-  write_execute
+write_execute
+subject="$(jq -er '.subjectSha256' "$decision")"
+artifact_name="bootstrap-evidence-manifest-$subject"
+
+if ! gh api "repos/$repository/actions/artifacts?name=$artifact_name&per_page=$max_candidates" >"$candidates"; then
+  :
 else
   selected=false
   while IFS=$'\t' read -r artifact_id run_id prior_head expires_at; do
@@ -61,8 +66,9 @@ else
       selected=true
       break
     fi
-  done < <(jq -r --arg current "$current_run" --arg not_before "$not_before" '
+  done < <(jq -r --arg current "$current_run" --arg not_before "$not_before" --arg artifact_name "$artifact_name" '
       [.artifacts[]
+       | select(.name == $artifact_name)
        | select(.expired == false)
        | select(.created_at >= $not_before)
        | select((.workflow_run.id | tostring) != $current)
@@ -75,7 +81,9 @@ else
 fi
 
 route="$(jq -er '.decision' "$decision")"
+subject="$(jq -er '.subjectSha256' "$decision")"
 prior_run="$(jq -r '.prior.runId // ""' "$decision")"
 printf 'route=%s\n' "$route" >>"${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 printf 'prior-run-id=%s\n' "$prior_run" >>"$GITHUB_OUTPUT"
+printf 'subject-sha=%s\n' "$subject" >>"$GITHUB_OUTPUT"
 printf 'qualification route: %s\n' "$route"
