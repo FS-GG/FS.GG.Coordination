@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <CoordinationCandidateVersion Condition="'$(CoordinationCandidateVersion)' == ''">0.0.0-invalid</CoordinationCandidateVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+    <PackageReference Include="FS.GG.Coordination.Protocol" Version="[$(CoordinationCandidateVersion)]" />
+  </ItemGroup>
+</Project>
