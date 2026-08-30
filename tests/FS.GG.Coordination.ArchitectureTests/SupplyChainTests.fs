@@ -27,8 +27,8 @@ let ``candidate supply chain proves positive and independent negative controls``
     let exitCode, output, error = runSelfTest ()
     Assert.Equal(0, exitCode)
     Assert.Equal("", error)
-    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=5", output)
-    for caseName in [ "package-tamper"; "sbom-tamper"; "channel-substitution"; "stable-version"; "repack-count" ] do
+    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=9", output)
+    for caseName in [ "package-tamper"; "sbom-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected" ] do
         Assert.Contains(caseName, output)
 
 [<Fact>]
@@ -38,11 +38,13 @@ let ``candidate workflow is manual exact-sha and pre-production only`` () =
     Assert.Contains("expected_sha:", workflow)
     Assert.Contains("permissions:\n  contents: read\n  packages: write", workflow)
     Assert.Contains("dotnet fsi eng/supply-chain-candidate.fsx -- prepare", workflow)
+    Assert.Contains("git merge-base --is-ancestor", workflow)
+    Assert.Contains("--protected-ref refs/remotes/origin/main", workflow)
     Assert.Contains("https://nuget.pkg.github.com/FS-GG/index.json", workflow)
     Assert.Contains("https://nuget.pkg.github.com/fs-gg/download/", workflow)
     Assert.Contains("dotnet fsi eng/supply-chain-candidate.fsx -- verify-served", workflow)
     Assert.Contains("retention-days: 90", workflow)
-    Assert.DoesNotContain("api.nuget.org/v3/index.json\n          --skip-duplicate", workflow)
+    Assert.DoesNotContain("nuget.org", workflow.ToLowerInvariant())
     Assert.DoesNotContain("gh release", workflow)
     Assert.DoesNotContain("git tag", workflow)
     Assert.DoesNotContain("environment:", workflow)
@@ -55,6 +57,7 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("SPDX-2.3", implementation)
     Assert.Contains("https://in-toto.io/Statement/v1", implementation)
     Assert.Contains("packInvocations", implementation)
+    Assert.Contains("canonicalizePackage", implementation)
     Assert.Contains("SequenceEqual", implementation)
     Assert.Contains("supply-chain-consumer-a", implementation)
     Assert.Contains("supply-chain-consumer-b", implementation)

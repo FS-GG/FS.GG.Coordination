@@ -43,6 +43,8 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "${{ inputs.expected_sha }}"
           [[ "$actual" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$actual" refs/remotes/origin/main
           version="0.0.0-gs2-03-7.${actual:0:12}"
           printf 'candidate=%s\nversion=%s\n' "$actual" "$version" >> "$GITHUB_OUTPUT"
       - name: Pack once and generate supply-chain evidence
@@ -51,6 +53,7 @@ jobs:
           --repo .
           --candidate "${{ steps.identity.outputs.candidate }}"
           --version "${{ steps.identity.outputs.version }}"
+          --protected-ref refs/remotes/origin/main
           --output "$CANDIDATE_OUTPUT"
       - name: Verify prepared evidence before publication
         run: >-
