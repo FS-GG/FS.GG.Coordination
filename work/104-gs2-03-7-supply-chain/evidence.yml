@@ -11,7 +11,7 @@ sourceAnalysis: readiness/104-gs2-03-7-supply-chain/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/104-gs2-03-7-supply-chain/analysis.json
-    digest: 0f9b86cb56b8c3aae84b281fab5bf56baf022f2c15383d5234a7df541db3db4f
+    digest: db9a1cb58f12dc3c84740bb0c3ece5ff6f9d34b228b2faf706e3601769050534
     schemaVersion: 1
   - label: checklist
     path: work/104-gs2-03-7-supply-chain/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/104-gs2-03-7-supply-chain/plan.md
-    digest: f08770718be59e96aed78fc9b4ac93c4a9b86427a1947100d2b321721cc483ad
+    digest: 63dd4590673eeedcc16156894836333a91e2ecdc5b2081a39536da687b41b17a
     schemaVersion: 1
   - label: spec
     path: work/104-gs2-03-7-supply-chain/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/104-gs2-03-7-supply-chain/tasks.yml
-    digest: 723c9c48a0d62b48a1b22bce8f587522a17238873f348020523d73d8c16f2e91
+    digest: b41cf92a8a7d8fdba37cbff7733e98787e66a9d092d7e0fc1640bd7a1c7c522f
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:aabc7217aeed42f92863e54e90da584e317d159a122f32f1f0c4df36fa6009f2"
+      digest: "sha256:0efc11f7872dbe8c1dc35e472ad7763a17a67b5241d287755fea00b0a17543a3"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
