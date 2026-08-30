@@ -1,0 +1,15 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-03.6",
+  "state": "accepted",
+  "unitContractSha256": "26d5605dd8cb35d0e26a8038c23b094874ce20fbcba47adc773c928e97e2a610",
+  "sourceRevision": "df8e7d290c9990087ada6c2cd62e859db976f0ee",
+  "artifacts": [
+    {
+      "name": "merge-commit",
+      "sha256": "6bc1ef5567f125159b795bbcb8cd57b23b98cdafdf3a6730f484c0bfe8c30ab3"
+    }
+  ],
+  "acceptedAt": "2026-08-30T02:18:17Z",
+  "digest": "20cc7aad8231fcdd5b99d63e17817e33ba4d835d266238efa357e4d363a27778"
+}

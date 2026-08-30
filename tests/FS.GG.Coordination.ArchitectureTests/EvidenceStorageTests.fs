@@ -24,7 +24,7 @@ let ``evidence storage contract and all independent negative cases pass`` () =
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.Equal(0, child.ExitCode)
-    Assert.Contains("EVIDENCE_STORAGE_OK categories=10 entries=53 maxTrackedBytes=65536 frozenCorpusCases=21 observed=2 unobserved=19 aggregate=bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753", output)
+    Assert.Contains("EVIDENCE_STORAGE_OK categories=10 entries=54 maxTrackedBytes=65536 frozenCorpusCases=21 observed=2 unobserved=19 aggregate=bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753", output)
     Assert.Contains("EVIDENCE_STORAGE_SELF_TEST_OK negativeCases=52 positiveArtifactManifests=1", output)
     Assert.Equal("", error)
 
