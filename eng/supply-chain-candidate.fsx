@@ -80,6 +80,9 @@ let required name (values: Map<string, string>) =
     values |> Map.tryFind name |> Option.filter (String.IsNullOrWhiteSpace >> not)
     |> Option.defaultWith (fun () -> fail $"required option is missing: {name}")
 
+let optional name (values: Map<string, string>) =
+    values |> Map.tryFind name |> Option.filter (String.IsNullOrWhiteSpace >> not)
+
 let requireIdentity (candidate: string) (version: string) (selectedChannel: string) =
     require (shaPattern.IsMatch candidate) "candidate must be a lowercase 40-character Git SHA"
     let matched = versionPattern.Match version
@@ -99,6 +102,59 @@ let zipEntries packagePath =
         {| path = entry.FullName.Replace('\\', '/'); size = bytes.LongLength; sha256 = sha256Bytes bytes |})
     |> Seq.sortBy _.path
     |> Seq.toArray
+
+let canonicalizePackage packagePath =
+    let entries =
+        use archive = ZipFile.OpenRead packagePath
+        archive.Entries
+        |> Seq.map (fun entry ->
+            use stream = entry.Open()
+            use memory = new MemoryStream()
+            stream.CopyTo memory
+            entry.FullName.Replace('\\', '/'), entry.ExternalAttributes, memory.ToArray())
+        |> Seq.sortWith (fun (left, _, _) (right, _, _) -> StringComparer.Ordinal.Compare(left, right))
+        |> Seq.toArray
+    let canonical = packagePath + ".canonical"
+    use file = new FileStream(canonical, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+    use archive = new ZipArchive(file, ZipArchiveMode.Create, false, UTF8Encoding(false))
+    for name, attributes, bytes in entries do
+        let entry = archive.CreateEntry(name, CompressionLevel.Optimal)
+        entry.LastWriteTime <- DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        entry.ExternalAttributes <- attributes
+        if not (name.EndsWith("/", StringComparison.Ordinal)) then
+            use target = entry.Open()
+            target.Write bytes
+    archive.Dispose()
+    file.Dispose()
+    File.Move(canonical, packagePath, true)
+
+let occurrenceCount (needle: string) (text: string) =
+    text.Split(needle, StringSplitOptions.None).Length - 1
+
+let validateWorkflowText (workflow: string) =
+    require (not (String.IsNullOrWhiteSpace workflow)) "candidate workflow is empty or unreadable"
+    let normalized = workflow.Replace("\r\n", "\n")
+    let lineCount pattern = Regex.Matches(normalized, pattern, RegexOptions.Multiline ||| RegexOptions.CultureInvariant).Count
+    require (lineCount "^  workflow_dispatch:$" = 1) "candidate workflow must be manual-only"
+    for forbiddenTrigger in [ "push"; "pull_request"; "schedule"; "repository_dispatch" ] do
+        require (lineCount $"^  {Regex.Escape forbiddenTrigger}:" = 0) $"candidate workflow enables forbidden trigger: {forbiddenTrigger}"
+    require (lineCount "^[ ]+dotnet nuget push(?:[ ]|$)" = 1) "candidate workflow must contain exactly one active NuGet publication command"
+    require (occurrenceCount "--source https://nuget.pkg.github.com/FS-GG/index.json" normalized = 1) "candidate workflow must publish exactly once to the allowed endpoint"
+    require (occurrenceCount "https://nuget.pkg.github.com/FS-GG/index.json" normalized = 1) "candidate workflow has an ambiguous publication endpoint"
+    require (not (normalized.Contains("nuget.org", StringComparison.OrdinalIgnoreCase))) "candidate workflow references nuget.org"
+    require (not (normalized.Contains("continue-on-error", StringComparison.OrdinalIgnoreCase))) "candidate workflow can bypass a failed publication control"
+    require (not (Regex.IsMatch(normalized, "^[ ]+if:[ ]*(false|\\$\\{\\{[ ]*false[ ]*\\}\\})[ ]*$", RegexOptions.Multiline ||| RegexOptions.IgnoreCase))) "candidate workflow disables a step"
+    require (occurrenceCount "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main" normalized = 1) "candidate workflow does not fetch protected-main authority"
+    require (occurrenceCount "--protected-ref refs/remotes/origin/main" normalized = 1) "candidate workflow does not bind preparation to protected-main ancestry"
+    require (occurrenceCount "packages: write" normalized = 1) "candidate workflow package permission is missing or ambiguous"
+    require (not (normalized.Contains("gh release", StringComparison.OrdinalIgnoreCase))) "candidate workflow creates a release"
+    require (not (Regex.IsMatch(normalized, "^[ ]+git tag(?:[ ]|$)", RegexOptions.Multiline))) "candidate workflow creates a tag"
+    require (not (Regex.IsMatch(normalized, "^[ ]+environment:", RegexOptions.Multiline))) "candidate workflow targets a deployment environment"
+
+let validateWorkflow repo =
+    let path = Path.Combine(repo, ".github", "workflows", "candidate-supply-chain.yml")
+    require (File.Exists path) "candidate workflow does not exist"
+    validateWorkflowText (File.ReadAllText path)
 
 let nuspecDependencies packagePath =
     use archive = ZipFile.OpenRead packagePath
@@ -171,7 +227,7 @@ let createPreparedEvidence repo candidate version commitTime packagePath output 
            sbom = {| file = "sbom.spdx.json"; schema = "SPDX-2.3"; sha256 = sbomDigest |}
            attestations = [| {| file = "provenance.intoto.json"; predicateType = "https://slsa.dev/provenance/v1"; sha256 = provenanceDigest |} |]
            inputs = [| {| path = packageLock; sha256 = lockDigest |} |]
-           stages = [| "identity-bound"; "restored"; "built"; "packed-once"; "sbom-generated"; "provenance-generated"; "prepared-verified" |] |}
+           stages = [| "identity-bound"; "restored"; "built"; "packed-once"; "package-canonicalized"; "sbom-generated"; "provenance-generated"; "prepared-verified" |] |}
     let canonical = JsonSerializer.SerializeToUtf8Bytes(manifestWithoutDigest, jsonOptions)
     let manifest = {| payload = manifestWithoutDigest; selfSha256 = sha256Bytes canonical |}
     let manifestPath = Path.Combine(output, "candidate.json")
@@ -233,12 +289,17 @@ let verifyPrepared manifestPath =
     require (stringAt manifest "selfSha256" = sha256Bytes payloadBytes) "candidate manifest self digest mismatch"
     packagePath, candidate, version, stringAt package "sha256", stringAt payload "commitTime"
 
-let cleanGitCandidate repo expected =
+let cleanGitCandidate repo expected protectedRef =
     let head = run repo "git" [ "rev-parse"; "HEAD" ] []
     require (head = expected) "checked-out HEAD does not match expected candidate"
     let status = run repo "git" [ "status"; "--porcelain" ] []
     require (String.IsNullOrWhiteSpace status) "candidate checkout must be clean before packaging"
     run repo "git" [ "cat-file"; "-e"; expected + "^{commit}" ] [] |> ignore
+    match protectedRef with
+    | Some reference ->
+        run repo "git" [ "rev-parse"; "--verify"; reference + "^{commit}" ] [] |> ignore
+        run repo "git" [ "merge-base"; "--is-ancestor"; expected; reference ] [] |> ignore
+    | None -> ()
     run repo "git" [ "show"; "-s"; "--format=%cI"; expected ] []
 
 let prepare values =
@@ -247,7 +308,8 @@ let prepare values =
     let version = required "--version" values
     let output = required "--output" values |> canonicalFullPath
     requireIdentity candidate version channel
-    let commitTime = cleanGitCandidate repo candidate
+    validateWorkflow repo
+    let commitTime = cleanGitCandidate repo candidate (optional "--protected-ref" values)
     require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "output directory must be empty"
     Directory.CreateDirectory output |> ignore
     run repo "dotnet" [ "restore"; packageProject; "--locked-mode" ] [] |> ignore
@@ -257,6 +319,7 @@ let prepare values =
     run repo "dotnet" [ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--output"; packOutput; "-p:IsPackable=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] [] |> ignore
     let packages = Directory.GetFiles(packOutput, "*.nupkg", SearchOption.TopDirectoryOnly)
     require (packages.Length = 1) "exactly one candidate package must be produced"
+    canonicalizePackage packages[0]
     let manifest = createPreparedEvidence repo candidate version commitTime packages[0] output
     verifyPrepared manifest |> ignore
     Directory.Delete(packOutput, true)
@@ -348,6 +411,7 @@ let expectRefusal (action: unit -> unit) =
 
 let selfTest values =
     let repo = required "--repo" values |> canonicalFullPath
+    validateWorkflow repo
     let scratch = Path.Combine(Path.GetTempPath(), "fsgg-supply-chain-selftest-" + Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory scratch |> ignore
     try
@@ -355,6 +419,15 @@ let selfTest values =
         let version = "0.0.0-gs2-03-7." + candidate.Substring(0, 12)
         let package = Path.Combine(scratch, $"{packageId}.{version}.nupkg")
         createFakePackage package version
+        let secondPackage = Path.Combine(scratch, $"second-{packageId}.{version}.nupkg")
+        createFakePackage secondPackage version
+        use secondArchive = ZipFile.Open(secondPackage, ZipArchiveMode.Update)
+        for entry in secondArchive.Entries do
+            entry.LastWriteTime <- DateTimeOffset(2025, 5, 6, 7, 8, 10, TimeSpan.Zero)
+        secondArchive.Dispose()
+        canonicalizePackage package
+        canonicalizePackage secondPackage
+        require (File.ReadAllBytes(package).AsSpan().SequenceEqual(File.ReadAllBytes(secondPackage).AsSpan())) "canonical package bytes differ across ZIP metadata"
         let output = Path.Combine(scratch, "prepared")
         let manifest = createPreparedEvidence repo candidate version "2026-08-30T00:00:00Z" package output
         verifyPrepared manifest |> ignore
@@ -375,7 +448,12 @@ let selfTest values =
         packageNode["packInvocations"] <- JsonValue.Create(2)
         writeJson manifest node
         if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "repack-count"
-        require (negative.Count = 5) "self-test did not exercise every negative control"
+        let workflow = File.ReadAllText(Path.Combine(repo, ".github", "workflows", "candidate-supply-chain.yml"))
+        if expectRefusal (fun () -> validateWorkflowText (workflow + "\n      - run: dotnet nuget push candidate.nupkg --source https://api.nuget.org/v3/index.json\n")) then negative.Add "workflow-channel-substitution"
+        if expectRefusal (fun () -> validateWorkflowText (workflow.Replace("      - name: Publish only", "      - continue-on-error: true\n      - name: Publish only"))) then negative.Add "workflow-bypass"
+        if expectRefusal (fun () -> validateWorkflowText "") then negative.Add "workflow-unreadable"
+        if expectRefusal (fun () -> validateWorkflowText (workflow.Replace("          --protected-ref refs/remotes/origin/main\n", ""))) then negative.Add "workflow-unprotected"
+        require (negative.Count = 9) "self-test did not exercise every negative control"
         printfn "SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=%d cases=%s" negative.Count (String.concat "," negative)
     finally
         if Directory.Exists scratch then Directory.Delete(scratch, true)
