@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/100-gs2-03-6-deterministic-fault-injection/plan.md
-    digest: 340a5f0ed9ad7e89e188fdf7f930974144cdb68617e656c932926eeee333fa42
+    digest: 92e0bf114fd8076b3d244da3e41e78a859212182cb7ea0033931fc952b75c904
     schemaVersion: 1
 tasks:
   - id: T001

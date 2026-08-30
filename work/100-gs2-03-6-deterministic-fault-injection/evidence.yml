@@ -11,7 +11,7 @@ sourceAnalysis: readiness/100-gs2-03-6-deterministic-fault-injection/analysis.js
 sourceSnapshots:
   - label: analysis
     path: readiness/100-gs2-03-6-deterministic-fault-injection/analysis.json
-    digest: 0f4faa51c45f926debe262426250cdc16fe66a431c1db96e5532b7c567279c9c
+    digest: 3846edb61e1d2a01c5267a286873902ea9a2160ee835d720c82678a740ea08ff
     schemaVersion: 1
   - label: checklist
     path: work/100-gs2-03-6-deterministic-fault-injection/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/100-gs2-03-6-deterministic-fault-injection/plan.md
-    digest: 340a5f0ed9ad7e89e188fdf7f930974144cdb68617e656c932926eeee333fa42
+    digest: 92e0bf114fd8076b3d244da3e41e78a859212182cb7ea0033931fc952b75c904
     schemaVersion: 1
   - label: spec
     path: work/100-gs2-03-6-deterministic-fault-injection/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/100-gs2-03-6-deterministic-fault-injection/tasks.yml
-    digest: 19b365f6c5b529accbe5229124079f4b640c942a1f13501d56a44c28d9bf0e95
+    digest: 226520726a88af2b5e6216dd16bc4faa5eba4f9127b39539ef69e6a9ec2790bb
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -46,18 +46,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -73,18 +73,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -100,18 +100,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -127,18 +127,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -154,18 +154,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -181,18 +181,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -208,18 +208,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-007]
     obligationRefs: [EV007]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -235,18 +235,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV008]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -262,18 +262,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV009]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -289,18 +289,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV010]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -316,18 +316,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV011]
-    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
+    artifacts: [evidence/github-substrate-v2/generated/GS2-03.6.json, evidence/github-substrate-v2/oracles/GS2-03.6.json, src/FS.GG.Coordination.Qualification.Contracts/FaultInjectionOracle.fs, src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json, tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/FaultInjectionTests.fs
     result: pass
     synthetic: false
     observedRun:
-      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture.trx
-      digest: "sha256:728a21a16afe0ad5a3a0a1486ec40ff32b566827fd2b362781cfabbf5a5c94ce"
+      source: work/100-gs2-03-6-deterministic-fault-injection/test-results/architecture-repair.trx
+      digest: "sha256:62cb5ff890eead1c052706757621319bd8549486f5d33838776335fc8158e745"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 237
+      passed: 239
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]

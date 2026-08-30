@@ -31,40 +31,41 @@ let ``committed matrix is deterministic complete and source bound`` () =
     let generated = FaultInjection.generate root |> Result.defaultWith failwith
     Assert.Equal<byte>(committed, generated)
     let summary = FaultInjection.validate root committed |> Result.defaultWith failwith
-    Assert.Equal(12, summary.ExternalStepCount)
-    Assert.Equal(31, summary.ScenarioCount)
-    Assert.Equal(27, summary.ConvergedCount)
+    Assert.Equal(4, summary.ExternalStepCount)
+    Assert.Equal(15, summary.ScenarioCount)
+    Assert.Equal(11, summary.ConvergedCount)
     Assert.Equal(4, summary.RefusedCount)
-    Assert.Equal("c7a1d1372dd341f57e6f591f2b8a7c77783124de48828b8a61645cbb7eee5c84", summary.SelfSha256)
+    Assert.Equal("7802d4fd2d955a123e59d8e095ca227484e37254a0f60691e107f45cc302bcbf", summary.SelfSha256)
 
 [<Fact>]
 let ``every modeled external step has before and after convergence`` () =
     let document = parseArtifact ()
     let steps = document["externalSteps"].AsArray() |> Seq.map _.GetValue<string>() |> Seq.toList
-    let scenarios = document["scenarios"].AsArray()
-    let byId = scenarios |> Seq.map (fun item -> item["id"].GetValue<string>(), item) |> Map.ofSeq
-    Assert.Equal(12, steps.Length)
+    let executions = document["executions"].AsArray()
+    let byId = executions |> Seq.map (fun item -> item["id"].GetValue<string>(), item) |> Map.ofSeq
+    Assert.Equal(4, steps.Length)
     for step in steps do
         for boundary in [ "before"; "after" ] do
             let scenario = byId[$"%s{boundary}/%s{step}"]
             Assert.Equal("converged", scenario["outcome"].GetValue<string>())
             Assert.Null(scenario["refusalCode"])
+            Assert.True(scenario["trace"].AsArray().Count > steps.Length)
 
 [<Fact>]
 let ``transport shaped ambiguity converges or refuses with exact codes`` () =
     let document = parseArtifact ()
     let byId =
-        document["scenarios"].AsArray()
+        document["executions"].AsArray()
         |> Seq.map (fun item -> item["id"].GetValue<string>(), item)
         |> Map.ofSeq
     for id in [ "lost-response"; "duplicate-event"; "reordered-events" ] do
         Assert.Equal("converged", (byId[id]["outcome"]).GetValue<string>())
         Assert.Null(byId[id]["refusalCode"])
     let refusals =
-        [ "partial-page", "FI-PARTIAL-PAGE"
-          "rate-budget-exhausted", "FI-RATE-BUDGET-EXHAUSTED"
-          "permission-revoked", "FI-PERMISSION-REVOKED"
-          "concurrent-revision", "FI-REVISION-CONFLICT" ]
+        [ "partial-page", "OBS-Incomplete"
+          "rate-budget-exhausted", "MOUT-RateLimited"
+          "permission-revoked", "OBS-Unauthorized"
+          "concurrent-revision", "MOUT-RevisionConflict" ]
     for id, code in refusals do
         Assert.Equal("refused", (byId[id]["outcome"]).GetValue<string>())
         Assert.Equal(code, (byId[id]["refusalCode"]).GetValue<string>())
@@ -76,7 +77,8 @@ let ``transport shaped ambiguity converges or refuses with exact codes`` () =
 [<InlineData("step", "FI-STEP-INVENTORY")>]
 [<InlineData("missing", "FI-SCENARIO-COUNT")>]
 [<InlineData("order", "FI-SCENARIO-ORDER")>]
-[<InlineData("outcome", "FI-SCENARIO-OUTCOME")>]
+[<InlineData("outcome", "FI-EXECUTION-TRACE")>]
+[<InlineData("trace", "FI-EXECUTION-TRACE")>]
 [<InlineData("digest", "FI-SELF-DIGEST")>]
 let ``independent inversions fail closed`` name expected =
     let bytes =
@@ -87,15 +89,36 @@ let ``independent inversions fail closed`` name expected =
             Encoding.UTF8.GetBytes(document.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
         | "source" -> mutate (fun document -> document["source"]["contractSha256"] <- String.replicate 64 "0")
         | "step" -> mutate (fun document -> document["externalSteps"].AsArray().RemoveAt(0))
-        | "missing" -> mutate (fun document -> document["scenarios"].AsArray().RemoveAt(0))
+        | "missing" -> mutate (fun document -> document["executions"].AsArray().RemoveAt(0))
         | "order" -> mutate (fun document ->
-            let scenarios = document["scenarios"].AsArray()
+            let scenarios = document["executions"].AsArray()
             let first = scenarios[0].DeepClone()
             scenarios[0] <- scenarios[1].DeepClone()
             scenarios[1] <- first)
         | "outcome" -> mutate (fun document ->
-            let scenario = document["scenarios"].AsArray()[0]
+            let scenario = document["executions"].AsArray()[0]
             scenario["outcome"] <- "refused")
+        | "trace" -> mutate (fun document ->
+            let execution = document["executions"].AsArray()[0]
+            execution["trace"].AsArray().RemoveAt(0))
         | "digest" -> mutate (fun document -> document["selfSha256"] <- String.replicate 64 "0")
         | unknown -> invalidArg "name" unknown
     assertRejected expected bytes
+
+[<Fact>]
+let ``independent oracle accepts the executed subject and rejects every subject defect`` () =
+    let executions = FaultInjection.execute root FaultInjection.SubjectDefect.None |> Result.defaultWith failwith
+    FaultInjectionOracle.validate root executions |> Result.defaultWith failwith
+    let defects =
+        [ FaultInjection.SubjectDefect.SkipRetry
+          FaultInjection.SubjectDefect.DuplicateIsApplied
+          FaultInjection.SubjectDefect.PreserveArrivalOrder
+          FaultInjection.SubjectDefect.AcceptPartialPage
+          FaultInjection.SubjectDefect.IgnoreRateBudget
+          FaultInjection.SubjectDefect.IgnorePermission
+          FaultInjection.SubjectDefect.IgnoreRevision ]
+    for defect in defects do
+        let mutated = FaultInjection.execute root defect |> Result.defaultWith failwith
+        match FaultInjectionOracle.validate root mutated with
+        | Ok _ -> failwith $"subject defect %A{defect} escaped the independent oracle"
+        | Error error -> Assert.StartsWith("FIO-", error)

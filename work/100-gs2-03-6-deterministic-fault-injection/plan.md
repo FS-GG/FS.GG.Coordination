@@ -27,11 +27,11 @@ Prose status: planned
 - Checklist result count: 7.
 
 ## Plan Decisions
-- PD-001 [AC-001] [FR-001] complete: Define the modeled external-step inventory from the accepted protocol's registered actions and mutation/revision metadata, then generate both before-step and after-step injections for every inventory row.
+- PD-001 [AC-001] [FR-001] complete: Define the modeled external-step inventory from the accepted `DSTATE-Specification.phaseContract`, then execute both before-step and after-step injections for each Inspect, Plan, Apply, and Verify boundary.
 - PD-002 [AC-001] [FR-002] complete: Use one deterministic scheduler to execute lost-response, duplicate-event, reordered-event, partial-page, rate-budget, permission-revocation, and concurrent-revision scenarios; scenario data varies inputs, not behavior.
-- PD-003 [AC-001] [FR-003] complete: Represent terminal results as a closed outcome union whose converged branch carries the final canonical state digest and whose refused branch carries an exact stable refusal code and unchanged-authority digest.
-- PD-004 [AC-001] [FR-004] complete: Generate a canonical JSON fault matrix under evidence/github-substrate-v2, bind it to accepted protocol artifacts and its own self digest, index its exact bytes, and reject omissions, substitutions, reordering, truncation, forged outcomes, and stale source identities.
-- PD-005 [AC-001] [FR-005] complete: Derive external-step and permission/revision inputs from the compiled protocol outputs already qualified by GS2-03.3; the harness may interpret those inputs but must not define an independent transition system.
+- PD-003 [AC-001] [FR-003] complete: Execute a deterministic in-memory operation subject whose state, idempotent receipts, revision changes, page completion, budget, permission, and event reduction derive terminal convergence or exact accepted `MOUT-*`/`OBS-*` refusals and retain the full trace.
+- PD-004 [AC-001] [FR-004] complete: Generate a canonical executed-trace matrix, bind it to accepted protocol artifacts and its own self digest, index exact generated-case and independent-oracle evidence, and reject both artifact mutations and seven live subject defects.
+- PD-005 [AC-001] [FR-005] complete: Derive external steps, permission/revision inputs, and refusal vocabulary from the accepted settings-plan, mutation, permission, and compiled-contract outputs already qualified by GS2-03.3; the subject interprets those facts rather than declaring a second transition system.
 - PD-006 [AC-001] [FR-006] complete: Keep all execution in FS.GG.Coordination.Qualification.Contracts using in-memory fixtures and filesystem reads beneath the repository root; introduce no HTTP/client dependency or runtime adapter surface.
 - PD-007 [AC-001] [FR-007] complete: Exercise the committed artifact through ArchitectureTests and the existing evidence-storage gate, then bind the clean candidate to roadmap manifest/gates, hosted Bootstrap CI, independent review, protected merge, and exact-main verification.
 
@@ -39,7 +39,7 @@ Prose status: planned
 - PC-001 [PD-001] qualification contract: Add a public F# qualification module with deterministic generate, validate, and check entry points plus a versioned canonical JSON schema; no runtime or network-facing API changes.
 
 ## Verification Obligations
-- VO-001 [PD-001] [PC-001] semanticTest: Architecture tests must prove complete two-sided step coverage, every named failure class, exact convergence/refusal outcomes, deterministic regeneration, source binding, and independent red controls; the evidence-storage validator must accept the indexed exact bytes.
+- VO-001 [PD-001] [PC-001] semanticTest: Architecture tests must prove complete two-sided executed step coverage, every named failure class, exact convergence/refusal outcomes, retained trace freshness, deterministic regeneration, and source binding; an independently implemented oracle must reject skipped retry, applied duplicate, arrival-order preservation, accepted partial pages, and ignored budget/permission/revision guards.
 
 ## Performance Intent
 No performance intent is declared for this work item.
