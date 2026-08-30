@@ -11,7 +11,7 @@ sourceAnalysis: readiness/104-gs2-03-7-supply-chain/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/104-gs2-03-7-supply-chain/analysis.json
-    digest: 9d36304a349cd38e7eac6d845b3699daeae981536946c62a802dbaee33d94be1
+    digest: 9dbfc9e3d9042e92c5712812da46fcc2d5aa1c55326429c8d2cdffac6a1db48d
     schemaVersion: 1
   - label: checklist
     path: work/104-gs2-03-7-supply-chain/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/104-gs2-03-7-supply-chain/plan.md
-    digest: 94f5a2c66acec4131535bf10b37043915ad2c98eb0bb2702242248d20cf15361
+    digest: 42ad5c9a842b653772a5c7dab974f0569bfcd2d0f748ae1aefe233fb5f82e450
     schemaVersion: 1
   - label: spec
     path: work/104-gs2-03-7-supply-chain/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/104-gs2-03-7-supply-chain/tasks.yml
-    digest: 6d884a7d6ba20b35eec7eafb0a5082d2661cc3a4332be6b31b0be4c5f8482de4
+    digest: 33f1d804fbbf0dff0f13fbf64bfcb542ad15bef6ed3f31db305a26451bbd6f4c
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -81,13 +81,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
       failed: 0
       skipped: 0
-    notes: [The one-pack contract, and repack-count inversion are executable., projection-binding refusal, tracked-source projection that excludes ignored bin and obj before SDK evaluation]
+    notes: ["The one-pack contract, tracked-source projection that excludes ignored bin and obj before SDK evaluation, disabled build-server and shared-compilation reuse, projection-binding refusal, and repack-count inversion are executable."]
   - id: EV003
     kind: verification
     subject:
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -243,13 +243,13 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
       failed: 0
       skipped: 0
-    notes: [The complete architecture suite executes the tracked-source behavioral control, and independent negative controls., positive controls]
+    notes: ["The complete architecture suite executes the tracked-source behavioral control, positive controls, and independent negative controls."]
   - id: EV009
     kind: verification
     subject:
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/gs2-03-7-tests/gs2-03-7-architecture.trx
-      digest: "sha256:34514a2e2e6ae785d826a6f7398e8be219ab66dcf8d66afec612f989b99b70d9"
+      digest: "sha256:ab8ba2afcb5241a64e7139e6b63ebc0191b99d17649b9f88884a0a1d8cee6715"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 243

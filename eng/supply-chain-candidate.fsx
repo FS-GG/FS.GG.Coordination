@@ -245,7 +245,9 @@ let createPreparedEvidence repo candidate sourceTree version commitTime packageP
              {| buildDefinition =
                   {| buildType = "https://github.com/FS-GG/FS.GG.Coordination/supply-chain-candidate/v1"
                      externalParameters = {| repository = "FS-GG/FS.GG.Coordination"; candidate = candidate; sourceTree = sourceTree; packageId = packageId; version = version; channel = channel; packInvocations = 1 |}
-                     internalParameters = {| configuration = "Release"; project = packageProject; sourceProjection = "git-archive-zip-v1" |}
+                     internalParameters =
+                       {| configuration = "Release"; project = packageProject; sourceProjection = "git-archive-zip-v1"
+                          buildServers = "disabled"; sharedCompilation = false |}
                      resolvedDependencies = [| {| uri = packageLock; digest = {| sha256 = lockDigest |} |}; {| uri = "spdx:sbom.spdx.json"; digest = {| sha256 = sbomDigest |} |} |] |}
                 runDetails = {| builder = {| id = "https://github.com/FS-GG/FS.GG.Coordination/.github/workflows/candidate-supply-chain.yml" |}; metadata = {| invocationId = candidate; startedOn = commitTime; finishedOn = commitTime |} |} |} |}
     let provenancePath = Path.Combine(output, "provenance.intoto.json")
@@ -325,8 +327,11 @@ let verifyPrepared manifestPath =
     let provenanceDigest = provenanceSubject["digest"]
     require (stringAt provenanceDigest "sha256" = stringAt package "sha256") "provenance subject does not match"
     let buildDefinition = provenance["predicate"]["buildDefinition"]
+    let internalParameters = buildDefinition["internalParameters"]
     require (stringAt buildDefinition["externalParameters"] "sourceTree" = sourceTree) "provenance source tree does not match"
-    require (stringAt buildDefinition["internalParameters"] "sourceProjection" = "git-archive-zip-v1") "provenance source projection does not match"
+    require (stringAt internalParameters "sourceProjection" = "git-archive-zip-v1") "provenance source projection does not match"
+    require (stringAt internalParameters "buildServers" = "disabled") "provenance build-server boundary does not match"
+    require (not (internalParameters["sharedCompilation"].GetValue<bool>())) "provenance shared-compilation boundary does not match"
     let payloadBytes = JsonSerializer.SerializeToUtf8Bytes(payload, jsonOptions)
     require (stringAt manifest "selfSha256" = sha256Bytes payloadBytes) "candidate manifest self digest mismatch"
     packagePath, candidate, version, stringAt package "sha256", stringAt payload "commitTime"
@@ -364,14 +369,15 @@ let prepare values =
         [ "-p:ContinuousIntegrationBuild=true"
           "-p:Deterministic=true"
           "-p:DeterministicSourcePaths=true"
+          "-p:UseSharedCompilation=false"
           $"-p:PathMap={sourceRoot}=/_/%%2C{buildRoot}=/_build/"
           $"-p:BaseIntermediateOutputPath={intermediate}"
           $"-p:BaseOutputPath={binaries}" ]
-    run sourceRoot "dotnet" ([ "restore"; packageProject; "--locked-mode" ] @ deterministicProperties) [] |> ignore
-    run sourceRoot "dotnet" ([ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror" ] @ deterministicProperties) [] |> ignore
+    run sourceRoot "dotnet" ([ "restore"; packageProject; "--locked-mode"; "--disable-build-servers" ] @ deterministicProperties) [] |> ignore
+    run sourceRoot "dotnet" ([ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror"; "--disable-build-servers" ] @ deterministicProperties) [] |> ignore
     let packOutput = Path.Combine(output, "pack")
     Directory.CreateDirectory packOutput |> ignore
-    run sourceRoot "dotnet" ([ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--output"; packOutput; "-p:IsPackable=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] @ deterministicProperties) [] |> ignore
+    run sourceRoot "dotnet" ([ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--disable-build-servers"; "--output"; packOutput; "-p:IsPackable=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] @ deterministicProperties) [] |> ignore
     let packages = Directory.GetFiles(packOutput, "*.nupkg", SearchOption.TopDirectoryOnly)
     require (packages.Length = 1) "exactly one candidate package must be produced"
     canonicalizePackage packages[0]

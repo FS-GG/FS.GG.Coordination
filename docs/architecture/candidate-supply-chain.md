@@ -8,7 +8,9 @@ version `0.0.0-gs2-03-7.<first12sha>`. It is the only accepted version form.
 Preparation projects only the exact commit's tracked bytes through `git archive` into an
 output-owned source tree before the first SDK command. Restore, build, and pack use that
 projection plus fresh output-owned intermediate and binary directories, and map the projected
-source and isolated build roots to stable compiler paths. Ignored project-local `bin`/`obj`
+source and isolated build roots to stable compiler paths. Build-server reuse and shared
+compilation are disabled so no prior compiler process can carry environment-local state.
+Ignored project-local `bin`/`obj`
 state in the original checkout is therefore absent before SDK evaluation. The manifest, SBOM,
 and provenance bind the Git tree plus the `git-archive-zip-v1` projection method. The workflow performs
 exactly one `dotnet pack`, then canonicalizes the archive entry order

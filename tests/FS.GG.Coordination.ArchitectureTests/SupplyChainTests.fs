@@ -60,6 +60,8 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("canonicalizePackage", implementation)
     Assert.Contains("-p:PathMap=", implementation)
     Assert.Contains("BaseIntermediateOutputPath", implementation)
+    Assert.Contains("UseSharedCompilation=false", implementation)
+    Assert.Equal(3, implementation.Split("--disable-build-servers", StringSplitOptions.None).Length - 1)
     Assert.Contains("projectTrackedSource", implementation)
     Assert.Contains("\"archive\"; \"--format=zip\"", implementation)
     Assert.Contains("tracked-source", implementation)
