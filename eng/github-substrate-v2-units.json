@@ -385,7 +385,7 @@
     },
     {
       "id": "GS2-03.8",
-      "title": "Add review gates",
+      "title": "Add critique evidence gates",
       "owner": "FS.GG.Coordination",
       "prerequisites": ["GS2-03.7"],
       "permissionCeiling": ["repository-local typed architecture, security, adapter, migration, and cutover critique findings, exact-candidate and exact-evidence binding, deterministic roll-up derivation, validation, and evidence", "no external or multiple authorization requirement, network, live GitHub mutation, deployment, publication, production write, or successor-unit implementation authority"],
@@ -396,7 +396,7 @@
         { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" },
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
-      "contractSha256": "b969195e59ceb0d363d76259f53952e092a40a1ad21c163f5b00d8e93785613a"
+      "contractSha256": "6e2c6c9b1ad49b2eefeeca650bbb8d311af6f6973ab2d043ceb9c46cad403440"
     }
   ]
 }
