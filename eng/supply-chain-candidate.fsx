@@ -455,6 +455,9 @@ let requireServedRoute (servedUrl: string) (selectedChannel: string) (selectedSo
     let expected = [| githubPackagesOwner; "download"; packageId.ToLowerInvariant(); version; fileName.ToLowerInvariant() |]
     require (segments.Length = expected.Length) "served URL route has an unexpected segment count"
     require (Array.forall2 (fun actual wanted -> String.Equals(actual, wanted, StringComparison.Ordinal)) segments expected) "served URL route does not exactly bind owner, package, version, and file"
+    let expectedPath = "/" + String.concat "/" expected
+    require (parsed.AbsolutePath = expectedPath) "served URL path is not the exact canonical package route"
+    require (servedUrl = $"https://{githubPackagesDownloadHost}{expectedPath}") "served URL text is not the exact canonical package route"
 
 let verifyServed values =
     let repo = required "--repo" values |> canonicalFullPath
@@ -619,12 +622,15 @@ let selfTest values =
               "served-route-file", validRoute.Replace(fileName.ToLowerInvariant(), "wrong.nupkg")
               "served-route-query", validRoute + "?redirect=wrong"
               "served-route-fragment", validRoute + "#wrong"
-              "served-route-extra-segment", validRoute + "/extra" ]
+              "served-route-extra-segment", validRoute + "/extra"
+              "served-route-trailing-slash", validRoute + "/"
+              "served-route-double-slash", validRoute.Replace("/download/", "//download/")
+              "served-route-percent-encoding", validRoute.Replace("/fs-gg/", "/%66s-gg/") ]
         for caseName, route in routeCases do
             if expectRefusal (fun () -> requireServedRoute route channel githubPackagesSource version fileName) then negative.Add caseName
         if expectRefusal (fun () -> requireServedRoute validRoute "wrong-channel" githubPackagesSource version fileName) then negative.Add "served-route-channel-binding"
         if expectRefusal (fun () -> requireServedRoute validRoute channel "https://example.invalid/index.json" version fileName) then negative.Add "served-route-source-binding"
-        require (negative.Count = 21) "self-test did not exercise every negative control"
+        require (negative.Count = 24) "self-test did not exercise every negative control"
         printfn "SUPPLY_CHAIN_SELFTEST_OK positive=3 negative=%d cases=%s" negative.Count (String.concat "," negative)
     finally
         if Directory.Exists scratch then Directory.Delete(scratch, true)

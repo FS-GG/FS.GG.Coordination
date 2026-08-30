@@ -38,7 +38,9 @@ arbitrary feature commit is refused.
 Served verification parses the download URI and requires HTTPS, the exact GitHub Packages host,
 the `fs-gg/download/<lowercase-package-id>/<exact-version>/<exact-lowercase-file>` route, the default
 port, and no query, fragment, or extra segment. That route is accepted only when the prepared
-manifest still binds `github-packages-candidate` to the sole allowed NuGet source.
+manifest still binds `github-packages-candidate` to the sole allowed NuGet source. The original URL
+text must also equal that one canonical route, so URI normalization cannot conceal percent-encoding,
+duplicate separators, or a trailing separator.
 
 `eng/supply-chain-candidate.fsx` owns preparation and verification. It produces canonical
 compact JSON for a candidate manifest, SPDX SBOM, provenance statement, verification

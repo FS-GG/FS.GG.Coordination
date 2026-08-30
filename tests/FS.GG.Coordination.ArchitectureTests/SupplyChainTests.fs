@@ -27,8 +27,8 @@ let ``candidate supply chain proves positive and independent negative controls``
     let exitCode, output, error = runSelfTest ()
     Assert.Equal(0, exitCode)
     Assert.Equal("", error)
-    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=3 negative=21", output)
-    for caseName in [ "package-tamper"; "sbom-tamper"; "source-projection-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected"; "workflow-dynamic-source"; "workflow-detached-source"; "served-route-owner"; "served-route-package"; "served-route-version"; "served-route-file"; "served-route-query"; "served-route-fragment"; "served-route-extra-segment"; "served-route-channel-binding"; "served-route-source-binding" ] do
+    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=3 negative=24", output)
+    for caseName in [ "package-tamper"; "sbom-tamper"; "source-projection-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected"; "workflow-dynamic-source"; "workflow-detached-source"; "served-route-owner"; "served-route-package"; "served-route-version"; "served-route-file"; "served-route-query"; "served-route-fragment"; "served-route-extra-segment"; "served-route-trailing-slash"; "served-route-double-slash"; "served-route-percent-encoding"; "served-route-channel-binding"; "served-route-source-binding" ] do
         Assert.Contains(caseName, output)
 
 [<Fact>]
