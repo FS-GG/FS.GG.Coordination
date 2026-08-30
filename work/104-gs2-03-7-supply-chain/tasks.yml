@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/104-gs2-03-7-supply-chain/plan.md
-    digest: 42ad5c9a842b653772a5c7dab974f0569bfcd2d0f748ae1aefe233fb5f82e450
+    digest: cc87331f1bdcad16672ceb2179470741394c1468be2624ebf63cf2b5584626c5
     schemaVersion: 1
 tasks:
   - id: T001
@@ -39,7 +39,7 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV001]
   - id: T002
-    title: Implement reproducibility with tracked projection, no-debug PE output, and pinned toolchain provenance
+    title: Implement requirement FR-002
     status: done
     owner: codex
     dependencies: []
@@ -79,7 +79,7 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV005]
   - id: T006
-    title: Verify exact served bytes and exact channel-bound package download route
+    title: Implement requirement FR-006
     status: done
     owner: codex
     dependencies: []
