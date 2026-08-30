@@ -5,9 +5,12 @@ GS2-03.7 adds one deliberately pre-production Q7 route for
 exact protected-main commit, checks out that immutable revision, and derives the unique
 version `0.0.0-gs2-03-7.<first12sha>`. It is the only accepted version form.
 
-The build uses fresh output-owned intermediate and binary directories and maps every checkout
-root and isolated build root to stable compiler paths, so ignored `bin`/`obj` state cannot enter
-the candidate. The workflow performs
+Preparation projects only the exact commit's tracked bytes through `git archive` into an
+output-owned source tree before the first SDK command. Restore, build, and pack use that
+projection plus fresh output-owned intermediate and binary directories, and map the projected
+source and isolated build roots to stable compiler paths. Ignored project-local `bin`/`obj`
+state in the original checkout is therefore absent before SDK evaluation. The manifest, SBOM,
+and provenance bind the Git tree plus the `git-archive-zip-v1` projection method. The workflow performs
 exactly one `dotnet pack`, then canonicalizes the archive entry order
 and timestamps without rebuilding or repacking the project. That canonical package is the sole byte source for
 the SPDX 2.3 SBOM, SLSA-shaped in-toto provenance, GitHub Packages upload, independent
@@ -27,7 +30,8 @@ arbitrary feature commit is refused.
 `eng/supply-chain-candidate.fsx` owns preparation and verification. It produces canonical
 compact JSON for a candidate manifest, SPDX SBOM, provenance statement, verification
 statement, and terminal receipt. Every document binds the package SHA-256 and source
-revision. The self-test proves package and SBOM tamper, channel substitution, stable-version
+revision. The self-test behaviorally proves ignored `bin` and `obj` are absent from a tracked
+source projection and proves package, SBOM, and projection-binding tamper, channel substitution, stable-version
 substitution, any pack count other than one, additional or bypassed publication commands
 (including inline commands with dynamically selected sources or an allowed endpoint detached
 into inert metadata),

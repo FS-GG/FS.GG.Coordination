@@ -40,6 +40,12 @@ let require condition message = if not condition then fail message
 
 let canonicalFullPath path = Path.GetFullPath path
 
+let isWithin root candidate =
+    let relative = Path.GetRelativePath(root, candidate)
+    relative <> ".."
+    && not (relative.StartsWith(".." + string Path.DirectorySeparatorChar, StringComparison.Ordinal))
+    && not (Path.IsPathRooted relative)
+
 let run workingDirectory executable arguments environment =
     let info = ProcessStartInfo(executable)
     info.WorkingDirectory <- workingDirectory
@@ -64,6 +70,25 @@ let copyDirectory source target =
         let destination = Path.Combine(target, relative)
         Directory.CreateDirectory(Path.GetDirectoryName destination) |> ignore
         File.Copy(file, destination, true)
+
+let projectTrackedSource repo candidate projectionRoot =
+    require (not (Directory.Exists projectionRoot)) "tracked source projection already exists"
+    let archivePath = projectionRoot + ".zip"
+    require (not (File.Exists archivePath)) "tracked source projection archive already exists"
+    Directory.CreateDirectory(Path.GetDirectoryName projectionRoot) |> ignore
+    run repo "git" [ "archive"; "--format=zip"; "--output"; archivePath; candidate ] [] |> ignore
+    require (File.Exists archivePath) "tracked source projection archive was not created"
+    use archive = ZipFile.OpenRead archivePath
+    require (archive.Entries.Count > 0) "tracked source projection archive is empty"
+    for entry in archive.Entries do
+        let destination = canonicalFullPath (Path.Combine(projectionRoot, entry.FullName))
+        require (isWithin (canonicalFullPath projectionRoot) destination) "tracked source projection contains an unsafe path"
+    archive.Dispose()
+    ZipFile.ExtractToDirectory(archivePath, projectionRoot)
+    File.Delete archivePath
+    require (File.Exists(Path.Combine(projectionRoot, packageProject))) "tracked source projection omits the package project"
+    require (File.Exists(Path.Combine(projectionRoot, packageLock))) "tracked source projection omits the package lock"
+    projectionRoot
 
 let parseArgs (arguments: string array) =
     let rec loop index values =
@@ -175,7 +200,7 @@ let nuspecDependencies packagePath =
     |> Seq.sortBy (fun dependency -> dependency.id, dependency.version)
     |> Seq.toArray
 
-let createPreparedEvidence repo candidate version commitTime packagePath output =
+let createPreparedEvidence repo candidate sourceTree version commitTime packagePath output =
     requireIdentity candidate version channel
     require (File.Exists packagePath) "candidate package does not exist"
     require (File.Exists(Path.Combine(repo, packageLock))) "Protocol lock file does not exist"
@@ -206,7 +231,9 @@ let createPreparedEvidence repo candidate version commitTime packagePath output 
                    filesAnalyzed = true; checksums = [| {| algorithm = "SHA256"; checksumValue = packageDigest |} |]
                    externalRefs = [| {| referenceCategory = "PACKAGE-MANAGER"; referenceType = "purl"; referenceLocator = $"pkg:nuget/{packageId}@{version}" |} |] |} |]
            files = spdxFiles; relationships = relationships
-           fsgg = {| candidate = candidate; packageSize = FileInfo(packageTarget).Length; lockPath = packageLock; lockSha256 = lockDigest; dependencies = dependencies |} |}
+           fsgg =
+             {| candidate = candidate; sourceTree = sourceTree; sourceProjection = "git-archive-zip-v1"
+                packageSize = FileInfo(packageTarget).Length; lockPath = packageLock; lockSha256 = lockDigest; dependencies = dependencies |} |}
     let sbomPath = Path.Combine(output, "sbom.spdx.json")
     writeJson sbomPath sbom
     let sbomDigest = sha256File sbomPath
@@ -217,8 +244,8 @@ let createPreparedEvidence repo candidate version commitTime packagePath output 
            predicate =
              {| buildDefinition =
                   {| buildType = "https://github.com/FS-GG/FS.GG.Coordination/supply-chain-candidate/v1"
-                     externalParameters = {| repository = "FS-GG/FS.GG.Coordination"; candidate = candidate; packageId = packageId; version = version; channel = channel; packInvocations = 1 |}
-                     internalParameters = {| configuration = "Release"; project = packageProject |}
+                     externalParameters = {| repository = "FS-GG/FS.GG.Coordination"; candidate = candidate; sourceTree = sourceTree; packageId = packageId; version = version; channel = channel; packInvocations = 1 |}
+                     internalParameters = {| configuration = "Release"; project = packageProject; sourceProjection = "git-archive-zip-v1" |}
                      resolvedDependencies = [| {| uri = packageLock; digest = {| sha256 = lockDigest |} |}; {| uri = "spdx:sbom.spdx.json"; digest = {| sha256 = sbomDigest |} |} |] |}
                 runDetails = {| builder = {| id = "https://github.com/FS-GG/FS.GG.Coordination/.github/workflows/candidate-supply-chain.yml" |}; metadata = {| invocationId = candidate; startedOn = commitTime; finishedOn = commitTime |} |} |} |}
     let provenancePath = Path.Combine(output, "provenance.intoto.json")
@@ -230,8 +257,9 @@ let createPreparedEvidence repo candidate version commitTime packagePath output 
            channel = {| id = channel; source = githubPackagesSource; stable = false; production = false |}
            sbom = {| file = "sbom.spdx.json"; schema = "SPDX-2.3"; sha256 = sbomDigest |}
            attestations = [| {| file = "provenance.intoto.json"; predicateType = "https://slsa.dev/provenance/v1"; sha256 = provenanceDigest |} |]
+           source = {| tree = sourceTree; projection = "git-archive-zip-v1"; ignoredWorktreeArtifactsIncluded = false |}
            inputs = [| {| path = packageLock; sha256 = lockDigest |} |]
-           stages = [| "identity-bound"; "restored"; "built"; "packed-once"; "package-canonicalized"; "sbom-generated"; "provenance-generated"; "prepared-verified" |] |}
+           stages = [| "identity-bound"; "tracked-source-projected"; "restored"; "built"; "packed-once"; "package-canonicalized"; "sbom-generated"; "provenance-generated"; "prepared-verified" |] |}
     let canonical = JsonSerializer.SerializeToUtf8Bytes(manifestWithoutDigest, jsonOptions)
     let manifest = {| payload = manifestWithoutDigest; selfSha256 = sha256Bytes canonical |}
     let manifestPath = Path.Combine(output, "candidate.json")
@@ -260,8 +288,13 @@ let verifyPrepared manifestPath =
     let candidate = stringAt payload "candidate"
     let package = payload["package"]
     let channelNode = payload["channel"]
+    let sourceNode = payload["source"]
     let version = stringAt package "version"
     requireIdentity candidate version (stringAt channelNode "id")
+    let sourceTree = stringAt sourceNode "tree"
+    require (shaPattern.IsMatch sourceTree) "candidate source tree must be a lowercase 40-character Git tree SHA"
+    require (stringAt sourceNode "projection" = "git-archive-zip-v1") "candidate source projection is unsupported"
+    require (not (sourceNode["ignoredWorktreeArtifactsIncluded"].GetValue<bool>())) "candidate source projection includes ignored worktree artifacts"
     require (intAt package "packInvocations" = 1) "candidate manifest does not prove exactly one pack invocation"
     require (not (channelNode["stable"].GetValue<bool>())) "candidate channel cannot be stable"
     require (not (channelNode["production"].GetValue<bool>())) "candidate channel cannot be production"
@@ -281,6 +314,8 @@ let verifyPrepared manifestPath =
     let sbom = readJson sbomPath
     require (stringAt sbom "spdxVersion" = "SPDX-2.3") "unsupported SPDX version"
     require (stringAt sbom["fsgg"] "candidate" = candidate) "SBOM candidate does not match"
+    require (stringAt sbom["fsgg"] "sourceTree" = sourceTree) "SBOM source tree does not match"
+    require (stringAt sbom["fsgg"] "sourceProjection" = "git-archive-zip-v1") "SBOM source projection does not match"
     let sbomPackage = (sbom["packages"].AsArray())[0]
     let sbomChecksum = (sbomPackage["checksums"].AsArray())[0]
     require (stringAt sbomChecksum "checksumValue" = stringAt package "sha256") "SBOM package digest does not match"
@@ -289,6 +324,9 @@ let verifyPrepared manifestPath =
     let provenanceSubject = (provenance["subject"].AsArray())[0]
     let provenanceDigest = provenanceSubject["digest"]
     require (stringAt provenanceDigest "sha256" = stringAt package "sha256") "provenance subject does not match"
+    let buildDefinition = provenance["predicate"]["buildDefinition"]
+    require (stringAt buildDefinition["externalParameters"] "sourceTree" = sourceTree) "provenance source tree does not match"
+    require (stringAt buildDefinition["internalParameters"] "sourceProjection" = "git-archive-zip-v1") "provenance source projection does not match"
     let payloadBytes = JsonSerializer.SerializeToUtf8Bytes(payload, jsonOptions)
     require (stringAt manifest "selfSha256" = sha256Bytes payloadBytes) "candidate manifest self digest mismatch"
     packagePath, candidate, version, stringAt package "sha256", stringAt payload "commitTime"
@@ -312,10 +350,12 @@ let prepare values =
     let version = required "--version" values
     let output = required "--output" values |> canonicalFullPath
     requireIdentity candidate version channel
-    validateWorkflow repo
     let commitTime = cleanGitCandidate repo candidate (optional "--protected-ref" values)
+    let sourceTree = run repo "git" [ "rev-parse"; candidate + "^{tree}" ] []
     require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "output directory must be empty"
     Directory.CreateDirectory output |> ignore
+    let sourceRoot = projectTrackedSource repo candidate (Path.Combine(output, "tracked-source"))
+    validateWorkflow sourceRoot
     let buildRoot = Path.Combine(output, "isolated-build")
     let intermediate = Path.Combine(buildRoot, "obj") + string Path.DirectorySeparatorChar
     let binaries = Path.Combine(buildRoot, "bin") + string Path.DirectorySeparatorChar
@@ -324,21 +364,22 @@ let prepare values =
         [ "-p:ContinuousIntegrationBuild=true"
           "-p:Deterministic=true"
           "-p:DeterministicSourcePaths=true"
-          $"-p:PathMap={repo}=/_/%%2C{buildRoot}=/_build/"
+          $"-p:PathMap={sourceRoot}=/_/%%2C{buildRoot}=/_build/"
           $"-p:BaseIntermediateOutputPath={intermediate}"
           $"-p:BaseOutputPath={binaries}" ]
-    run repo "dotnet" ([ "restore"; packageProject; "--locked-mode" ] @ deterministicProperties) [] |> ignore
-    run repo "dotnet" ([ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror" ] @ deterministicProperties) [] |> ignore
+    run sourceRoot "dotnet" ([ "restore"; packageProject; "--locked-mode" ] @ deterministicProperties) [] |> ignore
+    run sourceRoot "dotnet" ([ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror" ] @ deterministicProperties) [] |> ignore
     let packOutput = Path.Combine(output, "pack")
     Directory.CreateDirectory packOutput |> ignore
-    run repo "dotnet" ([ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--output"; packOutput; "-p:IsPackable=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] @ deterministicProperties) [] |> ignore
+    run sourceRoot "dotnet" ([ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--output"; packOutput; "-p:IsPackable=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] @ deterministicProperties) [] |> ignore
     let packages = Directory.GetFiles(packOutput, "*.nupkg", SearchOption.TopDirectoryOnly)
     require (packages.Length = 1) "exactly one candidate package must be produced"
     canonicalizePackage packages[0]
-    let manifest = createPreparedEvidence repo candidate version commitTime packages[0] output
+    let manifest = createPreparedEvidence sourceRoot candidate sourceTree version commitTime packages[0] output
     verifyPrepared manifest |> ignore
     Directory.Delete(packOutput, true)
     Directory.Delete(buildRoot, true)
+    Directory.Delete(sourceRoot, true)
     printfn "SUPPLY_CHAIN_PREPARED manifest=%s" manifest
 
 let writeConsumerConfig path feed =
@@ -425,13 +466,41 @@ let createFakePackage (path: string) (version: string) =
 let expectRefusal (action: unit -> unit) =
     try action (); false with :? InvalidOperationException -> true
 
+let proveTrackedProjection scratch =
+    let source = Path.Combine(scratch, "projection-source")
+    let projectDirectory = Path.Combine(source, Path.GetDirectoryName packageProject)
+    Directory.CreateDirectory(projectDirectory) |> ignore
+    run source "git" [ "init"; "--quiet" ] [] |> ignore
+    run source "git" [ "config"; "user.name"; "projection-selftest" ] [] |> ignore
+    run source "git" [ "config"; "user.email"; "projection-selftest@example.invalid" ] [] |> ignore
+    File.WriteAllText(Path.Combine(source, ".gitignore"), "bin/\nobj/\n")
+    File.WriteAllText(Path.Combine(source, packageProject), "<Project />\n")
+    File.WriteAllText(Path.Combine(source, packageLock), "{}\n")
+    run source "git" [ "add"; ".gitignore"; packageProject; packageLock ] [] |> ignore
+    run source "git" [ "commit"; "--quiet"; "-m"; "tracked source" ] [] |> ignore
+    let bin = Path.Combine(projectDirectory, "bin")
+    let obj = Path.Combine(projectDirectory, "obj")
+    Directory.CreateDirectory bin |> ignore
+    Directory.CreateDirectory obj |> ignore
+    File.WriteAllText(Path.Combine(bin, "poison.dll"), "ignored-bin")
+    File.WriteAllText(Path.Combine(obj, "poison.props"), "ignored-obj")
+    require (String.IsNullOrWhiteSpace(run source "git" [ "status"; "--porcelain" ] [])) "projection self-test source is not clean"
+    let candidate = run source "git" [ "rev-parse"; "HEAD" ] []
+    let projection = projectTrackedSource source candidate (Path.Combine(scratch, "projection-result"))
+    require (File.ReadAllText(Path.Combine(projection, packageProject)) = "<Project />\n") "tracked source projection changed committed bytes"
+    let projectedProject = Path.Combine(projection, Path.GetDirectoryName packageProject)
+    require (not (Directory.Exists(Path.Combine(projectedProject, "bin")))) "tracked source projection admitted ignored bin content"
+    require (not (Directory.Exists(Path.Combine(projectedProject, "obj")))) "tracked source projection admitted ignored obj content"
+
 let selfTest values =
     let repo = required "--repo" values |> canonicalFullPath
     validateWorkflow repo
     let scratch = Path.Combine(Path.GetTempPath(), "fsgg-supply-chain-selftest-" + Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory scratch |> ignore
     try
+        proveTrackedProjection scratch
         let candidate = String.replicate 40 "a"
+        let sourceTree = String.replicate 40 "b"
         let version = "0.0.0-gs2-03-7." + candidate.Substring(0, 12)
         let package = Path.Combine(scratch, $"{packageId}.{version}.nupkg")
         createFakePackage package version
@@ -445,7 +514,7 @@ let selfTest values =
         canonicalizePackage secondPackage
         require (File.ReadAllBytes(package).AsSpan().SequenceEqual(File.ReadAllBytes(secondPackage).AsSpan())) "canonical package bytes differ across ZIP metadata"
         let output = Path.Combine(scratch, "prepared")
-        let manifest = createPreparedEvidence repo candidate version "2026-08-30T00:00:00Z" package output
+        let manifest = createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" package output
         verifyPrepared manifest |> ignore
         let negative = ResizeArray<string>()
         let mutatedPackage = Path.Combine(output, Path.GetFileName package)
@@ -455,7 +524,14 @@ let selfTest values =
         let sbomPath = Path.Combine(output, "sbom.spdx.json")
         File.AppendAllText(sbomPath, "tamper")
         if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "sbom-tamper"
-        createPreparedEvidence repo candidate version "2026-08-30T00:00:00Z" package output |> ignore
+        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" package output |> ignore
+        let projectionNode = readJson manifest
+        let projectionPayload = projectionNode["payload"]
+        let projectionSource = projectionPayload["source"]
+        projectionSource["ignoredWorktreeArtifactsIncluded"] <- JsonValue.Create(true)
+        writeJson manifest projectionNode
+        if expectRefusal (fun () -> verifyPrepared manifest |> ignore) then negative.Add "source-projection-tamper"
+        createPreparedEvidence repo candidate sourceTree version "2026-08-30T00:00:00Z" package output |> ignore
         if expectRefusal (fun () -> requireIdentity candidate version "nuget-org") then negative.Add "channel-substitution"
         if expectRefusal (fun () -> requireIdentity candidate "1.0.0" channel) then negative.Add "stable-version"
         let node = readJson manifest
@@ -472,8 +548,8 @@ let selfTest values =
         if expectRefusal (fun () -> validateWorkflowText (workflow + "\n      - run: dotnet nuget push candidate.nupkg --source \"$UNTRUSTED_SOURCE\"\n")) then negative.Add "workflow-dynamic-source"
         let detachedSource = workflow.Replace("--source https://nuget.pkg.github.com/FS-GG/index.json", "--source \"$UNTRUSTED_SOURCE\"") + "\nenv:\n  PUBLISH_POLICY_NOTE: https://nuget.pkg.github.com/FS-GG/index.json\n"
         if expectRefusal (fun () -> validateWorkflowText detachedSource) then negative.Add "workflow-detached-source"
-        require (negative.Count = 11) "self-test did not exercise every negative control"
-        printfn "SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=%d cases=%s" negative.Count (String.concat "," negative)
+        require (negative.Count = 12) "self-test did not exercise every negative control"
+        printfn "SUPPLY_CHAIN_SELFTEST_OK positive=2 negative=%d cases=%s" negative.Count (String.concat "," negative)
     finally
         if Directory.Exists scratch then Directory.Delete(scratch, true)
 
