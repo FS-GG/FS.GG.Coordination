@@ -81,6 +81,11 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("expectedInvocationInventory", validator)
     Assert.Contains("ConcurrentDictionary<string, int>", validator)
     Assert.Contains("actualInvocationInventory.AddOrUpdate", validator)
+    Assert.Contains("let isolateApalacheEndpoint isQuint arguments", validator)
+    Assert.Contains("Interlocked.Increment(&apalacheEndpointOrdinal)", validator)
+    Assert.Contains("APALACHE-ENDPOINT-DUPLICATE", validator)
+    Assert.Contains("arguments @ [ \"--server-endpoint\"; $\"localhost:%d{port}\" ]", validator)
+    Assert.Contains("stdout=%s{temporalOutput}; stderr=%s{temporalError}", validator)
     Assert.Contains("quint/formal-safety-mutant", validator)
     Assert.Contains("actual <> expected", validator)
 

@@ -64,6 +64,15 @@ let mutable formalSafeSteps = Set.empty<string * string>
 let mutable formalInvalidSteps = Set.empty<string * string>
 let mutable formalRemovedSteps = Set.empty<string * string>
 let mutable formalInventoryReady = false
+let mutable apalacheEndpointOrdinal = 0
+let apalacheEndpointBase =
+    match Environment.GetEnvironmentVariable "FSGG_APALACHE_PORT_BASE" with
+    | null | "" -> 18820
+    | value ->
+        match Int32.TryParse value with
+        | true, port when port >= 1024 && port <= 65400 -> port
+        | _ -> failwith "FSGG_APALACHE_PORT_BASE must be an integer from 1024 through 65400"
+let apalacheEndpoints = System.Collections.Concurrent.ConcurrentDictionary<int, byte>()
 
 let incrementInvocation label =
     actualInvocationInventory.AddOrUpdate(label, 1, fun _ count -> count + 1) |> ignore
@@ -150,10 +159,26 @@ let requireFile code path =
     if not (File.Exists path) then
         fail code path
 
+let isolateApalacheEndpoint isQuint arguments =
+    let command = List.tryHead arguments
+    let usesApalacheServer =
+        isQuint
+        && (command = Some "verify"
+            || (command = Some "compile" && argumentValue "--target" arguments = Some "tlaplus"))
+
+    if not usesApalacheServer || List.contains "--server-endpoint" arguments then arguments
+    else
+        let ordinal = Interlocked.Increment(&apalacheEndpointOrdinal) - 1
+        let port = apalacheEndpointBase + ordinal
+        if port > 65535 then fail "APALACHE-ENDPOINT-RANGE" (string port)
+        if not (apalacheEndpoints.TryAdd(port, 0uy)) then fail "APALACHE-ENDPOINT-DUPLICATE" (string port)
+        arguments @ [ "--server-endpoint"; $"localhost:%d{port}" ]
+
 let run workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
 
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
+    let arguments = isolateApalacheEndpoint isQuint arguments
     incrementInvocation (classifyInvocation isQuint arguments)
 
     if isQuint then
@@ -216,6 +241,7 @@ let private processTreeRssBytes rootPid =
 let runMeasured workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
+    let arguments = isolateApalacheEndpoint isQuint arguments
     incrementInvocation (classifyInvocation isQuint arguments)
     if isQuint then
         Interlocked.Increment(&quintProcessCount) |> ignore
@@ -1376,7 +1402,10 @@ try
         if temporalExit <> 0 then
             fail "QUINT-FORMAL-TEMPORAL" ($"%s{formalId}: exit=%d{temporalExit}; stdout=%s{temporalOutput}; stderr=%s{temporalError}")
         let stateMatches = Regex.Matches(temporalOutput + "\n" + temporalError, @"(\d+) states generated, (\d+) distinct states found")
-        if stateMatches.Count = 0 then fail "QUINT-FORMAL-TLC-MEASUREMENT" formalId
+        if stateMatches.Count = 0 then
+            fail
+                "QUINT-FORMAL-TLC-MEASUREMENT"
+                ($"%s{formalId}: exit=%d{temporalExit}; stdout=%s{temporalOutput}; stderr=%s{temporalError}")
         let stateMatch = stateMatches[stateMatches.Count - 1]
         let generatedStates = Int32.Parse stateMatch.Groups[1].Value
         let distinctStates = Int32.Parse stateMatch.Groups[2].Value
