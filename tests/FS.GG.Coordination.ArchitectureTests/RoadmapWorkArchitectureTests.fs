@@ -104,7 +104,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-03-6 without successor implementation`` () =
+let ``roadmap unit index advances through GS2-03-7 without successor implementation`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -139,7 +139,8 @@ let ``roadmap unit index advances through GS2-03-6 without successor implementat
              "GS2-03.3"
              "GS2-03.4"
              "GS2-03.5"
-             "GS2-03.6" ]
+             "GS2-03.6"
+             "GS2-03.7" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -454,6 +455,43 @@ let ``roadmap unit index advances through GS2-03-6 without successor implementat
           "convergence"
           "typed refusal" ] do
         Assert.Contains(requiredTerm, faultInjectionExitGate)
+
+    let supplyChainUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-03.7")
+
+    Assert.Equal<string list>(
+        [ "GS2-03.6" ],
+        supplyChainUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "architecture-tests"; "evidence-storage-contract"; "bootstrap-recovery" ],
+        supplyChainUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "Q7" ],
+        supplyChainUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let supplyChainExitGate = supplyChainUnit.GetProperty("exitGate").GetString()
+
+    for requiredTerm in
+        [ "packed once"
+          "byte-for-byte reproducibly"
+          "SBOM"
+          "attestations"
+          "allowed pre-production channel"
+          "served exact bytes"
+          "clean consumers" ] do
+        Assert.Contains(requiredTerm, supplyChainExitGate)
 
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
