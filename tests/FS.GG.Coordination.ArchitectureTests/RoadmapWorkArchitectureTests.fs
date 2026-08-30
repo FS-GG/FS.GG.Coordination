@@ -111,7 +111,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-03-7 without successor implementation`` () =
+let ``roadmap unit index advances through GS2-03-8 without successor implementation`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -147,7 +147,8 @@ let ``roadmap unit index advances through GS2-03-7 without successor implementat
              "GS2-03.4"
              "GS2-03.5"
              "GS2-03.6"
-             "GS2-03.7" ]
+             "GS2-03.7"
+             "GS2-03.8" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -501,6 +502,43 @@ let ``roadmap unit index advances through GS2-03-7 without successor implementat
           "served exact bytes"
           "clean consumers" ] do
         Assert.Contains(requiredTerm, supplyChainExitGate)
+
+    let reviewGatesUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-03.8")
+
+    Assert.Equal("Add critique evidence gates", reviewGatesUnit.GetProperty("title").GetString())
+
+    Assert.Equal<string list>(
+        [ "GS2-03.7" ],
+        reviewGatesUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "architecture-tests"; "evidence-storage-contract" ],
+        reviewGatesUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let reviewExitGate = reviewGatesUnit.GetProperty("exitGate").GetString()
+
+    for requiredTerm in
+        [ "architecture"
+          "security"
+          "adapter"
+          "migration"
+          "cutover"
+          "exact candidate"
+          "evidence fingerprints"
+          "distinct phase identity"
+          "Accountable Delivery Owner"
+          "sole acceptance decision"
+          "self-authored"
+          "prose-only" ] do
+        Assert.Contains(requiredTerm, reviewExitGate)
 
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
