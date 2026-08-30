@@ -5,7 +5,9 @@ GS2-03.7 adds one deliberately pre-production Q7 route for
 exact protected-main commit, checks out that immutable revision, and derives the unique
 version `0.0.0-gs2-03-7.<first12sha>`. It is the only accepted version form.
 
-The build maps every checkout root to the stable `/_/` compiler path. The workflow performs
+The build uses fresh output-owned intermediate and binary directories and maps every checkout
+root and isolated build root to stable compiler paths, so ignored `bin`/`obj` state cannot enter
+the candidate. The workflow performs
 exactly one `dotnet pack`, then canonicalizes the archive entry order
 and timestamps without rebuilding or repacking the project. That canonical package is the sole byte source for
 the SPDX 2.3 SBOM, SLSA-shaped in-toto provenance, GitHub Packages upload, independent
@@ -27,7 +29,8 @@ compact JSON for a candidate manifest, SPDX SBOM, provenance statement, verifica
 statement, and terminal receipt. Every document binds the package SHA-256 and source
 revision. The self-test proves package and SBOM tamper, channel substitution, stable-version
 substitution, any pack count other than one, additional or bypassed publication commands
-(including inline commands with dynamically selected sources),
+(including inline commands with dynamically selected sources or an allowed endpoint detached
+into inert metadata),
 unreadable workflow input, and missing protected-history binding are red. The validator reads
 the production workflow itself, and its positive and negative controls execute in the architecture suite.
 

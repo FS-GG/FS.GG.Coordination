@@ -140,7 +140,10 @@ let validateWorkflowText (workflow: string) =
         require (lineCount $"^  {Regex.Escape forbiddenTrigger}:" = 0) $"candidate workflow enables forbidden trigger: {forbiddenTrigger}"
     let publicationCommands = Regex.Matches(normalized, "\\b(?:dotnet[ \\t\\r\\n]+)?nuget[ \\t\\r\\n]+push\\b", RegexOptions.IgnoreCase ||| RegexOptions.CultureInvariant).Count
     require (publicationCommands = 1) "candidate workflow must contain exactly one active NuGet publication command"
-    require (occurrenceCount "--source https://nuget.pkg.github.com/FS-GG/index.json" normalized = 1) "candidate workflow must publish exactly once to the allowed endpoint"
+    let compact = Regex.Replace(normalized, "\\s+", " ").Trim()
+    let expectedPublication = "dotnet nuget push \"$CANDIDATE_OUTPUT/FS.GG.Coordination.Protocol.${{ steps.identity.outputs.version }}.nupkg\" --api-key \"${{ secrets.GITHUB_TOKEN }}\" --source https://nuget.pkg.github.com/FS-GG/index.json --skip-duplicate"
+    require (occurrenceCount expectedPublication compact = 1) "candidate publication invocation is not exactly bound to the allowed endpoint and arguments"
+    require (occurrenceCount "--source" compact = 1) "candidate workflow has an ambiguous publication source argument"
     require (occurrenceCount "https://nuget.pkg.github.com/FS-GG/index.json" normalized = 1) "candidate workflow has an ambiguous publication endpoint"
     require (not (normalized.Contains("nuget.org", StringComparison.OrdinalIgnoreCase))) "candidate workflow references nuget.org"
     require (not (normalized.Contains("continue-on-error", StringComparison.OrdinalIgnoreCase))) "candidate workflow can bypass a failed publication control"
@@ -313,12 +316,18 @@ let prepare values =
     let commitTime = cleanGitCandidate repo candidate (optional "--protected-ref" values)
     require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "output directory must be empty"
     Directory.CreateDirectory output |> ignore
-    run repo "dotnet" [ "restore"; packageProject; "--locked-mode" ] [] |> ignore
+    let buildRoot = Path.Combine(output, "isolated-build")
+    let intermediate = Path.Combine(buildRoot, "obj") + string Path.DirectorySeparatorChar
+    let binaries = Path.Combine(buildRoot, "bin") + string Path.DirectorySeparatorChar
+    Directory.CreateDirectory buildRoot |> ignore
     let deterministicProperties =
         [ "-p:ContinuousIntegrationBuild=true"
           "-p:Deterministic=true"
           "-p:DeterministicSourcePaths=true"
-          $"-p:PathMap={repo}=/_/" ]
+          $"-p:PathMap={repo}=/_/,{buildRoot}=/_build/"
+          $"-p:BaseIntermediateOutputPath={intermediate}"
+          $"-p:BaseOutputPath={binaries}" ]
+    run repo "dotnet" ([ "restore"; packageProject; "--locked-mode" ] @ deterministicProperties) [] |> ignore
     run repo "dotnet" ([ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror" ] @ deterministicProperties) [] |> ignore
     let packOutput = Path.Combine(output, "pack")
     Directory.CreateDirectory packOutput |> ignore
@@ -329,6 +338,7 @@ let prepare values =
     let manifest = createPreparedEvidence repo candidate version commitTime packages[0] output
     verifyPrepared manifest |> ignore
     Directory.Delete(packOutput, true)
+    Directory.Delete(buildRoot, true)
     printfn "SUPPLY_CHAIN_PREPARED manifest=%s" manifest
 
 let writeConsumerConfig path feed =
@@ -460,7 +470,9 @@ let selfTest values =
         if expectRefusal (fun () -> validateWorkflowText "") then negative.Add "workflow-unreadable"
         if expectRefusal (fun () -> validateWorkflowText (workflow.Replace("          --protected-ref refs/remotes/origin/main\n", ""))) then negative.Add "workflow-unprotected"
         if expectRefusal (fun () -> validateWorkflowText (workflow + "\n      - run: dotnet nuget push candidate.nupkg --source \"$UNTRUSTED_SOURCE\"\n")) then negative.Add "workflow-dynamic-source"
-        require (negative.Count = 10) "self-test did not exercise every negative control"
+        let detachedSource = workflow.Replace("--source https://nuget.pkg.github.com/FS-GG/index.json", "--source \"$UNTRUSTED_SOURCE\"") + "\nenv:\n  PUBLISH_POLICY_NOTE: https://nuget.pkg.github.com/FS-GG/index.json\n"
+        if expectRefusal (fun () -> validateWorkflowText detachedSource) then negative.Add "workflow-detached-source"
+        require (negative.Count = 11) "self-test did not exercise every negative control"
         printfn "SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=%d cases=%s" negative.Count (String.concat "," negative)
     finally
         if Directory.Exists scratch then Directory.Delete(scratch, true)
