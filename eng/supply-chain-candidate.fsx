@@ -399,4 +399,4 @@ try
     | _ -> usage ()
 with error ->
     eprintfn "SUPPLY_CHAIN_REFUSED %s" error.Message
-    Environment.ExitCode <- 3
+    exit 3
