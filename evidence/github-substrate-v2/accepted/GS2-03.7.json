@@ -1,0 +1,43 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-03.7",
+  "state": "accepted",
+  "unitContractSha256": "9aafa686e23439c3c0c8535855f5a871903b53ece25eb196b7cf14595bab8b24",
+  "sourceRevision": "ea9781c89d169eec2e4f6aad004acc3a764d59d7",
+  "artifacts": [
+    {
+      "name": "candidate-package",
+      "sha256": "c15c18070e68b8e34bf0b0432456e2565eab06ba3f65679b5d70037f3798b250"
+    },
+    {
+      "name": "canonical-symbol-package",
+      "sha256": "8161e0d2772aeddc36bebebfcf936fb0ba1c822a599af4947d8457727d0a5166"
+    },
+    {
+      "name": "portable-pdb",
+      "sha256": "6a13585cc73600b91654a5a5a3e540533dcd8e4911a13f6944c3e923535d0a1a"
+    },
+    {
+      "name": "installed-assembly",
+      "sha256": "6656b1ba71c1e39089dba65faae04dfeef36689526a827f636f3f7fd40854ffc"
+    },
+    {
+      "name": "spdx-sbom",
+      "sha256": "63854c9bb2599d9972906954e3e502c87f4bb39543732e68250a86c29f3a3021"
+    },
+    {
+      "name": "slsa-provenance",
+      "sha256": "1d51d2030fbccf54cf95572a06f35731292dae74789c3d6c8c2f525d211fc5be"
+    },
+    {
+      "name": "served-verification-attestation",
+      "sha256": "97a9449a5f8d8685e881014ade1751d7266a12addd829f1f2dc3e4f6fa8c44ee"
+    },
+    {
+      "name": "hosted-actions-artifact",
+      "sha256": "592cfd8ece9ce30a2430e81425ae08ee241e43366c91e0b484dc3bf5d0541ade"
+    }
+  ],
+  "acceptedAt": "2026-08-30T21:37:20Z",
+  "digest": "4bbf4c1a0703d821f15325d4058624608c76211ee083396e8e10fd95653941b9"
+}

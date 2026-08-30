@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/runner-temp.sh"
+fsgg_resolve_runner_temp
 dotnet restore FS.GG.Coordination.sln --locked-mode
 dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror
 mkdir -p "$RUNNER_TEMP/deterministic-build"

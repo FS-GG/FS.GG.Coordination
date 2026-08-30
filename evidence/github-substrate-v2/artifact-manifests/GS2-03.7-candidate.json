@@ -1,0 +1,12 @@
+{
+  "schema": "fsgg.coordination.artifact-manifest/1",
+  "id": "GS2-03.7-candidate-supply-chain",
+  "store": "github-actions-artifact",
+  "repositoryId": 1346720714,
+  "producerId": 33336821654,
+  "artifactId": 9739282742,
+  "artifactName": "candidate-supply-chain-ea9781c89d169eec2e4f6aad004acc3a764d59d7",
+  "bytes": 118702,
+  "mediaType": "application/zip",
+  "sha256": "592cfd8ece9ce30a2430e81425ae08ee241e43366c91e0b484dc3bf5d0541ade"
+}
