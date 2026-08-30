@@ -295,7 +295,7 @@ let verifyServed values =
     File.Copy(served, Path.Combine(feed, Path.GetFileName served), true)
     let consumers =
         [| "supply-chain-consumer-a", "FS.GG.Coordination.Protocol:1"
-           "supply-chain-consumer-b", "Coordination candidate schema:2" |]
+           "supply-chain-consumer-b", "Coordination candidate schema:1" |]
     let results = ResizeArray<_>()
     for fixture, expectedOutput in consumers do
         let consumer = Path.Combine(output, fixture)
