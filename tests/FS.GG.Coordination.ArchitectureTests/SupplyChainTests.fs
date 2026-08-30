@@ -27,8 +27,8 @@ let ``candidate supply chain proves positive and independent negative controls``
     let exitCode, output, error = runSelfTest ()
     Assert.Equal(0, exitCode)
     Assert.Equal("", error)
-    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=9", output)
-    for caseName in [ "package-tamper"; "sbom-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected" ] do
+    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=10", output)
+    for caseName in [ "package-tamper"; "sbom-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected"; "workflow-dynamic-source" ] do
         Assert.Contains(caseName, output)
 
 [<Fact>]
@@ -52,12 +52,13 @@ let ``candidate workflow is manual exact-sha and pre-production only`` () =
 [<Fact>]
 let ``candidate implementation has one pack call and two clean consumers`` () =
     let implementation = File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
-    let packToken = "run repo \"dotnet\" [ \"pack\";"
+    let packToken = "\"pack\"; packageProject"
     Assert.Equal(1, implementation.Split(packToken, StringSplitOptions.None).Length - 1)
     Assert.Contains("SPDX-2.3", implementation)
     Assert.Contains("https://in-toto.io/Statement/v1", implementation)
     Assert.Contains("packInvocations", implementation)
     Assert.Contains("canonicalizePackage", implementation)
+    Assert.Contains("-p:PathMap=", implementation)
     Assert.Contains("SequenceEqual", implementation)
     Assert.Contains("supply-chain-consumer-a", implementation)
     Assert.Contains("supply-chain-consumer-b", implementation)
