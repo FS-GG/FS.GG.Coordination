@@ -138,7 +138,8 @@ let validateWorkflowText (workflow: string) =
     require (lineCount "^  workflow_dispatch:$" = 1) "candidate workflow must be manual-only"
     for forbiddenTrigger in [ "push"; "pull_request"; "schedule"; "repository_dispatch" ] do
         require (lineCount $"^  {Regex.Escape forbiddenTrigger}:" = 0) $"candidate workflow enables forbidden trigger: {forbiddenTrigger}"
-    require (lineCount "^[ ]+dotnet nuget push(?:[ ]|$)" = 1) "candidate workflow must contain exactly one active NuGet publication command"
+    let publicationCommands = Regex.Matches(normalized, "\\b(?:dotnet[ \\t\\r\\n]+)?nuget[ \\t\\r\\n]+push\\b", RegexOptions.IgnoreCase ||| RegexOptions.CultureInvariant).Count
+    require (publicationCommands = 1) "candidate workflow must contain exactly one active NuGet publication command"
     require (occurrenceCount "--source https://nuget.pkg.github.com/FS-GG/index.json" normalized = 1) "candidate workflow must publish exactly once to the allowed endpoint"
     require (occurrenceCount "https://nuget.pkg.github.com/FS-GG/index.json" normalized = 1) "candidate workflow has an ambiguous publication endpoint"
     require (not (normalized.Contains("nuget.org", StringComparison.OrdinalIgnoreCase))) "candidate workflow references nuget.org"
@@ -313,10 +314,15 @@ let prepare values =
     require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "output directory must be empty"
     Directory.CreateDirectory output |> ignore
     run repo "dotnet" [ "restore"; packageProject; "--locked-mode" ] [] |> ignore
-    run repo "dotnet" [ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror" ] [] |> ignore
+    let deterministicProperties =
+        [ "-p:ContinuousIntegrationBuild=true"
+          "-p:Deterministic=true"
+          "-p:DeterministicSourcePaths=true"
+          $"-p:PathMap={repo}=/_/" ]
+    run repo "dotnet" ([ "build"; packageProject; "--configuration"; "Release"; "--no-restore"; "--warnaserror" ] @ deterministicProperties) [] |> ignore
     let packOutput = Path.Combine(output, "pack")
     Directory.CreateDirectory packOutput |> ignore
-    run repo "dotnet" [ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--output"; packOutput; "-p:IsPackable=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] [] |> ignore
+    run repo "dotnet" ([ "pack"; packageProject; "--configuration"; "Release"; "--no-build"; "--no-restore"; "--output"; packOutput; "-p:IsPackable=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={candidate}"; "-p:RepositoryBranch=main" ] @ deterministicProperties) [] |> ignore
     let packages = Directory.GetFiles(packOutput, "*.nupkg", SearchOption.TopDirectoryOnly)
     require (packages.Length = 1) "exactly one candidate package must be produced"
     canonicalizePackage packages[0]
@@ -453,7 +459,8 @@ let selfTest values =
         if expectRefusal (fun () -> validateWorkflowText (workflow.Replace("      - name: Publish only", "      - continue-on-error: true\n      - name: Publish only"))) then negative.Add "workflow-bypass"
         if expectRefusal (fun () -> validateWorkflowText "") then negative.Add "workflow-unreadable"
         if expectRefusal (fun () -> validateWorkflowText (workflow.Replace("          --protected-ref refs/remotes/origin/main\n", ""))) then negative.Add "workflow-unprotected"
-        require (negative.Count = 9) "self-test did not exercise every negative control"
+        if expectRefusal (fun () -> validateWorkflowText (workflow + "\n      - run: dotnet nuget push candidate.nupkg --source \"$UNTRUSTED_SOURCE\"\n")) then negative.Add "workflow-dynamic-source"
+        require (negative.Count = 10) "self-test did not exercise every negative control"
         printfn "SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=%d cases=%s" negative.Count (String.concat "," negative)
     finally
         if Directory.Exists scratch then Directory.Delete(scratch, true)
