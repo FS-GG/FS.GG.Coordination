@@ -1,0 +1,65 @@
+{
+  "schema": "fsgg.coordination.canonical-quint-qualification/1",
+  "q1Outcome": "passed",
+  "q2Outcome": "passed",
+  "positiveInvariantCount": 8,
+  "negativeControlCount": 101,
+  "preparationDurationMs": 40360,
+  "q2DurationMs": 346591,
+  "totalDurationMs": 386951,
+  "processCounts": {
+    "external": 151,
+    "quintCli": 126,
+    "apalacheVerify": 32
+  },
+  "formalCounterexamples": [
+    {
+      "id": "claim-election",
+      "manifestSha256": "bff164421c41d639d0581d27bc05dd5c767c5866b3df0c9d32d8655cc5270c78",
+      "traceSha256": "095a9ee853b379de5dcb7a81cf070c4f0907ada56c8efa58ecea0f0e522c8618",
+      "itfSha256": "020e920225ce3c124478d392fd1445c193d09a1b85bb54cca627adad24a4a45f"
+    },
+    {
+      "id": "epoch",
+      "manifestSha256": "0d98d075c01dce701bb477d329d013e64697c641aa885123fc45e782df790e1e",
+      "traceSha256": "2f51c268bbd112b059dc085bda2f6764d4462dbe6c2cef7ac9a8d153e177e3d1",
+      "itfSha256": "684c51f550cd6c649fca80046977094f9381f4df368a3add08a456f4a7377667"
+    },
+    {
+      "id": "lifecycle",
+      "manifestSha256": "74d802614d98235b346f8b354eb9aefee4ee1cd7b7cfd98d67e7022d980bdd80",
+      "traceSha256": "9bb73088cff413dd35cbf3b42c0e3dc59b51bcbd05604333f08f3b8c33faa581",
+      "itfSha256": "74e6f1b54aec3e1ee11633797c8d93a9fb2d5e16f19ed226b72b48be93604d60"
+    },
+    {
+      "id": "operation-saga",
+      "manifestSha256": "213fdcbc186cc0939d4f00184bd0eccc6a91b5d748c01da54d2137ae6463ccb9",
+      "traceSha256": "263c0178b291031c3e5b1d0f214c985dc18dcc1c6f9c0b389fe475bcb95abc35",
+      "itfSha256": "514365d16b441e2be7d6b45248cb2cd11d05533a10e3120767c35c98798a6a9d"
+    },
+    {
+      "id": "relation-mutation",
+      "manifestSha256": "f101995026257fcded1f2f18c672b2a217532b447e47e0413bbb517a75b61ab7",
+      "traceSha256": "186c0bf147f3cf2cdf3c6a28a09a5b5abba131c0b8a82dd08b14f8a0eb241258",
+      "itfSha256": "bcae8d4b2aa84a8e898ac8bef7734789fa6f6fb0bc0ce5ec76ca5290aaf2bf8a"
+    },
+    {
+      "id": "rollback",
+      "manifestSha256": "9a3cc1379225bb9d164daa227312f7f70b6bcbef8ce3ef7aaa9f9118c4e9a080",
+      "traceSha256": "ab3d7caa55ba71741a22378d56326b889baf86e96edb989a48310a543d5baba8",
+      "itfSha256": "50e81fe45e26710ae889b0d58413a88cdd97a4d8042da0d2e1341b10d4356436"
+    }
+  ],
+  "tools": {
+    "toolchainSha256": "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486",
+    "quintSha256": "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
+    "apalacheJarSha256": "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
+  },
+  "inputs": {
+    "sourceSha256": "cb6f4f5203d8c5bd87abcbc6cf03d37824f8e7fe5db209c9b029f9a2e334c223",
+    "contractSha256": "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
+  },
+  "preparationSha256": "467ae7b091767cae4a3aa7da067171be03572226e54448ea55ddcfa15653d77e",
+  "failure": null,
+  "resultSha256": "87f0e6eebb91098cc80dca5213b135890f43f2cd9bf11fda1fdfd4b1bc1e1108"
+}

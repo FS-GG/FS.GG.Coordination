@@ -5,8 +5,18 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
+open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
+
+type FormalMeasurement = {
+    mutable StateCount: int
+    mutable TransitionCount: int
+    mutable SampleCount: int
+    mutable ElapsedMs: int64
+    mutable PeakMiB: int
+    mutable ArtifactBytes: int64
+}
 
 let expectedPackage = "FS.GG.SDD.Artifacts/1.5.0"
 let expectedProfile = "fsgg-quint-profile/2"
@@ -20,7 +30,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "750bb30a034ec4a1f742eae3684e9e9d1e9a84e9cd2cba0716ea028bfeec536a"
+    "cb6f4f5203d8c5bd87abcbc6cf03d37824f8e7fe5db209c9b029f9a2e334c223"
 
 let expectedContract =
     "60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76"
@@ -32,9 +42,9 @@ let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
-let mutable expectedExternalProcessCount = 109
-let mutable expectedQuintProcessCount = 84
-let expectedApalacheVerifyInvocationCount = 14
+let mutable expectedExternalProcessCount = 151
+let mutable expectedQuintProcessCount = 126
+let expectedApalacheVerifyInvocationCount = 32
 
 let expectedApalacheJar =
     "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
@@ -51,6 +61,7 @@ let mutable currentPhase = "q1"
 let mutable preparationDurationMs = 0L
 let mutable preparationDigest: string option = None
 let mutable failureReceiptWriter: (string -> string -> unit) option = None
+let formalCounterexampleReceipts = ResizeArray<string * string * string * string>()
 
 let positiveInvariants =
     [ "acceptedVocabularyIsQualified"
@@ -139,6 +150,63 @@ let run workingDirectory (executable: string) arguments environment =
 
     child.ExitCode, output.Result.Trim(), error.Result.Trim()
 
+let private processTreeRssBytes rootPid =
+    let rec collect visited pid =
+        if Set.contains pid visited then 0L, visited
+        else
+            let visited' = Set.add pid visited
+            let status = $"/proc/%d{pid}/status"
+            let rss =
+                try
+                    File.ReadLines status
+                    |> Seq.tryFind (fun line -> line.StartsWith("VmRSS:", StringComparison.Ordinal))
+                    |> Option.map (fun line ->
+                        let fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                        Int64.Parse(fields[1]) * 1024L)
+                    |> Option.defaultValue 0L
+                with _ -> 0L
+            let childrenPath = $"/proc/%d{pid}/task/%d{pid}/children"
+            let children =
+                try
+                    File.ReadAllText(childrenPath).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    |> Array.map Int32.Parse
+                    |> Array.toList
+                with _ -> []
+            children
+            |> List.fold (fun (total, seen) childPid ->
+                let childTotal, nextSeen = collect seen childPid
+                total + childTotal, nextSeen) (rss, visited')
+    collect Set.empty rootPid |> fst
+
+let runMeasured workingDirectory (executable: string) arguments environment =
+    Interlocked.Increment(&externalProcessCount) |> ignore
+    let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
+    if isQuint then
+        Interlocked.Increment(&quintProcessCount) |> ignore
+        match arguments with
+        | "verify" :: _ -> Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
+        | _ -> ()
+    let info = ProcessStartInfo(executable)
+    info.WorkingDirectory <- workingDirectory
+    info.UseShellExecute <- false
+    info.RedirectStandardOutput <- true
+    info.RedirectStandardError <- true
+    for argument in arguments do info.ArgumentList.Add argument
+    for name, value in environment do info.Environment[name] <- value
+    use child = Process.Start info
+    let output = child.StandardOutput.ReadToEndAsync()
+    let error = child.StandardError.ReadToEndAsync()
+    let clock = Stopwatch.StartNew()
+    let mutable peakBytes = 0L
+    while not child.HasExited do
+        peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
+        Thread.Sleep 10
+    child.WaitForExit()
+    peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
+    if isQuint && child.ExitCode <> 0 then Interlocked.Increment(&quintRejectedProcessCount) |> ignore
+    child.ExitCode, output.Result.Trim(), error.Result.Trim(), clock.ElapsedMilliseconds,
+    int (Math.Ceiling(float peakBytes / 1048576.0))
+
 let requireGreen code workingDirectory executable arguments environment =
     let exitCode, output, error = run workingDirectory executable arguments environment
 
@@ -161,6 +229,7 @@ let rec parse root staticOnly compilerOnly output receiptFailurePhase remaining 
 
 let root, staticOnly, compilerOnly, outputOption, receiptFailurePhase =
     parse (Path.GetFullPath ".") false false None None arguments
+let refreshFormalEvidence = Environment.GetEnvironmentVariable("FSGG_REFRESH_FORMAL_EVIDENCE") = "1"
 
 let qualificationOutput =
     outputOption
@@ -177,9 +246,15 @@ let writeQualificationReceipt failure =
         | Some(code, detail) -> code, sha256Text detail
         | None -> "none", "none"
 
+    let formalEvidenceIdentity =
+        formalCounterexampleReceipts
+        |> Seq.sortBy (fun (id, _, _, _) -> id)
+        |> Seq.map (fun (id, manifest, trace, itf) -> $"%s{id}|%s{manifest}|%s{trace}|%s{itf}")
+        |> String.concat ";"
+
     let resultSha256 =
         sha256Text
-            ($"%s{q1Outcome}|%s{q2Outcome}|%d{verifiedPositiveInvariantCount}|%d{quintRejectedProcessCount}|%d{externalProcessCount}|%d{quintProcessCount}|%d{apalacheVerifyInvocationCount}|%s{preparationValue}|%s{failureCode}|%s{failureDetailSha256}")
+            ($"%s{q1Outcome}|%s{q2Outcome}|%d{verifiedPositiveInvariantCount}|%d{quintRejectedProcessCount}|%d{externalProcessCount}|%d{quintProcessCount}|%d{apalacheVerifyInvocationCount}|%s{preparationValue}|%s{formalEvidenceIdentity}|%s{failureCode}|%s{failureDetailSha256}")
 
     let outputDirectory = Path.GetDirectoryName qualificationOutput
 
@@ -205,6 +280,15 @@ let writeQualificationReceipt failure =
         writer.WriteNumber("quintCli", quintProcessCount)
         writer.WriteNumber("apalacheVerify", apalacheVerifyInvocationCount)
         writer.WriteEndObject()
+        writer.WriteStartArray("formalCounterexamples")
+        for id, manifestSha256, traceSha256, itfSha256 in formalCounterexampleReceipts |> Seq.sortBy (fun (id, _, _, _) -> id) do
+            writer.WriteStartObject()
+            writer.WriteString("id", id)
+            writer.WriteString("manifestSha256", manifestSha256)
+            writer.WriteString("traceSha256", traceSha256)
+            writer.WriteString("itfSha256", itfSha256)
+            writer.WriteEndObject()
+        writer.WriteEndArray()
         writer.WriteStartObject("tools")
         writer.WriteString("toolchainSha256", expectedToolchain)
         writer.WriteString("quintSha256", expectedQuint)
@@ -266,10 +350,10 @@ match receiptFailurePhase with
     q1Outcome <- "passed"
     currentPhase <- "q2"
     verifiedPositiveInvariantCount <- 8
-    quintRejectedProcessCount <- 70
-    externalProcessCount <- 108
-    quintProcessCount <- 83
-    apalacheVerifyInvocationCount <- 14
+    quintRejectedProcessCount <- 100
+    externalProcessCount <- 150
+    quintProcessCount <- 125
+    apalacheVerifyInvocationCount <- 32
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
     requireCompletedProcessInventory ()
@@ -632,8 +716,8 @@ let selectedRootIds =
     |> Seq.map _.GetString()
     |> Set.ofSeq
 File.Delete selectionPlanPath
-expectedExternalProcessCount <- 102 + selectedRootIds.Count
-expectedQuintProcessCount <- 77 + selectedRootIds.Count
+expectedExternalProcessCount <- 144 + selectedRootIds.Count
+expectedQuintProcessCount <- 119 + selectedRootIds.Count
 
 if staticOnly then
     printfn "CANONICAL_QUINT_PROTOCOL_STATIC_OK contract=%s profile=%s" expectedContract expectedProfile
@@ -981,6 +1065,31 @@ try
         |> Seq.map (fun item ->
             item.GetProperty("id").GetString(), item.GetProperty("budget").GetProperty("artifactBytes").GetInt32())
         |> Map.ofSeq
+    let formalTests =
+        qualificationConfigurationDocument.RootElement.GetProperty("formalTests").EnumerateArray()
+        |> Seq.map (fun item ->
+            item.GetProperty("id").GetString(),
+            item.GetProperty("main").GetString(),
+            item.GetProperty("init").GetString(),
+            item.GetProperty("step").GetString(),
+            item.GetProperty("invariant").GetString(),
+            item.GetProperty("witness").GetString(),
+            item.GetProperty("temporal").GetString(),
+            item.GetProperty("invalid").GetString(),
+            item.GetProperty("removedStep").GetString(),
+            item.GetProperty("violatedTemporal").GetString(),
+            item.GetProperty("blockedInvariant").GetString(),
+            item.GetProperty("counterexample").GetString(),
+            item.GetProperty("counterexampleTrace").GetString(),
+            item.GetProperty("counterexampleManifest").GetString(),
+            item.GetProperty("budget").GetProperty("depth").GetInt32(),
+            item.GetProperty("budget").GetProperty("states").GetInt32(),
+            item.GetProperty("budget").GetProperty("transitions").GetInt32(),
+            item.GetProperty("budget").GetProperty("samples").GetInt32(),
+            item.GetProperty("budget").GetProperty("elapsedMs").GetInt32(),
+            item.GetProperty("budget").GetProperty("peakMiB").GetInt32(),
+            item.GetProperty("budget").GetProperty("artifactBytes").GetInt32())
+        |> Seq.toList
     let rootArtifactDirectory = Path.Combine(scratch, "root-artifacts")
     Directory.CreateDirectory rootArtifactDirectory |> ignore
     let rootArtifactDigests = ResizeArray<string * string>()
@@ -1058,6 +1167,35 @@ try
     if not (List.isEmpty duplicateRootArtifacts) then
         fail "QUINT-ROOT-ARTIFACT-IDENTITY" ($"duplicates=%A{duplicateRootArtifacts |> List.map fst}")
 
+    let formalArtifactDirectory = Path.Combine(scratch, "formal-test-artifacts")
+    Directory.CreateDirectory formalArtifactDirectory |> ignore
+    let formalMeasurements = System.Collections.Generic.Dictionary<string, FormalMeasurement>()
+
+    for formalId, main, init, step, invariantName, witness, _, _, _, _, _, _, _, _, depth, _, _, samples, elapsedBudget, peakBudget, artifactBudget in formalTests do
+        let artifactPath = Path.Combine(formalArtifactDirectory, $"%s{formalId}-simulation.json")
+        let exitCode, output, error, elapsedMs, peakMiB =
+            runMeasured scratch quint
+                [ "run"; q2Qnt; "--main"; main; "--init"; init; "--step"; step
+                  "--invariant"; invariantName; "--witnesses"; witness
+                  "--max-steps"; string depth; "--max-samples"; string samples
+                  "--seed"; "1"; "--verbosity"; "1" ] []
+        if exitCode <> 0 then
+            fail "QUINT-FORMAL-SIMULATION" ($"%s{formalId}: exit=%d{exitCode}; stdout=%s{output}; stderr=%s{error}")
+        let exploredMatch = Regex.Match(output + "\n" + error, @"out of (\d+) explored")
+        if not exploredMatch.Success then fail "QUINT-FORMAL-SIMULATION-MEASUREMENT" formalId
+        let observedSamples = Int32.Parse exploredMatch.Groups[1].Value
+        let normalizedOutput =
+            Regex.Replace((output + "\n" + error).Trim(), @"\d+ms at \d+ traces/second", "<measured runtime>")
+        File.WriteAllText(artifactPath, normalizedOutput + "\n", UTF8Encoding(false))
+        let length = FileInfo(artifactPath).Length
+        if length <= 0L || length > int64 artifactBudget || elapsedMs > int64 elapsedBudget || peakMiB > peakBudget then
+            fail "QUINT-FORMAL-ARTIFACT-BUDGET" ($"%s{formalId}: bytes=%d{length}; budget=%d{artifactBudget}")
+        formalMeasurements[formalId] <- {
+            StateCount = 0; TransitionCount = 0; SampleCount = observedSamples
+            ElapsedMs = elapsedMs; PeakMiB = peakMiB; ArtifactBytes = length
+        }
+        printfn "QUINT_FORMAL_SIMULATION id=%s samples=%d elapsedMs=%d peakMiB=%d bytes=%d sha256=%s" formalId observedSamples elapsedMs peakMiB length (sha256 artifactPath)
+
     requireGreen
         "QUINT-INDEPENDENT-ORACLES"
         scratch
@@ -1134,6 +1272,161 @@ try
           Path.GetDirectoryName(java)
           + string Path.PathSeparator
           + Environment.GetEnvironmentVariable("PATH") ]
+
+    let normalizeItf path =
+        let document = JsonNode.Parse(File.ReadAllBytes path).AsObject()
+        let metadata = document["#meta"].AsObject()
+        metadata.Remove("description") |> ignore
+        metadata.Remove("timestamp") |> ignore
+        metadata.Remove("source") |> ignore
+        if metadata["format"].GetValue<string>() <> "ITF" || metadata["status"].GetValue<string>() <> "violation" then
+            fail "QUINT-FORMAL-COUNTEREXAMPLE-SHAPE" path
+        if document["states"].AsArray().Count < 2 then fail "QUINT-FORMAL-COUNTEREXAMPLE-TRACE" path
+        document.ToJsonString(JsonSerializerOptions(WriteIndented = false))
+
+    for formalId, main, init, step, invariantName, _, temporalName, invalid, removedStep, violatedTemporal, blockedInvariant,
+        retainedCounterexample, retainedTrace, retainedManifest, depth, stateBudget, transitionBudget, _,
+        elapsedBudget, peakBudget, artifactBudget in formalTests do
+        let temporalExit, temporalOutput, temporalError, temporalElapsed, temporalPeak =
+            runMeasured scratch quint
+                [ "verify"; q2Qnt; "--main"; main; "--init"; init; "--step"; step
+                  "--invariant"; invariantName; "--temporal"; temporalName
+                  "--max-steps"; string depth; "--backend"; "tlc"; "--verbosity"; "5" ] environment
+        if temporalExit <> 0 then
+            fail "QUINT-FORMAL-TEMPORAL" ($"%s{formalId}: exit=%d{temporalExit}; stdout=%s{temporalOutput}; stderr=%s{temporalError}")
+        let stateMatches = Regex.Matches(temporalOutput + "\n" + temporalError, @"(\d+) states generated, (\d+) distinct states found")
+        if stateMatches.Count = 0 then fail "QUINT-FORMAL-TLC-MEASUREMENT" formalId
+        let stateMatch = stateMatches[stateMatches.Count - 1]
+        let generatedStates = Int32.Parse stateMatch.Groups[1].Value
+        let distinctStates = Int32.Parse stateMatch.Groups[2].Value
+        let transitions = Math.Max(0, generatedStates - 1)
+        let measurement = formalMeasurements[formalId]
+        measurement.StateCount <- distinctStates
+        measurement.TransitionCount <- transitions
+        measurement.ElapsedMs <- measurement.ElapsedMs + temporalElapsed
+        measurement.PeakMiB <- Math.Max(measurement.PeakMiB, temporalPeak)
+
+        let safetyExit, safetyOutput, safetyError, safetyElapsed, safetyPeak =
+            runMeasured scratch quint
+                [ "run"; q2Qnt; "--main"; main; "--init"; init; "--step"; invalid
+                  "--invariant"; invariantName; "--max-steps"; "2"; "--max-samples"; "1"
+                  "--seed"; "1"; "--verbosity"; "0" ] []
+        if safetyExit = 0 || not ((safetyOutput + "\n" + safetyError).Contains("Invariant violated", StringComparison.Ordinal)) then
+            fail "QUINT-FORMAL-SAFETY-INVALID" ($"%s{formalId}: exit=%d{safetyExit}; stdout=%s{safetyOutput}; stderr=%s{safetyError}")
+        measurement.ElapsedMs <- measurement.ElapsedMs + safetyElapsed
+        measurement.PeakMiB <- Math.Max(measurement.PeakMiB, safetyPeak)
+
+        let runCounterexample ordinal =
+            let pattern = Path.Combine(formalArtifactDirectory, $"%s{formalId}-counterexample-%d{ordinal}-{{seq}}.itf.json")
+            let temporalExitCode, temporalOutput, temporalError, temporalElapsedMs, temporalPeakMiB =
+                runMeasured scratch quint
+                    [ "verify"; q2Qnt; "--main"; main; "--init"; init; "--step"; removedStep
+                      "--temporal"; violatedTemporal; "--max-steps"; string depth
+                      "--backend"; "tlc"; "--verbosity"; "5" ] environment
+            let temporalDiagnostic = temporalOutput + "\n" + temporalError
+            if temporalExitCode = 0 || not (temporalDiagnostic.Contains("Temporal properties were violated", StringComparison.Ordinal)) then
+                fail "QUINT-FORMAL-TEMPORAL-COUNTEREXAMPLE" ($"%s{formalId}: transition-removal did not violate %s{violatedTemporal}")
+            let diagnosticStart = temporalDiagnostic.IndexOf("Error: The following behavior constitutes a counter-example:", StringComparison.Ordinal)
+            if diagnosticStart < 0 then fail "QUINT-FORMAL-TEMPORAL-DIAGNOSTIC" formalId
+            let diagnosticEnd = temporalDiagnostic.IndexOf("Finished checking temporal properties", diagnosticStart, StringComparison.Ordinal)
+            if diagnosticEnd <= diagnosticStart then fail "QUINT-FORMAL-TEMPORAL-DIAGNOSTIC" formalId
+            let normalizedDiagnostic = temporalDiagnostic.Substring(diagnosticStart, diagnosticEnd - diagnosticStart).Trim()
+
+            let rustExitCode, rustOutput, rustError, rustElapsedMs, rustPeakMiB =
+                runMeasured scratch quint
+                    [ "run"; q2Qnt; "--main"; main; "--init"; init; "--step"; removedStep
+                      "--invariant"; blockedInvariant; "--max-steps"; string depth; "--max-samples"; "1"
+                      "--seed"; "1"; "--verbosity"; "0"; "--out-itf"; pattern ] []
+            if rustExitCode = 0 || not ((rustOutput + "\n" + rustError).Contains("Invariant violated", StringComparison.Ordinal)) then
+                fail "QUINT-FORMAL-ITF-PROJECTION" ($"%s{formalId}: exit=%d{rustExitCode}; stdout=%s{rustOutput}; stderr=%s{rustError}")
+            let path = pattern.Replace("{seq}", "0", StringComparison.Ordinal)
+            requireFile "QUINT-FORMAL-COUNTEREXAMPLE-MISSING" path
+            path, normalizeItf path, normalizedDiagnostic,
+            temporalElapsedMs + rustElapsedMs, Math.Max(temporalPeakMiB, rustPeakMiB)
+
+        let firstPath, first, firstDiagnostic, firstElapsed, firstPeak = runCounterexample 1
+        let _, second, secondDiagnostic, secondElapsed, secondPeak = runCounterexample 2
+        if first <> second || firstDiagnostic <> secondDiagnostic then
+            fail "QUINT-FORMAL-COUNTEREXAMPLE-NONDETERMINISTIC" formalId
+        File.WriteAllText(firstPath, first, UTF8Encoding(false))
+        let itfSha256 = sha256 firstPath
+        let itfNode = JsonNode.Parse(first).AsObject()
+        let traceNode = JsonObject()
+        traceNode["schema"] <- JsonValue.Create("fsgg.coordination.quint-counterexample-trace/1")
+        traceNode["temporalDiagnostic"] <- JsonValue.Create(firstDiagnostic)
+        traceNode["states"] <- itfNode["states"].DeepClone()
+        let traceText = traceNode.ToJsonString(JsonSerializerOptions(WriteIndented = false))
+        let tracePath = Path.Combine(formalArtifactDirectory, $"%s{formalId}.quint-trace.json")
+        File.WriteAllText(tracePath, traceText, UTF8Encoding(false))
+        let traceSha256 = sha256 tracePath
+        let orderedStatesSha256 = sha256Text (itfNode["states"].ToJsonString(JsonSerializerOptions(WriteIndented = false)))
+        let manifestNode = JsonObject()
+        manifestNode["schema"] <- JsonValue.Create("fsgg.coordination.quint-counterexample-manifest/1")
+        manifestNode["id"] <- JsonValue.Create(formalId)
+        manifestNode["sourceSha256"] <- JsonValue.Create(expectedSource)
+        manifestNode["assembledQuintSha256"] <- JsonValue.Create(sha256 q2Qnt)
+        manifestNode["main"] <- JsonValue.Create(main)
+        manifestNode["init"] <- JsonValue.Create(init)
+        manifestNode["removedStep"] <- JsonValue.Create(removedStep)
+        manifestNode["violatedTemporal"] <- JsonValue.Create(violatedTemporal)
+        manifestNode["blockedInvariant"] <- JsonValue.Create(blockedInvariant)
+        let boundsNode = JsonObject()
+        boundsNode["maxSteps"] <- JsonValue.Create(depth)
+        manifestNode["bounds"] <- boundsNode
+        manifestNode["backend"] <- JsonValue.Create("tlc")
+        manifestNode["toolchainSha256"] <- JsonValue.Create(expectedToolchain)
+        manifestNode["normalization"] <- JsonValue.Create("itf-volatile-meta-v1")
+        manifestNode["outcome"] <- JsonValue.Create("temporal-violation")
+        manifestNode["orderedStatesSha256"] <- JsonValue.Create(orderedStatesSha256)
+        manifestNode["traceSha256"] <- JsonValue.Create(traceSha256)
+        manifestNode["itfSha256"] <- JsonValue.Create(itfSha256)
+        let manifestText = manifestNode.ToJsonString(JsonSerializerOptions(WriteIndented = false))
+        let manifestPath = Path.Combine(formalArtifactDirectory, $"%s{formalId}.manifest.json")
+        File.WriteAllText(manifestPath, manifestText, UTF8Encoding(false))
+
+        for code, retainedPath, actualText in
+            [ "QUINT-FORMAL-COUNTEREXAMPLE-STALE", retainedCounterexample, first
+              "QUINT-FORMAL-TRACE-STALE", retainedTrace, traceText
+              "QUINT-FORMAL-MANIFEST-STALE", retainedManifest, manifestText ] do
+            let fullPath = Path.Combine(root, retainedPath)
+            if refreshFormalEvidence then
+                Directory.CreateDirectory(Path.GetDirectoryName fullPath) |> ignore
+                File.WriteAllText(fullPath, actualText, UTF8Encoding(false))
+            else
+                requireFile code fullPath
+                if File.ReadAllText(fullPath, Encoding.UTF8) <> actualText then fail code formalId
+
+        let totalBytes = FileInfo(firstPath).Length + FileInfo(tracePath).Length + FileInfo(manifestPath).Length + measurement.ArtifactBytes
+        measurement.ArtifactBytes <- totalBytes
+        measurement.ElapsedMs <- measurement.ElapsedMs + firstElapsed + secondElapsed
+        measurement.PeakMiB <- List.max [ measurement.PeakMiB; firstPeak; secondPeak ]
+        if distinctStates > stateBudget || transitions > transitionBudget
+           || measurement.ElapsedMs > int64 elapsedBudget || measurement.PeakMiB > peakBudget
+           || totalBytes > int64 artifactBudget then
+            fail "QUINT-FORMAL-MEASUREMENT-BUDGET" ($"%s{formalId}: states=%d{distinctStates}; transitions=%d{transitions}; elapsedMs=%d{measurement.ElapsedMs}; peakMiB=%d{measurement.PeakMiB}; bytes=%d{totalBytes}")
+        formalCounterexampleReceipts.Add(formalId, sha256 manifestPath, traceSha256, itfSha256)
+        printfn "QUINT_FORMAL_TEST id=%s backend=tlc temporal=%s removedStep=%s violatedTemporal=%s states=%d transitions=%d samples=%d elapsedMs=%d peakMiB=%d artifactBytes=%d manifestSha256=%s traceSha256=%s itfSha256=%s" formalId temporalName removedStep violatedTemporal distinctStates transitions measurement.SampleCount measurement.ElapsedMs measurement.PeakMiB totalBytes (sha256 manifestPath) traceSha256 itfSha256
+
+    use formalBaselineDocument = JsonDocument.Parse(File.ReadAllBytes qualificationBaseline)
+    if formalBaselineDocument.RootElement.GetProperty("formalMeasurementMethod").GetString()
+       <> "canonical-runner-observed-tlc-and-rust-v1" then
+        fail "QUINT-FORMAL-BASELINE-METHOD" "unsupported"
+    let retainedFormalMeasurements =
+        formalBaselineDocument.RootElement.GetProperty("formalMeasurements").EnumerateArray()
+        |> Seq.map (fun item -> item.GetProperty("id").GetString(), item.Clone())
+        |> Map.ofSeq
+    for KeyValue(formalId, observed) in formalMeasurements do
+        if not (Map.containsKey formalId retainedFormalMeasurements) then fail "QUINT-FORMAL-BASELINE-MISSING" formalId
+        let retainedMeasurement = retainedFormalMeasurements[formalId]
+        let expectedStable =
+            retainedMeasurement.GetProperty("stateCount").GetInt32(),
+            retainedMeasurement.GetProperty("transitionCount").GetInt32(),
+            retainedMeasurement.GetProperty("sampleCount").GetInt32(),
+            retainedMeasurement.GetProperty("artifactBytes").GetInt64()
+        let observedStable = observed.StateCount, observed.TransitionCount, observed.SampleCount, observed.ArtifactBytes
+        if expectedStable <> observedStable && not refreshFormalEvidence then
+            fail "QUINT-FORMAL-BASELINE-DRIFT" ($"%s{formalId}: expected=%A{expectedStable}; observed=%A{observedStable}")
+        printfn "QUINT_FORMAL_MEASUREMENT id=%s stateCount=%d transitionCount=%d sampleCount=%d elapsedMs=%d peakMiB=%d artifactBytes=%d" formalId observed.StateCount observed.TransitionCount observed.SampleCount observed.ElapsedMs observed.PeakMiB observed.ArtifactBytes
 
     requireGreen
         "QUINT-POSITIVE-INVARIANTS-VERIFY"
@@ -2037,8 +2330,8 @@ try
     if verifiedPositiveInvariantCount <> 8 then
         fail "POSITIVE-INVARIANT-COVERAGE" ($"expected=8; actual=%d{verifiedPositiveInvariantCount}")
 
-    if quintRejectedProcessCount <> 71 then
-        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=71; actual=%d{quintRejectedProcessCount}")
+    if quintRejectedProcessCount <> 101 then
+        fail "NEGATIVE-CONTROL-COVERAGE" ($"expected=101; actual=%d{quintRejectedProcessCount}")
 
     requireCompletedProcessInventory ()
 

@@ -41,13 +41,94 @@ let private execute selfTest = executeWith selfTest []
 let ``bounded roots classifications selection and admission are complete`` () =
     let exitCode, output, error = execute false
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations oracles=11 negativeControls=0", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=6 oracles=11 negativeControls=0", output)
 
 [<Fact>]
 let ``independent oracles and qualification contracts reject every focused mutation`` () =
     let exitCode, output, error = execute true
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations oracles=11 negativeControls=20", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=6 oracles=11 negativeControls=27", output)
+
+[<Fact>]
+let ``native formal catalogue covers all domains and retains normalized ITF counterexamples`` () =
+    let configuration =
+        JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification.json"))).AsObject()
+    let source = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
+    let tests = configuration["formalTests"].AsArray() |> Seq.map _.AsObject() |> Seq.toList
+    let baseline = JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification-baseline.json"))).AsObject()
+    let measurements =
+        baseline["formalMeasurements"].AsArray()
+        |> Seq.map _.AsObject()
+        |> Seq.map (fun item -> item["id"].GetValue<string>(), item)
+        |> Map.ofSeq
+    Assert.Equal("canonical-runner-observed-tlc-and-rust-v1", baseline["formalMeasurementMethod"].GetValue<string>())
+    let ids = tests |> List.map (fun item -> item["id"].GetValue<string>()) |> Set.ofList
+    let expectedIds = Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback" ]
+    if ids <> expectedIds then failwithf "unexpected formal-test catalogue: %A" ids
+    for item in tests do
+        Assert.Equal("tlc", item["backend"].GetValue<string>())
+        for field in [ "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"; "removedStep"; "violatedTemporal"; "blockedInvariant" ] do
+            Assert.Contains(item[field].GetValue<string>(), source)
+        let counterexample = Path.Combine(root, item["counterexample"].GetValue<string>())
+        let tracePath = Path.Combine(root, item["counterexampleTrace"].GetValue<string>())
+        let manifestPath = Path.Combine(root, item["counterexampleManifest"].GetValue<string>())
+        let itf = JsonNode.Parse(File.ReadAllBytes counterexample).AsObject()
+        let trace = JsonNode.Parse(File.ReadAllBytes tracePath).AsObject()
+        let manifest = JsonNode.Parse(File.ReadAllBytes manifestPath).AsObject()
+        let metadata = itf["#meta"].AsObject()
+        Assert.Equal("ITF", metadata["format"].GetValue<string>())
+        Assert.Equal("violation", metadata["status"].GetValue<string>())
+        Assert.Null(metadata["timestamp"])
+        Assert.Null(metadata["source"])
+        Assert.True(itf["states"].AsArray().Count >= 2)
+        Assert.Equal(itf["states"].ToJsonString(), trace["states"].ToJsonString())
+        Assert.Contains("behavior constitutes a counter-example", trace["temporalDiagnostic"].GetValue<string>())
+        Assert.Contains("Stuttering", trace["temporalDiagnostic"].GetValue<string>())
+        let fileSha path = SHA256.HashData(File.ReadAllBytes path) |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(configuration["sourceSha256"].GetValue<string>(), manifest["sourceSha256"].GetValue<string>())
+        Assert.Equal(item["main"].GetValue<string>(), manifest["main"].GetValue<string>())
+        Assert.Equal(item["init"].GetValue<string>(), manifest["init"].GetValue<string>())
+        Assert.Equal(item["removedStep"].GetValue<string>(), manifest["removedStep"].GetValue<string>())
+        Assert.Equal(item["violatedTemporal"].GetValue<string>(), manifest["violatedTemporal"].GetValue<string>())
+        Assert.Equal(item["blockedInvariant"].GetValue<string>(), manifest["blockedInvariant"].GetValue<string>())
+        Assert.Equal((item["budget"].AsObject()["depth"]).GetValue<int>(), (manifest["bounds"].AsObject()["maxSteps"]).GetValue<int>())
+        Assert.Equal("79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486", manifest["toolchainSha256"].GetValue<string>())
+        Assert.Equal("temporal-violation", manifest["outcome"].GetValue<string>())
+        Assert.Equal(fileSha counterexample, manifest["itfSha256"].GetValue<string>())
+        Assert.Equal(fileSha tracePath, manifest["traceSha256"].GetValue<string>())
+        let measurement = measurements[item["id"].GetValue<string>()]
+        Assert.True(measurement["stateCount"].GetValue<int>() > 0)
+        Assert.True(measurement["transitionCount"].GetValue<int>() > 0)
+        Assert.Equal(100, measurement["sampleCount"].GetValue<int>())
+        Assert.True(measurement["elapsedMs"].GetValue<int>() > 0)
+        Assert.True(measurement["peakMiB"].GetValue<int>() > 0)
+        Assert.True(measurement["artifactBytes"].GetValue<int>() > 0)
+        let rebound = manifest.DeepClone().AsObject()
+        rebound["violatedTemporal"] <- JsonValue.Create("rebound-property")
+        Assert.NotEqual(item["violatedTemporal"].GetValue<string>(), rebound["violatedTemporal"].GetValue<string>())
+
+    let receipt =
+        JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "work/96-gs2-03-5-native-quint-formal-tests/qualification.json"))).AsObject()
+    Assert.Equal(101, receipt["negativeControlCount"].GetValue<int>())
+    Assert.Equal(151, (receipt["processCounts"].AsObject()["external"]).GetValue<int>())
+    Assert.Equal(126, (receipt["processCounts"].AsObject()["quintCli"]).GetValue<int>())
+    Assert.Equal(32, (receipt["processCounts"].AsObject()["apalacheVerify"]).GetValue<int>())
+    let receiptRows =
+        receipt["formalCounterexamples"].AsArray()
+        |> Seq.map _.AsObject()
+        |> Seq.map (fun row -> row["id"].GetValue<string>(), row)
+        |> Map.ofSeq
+    Assert.Equal(6, receiptRows.Count)
+    for item in tests do
+        let id = item["id"].GetValue<string>()
+        let row = receiptRows[id]
+        let manifestPath = Path.Combine(root, item["counterexampleManifest"].GetValue<string>())
+        let tracePath = Path.Combine(root, item["counterexampleTrace"].GetValue<string>())
+        let counterexamplePath = Path.Combine(root, item["counterexample"].GetValue<string>())
+        let fileSha path = SHA256.HashData(File.ReadAllBytes path) |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(fileSha manifestPath, row["manifestSha256"].GetValue<string>())
+        Assert.Equal(fileSha tracePath, row["traceSha256"].GetValue<string>())
+        Assert.Equal(fileSha counterexamplePath, row["itfSha256"].GetValue<string>())
 
 [<Fact>]
 let ``changed paths surfaces reuse and future proposals bind selection inputs`` () =

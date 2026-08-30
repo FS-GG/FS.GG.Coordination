@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="86c853cf-9dd5-468b-a28d-d77fef1a205a" name="@780ae460ce3c 2026-08-30 00:52:43" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-30T00:52:43.3663909+02:00" queuing="2026-08-30T00:52:43.3663909+02:00" start="2026-08-30T00:52:41.5390295+02:00" finish="2026-08-30T00:52:43.3691548+02:00" />
+  <TestSettings name="default" id="0dba403a-0ea9-472c-885d-d88a2a3cbf21">
+    <Deployment runDeploymentRoot="_780ae460ce3c_2026-08-30_00_52_43" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="595babe6-d7cf-4a3a-8de3-36f3c0742b88" testId="11e90f1b-8454-e66e-0ffd-e658c78a726e" testName="FS.GG.Coordination.QuintQualificationTests.bounded roots classifications selection and admission are complete" computerName="780ae460ce3c" duration="00:00:01.4597032" startTime="2026-08-30T00:52:41.8556319+02:00" endTime="2026-08-30T00:52:43.3188490+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="595babe6-d7cf-4a3a-8de3-36f3c0742b88" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.QuintQualificationTests.bounded roots classifications selection and admission are complete" storage="/tmp/fsgg-coordination-96-cgkomh/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="11e90f1b-8454-e66e-0ffd-e658c78a726e">
+      <Execution id="595babe6-d7cf-4a3a-8de3-36f3c0742b88" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-96-cgkOmh/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.QuintQualificationTests" name="bounded roots classifications selection and admission are complete" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="11e90f1b-8454-e66e-0ffd-e658c78a726e" executionId="595babe6-d7cf-4a3a-8de3-36f3c0742b88" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.09]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:01.58]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
