@@ -1,12 +1,12 @@
 # Compiled contract projection
 
-Source: `cb6f4f5203d8c5bd87abcbc6cf03d37824f8e7fe5db209c9b029f9a2e334c223`
+Source: `7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218`
 
-Behavior: `7d7dd76d29d4a26555eeed5069215504e188990cfdd15a7ede719c051bd52d1a`
+Behavior: `c60fb49e78385bbd50e21b20bc90a1d682f967de8c2825690aca81d25d3db132`
 
 Profile: `fsgg-quint-profile/2`
 
-Contract: `60bf639dc6c6e4a31ac284c57d85cb10a5cd7c0cce5532552884b5a3ea1b8c76`
+Contract: `947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e`
 
 - Catalogue entries: 134
 - Actions: 14

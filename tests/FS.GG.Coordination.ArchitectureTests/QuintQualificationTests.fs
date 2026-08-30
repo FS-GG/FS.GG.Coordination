@@ -41,13 +41,13 @@ let private execute selfTest = executeWith selfTest []
 let ``bounded roots classifications selection and admission are complete`` () =
     let exitCode, output, error = execute false
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=6 oracles=11 negativeControls=0", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=11 oracles=11 negativeControls=0", output)
 
 [<Fact>]
 let ``independent oracles and qualification contracts reject every focused mutation`` () =
     let exitCode, output, error = execute true
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=6 oracles=11 negativeControls=27", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=11 oracles=11 negativeControls=27", output)
 
 [<Fact>]
 let ``native formal catalogue covers all domains and retains normalized ITF counterexamples`` () =
@@ -63,7 +63,10 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         |> Map.ofSeq
     Assert.Equal("canonical-runner-observed-tlc-and-rust-v1", baseline["formalMeasurementMethod"].GetValue<string>())
     let ids = tests |> List.map (fun item -> item["id"].GetValue<string>()) |> Set.ofList
-    let expectedIds = Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback" ]
+    let expectedIds =
+        Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback"
+              "journal-reconciliation"; "journal-fencing"; "authority-reconciliation"; "review-epoch"
+              "cutover-observation" ]
     if ids <> expectedIds then failwithf "unexpected formal-test catalogue: %A" ids
     for item in tests do
         Assert.Equal("tlc", item["backend"].GetValue<string>())
@@ -99,7 +102,7 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         let measurement = measurements[item["id"].GetValue<string>()]
         Assert.True(measurement["stateCount"].GetValue<int>() > 0)
         Assert.True(measurement["transitionCount"].GetValue<int>() > 0)
-        Assert.Equal(100, measurement["sampleCount"].GetValue<int>())
+        Assert.Equal((item["budget"].AsObject()["samples"]).GetValue<int>(), measurement["sampleCount"].GetValue<int>())
         Assert.True(measurement["elapsedMs"].GetValue<int>() > 0)
         Assert.True(measurement["peakMiB"].GetValue<int>() > 0)
         Assert.True(measurement["artifactBytes"].GetValue<int>() > 0)
@@ -109,16 +112,16 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
 
     let receipt =
         JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "work/96-gs2-03-5-native-quint-formal-tests/qualification.json"))).AsObject()
-    Assert.Equal(101, receipt["negativeControlCount"].GetValue<int>())
-    Assert.Equal(151, (receipt["processCounts"].AsObject()["external"]).GetValue<int>())
-    Assert.Equal(126, (receipt["processCounts"].AsObject()["quintCli"]).GetValue<int>())
-    Assert.Equal(32, (receipt["processCounts"].AsObject()["apalacheVerify"]).GetValue<int>())
+    Assert.Equal(126, receipt["negativeControlCount"].GetValue<int>())
+    Assert.Equal(186, (receipt["processCounts"].AsObject()["external"]).GetValue<int>())
+    Assert.Equal(161, (receipt["processCounts"].AsObject()["quintCli"]).GetValue<int>())
+    Assert.Equal(47, (receipt["processCounts"].AsObject()["apalacheVerify"]).GetValue<int>())
     let receiptRows =
         receipt["formalCounterexamples"].AsArray()
         |> Seq.map _.AsObject()
         |> Seq.map (fun row -> row["id"].GetValue<string>(), row)
         |> Map.ofSeq
-    Assert.Equal(6, receiptRows.Count)
+    Assert.Equal(11, receiptRows.Count)
     for item in tests do
         let id = item["id"].GetValue<string>()
         let row = receiptRows[id]
