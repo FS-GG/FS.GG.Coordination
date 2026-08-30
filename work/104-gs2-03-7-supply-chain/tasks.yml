@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/104-gs2-03-7-supply-chain/plan.md
-    digest: 63dd4590673eeedcc16156894836333a91e2ecdc5b2081a39536da687b41b17a
+    digest: 48e037f2f7bad5baef05124508dccb297e1e0475ba89f90b797a6ec6df298efe
     schemaVersion: 1
 tasks:
   - id: T001

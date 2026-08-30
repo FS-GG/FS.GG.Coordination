@@ -27,8 +27,8 @@ let ``candidate supply chain proves positive and independent negative controls``
     let exitCode, output, error = runSelfTest ()
     Assert.Equal(0, exitCode)
     Assert.Equal("", error)
-    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=10", output)
-    for caseName in [ "package-tamper"; "sbom-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected"; "workflow-dynamic-source" ] do
+    Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=1 negative=11", output)
+    for caseName in [ "package-tamper"; "sbom-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected"; "workflow-dynamic-source"; "workflow-detached-source" ] do
         Assert.Contains(caseName, output)
 
 [<Fact>]
@@ -59,6 +59,7 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("packInvocations", implementation)
     Assert.Contains("canonicalizePackage", implementation)
     Assert.Contains("-p:PathMap=", implementation)
+    Assert.Contains("BaseIntermediateOutputPath", implementation)
     Assert.Contains("SequenceEqual", implementation)
     Assert.Contains("supply-chain-consumer-a", implementation)
     Assert.Contains("supply-chain-consumer-b", implementation)
