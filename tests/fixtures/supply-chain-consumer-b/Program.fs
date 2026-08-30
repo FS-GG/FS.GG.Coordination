@@ -1,3 +1,3 @@
 open FS.GG.Coordination.Protocol
 
-printfn "Coordination candidate schema:%d" Identity.SchemaVersion
+printfn "Coordination candidate schema:%d" ProtocolBoundary.schemaVersion
