@@ -1,0 +1,362 @@
+schemaVersion: 1
+workId: 104-gs2-03-7-supply-chain
+stage: evidence
+status: evidenceReady
+sourceSpec: work/104-gs2-03-7-supply-chain/spec.md
+sourceClarifications: work/104-gs2-03-7-supply-chain/clarifications.md
+sourceChecklist: work/104-gs2-03-7-supply-chain/checklist.md
+sourcePlan: work/104-gs2-03-7-supply-chain/plan.md
+sourceTasks: work/104-gs2-03-7-supply-chain/tasks.yml
+sourceAnalysis: readiness/104-gs2-03-7-supply-chain/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/104-gs2-03-7-supply-chain/analysis.json
+    digest: c1a89d86ee2a708aa883a84926c50dbc5f8b1e22cccfb83a897632e444a4beaa
+    schemaVersion: 1
+  - label: checklist
+    path: work/104-gs2-03-7-supply-chain/checklist.md
+    digest: 12fc69dd9bb8c82a84279c6084049f5515d7b52ab7283251b8305756fe5bd024
+    schemaVersion: 1
+  - label: clarifications
+    path: work/104-gs2-03-7-supply-chain/clarifications.md
+    digest: cc09ac8459ba709aba3f5d333ddd493e23c5c37c7630dd1c45ba4b3a7206272e
+    schemaVersion: 1
+  - label: plan
+    path: work/104-gs2-03-7-supply-chain/plan.md
+    digest: 1d2bfa7e95fdbf259a91b04a5787b1a8bb7865b5fd4b3fa027de1835193401d2
+    schemaVersion: 1
+  - label: spec
+    path: work/104-gs2-03-7-supply-chain/spec.md
+    digest: 214700b83c3ae982489a5697c3018d1ff850ee1913d0ada7b423e71f344bac20
+    schemaVersion: 1
+  - label: tasks
+    path: work/104-gs2-03-7-supply-chain/tasks.yml
+    digest: af6ee0378fdfbf95d02d161687b105409fb8cf2514de0275ff8aa09a57051b9b
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [Exact candidate identity policy is exercised by the supply-chain self-test.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: ["The one-pack contract, tracked-source projection that excludes ignored bin and obj before SDK evaluation, disabled build-server and shared-compilation reuse, no-debug PE boundary, pinned SDK/runtime/compiler provenance, projection-binding refusal, and repack-count inversion are executable. At commit 944fe8f7f282465d0f2a42dc7d858a6f8771ec10, three genuinely separate path-length contexts including ignored bin/obj contamination agreed on package ca18e6533edb6f704cc34de4f6672ca98368aa9946a3ec3a8ca91e1e02c4e4e8 and DLL 4ecc9509abdc460ef17b4eefe45b27638bde1eee6d86754bf67ea0fb0561c331."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [SPDX generation and SBOM tamper refusal are executable.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [in-toto subject and predicate bindings are inspected and validated.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [Workflow source and stable/channel substitution controls prove the publication ceiling.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [Digest and byte-sequence comparison paths, and package tamper refusal are executable., exact owner/package/version/file served-route parsing, prepared channel/source binding, route-smuggling inversions]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [Two distinct clean-consumer fixtures and exact cached-package checks are inspected.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: ["The complete 243-case architecture suite executes the tracked-source behavioral control, three supply-chain positive controls, and all 24 independent supply-chain negative controls, including non-canonical trailing, duplicate-separator, and percent-encoded routes."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [Additive schemas, and architecture contract are reviewed together., fixtures, implementation, workflow]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [A passing machine-readable architecture test report is tracked inside this work package and is independently available in a clean clone.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [Architecture controls prove the prerelease-only additive migration posture.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/SupplyChainTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/104-gs2-03-7-supply-chain/evidence/architecture.trx
+      digest: "sha256:ef6bef4c38b52c52fb56329c63a518b4918795ac3bcbb57ddc2d9a8235027ea4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 243
+      failed: 0
+      skipped: 0
+    notes: [The SDD verification run binds refreshed generated views to these authored sources.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

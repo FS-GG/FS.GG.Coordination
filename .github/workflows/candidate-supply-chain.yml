@@ -1,0 +1,106 @@
+name: Candidate supply chain
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact protected-main candidate commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: candidate-supply-chain-${{ inputs.expected_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish-and-verify:
+    name: publish-and-verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CANDIDATE_OUTPUT: ${{ runner.temp }}/candidate
+      SERVED_OUTPUT: ${{ runner.temp }}/served
+      NUGET_PACKAGES: ${{ runner.temp }}/prepare-nuget
+    steps:
+      - name: Check out the exact protected candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_sha }}
+          fetch-depth: 0
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Bind the exact prerelease identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "${{ inputs.expected_sha }}"
+          [[ "$actual" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$actual" refs/remotes/origin/main
+          version="0.0.0-gs2-03-7.${actual:0:12}"
+          printf 'candidate=%s\nversion=%s\n' "$actual" "$version" >> "$GITHUB_OUTPUT"
+      - name: Pack once and generate supply-chain evidence
+        run: >-
+          dotnet fsi eng/supply-chain-candidate.fsx -- prepare
+          --repo .
+          --candidate "${{ steps.identity.outputs.candidate }}"
+          --version "${{ steps.identity.outputs.version }}"
+          --protected-ref refs/remotes/origin/main
+          --output "$CANDIDATE_OUTPUT"
+      - name: Verify prepared evidence before publication
+        run: >-
+          dotnet fsi eng/supply-chain-candidate.fsx -- verify
+          --manifest "$CANDIDATE_OUTPUT/candidate.json"
+      - name: Publish only to the GitHub Packages candidate channel
+        run: >-
+          dotnet nuget push
+          "$CANDIDATE_OUTPUT/FS.GG.Coordination.Protocol.${{ steps.identity.outputs.version }}.nupkg"
+          --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --source https://nuget.pkg.github.com/FS-GG/index.json
+          --skip-duplicate
+      - name: Independently download the served exact bytes
+        id: download
+        shell: bash
+        env:
+          GH_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.identity.outputs.version }}"
+          file="fs.gg.coordination.protocol.${version}.nupkg"
+          url="https://nuget.pkg.github.com/fs-gg/download/fs.gg.coordination.protocol/${version}/${file}"
+          mkdir -p "$SERVED_OUTPUT"
+          curl --fail --location --silent --show-error \
+            --retry 18 --retry-delay 10 --retry-all-errors \
+            --user "${{ github.actor }}:${GH_PACKAGES_TOKEN}" \
+            --output "$SERVED_OUTPUT/$file" "$url"
+          printf 'url=%s\npath=%s\n' "$url" "$SERVED_OUTPUT/$file" >> "$GITHUB_OUTPUT"
+      - name: Compare bytes and execute two clean consumers
+        run: >-
+          dotnet fsi eng/supply-chain-candidate.fsx -- verify-served
+          --repo .
+          --manifest "$CANDIDATE_OUTPUT/candidate.json"
+          --served "${{ steps.download.outputs.path }}"
+          --served-url "${{ steps.download.outputs.url }}"
+          --output "$SERVED_OUTPUT/verification"
+      - name: Upload exact candidate and attestations
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: candidate-supply-chain-${{ inputs.expected_sha }}
+          path: |
+            ${{ env.CANDIDATE_OUTPUT }}/candidate.json
+            ${{ env.CANDIDATE_OUTPUT }}/FS.GG.Coordination.Protocol.*.nupkg
+            ${{ env.CANDIDATE_OUTPUT }}/sbom.spdx.json
+            ${{ env.CANDIDATE_OUTPUT }}/provenance.intoto.json
+            ${{ env.SERVED_OUTPUT }}/verification/verification.intoto.json
+            ${{ env.SERVED_OUTPUT }}/verification/verification.json
+          if-no-files-found: error
+          retention-days: 90

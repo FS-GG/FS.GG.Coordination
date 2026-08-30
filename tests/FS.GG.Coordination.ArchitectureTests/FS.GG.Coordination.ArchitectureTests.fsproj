@@ -12,6 +12,7 @@
     <Compile Include="RepositorySettingsTests.fs" />
     <Compile Include="GeneratedStructuralTests.fs" />
     <Compile Include="FaultInjectionTests.fs" />
+    <Compile Include="SupplyChainTests.fs" />
     <Compile Include="QuintQualificationTests.fs" />
   </ItemGroup>
 
