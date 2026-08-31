@@ -1,0 +1,999 @@
+schemaVersion: 1
+workId: gs2-04-4-project-adapter
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-4-project-adapter/spec.md
+sourceClarifications: work/gs2-04-4-project-adapter/clarifications.md
+sourceChecklist: work/gs2-04-4-project-adapter/checklist.md
+sourcePlan: work/gs2-04-4-project-adapter/plan.md
+sourceTasks: work/gs2-04-4-project-adapter/tasks.yml
+sourceAnalysis: readiness/gs2-04-4-project-adapter/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-4-project-adapter/analysis.json
+    digest: 0e9e4c93323e27e20c7d9c7968eed84e377b230ac886ea68c611b037e2f638a0
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-4-project-adapter/checklist.md
+    digest: 4580b4226cfb5016a2cb7ca9634c37fbb11a24e0b06daad09584a46388de013f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-4-project-adapter/clarifications.md
+    digest: dbc43de7841989dca4cb9ca31bbc4960d2124e26a4fef88105dc6ce84277b38a
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-4-project-adapter/plan.md
+    digest: 2596214321122d730883ebec8689c934569828e4f4fd7c22e8f66b1b99affb7f
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-4-project-adapter/spec.md
+    digest: e4ae5992e996f298b71b39397865def188ff132e3e60a6ae7f7122e185993e37
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-4-project-adapter/tasks.yml
+    digest: e171f4db9533139ccf41b50066a1653c4d7d1947a0415326b4186353b43b2d17
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV024]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV025]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV026]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV027]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV028]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV029]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV030]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+  - id: EV031
+    kind: verification
+    subject:
+      type: task
+      id: T031
+    taskRefs: [T031]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV031]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubProjectAdapterArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-project-adapter.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-4/qualification.trx
+      digest: "sha256:d71fbd4ca6430c3eb3f46f0acfd03dc9bd46291bda4a09906037b692d63dbce8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared project-adapter unit, and mutation controls., architecture, independent offline qualification]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
