@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "7fa7553cb6d805bffd4de0ba09b05694185909fb",
+    "revision": "051d811169b4b6695def252e7e6c251f91ec73b2",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "1b96f25234447260a7ab83cf051c171a859ae0dc517c3858d10ce6dddb61e964"
+    "sha256": "5eb187d4ed9abdcb82929c4c630cdf715331da389bfd78b038470ad53b80448f"
   },
   "units": [
     {
@@ -482,6 +482,20 @@
         { "id": "github-comment-projection-contract", "qGate": "Q3", "commandSha256": "13084a2c361986eb4a5046c7034dfe81f9a7a3e8fa8732f3cce9ac2cf7ef27af" }
       ],
       "contractSha256": "829a9bb643f95729b5d28f8902e0a8016c366730df792f92b6d0140710ce11d4"
+    },
+    {
+      "id": "GS2-04.6",
+      "title": "Sharded Git journal adapter",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.5"],
+      "permissionCeiling": ["repository-local protected sharded Git journal observation and mutation contracts, canonical aggregate and shard derivation, append-only event and snapshot validation, expected-parent receive-pack CAS plans, fencing generations, ambiguous-outcome rereads, deterministic multi-aggregate acquisition and compensation, protected ruleset and effective-rule observation fixtures, validation, and evidence", "local Git and loopback fixture execution plus consumption of already-protected administrative qualification receipts are allowed; no live GitHub write, ruleset or repository settings mutation, production credential, deployment, publication, stable release, Q4 sandbox claim, repository/settings adapter, or successor-unit implementation authority"],
+      "exitGate": "the Q3 sharded Git journal adapter derives canonical aggregate digests and two-hex shards; targets only refs/heads/fsgg/v2/journal/<kind>/<shard>; validates one-parent append-only commits, canonical head, event, and checkpoint snapshot bytes and digests, monotonic fencing generations, terminal checkpoints, ancestry, and shard integrity; derives exact old-OID --force-with-lease receive-pack CAS plans with stable operation identities; classifies accepted, parent-conflict, definite-refusal, and response-unknown-requires-reread outcomes without inferring success from comments or object existence; fences every effect against the current journal commit and generation; orders multi-aggregate acquisition and reverse compensation deterministically; validates the split v2-journal-writer and v2-journal-integrity ruleset observations, exact refs/heads/fsgg/v2/journal/**/* target, writer-App-only bypass, and no integrity bypass; generated cases and independent wrong-shard, missing-parent, duplicate-generation, digest-mismatch, unknown-schema, stale-parent, ambiguous-response, rewind, deletion, divergence, stale-fence, terminal-append, compaction, ruleset-drift, target-pattern, bypass, acquisition-order, and compensation controls all pass without performing live writes and without claiming Q4 sandbox behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-sharded-journal-contract"],
+      "gateContracts": [
+        { "id": "github-sharded-journal-contract", "qGate": "Q3", "commandSha256": "42f5c89ee83ba05261ebecb7e6ce3fd68d6a6f371a764039f4371200831cea42" }
+      ],
+      "contractSha256": "33b2dabe28c4e0133b5503c8bb907f83d036b6da0b8532f3f60a93b649d85b51"
     }
   ]
 }

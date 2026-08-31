@@ -134,7 +134,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through registered GS2-04-5 boundary`` () =
+let ``roadmap unit index advances through registered GS2-04-6 boundary`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -177,7 +177,8 @@ let ``roadmap unit index advances through registered GS2-04-5 boundary`` () =
              "GS2-04.2"
              "GS2-04.3"
              "GS2-04.4"
-             "GS2-04.5" ]
+             "GS2-04.5"
+             "GS2-04.6" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -808,6 +809,52 @@ let ``roadmap unit index advances through registered GS2-04-5 boundary`` () =
           "without claiming Q4" ] do
         Assert.Contains(requiredTerm, commentProjectionExitGate)
 
+    let shardedJournalUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-04.6")
+
+    Assert.Equal("Sharded Git journal adapter", shardedJournalUnit.GetProperty("title").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-04.5" ],
+        shardedJournalUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-sharded-journal-contract" ],
+        shardedJournalUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3" ],
+        shardedJournalUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    let shardedJournalExitGate = shardedJournalUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "canonical aggregate digests and two-hex shards"
+          "refs/heads/fsgg/v2/journal/<kind>/<shard>"
+          "one-parent append-only commits"
+          "monotonic fencing generations"
+          "exact old-OID --force-with-lease"
+          "response-unknown-requires-reread"
+          "without inferring success from comments or object existence"
+          "current journal commit and generation"
+          "reverse compensation"
+          "v2-journal-writer"
+          "v2-journal-integrity"
+          "refs/heads/fsgg/v2/journal/**/*"
+          "writer-App-only bypass"
+          "no integrity bypass"
+          "stale-parent"
+          "ambiguous-response"
+          "ruleset-drift"
+          "without performing live writes"
+          "without claiming Q4" ] do
+        Assert.Contains(requiredTerm, shardedJournalExitGate)
+
     use acceptedPrerequisite =
         JsonDocument.Parse(
             File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.2.json"))
@@ -849,7 +896,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(13, commands.Length)
+    Assert.Equal(14, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -930,6 +977,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-comment-projection.fsx"; "--"; "." ],
         commentProjectionCommand.GetProperty("args").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let shardedJournalCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-sharded-journal-contract")
+    Assert.Equal("Q3", shardedJournalCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-sharded-journal.fsx"; "--"; "." ],
+        shardedJournalCommand.GetProperty("args").EnumerateArray()
         |> Seq.map _.GetString()
         |> Seq.toList
     )
