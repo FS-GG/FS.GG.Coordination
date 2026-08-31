@@ -3,6 +3,8 @@
   <ItemGroup>
     <Compile Include="Transport.fsi" />
     <Compile Include="Transport.fs" />
+    <Compile Include="IssueFields.fsi" />
+    <Compile Include="IssueFields.fs" />
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
   </ItemGroup>
