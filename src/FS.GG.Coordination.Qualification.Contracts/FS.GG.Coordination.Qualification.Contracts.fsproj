@@ -29,6 +29,8 @@
     <Compile Include="GitHubTransportQualification.fs" />
     <Compile Include="GitHubIssueFieldQualification.fsi" />
     <Compile Include="GitHubIssueFieldQualification.fs" />
+    <Compile Include="GitHubNativeRelationQualification.fsi" />
+    <Compile Include="GitHubNativeRelationQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

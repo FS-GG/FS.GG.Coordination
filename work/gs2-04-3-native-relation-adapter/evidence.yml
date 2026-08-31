@@ -1,0 +1,968 @@
+schemaVersion: 1
+workId: gs2-04-3-native-relation-adapter
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-3-native-relation-adapter/spec.md
+sourceClarifications: work/gs2-04-3-native-relation-adapter/clarifications.md
+sourceChecklist: work/gs2-04-3-native-relation-adapter/checklist.md
+sourcePlan: work/gs2-04-3-native-relation-adapter/plan.md
+sourceTasks: work/gs2-04-3-native-relation-adapter/tasks.yml
+sourceAnalysis: readiness/gs2-04-3-native-relation-adapter/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-3-native-relation-adapter/analysis.json
+    digest: 1c819745301c5d7157eda375bcc8298a6583d3ec4c83e08d6dfc0222cca6379c
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-3-native-relation-adapter/checklist.md
+    digest: 51b7839cb145864904d43f0c54bbcd107c2d44452c92fa32c0ee1960d3a6c256
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-3-native-relation-adapter/clarifications.md
+    digest: 554abba525ffff06e9ca9684d9ecce9cb0ec818f61a4e91e1cafb3b1778f48d6
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-3-native-relation-adapter/plan.md
+    digest: a6dd6f5e2460086652cc7b7ad3555eebcd7936d7f5dcb1db633bc93781c5615b
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-3-native-relation-adapter/spec.md
+    digest: 54f54cd4aa6ab7ee1905b7c5751cd38a5ca9a99125f96d23d4321e1e6a4173b1
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-3-native-relation-adapter/tasks.yml
+    digest: e11b0b346ac8c4526fa5c63e233f16a0e95bb10328e8f4f63d5460f4aff9368a
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV024]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV025]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV026]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV027]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV028]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV029]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV030]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubNativeRelationArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-native-relation.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-3/qualification.trx
+      digest: "sha256:5f02a9da60517d3499634402cf0145cc4c099b99ad1077496036b67444205f7e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared native-relation unit, and offline mutation controls., architecture]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

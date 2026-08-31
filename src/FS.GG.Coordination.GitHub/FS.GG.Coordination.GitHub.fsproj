@@ -5,6 +5,8 @@
     <Compile Include="Transport.fs" />
     <Compile Include="IssueFields.fsi" />
     <Compile Include="IssueFields.fs" />
+    <Compile Include="NativeRelations.fsi" />
+    <Compile Include="NativeRelations.fs" />
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
   </ItemGroup>
