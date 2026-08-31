@@ -151,11 +151,14 @@ module Transport =
 
     let collectRest (start: Uri) (pages: RestPage<'item> list) =
         let malformed =
-            pages
-            |> List.exists (fun page ->
-                isNull page.Uri
-                || not page.Uri.IsAbsoluteUri
-                || (page.Next |> Option.exists (fun next -> isNull next || not next.IsAbsoluteUri)))
+            isNull (box pages)
+            || (pages
+                |> List.exists (fun page ->
+                    isNull (box page)
+                    || isNull page.Uri
+                    || not page.Uri.IsAbsoluteUri
+                    || isNull (box page.Items)
+                    || (page.Next |> Option.exists (fun next -> isNull next || not next.IsAbsoluteUri))))
         let entries =
             if malformed then []
             else pages |> List.map (fun page -> page.Uri.AbsoluteUri, page)
@@ -177,7 +180,18 @@ module Transport =
         else loop Set.empty start.AbsoluteUri []
 
     let collectGraphQL (pages: GraphQLPage<'item> list) =
-        let entries = pages |> List.map (fun page -> page.Cursor, page)
+        let invalidCursor = Option.exists String.IsNullOrWhiteSpace
+        let malformed =
+            isNull (box pages)
+            || (pages
+                |> List.exists (fun page ->
+                    isNull (box page)
+                    || isNull (box page.Items)
+                    || invalidCursor page.Cursor
+                    || invalidCursor page.EndCursor))
+        let entries =
+            if malformed then []
+            else pages |> List.map (fun page -> page.Cursor, page)
         let ambiguous = entries |> List.countBy fst |> List.exists (fun (_, count) -> count <> 1)
         let indexed = entries |> Map.ofList
         let rec loop seen cursor collected =
@@ -192,7 +206,9 @@ module Transport =
                     | false, Some _ -> Error UnexpectedContinuation
                     | true, None -> Error MissingContinuation
                     | true, Some next -> loop (Set.add cursor seen) (Some next) values
-        if ambiguous then Error AmbiguousContinuationMapping else loop Set.empty None []
+        if malformed then Error MalformedPage
+        elif ambiguous then Error AmbiguousContinuationMapping
+        else loop Set.empty None []
 
     let private looksSensitive (path: string) (value: string) =
         let lowerPath = path.ToLowerInvariant()
@@ -205,20 +221,25 @@ module Transport =
 
     let projectFixture (allowList: Set<string>) (fixture: CapturedFixture) =
         let project (prefix: string) (fields: FixtureField list) =
-            fields
-            |> List.sortBy _.Path
-            |> List.fold (fun state field ->
-                match state with
-                | Error error -> Error error
-                | Ok values ->
-                    if String.IsNullOrWhiteSpace field.Path || isNull field.Value then Error(InvalidFixtureField(if isNull field.Path then "<null>" else field.Path))
-                    else
-                        match field.Classification with
-                        | Unclassified -> Error(UnclassifiedField field.Path)
-                        | Public when looksSensitive field.Path field.Value -> Error(SensitiveFieldMisclassified field.Path)
-                        | Public when allowList.Contains field.Path -> Ok($"{prefix}.{field.Path}={field.Value}" :: values)
-                        | Secret when allowList.Contains field.Path -> Ok($"{prefix}.{field.Path}=[REDACTED]" :: values)
-                        | Public | Secret | Private | Unstable -> Ok values) (Ok [])
-        match project "request" fixture.Request, project "response" fixture.Response with
-        | Ok request, Ok response -> List.append request response |> List.sort |> String.concat "\n" |> fun value -> Ok(value + "\n")
-        | Error error, _ | _, Error error -> Error error
+            if isNull (box fields) then Error(InvalidFixtureField $"<{prefix}>")
+            else
+                fields
+                |> List.fold (fun state field ->
+                    match state with
+                    | Error error -> Error error
+                    | Ok values ->
+                        if isNull (box field) then Error(InvalidFixtureField $"<{prefix}-field>")
+                        elif String.IsNullOrWhiteSpace field.Path || isNull field.Value then Error(InvalidFixtureField(if isNull field.Path then "<null>" else field.Path))
+                        else
+                            match field.Classification with
+                            | Unclassified -> Error(UnclassifiedField field.Path)
+                            | Public when looksSensitive field.Path field.Value -> Error(SensitiveFieldMisclassified field.Path)
+                            | Public when allowList.Contains field.Path -> Ok($"{prefix}.{field.Path}={field.Value}" :: values)
+                            | Secret when allowList.Contains field.Path -> Ok($"{prefix}.{field.Path}=[REDACTED]" :: values)
+                            | Public | Secret | Private | Unstable -> Ok values) (Ok [])
+        if isNull (box allowList) then Error(InvalidFixtureField "<allow-list>")
+        elif isNull (box fixture) then Error(InvalidFixtureField "<fixture>")
+        else
+            match project "request" fixture.Request, project "response" fixture.Response with
+            | Ok request, Ok response -> List.append request response |> List.sort |> String.concat "\n" |> fun value -> Ok(value + "\n")
+            | Error error, _ | _, Error error -> Error error

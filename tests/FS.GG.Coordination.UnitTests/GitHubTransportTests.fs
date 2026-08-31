@@ -40,7 +40,10 @@ let ``REST and GraphQL traversal require terminal completeness`` () =
     Assert.Equal(Error AmbiguousContinuationMapping, Transport.collectRest first [ List.head pages; List.head pages ])
     Assert.Equal(Error MalformedPage, Transport.collectRest first [ { Uri = null; Items = [ 1 ]; Next = None } ])
     Assert.Equal(Error MalformedPage, Transport.collectRest first [ { Uri = first; Items = [ 1 ]; Next = Some null } ])
+    Assert.Equal(Error MalformedPage, Transport.collectRest first [ { Uri = first; Items = Unchecked.defaultof<_>; Next = None } ])
     Assert.Equal(Error MissingContinuation, Transport.collectGraphQL [ { Cursor = None; Items = [ 1 ]; HasNextPage = true; EndCursor = None } ])
+    Assert.Equal(Error MalformedPage, Transport.collectGraphQL [ { Cursor = Some null; Items = [ 1 ]; HasNextPage = false; EndCursor = None } ])
+    Assert.Equal(Error MalformedPage, Transport.collectGraphQL [ { Cursor = None; Items = Unchecked.defaultof<_>; HasNextPage = false; EndCursor = None } ])
 
 [<Fact>]
 let ``REST Link parsing preserves next relation and rejects ambiguous mapping`` () =
@@ -60,6 +63,7 @@ let ``fixture projection is stable allow-listed and leak rejecting`` () =
     Assert.Equal(Error(SensitiveFieldMisclassified "authorization"), Transport.projectFixture allowed leak)
     let malformed = { fixture with Request = [ { Path = null; Value = "value"; Classification = Public } ] }
     Assert.Equal(Error(InvalidFixtureField "<null>"), Transport.projectFixture allowed malformed)
+    Assert.Equal(Error(InvalidFixtureField "<request>"), Transport.projectFixture allowed { fixture with Request = Unchecked.defaultof<_> })
 
 [<Fact>]
 let ``qualification rejects producer gaps and accepts two closed inventories`` () =
