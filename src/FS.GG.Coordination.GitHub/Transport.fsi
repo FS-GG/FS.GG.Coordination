@@ -72,12 +72,12 @@ type GraphQLPage<'item> =
       HasNextPage: bool
       EndCursor: string option }
 
-type PaginationFailure = MissingPage | RepeatedContinuation | MissingContinuation | UnexpectedContinuation | MalformedContinuation | AmbiguousContinuationMapping
+type PaginationFailure = MissingPage | RepeatedContinuation | MissingContinuation | UnexpectedContinuation | MalformedContinuation | MalformedPage | AmbiguousContinuationMapping
 
 type FieldClassification = Public | Secret | Private | Unstable | Unclassified
 type FixtureField = { Path: string; Value: string; Classification: FieldClassification }
 type CapturedFixture = { Request: FixtureField list; Response: FixtureField list }
-type FixtureFailure = UnclassifiedField of string | SensitiveFieldMisclassified of string
+type FixtureFailure = InvalidFixtureField of string | UnclassifiedField of string | SensitiveFieldMisclassified of string
 
 [<RequireQualifiedAccess>]
 module Transport =

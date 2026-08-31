@@ -27,6 +27,7 @@ let ``revision and rate state preserve unknown stale and exhausted meaning`` () 
     Assert.Equal(RevisionStale "v1", Transport.evaluateRevision (IfMatch "v2") (RevisionValue "v1"))
     Assert.Equal(Refused MissingRateFacts, Transport.schedule DateTimeOffset.UtcNow 1 { Limit = None; Remaining = None; ResetAt = None; Cost = None })
     Assert.Equal(Refused RateExhausted, Transport.schedule DateTimeOffset.UtcNow 1 (budget 0))
+    Assert.Equal(Refused InvalidRateFacts, Transport.schedule DateTimeOffset.UtcNow -1 (budget 5))
 
 [<Fact>]
 let ``REST and GraphQL traversal require terminal completeness`` () =
@@ -37,6 +38,8 @@ let ``REST and GraphQL traversal require terminal completeness`` () =
     Assert.Equal(Error MissingPage, Transport.collectRest first [ List.head pages ])
     Assert.Equal(Error RepeatedContinuation, Transport.collectRest first [ { Uri = first; Items = [ 1 ]; Next = Some first } ])
     Assert.Equal(Error AmbiguousContinuationMapping, Transport.collectRest first [ List.head pages; List.head pages ])
+    Assert.Equal(Error MalformedPage, Transport.collectRest first [ { Uri = null; Items = [ 1 ]; Next = None } ])
+    Assert.Equal(Error MalformedPage, Transport.collectRest first [ { Uri = first; Items = [ 1 ]; Next = Some null } ])
     Assert.Equal(Error MissingContinuation, Transport.collectGraphQL [ { Cursor = None; Items = [ 1 ]; HasNextPage = true; EndCursor = None } ])
 
 [<Fact>]
@@ -55,6 +58,8 @@ let ``fixture projection is stable allow-listed and leak rejecting`` () =
     Assert.Equal(Ok "request.authorization=[REDACTED]\nrequest.method=GET\n", Transport.projectFixture allowed fixture)
     let leak = { fixture with Request = [ { Path = "authorization"; Value = "bearer secret"; Classification = Public } ] }
     Assert.Equal(Error(SensitiveFieldMisclassified "authorization"), Transport.projectFixture allowed leak)
+    let malformed = { fixture with Request = [ { Path = null; Value = "value"; Classification = Public } ] }
+    Assert.Equal(Error(InvalidFixtureField "<null>"), Transport.projectFixture allowed malformed)
 
 [<Fact>]
 let ``qualification rejects producer gaps and accepts two closed inventories`` () =

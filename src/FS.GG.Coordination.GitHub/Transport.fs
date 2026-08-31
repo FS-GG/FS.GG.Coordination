@@ -57,11 +57,11 @@ type RateRefusal = MissingRateFacts | InvalidRateFacts | RateExhausted | CostExc
 type RateDecision = Scheduled of remainingAfter: int | Refused of RateRefusal
 type RestPage<'item> = { Uri: Uri; Items: 'item list; Next: Uri option }
 type GraphQLPage<'item> = { Cursor: string option; Items: 'item list; HasNextPage: bool; EndCursor: string option }
-type PaginationFailure = MissingPage | RepeatedContinuation | MissingContinuation | UnexpectedContinuation | MalformedContinuation | AmbiguousContinuationMapping
+type PaginationFailure = MissingPage | RepeatedContinuation | MissingContinuation | UnexpectedContinuation | MalformedContinuation | MalformedPage | AmbiguousContinuationMapping
 type FieldClassification = Public | Secret | Private | Unstable | Unclassified
 type FixtureField = { Path: string; Value: string; Classification: FieldClassification }
 type CapturedFixture = { Request: FixtureField list; Response: FixtureField list }
-type FixtureFailure = UnclassifiedField of string | SensitiveFieldMisclassified of string
+type FixtureFailure = InvalidFixtureField of string | UnclassifiedField of string | SensitiveFieldMisclassified of string
 
 [<RequireQualifiedAccess>]
 module Transport =
@@ -108,15 +108,16 @@ module Transport =
         | IfMatch _, RevisionValue observedValue -> RevisionStale observedValue
 
     let schedule now cost budget =
-        match budget.Limit, budget.Remaining, budget.ResetAt, budget.Cost with
-        | Some limit, Some remaining, Some resetAt, Some observedCost when limit >= 0 && remaining >= 0 && observedCost >= 0 && resetAt >= now ->
-            let required = max cost observedCost
-            if remaining = 0 then Refused RateExhausted
-            elif required < 0 then Refused InvalidRateFacts
-            elif required > remaining then Refused CostExceedsRemaining
-            else Scheduled(remaining - required)
-        | Some _, Some _, Some _, Some _ -> Refused InvalidRateFacts
-        | _ -> Refused MissingRateFacts
+        if cost < 0 then Refused InvalidRateFacts
+        else
+            match budget.Limit, budget.Remaining, budget.ResetAt, budget.Cost with
+            | Some limit, Some remaining, Some resetAt, Some observedCost when limit >= 0 && remaining >= 0 && observedCost >= 0 && resetAt >= now ->
+                let required = max cost observedCost
+                if remaining = 0 then Refused RateExhausted
+                elif required > remaining then Refused CostExceedsRemaining
+                else Scheduled(remaining - required)
+            | Some _, Some _, Some _, Some _ -> Refused InvalidRateFacts
+            | _ -> Refused MissingRateFacts
 
     let tryNextLink (linkHeader: string) =
         if String.IsNullOrWhiteSpace linkHeader then Ok None
@@ -149,7 +150,15 @@ module Transport =
                 | _ -> Error AmbiguousContinuationMapping
 
     let collectRest (start: Uri) (pages: RestPage<'item> list) =
-        let entries = pages |> List.map (fun page -> page.Uri.AbsoluteUri, page)
+        let malformed =
+            pages
+            |> List.exists (fun page ->
+                isNull page.Uri
+                || not page.Uri.IsAbsoluteUri
+                || (page.Next |> Option.exists (fun next -> isNull next || not next.IsAbsoluteUri)))
+        let entries =
+            if malformed then []
+            else pages |> List.map (fun page -> page.Uri.AbsoluteUri, page)
         let ambiguous = entries |> List.countBy fst |> List.exists (fun (_, count) -> count <> 1)
         let indexed = entries |> Map.ofList
         let rec loop seen current collected =
@@ -162,7 +171,8 @@ module Transport =
                     match page.Next with
                     | None -> Ok values
                     | Some next -> loop (Set.add current seen) next.AbsoluteUri values
-        if ambiguous then Error AmbiguousContinuationMapping
+        if malformed then Error MalformedPage
+        elif ambiguous then Error AmbiguousContinuationMapping
         elif isNull start || not start.IsAbsoluteUri then Error MissingPage
         else loop Set.empty start.AbsoluteUri []
 
@@ -201,12 +211,14 @@ module Transport =
                 match state with
                 | Error error -> Error error
                 | Ok values ->
-                    match field.Classification with
-                    | Unclassified -> Error(UnclassifiedField field.Path)
-                    | Public when looksSensitive field.Path field.Value -> Error(SensitiveFieldMisclassified field.Path)
-                    | Public when allowList.Contains field.Path -> Ok($"{prefix}.{field.Path}={field.Value}" :: values)
-                    | Secret when allowList.Contains field.Path -> Ok($"{prefix}.{field.Path}=[REDACTED]" :: values)
-                    | Public | Secret | Private | Unstable -> Ok values) (Ok [])
+                    if String.IsNullOrWhiteSpace field.Path || isNull field.Value then Error(InvalidFixtureField(if isNull field.Path then "<null>" else field.Path))
+                    else
+                        match field.Classification with
+                        | Unclassified -> Error(UnclassifiedField field.Path)
+                        | Public when looksSensitive field.Path field.Value -> Error(SensitiveFieldMisclassified field.Path)
+                        | Public when allowList.Contains field.Path -> Ok($"{prefix}.{field.Path}={field.Value}" :: values)
+                        | Secret when allowList.Contains field.Path -> Ok($"{prefix}.{field.Path}=[REDACTED]" :: values)
+                        | Public | Secret | Private | Unstable -> Ok values) (Ok [])
         match project "request" fixture.Request, project "response" fixture.Response with
         | Ok request, Ok response -> List.append request response |> List.sort |> String.concat "\n" |> fun value -> Ok(value + "\n")
         | Error error, _ | _, Error error -> Error error
