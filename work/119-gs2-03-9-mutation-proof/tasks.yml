@@ -29,8 +29,8 @@ sources:
     schemaVersion: 1
 tasks:
   - id: T001
-    title: Implement requirement FR-001
-    status: pending
+    title: Derive the closed ten-by-six mutation inventory and controls
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-001]
@@ -39,8 +39,8 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV001]
   - id: T002
-    title: Implement requirement FR-002
-    status: pending
+    title: Execute every observation through production validation
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-002]
@@ -49,8 +49,8 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV002]
   - id: T003
-    title: Implement requirement FR-003
-    status: pending
+    title: Implement canonical fingerprint-bound mutation proof
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-003]
@@ -59,8 +59,8 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV003]
   - id: T004
-    title: Implement requirement FR-004
-    status: pending
+    title: Add proof and coverage inversions with exact diagnostics
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-004]
@@ -69,8 +69,8 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV004]
   - id: T005
-    title: Implement requirement FR-005
-    status: pending
+    title: Reject generated-only provenance across non-generated gates
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-005]
@@ -79,8 +79,8 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV005]
   - id: T006
-    title: Implement requirement FR-006
-    status: pending
+    title: Integrate Q7 storage architecture and qualification policy gates
+    status: done
     owner: sdd
     dependencies: []
     requirements: [FR-006]
@@ -89,8 +89,8 @@ tasks:
     requiredSkills: [fsharp, implementation]
     requiredEvidence: [EV006]
   - id: T007
-    title: Update contract surface PC-001
-    status: pending
+    title: Publish the additive typed proof and schema surface
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -99,8 +99,8 @@ tasks:
     requiredSkills: [fsharp]
     requiredEvidence: [EV007]
   - id: T008
-    title: Record verification evidence VO-001
-    status: pending
+    title: Record clean build test storage and matrix evidence
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -109,8 +109,8 @@ tasks:
     requiredSkills: [automated-tests, readiness-evidence]
     requiredEvidence: [EV008]
   - id: T009
-    title: Handle migration posture PM-001
-    status: pending
+    title: Preserve existing evidence and manifest contracts additively
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
@@ -119,8 +119,8 @@ tasks:
     requiredSkills: [schema-versioning]
     requiredEvidence: [EV009]
   - id: T010
-    title: Refresh generated view impact GV-001
-    status: pending
+    title: Refresh deterministic SDD and qualification projections
+    status: done
     owner: sdd
     dependencies: [T001]
     requirements: []
