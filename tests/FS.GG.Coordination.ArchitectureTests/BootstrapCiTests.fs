@@ -266,7 +266,7 @@ let ``formal subject ignores unrelated files but binds every selected byte`` () 
     Assert.Throws<ArgumentException>(fun () -> QualificationReuse.createFormalSubject files [ QualificationReuse.Exact "src/Protocol/Model.fs"; QualificationReuse.Prefix "src/Protocol/" ] policy |> ignore) |> ignore
 
 [<Fact>]
-let ``current scoped milestone reports accepted contract drift without hiding it`` () =
+let ``current scoped milestone binds the accepted prefix without contract drift`` () =
     let statePath = Path.Combine(repositoryRoot, "eng/milestone-qualification.json")
     let state =
         match MilestoneQualification.parse (File.ReadAllBytes statePath) with
@@ -282,7 +282,7 @@ let ``current scoped milestone reports accepted contract drift without hiding it
         | Error problem -> failwith problem
     Assert.Equal(MilestoneQualification.Scoped, validation.State.Mode)
     Assert.Equal(2, validation.AcceptedPrefixLength)
-    Assert.Equal<string list>([ "GS2-04.2" ], validation.ContractDrift)
+    Assert.Empty(validation.ContractDrift)
     Assert.True(validation.SubjectSha256.Length = 64)
     let closure = { state with Mode = MilestoneQualification.Comprehensive; BoundaryKind = Some "closure" }
     Assert.True(MilestoneQualification.validate closure receipts |> Result.isError)

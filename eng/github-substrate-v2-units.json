@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "8e406c92bc8a6d18b555afb66c7fb3632554ccb0",
+    "revision": "c612d3add3526f028b4a1512f7c970661a839ccd",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "87e56a00d73a8e7c20d22f4b32faf0605a3bb0f5dfb6c20aa615bd305fb13bd2"
+    "sha256": "733e9636db7e4250d7d5a0bbe9c6a82ed3f8ac830debc2936614972dedcc6eb7"
   },
   "units": [
     {
@@ -440,6 +440,20 @@
         { "id": "github-issue-field-contract", "qGate": "Q3", "commandSha256": "c0a4cdeacfb6f5df45671bff6fa9562793490eabcd522e44a3b6f99d5db345e2" }
       ],
       "contractSha256": "1fd6e5ceeec2f9932fdf18568dd65f822cce2986b4ebdc53f2e8f53e33c79364"
+    },
+    {
+      "id": "GS2-04.3",
+      "title": "Native relation adapter",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.2"],
+      "permissionCeiling": ["repository-local native hierarchy and dependency relation observation contracts, complete deterministic fixtures, guarded add and remove plans, stale re-read and post-state verification, validation, and evidence", "local loopback fixture execution is allowed; no live GitHub write, organization or repository settings mutation, production credential, deployment, publication, stable release, Q4 sandbox claim, Project adapter, or successor-unit implementation authority"],
+      "exitGate": "the Q3 native relation adapter reads complete hierarchy and dependency edge sets without inventing absence; preserves relation kind, endpoint direction, and unrelated edges; derives deterministic guarded add and remove plans bound to expected revisions and idempotency identities; stale pre-state forces a re-read and replan before any effect; exact post-state verification proves the intended edge delta and unchanged unrelated edges; generated cases and independent pagination, duplicate-edge, reversed-endpoint, relation-kind, stale-revision, incomplete-observation, concurrent-change, and no-op controls all pass without performing live writes and without claiming Q4 sandbox behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-native-relation-contract"],
+      "gateContracts": [
+        { "id": "github-native-relation-contract", "qGate": "Q3", "commandSha256": "3b945e7eaa6244d5cc7cfb5d086bf2cc1e2ea5476ba19301dfd5e411f2a51556" }
+      ],
+      "contractSha256": "34f246d86a24721db2bada1baf5e1ff8ecc89f55016744affbf9657c31da5844"
     }
   ]
 }

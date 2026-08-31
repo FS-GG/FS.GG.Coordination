@@ -60,6 +60,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-issue-field.fsx", "--", "."]
+    },
+    {
+      "id": "github-native-relation-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-native-relation.fsx", "--", "."]
     }
   ]
 }

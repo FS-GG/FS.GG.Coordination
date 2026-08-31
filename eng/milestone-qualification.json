@@ -29,7 +29,7 @@
       "contractSha256": "1fd6e5ceeec2f9932fdf18568dd65f822cce2986b4ebdc53f2e8f53e33c79364",
       "acceptance": {
         "receiptPath": "evidence/github-substrate-v2/accepted/GS2-04.2.json",
-        "receiptDigest": "785c9aa468dee89e0ab54dce6c1403d7575e8dfe0d9a8730a8e4935319f0a56d"
+        "receiptDigest": "5f7bea734709fa23a9da8056701e6d109b87e6d4702e6439943742e1addbf5a1"
       }
     }
   ]

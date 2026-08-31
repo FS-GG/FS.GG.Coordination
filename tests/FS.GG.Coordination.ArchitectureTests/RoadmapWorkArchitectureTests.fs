@@ -134,7 +134,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through registered GS2-04-2 boundary`` () =
+let ``roadmap unit index advances through registered GS2-04-3 boundary`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -174,7 +174,8 @@ let ``roadmap unit index advances through registered GS2-04-2 boundary`` () =
              "GS2-03.8"
              "GS2-03.9"
              "GS2-04.1"
-             "GS2-04.2" ]
+             "GS2-04.2"
+             "GS2-04.3" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -678,6 +679,58 @@ let ``roadmap unit index advances through registered GS2-04-2 boundary`` () =
           "without claiming Q4" ] do
         Assert.Contains(requiredTerm, issueFieldExitGate)
 
+    let nativeRelationUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-04.3")
+
+    Assert.Equal("Native relation adapter", nativeRelationUnit.GetProperty("title").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-04.2" ],
+        nativeRelationUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-native-relation-contract" ],
+        nativeRelationUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3" ],
+        nativeRelationUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    let nativeRelationExitGate = nativeRelationUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "complete hierarchy and dependency edge sets"
+          "without inventing absence"
+          "relation kind"
+          "endpoint direction"
+          "guarded add and remove plans"
+          "expected revisions"
+          "idempotency identities"
+          "re-read and replan"
+          "exact post-state verification"
+          "unchanged unrelated edges"
+          "independent pagination"
+          "reversed-endpoint"
+          "concurrent-change"
+          "without performing live writes"
+          "without claiming Q4" ] do
+        Assert.Contains(requiredTerm, nativeRelationExitGate)
+
+    use acceptedPrerequisite =
+        JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.2.json"))
+        )
+
+    Assert.Equal(
+        issueFieldUnit.GetProperty("contractSha256").GetString(),
+        acceptedPrerequisite.RootElement.GetProperty("unitContractSha256").GetString()
+    )
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -689,7 +742,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(10, commands.Length)
+    Assert.Equal(11, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -737,6 +790,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-issue-field.fsx"; "--"; "." ],
         issueFieldCommand.GetProperty("args").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let nativeRelationCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-native-relation-contract")
+    Assert.Equal("Q3", nativeRelationCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-native-relation.fsx"; "--"; "." ],
+        nativeRelationCommand.GetProperty("args").EnumerateArray()
         |> Seq.map _.GetString()
         |> Seq.toList
     )
