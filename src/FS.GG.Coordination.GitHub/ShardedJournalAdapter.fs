@@ -5,11 +5,14 @@ open System.Globalization
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 
 type JournalKind = Claim | Review | Operation | Cutover
 type AggregateAddress = { CanonicalId: string; Digest: string; Shard: string; Kind: JournalKind; Ref: string }
 type JournalHead = { SchemaVersion: int; Address: AggregateAddress; Generation: int64; EventDigest: string; SnapshotDigest: string option; Terminal: bool; PriorHeadDigest: string option; HeadDigest: string }
-type JournalCommit = { CommitOid: string; ParentOid: string option; TreeOid: string; OperationId: string; Head: JournalHead }
+type CanonicalBlob = { Bytes: byte array; Digest: string }
+type JournalCheckpoint = { Blob: CanonicalBlob; HighWaterGeneration: int64; EventDigests: string list; AggregateDigest: string; ReplayAggregateDigest: string }
+type JournalCommit = { CommitOid: string; ParentOid: string option; TreeOid: string; OperationId: string; Head: JournalHead; HeadBytes: byte array; Event: CanonicalBlob; Checkpoint: JournalCheckpoint option }
 type JournalObservation = JournalComplete of revision: string * commits: JournalCommit list | JournalIncomplete of reason: string | JournalUnsupported of reason: string | JournalUnauthorized of reason: string | JournalUnreadable of reason: string | JournalDeleted | JournalDivergent of reason: string
 type JournalFailure = InvalidAggregateId | InvalidJournalRef | IncompleteJournal of string | UnsupportedJournal of string | UnauthorizedJournal of string | UnreadableJournal of string | DeletedJournal | DivergentJournal of string | UnknownJournalSchema of int | WrongJournalShard | InvalidDigest of string | MissingJournalParent | DuplicateJournalGeneration of int64 | NonMonotonicJournalGeneration | TerminalJournalAppend | InvalidJournalCommit
 type JournalSnapshot = { Revision: string; Current: JournalCommit; Commits: JournalCommit list }
@@ -21,8 +24,10 @@ type EffectRefusal = StaleFence | TerminalAuthority | EffectAuthorityUnavailable
 type SagaTouch = { Address: AggregateAddress; ExpectedGeneration: int64 }
 type SagaPlan = { OperationId: string; PersistBeforeEffects: SagaTouch list; AcquisitionOrder: SagaTouch list }
 type Compensation = { OperationId: string; Address: AggregateAddress; Generation: int64; OriginalResultRetained: bool }
+type SagaConflictPlan = { ReleaseUnconsumed: SagaTouch list; CompensateApplied: Compensation list }
+type EffectiveBranchRule = CreationRestricted | UpdateRestricted | DeletionRejected | NonFastForwardRejected
 type Ruleset = { Id: int64; Name: string; Active: bool; Target: string; BypassAppIds: int64 list; RestrictsCreationAndUpdate: bool; RejectsDeletionAndNonFastForward: bool }
-type ProtectionObservation = { Complete: bool; RepositoryId: int64; Writer: Ruleset; Integrity: Ruleset; EffectiveRulesComplete: bool }
+type ProtectionObservation = { Complete: bool; RepositoryId: int64; Writer: Ruleset; Integrity: Ruleset; EffectiveRulesComplete: bool; EffectiveRules: EffectiveBranchRule list }
 type ProtectionFailure = IncompleteProtectionObservation | AuthorityRepositoryDrift | WriterRulesetDrift | IntegrityRulesetDrift | TargetPatternDrift | BypassDrift | EffectiveRulesDrift
 
 [<RequireQualifiedAccess>]
@@ -70,12 +75,47 @@ module ShardedJournalAdapter =
             Ok(Array.append (stream.ToArray()) [| byte '\n' |])
         with ex -> Error ex.Message
 
-    let private validateCommit address index previous (commit: JournalCommit) =
+    let journalHeadBytes (head: JournalHead) =
+        let root = JsonObject()
+        root.Add("aggregateDigest", head.Address.Digest)
+        root.Add("aggregateId", head.Address.CanonicalId)
+        root.Add("eventDigest", head.EventDigest)
+        root.Add("generation", head.Generation)
+        root.Add("journalKind", journalKind head.Address.Kind)
+        match head.PriorHeadDigest with Some value -> root.Add("priorHeadDigest", value) | None -> root.Add("priorHeadDigest", null)
+        root.Add("schemaVersion", head.SchemaVersion)
+        root.Add("shard", head.Address.Shard)
+        match head.SnapshotDigest with Some value -> root.Add("snapshotDigest", value) | None -> root.Add("snapshotDigest", null)
+        root.Add("terminal", head.Terminal)
+        root.ToJsonString(JsonSerializerOptions(WriteIndented = false)) |> canonicalJson |> Result.defaultWith invalidOp
+
+    let private validBlob (blob: CanonicalBlob) =
+        not (obj.ReferenceEquals(blob, null))
+        && not (obj.ReferenceEquals(blob.Bytes, null))
+        && validDigest blob.Digest
+        && sha256 blob.Bytes = blob.Digest
+        && (try Encoding.UTF8.GetString blob.Bytes |> canonicalJson = Ok blob.Bytes with _ -> false)
+
+    let private validateCommit address index previous eventDigests (commit: JournalCommit) =
         let head = commit.Head
         if obj.ReferenceEquals(commit, null) || obj.ReferenceEquals(head, null) || not (validOid commit.CommitOid) || not (validOid commit.TreeOid) || not (validText commit.OperationId) then Error InvalidJournalCommit
         elif head.SchemaVersion <> 1 then Error(UnknownJournalSchema head.SchemaVersion)
         elif head.Address <> address || head.Address.Shard <> address.Shard then Error WrongJournalShard
         elif not (validDigest head.EventDigest) || not (validDigest head.HeadDigest) || (head.SnapshotDigest |> Option.exists (validDigest >> not)) || (head.PriorHeadDigest |> Option.exists (validDigest >> not)) then Error(InvalidDigest head.HeadDigest)
+        elif not (validBlob commit.Event) || commit.Event.Digest <> head.EventDigest then Error(InvalidDigest head.EventDigest)
+        elif obj.ReferenceEquals(commit.HeadBytes, null) || commit.HeadBytes <> journalHeadBytes head || sha256 commit.HeadBytes <> head.HeadDigest then Error(InvalidDigest head.HeadDigest)
+        elif
+            match head.SnapshotDigest, commit.Checkpoint with
+            | None, None -> false
+            | Some expected, Some checkpoint ->
+                not (validBlob checkpoint.Blob)
+                || checkpoint.Blob.Digest <> expected
+                || checkpoint.HighWaterGeneration <> head.Generation
+                || checkpoint.EventDigests <> eventDigests @ [ head.EventDigest ]
+                || not (validDigest checkpoint.AggregateDigest)
+                || checkpoint.AggregateDigest <> checkpoint.ReplayAggregateDigest
+            | _ -> true
+            then Error(InvalidDigest(head.SnapshotDigest |> Option.defaultValue "missing-checkpoint"))
         elif head.Generation <> int64 (index + 1) then Error NonMonotonicJournalGeneration
         else
             match previous, commit.ParentOid with
@@ -97,8 +137,11 @@ module ShardedJournalAdapter =
             match commits |> List.groupBy (fun commit -> commit.Head.Generation) |> List.tryFind (fun (_, values) -> values.Length > 1) with
             | Some(generation, _) -> Error(DuplicateJournalGeneration generation)
             | None ->
-                let folder state (index, commit) = state |> Result.bind (fun previous -> validateCommit address index previous commit |> Result.map (fun () -> Some commit))
-                match commits |> List.indexed |> List.fold folder (Ok None) with
+                let folder state (index, commit) =
+                    state |> Result.bind (fun (previous, eventDigests) ->
+                        validateCommit address index previous eventDigests commit
+                        |> Result.map (fun () -> Some commit, eventDigests @ [ commit.Head.EventDigest ]))
+                match commits |> List.indexed |> List.fold folder (Ok(None, [])) with
                 | Error failure -> Error failure
                 | Ok _ -> Ok { Revision = revision; Current = List.last commits; Commits = commits }
 
@@ -137,8 +180,20 @@ module ShardedJournalAdapter =
         if not (validText operationId) || obj.ReferenceEquals(touches, null) || List.isEmpty touches || touches |> List.exists (fun touch -> touch.ExpectedGeneration < 0L) then Error "invalid saga"
         elif touches |> List.groupBy (fun touch -> touch.Address.Kind, touch.Address.Digest) |> List.exists (fun (_, values) -> values.Length > 1) then Error "duplicate aggregate"
         else let ordered = List.sortBy touchKey touches in Ok { OperationId = operationId; PersistBeforeEffects = ordered; AcquisitionOrder = ordered }
-    let compensations (plan: SagaPlan) (applied: SagaTouch list) =
-        applied |> List.rev |> List.mapi (fun index touch -> { OperationId = $"{plan.OperationId}:compensate:{index + 1}"; Address = touch.Address; Generation = touch.ExpectedGeneration; OriginalResultRetained = true })
+    let planConflict (plan: SagaPlan) (acquired: SagaTouch list) (applied: SagaTouch list) =
+        let prefix length values = plan.AcquisitionOrder |> List.truncate length = values
+        if obj.ReferenceEquals(plan, null) || not (prefix acquired.Length acquired) || not (prefix applied.Length applied) || applied.Length > acquired.Length then Error "conflict state is not a persisted acquisition prefix"
+        else
+            let release = plan.AcquisitionOrder |> List.skip acquired.Length
+            let compensation =
+                applied
+                |> List.rev
+                |> List.map (fun touch ->
+                    { OperationId = $"{plan.OperationId}:compensate:{journalKind touch.Address.Kind}:{touch.Address.Digest}:{touch.ExpectedGeneration}"
+                      Address = touch.Address
+                      Generation = touch.ExpectedGeneration
+                      OriginalResultRetained = true })
+            Ok { ReleaseUnconsumed = release; CompensateApplied = compensation }
 
     let validateProtection (observation: ProtectionObservation) =
         if obj.ReferenceEquals(observation, null) || not observation.Complete then Error IncompleteProtectionObservation
@@ -147,5 +202,5 @@ module ShardedJournalAdapter =
         elif observation.Integrity.Id <> 21872115L || observation.Integrity.Name <> "v2-journal-integrity" || not observation.Integrity.Active || not observation.Integrity.RejectsDeletionAndNonFastForward then Error IntegrityRulesetDrift
         elif observation.Writer.Target <> "refs/heads/fsgg/v2/journal/**/*" || observation.Integrity.Target <> "refs/heads/fsgg/v2/journal/**/*" then Error TargetPatternDrift
         elif observation.Writer.BypassAppIds <> [ 4166418L ] || not (List.isEmpty observation.Integrity.BypassAppIds) then Error BypassDrift
-        elif not observation.EffectiveRulesComplete then Error EffectiveRulesDrift
+        elif not observation.EffectiveRulesComplete || observation.EffectiveRules <> [ CreationRestricted; UpdateRestricted; DeletionRejected; NonFastForwardRejected ] then Error EffectiveRulesDrift
         else Ok ()

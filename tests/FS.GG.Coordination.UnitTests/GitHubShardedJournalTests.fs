@@ -7,17 +7,23 @@ open FS.GG.Coordination.Qualification.Contracts
 let private digest c = String.replicate 64 c
 let private oid c = String.replicate 40 c
 let private address kind id = ShardedJournalAdapter.address kind id |> Result.defaultWith (failwithf "%A")
-let private head (address: AggregateAddress) generation terminal prior: JournalHead =
-    { SchemaVersion = 1
-      Address = address
-      Generation = generation
-      EventDigest = digest "e"
-      SnapshotDigest = (if terminal then Some(digest "s") else None)
-      Terminal = terminal
-      PriorHeadDigest = prior
-      HeadDigest = digest (string generation) }
+let private blob json =
+    let bytes = ShardedJournalAdapter.canonicalJson json |> Result.defaultWith failwith
+    { Bytes = bytes; Digest = ShardedJournalAdapter.sha256 bytes }
+let private eventBlob generation = blob $"{{\"generation\":{generation},\"payload\":\"event\"}}"
 let private commit address generation terminal parent prior operation commitOid: JournalCommit =
-    { CommitOid = commitOid; ParentOid = parent; TreeOid = oid "b"; OperationId = operation; Head = head address generation terminal prior }
+    let event = eventBlob generation
+    let checkpoint =
+        if terminal then
+            let aggregateDigest = digest "f"
+            let content = blob $"{{\"aggregateDigest\":\"{aggregateDigest}\",\"highWaterGeneration\":{generation}}}"
+            Some { Blob = content; HighWaterGeneration = generation; EventDigests = [ 1L .. generation ] |> List.map (eventBlob >> _.Digest); AggregateDigest = aggregateDigest; ReplayAggregateDigest = aggregateDigest }
+        else None
+    let unsigned =
+        { SchemaVersion = 1; Address = address; Generation = generation; EventDigest = event.Digest; SnapshotDigest = checkpoint |> Option.map _.Blob.Digest; Terminal = terminal; PriorHeadDigest = prior; HeadDigest = "" }
+    let headBytes = ShardedJournalAdapter.journalHeadBytes unsigned
+    let head = { unsigned with HeadDigest = ShardedJournalAdapter.sha256 headBytes }
+    { CommitOid = commitOid; ParentOid = parent; TreeOid = oid "b"; OperationId = operation; Head = head; HeadBytes = ShardedJournalAdapter.journalHeadBytes head; Event = event; Checkpoint = checkpoint }
 
 [<Fact>]
 let ``aggregate addresses are lowercase length-prefixed sharded and protected`` () =
@@ -43,7 +49,10 @@ let ``journal validation requires one-parent monotonic append-only ancestry`` ()
     Assert.Equal(next, snapshot.Current)
     Assert.Equal(Error MissingJournalParent, ShardedJournalAdapter.validate location (JournalComplete("bad", [ root; { next with ParentOid = Some(oid "d") } ])))
     Assert.Equal(Error(DuplicateJournalGeneration 1L), ShardedJournalAdapter.validate location (JournalComplete("bad", [ root; { next with Head = { next.Head with Generation = 1L } } ])))
-    Assert.Equal(Error TerminalJournalAppend, ShardedJournalAdapter.validate location (JournalComplete("bad", [ { root with Head = { root.Head with Terminal = true } }; next ])))
+    let terminalRoot = commit location 1L true None None "root" root.CommitOid
+    Assert.Equal(Error TerminalJournalAppend, ShardedJournalAdapter.validate location (JournalComplete("bad", [ terminalRoot; next ])))
+    let wrongDigest = { next with Event = { next.Event with Digest = digest "0" } }
+    match ShardedJournalAdapter.validate location (JournalComplete("bad", [ root; wrongDigest ])) with Error(InvalidDigest _) -> () | value -> failwithf "%A" value
 
 [<Fact>]
 let ``CAS uses exact old oid and ambiguous results require exact authoritative reread`` () =
@@ -75,19 +84,21 @@ let ``saga acquisition is globally sorted and compensation is reverse append-onl
     let expected: SagaTouch list = List.sortBy (fun (touch: SagaTouch) -> ShardedJournalAdapter.journalKind touch.Address.Kind, touch.Address.Shard, touch.Address.Digest) [ first; second ]
     Assert.Equal<SagaTouch list>(expected, plan.AcquisitionOrder)
     Assert.Equal<SagaTouch list>(plan.AcquisitionOrder, plan.PersistBeforeEffects)
-    let compensation = ShardedJournalAdapter.compensations plan [ second; first ]
-    Assert.Equal(first.Address, compensation.Head.Address)
-    Assert.All(compensation, fun value -> Assert.True(value.OriginalResultRetained))
+    let conflict = ShardedJournalAdapter.planConflict plan plan.AcquisitionOrder [ plan.AcquisitionOrder.Head ] |> Result.defaultWith failwith
+    Assert.Equal(plan.AcquisitionOrder.Head.Address, conflict.CompensateApplied.Head.Address)
+    Assert.All(conflict.CompensateApplied, fun value -> Assert.True(value.OriginalResultRetained))
+    Assert.Equal(Error "conflict state is not a persisted acquisition prefix", ShardedJournalAdapter.planConflict plan [ first ] [ second ])
 
 [<Fact>]
 let ``protection binds exact repository rulesets target and bypass split`` () =
     let target = "refs/heads/fsgg/v2/journal/**/*"
     let writer = { Id = 21872113L; Name = "v2-journal-writer"; Active = true; Target = target; BypassAppIds = [ 4166418L ]; RestrictsCreationAndUpdate = true; RejectsDeletionAndNonFastForward = false }
     let integrity = { Id = 21872115L; Name = "v2-journal-integrity"; Active = true; Target = target; BypassAppIds = []; RestrictsCreationAndUpdate = false; RejectsDeletionAndNonFastForward = true }
-    let observed = { Complete = true; RepositoryId = 1351660651L; Writer = writer; Integrity = integrity; EffectiveRulesComplete = true }
+    let observed = { Complete = true; RepositoryId = 1351660651L; Writer = writer; Integrity = integrity; EffectiveRulesComplete = true; EffectiveRules = [ CreationRestricted; UpdateRestricted; DeletionRejected; NonFastForwardRejected ] }
     Assert.Equal(Ok (), ShardedJournalAdapter.validateProtection observed)
     Assert.Equal(Error BypassDrift, ShardedJournalAdapter.validateProtection { observed with Integrity = { integrity with BypassAppIds = [ 4166418L ] } })
     Assert.Equal(Error TargetPatternDrift, ShardedJournalAdapter.validateProtection { observed with Writer = { writer with Target = "refs/heads/fsgg/v2/journal/**" } })
+    Assert.Equal(Error EffectiveRulesDrift, ShardedJournalAdapter.validateProtection { observed with EffectiveRules = [ CreationRestricted ] })
 
 [<Fact>]
 let ``journal qualification inventory is closed and every mutation must be red`` () =

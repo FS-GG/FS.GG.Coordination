@@ -19,12 +19,24 @@ type JournalHead =
       PriorHeadDigest: string option
       HeadDigest: string }
 
+type CanonicalBlob = { Bytes: byte array; Digest: string }
+
+type JournalCheckpoint =
+    { Blob: CanonicalBlob
+      HighWaterGeneration: int64
+      EventDigests: string list
+      AggregateDigest: string
+      ReplayAggregateDigest: string }
+
 type JournalCommit =
     { CommitOid: string
       ParentOid: string option
       TreeOid: string
       OperationId: string
-      Head: JournalHead }
+      Head: JournalHead
+      HeadBytes: byte array
+      Event: CanonicalBlob
+      Checkpoint: JournalCheckpoint option }
 
 type JournalObservation =
     | JournalComplete of revision: string * commits: JournalCommit list
@@ -72,6 +84,9 @@ type EffectRefusal = StaleFence | TerminalAuthority | EffectAuthorityUnavailable
 type SagaTouch = { Address: AggregateAddress; ExpectedGeneration: int64 }
 type SagaPlan = { OperationId: string; PersistBeforeEffects: SagaTouch list; AcquisitionOrder: SagaTouch list }
 type Compensation = { OperationId: string; Address: AggregateAddress; Generation: int64; OriginalResultRetained: bool }
+type SagaConflictPlan = { ReleaseUnconsumed: SagaTouch list; CompensateApplied: Compensation list }
+
+type EffectiveBranchRule = CreationRestricted | UpdateRestricted | DeletionRejected | NonFastForwardRejected
 
 type Ruleset =
     { Id: int64
@@ -87,7 +102,8 @@ type ProtectionObservation =
       RepositoryId: int64
       Writer: Ruleset
       Integrity: Ruleset
-      EffectiveRulesComplete: bool }
+      EffectiveRulesComplete: bool
+      EffectiveRules: EffectiveBranchRule list }
 
 type ProtectionFailure = IncompleteProtectionObservation | AuthorityRepositoryDrift | WriterRulesetDrift | IntegrityRulesetDrift | TargetPatternDrift | BypassDrift | EffectiveRulesDrift
 
@@ -97,10 +113,11 @@ module ShardedJournalAdapter =
     val address: JournalKind -> aggregateId: string -> Result<AggregateAddress, JournalFailure>
     val canonicalJson: string -> Result<byte array, string>
     val sha256: byte array -> string
+    val journalHeadBytes: JournalHead -> byte array
     val validate: AggregateAddress -> JournalObservation -> Result<JournalSnapshot, JournalFailure>
     val planCas: operationId: string -> JournalSnapshot -> proposed: JournalCommit -> Result<CasProposal, JournalFailure>
     val reconcile: CasProposal -> ReceivePackOutcome -> JournalObservation -> ReconcileOutcome
     val authorizeEffect: FencedGrant -> JournalObservation -> Result<JournalCommit, EffectRefusal>
     val planSaga: operationId: string -> SagaTouch list -> Result<SagaPlan, string>
-    val compensations: SagaPlan -> applied: SagaTouch list -> Compensation list
+    val planConflict: SagaPlan -> acquired: SagaTouch list -> applied: SagaTouch list -> Result<SagaConflictPlan, string>
     val validateProtection: ProtectionObservation -> Result<unit, ProtectionFailure>
