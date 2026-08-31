@@ -1,0 +1,67 @@
+{
+  "schema": "fsgg.coordination.bootstrap-evidence/3",
+  "candidate": "11a30b6d0914e79d7c0d23bd3532440f96c24431",
+  "route": "execute",
+  "subjectSha256": "3f33d551fc27099b9b1991f11dfc992354dfadbc87f461c833d760aeabc6f801",
+  "decisionSha256": "04de31e75ee8c700f35b9bc4037dc058bd93cfe67ad107a21d99d3c65557280f",
+  "prior": null,
+  "planSha256": "7b9fa8b15f2f5212618dbf1b4adb4d550385ca7b98b534cb802779609ab0a28a",
+  "gates": [
+    {
+      "id": "deterministic-build",
+      "artifact": "deterministic-build/protocol.dll",
+      "sha256": "fa273e296adc0c8d35d2f399961c204df0650b3094d47351e3262a2ac5eff47e",
+      "commands": [
+        "bash eng/bootstrap-gates/deterministic-build.sh"
+      ]
+    },
+    {
+      "id": "compiler-and-tests",
+      "artifact": "compiler-and-tests/architecture.trx",
+      "sha256": "96d4169ce12e11c4d9c183edaa22ed0558d17f1d1a54ce3f5e0d43d1659fc8d6",
+      "commands": [
+        "bash eng/bootstrap-gates/compiler-and-tests.sh"
+      ]
+    },
+    {
+      "id": "canonical-quint",
+      "artifact": "canonical-quint/qualification.json",
+      "sha256": "7b8c2dd0e754668d4e04666a554a62debcd3b683a3db7ad97e370f2d90bdd13a",
+      "commands": [
+        "bash eng/bootstrap-gates/canonical-quint.sh"
+      ]
+    },
+    {
+      "id": "dependency-and-security",
+      "artifact": "dependency-and-security/vulnerability-report.json",
+      "sha256": "f578f2680d7629b2257fbe3d7bca676996b101dd48cc15dd725ea8ded931b77c",
+      "commands": [
+        "bash eng/bootstrap-gates/dependency-and-security.sh"
+      ]
+    },
+    {
+      "id": "package-install-smoke",
+      "artifact": "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg",
+      "sha256": "b712a4fcf74aadca09a0a6c30dd1bd897660672014353a550144912204f1644c",
+      "commands": [
+        "bash eng/bootstrap-gates/package-install-smoke.sh"
+      ]
+    },
+    {
+      "id": "bootstrap-recovery",
+      "artifact": "bootstrap-recovery/result.json",
+      "sha256": "263fcb4ea22064125356a08c4b559bc973beefb52f3512ddecdb5e2ecb9db0fc",
+      "commands": [
+        "bash eng/bootstrap-gates/bootstrap-recovery.sh"
+      ]
+    },
+    {
+      "id": "evidence-manifest",
+      "artifact": "evidence-manifest/plan.json",
+      "sha256": "7b9fa8b15f2f5212618dbf1b4adb4d550385ca7b98b534cb802779609ab0a28a",
+      "commands": [
+        "bash eng/bootstrap-gates/evidence-manifest.sh"
+      ]
+    }
+  ]
+}
