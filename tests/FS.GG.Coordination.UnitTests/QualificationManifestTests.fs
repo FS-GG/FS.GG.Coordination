@@ -169,3 +169,50 @@ let ``resealed truncation of every closed inventory remains red`` () =
         let observed = reseal root |> codes
         Assert.Contains("QM-INVENTORY-BINDING", observed)
         Assert.DoesNotContain("QM-SELF-DIGEST", observed)
+
+[<Fact>]
+let ``generated producers cannot be the sole evidence for another gate class`` () =
+    let baseline = generated (validInput ())
+    for category in [ "compiler"; "dependencies"; "externalFixtures"; "independentCases"; "model"; "packages"; "sources" ] do
+        let root = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
+        for entry in root[category].AsArray() do entry.AsObject()["producer"] <- "case-generator"
+        let observed = reseal root |> codes
+        Assert.Contains("QM-GENERATED-ONLY", observed)
+    let resultRoot = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
+    for entry in resultRoot["results"].AsArray() do entry.AsObject()["producer"] <- "case-generator"
+    Assert.Contains("QM-GENERATED-ONLY", reseal resultRoot |> codes)
+    let reviewRoot = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
+    for entry in reviewRoot["reviewers"].AsArray() do entry.AsObject()["principal"] <- "case-generator"
+    Assert.Contains("QM-GENERATED-ONLY", reseal reviewRoot |> codes)
+
+[<Fact>]
+let ``harness mutation proof derives all controls and negative observations`` () =
+    let input = validInput ()
+    let inventory = QualificationManifest.generateInventory input.Expected |> Result.defaultWith (failwithf "%A")
+    let baseline = generated input
+    let context =
+        { CandidateCommit = String('1', 40)
+          CandidateTreeSha256 = digest '2'
+          UnitContractSha256 = digest '3'
+          ValidatorSha256 = digest '4' }
+    let proof =
+        HarnessMutationProof.generate context (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(baseline))
+        |> Result.defaultWith (failwithf "%A")
+    Assert.True(
+        HarnessMutationProof.validate context (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(baseline)) (ReadOnlyMemory<byte>(proof))
+        |> Result.isOk)
+    use document = JsonDocument.Parse proof
+    Assert.Equal(10, document.RootElement.GetProperty("controls").GetArrayLength())
+    Assert.Equal(60, document.RootElement.GetProperty("observations").GetArrayLength())
+    Assert.All(document.RootElement.GetProperty("controls").EnumerateArray(), fun item -> Assert.Equal("passed", item.GetProperty("outcome").GetString()))
+    Assert.All(document.RootElement.GetProperty("observations").EnumerateArray(), fun item ->
+        Assert.Equal("rejected", item.GetProperty("outcome").GetString())
+        Assert.True(item.GetProperty("diagnostics").GetArrayLength() > 0))
+    let mutated = JsonNode.Parse(proof).AsObject()
+    mutated["observations"].AsArray().RemoveAt(0)
+    let invalid = Encoding.UTF8.GetBytes(mutated.ToJsonString() + "\n")
+    let findings =
+        match HarnessMutationProof.validate context (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(baseline)) (ReadOnlyMemory<byte>(invalid)) with
+        | Ok _ -> failwith "mutated proof unexpectedly validated"
+        | Error values -> values
+    Assert.Contains(findings, fun item -> item.Code = "HMP-PROOF-MISMATCH")

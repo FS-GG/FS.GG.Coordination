@@ -1265,7 +1265,10 @@ try
         if exitCode <> 0 then
             fail "QUINT-FORMAL-SIMULATION" ($"%s{formalId}: exit=%d{exitCode}; stdout=%s{output}; stderr=%s{error}")
         let exploredMatch = Regex.Match(output + "\n" + error, @"out of (\d+) explored")
-        if not exploredMatch.Success then fail "QUINT-FORMAL-SIMULATION-MEASUREMENT" formalId
+        if not exploredMatch.Success then
+            fail
+                "QUINT-FORMAL-SIMULATION-MEASUREMENT"
+                ($"%s{formalId}: exit=%d{exitCode}; stdout=%s{output}; stderr=%s{error}")
         let observedSamples = Int32.Parse exploredMatch.Groups[1].Value
         let normalizedOutput =
             Regex.Replace((output + "\n" + error).Trim(), @"\d+ms at \d+ traces/second", "<measured runtime>")
@@ -1434,11 +1437,19 @@ try
                       "--backend"; "tlc"; "--verbosity"; "5" ] environment
             let temporalDiagnostic = temporalOutput + "\n" + temporalError
             if temporalExitCode = 0 || not (temporalDiagnostic.Contains("Temporal properties were violated", StringComparison.Ordinal)) then
-                fail "QUINT-FORMAL-TEMPORAL-COUNTEREXAMPLE" ($"%s{formalId}: transition-removal did not violate %s{violatedTemporal}")
+                fail
+                    "QUINT-FORMAL-TEMPORAL-COUNTEREXAMPLE"
+                    ($"%s{formalId}: transition-removal did not violate %s{violatedTemporal}; exit=%d{temporalExitCode}; stdout=%s{temporalOutput}; stderr=%s{temporalError}")
             let diagnosticStart = temporalDiagnostic.IndexOf("Error: The following behavior constitutes a counter-example:", StringComparison.Ordinal)
-            if diagnosticStart < 0 then fail "QUINT-FORMAL-TEMPORAL-DIAGNOSTIC" formalId
+            if diagnosticStart < 0 then
+                fail
+                    "QUINT-FORMAL-TEMPORAL-DIAGNOSTIC"
+                    ($"%s{formalId}: counterexample start marker missing; exit=%d{temporalExitCode}; stdout=%s{temporalOutput}; stderr=%s{temporalError}")
             let diagnosticEnd = temporalDiagnostic.IndexOf("Finished checking temporal properties", diagnosticStart, StringComparison.Ordinal)
-            if diagnosticEnd <= diagnosticStart then fail "QUINT-FORMAL-TEMPORAL-DIAGNOSTIC" formalId
+            if diagnosticEnd <= diagnosticStart then
+                fail
+                    "QUINT-FORMAL-TEMPORAL-DIAGNOSTIC"
+                    ($"%s{formalId}: counterexample end marker missing; exit=%d{temporalExitCode}; stdout=%s{temporalOutput}; stderr=%s{temporalError}")
             let normalizedDiagnostic = temporalDiagnostic.Substring(diagnosticStart, diagnosticEnd - diagnosticStart).Trim()
 
             let path, projection, projectionElapsedMs, projectionPeakMiB =
@@ -1450,7 +1461,9 @@ try
         let firstPath, first, firstDiagnostic, firstElapsed, firstPeak = runCounterexample 1
         let _, second, secondDiagnostic, secondElapsed, secondPeak = runCounterexample 2
         if first <> second || firstDiagnostic <> secondDiagnostic then
-            fail "QUINT-FORMAL-COUNTEREXAMPLE-NONDETERMINISTIC" formalId
+            fail
+                "QUINT-FORMAL-COUNTEREXAMPLE-NONDETERMINISTIC"
+                ($"%s{formalId}: firstProjection=%s{sha256Text first}; secondProjection=%s{sha256Text second}; firstDiagnostic=%s{sha256Text firstDiagnostic}; secondDiagnostic=%s{sha256Text secondDiagnostic}")
         File.WriteAllText(firstPath, first, UTF8Encoding(false))
         let itfSha256 = sha256 firstPath
         let itfNode = JsonNode.Parse(first).AsObject()

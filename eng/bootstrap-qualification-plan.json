@@ -43,7 +43,7 @@
     "notBefore": "2026-08-29T13:32:00Z",
     "runner": "ubuntu-latest",
     "architecture": "x64",
-    "reviewPolicy": "critique-evidence/1"
+    "reviewPolicy": "critique-and-mutation-proof/1"
   },
   "jobs": [
     {

@@ -529,6 +529,7 @@ module QualificationManifest =
             let reviewTimes = ResizeArray<DateTimeOffset>()
             let reviewIds = HashSet<string>(StringComparer.Ordinal)
             let observedReviewIds = ResizeArray<string>()
+            let reviewPrincipals = ResizeArray<string>()
             let mutable previousReview = ""
             reviewElements |> List.iteri (fun index entry ->
                 let path = $"/reviewers/%d{index}"
@@ -557,7 +558,9 @@ module QualificationManifest =
                 if outcome <> "accepted" then findings <- finding "QM-REVIEW-OUTCOME" (path + "/outcome") "accepted" (if isNull outcome then "<missing>" else outcome) :: findings
                 if not (isSha digest) then findings <- finding "QM-REVIEW-DIGEST" (path + "/sha256") "lowercase SHA-256" (if isNull digest then "<missing>" else digest) :: findings
                 if not (isId principal) then findings <- finding "QM-REVIEW-PRINCIPAL" (path + "/principal") "stable principal id" (if isNull principal then "<missing>" else principal) :: findings
-                elif principal = candidateProducer || resultProducers.Contains principal then findings <- finding "QM-SELF-REVIEW" (path + "/principal") "principal distinct from candidate and result producers" principal :: findings
+                else
+                    reviewPrincipals.Add principal
+                    if principal = candidateProducer || resultProducers.Contains principal then findings <- finding "QM-SELF-REVIEW" (path + "/principal") "principal distinct from candidate and result producers" principal :: findings
                 if candidateSha <> commit then findings <- finding "QM-CANDIDATE-BINDING" (path + "/candidateSha") commit (if isNull candidateSha then "<missing>" else candidateSha) :: findings
                 if inputs <> computedInputs then findings <- finding "QM-INPUT-SET-BINDING" (path + "/inputSetSha256") computedInputs (if isNull inputs then "<missing>" else inputs) :: findings
                 match parseTime completedRaw with
@@ -570,6 +573,14 @@ module QualificationManifest =
             let independent = observedByCategory.TryFind "independentCases" |> Option.defaultValue []
             if independent |> List.exists (fun entry -> entry.Producer = candidateProducer || generatedProducers.Contains entry.Producer) then
                 findings <- finding "QM-INDEPENDENCE" "/independentCases" "producer distinct from candidate and generated-case producers" "overlap" :: findings
+            for category in [ "compiler"; "dependencies"; "externalFixtures"; "independentCases"; "model"; "packages"; "sources" ] do
+                let entries = observedByCategory.TryFind category |> Option.defaultValue []
+                if not (List.isEmpty entries) && entries |> List.forall (fun entry -> generatedProducers.Contains entry.Producer) then
+                    findings <- finding "QM-GENERATED-ONLY" ("/" + category) "at least one producer independent of generated cases" "generated producers only" :: findings
+            if resultProducers.Count > 0 && resultProducers |> Seq.forall generatedProducers.Contains then
+                findings <- finding "QM-GENERATED-ONLY" "/results" "at least one producer independent of generated cases" "generated producers only" :: findings
+            if reviewPrincipals.Count > 0 && reviewPrincipals |> Seq.forall generatedProducers.Contains then
+                findings <- finding "QM-GENERATED-ONLY" "/reviewers" "at least one principal independent of generated cases" "generated principals only" :: findings
             let inputTimes =
                 [ for KeyValue(_, entries) in observedByCategory do
                       for entry in entries do yield! entry.ObservedAt |> Option.toList

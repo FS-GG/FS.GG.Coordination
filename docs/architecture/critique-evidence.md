@@ -40,7 +40,9 @@ The JSON Schema proves storage shape. `CritiqueEvidence` proves semantic hashes,
 separation, exact bindings, owner identity, and roll-up derivation. Neither layer consults GitHub approval counts.
 Native repository approvals remain zero; red declared technical predicates still block delivery.
 
-Bootstrap qualification names `critique-evidence/1` as its review-policy component. That component is hashed into
+Bootstrap qualification originally named `critique-evidence/1` as its review-policy component. GS2-03.9 advances
+that identity to `critique-and-mutation-proof/1`, retaining the critique contract while also requiring the closed
+mutation proof. The component is hashed into
 the qualification subject, so evidence produced under the earlier structured-decision policy cannot be reused after
 this contract becomes current even when every other tracked input is unchanged.
 
