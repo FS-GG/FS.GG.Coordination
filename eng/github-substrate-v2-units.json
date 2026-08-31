@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "c612d3add3526f028b4a1512f7c970661a839ccd",
+    "revision": "7fa7553cb6d805bffd4de0ba09b05694185909fb",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "733e9636db7e4250d7d5a0bbe9c6a82ed3f8ac830debc2936614972dedcc6eb7"
+    "sha256": "1b96f25234447260a7ab83cf051c171a859ae0dc517c3858d10ce6dddb61e964"
   },
   "units": [
     {
@@ -468,6 +468,20 @@
         { "id": "github-project-adapter-contract", "qGate": "Q3", "commandSha256": "c782afca818ccd8c0b9845a4abcfa2d14bc70cfc5b762d0fac4a600875b82fcc" }
       ],
       "contractSha256": "2f1a2ce88d7939c9c5607cb09b31d3e956a1cd0f9df66dc02dd35715b54d0838"
+    },
+    {
+      "id": "GS2-04.5",
+      "title": "Comment/projection adapter",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.4"],
+      "permissionCeiling": ["repository-local comment identity and order observation contracts, marker JSON and referenced journal digest validation, edit/delete/tamper distinctions, deterministic durable-authority projection regeneration, complete deterministic fixtures, validation, and evidence", "local loopback fixture execution is allowed; no live GitHub write, organization or repository settings mutation, production credential, deployment, publication, stable release, Q4 sandbox claim, sharded Git journal adapter, or successor-unit implementation authority"],
+      "exitGate": "the Q3 comment and projection adapter preserves server-issued comment identity and order without treating comment order as concurrency authority; validates marker JSON and referenced journal digests; distinguishes edited, deleted, tampered, malformed, unsupported, unauthorized, incomplete, and unreadable outcomes without inventing authority or absence; regenerates deterministic human projections only from durable journal authority; generated cases and independent pagination, duplicate-identity, reordered-page, edited-comment, deleted-comment, tampered-marker, malformed-JSON, mismatched-journal-digest, incomplete-observation, stale-revision, concurrent-change, and no-op controls all pass without performing live writes and without claiming Q4 sandbox behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-comment-projection-contract"],
+      "gateContracts": [
+        { "id": "github-comment-projection-contract", "qGate": "Q3", "commandSha256": "13084a2c361986eb4a5046c7034dfe81f9a7a3e8fa8732f3cce9ac2cf7ef27af" }
+      ],
+      "contractSha256": "829a9bb643f95729b5d28f8902e0a8016c366730df792f92b6d0140710ce11d4"
     }
   ]
 }
