@@ -8,6 +8,11 @@ payloads belong in an immutable GitHub Actions artifact or GitHub release asset;
 their tracked manifest records the immutable producer identity, exact byte
 length, media type, and lowercase SHA-256.
 
+The reviews category preserves its v1 schema and selects v2 critique bundles.
+Those bundles distinguish five perspective/phase findings from the sole
+Accountable Delivery Owner's acceptance authority and derive, rather than
+assert, their roll-up.
+
 Run the closed offline contract gate with:
 
 ```console

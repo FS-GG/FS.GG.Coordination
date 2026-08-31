@@ -165,7 +165,7 @@ let private loadContract root =
           Runner = stringProperty "runner" reuseValue |> Option.defaultWith (fun () -> failwith "reuse runner is missing")
           Architecture = stringProperty "architecture" reuseValue |> Option.defaultWith (fun () -> failwith "reuse architecture is missing")
           ReviewPolicy = stringProperty "reviewPolicy" reuseValue |> Option.defaultWith (fun () -> failwith "reuse reviewPolicy is missing") }
-    if reuse <> { JobId = "reuse-decision"; Artifact = "reuse-decision/decision.json"; TimeoutMinutes = 5; EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"; UploadName = "reuse-decision"; WorkflowPath = ".github/workflows/bootstrap-qualification.yml"; MaxCandidateArtifacts = 100; NotBefore = "2026-08-29T13:32:00Z"; Runner = "ubuntu-latest"; Architecture = "x64"; ReviewPolicy = "structured-decisions/1" } then
+    if reuse <> { JobId = "reuse-decision"; Artifact = "reuse-decision/decision.json"; TimeoutMinutes = 5; EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"; UploadName = "reuse-decision"; WorkflowPath = ".github/workflows/bootstrap-qualification.yml"; MaxCandidateArtifacts = 100; NotBefore = "2026-08-29T13:32:00Z"; Runner = "ubuntu-latest"; Architecture = "x64"; ReviewPolicy = "critique-evidence/1" } then
         failwith "reuse policy differs from the reviewed fail-closed contract"
     let jobs =
         arrayProperty "jobs" value

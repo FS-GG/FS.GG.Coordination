@@ -120,7 +120,7 @@ let rec validateSchemaVocabulary (path: string) (schema: JsonElement) =
     | JsonValueKind.Object ->
         let supported =
             set [ "$schema"; "$id"; "$defs"; "$ref"; "category"; "type"; "const"; "enum"; "minLength"; "pattern"; "format"
-                  "minimum"; "maximum"; "minItems"; "uniqueItems"; "items"; "required"; "properties"; "additionalProperties" ]
+                  "minimum"; "maximum"; "minItems"; "maxItems"; "uniqueItems"; "items"; "required"; "properties"; "additionalProperties" ]
         for keyword in schema.EnumerateObject() do
             if not (supported.Contains keyword.Name) then fail "ES-SCHEMA-KEYWORD" $"{path}: unsupported keyword {keyword.Name}"
         match tryProperty "properties" schema with
@@ -213,6 +213,9 @@ let rec validateJsonSchema (rootSchema: JsonElement) (path: string) (schema: Jso
         match tryProperty "minItems" schema with
         | Some minimum when items.Length < minimum.GetInt32() -> schemaFail "array is too short"
         | _ -> ()
+        match tryProperty "maxItems" schema with
+        | Some maximum when items.Length > maximum.GetInt32() -> schemaFail "array is too long"
+        | _ -> ()
         match tryProperty "uniqueItems" schema with
         | Some unique when unique.GetBoolean() && (items |> List.map _.GetRawText() |> List.distinct |> List.length) <> items.Length -> schemaFail "array items are not unique"
         | _ -> ()
@@ -277,14 +280,12 @@ let validateRecord categoryName relative (record: JsonElement) =
         let outcome = stringProperty "outcome" record
         if outcome <> "passed" && outcome <> "failed" then fail "ES-RECORD-OUTCOME" relative
     | "reviews" ->
-        exactProperties relative [ "schema"; "id"; "candidate"; "reviewer"; "decision"; "evidenceSha256" ] record
-        if stringProperty "schema" record <> "fsgg.coordination.review/1" then fail "ES-RECORD-SCHEMA" relative
-        nonEmpty relative (stringProperty "id" record)
-        nonEmpty relative (stringProperty "reviewer" record)
-        validateRevision relative (stringProperty "candidate" record)
-        let decision = stringProperty "decision" record
-        if decision <> "accepted" && decision <> "changes-requested" then fail "ES-RECORD-DECISION" relative
-        validateSha relative (stringProperty "evidenceSha256" record)
+        exactProperties relative [ "accountableOwner"; "candidate"; "createdAt"; "digest"; "evidence"; "evidenceSetSha256"; "findings"; "rollup"; "schema" ] record
+        if stringProperty "schema" record <> "fsgg.coordination.critique-evidence/1" then fail "ES-RECORD-SCHEMA" relative
+        nonEmpty relative (stringProperty "accountableOwner" record)
+        validateTime relative (stringProperty "createdAt" record)
+        validateSha relative (stringProperty "digest" record)
+        validateSha relative (stringProperty "evidenceSetSha256" record)
     | _ -> ()
 
 type Category = { Name: string; Path: string; Schema: string }
@@ -541,8 +542,12 @@ let validate evidenceRoot =
         ensureNoSymlink root category.Schema
         use schemaDocument = readJson schemaPath
         let schema = schemaDocument.RootElement
+        validateSchemaVocabulary $"schema.%s{category.Name}" schema
+        if stringProperty "$schema" schema <> "https://json-schema.org/draft/2020-12/schema" then fail "ES-SCHEMA-DIALECT" category.Name
         if stringProperty "category" schema <> category.Name then fail "ES-SCHEMA-CATEGORY" category.Name
-        if stringProperty "$id" schema <> $"https://fs-gg.github.io/schemas/evidence/{category.Name}/v1" then fail "ES-SCHEMA-ID" category.Name
+        let schemaSegments = category.Schema.Split('/')
+        if schemaSegments.Length <> 3 || schemaSegments[0] <> "schemas" || not (Text.RegularExpressions.Regex("^v[1-9][0-9]*$").IsMatch schemaSegments[1]) then fail "ES-SCHEMA-VERSION" category.Schema
+        if stringProperty "$id" schema <> $"https://fs-gg.github.io/schemas/evidence/%s{category.Name}/%s{schemaSegments[1]}" then fail "ES-SCHEMA-ID" category.Name
 
     use indexDocument = readJson indexPath
     let index = indexDocument.RootElement
@@ -623,6 +628,9 @@ let validate evidenceRoot =
         if categoryName <> "accepted-receipts" && categoryName <> "artifact-manifests" then
             use recordDocument = readJson path
             validateRecord categoryName relative recordDocument.RootElement
+            if categoryName <> "corpus-inputs" then
+                use recordSchemaDocument = readJson (Path.Combine(root, category.Schema))
+                validateJsonSchema recordSchemaDocument.RootElement relative recordSchemaDocument.RootElement recordDocument.RootElement
 
     let indexed = paths |> Seq.toList |> Set.ofList
     let discovered =
@@ -705,10 +713,34 @@ let setNestedInt (node: JsonNode) (path: string list) (name: string) (value: int
 let selfTest evidenceRoot =
     let validManifest =
         "{\"schema\":\"fsgg.coordination.artifact-manifest/1\",\"id\":\"artifact-1\",\"store\":\"github-actions-artifact\",\"repositoryId\":131313,\"producerId\":33038126581,\"artifactId\":98405834712,\"artifactName\":\"qualification-evidence\",\"bytes\":70000,\"mediaType\":\"application/zip\",\"sha256\":\"" + String('a', 64) + "\"}"
+    let reviewDigest = String('b', 64)
+    let reviewFinding perspective id phase =
+        "{\"author\":\"accountable-owner\",\"candidateFingerprintSha256\":\"" + reviewDigest
+        + "\",\"completedAt\":\"2026-08-31T00:00:00Z\",\"contentSha256\":\"" + reviewDigest
+        + "\",\"decision\":\"passed\",\"digest\":\"" + reviewDigest + "\",\"evidenceSetSha256\":\""
+        + reviewDigest + "\",\"id\":\"" + id + "\",\"perspective\":\"" + perspective + "\",\"phaseId\":\"" + phase + "\"}"
+    let reviewFindings =
+        [ reviewFinding "adapter" "finding-adapter" "phase-adapter"
+          reviewFinding "architecture" "finding-architecture" "phase-architecture"
+          reviewFinding "cutover" "finding-cutover" "phase-cutover"
+          reviewFinding "migration" "finding-migration" "phase-migration"
+          reviewFinding "security" "finding-security" "phase-security" ]
+        |> String.concat ","
+    let reviewPerspectives = "[\"adapter\",\"architecture\",\"cutover\",\"migration\",\"security\"]"
+    let validReview =
+        "{\"accountableOwner\":\"accountable-owner\",\"candidate\":{\"commitSha\":\"" + String('a', 40)
+        + "\",\"fingerprintSha256\":\"" + reviewDigest + "\",\"treeSha256\":\"" + reviewDigest
+        + "\",\"unitContractSha256\":\"" + reviewDigest + "\"},\"createdAt\":\"2026-08-31T00:00:01Z\",\"digest\":\""
+        + reviewDigest + "\",\"evidence\":[{\"id\":\"architecture-tests\",\"sha256\":\"" + reviewDigest
+        + "\"}],\"evidenceSetSha256\":\"" + reviewDigest + "\",\"findings\":[" + reviewFindings
+        + "],\"rollup\":{\"acceptanceAuthority\":\"accountable-owner-only\",\"accountableOwner\":\"accountable-owner\",\"derivation\":\"all-required-bound-green/1\",\"digest\":\""
+        + reviewDigest + "\",\"findingSetSha256\":\"" + reviewDigest + "\",\"outcome\":\"passed\",\"passingPerspectives\":"
+        + reviewPerspectives + ",\"requiredPerspectives\":" + reviewPerspectives + "},\"schema\":\"fsgg.coordination.critique-evidence/1\"}"
     let positiveRoot = Path.Combine(Path.GetTempPath(), $"fsgg-evidence-{Guid.NewGuid():N}")
     try
         copyDirectory evidenceRoot positiveRoot
         addTrackedJson positiveRoot "manifest-valid" "artifact-manifests" "artifact-manifests/manifest-valid.json" validManifest
+        addTrackedJson positiveRoot "review-valid" "reviews" "reviews/review-valid.json" validReview
         validate positiveRoot |> ignore
     finally
         if Directory.Exists positiveRoot then Directory.Delete(positiveRoot, true)
@@ -736,10 +768,28 @@ let selfTest evidenceRoot =
               let entry = node["entries"].AsArray()[0]
               entry["category"] <- "reviews")), "ES-CATEGORY-PATH"
           "noncanonical", (fun root -> File.WriteAllText(Path.Combine(root, "index.json"), File.ReadAllText(Path.Combine(root, "index.json")).Replace("{\"schema\"", "{ \"schema\""))), "ES-JSON-CANONICAL"
-          "missing-schema", (fun root -> File.Delete(Path.Combine(root, "schemas/v1/reviews.schema.json"))), "ES-SCHEMA-MISSING"
+          "missing-schema", (fun root -> File.Delete(Path.Combine(root, "schemas/v2/reviews.schema.json"))), "ES-SCHEMA-MISSING"
           "missing-category", (fun root -> Directory.Delete(Path.Combine(root, "reviews"), true)), "ES-CATEGORY-MISSING"
           "malformed-category-record", (fun root ->
               addTrackedJson root "review-malformed" "reviews" "reviews/malformed.json" "{}"), "ES-JSON-SHAPE"
+          "review-six-findings", (fun root ->
+              let relative = "reviews/review-six-findings.json"
+              addTrackedJson root "review-six-findings" "reviews" relative validReview
+              mutateJson (Path.Combine(root, relative)) (fun node ->
+                  let findings = node["findings"].AsArray()
+                  findings.Add(findings[0].DeepClone()))
+              refreshIndexedJson root relative), "ES-SCHEMA-VALIDATION"
+          "review-external-authority", (fun root ->
+              let relative = "reviews/review-external-authority.json"
+              addTrackedJson root "review-external-authority" "reviews" relative validReview
+              mutateJson (Path.Combine(root, relative)) (fun node ->
+                  node["rollup"].AsObject()["acceptanceAuthority"] <- "external-quorum")
+              refreshIndexedJson root relative), "ES-SCHEMA-VALIDATION"
+          "review-extra-property", (fun root ->
+              let relative = "reviews/review-extra-property.json"
+              addTrackedJson root "review-extra-property" "reviews" relative validReview
+              mutateJson (Path.Combine(root, relative)) (fun node -> node["externalApproval"] <- true)
+              refreshIndexedJson root relative), "ES-JSON-SHAPE"
           "mutable-artifact-locator", (fun root ->
               let mutableManifest = validManifest.Replace("\"producerId\":33038126581", "\"producerId\":\"latest\"")
               addTrackedJson root "manifest-mutable" "artifact-manifests" "artifact-manifests/mutable.json" mutableManifest), "ES-JSON-TYPE"
@@ -875,7 +925,7 @@ let selfTest evidenceRoot =
             with error when error.Message.StartsWith(expected + ":", StringComparison.Ordinal) -> ()
         finally
             if Directory.Exists temp then Directory.Delete(temp, true)
-    $"EVIDENCE_STORAGE_SELF_TEST_OK negativeCases={cases.Length} positiveArtifactManifests=1"
+    $"EVIDENCE_STORAGE_SELF_TEST_OK negativeCases={cases.Length} positiveArtifactManifests=1 positiveCritiqueBundles=1"
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 try
