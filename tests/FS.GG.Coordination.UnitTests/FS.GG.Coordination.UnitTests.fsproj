@@ -4,6 +4,7 @@
     <Compile Include="GitHubIssueFieldTests.fs" />
     <Compile Include="GitHubNativeRelationTests.fs" />
     <Compile Include="GitHubProjectAdapterTests.fs" />
+    <Compile Include="GitHubCommentProjectionTests.fs" />
     <Compile Include="GitHubTransportTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />

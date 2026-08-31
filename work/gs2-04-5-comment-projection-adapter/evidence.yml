@@ -1,0 +1,917 @@
+schemaVersion: 1
+workId: gs2-04-5-comment-projection-adapter
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-5-comment-projection-adapter/spec.md
+sourceClarifications: work/gs2-04-5-comment-projection-adapter/clarifications.md
+sourceChecklist: work/gs2-04-5-comment-projection-adapter/checklist.md
+sourcePlan: work/gs2-04-5-comment-projection-adapter/plan.md
+sourceTasks: work/gs2-04-5-comment-projection-adapter/tasks.yml
+sourceAnalysis: readiness/gs2-04-5-comment-projection-adapter/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-5-comment-projection-adapter/analysis.json
+    digest: 561dd0e1f5fb72c919a23a021f0178a4414243bc18b3ce08206f966487b7d302
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-5-comment-projection-adapter/checklist.md
+    digest: 8d0b7dc632ebafa83b65aaac0279cd8849ddc9dba5ec7f7ea2db13a9edb047d1
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-5-comment-projection-adapter/clarifications.md
+    digest: ad8bcda142cfcc347bbff74abbd17899022247147605938105c265c0b1779921
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-5-comment-projection-adapter/plan.md
+    digest: 5a27983149a7cd7df4410d97d47e95bec82d2f7e12883c4e6f1df69d855adb1e
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-5-comment-projection-adapter/spec.md
+    digest: f7509c2e554d84164e6adf3bbcbf04425ee6d2c7040df0c917ac5b30bc48ffbc
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-5-comment-projection-adapter/tasks.yml
+    digest: 0adf8c2d1b50b211f932d292f6cd9a48e8f71f7443d3cce5fde5616715559e4c
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV017]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV018]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV019]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV020]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV021]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV022]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV023]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV024]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV025]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV026]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV027]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006, PD-007]
+    obligationRefs: [EV028]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV029]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV030]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV031
+    kind: verification
+    subject:
+      type: task
+      id: T031
+    taskRefs: [T031]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV031]
+    artifacts: [eng/validate-github-comment-projection.fsx, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fs, src/FS.GG.Coordination.GitHub/CommentProjectionAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubCommentProjectionQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubCommentProjectionArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs, tests/fixtures/github-comment-projection/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-5-comment-projection.trx
+      digest: "sha256:903abec32c2259737f0976bf94af57a2f20ce428f32bbc91be8a837d133e76d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV032
+    kind: deferral
+    subject:
+      type: task
+      id: T032
+    taskRefs: [T032]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV032]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: generated qualification-control inventory currency is established by the lifecycle generators rather than by an observed test receipt.
+    owner: shrike-186f
+    scope: Refresh and currency judgement for generated qualification-control inventory.
+    laterLifecycleVisibility: The verify and ship generators must refresh and adjudicate this view before merge.
+    notes: [Declared as generated-view currency rather than an unobservable pass.]
+  - id: EV033
+    kind: deferral
+    subject:
+      type: task
+      id: T033
+    taskRefs: [T033]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV033]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: SDD lifecycle readiness views currency is established by the lifecycle generators rather than by an observed test receipt.
+    owner: shrike-186f
+    scope: Refresh and currency judgement for SDD lifecycle readiness views.
+    laterLifecycleVisibility: The verify and ship generators must refresh and adjudicate this view before merge.
+    notes: [Declared as generated-view currency rather than an unobservable pass.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
