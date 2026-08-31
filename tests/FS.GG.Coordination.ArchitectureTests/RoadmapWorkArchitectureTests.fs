@@ -29,6 +29,21 @@ let private runAt workingDirectory executable arguments =
 let private run executable arguments = runAt root executable arguments
 
 [<Fact>]
+let ``current source tree contains no rival protocol AST`` () =
+    let authoredFsharp =
+        Directory.EnumerateFiles(Path.Combine(root, "src"), "*.fs", SearchOption.AllDirectories)
+        |> Seq.filter (fun path -> not (path.EndsWith("Protocol.Generated.fs", StringComparison.Ordinal)))
+        |> Seq.map File.ReadAllText
+        |> String.concat "\n"
+
+    for rival in
+        [ "type Subject ="
+          "type Authority ="
+          "type Mutation ="
+          "type ObservationPlan =" ] do
+        Assert.DoesNotContain(rival, authoredFsharp)
+
+[<Fact>]
 let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject`` () =
     let workflow =
         File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
@@ -972,15 +987,6 @@ let ``canonical Quint authority mutations fail closed`` () =
                     File.ReadAllText(path).Replace("FS.GG.SDD.Artifacts/1.5.0", "FS.GG.SDD.Artifacts/9.9.9")
                 ))
             "PACKAGE"
-
-        runMutation
-            "rival"
-            (fun clone ->
-                File.WriteAllText(
-                    Path.Combine(clone, "src/FS.GG.Coordination.Protocol/Rival.fs"),
-                    "type Subject = | Rival"
-                ))
-            "PARALLEL-AST"
 
         runMutation
             "generated-qnt"

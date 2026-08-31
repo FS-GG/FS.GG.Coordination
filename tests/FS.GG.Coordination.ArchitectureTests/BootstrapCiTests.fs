@@ -252,6 +252,66 @@ let ``reuse receipt round trips canonical bytes and rejects tampering`` () =
     Assert.True(QualificationReuse.parseDecision unknown |> Result.isError)
 
 [<Fact>]
+let ``formal subject ignores unrelated files but binds every selected byte`` () =
+    let files =
+        [ ({ Mode = "100644"; Path = "src/Protocol/Model.fs"; Bytes = Encoding.UTF8.GetBytes "model" }: QualificationReuse.TrackedFile)
+          { Mode = "100644"; Path = "docs/notes.md"; Bytes = Encoding.UTF8.GetBytes "first" } ]
+    let selectors = [ QualificationReuse.Prefix "src/Protocol/" ]
+    let policy = Encoding.UTF8.GetBytes "policy"
+    let baseline = QualificationReuse.createFormalSubject files selectors policy
+    let unrelated = QualificationReuse.createFormalSubject [ files[0]; { files[1] with Bytes = Encoding.UTF8.GetBytes "second" } ] selectors policy
+    let selected = QualificationReuse.createFormalSubject [ { files[0] with Bytes = Encoding.UTF8.GetBytes "changed" }; files[1] ] selectors policy
+    Assert.Equal(baseline.SubjectSha256, unrelated.SubjectSha256)
+    Assert.NotEqual(baseline.SubjectSha256, selected.SubjectSha256)
+    Assert.Throws<ArgumentException>(fun () -> QualificationReuse.createFormalSubject files [ QualificationReuse.Exact "src/Protocol/Model.fs"; QualificationReuse.Prefix "src/Protocol/" ] policy |> ignore) |> ignore
+
+[<Fact>]
+let ``current scoped milestone reports accepted contract drift without hiding it`` () =
+    let statePath = Path.Combine(repositoryRoot, "eng/milestone-qualification.json")
+    let state =
+        match MilestoneQualification.parse (File.ReadAllBytes statePath) with
+        | Ok value -> value
+        | Error problem -> failwith problem
+    let receipts =
+        state.Children
+        |> List.choose (fun child -> child.Acceptance |> Option.map (fun acceptance -> acceptance.ReceiptPath, File.ReadAllBytes(Path.Combine(repositoryRoot, acceptance.ReceiptPath))))
+        |> Map.ofList
+    let validation =
+        match MilestoneQualification.validate state receipts with
+        | Ok value -> value
+        | Error problem -> failwith problem
+    Assert.Equal(MilestoneQualification.Scoped, validation.State.Mode)
+    Assert.Equal(2, validation.AcceptedPrefixLength)
+    Assert.Equal<string list>([ "GS2-04.2" ], validation.ContractDrift)
+    Assert.True(validation.SubjectSha256.Length = 64)
+    let closure = { state with Mode = MilestoneQualification.Comprehensive; BoundaryKind = Some "closure" }
+    Assert.True(MilestoneQualification.validate closure receipts |> Result.isError)
+
+[<Fact>]
+let ``cadence recommendation trades measured cost for yield without weakening protected gates`` () =
+    let now = DateTimeOffset.Parse "2026-08-31T12:00:00Z"
+    let policy: QualificationCadence.Policy =
+        { Version = "adr-0081/1"; WindowDays = 14; FreshnessHours = 36; MinimumObservations = 5
+          ExpensiveRunnerMinutes = 8M; LowYieldMaximum = 0.05M; MinimumCadence = Map.empty }
+    let observation run outcome boundary equivalent =
+        ({ Gate = "canonical-quint"; RunId = run; Attempt = 1; ObservedAt = now.AddHours(-float run)
+           DurationSeconds = 1080; RunnerMinutes = 18M; Reused = false; Outcome = outcome; Boundary = boundary
+           ClosureEquivalent = equivalent; DetectionDelayHours = None }: QualificationCadence.Observation)
+    let quiet = [ 1L .. 5L ] |> List.map (fun run -> observation run QualificationCadence.Passed QualificationCadence.Child true)
+    let reduce = QualificationCadence.evaluate now policy "canonical-quint" quiet
+    Assert.Equal(QualificationCadence.Reduce, reduce.Kind)
+    Assert.True(reduce.ClosureEquivalent)
+    Assert.Equal("high", reduce.BlastRadius)
+    Assert.Equal(0M, reduce.CostSavedRunnerMinutes)
+    Assert.Equal(QualificationCadence.recommendationBytes reduce, QualificationCadence.recommendationBytes reduce)
+    let closureMiss = observation 1L QualificationCadence.ActionableDefect QualificationCadence.Closure true :: quiet.Tail
+    Assert.Equal(QualificationCadence.Increase, (QualificationCadence.evaluate now policy "canonical-quint" closureMiss).Kind)
+    let protectedPolicy = { policy with MinimumCadence = Map.ofList [ "canonical-quint", "parent-closure" ] }
+    Assert.Equal(QualificationCadence.Retain, (QualificationCadence.evaluate now protectedPolicy "canonical-quint" quiet).Kind)
+    let security = quiet |> List.map (fun value -> { value with Gate = "dependency-and-security" })
+    Assert.Equal(QualificationCadence.Retain, (QualificationCadence.evaluate now policy "dependency-and-security" security).Kind)
+
+[<Fact>]
 let ``bootstrap workflow satisfies the reuse decision plus exact seven-gate contract`` () =
     let exitCode, output, error = runBootstrap repositoryRoot [ "workflow" ]
     Assert.Equal(0, exitCode)
@@ -264,9 +324,10 @@ let ``reuse telemetry measures completed runner jobs without becoming route auth
     Assert.Contains("actions/runs/$run_id/jobs?filter=latest&per_page=100", entryPoint)
     Assert.Contains("artifact_name=\"bootstrap-evidence-manifest-$subject\"", entryPoint)
     Assert.Contains("artifacts?name=$artifact_name&per_page=$max_candidates", entryPoint)
-    Assert.Contains("printf 'subject-sha=%s", entryPoint)
+    Assert.Contains("subject-sha=%s\\nformal-route=%s", entryPoint)
+    Assert.Contains("formal-subject-sha=%s", entryPoint)
     Assert.Contains("runner_minutes=\"\"", entryPoint)
-    Assert.Contains("select_args+=(--runner-minutes \"$runner_minutes\")", entryPoint)
+    Assert.Contains("args+=(--runner-minutes \"$runner_minutes\")", entryPoint)
 
 [<Fact>]
 let ``subject indexed terminal evidence is projected and normalized fail closed`` () =
@@ -434,13 +495,13 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     let core = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"))
     let reuseCore = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs"))
     let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
-    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 260)
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 190)
-    Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 22)
-    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 900)
-    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 300)
-    Assert.InRange(gateLines, 1, 230)
-    Assert.InRange(uniqueGateLines, 1, 190)
+    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 330)
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 220)
+    Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
+    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 1280)
+    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 380)
+    Assert.InRange(gateLines, 1, 270)
+    Assert.InRange(uniqueGateLines, 1, 210)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)

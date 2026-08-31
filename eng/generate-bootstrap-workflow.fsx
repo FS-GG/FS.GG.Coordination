@@ -1,4 +1,6 @@
 #load "../src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs"
+#load "../src/FS.GG.Coordination.Qualification.Contracts/MilestoneQualification.fs"
+#load "../src/FS.GG.Coordination.Qualification.Contracts/QualificationCadence.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"
 
 open System
