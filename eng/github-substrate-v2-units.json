@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "602d9d86bea95b38f32235a545e2d23761e608d4",
+    "revision": "1077c602ed625e1aada5e05e37e5da46e396a5af",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "daac1002edc3a1f9d092723695758d3ec5c673f38d1083818fb5fb8b8d8d5342"
+    "sha256": "18ebecd27840ef2600fc221fa49a6558ed204d75075852b543f615ffa3b36fac"
   },
   "units": [
     {
@@ -412,6 +412,20 @@
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
       "contractSha256": "acb013dd87697c21886dca39fa9ca97ff48e24402e964000cdc1d4c4645be40b"
+    },
+    {
+      "id": "GS2-04.1",
+      "title": "Transport foundation",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-03.9"],
+      "permissionCeiling": ["repository-local typed REST and GraphQL request/response contracts, local deterministic HTTP fixtures, idempotency-aware retry, ETag/revision, rate-budget, pagination/completeness, API-version, redaction, validation, and evidence", "local loopback fixture execution is allowed; no live GitHub write, organization or repository settings mutation, production credential, deployment, publication, stable release, Q4 sandbox claim, or successor-unit implementation authority"],
+      "exitGate": "the Q3 transport boundary derives typed REST/GraphQL requests and response envelopes, refuses unsafe or unversioned requests, retries only operations whose idempotency contract permits it, preserves ETag and revision semantics, accounts rate budgets, proves complete pagination and GraphQL connection traversal, redacts secrets, and captures deterministic fixtures; generated cases and independent truncation, replay, stale-revision, rate, pagination, redaction, and mapping controls all pass without claiming live Q4 behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-transport-contract"],
+      "gateContracts": [
+        { "id": "github-transport-contract", "qGate": "Q3", "commandSha256": "e3b5522bd99a4c78f18546f4aa5ae290b0b3c66be6b58bc84a8a90d44651c7dc" }
+      ],
+      "contractSha256": "9cff04e83f2e7c8a4d6cfe083acc86665fd588107691a1e55d846c5e0d928566"
     }
   ]
 }

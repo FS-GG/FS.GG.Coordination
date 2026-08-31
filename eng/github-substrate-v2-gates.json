@@ -48,6 +48,12 @@
       "qGate": "Q2",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-canonical-quint-protocol.fsx", "--", "--root", "."]
+    },
+    {
+      "id": "github-transport-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-transport.fsx", "--", "."]
     }
   ]
 }
