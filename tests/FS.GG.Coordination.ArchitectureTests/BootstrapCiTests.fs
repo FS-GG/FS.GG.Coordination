@@ -338,6 +338,9 @@ let ``subject indexed terminal evidence is projected and normalized fail closed`
     Assert.Contains("FSGG_QUALIFICATION_SUBJECT_SHA: ${{ needs.reuse-decision.outputs.subject-sha }}", workflow)
     Assert.Contains("subject-indexed prior evidence is missing or ambiguous", terminal)
     Assert.Contains("mv \"$subject_manifest\" \"$canonical_manifest\"", terminal)
+    Assert.Contains("name: Retain normalized current-run formal evidence", workflow)
+    Assert.Contains("if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}", workflow)
+    Assert.Contains("path: ${{ runner.temp }}/bootstrap-artifacts/canonical-quint/qualification.json", workflow)
 
 [<Fact>]
 let ``production FSI adapter matches the compiled green outcome`` () =

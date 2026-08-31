@@ -378,6 +378,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "            ${{ env.FSGG_RUNNER_TEMP }}/milestone.json"
     line "          if-no-files-found: error"
     line ""
+    let formalGate = contract.Jobs |> List.find (fun gate -> gate.ReceiptKind = Some "formal")
     for gate in contract.Jobs do
         line $"  %s{gate.Id}:"
         line $"    name: %s{gate.Id}"
@@ -433,6 +434,14 @@ let private renderWorkflow (contract: BootstrapContract) =
             line "          path: ${{ runner.temp }}/prior-bootstrap-artifacts"
         line "      - name: Run the stable qualification gate"
         line $"        run: %s{gate.EntryPoint}"
+        if gate.DownloadArtifacts then
+            line "      - name: Retain normalized current-run formal evidence"
+            line "        if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}"
+            line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
+            line "        with:"
+            line $"          name: %s{formalGate.UploadName}"
+            line $"          path: ${{{{ runner.temp }}}}/bootstrap-artifacts/%s{formalGate.Artifact}"
+            line "          if-no-files-found: error"
         line "      - name: Upload qualification evidence"
         if gate.AlwaysUpload then line "        if: ${{ always() }}"
         line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
