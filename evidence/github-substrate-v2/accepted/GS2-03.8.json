@@ -1,0 +1,51 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-03.8",
+  "state": "accepted",
+  "unitContractSha256": "c38b9ed4a473a99ee1bb6b43dddcafc06c153e6f1b698fbb44f45af018f52920",
+  "sourceRevision": "2427478b6fffba470e86ff46cf2ca22106a11a6d",
+  "artifacts": [
+    {
+      "name": "critique-bundle",
+      "sha256": "824ebd90be03571e4b9bab25faab5301d2727343c7c2102e9b74a74782769f84"
+    },
+    {
+      "name": "critique-root-digest",
+      "sha256": "8dd10b11537c46a6c3b2f6009bfad86334e71d351f0ce06f8345f19c1ddec2d0"
+    },
+    {
+      "name": "critique-evidence-set",
+      "sha256": "48f16c2af28b9de96f4bb2f01bf4968ff3cfdc1f44e76a5bc55ef40e1fe714ce"
+    },
+    {
+      "name": "critique-finding-set",
+      "sha256": "d5bfc82512b82ec522ee7cf2798fc603da664c9c1a36dfbcf2dc8e1a311bf438"
+    },
+    {
+      "name": "acceptance-harness",
+      "sha256": "d101b0c3fe70e2b951a539ba854c21a7e3a8da39bfc8e2a6c53aec55e4f029f4"
+    },
+    {
+      "name": "q7-candidate-manifest",
+      "sha256": "2a91f8e3a2cc5ddf765b7af2d4083ded55e52c15111b255ecc47813f78f7c772"
+    },
+    {
+      "name": "q7-gate-results",
+      "sha256": "1b2e46abfe6b81e5bb1dea488be0773e0f2063f37a772597f5b1e9ba49832652"
+    },
+    {
+      "name": "pr-terminal-evidence",
+      "sha256": "72aabb5da85261397d872d7426876b88d2bd4077335250c2959a5b8fe727958f"
+    },
+    {
+      "name": "protected-main-terminal-evidence",
+      "sha256": "7d4eaa2fbc60d199b4b75c36bf18a254b41a50d48d8758e0b6cc2424cf188437"
+    },
+    {
+      "name": "qualification-subject",
+      "sha256": "3f33d551fc27099b9b1991f11dfc992354dfadbc87f461c833d760aeabc6f801"
+    }
+  ],
+  "acceptedAt": "2026-08-31T00:09:22Z",
+  "digest": "67e73228b0c6ef658b1294314e75e2bc62021f070f1c446b0ffdbda19834e116"
+}

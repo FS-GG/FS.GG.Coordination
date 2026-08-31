@@ -1,0 +1,33 @@
+{
+  "schema": "fsgg.coordination.hosted-qualification-observation/1",
+  "pullRequest": 116,
+  "candidateHead": "11a30b6d0914e79d7c0d23bd3532440f96c24431",
+  "protectedMerge": "2427478b6fffba470e86ff46cf2ca22106a11a6d",
+  "runs": [
+    {
+      "id": 33342486941,
+      "kind": "codeql",
+      "subject": "11a30b6d0914e79d7c0d23bd3532440f96c24431",
+      "conclusion": "success",
+      "completedAt": "2026-08-30T23:42:17Z"
+    },
+    {
+      "id": 33342488041,
+      "kind": "pull-request-qualification",
+      "subject": "11a30b6d0914e79d7c0d23bd3532440f96c24431",
+      "route": "execute",
+      "conclusion": "success",
+      "terminalEvidenceSha256": "72aabb5da85261397d872d7426876b88d2bd4077335250c2959a5b8fe727958f",
+      "completedAt": "2026-08-31T00:02:41Z"
+    },
+    {
+      "id": 33343401582,
+      "kind": "protected-main-qualification",
+      "subject": "2427478b6fffba470e86ff46cf2ca22106a11a6d",
+      "route": "reuse",
+      "conclusion": "success",
+      "terminalEvidenceSha256": "7d4eaa2fbc60d199b4b75c36bf18a254b41a50d48d8758e0b6cc2424cf188437",
+      "completedAt": "2026-08-31T00:03:47Z"
+    }
+  ]
+}

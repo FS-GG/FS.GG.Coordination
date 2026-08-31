@@ -1,6 +1,7 @@
 module FS.GG.Coordination.CritiqueEvidenceArchitectureTests
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text.Json
@@ -103,3 +104,24 @@ let ``critique architecture documents evidence authority and frozen diagnostics 
           "frozen corpus keeps its stronger provenance-specific validator"
           "Neither layer consults GitHub approval counts" ] do
         Assert.Contains(required, text)
+
+[<Fact>]
+let ``accepted GS2-03.8 bundle reproduces from exact protected evidence`` () =
+    let startInfo = ProcessStartInfo("dotnet")
+    for argument in
+        [ "fsi"
+          "work/115-gs2-03-8-critique-evidence/acceptance/validate.fsx" ] do
+        startInfo.ArgumentList.Add argument
+    startInfo.WorkingDirectory <- root
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use child = Process.Start startInfo
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.Equal(0, child.ExitCode)
+    Assert.Contains("CRITIQUE_ACCEPTANCE_OK candidate=2427478b6fffba470e86ff46cf2ca22106a11a6d", output)
+    Assert.Contains("evidenceSet=48f16c2af28b9de96f4bb2f01bf4968ff3cfdc1f44e76a5bc55ef40e1fe714ce", output)
+    Assert.Contains("findingSet=d5bfc82512b82ec522ee7cf2798fc603da664c9c1a36dfbcf2dc8e1a311bf438", output)
+    Assert.Equal("", error)
