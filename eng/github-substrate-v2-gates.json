@@ -72,6 +72,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-project-adapter.fsx", "--", "."]
+    },
+    {
+      "id": "github-comment-projection-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-comment-projection.fsx", "--", "."]
     }
   ]
 }
