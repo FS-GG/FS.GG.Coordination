@@ -1,0 +1,67 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-03.9",
+  "state": "accepted",
+  "unitContractSha256": "acb013dd87697c21886dca39fa9ca97ff48e24402e964000cdc1d4c4645be40b",
+  "sourceRevision": "53f0338dea988fd79b95092286709df7c0fb4745",
+  "artifacts": [
+    {
+      "name": "mutation-proof",
+      "sha256": "4585fb2f68700dd8d8f0a470a55591fc0d5b6e8a31d2936ff2388fe655204060"
+    },
+    {
+      "name": "validator-boundary",
+      "sha256": "22afe424bd4578e987d6c39b6beb52d58b933e491798508cefb4648e96ff3894"
+    },
+    {
+      "name": "critique-bundle",
+      "sha256": "ae4268a7eb9eebd4ecc3a050a59acf9b3829d6c809689e5fc5a8eed47b129f74"
+    },
+    {
+      "name": "critique-root-digest",
+      "sha256": "e1b7b0fdf7b741821b1e9ee42bbbf90b2c38b793b715552e295190fbce64e498"
+    },
+    {
+      "name": "critique-evidence-set",
+      "sha256": "f5b67a9866630ff6a8f24599e3e9057e87c8a8249a6c183b1a37dd62483b843b"
+    },
+    {
+      "name": "critique-finding-set",
+      "sha256": "a9d3f9aebddf62cee1d151e51096377eee70a9b018d7a2948fa9eb63b7ec5705"
+    },
+    {
+      "name": "acceptance-harness",
+      "sha256": "1920251c5bb405421107fdf617ae9043a51ed981c3ce18be3952eac82bf9ee43"
+    },
+    {
+      "name": "q7-candidate-manifest",
+      "sha256": "b7b9abfa3d50eb81e6db7cbcc0c0bf9ea3c60596ef4efa55e0ed61557068c223"
+    },
+    {
+      "name": "q7-gate-results",
+      "sha256": "87b87c1b257f61e78a6d1c7f49930b77469adb9868d328adf4be6503a4834252"
+    },
+    {
+      "name": "hosted-formal-qualification",
+      "sha256": "1d04b055b4f0ef8da34f484fbd4e661ba718f3d04589deaa4c0799e88e5a9b10"
+    },
+    {
+      "name": "pr-terminal-evidence",
+      "sha256": "6ffc13a88f0ac35c52774a4061f0bcb805bbcb0be38099efcf70ac06c029e46c"
+    },
+    {
+      "name": "protected-main-terminal-evidence",
+      "sha256": "1683dc8f0d5d67a38c71285cb494a7b976eaf85becb4500af10c5b32953e05f7"
+    },
+    {
+      "name": "qualification-subject",
+      "sha256": "d16d4c29f251442ce15a61abe44a4025383a8f42ca555e8e96f03e7eb09c9727"
+    },
+    {
+      "name": "hosted-run-observation",
+      "sha256": "17b429ac3ca1d46e3c774faf948908ea3ac15e424c9797f047c45a95ae881c42"
+    }
+  ],
+  "acceptedAt": "2026-08-31T02:05:00Z",
+  "digest": "c5b0bf313583e26dc6a2f471b58e22d6315f4ff425d05cf6f74070c45c5ecde2"
+}
