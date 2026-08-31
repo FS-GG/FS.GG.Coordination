@@ -1,0 +1,821 @@
+schemaVersion: 1
+workId: gs2-04-1-transport-foundation
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-1-transport-foundation/spec.md
+sourceClarifications: work/gs2-04-1-transport-foundation/clarifications.md
+sourceChecklist: work/gs2-04-1-transport-foundation/checklist.md
+sourcePlan: work/gs2-04-1-transport-foundation/plan.md
+sourceTasks: work/gs2-04-1-transport-foundation/tasks.yml
+sourceAnalysis: readiness/gs2-04-1-transport-foundation/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-1-transport-foundation/analysis.json
+    digest: 0de3516d4a1628e8dbafcc8060b57cf8e302e0c5976320efd516c90a2f161546
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-1-transport-foundation/checklist.md
+    digest: 5e5f4fe37d000213730bb0d50755a89222b4fc513e0accb51922fcad8dc10539
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-1-transport-foundation/clarifications.md
+    digest: cb4625d9259687bcd87c7c49af27c0bd393b54f510f4eab3b959c806b598a3bf
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-1-transport-foundation/plan.md
+    digest: dde578fa9f6085dbfed1a8268b26e7a99b4ee2595be3681c2f02ea43a599f969
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-1-transport-foundation/spec.md
+    digest: d6687e0754902dc86da1d11080a7f87299e9fe3a421661869f0c9b70ab8b0f5d
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-1-transport-foundation/tasks.yml
+    digest: 80a9756335be4e09c4badc152b5ce5a9d71c604c557674e8986fa24667c2b46a
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV024]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV025]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV026]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV027]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV028]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV029]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubTransportTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-1/unit.trx
+      digest: "sha256:a9e78bd80838a025b36ee827cdc05a15030acc75ec736b47fcb7a1a76a3b1bbf"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 34
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared transport test source.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
