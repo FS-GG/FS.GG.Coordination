@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 119-gs2-03-9-mutation-proof
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/119-gs2-03-9-mutation-proof/spec.md
 sourceClarifications: work/119-gs2-03-9-mutation-proof/clarifications.md
 sourceChecklist: work/119-gs2-03-9-mutation-proof/checklist.md
@@ -35,7 +35,7 @@ sourceSnapshots:
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T001
@@ -46,13 +46,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV002
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T002
@@ -63,13 +73,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV003
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T003
@@ -80,13 +100,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV004
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T004
@@ -97,13 +127,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV005
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T005
@@ -114,13 +154,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-005]
     obligationRefs: [EV005]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.UnitTests/QualificationManifestTests.fs, work/119-gs2-03-9-mutation-proof/test-results/unit.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/QualificationManifestTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/unit.trx
+      digest: "sha256:efb4581d1951ce72a1d99fc81bb2ead770fb0c9ef392af17a02c520117a7c851"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 28
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV006
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T006
@@ -131,13 +181,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV006]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV007
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T007
@@ -148,13 +208,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-005]
     obligationRefs: [EV007]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV008
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T008
@@ -165,13 +235,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
     obligationRefs: [EV008]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV009
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T009
@@ -182,13 +262,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV009]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
   - id: EV010
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T010
@@ -199,10 +289,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-006]
     obligationRefs: [EV010]
-    artifacts: []
-    sourceRefs: []
-    result: missing
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs, tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs, work/119-gs2-03-9-mutation-proof/test-results/architecture.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/HarnessMutationProofArchitectureTests.fs
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/119-gs2-03-9-mutation-proof/test-results/architecture.trx
+      digest: "sha256:81c1633146b595060e269589afcdb61ec63f7491ecc0216ece1d1a9a6572400e"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 252
+      failed: 0
+      skipped: 0
+    notes: [Observed clean Release validation of the production-bound mutation proof and its independent inversions.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
