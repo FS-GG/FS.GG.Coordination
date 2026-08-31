@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="47e54500-0c5f-4091-99b7-e027762c9f3e" name="@991ca70644d4 2026-08-31 23:50:19" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-31T23:50:19.0493021+02:00" queuing="2026-08-31T23:50:19.0493021+02:00" start="2026-08-31T23:50:17.3716761+02:00" finish="2026-08-31T23:50:19.2174896+02:00" />
+  <TestSettings name="default" id="bec47d37-ea9b-4073-95f6-784258afe131">
+    <Deployment runDeploymentRoot="_991ca70644d4_2026-08-31_23_50_19" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="cce2bfd1-ff8e-40d4-b766-5c37682c961a" testId="718cd4c4-b6cc-ea8a-9eb4-d1859c7c0ce4" testName="FS.GG.Coordination.GitHubShardedJournalTests.journal qualification inventory is closed and every mutation must be red" computerName="991ca70644d4" duration="00:00:00.0042075" startTime="2026-08-31T23:50:17.7219312+02:00" endTime="2026-08-31T23:50:17.7219601+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cce2bfd1-ff8e-40d4-b766-5c37682c961a" />
+    <UnitTestResult executionId="23051b50-e556-4b53-a6be-3e1565e05382" testId="5a99adff-6d77-4266-2137-7599170b6cee" testName="FS.GG.Coordination.GitHubShardedJournalTests.effect fencing fails closed on stale terminal and incomplete authority" computerName="991ca70644d4" duration="00:00:00.0241609" startTime="2026-08-31T23:50:17.6891332+02:00" endTime="2026-08-31T23:50:17.7161383+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="23051b50-e556-4b53-a6be-3e1565e05382" />
+    <UnitTestResult executionId="910efb5f-3a00-4bdf-beb0-e63a96b39941" testId="5bbe293e-0f49-4d4c-b915-6a6642ac4252" testName="FS.GG.Coordination.GitHubShardedJournalTests.aggregate addresses are lowercase length-prefixed sharded and protected" computerName="991ca70644d4" duration="00:00:00.0021145" startTime="2026-08-31T23:50:17.7223115+02:00" endTime="2026-08-31T23:50:17.7225073+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="910efb5f-3a00-4bdf-beb0-e63a96b39941" />
+    <UnitTestResult executionId="1c84cf1a-b9cd-4d16-8f3d-302ffcc2c414" testId="3c4acb80-e102-4c85-5ef7-8ec6d96f4cc2" testName="FS.GG.Coordination.GitHubShardedJournalArchitectureTests.registered journal validator is offline independent and passes" computerName="991ca70644d4" duration="00:00:01.4863078" startTime="2026-08-31T23:50:17.6883908+02:00" endTime="2026-08-31T23:50:19.1773266+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1c84cf1a-b9cd-4d16-8f3d-302ffcc2c414" />
+    <UnitTestResult executionId="4f05c5d1-23ed-4d44-a212-cd571db5538c" testId="9a01721c-1206-ee5b-5956-002997569ecd" testName="FS.GG.Coordination.GitHubShardedJournalTests.saga acquisition is globally sorted and compensation is reverse append-only" computerName="991ca70644d4" duration="00:00:00.0078689" startTime="2026-08-31T23:50:17.7285782+02:00" endTime="2026-08-31T23:50:17.7364212+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4f05c5d1-23ed-4d44-a212-cd571db5538c" />
+    <UnitTestResult executionId="83054b20-cf67-4fad-bedd-cc3e7b9a30cd" testId="3512c0e3-03a6-cd33-dc05-7ec3cefa96ee" testName="FS.GG.Coordination.GitHubShardedJournalTests.journal validation requires one-parent monotonic append-only ancestry" computerName="991ca70644d4" duration="00:00:00.0034070" startTime="2026-08-31T23:50:17.7241077+02:00" endTime="2026-08-31T23:50:17.7274909+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="83054b20-cf67-4fad-bedd-cc3e7b9a30cd" />
+    <UnitTestResult executionId="2337ecf4-5fd2-4816-b4b1-14b292ff26e6" testId="360342c0-39c8-0d3a-829f-83dbf3e2f306" testName="FS.GG.Coordination.GitHubShardedJournalTests.CAS uses exact old oid and ambiguous results require exact authoritative reread" computerName="991ca70644d4" duration="00:00:00.0010010" startTime="2026-08-31T23:50:17.7275681+02:00" endTime="2026-08-31T23:50:17.7285152+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2337ecf4-5fd2-4816-b4b1-14b292ff26e6" />
+    <UnitTestResult executionId="6f674ab2-d5ee-4ecc-b392-fafd9c7bc101" testId="9499d176-f023-e049-c42f-64b772bfc556" testName="FS.GG.Coordination.GitHubShardedJournalTests.protection binds exact repository rulesets target and bypass split" computerName="991ca70644d4" duration="00:00:00.0015158" startTime="2026-08-31T23:50:17.7225679+02:00" endTime="2026-08-31T23:50:17.7240542+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6f674ab2-d5ee-4ecc-b392-fafd9c7bc101" />
+    <UnitTestResult executionId="98439133-c2c6-4e3e-a491-fe9275b6dc8a" testId="12e4524a-5a0d-e8e1-a7f9-332add328642" testName="FS.GG.Coordination.GitHubShardedJournalArchitectureTests.journal adapter signatures precede implementations and stay transport free" computerName="991ca70644d4" duration="00:00:00.0002009" startTime="2026-08-31T23:50:19.1792056+02:00" endTime="2026-08-31T23:50:19.1793209+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="98439133-c2c6-4e3e-a491-fe9275b6dc8a" />
+    <UnitTestResult executionId="b9a1728c-c60f-4a79-a84b-941a6ea70f8c" testId="37c99bd1-5eb8-501b-d96c-19623c6a3284" testName="FS.GG.Coordination.GitHubShardedJournalTests.canonical json recursively sorts keys and terminates with LF" computerName="991ca70644d4" duration="00:00:00.0000894" startTime="2026-08-31T23:50:17.7365071+02:00" endTime="2026-08-31T23:50:17.7365201+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b9a1728c-c60f-4a79-a84b-941a6ea70f8c" />
+    <UnitTestResult executionId="29d464b7-0477-4192-9282-509960eaf9e9" testId="cc9f94c4-8c4f-261f-92aa-7a6cf8db5273" testName="FS.GG.Coordination.GitHubShardedJournalArchitectureTests.journal fixture is canonical synthetic offline and complete" computerName="991ca70644d4" duration="00:00:00.0019864" startTime="2026-08-31T23:50:19.1776411+02:00" endTime="2026-08-31T23:50:19.1790777+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="29d464b7-0477-4192-9282-509960eaf9e9" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalArchitectureTests.journal adapter signatures precede implementations and stay transport free" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="12e4524a-5a0d-e8e1-a7f9-332add328642">
+      <Execution id="98439133-c2c6-4e3e-a491-fe9275b6dc8a" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalArchitectureTests" name="journal adapter signatures precede implementations and stay transport free" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalTests.aggregate addresses are lowercase length-prefixed sharded and protected" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="5bbe293e-0f49-4d4c-b915-6a6642ac4252">
+      <Execution id="910efb5f-3a00-4bdf-beb0-e63a96b39941" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalTests" name="aggregate addresses are lowercase length-prefixed sharded and protected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalArchitectureTests.registered journal validator is offline independent and passes" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="3c4acb80-e102-4c85-5ef7-8ec6d96f4cc2">
+      <Execution id="1c84cf1a-b9cd-4d16-8f3d-302ffcc2c414" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalArchitectureTests" name="registered journal validator is offline independent and passes" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalTests.journal qualification inventory is closed and every mutation must be red" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="718cd4c4-b6cc-ea8a-9eb4-d1859c7c0ce4">
+      <Execution id="cce2bfd1-ff8e-40d4-b766-5c37682c961a" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalTests" name="journal qualification inventory is closed and every mutation must be red" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalTests.canonical json recursively sorts keys and terminates with LF" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="37c99bd1-5eb8-501b-d96c-19623c6a3284">
+      <Execution id="b9a1728c-c60f-4a79-a84b-941a6ea70f8c" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalTests" name="canonical json recursively sorts keys and terminates with LF" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalTests.saga acquisition is globally sorted and compensation is reverse append-only" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="9a01721c-1206-ee5b-5956-002997569ecd">
+      <Execution id="4f05c5d1-23ed-4d44-a212-cd571db5538c" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalTests" name="saga acquisition is globally sorted and compensation is reverse append-only" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalTests.protection binds exact repository rulesets target and bypass split" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="9499d176-f023-e049-c42f-64b772bfc556">
+      <Execution id="6f674ab2-d5ee-4ecc-b392-fafd9c7bc101" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalTests" name="protection binds exact repository rulesets target and bypass split" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalArchitectureTests.journal fixture is canonical synthetic offline and complete" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="cc9f94c4-8c4f-261f-92aa-7a6cf8db5273">
+      <Execution id="29d464b7-0477-4192-9282-509960eaf9e9" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalArchitectureTests" name="journal fixture is canonical synthetic offline and complete" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalTests.effect fencing fails closed on stale terminal and incomplete authority" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="5a99adff-6d77-4266-2137-7599170b6cee">
+      <Execution id="23051b50-e556-4b53-a6be-3e1565e05382" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalTests" name="effect fencing fails closed on stale terminal and incomplete authority" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalTests.CAS uses exact old oid and ambiguous results require exact authoritative reread" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="360342c0-39c8-0d3a-829f-83dbf3e2f306">
+      <Execution id="2337ecf4-5fd2-4816-b4b1-14b292ff26e6" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalTests" name="CAS uses exact old oid and ambiguous results require exact authoritative reread" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubShardedJournalTests.journal validation requires one-parent monotonic append-only ancestry" storage="/home/developer/projects/fs.gg.coordination-155/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="3512c0e3-03a6-cd33-dc05-7ec3cefa96ee">
+      <Execution id="83054b20-cf67-4fad-bedd-cc3e7b9a30cd" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-155/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubShardedJournalTests" name="journal validation requires one-parent monotonic append-only ancestry" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="718cd4c4-b6cc-ea8a-9eb4-d1859c7c0ce4" executionId="cce2bfd1-ff8e-40d4-b766-5c37682c961a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5a99adff-6d77-4266-2137-7599170b6cee" executionId="23051b50-e556-4b53-a6be-3e1565e05382" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5bbe293e-0f49-4d4c-b915-6a6642ac4252" executionId="910efb5f-3a00-4bdf-beb0-e63a96b39941" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3c4acb80-e102-4c85-5ef7-8ec6d96f4cc2" executionId="1c84cf1a-b9cd-4d16-8f3d-302ffcc2c414" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9a01721c-1206-ee5b-5956-002997569ecd" executionId="4f05c5d1-23ed-4d44-a212-cd571db5538c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3512c0e3-03a6-cd33-dc05-7ec3cefa96ee" executionId="83054b20-cf67-4fad-bedd-cc3e7b9a30cd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="360342c0-39c8-0d3a-829f-83dbf3e2f306" executionId="2337ecf4-5fd2-4816-b4b1-14b292ff26e6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9499d176-f023-e049-c42f-64b772bfc556" executionId="6f674ab2-d5ee-4ecc-b392-fafd9c7bc101" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="12e4524a-5a0d-e8e1-a7f9-332add328642" executionId="98439133-c2c6-4e3e-a491-fe9275b6dc8a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="37c99bd1-5eb8-501b-d96c-19623c6a3284" executionId="b9a1728c-c60f-4a79-a84b-941a6ea70f8c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cc9f94c4-8c4f-261f-92aa-7a6cf8db5273" executionId="29d464b7-0477-4192-9282-509960eaf9e9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="11" executed="11" passed="11" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.12]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:01.62]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

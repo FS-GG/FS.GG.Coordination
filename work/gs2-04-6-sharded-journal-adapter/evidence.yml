@@ -1,0 +1,794 @@
+schemaVersion: 1
+workId: gs2-04-6-sharded-journal-adapter
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-6-sharded-journal-adapter/spec.md
+sourceClarifications: work/gs2-04-6-sharded-journal-adapter/clarifications.md
+sourceChecklist: work/gs2-04-6-sharded-journal-adapter/checklist.md
+sourcePlan: work/gs2-04-6-sharded-journal-adapter/plan.md
+sourceTasks: work/gs2-04-6-sharded-journal-adapter/tasks.yml
+sourceAnalysis: readiness/gs2-04-6-sharded-journal-adapter/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-6-sharded-journal-adapter/analysis.json
+    digest: 63e2666b0ac68eb6d0f8337f5c551ddad476da4fe0038bb6b837db0716740168
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-6-sharded-journal-adapter/checklist.md
+    digest: 5c878a83209051219379dce5fb53d128cb3986d7d1060571a734bdd8d482163c
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-6-sharded-journal-adapter/clarifications.md
+    digest: 7f23dbc640bfdf3129755e30d32447d70d22c5b887e604f1644d51f1e4b3c12d
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-6-sharded-journal-adapter/plan.md
+    digest: fdeb8c23f9aa3514bbe1dfa12699044b72141100d5c83d439daa4e271d06006d
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-6-sharded-journal-adapter/spec.md
+    digest: 2914aa699dc05cc507211ffbfdc682fa24513606c1388435df948b8eee761fea
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-6-sharded-journal-adapter/tasks.yml
+    digest: 5f3834e657fd8d1c18bd53275d6ff8219a87b331b00e43429a9edf8517f64435
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV016]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV017]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV018]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV019]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV020]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV021]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV022]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006, PD-007]
+    obligationRefs: [EV023]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV024]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006, PD-007]
+    obligationRefs: [EV025]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV026]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV027]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV028]
+    artifacts: [eng/validate-github-sharded-journal.fsx, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs, src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubShardedJournalQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubShardedJournalArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs, tests/fixtures/github-sharded-journal/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-6/qualification.trx
+      digest: "sha256:9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 11
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
