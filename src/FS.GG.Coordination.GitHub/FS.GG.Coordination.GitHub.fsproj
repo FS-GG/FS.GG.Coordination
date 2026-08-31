@@ -13,6 +13,8 @@
     <Compile Include="CommentProjectionAdapter.fs" />
     <Compile Include="ShardedJournalAdapter.fsi" />
     <Compile Include="ShardedJournalAdapter.fs" />
+    <Compile Include="RepositorySettingsAdapter.fsi" />
+    <Compile Include="RepositorySettingsAdapter.fs" />
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
   </ItemGroup>
