@@ -5,6 +5,10 @@
     <Compile Include="Library.fs" />
     <Compile Include="QualificationReuse.fsi" />
     <Compile Include="QualificationReuse.fs" />
+    <Compile Include="MilestoneQualification.fsi" />
+    <Compile Include="MilestoneQualification.fs" />
+    <Compile Include="QualificationCadence.fsi" />
+    <Compile Include="QualificationCadence.fs" />
     <Compile Include="GeneratedStructuralTests.fsi" />
     <Compile Include="GeneratedStructuralTests.fs" />
     <Compile Include="FaultInjection.fsi" />

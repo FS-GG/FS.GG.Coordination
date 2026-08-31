@@ -1,0 +1,36 @@
+{
+  "schema": "fsgg.coordination.milestone-qualification/1",
+  "policyVersion": "adr-0080+adr-0081/1",
+  "parent": "GS2-04",
+  "mode": "scoped",
+  "boundaryKind": null,
+  "expectedChildren": [
+    "GS2-04.1",
+    "GS2-04.2",
+    "GS2-04.3",
+    "GS2-04.4",
+    "GS2-04.5",
+    "GS2-04.6",
+    "GS2-04.7",
+    "GS2-04.8",
+    "GS2-04.9"
+  ],
+  "children": [
+    {
+      "id": "GS2-04.1",
+      "contractSha256": "9cff04e83f2e7c8a4d6cfe083acc86665fd588107691a1e55d846c5e0d928566",
+      "acceptance": {
+        "receiptPath": "evidence/github-substrate-v2/accepted/GS2-04.1.json",
+        "receiptDigest": "867e1d9842f0821be0af1bacfc175ef23da1351f22bb353de6ffb3671229a58e"
+      }
+    },
+    {
+      "id": "GS2-04.2",
+      "contractSha256": "1fd6e5ceeec2f9932fdf18568dd65f822cce2986b4ebdc53f2e8f53e33c79364",
+      "acceptance": {
+        "receiptPath": "evidence/github-substrate-v2/accepted/GS2-04.2.json",
+        "receiptDigest": "785c9aa468dee89e0ab54dce6c1403d7575e8dfe0d9a8730a8e4935319f0a56d"
+      }
+    }
+  ]
+}

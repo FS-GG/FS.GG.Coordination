@@ -1,12 +1,12 @@
 # Bootstrap qualification
 
-FS.GG.Coordination qualifies an inert bootstrap substrate through one read-only route decision, six conditionally scheduled prerequisite jobs, and one evidence join that always evaluates the selected route. The workflow runs for pull requests and pushes to `main`; every third-party action is pinned to an immutable commit and the workflow receives only `contents: read` plus `actions: read` for immutable cross-run artifact retrieval.
+FS.GG.Coordination qualifies an inert bootstrap substrate through one read-only route decision, six conditionally scheduled prerequisite jobs, and one evidence join that always evaluates the selected route. Pull requests and pushes to `main` use scoped qualification by default; a tracked comprehensive milestone or production boundary forces every gate cold. A separate daily schedule runs only the observational economics evaluator. Every third-party action is pinned to an immutable commit and the workflow receives only `contents: read` plus `actions: read` for immutable cross-run artifact retrieval.
 
 ## Qualification plan
 
 `eng/bootstrap-qualification-plan.json` is the single semantic authority for reuse policy, gate identities, dependency edges, stable entrypoints, artifacts, timeouts, job environments, download/upload behavior, typed receipt roles, immutable action pins, action runtimes, triggers, permissions, concurrency, and terminal evidence. The compiled renderer has no parallel gate-identity list or ID-selected ordinary-gate branches: a representative ordinary gate addition changes only its plan declaration and stable script. `eng/generate-bootstrap-workflow.fsx -- --root .` deterministically projects the committed workflow; `eng/bootstrap-ci.fsx workflow --root .` rejects a stale projection. The generated YAML is deliberately thin and requires:
 
-- `reuse-decision`: construct the complete-tree qualification subject; search a bounded census of retained terminal artifacts; validate the owning workflow run and prior manifest; emit a canonical `reuse`, `execute`, or `refuse` receipt.
+- `reuse-decision`: construct the complete-tree qualification subject; search a bounded census of retained terminal artifacts; validate the owning workflow run and prior manifest; emit a canonical `reuse`, `execute`, or `refuse` receipt. On a complete-tree miss in scoped mode, it independently selects an original `canonical-quint-<formal-subject>` artifact; current-tree integration gates still execute. Comprehensive mode performs neither lookup.
 
 - `deterministic-build`: locked restore and warnings-as-errors Release build.
 - `compiler-and-tests`: unit and architecture suites, retaining architecture TRX. This is an identity-bound full-qualification partition: it refuses an uncommitted or dirty checkout before restore. Use focused tests during editing, then commit the candidate before invoking the full gate.
@@ -36,7 +36,13 @@ Reuse is an evidence authorization path, not a dependency cache. `QualificationR
 
 Discovery first computes the current complete subject and queries only immutable artifacts named `bootstrap-evidence-manifest-<subject-sha256>`, bounded by the plan's candidate limit and evidence epoch. This replaced a linear scan after observations found 167 retained manifests, a full 100-artifact query, and a 4m55s miss for a changed subject. Exact-name addressing makes a miss constant-work without weakening validation. A candidate must still belong to this exact workflow path, exact successful completed attempt, a different run, the declared prior head, the current plan, and the current complete subject. Legacy manifests and manifests produced by reuse are not selectable, preventing authority chains whose intermediate run lacks the six execution artifacts. No compatible candidate or a preselection lookup failure is an `execute` miss. Once a candidate is selected, missing, expired, changed, malformed, contradictory, or ambiguously normalized evidence is `refuse`; the terminal check cannot silently fall back after the expensive jobs were skipped.
 
-The reuse receipt is canonical compact JSON with a self-digest and binds the current exact head, complete subject, prior head/run/attempt, prior manifest digest, artifact expiry, and named reason. It also carries observational source runner minutes derived from the completed run's job timestamps. That value is nullable when the jobs census cannot be measured and never participates in the equivalence decision. At terminal acceptance the workflow re-downloads all prior artifacts, validates the prior execution receipt and manifest, re-hashes every gate artifact, and emits a new `bootstrap-evidence/3` manifest whose candidate is the current head while its `prior` block preserves the source provenance. A current-head critique record remains separate evidence for the Accountable Delivery Owner's decision; it is not another authorization, and no prior critique is relabelled onto the current head.
+The reuse receipt is canonical compact JSON with a self-digest and binds the current exact head, complete subject, prior head/run/attempt, prior manifest digest, artifact expiry, and named reason. It also carries observational source runner minutes derived from completed job timestamps. At terminal acceptance the workflow validates both route decisions, re-hashes every selected artifact, and emits `bootstrap-evidence/4`, binding the current head, mode, milestone subject, whole/formal subjects and routes, and immutable source executions. Comprehensive evidence refuses either reuse route.
+
+## Adaptive cadence policy
+
+ADR-0081 makes approximately daily review the default for expensive checks. The scheduled evaluator reads authoritative Actions run/job timestamps over a 14-day window and joins the tracked defect-attribution ledger. It reports cost, unique actionable-defect yield, detection delay, closure equivalence, confidence, and rationale as `retain`, `increase`, `reduce`, or `insufficient-data`. Missing attribution remains an unattributed failure, and absent closure linkage is not treated as equivalence.
+
+Recommendations are evidence, not execution authority; a reviewed plan change is required to alter cadence. Parent closure, freeze, release, cutover, OpenV2, rollback authority, formal-input drift, and other declared high-blast-radius minimums cannot be reduced. Defects first found at closure or production favor increased cadence. Issue handoff records phase timings where authoritative timestamps exist and labels uninstrumented local time unavailable rather than estimating it.
 
 ## Performance and complexity budget
 
@@ -44,14 +50,15 @@ The exact-merge baseline run `33248808361` took about 366 seconds end to end. It
 
 Hosted run `33255549867` established the full-execution source at 522 seconds wall / 922 runner-seconds. Its byte-identical-tree successor `33255929882` settled through reuse in 55 seconds wall / 49 runner-seconds while the six execution gates were skipped and terminal evidence re-hashed the retained artifacts. The observed saving was 467 wall-seconds and 873 runner-seconds (14m33s). Full measurements and the comparable pre-change cohort are retained in the work package performance evaluation.
 
-Architecture tests cap the generated workflow at 260 lines, the plan at 190, the FSI adapter at 22, the existing compiled workflow/evidence adapter at 900, the pure reuse domain at 300, all stable gate scripts at 230 physical lines, and their distinct nonblank logic at 190 lines. The added surface is separated by responsibility: GitHub discovery stays in one shell adapter, canonical authority stays in the network-free reuse domain, shared runner portability stays in one helper, and topology stays in the plan/renderer. The suite also rejects reintroduction of workflow byte digests, `requiredRunFragments`, regular-expression YAML parsing, or GitHub coupling in the pure reuse domain.
+Architecture tests cap the generated workflow at 330 lines, the plan at 220, the FSI adapter at 26, the compiled workflow/evidence adapter at 1280, the pure reuse domain at 380, all stable gate scripts at 270 physical lines, and their distinct nonblank logic at 210 lines. GitHub discovery stays in shell adapters, canonical authority and cadence scoring stay in network-free domains, shared runner portability stays in one helper, and topology stays in the plan/renderer.
 
 ## Evidence binding
 
-The final job downloads current or selected-prior prerequisite artifacts and copies the reviewed plan bytes into its evidence tree. It then emits `fsgg.coordination.bootstrap-evidence/3`, binding:
+The final job downloads current or selected-prior prerequisite artifacts and copies the reviewed plan bytes into its evidence tree. It then emits `fsgg.coordination.bootstrap-evidence/4`, binding:
 
 - the exact 40-hex candidate revision;
 - the `execute` or `reuse` route, complete subject digest, decision self-digest, and immutable prior identity when present;
+- scoped/comprehensive mode, milestone subject, and independent formal route, subject, decision, and source identity;
 - the exact seven gate identities;
 - each gate's stable entrypoint and artifact path;
 - SHA-256 of the plan and every gate artifact.

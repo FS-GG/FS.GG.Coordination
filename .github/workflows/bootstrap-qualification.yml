@@ -6,6 +6,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: '17 3 * * *'
 
 permissions:
   actions: read
@@ -18,12 +20,17 @@ concurrency:
 jobs:
   reuse-decision:
     name: reuse-decision
+    if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       route: ${{ steps.decide.outputs.route }}
       prior-run-id: ${{ steps.decide.outputs.prior-run-id }}
       subject-sha: ${{ steps.decide.outputs.subject-sha }}
+      formal-route: ${{ steps.decide.outputs.formal-route }}
+      prior-formal-run-id: ${{ steps.decide.outputs.prior-formal-run-id }}
+      formal-subject-sha: ${{ steps.decide.outputs.formal-subject-sha }}
+      qualification-mode: ${{ steps.decide.outputs.qualification-mode }}
     env:
       GH_TOKEN: ${{ github.token }}
       FSGG_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -47,7 +54,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: reuse-decision
-          path: ${{ env.FSGG_RUNNER_TEMP }}/decision.json
+          path: |
+            ${{ env.FSGG_RUNNER_TEMP }}/decision.json
+            ${{ env.FSGG_RUNNER_TEMP }}/formal-decision.json
+            ${{ env.FSGG_RUNNER_TEMP }}/milestone.json
           if-no-files-found: error
 
   deterministic-build:
@@ -101,7 +111,7 @@ jobs:
   canonical-quint:
     name: canonical-quint
     needs: [reuse-decision]
-    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}
+    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -123,6 +133,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: canonical-quint
+          path: ${{ env.FSGG_QUINT_RECEIPT }}
+          if-no-files-found: error
+      - name: Upload content-addressed canonical evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: canonical-quint-${{ needs.reuse-decision.outputs.formal-subject-sha }}
           path: ${{ env.FSGG_QUINT_RECEIPT }}
           if-no-files-found: error
 
@@ -204,13 +220,15 @@ jobs:
   evidence-manifest:
     name: evidence-manifest
     needs: [reuse-decision, deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, bootstrap-recovery]
-    if: ${{ always() && needs.reuse-decision.result == 'success' }}
+    if: ${{ always() && github.event_name != 'schedule' && needs.reuse-decision.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-evidence-manifest
       FSGG_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       FSGG_QUALIFICATION_SUBJECT_SHA: ${{ needs.reuse-decision.outputs.subject-sha }}
+      FSGG_FORMAL_SUBJECT_SHA: ${{ needs.reuse-decision.outputs.formal-subject-sha }}
+      FSGG_QUALIFICATION_MODE: ${{ needs.reuse-decision.outputs.qualification-mode }}
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -230,6 +248,14 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           path: ${{ runner.temp }}/bootstrap-artifacts
+      - name: Download selected prior canonical evidence
+        if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: canonical-quint-${{ needs.reuse-decision.outputs.formal-subject-sha }}
+          run-id: ${{ needs.reuse-decision.outputs.prior-formal-run-id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/bootstrap-artifacts/canonical-quint
       - name: Download selected prior evidence
         if: ${{ needs.reuse-decision.outputs.route == 'reuse' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -244,4 +270,29 @@ jobs:
         with:
           name: bootstrap-evidence-manifest-${{ needs.reuse-decision.outputs.subject-sha }}
           path: ${{ runner.temp }}/bootstrap-evidence.json
+          if-no-files-found: error
+
+  qualification-economics:
+    name: qualification-economics
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FSGG_REPOSITORY: ${{ github.repository }}
+      FSGG_RUNNER_TEMP: /tmp/fsgg-${{ github.run_id }}-economics
+    steps:
+      - name: Check out the protected branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Evaluate observed qualification economics
+        run: bash eng/bootstrap-gates/qualification-economics.sh
+      - name: Upload cadence recommendations
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: qualification-economics-${{ github.run_id }}
+          path: ${{ runner.temp }}/qualification-economics/recommendations.json
           if-no-files-found: error

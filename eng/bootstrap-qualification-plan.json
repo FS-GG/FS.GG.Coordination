@@ -1,6 +1,6 @@
 {
-  "schema": "fsgg.coordination.bootstrap-qualification-plan/3",
-  "evidenceSchema": "fsgg.coordination.bootstrap-evidence/3",
+  "schema": "fsgg.coordination.bootstrap-qualification-plan/4",
+  "evidenceSchema": "fsgg.coordination.bootstrap-evidence/4",
   "actions": {
     "checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
     "setupDotnet": "a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -13,7 +13,7 @@
     "uploadArtifact": "node24",
     "downloadArtifact": "node24"
   },
-  "triggers": ["pull_request", "push:main"],
+  "triggers": ["pull_request", "push:main", "schedule:17 3 * * *"],
   "permissions": ["actions:read", "contents:read"],
   "concurrency": {
     "group": "bootstrap-qualification-${{ github.ref }}",
@@ -44,6 +44,50 @@
     "runner": "ubuntu-latest",
     "architecture": "x64",
     "reviewPolicy": "critique-and-mutation-proof/1"
+  },
+  "milestone": {
+    "statePath": "eng/milestone-qualification.json",
+    "defaultMode": "scoped",
+    "comprehensiveBoundaryKinds": ["milestone-closure", "freeze", "release", "cutover", "open-v2", "rollback-authority"]
+  },
+  "formalReuse": {
+    "artifact": "formal-decision/decision.json",
+    "indexedArtifactPrefix": "canonical-quint-",
+    "notBefore": "2026-08-31T00:00:00Z",
+    "exactPaths": [
+      ".github/workflows/bootstrap-qualification.yml",
+      "Directory.Packages.props",
+      "eng/bootstrap-gates/canonical-quint.sh",
+      "eng/bootstrap-qualification-plan.json",
+      "eng/generate-compiled-contract-outputs.fsx",
+      "eng/qualify-canonical-quint.sh",
+      "eng/quint-qualification-baseline.json",
+      "eng/quint-qualification.json",
+      "eng/validate-canonical-quint-protocol.fsx",
+      "eng/validate-quint-qualification.fsx",
+      "global.json",
+      "src/FS.GG.Coordination.Qualification.Contracts/packages.lock.json"
+    ],
+    "pathPrefixes": ["src/FS.GG.Coordination.Protocol/"]
+  },
+  "economics": {
+    "jobId": "qualification-economics",
+    "timeoutMinutes": 5,
+    "entryPoint": "bash eng/bootstrap-gates/qualification-economics.sh",
+    "uploadName": "qualification-economics-${{ github.run_id }}",
+    "uploadPath": "${{ runner.temp }}/qualification-economics/recommendations.json",
+    "windowDays": 14,
+    "freshnessHours": 36,
+    "minimumObservations": 5,
+    "expensiveRunnerMinutes": 8,
+    "lowYieldMaximum": 0.05,
+    "policyVersion": "adr-0081/1",
+    "attributionPath": "eng/qualification-defect-attributions.json",
+    "minimumCadence": {
+      "milestone-closure": "every-candidate",
+      "production-authority": "every-candidate",
+      "formal-input-drift": "every-candidate"
+    }
   },
   "jobs": [
     {
@@ -142,7 +186,9 @@
       "environment": {
         "NUGET_PACKAGES": "/tmp/fsgg-${{ github.run_id }}-nuget-evidence-manifest",
         "FSGG_CANDIDATE_SHA": "${{ github.event.pull_request.head.sha || github.sha }}",
-        "FSGG_QUALIFICATION_SUBJECT_SHA": "${{ needs.reuse-decision.outputs.subject-sha }}"
+        "FSGG_QUALIFICATION_SUBJECT_SHA": "${{ needs.reuse-decision.outputs.subject-sha }}",
+        "FSGG_FORMAL_SUBJECT_SHA": "${{ needs.reuse-decision.outputs.formal-subject-sha }}",
+        "FSGG_QUALIFICATION_MODE": "${{ needs.reuse-decision.outputs.qualification-mode }}"
       },
       "uploadName": "bootstrap-evidence-manifest-${{ needs.reuse-decision.outputs.subject-sha }}",
       "uploadPath": "${{ runner.temp }}/bootstrap-evidence.json",

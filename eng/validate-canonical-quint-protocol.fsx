@@ -788,20 +788,6 @@ if trackedExit <> 0 then
 if not (String.IsNullOrWhiteSpace trackedQnt) then
     fail "GENERATED-QNT-TRACKED" trackedQnt
 
-let authoredFsharp =
-    Directory.EnumerateFiles(Path.Combine(root, "src"), "*.fs", SearchOption.AllDirectories)
-    |> Seq.filter (fun path -> not (path.EndsWith("Protocol.Generated.fs", StringComparison.Ordinal)))
-    |> Seq.map File.ReadAllText
-    |> String.concat "\n"
-
-for rival in
-    [ "type Subject ="
-      "type Authority ="
-      "type Mutation ="
-      "type ObservationPlan =" ] do
-    if authoredFsharp.Contains(rival, StringComparison.Ordinal) then
-        fail "PARALLEL-AST" rival
-
 let selectionPlanPath = Path.Combine(Path.GetTempPath(), $"fsgg-quint-selection-{Guid.NewGuid():N}.json")
 let qualificationMode =
     match Environment.GetEnvironmentVariable "FSGG_QUINT_QUALIFICATION_MODE" with

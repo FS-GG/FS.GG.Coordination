@@ -22,6 +22,16 @@ type QualificationSubject =
       ReviewPolicySha256: string
       SubjectSha256: string }
 
+type FormalSubjectSelector =
+    | Exact of string
+    | Prefix of string
+
+type FormalSubject =
+    { FilesSha256: string
+      SelectorPolicySha256: string
+      FileCount: int
+      SubjectSha256: string }
+
 type PriorRun =
     { Head: string
       RunId: int64
@@ -142,6 +152,54 @@ let subjectBytes (subject: QualificationSubject) =
             writer.WriteString("gateSetSha256", subject.GateSetSha256)
             writer.WriteString("environmentSha256", subject.EnvironmentSha256)
             writer.WriteString("reviewPolicySha256", subject.ReviewPolicySha256)
+            writer.WriteString("subjectSha256", subject.SubjectSha256)
+            writer.WriteEndObject()))
+        [| byte '\n' |]
+
+let private selectorText = function Exact path -> $"exact:{path}" | Prefix path -> $"prefix:{path}"
+
+let createFormalSubject (files: TrackedFile list) selectors (policyBytes: byte array) =
+    if files.IsEmpty then invalidArg (nameof files) "tracked tree must not be empty"
+    if List.isEmpty selectors then invalidArg (nameof selectors) "formal subject selectors must not be empty"
+    let selectorNames = selectors |> List.map selectorText
+    if selectorNames.Length <> (selectorNames |> List.distinct |> List.length) then invalidArg (nameof selectors) "formal subject selectors must be distinct"
+    let matches selector path =
+        match selector with
+        | Exact expected -> path = expected
+        | Prefix prefix -> path.StartsWith(prefix, StringComparison.Ordinal)
+    for selector in selectors do
+        match selector with
+        | Exact path when String.IsNullOrWhiteSpace path || Path.IsPathRooted path || path.Contains('\\') -> invalidArg (nameof selectors) "formal exact selector is unsafe"
+        | Prefix prefix when String.IsNullOrWhiteSpace prefix || not (prefix.EndsWith('/')) || Path.IsPathRooted prefix || prefix.Contains('\\') -> invalidArg (nameof selectors) "formal prefix selector is unsafe"
+        | _ -> ()
+        if files |> List.exists (fun file -> matches selector file.Path) |> not then
+            invalidArg (nameof selectors) $"formal subject selector matched no tracked file: {selectorText selector}"
+    let selected =
+        files
+        |> List.choose (fun file ->
+            let count = selectors |> List.filter (fun selector -> matches selector file.Path) |> List.length
+            if count > 1 then invalidArg (nameof selectors) $"formal subject selector overlap: {file.Path}"
+            if count = 1 then Some file else None)
+    let filesDigest = framedTreeBytes selected |> sha256
+    let selectorPolicy = policyBytes |> sha256
+    let payload =
+        compactBytes (fun writer ->
+            writer.WriteStartObject()
+            writer.WriteString("schema", "fsgg.coordination.formal-subject/1")
+            writer.WriteString("filesSha256", filesDigest)
+            writer.WriteString("selectorPolicySha256", selectorPolicy)
+            writer.WriteNumber("fileCount", selected.Length)
+            writer.WriteEndObject())
+    { FilesSha256 = filesDigest; SelectorPolicySha256 = selectorPolicy; FileCount = selected.Length; SubjectSha256 = sha256 payload }
+
+let formalSubjectBytes subject =
+    Array.append
+        (compactBytes (fun writer ->
+            writer.WriteStartObject()
+            writer.WriteString("schema", "fsgg.coordination.formal-subject/1")
+            writer.WriteString("filesSha256", subject.FilesSha256)
+            writer.WriteString("selectorPolicySha256", subject.SelectorPolicySha256)
+            writer.WriteNumber("fileCount", subject.FileCount)
             writer.WriteString("subjectSha256", subject.SubjectSha256)
             writer.WriteEndObject()))
         [| byte '\n' |]

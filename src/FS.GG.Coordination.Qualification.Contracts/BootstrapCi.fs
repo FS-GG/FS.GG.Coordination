@@ -42,6 +42,33 @@ type ReuseContract =
       Architecture: string
       ReviewPolicy: string }
 
+type MilestoneContract =
+    { StatePath: string
+      DefaultMode: string
+      ComprehensiveBoundaryKinds: string list }
+
+type FormalReuseContract =
+    { Artifact: string
+      IndexedArtifactPrefix: string
+      NotBefore: string
+      ExactPaths: string list
+      PathPrefixes: string list }
+
+type EconomicsContract =
+    { JobId: string
+      TimeoutMinutes: int
+      EntryPoint: string
+      UploadName: string
+      UploadPath: string
+      WindowDays: int
+      FreshnessHours: int
+      MinimumObservations: int
+      ExpensiveRunnerMinutes: decimal
+      LowYieldMaximum: decimal
+      PolicyVersion: string
+      AttributionPath: string
+      MinimumCadence: (string * string) list }
+
 type BootstrapContract =
     { EvidenceSchema: string
       Actions: ActionPins
@@ -52,6 +79,9 @@ type BootstrapContract =
       RequiredProjects: string list
       RequiredVulnerabilitySources: string list
       Reuse: ReuseContract
+      Milestone: MilestoneContract
+      FormalReuse: FormalReuseContract
+      Economics: EconomicsContract
       Jobs: GateContract list
       Bytes: byte array }
 
@@ -92,6 +122,11 @@ let private boolProperty (name: string) (element: JsonElement) =
     else
         None
 
+let private decimalProperty (name: string) (element: JsonElement) =
+    let mutable value = Unchecked.defaultof<JsonElement>
+    let mutable number = 0m
+    if element.TryGetProperty(name, &value) && value.ValueKind = JsonValueKind.Number && value.TryGetDecimal(&number) then Some number else None
+
 let private stringArray (name: string) element =
     arrayProperty name element
     |> Option.defaultValue []
@@ -113,7 +148,7 @@ let private loadContract root =
     let bytes = File.ReadAllBytes path
     use document = JsonDocument.Parse bytes
     let value = document.RootElement
-    if stringProperty "schema" value <> Some "fsgg.coordination.bootstrap-qualification-plan/3" then
+    if stringProperty "schema" value <> Some "fsgg.coordination.bootstrap-qualification-plan/4" then
         failwith "bootstrap qualification plan schema is unsupported"
     let evidenceSchema = stringProperty "evidenceSchema" value |> Option.defaultWith (fun () -> failwith "evidenceSchema is missing")
     let actionsValue = value.GetProperty("actions")
@@ -137,7 +172,7 @@ let private loadContract root =
     let actionRuntimes = value.GetProperty("actionRuntimes")
     for name in [ "checkout"; "setupDotnet"; "uploadArtifact"; "downloadArtifact" ] do
         if stringProperty name actionRuntimes <> Some "node24" then failwith $"action runtime must be node24: %s{name}"
-    if stringArray "triggers" value <> [ "pull_request"; "push:main" ] then failwith "triggers must be pull_request and push:main"
+    if stringArray "triggers" value <> [ "pull_request"; "push:main"; "schedule:17 3 * * *" ] then failwith "triggers must include pull_request, push:main, and the reviewed daily schedule"
     if stringArray "permissions" value <> [ "actions:read"; "contents:read" ] then failwith "permissions must be actions:read and contents:read"
     let concurrency = value.GetProperty("concurrency")
     let concurrencyGroup = stringProperty "group" concurrency |> Option.defaultWith (fun () -> failwith "concurrency group is missing")
@@ -167,6 +202,46 @@ let private loadContract root =
           ReviewPolicy = stringProperty "reviewPolicy" reuseValue |> Option.defaultWith (fun () -> failwith "reuse reviewPolicy is missing") }
     if reuse <> { JobId = "reuse-decision"; Artifact = "reuse-decision/decision.json"; TimeoutMinutes = 5; EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"; UploadName = "reuse-decision"; WorkflowPath = ".github/workflows/bootstrap-qualification.yml"; MaxCandidateArtifacts = 100; NotBefore = "2026-08-29T13:32:00Z"; Runner = "ubuntu-latest"; Architecture = "x64"; ReviewPolicy = "critique-and-mutation-proof/1" } then
         failwith "reuse policy differs from the reviewed fail-closed contract"
+    let milestoneValue = value.GetProperty("milestone")
+    let milestone =
+        { StatePath = stringProperty "statePath" milestoneValue |> Option.defaultWith (fun () -> failwith "milestone statePath is missing")
+          DefaultMode = stringProperty "defaultMode" milestoneValue |> Option.defaultWith (fun () -> failwith "milestone defaultMode is missing")
+          ComprehensiveBoundaryKinds = stringArray "comprehensiveBoundaryKinds" milestoneValue }
+    if milestone.StatePath <> "eng/milestone-qualification.json" || milestone.DefaultMode <> "scoped"
+       || milestone.ComprehensiveBoundaryKinds <> [ "milestone-closure"; "freeze"; "release"; "cutover"; "open-v2"; "rollback-authority" ] then
+        failwith "milestone qualification policy differs from the reviewed generic contract"
+    let formalValue = value.GetProperty("formalReuse")
+    let formalReuse =
+        { Artifact = stringProperty "artifact" formalValue |> Option.defaultWith (fun () -> failwith "formal reuse artifact is missing")
+          IndexedArtifactPrefix = stringProperty "indexedArtifactPrefix" formalValue |> Option.defaultWith (fun () -> failwith "formal indexed prefix is missing")
+          NotBefore = stringProperty "notBefore" formalValue |> Option.defaultWith (fun () -> failwith "formal reuse epoch is missing")
+          ExactPaths = stringArray "exactPaths" formalValue
+          PathPrefixes = stringArray "pathPrefixes" formalValue }
+    if formalReuse.Artifact <> "formal-decision/decision.json" || formalReuse.IndexedArtifactPrefix <> "canonical-quint-"
+       || formalReuse.ExactPaths.IsEmpty || formalReuse.PathPrefixes.IsEmpty then failwith "formal reuse policy is incomplete"
+    let selectorValues = formalReuse.ExactPaths @ formalReuse.PathPrefixes
+    if selectorValues.Length <> (selectorValues |> List.distinct |> List.length) then failwith "formal subject selectors must be distinct"
+    if formalReuse.PathPrefixes |> List.exists (fun prefix -> not (prefix.EndsWith('/'))) then failwith "formal path prefixes must end with slash"
+    let economicsValue = value.GetProperty("economics")
+    let economics =
+        { JobId = stringProperty "jobId" economicsValue |> Option.defaultWith (fun () -> failwith "economics jobId is missing")
+          TimeoutMinutes = economicsValue.GetProperty("timeoutMinutes").GetInt32()
+          EntryPoint = stringProperty "entryPoint" economicsValue |> Option.defaultWith (fun () -> failwith "economics entryPoint is missing")
+          UploadName = stringProperty "uploadName" economicsValue |> Option.defaultWith (fun () -> failwith "economics uploadName is missing")
+          UploadPath = stringProperty "uploadPath" economicsValue |> Option.defaultWith (fun () -> failwith "economics uploadPath is missing")
+          WindowDays = economicsValue.GetProperty("windowDays").GetInt32()
+          FreshnessHours = economicsValue.GetProperty("freshnessHours").GetInt32()
+          MinimumObservations = economicsValue.GetProperty("minimumObservations").GetInt32()
+          ExpensiveRunnerMinutes = decimalProperty "expensiveRunnerMinutes" economicsValue |> Option.defaultWith (fun () -> failwith "economics expensive threshold is missing")
+          LowYieldMaximum = decimalProperty "lowYieldMaximum" economicsValue |> Option.defaultWith (fun () -> failwith "economics yield threshold is missing")
+          PolicyVersion = stringProperty "policyVersion" economicsValue |> Option.defaultWith (fun () -> failwith "economics policyVersion is missing")
+          AttributionPath = stringProperty "attributionPath" economicsValue |> Option.defaultWith (fun () -> failwith "economics attributionPath is missing")
+          MinimumCadence = stringProperties "minimumCadence" economicsValue }
+    if economics.JobId <> "qualification-economics" || economics.EntryPoint <> "bash eng/bootstrap-gates/qualification-economics.sh"
+       || economics.TimeoutMinutes < 1 || economics.WindowDays <> 14 || economics.FreshnessHours <> 36 || economics.MinimumObservations <> 5
+       || economics.ExpensiveRunnerMinutes <> 8m || economics.LowYieldMaximum <> 0.05m || economics.PolicyVersion <> "adr-0081/1"
+       || economics.AttributionPath <> "eng/qualification-defect-attributions.json" || economics.MinimumCadence.Length <> 3 then
+        failwith "qualification economics policy differs from the reviewed adaptive contract"
     let jobs =
         arrayProperty "jobs" value
         |> Option.defaultWith (fun () -> failwith "jobs are missing")
@@ -222,6 +297,9 @@ let private loadContract root =
       RequiredProjects = requiredProjects
       RequiredVulnerabilitySources = requiredVulnerabilitySources
       Reuse = reuse
+      Milestone = milestone
+      FormalReuse = formalReuse
+      Economics = economics
       Jobs = jobs
       Bytes = bytes }
 
@@ -246,6 +324,8 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "  pull_request:"
     line "  push:"
     line "    branches: [main]"
+    line "  schedule:"
+    line "    - cron: '17 3 * * *'"
     line ""
     line "permissions:"
     line "  actions: read"
@@ -258,12 +338,17 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "jobs:"
     line $"  %s{contract.Reuse.JobId}:"
     line $"    name: %s{contract.Reuse.JobId}"
+    line "    if: ${{ github.event_name != 'schedule' }}"
     line $"    runs-on: %s{contract.Reuse.Runner}"
     line $"    timeout-minutes: %d{contract.Reuse.TimeoutMinutes}"
     line "    outputs:"
     line "      route: ${{ steps.decide.outputs.route }}"
     line "      prior-run-id: ${{ steps.decide.outputs.prior-run-id }}"
     line "      subject-sha: ${{ steps.decide.outputs.subject-sha }}"
+    line "      formal-route: ${{ steps.decide.outputs.formal-route }}"
+    line "      prior-formal-run-id: ${{ steps.decide.outputs.prior-formal-run-id }}"
+    line "      formal-subject-sha: ${{ steps.decide.outputs.formal-subject-sha }}"
+    line "      qualification-mode: ${{ steps.decide.outputs.qualification-mode }}"
     line "    env:"
     line "      GH_TOKEN: ${{ github.token }}"
     line "      FSGG_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}"
@@ -287,7 +372,10 @@ let private renderWorkflow (contract: BootstrapContract) =
     line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
     line "        with:"
     line $"          name: %s{contract.Reuse.UploadName}"
-    line "          path: ${{ env.FSGG_RUNNER_TEMP }}/decision.json"
+    line "          path: |"
+    line "            ${{ env.FSGG_RUNNER_TEMP }}/decision.json"
+    line "            ${{ env.FSGG_RUNNER_TEMP }}/formal-decision.json"
+    line "            ${{ env.FSGG_RUNNER_TEMP }}/milestone.json"
     line "          if-no-files-found: error"
     line ""
     for gate in contract.Jobs do
@@ -297,7 +385,9 @@ let private renderWorkflow (contract: BootstrapContract) =
         let renderedNeeds = String.concat ", " needs
         line $"    needs: [%s{renderedNeeds}]"
         if gate.DownloadArtifacts then
-            line "    if: ${{ always() && needs.reuse-decision.result == 'success' }}"
+            line "    if: ${{ always() && github.event_name != 'schedule' && needs.reuse-decision.result == 'success' }}"
+        elif gate.ReceiptKind = Some "formal" then
+            line "    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
         else
             line "    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}"
         line $"    runs-on: %s{contract.Reuse.Runner}"
@@ -326,6 +416,14 @@ let private renderWorkflow (contract: BootstrapContract) =
             line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
             line "        with:"
             line "          path: ${{ runner.temp }}/bootstrap-artifacts"
+            line "      - name: Download selected prior canonical evidence"
+            line "        if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}"
+            line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
+            line "        with:"
+            line "          name: canonical-quint-${{ needs.reuse-decision.outputs.formal-subject-sha }}"
+            line "          run-id: ${{ needs.reuse-decision.outputs.prior-formal-run-id }}"
+            line "          github-token: ${{ github.token }}"
+            line "          path: ${{ runner.temp }}/bootstrap-artifacts/canonical-quint"
             line "      - name: Download selected prior evidence"
             line "        if: ${{ needs.reuse-decision.outputs.route == 'reuse' }}"
             line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
@@ -342,7 +440,38 @@ let private renderWorkflow (contract: BootstrapContract) =
         line $"          name: %s{gate.UploadName}"
         line $"          path: %s{gate.UploadPath}"
         line "          if-no-files-found: error"
+        if gate.ReceiptKind = Some "formal" then
+            line "      - name: Upload content-addressed canonical evidence"
+            line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
+            line "        with:"
+            line "          name: canonical-quint-${{ needs.reuse-decision.outputs.formal-subject-sha }}"
+            line $"          path: %s{gate.UploadPath}"
+            line "          if-no-files-found: error"
         line ""
+    line $"  %s{contract.Economics.JobId}:"
+    line $"    name: %s{contract.Economics.JobId}"
+    line "    if: ${{ github.event_name == 'schedule' }}"
+    line $"    runs-on: %s{contract.Reuse.Runner}"
+    line $"    timeout-minutes: %d{contract.Economics.TimeoutMinutes}"
+    line "    env:"
+    line "      GH_TOKEN: ${{ github.token }}"
+    line "      FSGG_REPOSITORY: ${{ github.repository }}"
+    line "      FSGG_RUNNER_TEMP: /tmp/fsgg-${{ github.run_id }}-economics"
+    line "    steps:"
+    line "      - name: Check out the protected branch"
+    line $"        uses: actions/checkout@%s{contract.Actions.Checkout}"
+    line "      - name: Set up the pinned .NET SDK"
+    line $"        uses: actions/setup-dotnet@%s{contract.Actions.SetupDotnet}"
+    line "        with:"
+    line "          global-json-file: global.json"
+    line "      - name: Evaluate observed qualification economics"
+    line $"        run: %s{contract.Economics.EntryPoint}"
+    line "      - name: Upload cadence recommendations"
+    line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
+    line "        with:"
+    line $"          name: %s{contract.Economics.UploadName}"
+    line $"          path: %s{contract.Economics.UploadPath}"
+    line "          if-no-files-found: error"
     output.ToString().Replace("\r\n", "\n").TrimEnd() + "\n"
 
 let private inspectWorkflow root (contract: BootstrapContract) =
@@ -454,6 +583,26 @@ let private qualificationSubject root (contract: BootstrapContract) =
                   String.concat "," [ "actions:read"; "contents:read" ] ])
     let reviewPolicy = Encoding.UTF8.GetBytes contract.Reuse.ReviewPolicy
     QualificationReuse.createSubject (trackedFiles root) planBytes workflowBytes environment reviewPolicy
+
+let private formalSubject root (contract: BootstrapContract) =
+    let selectors =
+        (contract.FormalReuse.ExactPaths |> List.map QualificationReuse.Exact)
+        @ (contract.FormalReuse.PathPrefixes |> List.map QualificationReuse.Prefix)
+    QualificationReuse.createFormalSubject (trackedFiles root) selectors contract.Bytes
+
+let private milestoneValidation root (contract: BootstrapContract) =
+    let statePath = Path.Combine(root, contract.Milestone.StatePath)
+    let state =
+        match MilestoneQualification.parse (File.ReadAllBytes statePath) with
+        | Ok value -> value
+        | Error problem -> failwith $"milestone qualification state is invalid: {problem}"
+    let receipts =
+        state.Children
+        |> List.choose (fun child -> child.Acceptance |> Option.map (fun acceptance -> acceptance.ReceiptPath, File.ReadAllBytes(Path.Combine(root, acceptance.ReceiptPath))))
+        |> Map.ofList
+    match MilestoneQualification.validate state receipts with
+    | Ok value -> value
+    | Error problem -> failwith $"milestone qualification state is invalid: {problem}"
 
 let private recoveryStages =
     [ "clone"; "restore"; "build"; "unit-tests"; "architecture-tests"; "pack"; "install"; "execute" ]
@@ -613,7 +762,30 @@ let private decisionText = function
     | QualificationReuse.Execute -> "execute"
     | QualificationReuse.Refuse -> "refuse"
 
-let private writeEvidence (output: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) (decision: QualificationReuse.Decision) =
+type private MilestoneEvidence = { Mode: string; SubjectSha256: string }
+
+let private loadMilestoneEvidence path =
+    use document = JsonDocument.Parse(File.ReadAllBytes path)
+    let root = document.RootElement
+    if stringProperty "schema" root <> Some "fsgg.coordination.milestone-validation/1" then failwith "milestone validation schema is unsupported"
+    let mode = stringProperty "mode" root |> Option.defaultWith (fun () -> failwith "milestone validation mode is missing")
+    let subject = stringProperty "subjectSha256" root |> Option.defaultWith (fun () -> failwith "milestone validation subject is missing")
+    if (mode <> "scoped" && mode <> "comprehensive") || not (isLowerSha256 subject) then failwith "milestone validation identity is invalid"
+    { Mode = mode; SubjectSha256 = subject }
+
+let private writePrior (writer: Utf8JsonWriter) (propertyName: string) (prior: QualificationReuse.PriorRun option) =
+    match prior with
+    | None -> writer.WriteNull(propertyName)
+    | Some value ->
+        writer.WriteStartObject(propertyName)
+        writer.WriteString("head", value.Head)
+        writer.WriteNumber("runId", value.RunId)
+        writer.WriteNumber("attempt", value.Attempt)
+        writer.WriteString("evidenceSha256", value.EvidenceSha256)
+        writer.WriteString("artifactExpiresAt", value.ArtifactExpiresAt)
+        writer.WriteEndObject()
+
+let private writeEvidence (output: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) (decision: QualificationReuse.Decision) (formalDecision: QualificationReuse.Decision) (milestone: MilestoneEvidence) =
     if not (isSha head) then failwith "candidate head must be an exact 40-hex SHA"
     let artifacts =
         contract.Jobs
@@ -630,16 +802,13 @@ let private writeEvidence (output: string) (head: string) (artifactRoot: string)
     writer.WriteString("route", decisionText decision.Kind)
     writer.WriteString("subjectSha256", decision.SubjectSha256)
     writer.WriteString("decisionSha256", decision.SelfSha256)
-    match decision.Prior with
-    | None -> writer.WriteNull("prior")
-    | Some prior ->
-        writer.WriteStartObject("prior")
-        writer.WriteString("head", prior.Head)
-        writer.WriteNumber("runId", prior.RunId)
-        writer.WriteNumber("attempt", prior.Attempt)
-        writer.WriteString("evidenceSha256", prior.EvidenceSha256)
-        writer.WriteString("artifactExpiresAt", prior.ArtifactExpiresAt)
-        writer.WriteEndObject()
+    writePrior writer "prior" decision.Prior
+    writer.WriteString("qualificationMode", milestone.Mode)
+    writer.WriteString("milestoneSubjectSha256", milestone.SubjectSha256)
+    writer.WriteString("formalRoute", decisionText formalDecision.Kind)
+    writer.WriteString("formalSubjectSha256", formalDecision.SubjectSha256)
+    writer.WriteString("formalDecisionSha256", formalDecision.SelfSha256)
+    writePrior writer "formalPrior" formalDecision.Prior
     writer.WriteString("planSha256", sha256Bytes contract.Bytes)
     writer.WriteStartArray("gates")
     for gate, digest in artifacts do
@@ -655,7 +824,7 @@ let private writeEvidence (output: string) (head: string) (artifactRoot: string)
     writer.WriteEndObject()
     writer.Flush()
 
-let private inspectEvidence (path: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) (decision: QualificationReuse.Decision) =
+let private inspectEvidence (path: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) (decision: QualificationReuse.Decision) (formalDecision: QualificationReuse.Decision) (milestone: MilestoneEvidence) =
     try
         use document = JsonDocument.Parse(File.ReadAllBytes path)
         let root = document.RootElement
@@ -675,6 +844,15 @@ let private inspectEvidence (path: string) (head: string) (artifactRoot: string)
               yield violation "evidence-subject-digest" "terminal subject does not match the decision receipt"
           if stringProperty "decisionSha256" root <> Some decision.SelfSha256 then
               yield violation "evidence-decision-digest" "terminal decision digest does not match"
+          if stringProperty "qualificationMode" root <> Some milestone.Mode
+             || stringProperty "milestoneSubjectSha256" root <> Some milestone.SubjectSha256 then
+              yield violation "evidence-milestone" "terminal milestone mode or subject differs"
+          if stringProperty "formalRoute" root <> Some(decisionText formalDecision.Kind)
+             || stringProperty "formalSubjectSha256" root <> Some formalDecision.SubjectSha256
+             || stringProperty "formalDecisionSha256" root <> Some formalDecision.SelfSha256 then
+              yield violation "evidence-formal-decision" "terminal formal route differs from the selected decision"
+          if milestone.Mode = "comprehensive" && (decision.Kind <> QualificationReuse.Execute || formalDecision.Kind <> QualificationReuse.Execute) then
+              yield violation "evidence-comprehensive-reuse" "comprehensive qualification requires cold whole and formal execution"
           let priorElement = root.GetProperty("prior")
           match decision.Prior with
           | None when priorElement.ValueKind <> JsonValueKind.Null ->
@@ -688,6 +866,20 @@ let private inspectEvidence (path: string) (head: string) (artifactRoot: string)
                  || stringProperty "evidenceSha256" priorElement <> Some prior.EvidenceSha256
                  || stringProperty "artifactExpiresAt" priorElement <> Some prior.ArtifactExpiresAt then
                   yield violation "evidence-prior" "prior authority differs from the decision receipt"
+          | None -> ()
+          let formalPriorElement = root.GetProperty("formalPrior")
+          match formalDecision.Prior with
+          | None when formalPriorElement.ValueKind <> JsonValueKind.Null ->
+              yield violation "evidence-formal-prior" "formal execution must not carry prior authority"
+          | Some prior when formalPriorElement.ValueKind <> JsonValueKind.Object ->
+              yield violation "evidence-formal-prior" "formal reuse must carry prior authority"
+          | Some prior ->
+              if stringProperty "head" formalPriorElement <> Some prior.Head
+                 || int64Property "runId" formalPriorElement <> Some prior.RunId
+                 || formalPriorElement.GetProperty("attempt").GetInt32() <> prior.Attempt
+                 || stringProperty "evidenceSha256" formalPriorElement <> Some prior.EvidenceSha256
+                 || stringProperty "artifactExpiresAt" formalPriorElement <> Some prior.ArtifactExpiresAt then
+                  yield violation "evidence-formal-prior" "formal prior authority differs from the decision receipt"
           | None -> ()
           if stringProperty "planSha256" root <> Some(sha256Bytes contract.Bytes) then
               yield violation "evidence-plan-digest" "qualification plan bytes do not match"
@@ -721,6 +913,26 @@ let private writeDecision path decision =
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath path)) |> ignore
     File.WriteAllBytes(path, QualificationReuse.decisionBytes decision)
 
+let private effectiveFormalDecision artifactRoot (contract: BootstrapContract) (wholeDecision: QualificationReuse.Decision) supplied =
+    match wholeDecision.Prior with
+    | None -> supplied
+    | Some _ ->
+        let priorPath = Path.Combine(artifactRoot, contract.Reuse.UploadName, "formal-decision.json")
+        if File.Exists priorPath then loadDecision priorPath
+        elif supplied.SelfSha256 = wholeDecision.SelfSha256 then supplied
+        else failwith "selected prior formal decision is missing"
+
+let private suppliedEvidenceBindings arguments decision =
+    let formalDecision =
+        optionValue "--formal-decision" arguments
+        |> Option.map (Path.GetFullPath >> loadDecision)
+        |> Option.defaultValue decision
+    let milestone =
+        optionValue "--milestone" arguments
+        |> Option.map (Path.GetFullPath >> loadMilestoneEvidence)
+        |> Option.defaultValue { Mode = "scoped"; SubjectSha256 = decision.SubjectSha256 }
+    formalDecision, milestone
+
 let private selectPriorManifest (path: string) (priorHead: string) (contract: BootstrapContract) =
     use document = JsonDocument.Parse(File.ReadAllBytes path)
     let root = document.RootElement
@@ -750,6 +962,56 @@ let private optionalNonNegativeDecimal name arguments =
         match Decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture) with
         | true, parsed when parsed >= 0M -> Some parsed
         | _ -> failwith $"%s{name} must be a non-negative invariant decimal"
+
+let private writeCadenceRecommendations (input: string) (output: string) (now: DateTimeOffset) (dataStatus: string) (contract: BootstrapContract) =
+    use document = JsonDocument.Parse(File.ReadAllBytes input)
+    let observations =
+        document.RootElement.EnumerateArray()
+        |> Seq.map (fun item ->
+            let outcome =
+                match stringProperty "outcome" item with
+                | Some "passed" -> QualificationCadence.Passed
+                | Some "actionable-defect" -> QualificationCadence.ActionableDefect
+                | Some "infrastructure-failure" -> QualificationCadence.InfrastructureFailure
+                | Some "unattributed-failure" -> QualificationCadence.UnattributedFailure
+                | _ -> failwith "observation outcome is unsupported"
+            let boundary =
+                match stringProperty "boundary" item with
+                | Some "child" -> QualificationCadence.Child
+                | Some "closure" -> QualificationCadence.Closure
+                | Some "production" -> QualificationCadence.Production
+                | _ -> failwith "observation boundary is unsupported"
+            let observedAt = stringProperty "observedAt" item |> Option.map DateTimeOffset.Parse |> Option.defaultWith (fun () -> failwith "observation time is missing")
+            let duration = item.GetProperty("durationSeconds").GetInt32()
+            let runnerMinutes = item.GetProperty("runnerMinutes").GetDecimal()
+            let reused = boolProperty "reused" item |> Option.defaultWith (fun () -> failwith "observation reused is missing")
+            let equivalent = boolProperty "closureEquivalent" item |> Option.defaultWith (fun () -> failwith "observation closureEquivalent is missing")
+            let delay =
+                let value = item.GetProperty("detectionDelayHours")
+                if value.ValueKind = JsonValueKind.Null then None else Some(value.GetDecimal())
+            ({ Gate = stringProperty "gate" item |> Option.defaultWith (fun () -> failwith "observation gate is missing")
+               RunId = int64Property "runId" item |> Option.defaultWith (fun () -> failwith "observation runId is missing")
+               Attempt = item.GetProperty("attempt").GetInt32(); ObservedAt = observedAt; DurationSeconds = duration
+               RunnerMinutes = runnerMinutes; Reused = reused; Outcome = outcome; Boundary = boundary
+               ClosureEquivalent = equivalent; DetectionDelayHours = delay }: QualificationCadence.Observation))
+        |> Seq.toList
+    let policy: QualificationCadence.Policy =
+        { Version = contract.Economics.PolicyVersion; WindowDays = contract.Economics.WindowDays
+          FreshnessHours = contract.Economics.FreshnessHours; MinimumObservations = contract.Economics.MinimumObservations
+          ExpensiveRunnerMinutes = contract.Economics.ExpensiveRunnerMinutes; LowYieldMaximum = contract.Economics.LowYieldMaximum
+          MinimumCadence = Map.ofList contract.Economics.MinimumCadence }
+    let gates = contract.Jobs |> List.filter (fun job -> not job.DownloadArtifacts) |> List.map _.Id
+    let recommendations = gates |> List.map (fun gate -> QualificationCadence.evaluate now policy gate observations)
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath output)) |> ignore
+    use stream = File.Create output
+    use writer = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false))
+    writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.qualification-cadence-report/1")
+    writer.WriteString("evaluatedAt", now.ToUniversalTime().ToString("O")); writer.WriteString("policyVersion", policy.Version); writer.WriteString("dataStatus", dataStatus)
+    writer.WriteStartArray("recommendations")
+    for recommendation in recommendations do
+        use valueDocument = JsonDocument.Parse(QualificationCadence.recommendationBytes recommendation)
+        valueDocument.RootElement.WriteTo writer
+    writer.WriteEndArray(); writer.WriteEndObject(); writer.Flush()
 
 let execute (arguments: string list) =
     let arguments = arguments |> List.filter ((<>) "--")
@@ -782,6 +1044,33 @@ let execute (arguments: string list) =
                     |> fun bytes -> File.WriteAllBytes(Path.GetFullPath output, bytes)
                     []
                 | None -> [ violation "argument" "subject requires --output" ]
+            | "formal-subject" ->
+                match optionValue "--output" arguments with
+                | Some output ->
+                    formalSubject root contract
+                    |> QualificationReuse.formalSubjectBytes
+                    |> fun bytes -> File.WriteAllBytes(Path.GetFullPath output, bytes)
+                    []
+                | None -> [ violation "argument" "formal-subject requires --output" ]
+            | "milestone" ->
+                match optionValue "--output" arguments with
+                | Some output ->
+                    let validation = milestoneValidation root contract
+                    use stream = File.Create(Path.GetFullPath output)
+                    use writer = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false))
+                    writer.WriteStartObject()
+                    writer.WriteString("schema", "fsgg.coordination.milestone-validation/1")
+                    writer.WriteString("parent", validation.State.Parent)
+                    writer.WriteString("mode", if validation.State.Mode = MilestoneQualification.Scoped then "scoped" else "comprehensive")
+                    writer.WriteNumber("acceptedPrefixLength", validation.AcceptedPrefixLength)
+                    writer.WriteStartArray("contractDrift")
+                    for child in validation.ContractDrift do writer.WriteStringValue child
+                    writer.WriteEndArray()
+                    writer.WriteString("subjectSha256", validation.SubjectSha256)
+                    writer.WriteEndObject()
+                    writer.Flush()
+                    []
+                | None -> [ violation "argument" "milestone requires --output" ]
             | "select" ->
                 match optionValue "--head" arguments, optionValue "--output" arguments with
                 | Some head, Some output when isSha head ->
@@ -807,6 +1096,38 @@ let execute (arguments: string list) =
                     writeDecision (Path.GetFullPath output) decision
                     []
                 | _ -> [ violation "argument" "select requires an exact --head and --output" ]
+            | "formal-select" ->
+                match optionValue "--head" arguments, optionValue "--output" arguments with
+                | Some head, Some output when isSha head ->
+                    let subject = formalSubject root contract
+                    let decision =
+                        match optionValue "--prior-receipt" arguments with
+                        | None -> QualificationReuse.decide head subject.SubjectSha256 None None
+                        | Some receipt ->
+                            let receiptPath = Path.GetFullPath receipt
+                            let violations = inspectCanonicalQuintReceipt receiptPath
+                            if not violations.IsEmpty then QualificationReuse.refuse head subject.SubjectSha256 "selected-formal-evidence-invalid"
+                            else
+                                let prior: QualificationReuse.PriorRun =
+                                    { Head = optionValue "--prior-head" arguments |> Option.filter isSha |> Option.defaultWith (fun () -> failwith "--prior-head is required")
+                                      RunId = requiredInt64 "--prior-run" arguments
+                                      Attempt = requiredInt "--prior-attempt" arguments
+                                      EvidenceSha256 = sha256File receiptPath
+                                      ArtifactExpiresAt = optionValue "--expires" arguments |> Option.defaultWith (fun () -> failwith "--expires is required")
+                                      RunnerMinutes = optionalNonNegativeDecimal "--runner-minutes" arguments }
+                                let priorSubject = optionValue "--prior-subject" arguments |> Option.defaultWith (fun () -> failwith "--prior-subject is required")
+                                QualificationReuse.decide head subject.SubjectSha256 (Some prior) (Some priorSubject)
+                    writeDecision (Path.GetFullPath output) decision
+                    []
+                | _ -> [ violation "argument" "formal-select requires an exact --head and --output" ]
+            | "cadence" ->
+                match optionValue "--observations" arguments, optionValue "--output" arguments, optionValue "--now" arguments with
+                | Some input, Some output, Some now ->
+                    let dataStatus = optionValue "--data-status" arguments |> Option.defaultValue "available"
+                    if dataStatus <> "available" && dataStatus <> "unavailable" then failwith "cadence data status is unsupported"
+                    writeCadenceRecommendations (Path.GetFullPath input) (Path.GetFullPath output) (DateTimeOffset.Parse now) dataStatus contract
+                    []
+                | _ -> [ violation "argument" "cadence requires --observations, --output, and --now" ]
             | "vulnerability" ->
                 optionValue "--report" arguments
                 |> Option.map (fun path -> inspectVulnerabilityReport (Path.GetFullPath path) root contract)
@@ -821,6 +1142,8 @@ let execute (arguments: string list) =
                 | Some head, Some artifacts, Some output, Some decisionPath when isSha head ->
                     let artifactRoot = Path.GetFullPath artifacts
                     let decision = loadDecision (Path.GetFullPath decisionPath)
+                    let suppliedFormal, milestone = suppliedEvidenceBindings arguments decision
+                    let formalDecision = effectiveFormalDecision artifactRoot contract decision suppliedFormal
 
                     let qualificationViolations =
                         [ if decision.Candidate <> head.ToLowerInvariant() then
@@ -846,10 +1169,12 @@ let execute (arguments: string list) =
                                       yield violation "reuse-prior-decision" "prior execution decision is not equivalent"
                                   if sha256File priorManifestPath <> prior.EvidenceSha256 then
                                       yield violation "reuse-prior-evidence-digest" "selected prior manifest bytes changed"
-                                  yield! inspectEvidence priorManifestPath prior.Head artifactRoot contract priorDecision ]
+                                      let priorFormalPath = Path.Combine(artifactRoot, contract.Reuse.UploadName, "formal-decision.json")
+                                      let priorFormal = if File.Exists priorFormalPath then loadDecision priorFormalPath else priorDecision
+                                      yield! inspectEvidence priorManifestPath prior.Head artifactRoot contract priorDecision priorFormal milestone ]
 
                     if List.isEmpty qualificationViolations then
-                        writeEvidence (Path.GetFullPath output) head artifactRoot contract decision
+                        writeEvidence (Path.GetFullPath output) head artifactRoot contract decision formalDecision milestone
 
                     qualificationViolations
                 | _ -> [ violation "argument" "collect requires --head, --artifacts, --output, and --decision" ]
@@ -862,7 +1187,10 @@ let execute (arguments: string list) =
                 with
                 | Some head, Some artifacts, Some path, Some decisionPath when isSha head ->
                     let decision = loadDecision (Path.GetFullPath decisionPath)
-                    inspectEvidence (Path.GetFullPath path) head (Path.GetFullPath artifacts) contract decision
+                    let artifactRoot = Path.GetFullPath artifacts
+                    let suppliedFormal, milestone = suppliedEvidenceBindings arguments decision
+                    let formalDecision = effectiveFormalDecision artifactRoot contract decision suppliedFormal
+                    inspectEvidence (Path.GetFullPath path) head artifactRoot contract decision formalDecision milestone
                 | _ -> [ violation "argument" "evidence requires an exact --head plus --artifacts, --file, and --decision" ]
             | unknown -> [ violation "argument" $"unknown mode: %s{unknown}" ]
         with exceptionValue ->

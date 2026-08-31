@@ -3,6 +3,8 @@ set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/runner-temp.sh"
 fsgg_resolve_runner_temp
 decision="$RUNNER_TEMP/bootstrap-decision/decision.json"; route="$(jq -er '.decision' "$decision")"
+formal_decision="$RUNNER_TEMP/bootstrap-decision/formal-decision.json"
+milestone="$RUNNER_TEMP/bootstrap-decision/milestone.json"
 subject="${FSGG_QUALIFICATION_SUBJECT_SHA:?FSGG_QUALIFICATION_SUBJECT_SHA is required}"
 [[ "$subject" =~ ^[0-9a-f]{64}$ ]] || { echo "qualification subject must be lowercase SHA-256" >&2; exit 1; }
 
@@ -10,7 +12,7 @@ case "$route" in
   execute) artifact_root="$RUNNER_TEMP/bootstrap-artifacts" ;;
   reuse) artifact_root="$RUNNER_TEMP/prior-bootstrap-artifacts" ;;
   refuse)
-    dotnet fsi eng/bootstrap-ci.fsx -- collect --root . --head "$FSGG_CANDIDATE_SHA" --artifacts "$RUNNER_TEMP/bootstrap-artifacts" --output "$RUNNER_TEMP/bootstrap-evidence.json" --decision "$decision"
+    dotnet fsi eng/bootstrap-ci.fsx -- collect --root . --head "$FSGG_CANDIDATE_SHA" --artifacts "$RUNNER_TEMP/bootstrap-artifacts" --output "$RUNNER_TEMP/bootstrap-evidence.json" --decision "$decision" --formal-decision "$formal_decision" --milestone "$milestone"
     exit 1
     ;;
   *) echo "unsupported qualification route: $route" >&2; exit 1 ;;
@@ -28,5 +30,5 @@ fi
 
 mkdir -p "$artifact_root/evidence-manifest"
 cp eng/bootstrap-qualification-plan.json "$artifact_root/evidence-manifest/plan.json"
-dotnet fsi eng/bootstrap-ci.fsx -- collect --root . --head "$FSGG_CANDIDATE_SHA" --artifacts "$artifact_root" --output "$RUNNER_TEMP/bootstrap-evidence.json" --decision "$decision"
-dotnet fsi eng/bootstrap-ci.fsx -- evidence --root . --head "$FSGG_CANDIDATE_SHA" --artifacts "$artifact_root" --file "$RUNNER_TEMP/bootstrap-evidence.json" --decision "$decision"
+dotnet fsi eng/bootstrap-ci.fsx -- collect --root . --head "$FSGG_CANDIDATE_SHA" --artifacts "$artifact_root" --output "$RUNNER_TEMP/bootstrap-evidence.json" --decision "$decision" --formal-decision "$formal_decision" --milestone "$milestone"
+dotnet fsi eng/bootstrap-ci.fsx -- evidence --root . --head "$FSGG_CANDIDATE_SHA" --artifacts "$artifact_root" --file "$RUNNER_TEMP/bootstrap-evidence.json" --decision "$decision" --formal-decision "$formal_decision" --milestone "$milestone"
