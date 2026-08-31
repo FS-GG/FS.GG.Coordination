@@ -86,6 +86,9 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("APALACHE-ENDPOINT-DUPLICATE", validator)
     Assert.Contains("arguments @ [ \"--server-endpoint\"; $\"localhost:%d{port}\" ]", validator)
     Assert.Contains("stdout=%s{temporalOutput}; stderr=%s{temporalError}", validator)
+    Assert.Contains("transition-removal did not violate %s{violatedTemporal}; exit=%d{temporalExitCode}; stdout=%s{temporalOutput}; stderr=%s{temporalError}", validator)
+    Assert.Contains("counterexample start marker missing; exit=%d{temporalExitCode}", validator)
+    Assert.Contains("firstProjection=%s{sha256Text first}", validator)
     Assert.Contains("quint/formal-safety-mutant", validator)
     Assert.Contains("actual <> expected", validator)
 
