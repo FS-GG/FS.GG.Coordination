@@ -1,0 +1,35 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-04.4",
+  "state": "accepted",
+  "unitContractSha256": "2f1a2ce88d7939c9c5607cb09b31d3e956a1cd0f9df66dc02dd35715b54d0838",
+  "sourceRevision": "36abdce0a907b0acd3d8ace1f4ac6d6491f4e080",
+  "artifacts": [
+    {
+      "name": "project-adapter-qualification-results",
+      "sha256": "69a4589cb42e62709f09edf50327271abf7575da2cfaa9832d27696bba01231a"
+    },
+    {
+      "name": "project-adapter-q3-validator",
+      "sha256": "1901deaa3281c7ec03aae2305f382188d6db1fe771d8c58ce205d483142e77b9"
+    },
+    {
+      "name": "roadmap-gate-results",
+      "sha256": "53ceae3fc30df8a0df31ad302e49579acad21a2684f8470b0c647306cc270fa5"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "15b76c09701ee11380f9f0765dedb9b9c2fbdbf121c4c1691c144a185189c9ca"
+    },
+    {
+      "name": "structured-review-acceptance",
+      "sha256": "791737667d8ebe598b5a7d3f91d6500371a1edde75f0e0a09eacc655da94844d"
+    },
+    {
+      "name": "delivery-completion",
+      "sha256": "ac97c425617b01e457b9c48eaa18fe0de8a67950d1082fac0192a34f3d91463c"
+    }
+  ],
+  "acceptedAt": "2026-08-31T15:52:18Z",
+  "digest": "a2a71df6fe5f871c8f40b353c161b58fbb2206643b02dcb3ef5987802a82c252"
+}
