@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "8a420401b3cf53a51d06b4298e797355f64bf58a",
+    "revision": "602d9d86bea95b38f32235a545e2d23761e608d4",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "a3b6718b829960bd42ee011b5b9cf889f5e065e940c3e440132118ce12248326"
+    "sha256": "daac1002edc3a1f9d092723695758d3ec5c673f38d1083818fb5fb8b8d8d5342"
   },
   "units": [
     {
@@ -397,6 +397,21 @@
         { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
       ],
       "contractSha256": "c38b9ed4a473a99ee1bb6b43dddcafc06c153e6f1b698fbb44f45af018f52920"
+    },
+    {
+      "id": "GS2-03.9",
+      "title": "Prove the harness can fail",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-03.8"],
+      "permissionCeiling": ["repository-local deterministic mutation and inversion fixtures for every qualification gate class, evidence validator, retained acceptance harness, validation, and evidence", "no network, live GitHub mutation, deployment, publication, production write, gate bypass, weakening of an accepted invariant, or successor-unit implementation authority"],
+      "exitGate": "an independently enumerated closed inventory maps every gate class to executable mutations or inversions proving vacuous, absent, stale, truncated, forged, and generated-only evidence sets red with exact typed diagnostics; mutation adequacy, unmutated controls, and retained negative evidence satisfy Q7 without accepting self-attested coverage",
+      "qGates": ["Q7"],
+      "gateCommands": ["architecture-tests", "evidence-storage-contract"],
+      "gateContracts": [
+        { "id": "architecture-tests", "qGate": "Q7", "commandSha256": "b63fd92dcd21bd8f793cb00cc4c1682d0026cd18696f40de40b82bc16db5312e" },
+        { "id": "evidence-storage-contract", "qGate": "Q7", "commandSha256": "be1adf6ec08229b1b88b262159e12e23146129241779f29220aaeb5116ddc75b" }
+      ],
+      "contractSha256": "acb013dd87697c21886dca39fa9ca97ff48e24402e964000cdc1d4c4645be40b"
     }
   ]
 }

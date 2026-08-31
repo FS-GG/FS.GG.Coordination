@@ -111,7 +111,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-03-8 without successor implementation`` () =
+let ``roadmap unit index advances through GS2-03-9 without successor implementation`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -148,7 +148,8 @@ let ``roadmap unit index advances through GS2-03-8 without successor implementat
              "GS2-03.5"
              "GS2-03.6"
              "GS2-03.7"
-             "GS2-03.8" ]
+             "GS2-03.8"
+             "GS2-03.9" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -539,6 +540,43 @@ let ``roadmap unit index advances through GS2-03-8 without successor implementat
           "self-authored"
           "prose-only" ] do
         Assert.Contains(requiredTerm, reviewExitGate)
+
+    let mutationProofUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-03.9")
+
+    Assert.Equal("Prove the harness can fail", mutationProofUnit.GetProperty("title").GetString())
+
+    Assert.Equal<string list>(
+        [ "GS2-03.8" ],
+        mutationProofUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "architecture-tests"; "evidence-storage-contract" ],
+        mutationProofUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let mutationProofExitGate = mutationProofUnit.GetProperty("exitGate").GetString()
+
+    for requiredTerm in
+        [ "closed inventory"
+          "every gate class"
+          "vacuous"
+          "absent"
+          "stale"
+          "truncated"
+          "forged"
+          "generated-only"
+          "typed diagnostics"
+          "mutation adequacy"
+          "unmutated controls"
+          "self-attested" ] do
+        Assert.Contains(requiredTerm, mutationProofExitGate)
 
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
