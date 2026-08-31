@@ -8,6 +8,7 @@
     <Compile Include="RoadmapWorkArchitectureTests.fs" />
     <Compile Include="EvidenceStorageTests.fs" />
     <Compile Include="QualificationManifestArchitectureTests.fs" />
+    <Compile Include="HarnessMutationProofArchitectureTests.fs" />
     <Compile Include="CritiqueEvidenceArchitectureTests.fs" />
     <Compile Include="BootstrapRecoveryTests.fs" />
     <Compile Include="RepositorySettingsTests.fs" />

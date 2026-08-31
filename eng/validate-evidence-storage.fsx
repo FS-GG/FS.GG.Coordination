@@ -528,7 +528,7 @@ let validate evidenceRoot =
             { Name = stringProperty "name" item; Path = stringProperty "path" item; Schema = stringProperty "schema" item })
     let expectedNames =
         [ "corpus-inputs"; "external-observations"; "independent-oracles"; "generated-cases"
-          "test-results"; "artifact-manifests"; "reviews"; "qualification-inventories"; "qualification-manifests"; "accepted-receipts" ]
+          "test-results"; "artifact-manifests"; "reviews"; "qualification-inventories"; "qualification-manifests"; "mutation-proofs"; "accepted-receipts" ]
     if categories |> List.map _.Name <> expectedNames then fail "ES-CATEGORY-INVENTORY" "category names or order differ"
     if categories |> List.map _.Path |> List.distinct |> List.length <> categories.Length then fail "ES-CATEGORY-DUPLICATE" "duplicate category path"
 
@@ -736,11 +736,31 @@ let selfTest evidenceRoot =
         + "],\"rollup\":{\"acceptanceAuthority\":\"accountable-owner-only\",\"accountableOwner\":\"accountable-owner\",\"derivation\":\"all-required-bound-green/1\",\"digest\":\""
         + reviewDigest + "\",\"findingSetSha256\":\"" + reviewDigest + "\",\"outcome\":\"passed\",\"passingPerspectives\":"
         + reviewPerspectives + ",\"requiredPerspectives\":" + reviewPerspectives + "},\"schema\":\"fsgg.coordination.critique-evidence/1\"}"
+    let proofGates = [ "compiler"; "dependencies"; "externalFixtures"; "generatedCases"; "independentCases"; "model"; "packages"; "results"; "reviewers"; "sources" ]
+    let proofMutations = [ "vacuous"; "absent"; "stale"; "truncated"; "forged"; "generated-only" ]
+    let proofControls =
+        proofGates
+        |> List.map (fun gate -> $"{{\"diagnostics\":[],\"gateClass\":\"%s{gate}\",\"outcome\":\"passed\"}}")
+        |> String.concat ","
+    let proofObservations =
+        [ for gate in proofGates do
+              for mutation in proofMutations do
+                  yield $"{{\"diagnostics\":[\"TEST-REJECTION\"],\"gateClass\":\"%s{gate}\",\"mutationKind\":\"%s{mutation}\",\"outcome\":\"rejected\"}}" ]
+        |> String.concat ","
+    let quoted values = values |> List.map (sprintf "\"%s\"") |> String.concat ","
+    let validMutationProof =
+        "{\"baselineSha256\":\"" + reviewDigest + "\",\"candidateCommit\":\"" + String('a', 40)
+        + "\",\"candidateTreeSha256\":\"" + reviewDigest + "\",\"controls\":[" + proofControls
+        + "],\"digest\":\"" + reviewDigest + "\",\"gateClasses\":[" + quoted proofGates
+        + "],\"inventorySha256\":\"" + reviewDigest + "\",\"mutationKinds\":[" + quoted proofMutations
+        + "],\"observations\":[" + proofObservations + "],\"schema\":\"fsgg.coordination.harness-mutation-proof/1\",\"unitContractSha256\":\""
+        + reviewDigest + "\",\"validatorSha256\":\"" + reviewDigest + "\"}"
     let positiveRoot = Path.Combine(Path.GetTempPath(), $"fsgg-evidence-{Guid.NewGuid():N}")
     try
         copyDirectory evidenceRoot positiveRoot
         addTrackedJson positiveRoot "manifest-valid" "artifact-manifests" "artifact-manifests/manifest-valid.json" validManifest
         addTrackedJson positiveRoot "review-valid" "reviews" "reviews/review-valid.json" validReview
+        addTrackedJson positiveRoot "mutation-proof-valid" "mutation-proofs" "mutation-proofs/proof-valid.json" validMutationProof
         validate positiveRoot |> ignore
     finally
         if Directory.Exists positiveRoot then Directory.Delete(positiveRoot, true)
@@ -790,6 +810,11 @@ let selfTest evidenceRoot =
               addTrackedJson root "review-extra-property" "reviews" relative validReview
               mutateJson (Path.Combine(root, relative)) (fun node -> node["externalApproval"] <- true)
               refreshIndexedJson root relative), "ES-JSON-SHAPE"
+          "mutation-proof-truncated-matrix", (fun root ->
+              let relative = "mutation-proofs/truncated.json"
+              addTrackedJson root "mutation-proof-truncated" "mutation-proofs" relative validMutationProof
+              mutateJson (Path.Combine(root, relative)) (fun node -> node["observations"].AsArray().RemoveAt(0))
+              refreshIndexedJson root relative), "ES-SCHEMA-VALIDATION"
           "mutable-artifact-locator", (fun root ->
               let mutableManifest = validManifest.Replace("\"producerId\":33038126581", "\"producerId\":\"latest\"")
               addTrackedJson root "manifest-mutable" "artifact-manifests" "artifact-manifests/mutable.json" mutableManifest), "ES-JSON-TYPE"
@@ -925,7 +950,7 @@ let selfTest evidenceRoot =
             with error when error.Message.StartsWith(expected + ":", StringComparison.Ordinal) -> ()
         finally
             if Directory.Exists temp then Directory.Delete(temp, true)
-    $"EVIDENCE_STORAGE_SELF_TEST_OK negativeCases={cases.Length} positiveArtifactManifests=1 positiveCritiqueBundles=1"
+    $"EVIDENCE_STORAGE_SELF_TEST_OK negativeCases={cases.Length} positiveArtifactManifests=1 positiveCritiqueBundles=1 positiveMutationProofs=1"
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 try
