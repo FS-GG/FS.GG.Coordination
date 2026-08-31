@@ -23,6 +23,8 @@
     <Compile Include="HarnessMutationProof.fs" />
     <Compile Include="GitHubTransportQualification.fsi" />
     <Compile Include="GitHubTransportQualification.fs" />
+    <Compile Include="GitHubIssueFieldQualification.fsi" />
+    <Compile Include="GitHubIssueFieldQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

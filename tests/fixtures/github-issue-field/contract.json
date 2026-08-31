@@ -1,0 +1,1 @@
+{"controls":["pagination","duplicate-identity","type-drift","option-drift","stale-revision","incomplete-observation","no-op-mutation"],"generated":{"causation":"fixture-cause","fieldId":"F_fixture","issueId":"I_fixture","option":"Ready","revision":"fixture-rev-1"},"schema":"fsgg.coordination.github-issue-field-fixture/1","synthetic":true}

@@ -1,0 +1,117 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="f069c573-2508-42b9-b218-08db46e9d3ee" name="@0e1d0e6659b7 2026-08-31 09:55:47" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-31T09:55:47.6787821+02:00" queuing="2026-08-31T09:55:47.6787822+02:00" start="2026-08-31T09:55:47.0244885+02:00" finish="2026-08-31T09:55:50.7281309+02:00" />
+  <TestSettings name="default" id="31a331e9-b1aa-4195-85f6-b7e6bddaf847">
+    <Deployment runDeploymentRoot="_0e1d0e6659b7_2026-08-31_09_55_47" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c9fce2de-9734-4962-9aff-95888a828876" testId="198214af-b787-992f-c99b-52a3437edaa3" testName="FS.GG.Coordination.GitHubIssueFieldTests.planning refuses stale incomplete and ambiguous authority" computerName="0e1d0e6659b7" duration="00:00:00.0026606" startTime="2026-08-31T09:55:47.5631760+02:00" endTime="2026-08-31T09:55:47.5650736+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c9fce2de-9734-4962-9aff-95888a828876" />
+    <UnitTestResult executionId="bd6d61ad-d067-4234-96f0-ea4ed731ad1a" testId="1840b241-3f6a-fe41-841d-d3fe8027aa6a" testName="FS.GG.Coordination.GitHubIssueFieldTests.identity ambiguity and duplicate live ids fail closed" computerName="0e1d0e6659b7" duration="00:00:00.0005280" startTime="2026-08-31T09:55:47.5822421+02:00" endTime="2026-08-31T09:55:47.5826379+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bd6d61ad-d067-4234-96f0-ea4ed731ad1a" />
+    <UnitTestResult executionId="4299255f-bf79-4753-a431-99db2c457ee9" testId="44cc783b-4ec2-3d12-64be-bc6538265bf5" testName="FS.GG.Coordination.GitHubIssueFieldTests.qualification requires two complete independently reported control inventories" computerName="0e1d0e6659b7" duration="00:00:00.0153974" startTime="2026-08-31T09:55:47.5207035+02:00" endTime="2026-08-31T09:55:47.5418509+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4299255f-bf79-4753-a431-99db2c457ee9" />
+    <UnitTestResult executionId="3ffdd7d2-68e7-4722-bf41-76f135f7ff16" testId="0278831f-de33-3620-02c8-05a10930a728" testName="FS.GG.Coordination.GitHubIssueFieldTests.field validation enforces type and an exact closed option set" computerName="0e1d0e6659b7" duration="00:00:00.0204900" startTime="2026-08-31T09:55:47.5508627+02:00" endTime="2026-08-31T09:55:47.5623953+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3ffdd7d2-68e7-4722-bf41-76f135f7ff16" />
+    <UnitTestResult executionId="1e6cbaec-b443-411d-bde0-3ac3abddec68" testId="26288f43-204e-5ba5-528a-2d1cb5e9a002" testName="FS.GG.Coordination.GitHubIssueFieldTests.guarded plans are deterministic and distinguish create update clear and no-op" computerName="0e1d0e6659b7" duration="00:00:00.0122050" startTime="2026-08-31T09:55:47.5652435+02:00" endTime="2026-08-31T09:55:47.5774064+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1e6cbaec-b443-411d-bde0-3ac3abddec68" />
+    <UnitTestResult executionId="007fbe13-9633-4669-8ad2-54f6b8fe5efc" testId="3968bc3b-f23c-faf3-7573-48620b8dc1a7" testName="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.registered issue field Q3 validator is offline and runs two producers" computerName="0e1d0e6659b7" duration="00:00:00.0002722" startTime="2026-08-31T09:55:50.6926712+02:00" endTime="2026-08-31T09:55:50.6926989+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="007fbe13-9633-4669-8ad2-54f6b8fe5efc" />
+    <UnitTestResult executionId="1541c1fe-de34-4e34-86dd-a43d605a8ab3" testId="6f58674c-22b8-5d0e-6a24-9176e7fe81ff" testName="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.registered issue field Q3 command passes against repository local evidence" computerName="0e1d0e6659b7" duration="00:00:02.5086570" startTime="2026-08-31T09:55:48.1778357+02:00" endTime="2026-08-31T09:55:50.6855288+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1541c1fe-de34-4e34-86dd-a43d605a8ab3" />
+    <UnitTestResult executionId="bcbec96e-f18c-45e8-99b7-9f8ae345e896" testId="2e6d5482-62c4-7eea-07c5-c62db66724f8" testName="FS.GG.Coordination.GitHubIssueFieldTests.current value read preserves revision and terminal page evidence" computerName="0e1d0e6659b7" duration="00:00:00.0046214" startTime="2026-08-31T09:55:47.5857505+02:00" endTime="2026-08-31T09:55:47.5873589+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bcbec96e-f18c-45e8-99b7-9f8ae345e896" />
+    <UnitTestResult executionId="374672a6-23f8-42c4-b874-a77bb112f38f" testId="61e78db2-71bc-af30-1e5a-7c74115c3462" testName="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.Q3 issue field fixture is canonical synthetic and closed" computerName="0e1d0e6659b7" duration="00:00:00.0067619" startTime="2026-08-31T09:55:50.6859754+02:00" endTime="2026-08-31T09:55:50.6923622+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="374672a6-23f8-42c4-b874-a77bb112f38f" />
+    <UnitTestResult executionId="098f7d4f-c400-4dad-9c6a-67acea5811f6" testId="f8aa1e57-58e0-f317-3fb9-900be7af4b0a" testName="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.independent issue field inventory is closed and every mutation turns red" computerName="0e1d0e6659b7" duration="00:00:00.0215291" startTime="2026-08-31T09:55:48.1645312+02:00" endTime="2026-08-31T09:55:48.1767450+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="098f7d4f-c400-4dad-9c6a-67acea5811f6" />
+    <UnitTestResult executionId="efa9254e-358c-435b-af3a-7b0239f6ffb7" testId="d9af01dc-dc29-5434-5b66-0b4a658e757e" testName="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.issue field and qualification signatures precede implementations" computerName="0e1d0e6659b7" duration="00:00:00.0001652" startTime="2026-08-31T09:55:50.6928742+02:00" endTime="2026-08-31T09:55:50.6929011+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="efa9254e-358c-435b-af3a-7b0239f6ffb7" />
+    <UnitTestResult executionId="aaeef982-c3dc-4779-b4c9-12b2dd22e8de" testId="a1d1aaed-d8a1-c06c-bf6e-2522073eff5b" testName="FS.GG.Coordination.GitHubIssueFieldTests.idempotency identities use unambiguous length-prefixed opaque values" computerName="0e1d0e6659b7" duration="00:00:00.0015266" startTime="2026-08-31T09:55:47.5776206+02:00" endTime="2026-08-31T09:55:47.5790011+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="aaeef982-c3dc-4779-b4c9-12b2dd22e8de" />
+    <UnitTestResult executionId="7912da6d-7cc1-42b0-aded-d8933b7808d5" testId="d5673fc1-179a-37b7-fc5a-322d95804d2e" testName="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.issue field qualification contracts do not invert production dependencies" computerName="0e1d0e6659b7" duration="00:00:00.0029650" startTime="2026-08-31T09:55:48.1465822+02:00" endTime="2026-08-31T09:55:48.1550363+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7912da6d-7cc1-42b0-aded-d8933b7808d5" />
+    <UnitTestResult executionId="d0b44ca1-3027-4cef-a64c-48738c5fef3c" testId="5404cb40-c077-ba10-abb0-b8fc4a1e11c5" testName="FS.GG.Coordination.GitHubIssueFieldTests.semantic identity resolves every supported kind only from a unique complete observation" computerName="0e1d0e6659b7" duration="00:00:00.0029626" startTime="2026-08-31T09:55:47.5791326+02:00" endTime="2026-08-31T09:55:47.5820457+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d0b44ca1-3027-4cef-a64c-48738c5fef3c" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.registered issue field Q3 validator is offline and runs two producers" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="3968bc3b-f23c-faf3-7573-48620b8dc1a7">
+      <Execution id="007fbe13-9633-4669-8ad2-54f6b8fe5efc" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldArchitectureTests" name="registered issue field Q3 validator is offline and runs two producers" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.independent issue field inventory is closed and every mutation turns red" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="f8aa1e57-58e0-f317-3fb9-900be7af4b0a">
+      <Execution id="098f7d4f-c400-4dad-9c6a-67acea5811f6" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldArchitectureTests" name="independent issue field inventory is closed and every mutation turns red" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.issue field qualification contracts do not invert production dependencies" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="d5673fc1-179a-37b7-fc5a-322d95804d2e">
+      <Execution id="7912da6d-7cc1-42b0-aded-d8933b7808d5" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldArchitectureTests" name="issue field qualification contracts do not invert production dependencies" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldTests.current value read preserves revision and terminal page evidence" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.unittests/bin/debug/net10.0/fs.gg.coordination.unittests.dll" id="2e6d5482-62c4-7eea-07c5-c62db66724f8">
+      <Execution id="bcbec96e-f18c-45e8-99b7-9f8ae345e896" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.UnitTests/bin/Debug/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldTests" name="current value read preserves revision and terminal page evidence" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldTests.qualification requires two complete independently reported control inventories" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.unittests/bin/debug/net10.0/fs.gg.coordination.unittests.dll" id="44cc783b-4ec2-3d12-64be-bc6538265bf5">
+      <Execution id="4299255f-bf79-4753-a431-99db2c457ee9" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.UnitTests/bin/Debug/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldTests" name="qualification requires two complete independently reported control inventories" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldTests.planning refuses stale incomplete and ambiguous authority" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.unittests/bin/debug/net10.0/fs.gg.coordination.unittests.dll" id="198214af-b787-992f-c99b-52a3437edaa3">
+      <Execution id="c9fce2de-9734-4962-9aff-95888a828876" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.UnitTests/bin/Debug/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldTests" name="planning refuses stale incomplete and ambiguous authority" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldTests.idempotency identities use unambiguous length-prefixed opaque values" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.unittests/bin/debug/net10.0/fs.gg.coordination.unittests.dll" id="a1d1aaed-d8a1-c06c-bf6e-2522073eff5b">
+      <Execution id="aaeef982-c3dc-4779-b4c9-12b2dd22e8de" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.UnitTests/bin/Debug/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldTests" name="idempotency identities use unambiguous length-prefixed opaque values" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldTests.identity ambiguity and duplicate live ids fail closed" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.unittests/bin/debug/net10.0/fs.gg.coordination.unittests.dll" id="1840b241-3f6a-fe41-841d-d3fe8027aa6a">
+      <Execution id="bd6d61ad-d067-4234-96f0-ea4ed731ad1a" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.UnitTests/bin/Debug/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldTests" name="identity ambiguity and duplicate live ids fail closed" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldTests.semantic identity resolves every supported kind only from a unique complete observation" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.unittests/bin/debug/net10.0/fs.gg.coordination.unittests.dll" id="5404cb40-c077-ba10-abb0-b8fc4a1e11c5">
+      <Execution id="d0b44ca1-3027-4cef-a64c-48738c5fef3c" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.UnitTests/bin/Debug/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldTests" name="semantic identity resolves every supported kind only from a unique complete observation" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldTests.guarded plans are deterministic and distinguish create update clear and no-op" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.unittests/bin/debug/net10.0/fs.gg.coordination.unittests.dll" id="26288f43-204e-5ba5-528a-2d1cb5e9a002">
+      <Execution id="1e6cbaec-b443-411d-bde0-3ac3abddec68" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.UnitTests/bin/Debug/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldTests" name="guarded plans are deterministic and distinguish create update clear and no-op" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldTests.field validation enforces type and an exact closed option set" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.unittests/bin/debug/net10.0/fs.gg.coordination.unittests.dll" id="0278831f-de33-3620-02c8-05a10930a728">
+      <Execution id="3ffdd7d2-68e7-4722-bf41-76f135f7ff16" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.UnitTests/bin/Debug/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldTests" name="field validation enforces type and an exact closed option set" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.Q3 issue field fixture is canonical synthetic and closed" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="61e78db2-71bc-af30-1e5a-7c74115c3462">
+      <Execution id="374672a6-23f8-42c4-b874-a77bb112f38f" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldArchitectureTests" name="Q3 issue field fixture is canonical synthetic and closed" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.issue field and qualification signatures precede implementations" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="d9af01dc-dc29-5434-5b66-0b4a658e757e">
+      <Execution id="efa9254e-358c-435b-af3a-7b0239f6ffb7" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldArchitectureTests" name="issue field and qualification signatures precede implementations" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIssueFieldArchitectureTests.registered issue field Q3 command passes against repository local evidence" storage="/home/developer/projects/fs.gg.coordination/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="6f58674c-22b8-5d0e-6a24-9176e7fe81ff">
+      <Execution id="1541c1fe-de34-4e34-86dd-a43d605a8ab3" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIssueFieldArchitectureTests" name="registered issue field Q3 command passes against repository local evidence" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="198214af-b787-992f-c99b-52a3437edaa3" executionId="c9fce2de-9734-4962-9aff-95888a828876" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1840b241-3f6a-fe41-841d-d3fe8027aa6a" executionId="bd6d61ad-d067-4234-96f0-ea4ed731ad1a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="44cc783b-4ec2-3d12-64be-bc6538265bf5" executionId="4299255f-bf79-4753-a431-99db2c457ee9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0278831f-de33-3620-02c8-05a10930a728" executionId="3ffdd7d2-68e7-4722-bf41-76f135f7ff16" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="26288f43-204e-5ba5-528a-2d1cb5e9a002" executionId="1e6cbaec-b443-411d-bde0-3ac3abddec68" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3968bc3b-f23c-faf3-7573-48620b8dc1a7" executionId="007fbe13-9633-4669-8ad2-54f6b8fe5efc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6f58674c-22b8-5d0e-6a24-9176e7fe81ff" executionId="1541c1fe-de34-4e34-86dd-a43d605a8ab3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2e6d5482-62c4-7eea-07c5-c62db66724f8" executionId="bcbec96e-f18c-45e8-99b7-9f8ae345e896" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="61e78db2-71bc-af30-1e5a-7c74115c3462" executionId="374672a6-23f8-42c4-b874-a77bb112f38f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f8aa1e57-58e0-f317-3fb9-900be7af4b0a" executionId="098f7d4f-c400-4dad-9c6a-67acea5811f6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d9af01dc-dc29-5434-5b66-0b4a658e757e" executionId="efa9254e-358c-435b-af3a-7b0239f6ffb7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a1d1aaed-d8a1-c06c-bf6e-2522073eff5b" executionId="aaeef982-c3dc-4779-b4c9-12b2dd22e8de" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d5673fc1-179a-37b7-fc5a-322d95804d2e" executionId="7912da6d-7cc1-42b0-aded-d8933b7808d5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5404cb40-c077-ba10-abb0-b8fc4a1e11c5" executionId="d0b44ca1-3027-4cef-a64c-48738c5fef3c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="14" executed="14" passed="14" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.08]   Discovering: FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.12]   Discovered:  FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.15]   Starting:    FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.24]   Finished:    FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.09]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.17]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.20]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:02.76]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

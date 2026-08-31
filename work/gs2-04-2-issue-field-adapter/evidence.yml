@@ -1,0 +1,937 @@
+schemaVersion: 1
+workId: gs2-04-2-issue-field-adapter
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-2-issue-field-adapter/spec.md
+sourceClarifications: work/gs2-04-2-issue-field-adapter/clarifications.md
+sourceChecklist: work/gs2-04-2-issue-field-adapter/checklist.md
+sourcePlan: work/gs2-04-2-issue-field-adapter/plan.md
+sourceTasks: work/gs2-04-2-issue-field-adapter/tasks.yml
+sourceAnalysis: readiness/gs2-04-2-issue-field-adapter/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-2-issue-field-adapter/analysis.json
+    digest: 97969ede7d169f98c990294adf8b54981d2ab73069218c63819fa8c85e043961
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-2-issue-field-adapter/checklist.md
+    digest: 92982a3edabe6a8b9a2d12719dbb773c0389948f3644214ffb7c86b458522b91
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-2-issue-field-adapter/clarifications.md
+    digest: bba7cf1af1fd0dfdaece8ca45d5bc2542adcdae74b12f10cb2b0cc3acab1ef98
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-2-issue-field-adapter/plan.md
+    digest: 3748bb8df45e42d0217e5268e6fcdcbc62f7a237dda5aec86e2c5cdf3fcf291e
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-2-issue-field-adapter/spec.md
+    digest: 2d9a5bc24596eb449d821877d8706c38addaba4385cec17ded79354fecbf8ffd
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-2-issue-field-adapter/tasks.yml
+    digest: 3b9cae1d2f5043e7b0481207b2e3a594cbe75b19d2da2ac7e6e6786efe5e866c
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV024]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV025]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV026]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV027]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV028]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV029]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIssueFieldTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIssueFieldArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-issue-field.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-2/qualification.trx
+      digest: "sha256:4b15fc112df1c241942502dd00a1d0afc12231bcb7d2c6ef5e5e6a5d5eff543d"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 14
+      failed: 0
+      skipped: 0
+    notes: [Implemented and exercised by the declared issue-field unit and architecture controls.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
