@@ -454,6 +454,20 @@
         { "id": "github-native-relation-contract", "qGate": "Q3", "commandSha256": "3b945e7eaa6244d5cc7cfb5d086bf2cc1e2ea5476ba19301dfd5e411f2a51556" }
       ],
       "contractSha256": "34f246d86a24721db2bada1baf5e1ff8ecc89f55016744affbf9657c31da5844"
+    },
+    {
+      "id": "GS2-04.4",
+      "title": "Project adapter",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.3"],
+      "permissionCeiling": ["repository-local Project membership and Status projection observation contracts, complete deterministic fixtures, guarded projection plans, validation, and evidence", "local loopback fixture execution is allowed; no live GitHub write, organization or repository settings mutation, production credential, deployment, publication, stable release, Q4 sandbox claim, comment/projection adapter, or successor-unit implementation authority"],
+      "exitGate": "the Q3 Project adapter treats project membership and Status only as projections; reads complete membership, item, and field observations; preserves archived, duplicated, external, draft, missing, unsupported, unauthorized, incomplete, and unreadable outcomes without inventing absence or authority; derives deterministic guarded membership and Status projection plans bound to expected revisions and idempotency identities; generated cases and independent pagination, archived-item, duplicate-item, external-item, draft-item, missing-item, unreadable-observation, stale-revision, concurrent-change, and no-op controls all pass without performing live writes and without claiming Q4 sandbox behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-project-adapter-contract"],
+      "gateContracts": [
+        { "id": "github-project-adapter-contract", "qGate": "Q3", "commandSha256": "c782afca818ccd8c0b9845a4abcfa2d14bc70cfc5b762d0fac4a600875b82fcc" }
+      ],
+      "contractSha256": "2f1a2ce88d7939c9c5607cb09b31d3e956a1cd0f9df66dc02dd35715b54d0838"
     }
   ]
 }
