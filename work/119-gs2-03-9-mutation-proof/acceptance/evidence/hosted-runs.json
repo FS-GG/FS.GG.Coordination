@@ -1,0 +1,48 @@
+{
+  "schema": "fsgg.coordination.hosted-run-observation/1",
+  "unitId": "GS2-03.9",
+  "pullRequestHead": "fa1426cdd80697d54ad179c243bea50f706ec25a",
+  "protectedMerge": "53f0338dea988fd79b95092286709df7c0fb4745",
+  "runs": [
+    {
+      "id": 33348201595,
+      "workflow": "Bootstrap qualification",
+      "event": "pull_request",
+      "head": "fa1426cdd80697d54ad179c243bea50f706ec25a",
+      "conclusion": "success",
+      "createdAt": "2026-08-31T01:38:34Z",
+      "updatedAt": "2026-08-31T01:58:15Z",
+      "url": "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33348201595"
+    },
+    {
+      "id": 33348199638,
+      "workflow": "CodeQL",
+      "event": "dynamic",
+      "head": "fa1426cdd80697d54ad179c243bea50f706ec25a",
+      "conclusion": "success",
+      "createdAt": "2026-08-31T01:38:31Z",
+      "updatedAt": "2026-08-31T01:39:21Z",
+      "url": "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33348199638"
+    },
+    {
+      "id": 33349197336,
+      "workflow": "Bootstrap qualification",
+      "event": "push",
+      "head": "53f0338dea988fd79b95092286709df7c0fb4745",
+      "conclusion": "success",
+      "createdAt": "2026-08-31T01:58:21Z",
+      "updatedAt": "2026-08-31T01:59:24Z",
+      "url": "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33349197336"
+    },
+    {
+      "id": 33349196827,
+      "workflow": "CodeQL",
+      "event": "dynamic",
+      "head": "53f0338dea988fd79b95092286709df7c0fb4745",
+      "conclusion": "success",
+      "createdAt": "2026-08-31T01:58:20Z",
+      "updatedAt": "2026-08-31T01:59:05Z",
+      "url": "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/33349196827"
+    }
+  ]
+}

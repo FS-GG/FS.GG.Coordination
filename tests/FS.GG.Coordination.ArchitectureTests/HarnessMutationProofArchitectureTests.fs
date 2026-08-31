@@ -1,8 +1,10 @@
 module FS.GG.Coordination.HarnessMutationProofArchitectureTests
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
 open Xunit
@@ -14,11 +16,19 @@ let private baselinePath = Path.Combine(root, "evidence/github-substrate-v2/qual
 let private digest character = String(character, 64)
 
 let private context () =
-    let validator = File.ReadAllBytes(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/QualificationManifest.fs"))
+    let validatorBoundary =
+        [ "src/FS.GG.Coordination.Qualification.Contracts/HarnessMutationProof.fs"
+          "src/FS.GG.Coordination.Qualification.Contracts/QualificationManifest.fs" ]
+        |> List.map (fun path ->
+            let bytes = File.ReadAllBytes(Path.Combine(root, path))
+            let fileDigest = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+            $"%s{path}:%s{fileDigest}")
+        |> String.concat "\n"
+        |> fun value -> SHA256.HashData(Encoding.UTF8.GetBytes(value + "\n")) |> Convert.ToHexString |> _.ToLowerInvariant()
     { CandidateCommit = String('1', 40)
       CandidateTreeSha256 = digest '2'
       UnitContractSha256 = "acb013dd87697c21886dca39fa9ca97ff48e24402e964000cdc1d4c4645be40b"
-      ValidatorSha256 = SHA256.HashData validator |> Convert.ToHexString |> _.ToLowerInvariant() }
+      ValidatorSha256 = validatorBoundary }
 
 let private generate () =
     let inventory = File.ReadAllBytes inventoryPath
@@ -65,3 +75,24 @@ let ``proof coverage candidate and independent inputs cannot be asserted or subs
     let changedBaseline = Array.copy baseline
     changedBaseline[0] <- byte ' '
     Assert.True(HarnessMutationProof.validate value (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(changedBaseline)) (ReadOnlyMemory<byte>(proof)) |> Result.isError)
+
+[<Fact>]
+let ``accepted GS2-03.9 proof reproduces from exact protected evidence`` () =
+    let startInfo = ProcessStartInfo("dotnet")
+    for argument in
+        [ "fsi"
+          "work/119-gs2-03-9-mutation-proof/acceptance/validate.fsx" ] do
+        startInfo.ArgumentList.Add argument
+    startInfo.WorkingDirectory <- root
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use child = Process.Start startInfo
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.Equal(0, child.ExitCode)
+    Assert.Contains("GS2_03_9_ACCEPTANCE_OK candidate=53f0338dea988fd79b95092286709df7c0fb4745", output)
+    Assert.Contains("proof=4585fb2f68700dd8d8f0a470a55591fc0d5b6e8a31d2936ff2388fe655204060", output)
+    Assert.Contains("validatorBoundary=22afe424bd4578e987d6c39b6beb52d58b933e491798508cefb4648e96ff3894", output)
+    Assert.Equal("", error)
