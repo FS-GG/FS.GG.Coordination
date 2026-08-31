@@ -35,6 +35,8 @@
     <Compile Include="GitHubProjectAdapterQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
+    <Compile Include="GitHubShardedJournalQualification.fsi" />
+    <Compile Include="GitHubShardedJournalQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>
