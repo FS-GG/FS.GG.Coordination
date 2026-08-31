@@ -1,6 +1,7 @@
 open System
 open System.Diagnostics
 open System.IO
+open System.Net.Sockets
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -159,6 +160,56 @@ let requireFile code path =
     if not (File.Exists path) then
         fail code path
 
+type OwnedApalacheServer =
+    { Process: Process
+      Output: Task<string>
+      Error: Task<string>
+      mutable Stopped: bool }
+
+let stopApalacheServer server =
+    if not server.Stopped then
+        server.Stopped <- true
+        if not server.Process.HasExited then server.Process.Kill(true)
+        server.Process.WaitForExit()
+    let output = server.Output.Result.Trim()
+    let error = server.Error.Result.Trim()
+    String.concat "\n" [ output; error ] |> _.Trim()
+
+let startApalacheServer workingDirectory environment port =
+    let quintHome =
+        environment
+        |> List.tryPick (fun (name, value) -> if name = "QUINT_HOME" then Some value else None)
+        |> Option.defaultWith (fun () -> Environment.GetEnvironmentVariable "FSGG_QUINT_HOME")
+    if String.IsNullOrWhiteSpace quintHome then fail "APALACHE-SERVER-HOME" "QUINT_HOME is required"
+    let executable = Path.Combine(quintHome, "apalache-dist-0.56.1/apalache/bin/apalache-mc")
+    requireFile "APALACHE-SERVER-MISSING" executable
+    let info = ProcessStartInfo(executable)
+    info.WorkingDirectory <- workingDirectory
+    info.UseShellExecute <- false
+    info.RedirectStandardOutput <- true
+    info.RedirectStandardError <- true
+    info.ArgumentList.Add "server"
+    info.ArgumentList.Add($"--port=%d{port}")
+    for name, value in environment do info.Environment[name] <- value
+    let child = Process.Start info
+    let server =
+        { Process = child
+          Output = child.StandardOutput.ReadToEndAsync()
+          Error = child.StandardError.ReadToEndAsync()
+          Stopped = false }
+    let clock = Stopwatch.StartNew()
+    let mutable ready = false
+    while not ready && not child.HasExited && clock.Elapsed < TimeSpan.FromSeconds 20.0 do
+        try
+            use client = new TcpClient()
+            client.Connect("127.0.0.1", port)
+            ready <- true
+        with :? SocketException -> Thread.Sleep 50
+    if not ready then
+        let diagnostic = stopApalacheServer server
+        fail "APALACHE-SERVER-START" ($"port=%d{port}; elapsedMs=%d{clock.ElapsedMilliseconds}; %s{diagnostic}")
+    server
+
 let isolateApalacheEndpoint isQuint arguments =
     let command = List.tryHead arguments
     let usesApalacheServer =
@@ -166,19 +217,19 @@ let isolateApalacheEndpoint isQuint arguments =
         && (command = Some "verify"
             || (command = Some "compile" && argumentValue "--target" arguments = Some "tlaplus"))
 
-    if not usesApalacheServer || List.contains "--server-endpoint" arguments then arguments
+    if not usesApalacheServer || List.contains "--server-endpoint" arguments then arguments, None
     else
         let ordinal = Interlocked.Increment(&apalacheEndpointOrdinal) - 1
         let port = apalacheEndpointBase + ordinal
         if port > 65535 then fail "APALACHE-ENDPOINT-RANGE" (string port)
         if not (apalacheEndpoints.TryAdd(port, 0uy)) then fail "APALACHE-ENDPOINT-DUPLICATE" (string port)
-        arguments @ [ "--server-endpoint"; $"localhost:%d{port}" ]
+        arguments @ [ "--server-endpoint"; $"localhost:%d{port}" ], Some port
 
 let run workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
 
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
-    let arguments = isolateApalacheEndpoint isQuint arguments
+    let arguments, apalachePort = isolateApalacheEndpoint isQuint arguments
     incrementInvocation (classifyInvocation isQuint arguments)
 
     if isQuint then
@@ -200,15 +251,27 @@ let run workingDirectory (executable: string) arguments environment =
     for name, value in environment do
         info.Environment[name] <- value
 
+    let server = apalachePort |> Option.map (startApalacheServer workingDirectory environment)
+    use serverGuard =
+        { new IDisposable with
+            member _.Dispose() =
+                server
+                |> Option.iter (fun owned ->
+                    if not owned.Stopped then stopApalacheServer owned |> ignore) }
     use child = Process.Start info
     let output = child.StandardOutput.ReadToEndAsync()
     let error = child.StandardError.ReadToEndAsync()
     child.WaitForExit()
+    let serverDiagnostic = server |> Option.map stopApalacheServer |> Option.defaultValue ""
 
     if isQuint && child.ExitCode <> 0 then
         Interlocked.Increment(&quintRejectedProcessCount) |> ignore
 
-    child.ExitCode, output.Result.Trim(), error.Result.Trim()
+    let errorText =
+        if child.ExitCode <> 0 && not (String.IsNullOrWhiteSpace serverDiagnostic) then
+            error.Result.Trim() + "\napalache-server: " + serverDiagnostic
+        else error.Result.Trim()
+    child.ExitCode, output.Result.Trim(), errorText
 
 let private processTreeRssBytes rootPid =
     let rec collect visited pid =
@@ -241,7 +304,7 @@ let private processTreeRssBytes rootPid =
 let runMeasured workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
-    let arguments = isolateApalacheEndpoint isQuint arguments
+    let arguments, apalachePort = isolateApalacheEndpoint isQuint arguments
     incrementInvocation (classifyInvocation isQuint arguments)
     if isQuint then
         Interlocked.Increment(&quintProcessCount) |> ignore
@@ -255,6 +318,13 @@ let runMeasured workingDirectory (executable: string) arguments environment =
     info.RedirectStandardError <- true
     for argument in arguments do info.ArgumentList.Add argument
     for name, value in environment do info.Environment[name] <- value
+    let server = apalachePort |> Option.map (startApalacheServer workingDirectory environment)
+    use serverGuard =
+        { new IDisposable with
+            member _.Dispose() =
+                server
+                |> Option.iter (fun owned ->
+                    if not owned.Stopped then stopApalacheServer owned |> ignore) }
     use child = Process.Start info
     let output = child.StandardOutput.ReadToEndAsync()
     let error = child.StandardError.ReadToEndAsync()
@@ -265,8 +335,13 @@ let runMeasured workingDirectory (executable: string) arguments environment =
         Thread.Sleep 10
     child.WaitForExit()
     peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
+    let serverDiagnostic = server |> Option.map stopApalacheServer |> Option.defaultValue ""
     if isQuint && child.ExitCode <> 0 then Interlocked.Increment(&quintRejectedProcessCount) |> ignore
-    child.ExitCode, output.Result.Trim(), error.Result.Trim(), clock.ElapsedMilliseconds,
+    let errorText =
+        if child.ExitCode <> 0 && not (String.IsNullOrWhiteSpace serverDiagnostic) then
+            error.Result.Trim() + "\napalache-server: " + serverDiagnostic
+        else error.Result.Trim()
+    child.ExitCode, output.Result.Trim(), errorText, clock.ElapsedMilliseconds,
     int (Math.Ceiling(float peakBytes / 1048576.0))
 
 let requireGreen code workingDirectory executable arguments environment =
