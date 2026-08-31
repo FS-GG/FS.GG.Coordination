@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="1091c6d6-a60b-498f-ba78-e4d6308caa70" name="@0e1d0e6659b7 2026-08-31 15:51:12" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-31T15:51:12.3466286+02:00" queuing="2026-08-31T15:51:12.3466286+02:00" start="2026-08-31T15:51:10.5339913+02:00" finish="2026-08-31T15:51:13.9994046+02:00" />
+  <TestSettings name="default" id="7cc58b24-0f7b-4477-8ec0-cb4a8137a0cf">
+    <Deployment runDeploymentRoot="_0e1d0e6659b7_2026-08-31_15_51_12" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="84afb178-430e-40c8-9b1a-806c7f7936ef" testId="f33a251b-4c13-d381-7ce6-2ef3e7ee79a9" testName="FS.GG.Coordination.GitHubNativeRelationTests.native relation qualification inventory is exact and every mutation must turn red" computerName="0e1d0e6659b7" duration="00:00:00.0045562" startTime="2026-08-31T15:51:11.1287025+02:00" endTime="2026-08-31T15:51:11.1331693+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="84afb178-430e-40c8-9b1a-806c7f7936ef" />
+    <UnitTestResult executionId="0886beee-4785-4821-8589-48ee665ca061" testId="48afd122-508f-f6a2-08c0-85b271233d09" testName="FS.GG.Coordination.GitHubNativeRelationTests.post-state verification requires exact delta revision and unrelated-edge preservation" computerName="0e1d0e6659b7" duration="00:00:00.0039244" startTime="2026-08-31T15:51:11.1333473+02:00" endTime="2026-08-31T15:51:11.1371950+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0886beee-4785-4821-8589-48ee665ca061" />
+    <UnitTestResult executionId="6eabb36c-da71-4725-9274-40c51acec8bd" testId="9f5e7fe8-64ee-e89f-e067-1f1898fc2a8d" testName="FS.GG.Coordination.GitHubNativeRelationTests.complete reads require a contiguous terminal page chain and sort all edges" computerName="0e1d0e6659b7" duration="00:00:00.0307829" startTime="2026-08-31T15:51:11.0642234+02:00" endTime="2026-08-31T15:51:11.1017176+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6eabb36c-da71-4725-9274-40c51acec8bd" />
+    <UnitTestResult executionId="ba6ad6a4-d34d-4f23-aa64-4dc9d82fb95e" testId="ae8331b2-43d3-8baa-f8fe-57c39c462330" testName="FS.GG.Coordination.GitHubNativeRelationArchitectureTests.native relation fixture is canonical synthetic offline and closed" computerName="0e1d0e6659b7" duration="00:00:00.0034456" startTime="2026-08-31T15:51:13.9442723+02:00" endTime="2026-08-31T15:51:13.9469730+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ba6ad6a4-d34d-4f23-aa64-4dc9d82fb95e" />
+    <UnitTestResult executionId="78104623-5e7d-4dbc-aab1-32cdab1d4c01" testId="4486bd1c-7656-bde5-f050-e0a7f50d5cd8" testName="FS.GG.Coordination.GitHubNativeRelationTests.stale reread and concurrent pre-state changes refuse before execution" computerName="0e1d0e6659b7" duration="00:00:00.0178962" startTime="2026-08-31T15:51:11.1127613+02:00" endTime="2026-08-31T15:51:11.1198530+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="78104623-5e7d-4dbc-aab1-32cdab1d4c01" />
+    <UnitTestResult executionId="476a15b2-96ce-4ccb-a992-5b0b1f48288d" testId="3fe11a8f-28cd-2000-7dfe-2c1c68f9bf5e" testName="FS.GG.Coordination.GitHubNativeRelationArchitectureTests.registered native relation validator is offline uses two producers and passes" computerName="0e1d0e6659b7" duration="00:00:02.8747067" startTime="2026-08-31T15:51:11.0653962+02:00" endTime="2026-08-31T15:51:13.9434511+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="476a15b2-96ce-4ccb-a992-5b0b1f48288d" />
+    <UnitTestResult executionId="20dc888d-525c-408e-9295-d668f038bb63" testId="bfd56553-5d2a-b938-2297-338fe86cbd1c" testName="FS.GG.Coordination.GitHubNativeRelationTests.reads preserve refusals and reject duplicate self and wrong-kind edges" computerName="0e1d0e6659b7" duration="00:00:00.0022025" startTime="2026-08-31T15:51:11.1205948+02:00" endTime="2026-08-31T15:51:11.1220865+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="20dc888d-525c-408e-9295-d668f038bb63" />
+    <UnitTestResult executionId="b659512e-366e-44ac-aede-e471080b11df" testId="e0aa079f-e44f-36c5-edfa-93556cc9af3c" testName="FS.GG.Coordination.GitHubNativeRelationTests.planning is edge-local deterministic collision-safe and typed for no-ops" computerName="0e1d0e6659b7" duration="00:00:00.0063405" startTime="2026-08-31T15:51:11.1222604+02:00" endTime="2026-08-31T15:51:11.1285146+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b659512e-366e-44ac-aede-e471080b11df" />
+    <UnitTestResult executionId="21b49192-faea-45c1-8a08-26b12b79ead5" testId="783cc586-d069-f9f2-1cf8-694b2c4d7957" testName="FS.GG.Coordination.GitHubNativeRelationArchitectureTests.native relation public and qualification signatures precede implementations" computerName="0e1d0e6659b7" duration="00:00:00.0001864" startTime="2026-08-31T15:51:13.9472539+02:00" endTime="2026-08-31T15:51:13.9472802+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="21b49192-faea-45c1-8a08-26b12b79ead5" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationTests.planning is edge-local deterministic collision-safe and typed for no-ops" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="e0aa079f-e44f-36c5-edfa-93556cc9af3c">
+      <Execution id="b659512e-366e-44ac-aede-e471080b11df" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationTests" name="planning is edge-local deterministic collision-safe and typed for no-ops" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationTests.post-state verification requires exact delta revision and unrelated-edge preservation" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="48afd122-508f-f6a2-08c0-85b271233d09">
+      <Execution id="0886beee-4785-4821-8589-48ee665ca061" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationTests" name="post-state verification requires exact delta revision and unrelated-edge preservation" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationArchitectureTests.native relation fixture is canonical synthetic offline and closed" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="ae8331b2-43d3-8baa-f8fe-57c39c462330">
+      <Execution id="ba6ad6a4-d34d-4f23-aa64-4dc9d82fb95e" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationArchitectureTests" name="native relation fixture is canonical synthetic offline and closed" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationTests.reads preserve refusals and reject duplicate self and wrong-kind edges" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="bfd56553-5d2a-b938-2297-338fe86cbd1c">
+      <Execution id="20dc888d-525c-408e-9295-d668f038bb63" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationTests" name="reads preserve refusals and reject duplicate self and wrong-kind edges" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationTests.stale reread and concurrent pre-state changes refuse before execution" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="4486bd1c-7656-bde5-f050-e0a7f50d5cd8">
+      <Execution id="78104623-5e7d-4dbc-aab1-32cdab1d4c01" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationTests" name="stale reread and concurrent pre-state changes refuse before execution" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationTests.complete reads require a contiguous terminal page chain and sort all edges" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="9f5e7fe8-64ee-e89f-e067-1f1898fc2a8d">
+      <Execution id="6eabb36c-da71-4725-9274-40c51acec8bd" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationTests" name="complete reads require a contiguous terminal page chain and sort all edges" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationArchitectureTests.native relation public and qualification signatures precede implementations" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="783cc586-d069-f9f2-1cf8-694b2c4d7957">
+      <Execution id="21b49192-faea-45c1-8a08-26b12b79ead5" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationArchitectureTests" name="native relation public and qualification signatures precede implementations" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationTests.native relation qualification inventory is exact and every mutation must turn red" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="f33a251b-4c13-d381-7ce6-2ef3e7ee79a9">
+      <Execution id="84afb178-430e-40c8-9b1a-806c7f7936ef" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationTests" name="native relation qualification inventory is exact and every mutation must turn red" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNativeRelationArchitectureTests.registered native relation validator is offline uses two producers and passes" storage="/home/developer/projects/fs.gg.coordination-item-137/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="3fe11a8f-28cd-2000-7dfe-2c1c68f9bf5e">
+      <Execution id="476a15b2-96ce-4ccb-a992-5b0b1f48288d" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-137/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNativeRelationArchitectureTests" name="registered native relation validator is offline uses two producers and passes" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="f33a251b-4c13-d381-7ce6-2ef3e7ee79a9" executionId="84afb178-430e-40c8-9b1a-806c7f7936ef" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="48afd122-508f-f6a2-08c0-85b271233d09" executionId="0886beee-4785-4821-8589-48ee665ca061" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9f5e7fe8-64ee-e89f-e067-1f1898fc2a8d" executionId="6eabb36c-da71-4725-9274-40c51acec8bd" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ae8331b2-43d3-8baa-f8fe-57c39c462330" executionId="ba6ad6a4-d34d-4f23-aa64-4dc9d82fb95e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4486bd1c-7656-bde5-f050-e0a7f50d5cd8" executionId="78104623-5e7d-4dbc-aab1-32cdab1d4c01" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3fe11a8f-28cd-2000-7dfe-2c1c68f9bf5e" executionId="476a15b2-96ce-4ccb-a992-5b0b1f48288d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bfd56553-5d2a-b938-2297-338fe86cbd1c" executionId="20dc888d-525c-408e-9295-d668f038bb63" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e0aa079f-e44f-36c5-edfa-93556cc9af3c" executionId="b659512e-366e-44ac-aede-e471080b11df" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="783cc586-d069-f9f2-1cf8-694b2c4d7957" executionId="21b49192-faea-45c1-8a08-26b12b79ead5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="9" executed="9" passed="9" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.09]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.17]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.19]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:03.09]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

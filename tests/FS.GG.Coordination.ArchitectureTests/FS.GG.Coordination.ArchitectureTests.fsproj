@@ -6,6 +6,8 @@
     <Compile Include="Tests.fs" />
     <Compile Include="GitHubTransportArchitectureTests.fs" />
     <Compile Include="GitHubIssueFieldArchitectureTests.fs" />
+    <Compile Include="../FS.GG.Coordination.UnitTests/GitHubNativeRelationTests.fs" Link="GitHubNativeRelationUnitTests.fs" />
+    <Compile Include="GitHubNativeRelationArchitectureTests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
     <Compile Include="RoadmapWorkArchitectureTests.fs" />
     <Compile Include="EvidenceStorageTests.fs" />
