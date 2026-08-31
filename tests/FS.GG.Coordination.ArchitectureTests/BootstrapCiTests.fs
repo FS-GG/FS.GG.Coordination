@@ -300,11 +300,16 @@ let ``cadence recommendation trades measured cost for yield without weakening pr
     let quiet = [ 1L .. 5L ] |> List.map (fun run -> observation run QualificationCadence.Passed QualificationCadence.Child true)
     let reduce = QualificationCadence.evaluate now policy "canonical-quint" quiet
     Assert.Equal(QualificationCadence.Reduce, reduce.Kind)
+    Assert.True(reduce.ClosureEquivalent)
+    Assert.Equal("high", reduce.BlastRadius)
+    Assert.Equal(0M, reduce.CostSavedRunnerMinutes)
     Assert.Equal(QualificationCadence.recommendationBytes reduce, QualificationCadence.recommendationBytes reduce)
     let closureMiss = observation 1L QualificationCadence.ActionableDefect QualificationCadence.Closure true :: quiet.Tail
     Assert.Equal(QualificationCadence.Increase, (QualificationCadence.evaluate now policy "canonical-quint" closureMiss).Kind)
     let protectedPolicy = { policy with MinimumCadence = Map.ofList [ "canonical-quint", "parent-closure" ] }
     Assert.Equal(QualificationCadence.Retain, (QualificationCadence.evaluate now protectedPolicy "canonical-quint" quiet).Kind)
+    let security = quiet |> List.map (fun value -> { value with Gate = "dependency-and-security" })
+    Assert.Equal(QualificationCadence.Retain, (QualificationCadence.evaluate now policy "dependency-and-security" security).Kind)
 
 [<Fact>]
 let ``bootstrap workflow satisfies the reuse decision plus exact seven-gate contract`` () =

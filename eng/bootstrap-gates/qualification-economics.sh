@@ -24,7 +24,7 @@ while IFS=$'\t' read -r run_id attempt created_at event; do
        | if length == 0 then null elif length == 1 then .[0] else error("duplicate defect attribution") end) as $attribution
     | $job
     | select(.name == "deterministic-build" or .name == "compiler-and-tests" or .name == "canonical-quint" or .name == "dependency-and-security" or .name == "package-install-smoke" or .name == "bootstrap-recovery")
-    | select(.status == "completed" and .started_at != null and .completed_at != null)
+    | select(.status == "completed" and .started_at != null and .completed_at != null and (.completed_at|fromdateiso8601) >= (.started_at|fromdateiso8601))
     | {gate:.name,runId:$run,attempt:$attempt,observedAt:.completed_at,
        durationSeconds:((.completed_at|fromdateiso8601)-(.started_at|fromdateiso8601)),
        runnerMinutes:((((.completed_at|fromdateiso8601)-(.started_at|fromdateiso8601))/60)*1000000|round/1000000),

@@ -33,7 +33,10 @@ type Recommendation =
       ObservationCount: int
       UniqueDefectCount: int
       RunnerMinutes: decimal
+      CostSavedRunnerMinutes: decimal
       ExpectedDetectionDelayHours: decimal option
+      ClosureEquivalent: bool
+      BlastRadius: string
       Confidence: string
       PolicyVersion: string }
 
