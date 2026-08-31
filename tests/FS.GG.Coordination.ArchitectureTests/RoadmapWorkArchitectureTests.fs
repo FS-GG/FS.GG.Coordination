@@ -134,7 +134,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through registered GS2-04-3 boundary`` () =
+let ``roadmap unit index advances through registered GS2-04-4 boundary`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -175,7 +175,8 @@ let ``roadmap unit index advances through registered GS2-04-3 boundary`` () =
              "GS2-03.9"
              "GS2-04.1"
              "GS2-04.2"
-             "GS2-04.3" ]
+             "GS2-04.3"
+             "GS2-04.4" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -721,6 +722,48 @@ let ``roadmap unit index advances through registered GS2-04-3 boundary`` () =
           "without claiming Q4" ] do
         Assert.Contains(requiredTerm, nativeRelationExitGate)
 
+    let projectAdapterUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-04.4")
+
+    Assert.Equal("Project adapter", projectAdapterUnit.GetProperty("title").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-04.3" ],
+        projectAdapterUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-project-adapter-contract" ],
+        projectAdapterUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3" ],
+        projectAdapterUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    let projectAdapterExitGate = projectAdapterUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "membership and Status only as projections"
+          "complete membership, item, and field observations"
+          "archived"
+          "duplicated"
+          "external"
+          "draft"
+          "missing"
+          "unreadable"
+          "without inventing absence or authority"
+          "expected revisions"
+          "idempotency identities"
+          "independent pagination"
+          "concurrent-change"
+          "without performing live writes"
+          "without claiming Q4" ] do
+        Assert.Contains(requiredTerm, projectAdapterExitGate)
+
     use acceptedPrerequisite =
         JsonDocument.Parse(
             File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.2.json"))
@@ -729,6 +772,16 @@ let ``roadmap unit index advances through registered GS2-04-3 boundary`` () =
     Assert.Equal(
         issueFieldUnit.GetProperty("contractSha256").GetString(),
         acceptedPrerequisite.RootElement.GetProperty("unitContractSha256").GetString()
+    )
+
+    use acceptedNativeRelation =
+        JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.3.json"))
+        )
+
+    Assert.Equal(
+        nativeRelationUnit.GetProperty("contractSha256").GetString(),
+        acceptedNativeRelation.RootElement.GetProperty("unitContractSha256").GetString()
     )
 
 [<Fact>]
@@ -742,7 +795,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(11, commands.Length)
+    Assert.Equal(12, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -801,6 +854,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-native-relation.fsx"; "--"; "." ],
         nativeRelationCommand.GetProperty("args").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let projectAdapterCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-project-adapter-contract")
+    Assert.Equal("Q3", projectAdapterCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-project-adapter.fsx"; "--"; "." ],
+        projectAdapterCommand.GetProperty("args").EnumerateArray()
         |> Seq.map _.GetString()
         |> Seq.toList
     )

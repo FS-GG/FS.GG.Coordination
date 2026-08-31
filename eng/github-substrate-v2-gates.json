@@ -66,6 +66,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-native-relation.fsx", "--", "."]
+    },
+    {
+      "id": "github-project-adapter-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-project-adapter.fsx", "--", "."]
     }
   ]
 }
