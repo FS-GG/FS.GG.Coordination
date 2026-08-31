@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="04a25a1e-45d1-427e-b5d4-dfa2fed1dbad" name="@991ca70644d4 2026-08-31 21:57:18" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-31T21:57:18.2849002+02:00" queuing="2026-08-31T21:57:18.2849002+02:00" start="2026-08-31T21:57:16.5968702+02:00" finish="2026-08-31T21:57:18.6185983+02:00" />
+  <TestSettings name="default" id="6cf21b49-3d33-49fe-b98f-0fe12c3f65e5">
+    <Deployment runDeploymentRoot="_991ca70644d4_2026-08-31_21_57_18" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="7d2e4cee-d295-4812-bd9d-52242ed4e435" testId="21dce866-6972-203e-e206-806ec4291742" testName="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests.registered comment projection validator is offline uses independent producers and passes" computerName="991ca70644d4" duration="00:00:01.6463454" startTime="2026-08-31T21:57:16.9332058+02:00" endTime="2026-08-31T21:57:18.5793011+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7d2e4cee-d295-4812-bd9d-52242ed4e435" />
+    <UnitTestResult executionId="37d980f1-8413-4aad-be01-a400b14803ba" testId="7e81ef69-b448-8845-0acf-e4e872f2e73b" testName="FS.GG.Coordination.GitHubCommentProjectionTests.mandatory reread and exact post-state verification refuse stale authority and unrelated change" computerName="991ca70644d4" duration="00:00:00.0314705" startTime="2026-08-31T21:57:16.9184160+02:00" endTime="2026-08-31T21:57:16.9520855+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="37d980f1-8413-4aad-be01-a400b14803ba" />
+    <UnitTestResult executionId="faf00b21-8892-4816-80d4-c4a9f3503b47" testId="07c8d2ce-4850-a0d3-69c8-acf63b63a85b" testName="FS.GG.Coordination.GitHubCommentProjectionTests.comment reads preserve terminal pages and reject duplicate reordered incomplete unauthorized and unreadable observations" computerName="991ca70644d4" duration="00:00:00.0030191" startTime="2026-08-31T21:57:16.9522133+02:00" endTime="2026-08-31T21:57:16.9551202+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="faf00b21-8892-4816-80d4-c4a9f3503b47" />
+    <UnitTestResult executionId="543e3385-ed70-4eb8-92be-79940d33787d" testId="5171d78e-9417-ea12-d33e-47071cb23825" testName="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests.comment projection public and qualification signatures precede implementations without authority leakage" computerName="991ca70644d4" duration="00:00:00.0021119" startTime="2026-08-31T21:57:16.9191302+02:00" endTime="2026-08-31T21:57:16.9239583+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="543e3385-ed70-4eb8-92be-79940d33787d" />
+    <UnitTestResult executionId="cab8cc8b-c18f-4f40-bef5-7c00a6a0a787" testId="918ac831-aef1-e2dd-467a-55c9c5c2e9cc" testName="FS.GG.Coordination.GitHubCommentProjectionTests.projection planning is byte deterministic idempotent and distinguishes create replace and no-op" computerName="991ca70644d4" duration="00:00:00.0022702" startTime="2026-08-31T21:57:16.9568496+02:00" endTime="2026-08-31T21:57:16.9590894+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cab8cc8b-c18f-4f40-bef5-7c00a6a0a787" />
+    <UnitTestResult executionId="e7595970-5503-491b-ba5c-cf69362e75a4" testId="0327d719-542c-e9fc-2916-c186215fa575" testName="FS.GG.Coordination.GitHubCommentProjectionTests.comment projection qualification inventory is closed and every mutation must turn red" computerName="991ca70644d4" duration="00:00:00.0025111" startTime="2026-08-31T21:57:16.9591994+02:00" endTime="2026-08-31T21:57:16.9616164+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e7595970-5503-491b-ba5c-cf69362e75a4" />
+    <UnitTestResult executionId="f6bbef89-97ca-4ba2-beee-58598ae97456" testId="a5c11a79-bf32-8389-4372-c9357c4f1569" testName="FS.GG.Coordination.GitHubCommentProjectionTests.canonical marker parsing and durable authority trust reject malformed tampered edited and deleted projections distinctly" computerName="991ca70644d4" duration="00:00:00.0016333" startTime="2026-08-31T21:57:16.9552072+02:00" endTime="2026-08-31T21:57:16.9567751+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f6bbef89-97ca-4ba2-beee-58598ae97456" />
+    <UnitTestResult executionId="3e3b05b0-58e6-434f-95cc-f7b29b737d18" testId="0481a0e0-3d55-babc-0358-952a3be3c951" testName="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests.comment projection fixture is canonical synthetic offline and closed" computerName="991ca70644d4" duration="00:00:00.0088809" startTime="2026-08-31T21:57:16.9299329+02:00" endTime="2026-08-31T21:57:16.9328308+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3e3b05b0-58e6-434f-95cc-f7b29b737d18" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubCommentProjectionTests.comment projection qualification inventory is closed and every mutation must turn red" storage="/home/developer/projects/fs.gg.coordination-149/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="0327d719-542c-e9fc-2916-c186215fa575">
+      <Execution id="e7595970-5503-491b-ba5c-cf69362e75a4" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-149/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubCommentProjectionTests" name="comment projection qualification inventory is closed and every mutation must turn red" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubCommentProjectionTests.mandatory reread and exact post-state verification refuse stale authority and unrelated change" storage="/home/developer/projects/fs.gg.coordination-149/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="7e81ef69-b448-8845-0acf-e4e872f2e73b">
+      <Execution id="37d980f1-8413-4aad-be01-a400b14803ba" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-149/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubCommentProjectionTests" name="mandatory reread and exact post-state verification refuse stale authority and unrelated change" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests.comment projection fixture is canonical synthetic offline and closed" storage="/home/developer/projects/fs.gg.coordination-149/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="0481a0e0-3d55-babc-0358-952a3be3c951">
+      <Execution id="3e3b05b0-58e6-434f-95cc-f7b29b737d18" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-149/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests" name="comment projection fixture is canonical synthetic offline and closed" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests.comment projection public and qualification signatures precede implementations without authority leakage" storage="/home/developer/projects/fs.gg.coordination-149/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="5171d78e-9417-ea12-d33e-47071cb23825">
+      <Execution id="543e3385-ed70-4eb8-92be-79940d33787d" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-149/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests" name="comment projection public and qualification signatures precede implementations without authority leakage" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubCommentProjectionTests.canonical marker parsing and durable authority trust reject malformed tampered edited and deleted projections distinctly" storage="/home/developer/projects/fs.gg.coordination-149/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="a5c11a79-bf32-8389-4372-c9357c4f1569">
+      <Execution id="f6bbef89-97ca-4ba2-beee-58598ae97456" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-149/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubCommentProjectionTests" name="canonical marker parsing and durable authority trust reject malformed tampered edited and deleted projections distinctly" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubCommentProjectionTests.comment reads preserve terminal pages and reject duplicate reordered incomplete unauthorized and unreadable observations" storage="/home/developer/projects/fs.gg.coordination-149/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="07c8d2ce-4850-a0d3-69c8-acf63b63a85b">
+      <Execution id="faf00b21-8892-4816-80d4-c4a9f3503b47" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-149/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubCommentProjectionTests" name="comment reads preserve terminal pages and reject duplicate reordered incomplete unauthorized and unreadable observations" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests.registered comment projection validator is offline uses independent producers and passes" storage="/home/developer/projects/fs.gg.coordination-149/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="21dce866-6972-203e-e206-806ec4291742">
+      <Execution id="7d2e4cee-d295-4812-bd9d-52242ed4e435" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-149/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubCommentProjectionArchitectureTests" name="registered comment projection validator is offline uses independent producers and passes" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubCommentProjectionTests.projection planning is byte deterministic idempotent and distinguishes create replace and no-op" storage="/home/developer/projects/fs.gg.coordination-149/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="918ac831-aef1-e2dd-467a-55c9c5c2e9cc">
+      <Execution id="cab8cc8b-c18f-4f40-bef5-7c00a6a0a787" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-149/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubCommentProjectionTests" name="projection planning is byte deterministic idempotent and distinguishes create replace and no-op" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="21dce866-6972-203e-e206-806ec4291742" executionId="7d2e4cee-d295-4812-bd9d-52242ed4e435" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7e81ef69-b448-8845-0acf-e4e872f2e73b" executionId="37d980f1-8413-4aad-be01-a400b14803ba" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="07c8d2ce-4850-a0d3-69c8-acf63b63a85b" executionId="faf00b21-8892-4816-80d4-c4a9f3503b47" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5171d78e-9417-ea12-d33e-47071cb23825" executionId="543e3385-ed70-4eb8-92be-79940d33787d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="918ac831-aef1-e2dd-467a-55c9c5c2e9cc" executionId="cab8cc8b-c18f-4f40-bef5-7c00a6a0a787" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0327d719-542c-e9fc-2916-c186215fa575" executionId="e7595970-5503-491b-ba5c-cf69362e75a4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a5c11a79-bf32-8389-4372-c9357c4f1569" executionId="f6bbef89-97ca-4ba2-beee-58598ae97456" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0481a0e0-3d55-babc-0358-952a3be3c951" executionId="3e3b05b0-58e6-434f-95cc-f7b29b737d18" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="8" executed="8" passed="8" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.11]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:01.79]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
