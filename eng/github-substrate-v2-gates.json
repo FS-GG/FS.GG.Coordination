@@ -54,6 +54,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-transport.fsx", "--", "."]
+    },
+    {
+      "id": "github-issue-field-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-issue-field.fsx", "--", "."]
     }
   ]
 }

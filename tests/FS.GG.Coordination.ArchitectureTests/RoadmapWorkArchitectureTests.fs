@@ -119,7 +119,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through registered GS2-04-1 boundary`` () =
+let ``roadmap unit index advances through registered GS2-04-2 boundary`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -158,7 +158,8 @@ let ``roadmap unit index advances through registered GS2-04-1 boundary`` () =
              "GS2-03.7"
              "GS2-03.8"
              "GS2-03.9"
-             "GS2-04.1" ]
+             "GS2-04.1"
+             "GS2-04.2" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -623,6 +624,45 @@ let ``roadmap unit index advances through registered GS2-04-1 boundary`` () =
           "without claiming live Q4" ] do
         Assert.Contains(requiredTerm, transportExitGate)
 
+    let issueFieldUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-04.2")
+
+    Assert.Equal("Issue/type/field adapter", issueFieldUnit.GetProperty("title").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-04.1" ],
+        issueFieldUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-issue-field-contract" ],
+        issueFieldUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3" ],
+        issueFieldUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    let issueFieldExitGate = issueFieldUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "semantic identities"
+          "complete typed observations"
+          "closed option sets"
+          "without inventing absence"
+          "guarded create, update, and clear plans"
+          "expected revisions"
+          "idempotency identities"
+          "independent pagination"
+          "type-drift"
+          "option-drift"
+          "without performing live writes"
+          "without claiming Q4" ] do
+        Assert.Contains(requiredTerm, issueFieldExitGate)
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -634,7 +674,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(9, commands.Length)
+    Assert.Equal(10, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -671,6 +711,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-transport.fsx"; "--"; "." ],
         transportCommand.GetProperty("args").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let issueFieldCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-issue-field-contract")
+    Assert.Equal("Q3", issueFieldCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-issue-field.fsx"; "--"; "." ],
+        issueFieldCommand.GetProperty("args").EnumerateArray()
         |> Seq.map _.GetString()
         |> Seq.toList
     )

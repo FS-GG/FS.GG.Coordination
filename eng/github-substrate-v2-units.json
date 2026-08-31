@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "1077c602ed625e1aada5e05e37e5da46e396a5af",
+    "revision": "8e406c92bc8a6d18b555afb66c7fb3632554ccb0",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "18ebecd27840ef2600fc221fa49a6558ed204d75075852b543f615ffa3b36fac"
+    "sha256": "87e56a00d73a8e7c20d22f4b32faf0605a3bb0f5dfb6c20aa615bd305fb13bd2"
   },
   "units": [
     {
@@ -426,6 +426,20 @@
         { "id": "github-transport-contract", "qGate": "Q3", "commandSha256": "e3b5522bd99a4c78f18546f4aa5ae290b0b3c66be6b58bc84a8a90d44651c7dc" }
       ],
       "contractSha256": "9cff04e83f2e7c8a4d6cfe083acc86665fd588107691a1e55d846c5e0d928566"
+    },
+    {
+      "id": "GS2-04.2",
+      "title": "Issue/type/field adapter",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.1"],
+      "permissionCeiling": ["repository-local issue, issue-type, field, and option observation contracts, semantic identity resolution, complete deterministic fixtures, guarded mutation plans, validation, and evidence", "local loopback fixture execution is allowed; no live GitHub write, organization or repository settings mutation, production credential, deployment, publication, stable release, Q4 sandbox claim, native-relation adapter, or successor-unit implementation authority"],
+      "exitGate": "the Q3 issue/type/field adapter resolves repository, issue, issue-type, field, and option semantic identities to stable live IDs only from complete typed observations; verifies expected type and closed option sets; preserves unknown, unsupported, unauthorized, incomplete, stale, duplicate, and missing outcomes without inventing absence; reads complete current values; and derives deterministic guarded create, update, and clear plans bound to expected revisions and idempotency identities; generated cases and independent pagination, duplicate-identity, type-drift, option-drift, stale-revision, incomplete-observation, and no-op controls all pass without performing live writes and without claiming Q4 sandbox behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-issue-field-contract"],
+      "gateContracts": [
+        { "id": "github-issue-field-contract", "qGate": "Q3", "commandSha256": "c0a4cdeacfb6f5df45671bff6fa9562793490eabcd522e44a3b6f99d5db345e2" }
+      ],
+      "contractSha256": "1fd6e5ceeec2f9932fdf18568dd65f822cce2986b4ebdc53f2e8f53e33c79364"
     }
   ]
 }
