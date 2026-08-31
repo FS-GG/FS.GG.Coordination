@@ -1,0 +1,35 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-04.6",
+  "state": "accepted",
+  "unitContractSha256": "33b2dabe28c4e0133b5503c8bb907f83d036b6da0b8532f3f60a93b649d85b51",
+  "sourceRevision": "b6c25c0b3f26211d4cfcfcdc8f08f9b87e43586c",
+  "artifacts": [
+    {
+      "name": "sharded-journal-qualification-results",
+      "sha256": "9577eb44904d9582f36905a0443e8ba61eabe8bd22fedcfacbdbb7c5c44a694c"
+    },
+    {
+      "name": "sharded-journal-q3-validator",
+      "sha256": "b9125d9bfe053c81e91a442b58e7aa6c71090a9395f5ee1eaa7bf4347c1f1839"
+    },
+    {
+      "name": "roadmap-gate-results",
+      "sha256": "603bc842ea4f63e8448d98223b70a51bc20ea25e0f82820fe829ac7ac0858228"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "e22cb32d4bbb45643bf6561892f2a6aff486e8d7725560100128871796c34032"
+    },
+    {
+      "name": "structured-review-acceptance",
+      "sha256": "b4a87a19ee1b0342d9f7e3d6015d8cb3c95de8b50f6a66814657044bc360a581"
+    },
+    {
+      "name": "delivery-completion",
+      "sha256": "bfe63509dd5c10735ce03193246d7fb453af3b0e0fa29b055ff4470fa1294e28"
+    }
+  ],
+  "acceptedAt": "2026-08-31T22:04:00Z",
+  "digest": "4011bbe0d7e2db27aff2b6e0a36d9bc342dc89e8310b56d4e358b6d73bc96511"
+}
