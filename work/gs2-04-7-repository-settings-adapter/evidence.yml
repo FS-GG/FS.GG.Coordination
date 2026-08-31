@@ -1,0 +1,767 @@
+schemaVersion: 1
+workId: gs2-04-7-repository-settings-adapter
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-7-repository-settings-adapter/spec.md
+sourceClarifications: work/gs2-04-7-repository-settings-adapter/clarifications.md
+sourceChecklist: work/gs2-04-7-repository-settings-adapter/checklist.md
+sourcePlan: work/gs2-04-7-repository-settings-adapter/plan.md
+sourceTasks: work/gs2-04-7-repository-settings-adapter/tasks.yml
+sourceAnalysis: readiness/gs2-04-7-repository-settings-adapter/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-7-repository-settings-adapter/analysis.json
+    digest: 9812b377a6b1aad1ba4a61f76092cd71f25bc3a587c13ff07039d0d513f0aaa6
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-7-repository-settings-adapter/checklist.md
+    digest: e91a724f1144ed1a4415fb078c0a8f4de95c40bdc791a90052d4b512a8d2e7f6
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-7-repository-settings-adapter/clarifications.md
+    digest: 62d99dc879c2846566612a0429700b6f9442a7a4e93020c1f5a2235a0595c3c2
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-7-repository-settings-adapter/plan.md
+    digest: 035c28d3c26d3f02c294739b23b75c337f4bdd41c3c48ec8cac329747acfa0fd
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-7-repository-settings-adapter/spec.md
+    digest: 68bc746924278ee1b2c338b3e613c5de3d2a0ea328204463009b2d219157d091
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-7-repository-settings-adapter/tasks.yml
+    digest: 729dc9327e6cff80561b287db28ada55b3ddd8857023d9ead805b7b8115babf3
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV015]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV016]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV017]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV018]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV019]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV020]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV021]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006, PD-007]
+    obligationRefs: [EV022]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV023]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006, PD-007]
+    obligationRefs: [EV024]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV025]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV026]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV027]
+    artifacts: [eng/validate-github-repository-settings.fsx, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fs, src/FS.GG.Coordination.GitHub/RepositorySettingsAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRepositorySettingsQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRepositorySettingsArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs, tests/fixtures/github-repository-settings/contract.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRepositorySettingsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-04-7/qualification.trx
+      digest: "sha256:50d9e1772f74f9e9dc85d0d07eed57a38c9824ab23b0b8277e2afb296b1616b2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Focused semantic and architecture tests exercise this obligation through the closed Q3 contract.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
