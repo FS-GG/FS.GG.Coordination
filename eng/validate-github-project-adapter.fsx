@@ -106,9 +106,70 @@ let generatedResults () =
         (data.GetProperty("unrelatedContentId").GetString())
         (repo (data.GetProperty("repositoryOwner").GetString()) (data.GetProperty("repositoryName").GetString()))
 
-// Separately authored identities and revisions prevent the fixture producer from proving itself.
+// This leg deliberately does not call `controls`: separately authored observations keep the
+// generated fixture producer from proving itself through one shared assertion implementation.
 let independentResults () =
-    controls "independent-rev-23" "independent-cause" "P_INDEPENDENT" "ITEM_INDEPENDENT" "CONTENT_INDEPENDENT" "ITEM_OTHER_INDEPENDENT" "CONTENT_OTHER_INDEPENDENT" (repo "Independent" "Repository")
+    let revision = "independent-rev-23"
+    let causation = "independent-cause"
+    let projectId = "P_INDEPENDENT"
+    let itemId = "ITEM_INDEPENDENT"
+    let contentId = "CONTENT_INDEPENDENT"
+    let repository = repo "Independent" "Repository"
+    let main = item projectId itemId repository 23 contentId false
+    let other = item projectId "ITEM_OTHER_INDEPENDENT" repository 29 "CONTENT_OTHER_INDEPENDENT" false
+    let completeObservation = complete revision [ page 1 true [ main; other ] ]
+    let observed = snapshot completeObservation
+    let statusBefore =
+        ProjectAdapter.readStatus (liveId projectId) (liveId itemId) (statusObservation revision projectId itemId (Some "STATUS_READY"))
+        |> Result.defaultWith (fail "GPAQ-INDEPENDENT-STATUS" << sprintf "%A")
+    let plannedStatus =
+        match ProjectAdapter.planStatus revision causation (SetStatus(liveId "STATUS_BACKLOG")) statusBefore with
+        | Ok(StatusPlanned value) -> value
+        | value -> fail "GPAQ-INDEPENDENT-STATUS-PLAN" (sprintf "%A" value)
+    let archived = { main with Archived = true }
+    let duplicate = { main with ItemId = liveId "ITEM_DUPLICATE_INDEPENDENT" }
+    let external = item projectId itemId (repo "External" repository.Name) 23 contentId false
+    let draft = { ProjectId = liveId projectId; ItemId = liveId itemId; Content = DraftIssue(liveId contentId); Archived = false }
+    [ result
+          (ProjectAdapter.readProject (complete revision [ page 3 true [ main ] ]) = Error InvalidProjectPageChain)
+          (ProjectAdapter.readProject completeObservation |> Result.isOk)
+          GitHubProjectAdapterControl.Pagination
+      result
+          (match ProjectAdapter.planMembership revision causation repository (EnsureMember(liveId projectId, liveId contentId)) (snapshot (complete revision [ page 1 true [ archived; other ] ])) with Error(MembershipMutationIneligible(ArchivedMembership _)) -> true | _ -> false)
+          (match ProjectAdapter.resolveMembership repository (liveId contentId) observed with Ok(ActiveMembership _) -> true | _ -> false)
+          GitHubProjectAdapterControl.ArchivedItem
+      result
+          (ProjectAdapter.readProject (complete revision [ page 1 true [ main; duplicate ] ]) = Error(DuplicateProjectContent(liveId contentId)))
+          (ProjectAdapter.readProject completeObservation |> Result.isOk)
+          GitHubProjectAdapterControl.DuplicateItem
+      result
+          (match ProjectAdapter.planMembership revision causation repository (EnsureMember(liveId projectId, liveId contentId)) (snapshot (complete revision [ page 1 true [ external; other ] ])) with Error(MembershipMutationIneligible(ExternalRepositoryMembership _)) -> true | _ -> false)
+          (match ProjectAdapter.resolveMembership repository (liveId contentId) observed with Ok(ActiveMembership _) -> true | _ -> false)
+          GitHubProjectAdapterControl.ExternalItem
+      result
+          (match ProjectAdapter.planMembership revision causation repository (EnsureMember(liveId projectId, liveId contentId)) (snapshot (complete revision [ page 1 true [ draft; other ] ])) with Error(MembershipMutationIneligible(DraftMembership _)) -> true | _ -> false)
+          (match ProjectAdapter.resolveMembership repository (liveId contentId) observed with Ok(ActiveMembership _) -> true | _ -> false)
+          GitHubProjectAdapterControl.DraftItem
+      result
+          (match ProjectAdapter.readProject (ProjectIncomplete("independent-truncation", None)) with Error(ProjectObservationRefused(ObservationIncomplete _)) -> true | _ -> false)
+          (match ProjectAdapter.resolveMembership repository (liveId "CONTENT_ABSENT_INDEPENDENT") observed with Ok MissingMembership -> true | _ -> false)
+          GitHubProjectAdapterControl.MissingItem
+      result
+          (ProjectAdapter.readProject (ProjectUnreadable "independent-transport") = Error(ProjectObservationUnreadable "independent-transport"))
+          (ProjectAdapter.readProject completeObservation |> Result.isOk)
+          GitHubProjectAdapterControl.UnreadableObservation
+      result
+          (ProjectAdapter.planStatus "independent-stale-revision" causation (SetStatus(liveId "STATUS_BACKLOG")) statusBefore = Error(StatusStaleExpectedRevision revision))
+          (ProjectAdapter.planStatus revision causation (SetStatus(liveId "STATUS_BACKLOG")) statusBefore |> Result.isOk)
+          GitHubProjectAdapterControl.StaleRevision
+      result
+          (match ProjectAdapter.checkStatusPreState plannedStatus (statusObservation revision projectId itemId None) with Error ConcurrentStatusChange -> true | _ -> false)
+          (ProjectAdapter.checkStatusPreState plannedStatus (statusObservation revision projectId itemId (Some "STATUS_READY")) |> Result.isOk)
+          GitHubProjectAdapterControl.ConcurrentChange
+      result
+          (match ProjectAdapter.planStatus revision causation (SetStatus(liveId "STATUS_READY")) statusBefore with Ok(StatusNoOp _) -> true | _ -> false)
+          (match ProjectAdapter.planStatus revision causation (SetStatus(liveId "STATUS_BACKLOG")) statusBefore with Ok(StatusPlanned _) -> true | _ -> false)
+          GitHubProjectAdapterControl.NoOpMutation ]
 
 let generated = generatedResults ()
 let independent = independentResults ()
