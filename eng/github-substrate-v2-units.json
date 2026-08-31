@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "051d811169b4b6695def252e7e6c251f91ec73b2",
+    "revision": "66dc685921e5465e503e3932eab7faff0ad2099b",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "5eb187d4ed9abdcb82929c4c630cdf715331da389bfd78b038470ad53b80448f"
+    "sha256": "82d0a4d2fa41de439c9dd1b94ca5ad85d492b5bfe61df94392be75ee99c91943"
   },
   "units": [
     {
@@ -496,6 +496,20 @@
         { "id": "github-sharded-journal-contract", "qGate": "Q3", "commandSha256": "42f5c89ee83ba05261ebecb7e6ce3fd68d6a6f371a764039f4371200831cea42" }
       ],
       "contractSha256": "33b2dabe28c4e0133b5503c8bb907f83d036b6da0b8532f3f60a93b649d85b51"
+    },
+    {
+      "id": "GS2-04.7",
+      "title": "Repository/settings adapter",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.6"],
+      "permissionCeiling": ["repository-local repository and settings observation contracts, complete paginated fixtures, canonical surface fingerprints, deterministic exact-prestate plans for custom properties, branch and tag rulesets, merge policy, Actions policy, environments, releases, tags, security, and dependency features, validation, and evidence", "local loopback fixture execution plus consumption of already-protected administrative observations are allowed; no live GitHub write, organization or repository settings mutation, production credential, deployment, publication, stable release, Q4 sandbox claim, Actions/release/feed adapter, or successor-unit implementation authority"],
+      "exitGate": "the Q3 repository and settings adapter identifies the exact repository node and default branch; inspects complete custom-property values, branch and tag rulesets including targets and bypass actors, effective branch rules, merge policies, Actions permissions and workflow defaults, environments without secret values, release and tag protection, code-security controls, dependency graph, vulnerability alerts, Dependabot features, and immutable-release capability; preserves per-surface supported, unauthorized, unavailable, incomplete, and unreadable outcomes without inventing absence or compliance; derives deterministic minimal plans bound to canonical complete pre-state fingerprints, desired-state digests, stable operation identities, least required permissions, and explicit unsupported controls; refuses a plan from partial observations, preserves unrelated settings, requires a stale or indeterminate result to re-read and replan, and specifies authoritative post-state verification and rollback or forward-repair intent without inferring success from an API response; generated cases and independent pagination, repository-identity, custom-property, ruleset-target, bypass-actor, effective-rule, merge-policy, Actions-permission, environment, release, tag, security, dependency-feature, unsupported-capability, unauthorized, unavailable, incomplete-observation, stale-prestate, indeterminate-result, unrelated-setting, no-op, and secret-redaction controls all pass without performing live writes and without claiming Q4 sandbox behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-repository-settings-contract"],
+      "gateContracts": [
+        { "id": "github-repository-settings-contract", "qGate": "Q3", "commandSha256": "c65c99b5ea6a934aba8418d7abcc2220eb2b1a5b9e41d50829cb6bfb78047d77" }
+      ],
+      "contractSha256": "a04f3ef2182825d3b9fa71081fe56cee8ee85e79bdee49e25dc404f9aaf4c3d9"
     }
   ]
 }

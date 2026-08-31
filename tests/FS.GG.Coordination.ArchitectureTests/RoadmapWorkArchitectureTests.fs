@@ -134,7 +134,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through registered GS2-04-6 boundary`` () =
+let ``roadmap unit index advances through registered GS2-04-7 boundary`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -178,7 +178,8 @@ let ``roadmap unit index advances through registered GS2-04-6 boundary`` () =
              "GS2-04.3"
              "GS2-04.4"
              "GS2-04.5"
-             "GS2-04.6" ]
+             "GS2-04.6"
+             "GS2-04.7" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -855,6 +856,53 @@ let ``roadmap unit index advances through registered GS2-04-6 boundary`` () =
           "without claiming Q4" ] do
         Assert.Contains(requiredTerm, shardedJournalExitGate)
 
+    let repositorySettingsUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-04.7")
+
+    Assert.Equal("Repository/settings adapter", repositorySettingsUnit.GetProperty("title").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-04.6" ],
+        repositorySettingsUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-repository-settings-contract" ],
+        repositorySettingsUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3" ],
+        repositorySettingsUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    let repositorySettingsExitGate = repositorySettingsUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "exact repository node and default branch"
+          "custom-property values"
+          "branch and tag rulesets"
+          "effective branch rules"
+          "merge policies"
+          "Actions permissions"
+          "environments without secret values"
+          "code-security controls"
+          "dependency graph"
+          "supported, unauthorized, unavailable, incomplete, and unreadable"
+          "without inventing absence or compliance"
+          "canonical complete pre-state fingerprints"
+          "least required permissions"
+          "refuses a plan from partial observations"
+          "stale or indeterminate result"
+          "authoritative post-state verification"
+          "without inferring success from an API response"
+          "secret-redaction"
+          "without performing live writes"
+          "without claiming Q4" ] do
+        Assert.Contains(requiredTerm, repositorySettingsExitGate)
+
     use acceptedPrerequisite =
         JsonDocument.Parse(
             File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.2.json"))
@@ -885,6 +933,16 @@ let ``roadmap unit index advances through registered GS2-04-6 boundary`` () =
         acceptedProjectAdapter.RootElement.GetProperty("unitContractSha256").GetString()
     )
 
+    use acceptedShardedJournal =
+        JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.6.json"))
+        )
+
+    Assert.Equal(
+        shardedJournalUnit.GetProperty("contractSha256").GetString(),
+        acceptedShardedJournal.RootElement.GetProperty("unitContractSha256").GetString()
+    )
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -896,7 +954,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(14, commands.Length)
+    Assert.Equal(15, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -988,6 +1046,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-sharded-journal.fsx"; "--"; "." ],
         shardedJournalCommand.GetProperty("args").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let repositorySettingsCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-repository-settings-contract")
+    Assert.Equal("Q3", repositorySettingsCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-repository-settings.fsx"; "--"; "." ],
+        repositorySettingsCommand.GetProperty("args").EnumerateArray()
         |> Seq.map _.GetString()
         |> Seq.toList
     )
