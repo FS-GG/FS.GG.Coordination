@@ -1,0 +1,35 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-04.5",
+  "state": "accepted",
+  "unitContractSha256": "829a9bb643f95729b5d28f8902e0a8016c366730df792f92b6d0140710ce11d4",
+  "sourceRevision": "76782e3f86646f2303d0aad90b28d27198a4f7ef",
+  "artifacts": [
+    {
+      "name": "comment-projection-qualification-results",
+      "sha256": "dd95740e7b54625cf8e0cf3629bc9a54ffe60a9f0e6566193df4f35d865fc4da"
+    },
+    {
+      "name": "comment-projection-q3-validator",
+      "sha256": "ab25f78a3629e3d864328e769c8be64cb8365d0e9cd682b9266d3e05aa7fce9a"
+    },
+    {
+      "name": "roadmap-gate-results",
+      "sha256": "bac7ad443ffe4910e2d0ba2ff9f5d076fd01c0e94d8a2dfbcecb7527a626e627"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "4259a9652095db4d348d70d461c135c470e1d31136d87463f331d23b02837600"
+    },
+    {
+      "name": "structured-review-acceptance",
+      "sha256": "2e8f18a84efcaf94163758b5a73ba0211d7735d97a9e95ddf0516150b06f4c4f"
+    },
+    {
+      "name": "delivery-completion",
+      "sha256": "97e2318ad3dfeb5e9da036b7ca4a301d9fc024e1fc6719f59316f5693bb000b6"
+    }
+  ],
+  "acceptedAt": "2026-08-31T20:17:07Z",
+  "digest": "27b27b76cf52fca137059aa466c7922dc096cae33c0a4e1045735bd937497091"
+}
