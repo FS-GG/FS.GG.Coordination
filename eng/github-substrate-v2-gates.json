@@ -78,6 +78,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-comment-projection.fsx", "--", "."]
+    },
+    {
+      "id": "github-sharded-journal-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-sharded-journal.fsx", "--", "."]
     }
   ]
 }
