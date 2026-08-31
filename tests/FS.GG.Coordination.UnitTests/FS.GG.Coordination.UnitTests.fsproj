@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="GitHubTransportTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />
     <Compile Include="CritiqueEvidenceTests.fs" />
@@ -18,6 +19,7 @@
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.App\FS.GG.Coordination.App.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Qualification.Contracts\FS.GG.Coordination.Qualification.Contracts.fsproj" />
+    <ProjectReference Include="..\..\src\FS.GG.Coordination.GitHub\FS.GG.Coordination.GitHub.fsproj" />
   </ItemGroup>
 
 </Project>

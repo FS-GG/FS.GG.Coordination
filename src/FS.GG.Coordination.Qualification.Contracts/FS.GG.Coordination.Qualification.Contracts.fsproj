@@ -21,6 +21,8 @@
     <Compile Include="CritiqueEvidence.fs" />
     <Compile Include="HarnessMutationProof.fsi" />
     <Compile Include="HarnessMutationProof.fs" />
+    <Compile Include="GitHubTransportQualification.fsi" />
+    <Compile Include="GitHubTransportQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>
