@@ -48,8 +48,65 @@ type IntakeApplyReceipt = { PlanDigest: string; FinalRevision: string; AcceptedE
 type IntakeApplyMode = Execute | Resume of DurableEffect list | RollForward of DurableEffect list | Compensate of DurableEffect list
 
 [<RequireQualifiedAccess>]
+type DiscoveryDetail = Known of string | ExplicitlyUnknown of reason: string | Deferred of reason: string
+
+[<RequireQualifiedAccess>]
+type CaptureIdentityMode = CreateOrReuse
+
+[<RequireQualifiedAccess>]
+type CaptureAuthorityRead =
+    | IssueIdentity
+    | NativeTypeAndFields
+    | ProjectMembership
+    | Relations
+    | RepositoryScope
+    | ProtocolState
+
+type StagedCaptureRequest =
+    { Identity: string
+      IdentityMode: CaptureIdentityMode
+      Repository: string
+      Causation: string
+      RootCause: DiscoveryDetail
+      Verification: DiscoveryDetail
+      TouchSet: string list option }
+
+type StagedCaptureObservation =
+    { Intake: IntakeObservation
+      AuthorityReads: CaptureAuthorityRead list
+      UnrelatedProjectItems: int
+      UnrelatedBacklogItems: int }
+
+type IntakeOperationBudget = { AuthorityReads: int; Mutations: int }
+type StagedCapturePlan =
+    { ContractSchema: string
+      Intent: CanonicalIntakeIntent
+      Decision: IntakePlanDecision
+      Budget: IntakeOperationBudget }
+
+[<RequireQualifiedAccess>]
+type ReadyPromotionSurface =
+    | RootCause
+    | TouchSet
+    | VerificationContract
+    | Dependencies
+    | RouteDecision
+    | NativeIssueType
+    | OrganizationFields
+    | RepositoryScope
+    | WorkClassification
+
+type ReadyPromotionFact = { Surface: ReadyPromotionSurface; Value: string }
+
+[<RequireQualifiedAccess>]
 module IntakeAdapter =
+    val stagedContractSchema: string
+    val requiredCaptureReads: CaptureAuthorityRead list
+    val requiredReadyPromotionSurfaces: ReadyPromotionSurface list
     val validate: IntakeRequest -> Result<CanonicalIntakeIntent, IntakeDiagnostic list>
     val inspect: IntakeObservation -> Result<IntakeSnapshot, IntakeDiagnostic list>
     val plan: CanonicalIntakeIntent -> IntakeObservation -> Result<IntakePlanDecision, IntakeDiagnostic list>
     val applyControlled: IntakePlan -> reobserved: IntakeObservation -> mode: IntakeApplyMode -> scripted: ScriptedEffectResult list -> Result<IntakeApplyReceipt, IntakeApplyFailure>
+    val validateCapture: StagedCaptureRequest -> Result<CanonicalIntakeIntent, IntakeDiagnostic list>
+    val planCapture: StagedCaptureRequest -> StagedCaptureObservation -> Result<StagedCapturePlan, IntakeDiagnostic list>
+    val prepareReadyPromotion: identity: string -> repository: string -> causation: string -> ReadyPromotionFact list -> Result<CanonicalIntakeIntent, IntakeDiagnostic list>

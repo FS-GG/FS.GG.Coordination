@@ -1,0 +1,23 @@
+{
+  "schema": "fsgg.coordination.github-staged-intake-expectations/1",
+  "controls": [
+    "unknown-root-cause",
+    "deferred-verification",
+    "unspecified-touch-set",
+    "cardinality-invariance",
+    "authority-read-budget",
+    "forbidden-global-operation",
+    "missing-promotion-root-cause",
+    "missing-promotion-touch-set",
+    "missing-promotion-verification-contract",
+    "missing-promotion-dependencies",
+    "missing-promotion-route-decision",
+    "missing-promotion-native-issue-type",
+    "missing-promotion-organization-fields",
+    "missing-promotion-repository-scope",
+    "missing-promotion-work-classification",
+    "duplicate-promotion",
+    "invalid-promotion",
+    "v1-application"
+  ]
+}

@@ -15,6 +15,30 @@ let private canonical initializations = IntakeAdapter.validate (request initiali
 let private intents = [ InitializeJournal "journal-ready"; InitializeSchedulingIntent "Ready" ]
 let private planned () = match IntakeAdapter.plan (canonical intents) baseline with Ok(IntakePlanned value) -> value | value -> failwithf "%A" value
 let private result (effect: IntakeEffect) after : ScriptedEffectResult = { Ordinal = effect.Ordinal; OperationIdentity = effect.OperationIdentity; Accepted = true; Reason = None; After = after }
+let private stagedRequest touchSet =
+    { Identity = baseline.Identity
+      IdentityMode = CaptureIdentityMode.CreateOrReuse
+      Repository = "FS-GG/FS.GG.Coordination"
+      Causation = "discovery-200"
+      RootCause = DiscoveryDetail.ExplicitlyUnknown "investigation pending"
+      Verification = DiscoveryDetail.Deferred "define after reproduction"
+      TouchSet = touchSet }
+let private stagedObservation projectItems backlogItems reads =
+    { Intake = baseline
+      AuthorityReads = reads
+      UnrelatedProjectItems = projectItems
+      UnrelatedBacklogItems = backlogItems }
+let private completePromotionFacts =
+    [ ReadyPromotionSurface.RootCause, "staged intake conflates discovery and scheduling"
+      ReadyPromotionSurface.TouchSet, "src/Adapter.fs,tests/AdapterTests.fs"
+      ReadyPromotionSurface.VerificationContract, "unit and architecture tests with inversions"
+      ReadyPromotionSurface.Dependencies, "GS2-05.3"
+      ReadyPromotionSurface.RouteDecision, "sdd-required:200-staged-intake-admission"
+      ReadyPromotionSurface.NativeIssueType, "Task"
+      ReadyPromotionSurface.OrganizationFields, "class=hardening;severity=High"
+      ReadyPromotionSurface.RepositoryScope, "FS-GG/FS.GG.Coordination"
+      ReadyPromotionSurface.WorkClassification, "hardening/high" ]
+    |> List.map (fun (surface, value) -> { Surface = surface; Value = value })
 
 [<Fact>]
 let ``validation is pure canonical and permits only five initialization families`` () =
@@ -118,3 +142,85 @@ let ``intake qualification inventory is independently exact`` () =
     Assert.Equal(19, passing.Length)
     Assert.Equal(Ok (), GitHubIntakeQualification.validate passing passing)
     match GitHubIntakeQualification.validate passing (List.tail passing) with Error findings -> Assert.Contains(findings, fun finding -> finding.Code = "GIAQ-INVENTORY") | Ok () -> failwith "accepted omitted control"
+
+[<Fact>]
+let ``staged capture accepts honest discovery gaps and remains v1 sealed`` () =
+    let request = stagedRequest None
+    let first = IntakeAdapter.validateCapture request |> Result.defaultWith (failwithf "%A")
+    let second = IntakeAdapter.validateCapture request |> Result.defaultWith (failwithf "%A")
+    Assert.Equal(first, second)
+    Assert.Equal("Backlog", first.Initializations |> List.pick (function InitializeSchedulingIntent value -> Some value | _ -> None))
+    Assert.DoesNotContain(first.Initializations, function InitializeTouchSet _ -> true | _ -> false)
+    let contract = first.Initializations |> List.pick (function InitializeContract value -> Some value | _ -> None)
+    Assert.Contains("schema=fsgg.coord.intake/v1", contract)
+    Assert.Contains("root-cause=unknown:investigation pending", contract)
+    Assert.Contains("verification=deferred:define after reproduction", contract)
+    Assert.Contains("touch-set=unspecified", contract)
+    let known = { request with RootCause = DiscoveryDetail.Known "known cause"; Verification = DiscoveryDetail.Known "known verification"; TouchSet = Some [ "tests/Z.fs"; "src/A.fs"; "src/A.fs" ] }
+    let knownIntent = IntakeAdapter.validateCapture known |> Result.defaultWith (failwithf "%A")
+    Assert.Contains(knownIntent.Initializations, function InitializeTouchSet [ "src/A.fs"; "tests/Z.fs" ] -> true | _ -> false)
+    match IntakeAdapter.validateCapture { request with RootCause = DiscoveryDetail.Deferred "not a root-cause state" } with Error findings -> Assert.Contains(findings, fun finding -> finding.Code = "INTAKE-CAPTURE-ROOT-CAUSE-KIND") | Ok _ -> failwith "accepted deferred root cause"
+    match IntakeAdapter.validateCapture { request with Verification = DiscoveryDetail.ExplicitlyUnknown "not a verification deferral" } with Error findings -> Assert.Contains(findings, fun finding -> finding.Code = "INTAKE-CAPTURE-VERIFICATION-KIND") | Ok _ -> failwith "accepted unknown verification kind"
+
+[<Fact>]
+let ``staged capture cost is fixed and independent of unrelated cardinality`` () =
+    let request = stagedRequest None
+    let small = IntakeAdapter.planCapture request (stagedObservation 0 0 IntakeAdapter.requiredCaptureReads) |> Result.defaultWith (failwithf "%A")
+    let large = IntakeAdapter.planCapture request (stagedObservation 1000000 2000000 (List.rev IntakeAdapter.requiredCaptureReads)) |> Result.defaultWith (failwithf "%A")
+    Assert.Equal(small, large)
+    Assert.Equal("fsgg.coord.intake/v1", small.ContractSchema)
+    Assert.Equal(6, small.Budget.AuthorityReads)
+    Assert.InRange(small.Budget.Mutations, 0, 6)
+    let duplicated = IntakeAdapter.requiredCaptureReads @ [ CaptureAuthorityRead.IssueIdentity ]
+    match IntakeAdapter.planCapture request (stagedObservation 1 1 duplicated) with
+    | Error findings ->
+        Assert.Contains(findings, fun finding -> finding.Code = "INTAKE-CAPTURE-READ-DUPLICATE")
+        Assert.Contains(findings, fun finding -> finding.Code = "INTAKE-CAPTURE-READ-BUDGET")
+    | Ok _ -> failwith "accepted a seventh duplicate authority read"
+    match IntakeAdapter.planCapture request (stagedObservation 1 1 (List.tail IntakeAdapter.requiredCaptureReads)) with Error findings -> Assert.Contains(findings, fun finding -> finding.Code = "INTAKE-CAPTURE-READ-MISSING") | Ok _ -> failwith "accepted an incomplete authority-read inventory"
+
+[<Fact>]
+let ``staged capture delegates application recovery and readback to the sealed executor`` () =
+    let staged = IntakeAdapter.planCapture (stagedRequest None) (stagedObservation 5 8 IntakeAdapter.requiredCaptureReads) |> Result.defaultWith (failwithf "%A")
+    let plan = match staged.Decision with IntakePlanned value -> value | value -> failwithf "%A" value
+    let mutable applied = Map.empty
+    let script =
+        plan.Effects
+        |> List.mapi (fun index effect ->
+            applied <- applied |> Map.add effect.Postcondition.Surface effect.Postcondition.Outcome
+            result effect (observation $"capture-rev-%d{index + 2}" applied))
+    let receipt = IntakeAdapter.applyControlled plan baseline Execute script |> Result.defaultWith (failwithf "%A")
+    Assert.Equal(plan.Effects.Length, receipt.AcceptedEffects.Length)
+    let finalState = script |> List.last |> _.After
+    Assert.True(IntakeAdapter.applyControlled plan finalState (Resume receipt.AcceptedEffects) [] |> Result.isOk)
+    Assert.Equal(Error FullFenceChanged, IntakeAdapter.applyControlled plan { baseline with Revision = "capture-drift" } Execute script)
+    let firstState = script.Head.After
+    let firstReceipt = receipt.AcceptedEffects.Head
+    Assert.True(IntakeAdapter.applyControlled plan firstState (RollForward [ firstReceipt ]) (List.tail script) |> Result.isOk)
+    let compensation =
+        plan.Effects
+        |> List.rev
+        |> List.mapi (fun index effect ->
+            let remaining = plan.Effects |> List.take (plan.Effects.Length - index - 1)
+            result effect (observation $"capture-undo-%d{index + 1}" (remaining |> List.map (fun value -> value.Postcondition.Surface, value.Postcondition.Outcome) |> Map.ofList)))
+    let compensated = IntakeAdapter.applyControlled plan finalState (Compensate receipt.AcceptedEffects) compensation |> Result.defaultWith (failwithf "%A")
+    Assert.Equal<int list>(plan.Effects |> List.rev |> List.map _.Ordinal, compensated.CompensatedOrdinals)
+
+[<Fact>]
+let ``Ready promotion requires every phase-local fact but no claim or pull request`` () =
+    let promote facts = IntakeAdapter.prepareReadyPromotion baseline.Identity "FS-GG/FS.GG.Coordination" "promote-200" facts
+    let first = promote completePromotionFacts |> Result.defaultWith (failwithf "%A")
+    let second = promote (List.rev completePromotionFacts) |> Result.defaultWith (failwithf "%A")
+    Assert.Equal(first, second)
+    Assert.Contains(first.Initializations, function InitializeSchedulingIntent "Ready" -> true | _ -> false)
+    Assert.Contains(first.Initializations, function InitializeTouchSet [ "src/Adapter.fs"; "tests/AdapterTests.fs" ] -> true | _ -> false)
+    Assert.Equal(9, IntakeAdapter.requiredReadyPromotionSurfaces.Length)
+    for omitted in IntakeAdapter.requiredReadyPromotionSurfaces do
+        let incomplete = completePromotionFacts |> List.filter (fun fact -> fact.Surface <> omitted)
+        match promote incomplete with
+        | Error findings ->
+            let token = (string omitted).ToUpperInvariant()
+            Assert.Contains(findings, fun finding -> finding.Code.StartsWith("INTAKE-PROMOTION-MISSING-") && finding.Code.Replace("_", "").Contains(token.Replace("_", "")))
+        | Ok _ -> failwithf "accepted missing %A" omitted
+    match promote (completePromotionFacts @ [ completePromotionFacts.Head ]) with Error findings -> Assert.Contains(findings, fun finding -> finding.Code.StartsWith("INTAKE-PROMOTION-DUPLICATE-")) | Ok _ -> failwith "accepted duplicate promotion fact"
+    match promote ({ completePromotionFacts.Head with Value = " " } :: List.tail completePromotionFacts) with Error findings -> Assert.Contains(findings, fun finding -> finding.Code.StartsWith("INTAKE-PROMOTION-VALUE-")) | Ok _ -> failwith "accepted blank promotion fact"

@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "8de7e621cda3fcc3eb06b9c053cf883288e5ef72",
+    "revision": "2ff646743e770f0ec6be5566acd04df0b1a83dec",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "a5d2eb1e821af5742f6a76fc3bf630e4100839d4d947964757cf30da446db291"
+    "sha256": "e10e4a4245d11d1ae955d3a11c7cc25aa92e52a1c1b6bf6398e4249acc8ee581"
   },
   "units": [
     {
@@ -588,6 +588,32 @@
         { "id": "github-intake-contract", "qGate": "Q3", "commandSha256": "1db2b6e766e4a024a31c918b68dea21420728b6ad280661799b76e022412002a" }
       ],
       "contractSha256": "01e29e3b7f0f049364a64b85c3b75f1e47f37f256778052e66d3894b23632ae6"
+    },
+    {
+      "id": "GS2-05.9",
+      "title": "Implement staged intake admission",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-05.3"],
+      "permissionCeiling": ["repository-local additive staged-intake contracts, pure deterministic capture and Ready-promotion planning, exact sealed-plan application over controlled fixtures, fixed operation-budget accounting, validation, and retained evidence", "local pure-model and deterministic fixture execution is allowed; no production GitHub write, organization-wide reconciliation, full-Backlog traversal or retriage, Project administration, production credential, deployment, publication, stable release, GS2-05.4 roadmap-intake implementation, or claim/pull-request prerequisite authority"],
+      "exitGate": "the Q3 staged-intake contract preserves GS2-05.3 validate, sealed plan, exact apply, idempotent replay, resume, roll-forward, reverse compensation, and authoritative post-state readback while adding explicit create-or-reuse item identity and accepting a canonical discovery with known or explicitly unknown root cause, known or deferred verification, and a declared or unspecified touch set; item-local capture declares exactly the six closed authority-read classes and no more than six actual mutation effects, and its canonical intent, sealed decision, and reported cost remain byte-identical as unrelated Project and Backlog cardinality grows; the capture vocabulary contains no organization-wide reconcile, full-board traversal, full-Backlog traversal, or unrelated retriage operation, leaving global maintenance to event-targeted, scheduled, or explicitly requested operations; Ready promotion is a separate pure decision that requires complete root cause, touch set, verification contract, dependency declaration, route decision, native issue type, organization fields, repository scope, and work classification, reports every missing, duplicate, or invalid fact, and cannot require claim or pull-request evidence because neither is representable in its phase-local vocabulary; staged operations emit canonical fsgg.coord.intake/v1 intents and retain every existing public intake member; generated and independently authored discovery-state, authority-read, mutation-budget, cardinality-growth, forbidden-global-operation, nine missing-promotion-fact, duplicate, invalid-value, v1-compatibility, and roadmap-sequencing inversions all fail closed without performing a production write or claiming GS2-05.4 behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-intake-contract"],
+      "gateContracts": [
+        { "id": "github-intake-contract", "qGate": "Q3", "commandSha256": "1db2b6e766e4a024a31c918b68dea21420728b6ad280661799b76e022412002a" }
+      ],
+      "contractSha256": "594702c526db8858ba5fd82ed4d4f18c0300ad0c8b33c7cb0608356d748db6c8"
+    },
+    {
+      "id": "GS2-05.4",
+      "title": "Implement roadmap intake",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-05.9"],
+      "permissionCeiling": ["repository-local roadmap-intake contract design and qualification scoped to compiling one roadmap into bounded native GitHub work projections", "no implementation, production GitHub mutation, Project-field execution ledger, deployment, publication, stable release, or successor-unit authority until the unit's own accepted route and qualification are registered"],
+      "exitGate": "compile a roadmap into an Epic, bounded work issues, parent edges, dependency edges, dates and fields, and drift inspection without making Project fields the execution ledger; begin only from the accepted GS2-05.9 receipt",
+      "qGates": [],
+      "gateCommands": [],
+      "gateContracts": [],
+      "contractSha256": "5777b9fe5f8fa757a073679751f792505631f2965404ede543b86bdd04fb15f2"
     }
   ]
 }
