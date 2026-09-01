@@ -69,7 +69,7 @@ type DeliveryState =
     | Merged of mergeCommit: string
     | ProtectedVerified of mergeCommit: string * runId: int64 * runCommit: string * conclusion: string
 
-type DeliveryReceiptKind = DeliveryReceipt | DoneReceipt
+type DeliveryReceiptKind = DeliveryGenesis | DeliveryReceipt | DoneReceipt
 
 type DeliveryAuthorityRecord =
     { SchemaVersion: int
@@ -114,6 +114,10 @@ type DeliveryRefusal =
     | InvalidProtectedRun
     | ProtectedRunCommitMismatch
     | ProtectedRunNotSuccessful
+    | InvalidDeliveryKind
+    | DeliveryReceiptRequired
+    | DeliveryAlreadyCompleted
+    | DeliveryPredecessorMismatch
     | DivergentDeliveryReplay
     | InvalidDeliveryCommitMaterial
 

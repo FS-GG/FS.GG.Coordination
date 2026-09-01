@@ -52,13 +52,13 @@ let generatedMutation = function
     | GitHubReviewDeliveryControl.HistoricalPass -> WrongReviewSnapshot <> ReviewNotPassed
     | GitHubReviewDeliveryControl.CurrentPass -> ReviewPass <> ReviewChangesRequired
     | GitHubReviewDeliveryControl.ReviewFence -> ReviewEffectRefused StaleFence <> ReviewEffectRefused TerminalAuthority
-    | GitHubReviewDeliveryControl.MergeDistinct -> NotMerged <> Merged(oid "d")
+    | GitHubReviewDeliveryControl.MergeDistinct -> NotMerged <> Merged(oid "d") && DeliveryGenesis <> DeliveryReceipt
     | GitHubReviewDeliveryControl.ProtectedMain -> Merged(oid "d") <> ProtectedVerified(oid "d", 1L, oid "d", "success")
     | GitHubReviewDeliveryControl.ExactMergeRun -> ProtectedRunCommitMismatch <> ProtectedRunNotSuccessful
     | GitHubReviewDeliveryControl.DeliveryReceipt -> DeliveryReceipt <> DoneReceipt
     | GitHubReviewDeliveryControl.DoneReceipt -> ProtectedVerificationRequired <> MergeRequired
     | GitHubReviewDeliveryControl.ExactReplay -> DeliveryReplayed Unchecked.defaultof<DeliveryReceipt> <> DeliveryPlanned Unchecked.defaultof<DeliveryPlan>
-    | GitHubReviewDeliveryControl.DivergentReplay -> DivergentDeliveryReplay <> DeliveryPayloadMismatch
+    | GitHubReviewDeliveryControl.DivergentReplay -> DivergentDeliveryReplay <> DeliveryPredecessorMismatch
     | GitHubReviewDeliveryControl.BoundedCost -> ({ AuthorityReads = 3; MaximumEffects = 1 }: ReviewDeliveryCost) = { AuthorityReads = 3; MaximumEffects = 1 }
     | GitHubReviewDeliveryControl.QuintAndPrerequisite -> receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.5" && sha256 quintPath = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
 

@@ -16,13 +16,13 @@ type ReviewGrant = { Address: AggregateAddress; ChainId: string; EpochKey: strin
 type ReviewPlan = { ProposedAuthority: ReviewAuthorityRecord; Proposal: CasProposal; Grant: ReviewGrant; Seal: string; Cost: ReviewDeliveryCost }
 type ReviewRefusal = InvalidReviewSubject | IncompleteReviewSnapshot | InvalidReviewSnapshot of string | InvalidAccountableAuthority | InvalidSeatOrdinal | ReusedPhaseSeat | ReviewObservationIncomplete | ReviewJournalFailure of JournalFailure | ReviewPayloadMismatch | WrongReviewChain | WrongReviewEpoch | WrongReviewSnapshot | WrongReviewSeat | ReviewNotPassed | ReviewEffectRefused of EffectRefusal | InvalidReviewCommitMaterial
 type DeliveryState = NotMerged | Merged of mergeCommit: string | ProtectedVerified of mergeCommit: string * runId: int64 * runCommit: string * conclusion: string
-type DeliveryReceiptKind = DeliveryReceipt | DoneReceipt
+type DeliveryReceiptKind = DeliveryGenesis | DeliveryReceipt | DoneReceipt
 type DeliveryAuthorityRecord = { SchemaVersion: int; Subject: string; Kind: DeliveryReceiptKind; ReviewChainId: string; ReviewEpochKey: string; ReviewSeat: string; MergeCommit: string; ProtectedRunId: int64 option; OperationId: string }
 type DeliveryAuthorityObservation = { Complete: bool; Journal: JournalObservation; Current: DeliveryAuthorityRecord }
 type DeliveryReceipt = { Address: AggregateAddress; Record: DeliveryAuthorityRecord; JournalCommit: string; Generation: int64; Digest: string }
 type DeliveryPlan = { ProposedAuthority: DeliveryAuthorityRecord; Proposal: CasProposal; Receipt: DeliveryReceipt; Seal: string; Cost: ReviewDeliveryCost }
 type DeliveryPlanResult = DeliveryPlanned of DeliveryPlan | DeliveryReplayed of DeliveryReceipt
-type DeliveryRefusal = ReviewAuthorizationRefused of ReviewRefusal | DeliveryObservationIncomplete | DeliveryJournalFailure of JournalFailure | DeliveryPayloadMismatch | MergeRequired | ProtectedVerificationRequired | InvalidMergeCommit | InvalidProtectedRun | ProtectedRunCommitMismatch | ProtectedRunNotSuccessful | DivergentDeliveryReplay | InvalidDeliveryCommitMaterial
+type DeliveryRefusal = ReviewAuthorizationRefused of ReviewRefusal | DeliveryObservationIncomplete | DeliveryJournalFailure of JournalFailure | DeliveryPayloadMismatch | MergeRequired | ProtectedVerificationRequired | InvalidMergeCommit | InvalidProtectedRun | ProtectedRunCommitMismatch | ProtectedRunNotSuccessful | InvalidDeliveryKind | DeliveryReceiptRequired | DeliveryAlreadyCompleted | DeliveryPredecessorMismatch | DivergentDeliveryReplay | InvalidDeliveryCommitMaterial
 
 [<RequireQualifiedAccess>]
 module ReviewDeliveryAdapter =
@@ -30,7 +30,8 @@ module ReviewDeliveryAdapter =
     let private validText (value: string) = not (String.IsNullOrWhiteSpace value) && value = value.Trim()
     let private validOid (value: string) = validText value && (value.Length = 40 || value.Length = 64) && value |> Seq.forall Uri.IsHexDigit
     let private verdictText = function ReviewPending -> "pending" | ReviewPass -> "pass" | ReviewChangesRequired -> "changes-required"
-    let private kindText = function DeliveryReceipt -> "delivery" | DoneReceipt -> "done"
+    let private kindText = function DeliveryGenesis -> "genesis" | DeliveryReceipt -> "delivery" | DoneReceipt -> "done"
+    let private validDigest (value: string) = validText value && value.Length = 64 && value |> Seq.forall Uri.IsHexDigit
 
     let chainId (subject: string) =
         if validText subject then Ok("review-chain:" + shaText (subject.ToLowerInvariant())) else Error InvalidReviewSubject
@@ -77,8 +78,8 @@ module ReviewDeliveryAdapter =
         let failures =
             [ if authority.SchemaVersion <> 1 || not (validText authority.OperationId) then yield ReviewPayloadMismatch
               if not (validText authority.ChainId) then yield WrongReviewChain
-              if not (validText authority.EpochKey) then yield WrongReviewEpoch
-              if not (validText authority.SnapshotDigest) then yield WrongReviewSnapshot
+              if not (validDigest authority.SnapshotDigest) then yield WrongReviewSnapshot
+              if authority.EpochKey <> "review-epoch:" + shaText (authority.ChainId + "|" + authority.SnapshotDigest) then yield WrongReviewEpoch
               if not (validText authority.AccountableAuthority) then yield InvalidAccountableAuthority
               if phaseSeat authority.EpochKey authority.SeatOrdinal <> Ok authority.PhaseSeat then yield WrongReviewSeat ]
         if not (List.isEmpty failures) then Error failures else
@@ -164,9 +165,17 @@ module ReviewDeliveryAdapter =
     let deliveryAuthorityBytes (record: DeliveryAuthorityRecord) =
         let failures =
             [ if record.SchemaVersion <> 1 || not (validText record.Subject) || not (validText record.OperationId) then yield DeliveryPayloadMismatch
-              if not (validText record.ReviewChainId && validText record.ReviewEpochKey && validText record.ReviewSeat) then yield DeliveryPayloadMismatch
-              if not (validOid record.MergeCommit) then yield InvalidMergeCommit
-              match record.Kind, record.ProtectedRunId with DoneReceipt, None -> yield ProtectedVerificationRequired | DeliveryReceipt, Some _ -> yield DeliveryPayloadMismatch | _ -> () ]
+              match record.Kind with
+              | DeliveryGenesis ->
+                  if record.ReviewChainId <> "" || record.ReviewEpochKey <> "" || record.ReviewSeat <> "" || record.MergeCommit <> "" || record.ProtectedRunId.IsSome then yield DeliveryPayloadMismatch
+              | DeliveryReceipt ->
+                  if not (validText record.ReviewChainId && validText record.ReviewEpochKey && validText record.ReviewSeat) then yield DeliveryPayloadMismatch
+                  if not (validOid record.MergeCommit) then yield InvalidMergeCommit
+                  if record.ProtectedRunId.IsSome then yield DeliveryPayloadMismatch
+              | DoneReceipt ->
+                  if not (validText record.ReviewChainId && validText record.ReviewEpochKey && validText record.ReviewSeat) then yield DeliveryPayloadMismatch
+                  if not (validOid record.MergeCommit) then yield InvalidMergeCommit
+                  if record.ProtectedRunId.IsNone then yield ProtectedVerificationRequired ]
         if not (List.isEmpty failures) then Error failures else
         let root = JsonObject()
         root.Add("kind", kindText record.Kind); root.Add("mergeCommit", record.MergeCommit.ToLowerInvariant())
@@ -193,6 +202,7 @@ module ReviewDeliveryAdapter =
         let operation = validateDelivery operationObservation
         let stateResult =
             match kind, state with
+            | DeliveryGenesis, _ -> Error InvalidDeliveryKind
             | _, NotMerged -> Error MergeRequired
             | DeliveryReceipt, Merged merge when validOid merge -> Ok(merge.ToLowerInvariant(), None)
             | DoneReceipt, Merged _ -> Error ProtectedVerificationRequired
@@ -223,6 +233,15 @@ module ReviewDeliveryAdapter =
         if operationObservation.Current.OperationId = operationId then
             if operationObservation.Current = record then Ok(DeliveryReplayed { Address = journal.Current.Head.Address; Record = record; JournalCommit = journal.Current.CommitOid; Generation = journal.Current.Head.Generation; Digest = digest })
             else Error [ DivergentDeliveryReplay ]
+        elif kind = DeliveryReceipt && operationObservation.Current.Kind = DoneReceipt then Error [ DeliveryAlreadyCompleted ]
+        elif kind = DeliveryReceipt && operationObservation.Current.Kind <> DeliveryGenesis then Error [ DeliveryPredecessorMismatch ]
+        elif kind = DoneReceipt && operationObservation.Current.Kind = DeliveryGenesis then Error [ DeliveryReceiptRequired ]
+        elif kind = DoneReceipt && operationObservation.Current.Kind = DoneReceipt then Error [ DeliveryAlreadyCompleted ]
+        elif kind = DoneReceipt
+             && (operationObservation.Current.ReviewChainId <> record.ReviewChainId
+                 || operationObservation.Current.ReviewEpochKey <> record.ReviewEpochKey
+                 || operationObservation.Current.ReviewSeat <> record.ReviewSeat
+                 || operationObservation.Current.MergeCommit <> record.MergeCommit) then Error [ DeliveryPredecessorMismatch ]
         elif not (validOid material.CommitOid && validOid material.TreeOid) then Error [ InvalidDeliveryCommitMaterial ]
         else
             let proposed: JournalCommit = makeCommit journal.Current.Head.Address (journal.Current.Head.Generation + 1L) journal.Current.CommitOid (Some journal.Current.Head.HeadDigest) operationId bytes material

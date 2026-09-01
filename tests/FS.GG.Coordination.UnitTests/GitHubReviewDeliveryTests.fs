@@ -23,7 +23,7 @@ let private reviewCommit = commit reviewAddress 1L None None reviewAuthority.Ope
 let private reviewObservation: ReviewAuthorityObservation = { Complete = true; Journal = JournalComplete("review-1", [ reviewCommit ]); Current = reviewAuthority }
 let private grant: ReviewGrant = { Address = reviewAddress; ChainId = chain; EpochKey = epoch; SnapshotDigest = reviewAuthority.SnapshotDigest; AccountableAuthority = reviewAuthority.AccountableAuthority; PhaseSeat = seat; JournalCommit = reviewCommit.CommitOid; Generation = 1L }
 
-let private deliveryRecord = { SchemaVersion = 1; Subject = snapshot.Subject.ToLowerInvariant(); Kind = DeliveryReceipt; ReviewChainId = chain; ReviewEpochKey = epoch; ReviewSeat = seat; MergeCommit = oid "e"; ProtectedRunId = None; OperationId = "delivery-root" }
+let private deliveryRecord = { SchemaVersion = 1; Subject = snapshot.Subject.ToLowerInvariant(); Kind = DeliveryGenesis; ReviewChainId = ""; ReviewEpochKey = ""; ReviewSeat = ""; MergeCommit = ""; ProtectedRunId = None; OperationId = "delivery-root" }
 let private operationAddress = ReviewDeliveryAdapter.deliveryAddress snapshot.Subject |> Result.defaultWith (failwithf "%A")
 let private deliveryBytes = ReviewDeliveryAdapter.deliveryAuthorityBytes deliveryRecord |> Result.defaultWith (failwithf "%A")
 let private operationCommit = commit operationAddress 1L None None deliveryRecord.OperationId deliveryBytes (oid "f")
@@ -63,11 +63,16 @@ let ``succession is fresh inside an epoch and a new epoch keeps accountability``
 [<Fact>]
 let ``merged and protected verified are distinct receipt boundaries`` () =
     let delivery = ReviewDeliveryAdapter.planDelivery DeliveryReceipt grant snapshot reviewObservation (Merged(oid "9")) deliveryObservation { CommitOid = oid "1"; TreeOid = oid "2" }
-    match delivery with Ok(DeliveryPlanned plan) -> Assert.Equal(DeliveryReceipt, plan.Receipt.Record.Kind) | value -> failwithf "%A" value
+    let delivered = match delivery with Ok(DeliveryPlanned plan) -> Assert.Equal(DeliveryReceipt, plan.Receipt.Record.Kind); plan | value -> failwithf "%A" value
     Assert.Equal(Error [ ProtectedVerificationRequired ], ReviewDeliveryAdapter.planDelivery DoneReceipt grant snapshot reviewObservation (Merged(oid "9")) deliveryObservation { CommitOid = oid "1"; TreeOid = oid "2" })
-    let donePlan = ReviewDeliveryAdapter.planDelivery DoneReceipt grant snapshot reviewObservation (ProtectedVerified(oid "9", 42L, oid "9", "success")) deliveryObservation { CommitOid = oid "3"; TreeOid = oid "4" }
+    let deliveredObservation: DeliveryAuthorityObservation = { Complete = true; Journal = JournalComplete("delivery-2", [ operationCommit; delivered.Proposal.ProposedCommit ]); Current = delivered.ProposedAuthority }
+    let donePlan = ReviewDeliveryAdapter.planDelivery DoneReceipt grant snapshot reviewObservation (ProtectedVerified(oid "9", 42L, oid "9", "success")) deliveredObservation { CommitOid = oid "3"; TreeOid = oid "4" }
     match donePlan with Ok(DeliveryPlanned plan) -> Assert.Equal(Some 42L, plan.Receipt.Record.ProtectedRunId) | value -> failwithf "%A" value
-    Assert.Equal(Error [ ProtectedRunCommitMismatch ], ReviewDeliveryAdapter.planDelivery DoneReceipt grant snapshot reviewObservation (ProtectedVerified(oid "9", 42L, oid "8", "success")) deliveryObservation { CommitOid = oid "3"; TreeOid = oid "4" })
+    Assert.Equal(Error [ ProtectedRunCommitMismatch ], ReviewDeliveryAdapter.planDelivery DoneReceipt grant snapshot reviewObservation (ProtectedVerified(oid "9", 42L, oid "8", "success")) deliveredObservation { CommitOid = oid "3"; TreeOid = oid "4" })
+    Assert.Equal(Error [ DeliveryReceiptRequired ], ReviewDeliveryAdapter.planDelivery DoneReceipt grant snapshot reviewObservation (ProtectedVerified(oid "9", 42L, oid "9", "success")) deliveryObservation { CommitOid = oid "3"; TreeOid = oid "4" })
+    let completedPlan = match donePlan with Ok(DeliveryPlanned plan) -> plan | _ -> failwith "expected done plan"
+    let doneObservation: DeliveryAuthorityObservation = { Complete = true; Journal = JournalComplete("delivery-3", [ operationCommit; delivered.Proposal.ProposedCommit; completedPlan.Proposal.ProposedCommit ]); Current = completedPlan.ProposedAuthority }
+    Assert.Equal(Error [ DeliveryAlreadyCompleted ], ReviewDeliveryAdapter.planDelivery DeliveryReceipt grant snapshot reviewObservation (Merged(oid "9")) doneObservation { CommitOid = oid "5"; TreeOid = oid "6" })
 
 [<Fact>]
 let ``exact delivery replay is idempotent and qualification inventory is closed`` () =
