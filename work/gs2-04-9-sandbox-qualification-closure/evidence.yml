@@ -1,0 +1,937 @@
+schemaVersion: 1
+workId: gs2-04-9-sandbox-qualification-closure
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-04-9-sandbox-qualification-closure/spec.md
+sourceClarifications: work/gs2-04-9-sandbox-qualification-closure/clarifications.md
+sourceChecklist: work/gs2-04-9-sandbox-qualification-closure/checklist.md
+sourcePlan: work/gs2-04-9-sandbox-qualification-closure/plan.md
+sourceTasks: work/gs2-04-9-sandbox-qualification-closure/tasks.yml
+sourceAnalysis: readiness/gs2-04-9-sandbox-qualification-closure/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-04-9-sandbox-qualification-closure/analysis.json
+    digest: adc314bb4247b2387c9eb1403bf35bc3da064103108a4b91a40d7602b4e77e2c
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-04-9-sandbox-qualification-closure/checklist.md
+    digest: 21e25e1aacf27ad38a97e8a86b953e81e6f68d37999710b1e896831056c58bbc
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-04-9-sandbox-qualification-closure/clarifications.md
+    digest: c30fd335704accc51c39adc2c5c0f1f02a332f60192039382eb4df59109a48ae
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-04-9-sandbox-qualification-closure/plan.md
+    digest: b738c61d2185e092c9f615bb78e65b6601616fc2834606f632cccc7dcb09c843
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-04-9-sandbox-qualification-closure/spec.md
+    digest: d45ea6ecde0a5ee0c80b5ccf61aeb4cb8c4b90f0fd0c143049e94fb9d40e43b2
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-04-9-sandbox-qualification-closure/tasks.yml
+    digest: d31620b07e64cd32aefc906d69b7d534cb34f413450d1183bb4370719061d678
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV014]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV015]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV016]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV017]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV018]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV019]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV020]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV021]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV022]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV023]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV024]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-006]
+    obligationRefs: [EV025]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV026]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007, PD-008]
+    obligationRefs: [EV027]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV028]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-006]
+    obligationRefs: [EV029]
+    artifacts: [eng/execute-github-sandbox-live.sh, eng/qualify-github-sandbox-closure.sh, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fs, src/FS.GG.Coordination.GitHub/GitHubSandboxClosure.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubSandboxClosureQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubSandboxClosureTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubSandboxClosureArchitectureTests.fs
+      - kind: verification
+        path: eng/execute-github-sandbox-live.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-04-9-sandbox-qualification-closure/unit/qualification.trx
+      digest: "sha256:d6e6f833473560970227b56016351bc7ee7a208731c3b92bd4ff32eade656acc"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["Exact candidate f8726836a72ad3e2528c8e2af1543c880b401fec passed protected credential-owner workflow run https://github.com/FS-GG/.github/actions/runs/33465929736 with eight cold children, eight live effects, byte-identical release asset retrieval, always-run cleanup, and independently confirmed zero residue. Earlier red runs 33464077514, 33464332367, 33464499738, and 33464706050 prove fail-closed validation and cleanup during repair."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

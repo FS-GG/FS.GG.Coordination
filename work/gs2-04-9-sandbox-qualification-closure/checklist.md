@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/gs2-04-9-sandbox-qualification-closure/clarifications.md
 
 ## Source Snapshot
-- spec: work/gs2-04-9-sandbox-qualification-closure/spec.md sha256:bf5aae39f45b2d04aa210514c8f5f041dfb2ffe5702c2629b34276602fd7cabb schemaVersion:1
+- spec: work/gs2-04-9-sandbox-qualification-closure/spec.md sha256:d45ea6ecde0a5ee0c80b5ccf61aeb4cb8c4b90f0fd0c143049e94fb9d40e43b2 schemaVersion:1
 - clarifications: work/gs2-04-9-sandbox-qualification-closure/clarifications.md sha256:c30fd335704accc51c39adc2c5c0f1f02a332f60192039382eb4df59109a48ae schemaVersion:1
 
 ## Checklist Items
