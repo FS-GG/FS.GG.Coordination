@@ -93,7 +93,14 @@ execute_plan() {
 
   project_add="$(api_json graphql -f query='mutation($project:ID!,$content:ID!){addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{id}}}' -F project="$project_node" -F content="$(jq -r .node_id <<<"$issue1")" --jq '.data.addProjectV2ItemById.item')"
   write_state --arg id "$(jq -r .id <<<"$project_add")" '.resources.projectItemId=$id'
-  project_items="$(api_json graphql -f query='query($id:ID!){node(id:$id){... on ProjectV2{items(first:100){nodes{id content{... on Issue{id}}}}}}}' -F id="$project_node" --jq '.data.node.items.nodes')"
+  # ProjectV2 membership is eventually consistent after addProjectV2ItemById.
+  # Poll the authoritative read instead of treating propagation delay as a
+  # failed operation; the bounded loop still fails closed.
+  for _ in {1..10}; do
+    project_items="$(api_json graphql -f query='query($id:ID!){node(id:$id){... on ProjectV2{items(first:100){nodes{id content{... on Issue{id}}}}}}}' -F id="$project_node" --jq '.data.node.items.nodes')"
+    [[ "$(jq --arg id "$(jq -r .node_id <<<"$issue1")" '[.[]|select(.content.id==$id)]|length' <<<"$project_items")" == 1 ]] && break
+    sleep 1
+  done
   [[ "$(jq --arg id "$(jq -r .node_id <<<"$issue1")" '[.[]|select(.content.id==$id)]|length' <<<"$project_items")" == 1 ]]
   record_effect project project "$(sha256_text absent)" "$(sha256_text "$project_add")" "$(jq -r .id <<<"$project_add")"
 
