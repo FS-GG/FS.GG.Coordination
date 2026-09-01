@@ -2,6 +2,7 @@
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/runner-temp.sh"
 fsgg_resolve_runner_temp
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/provision-quint.sh"
 if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
   echo "COMPILER_AND_TESTS_REFUSED identity-bound qualification requires a clean committed candidate; run focused tests while editing, then commit before this full gate" >&2
   exit 3
