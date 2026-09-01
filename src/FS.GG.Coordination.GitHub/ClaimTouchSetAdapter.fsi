@@ -66,6 +66,10 @@ type ClaimRefusal =
     | WrongClaimOwner
     | WrongClaimTouches
     | ClaimEffectRefused of EffectRefusal
+    | MissingDomainProof of string
+    | DuplicateDomainProof of string
+    | WrongDomainGeneration of touch: string * expected: int64 * observed: int64
+    | ClaimDomainEffectRefused of touch: string * refusal: EffectRefusal
 
 type ClaimAcquireResult =
     | ClaimAcquired of ClaimGrant
@@ -79,10 +83,21 @@ type ClaimDomainObservation =
       ExpectedGeneration: int64
       ActiveGrant: ClaimGrant option }
 
+type ClaimDomainExpectation =
+    { Touch: ClaimTouch
+      Address: AggregateAddress
+      ExpectedGeneration: int64 }
+
+type ClaimDomainEffectProof =
+    { Touch: ClaimTouch
+      JournalCommit: string
+      Generation: int64 }
+
 type ClaimMultiTouchPlan =
     { OperationId: string
       Owner: string
       Touches: ClaimTouch list
+      Domains: ClaimDomainExpectation list
       Saga: SagaPlan
       Seal: string
       Cost: ClaimCost }
@@ -91,7 +106,8 @@ type ClaimPersistedPlan =
     { OperationId: string
       PlanSeal: string
       Touches: ClaimTouch list
-      ExpectedGenerations: int64 list }
+      ExpectedGenerations: int64 list
+      Domains: ClaimDomainExpectation list }
 
 [<RequireQualifiedAccess>]
 module ClaimTouchSetAdapter =
@@ -106,5 +122,5 @@ module ClaimTouchSetAdapter =
     val authorizeEffect: ClaimGrant -> ClaimAuthorityObservation -> Result<JournalCommit, ClaimRefusal>
     val planMultiTouch: operationId: string -> owner: string -> ClaimTouch list -> ClaimDomainObservation list -> Result<ClaimMultiTouchPlan, ClaimRefusal list>
     val persistPlan: ClaimMultiTouchPlan -> ClaimPersistedPlan
-    val authorizeMultiTouchEffects: ClaimMultiTouchPlan -> ClaimPersistedPlan option -> (ClaimGrant * ClaimAuthorityObservation) list -> Result<JournalCommit list, ClaimRefusal list>
+    val authorizeMultiTouchEffects: ClaimMultiTouchPlan -> ClaimPersistedPlan option -> primary: (ClaimGrant * ClaimAuthorityObservation) -> domains: (ClaimDomainEffectProof * JournalObservation) list -> Result<JournalCommit list, ClaimRefusal list>
     val planConflict: ClaimMultiTouchPlan -> acquired: SagaTouch list -> applied: SagaTouch list -> Result<SagaConflictPlan, string>

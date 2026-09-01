@@ -11,7 +11,7 @@ sourceAnalysis: readiness/208-claim-touch-sets/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/208-claim-touch-sets/analysis.json
-    digest: 1005b3080e97f7a4f2caf84930e031eaf94e0c285f249510c876ed0e0ba19e2a
+    digest: 6b89b63d4d4eaca0ccfb46e89463b8001664ee7b187681a4d95044ba4fe47bc7
     schemaVersion: 1
   - label: checklist
     path: work/208-claim-touch-sets/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/208-claim-touch-sets/plan.md
-    digest: 55c1946837b5098c3c99111e1ac0970bc598014df72ec16e4e12b2c077d6ba80
+    digest: edbe8753e8471aa47ef3295d175b88fa99f633ced08a66b16cffa07f28e65b0d
     schemaVersion: 1
   - label: spec
     path: work/208-claim-touch-sets/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/208-claim-touch-sets/tasks.yml
-    digest: d144e06bb75d579a28301cd1b9c352685a237951408718f8c2f6bfbdd6f9309a
+    digest: b194d7f74b69303f47a28b5f787dc2e112495768b006ae53d8f984e76d682e6f
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -486,10 +486,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -513,10 +513,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -540,10 +540,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -567,10 +567,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -594,10 +594,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -621,10 +621,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -648,10 +648,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -675,10 +675,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -702,10 +702,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -729,10 +729,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -756,10 +756,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -783,10 +783,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -810,10 +810,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -837,10 +837,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -864,10 +864,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]
@@ -891,10 +891,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-5/gs2-05-5-unit.trx
-      digest: "sha256:ced2140432b938bd64bf4f0dbf603b172f4d1a12c93a996db617cbbc53fa10a9"
+      digest: "sha256:ffee0b0687dbe2220fafe636aca947f31e9a481a62f2d0e5646c620e8777a8e6"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 114
+      passed: 115
       failed: 0
       skipped: 0
     notes: [The typed claim and touch-set contract, and controlled-fixture authorization passed without production writes., independent Q3 inversions, journal-CAS composition]

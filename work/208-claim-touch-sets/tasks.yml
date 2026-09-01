@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/208-claim-touch-sets/plan.md
-    digest: 55c1946837b5098c3c99111e1ac0970bc598014df72ec16e4e12b2c077d6ba80
+    digest: edbe8753e8471aa47ef3295d175b88fa99f633ced08a66b16cffa07f28e65b0d
     schemaVersion: 1
 tasks:
   - id: T001

@@ -45,6 +45,36 @@ let private baseObservation =
       Journal = JournalComplete("revision-1", [ baseCommit ])
       Current = baseAuthority }
 
+let private baseGrant =
+    { Address = baseCommit.Head.Address
+      Subject = baseAuthority.Subject.ToLowerInvariant()
+      Owner = baseAuthority.Owner
+      Touches = baseAuthority.Touches |> List.map (fun value -> { value with Repository = value.Repository.ToLowerInvariant() })
+      JournalCommit = baseCommit.CommitOid
+      Generation = 1L }
+
+let private domainCommit (address: AggregateAddress) commitOid =
+    let bytes = ClaimTouchSetAdapter.authorityBytes baseAuthority |> Result.defaultWith (failwithf "%A")
+    let event = { Bytes = bytes; Digest = ShardedJournalAdapter.sha256 bytes }
+    let unsigned =
+        { SchemaVersion = 1
+          Address = address
+          Generation = 1L
+          EventDigest = event.Digest
+          SnapshotDigest = None
+          Terminal = false
+          PriorHeadDigest = None
+          HeadDigest = String.replicate 64 "0" }
+    let head = { unsigned with HeadDigest = ShardedJournalAdapter.sha256 (ShardedJournalAdapter.journalHeadBytes unsigned) }
+    { CommitOid = commitOid
+      ParentOid = None
+      TreeOid = oid "e"
+      OperationId = "domain-root"
+      Head = head
+      HeadBytes = ShardedJournalAdapter.journalHeadBytes head
+      Event = event
+      Checkpoint = None }
+
 [<Fact>]
 let ``touches are canonical repository-scoped and ancestry conflicts`` () =
     let normalized =
@@ -62,15 +92,8 @@ let ``expiry grants successor eligibility but never changes current authority`` 
     Assert.Equal(Ok(SuccessorEligibility.BlockedUntil 100L), ClaimTouchSetAdapter.successorEligibility 99L "worker-b" baseObservation)
     Assert.Equal(Ok SuccessorEligibility.EligibleAfterExpiry, ClaimTouchSetAdapter.successorEligibility 100L "worker-b" baseObservation)
     Assert.Equal(Ok SuccessorEligibility.CurrentOwner, ClaimTouchSetAdapter.successorEligibility 10L "worker-a" baseObservation)
-    let currentGrant =
-        { Address = baseCommit.Head.Address
-          Subject = baseAuthority.Subject.ToLowerInvariant()
-          Owner = baseAuthority.Owner
-          Touches = baseAuthority.Touches |> List.map (fun value -> { value with Repository = value.Repository.ToLowerInvariant() })
-          JournalCommit = baseCommit.CommitOid
-          Generation = 1L }
-    Assert.True(ClaimTouchSetAdapter.authorizeEffect currentGrant baseObservation |> Result.isOk)
-    Assert.Equal(Error WrongClaimOwner, ClaimTouchSetAdapter.authorizeEffect { currentGrant with Owner = "worker-b" } baseObservation)
+    Assert.True(ClaimTouchSetAdapter.authorizeEffect baseGrant baseObservation |> Result.isOk)
+    Assert.Equal(Error WrongClaimOwner, ClaimTouchSetAdapter.authorizeEffect { baseGrant with Owner = "worker-b" } baseObservation)
 
 [<Fact>]
 let ``successor acquisition is expected-parent CAS with a new fencing generation`` () =
@@ -132,7 +155,50 @@ let ``multi-touch plan persists the full ordered acquisition and compensates in 
     Assert.Equal<SagaTouch list>([], conflict.ReleaseUnconsumed)
     Assert.Equal<SagaTouch list>(plan.Saga.AcquisitionOrder |> List.rev, conflict.CompensateApplied |> List.map (fun value -> { Address = value.Address; ExpectedGeneration = value.Generation }))
     Assert.All(conflict.CompensateApplied, fun value -> Assert.True value.OriginalResultRetained)
-    Assert.Equal(Error [ PersistedPlanMissing ], ClaimTouchSetAdapter.authorizeMultiTouchEffects plan None [])
+    Assert.Equal(Error [ PersistedPlanMissing ], ClaimTouchSetAdapter.authorizeMultiTouchEffects plan None (baseGrant, baseObservation) [])
+
+[<Fact>]
+let ``multi-touch effects require every distinct persisted domain proof`` () =
+    let touches = [ touch "repo" "src/Z"; touch "repo" "src/A" ]
+    let domains = touches |> List.map (fun value -> { Touch = value; ExpectedGeneration = 1L; ActiveGrant = None })
+    let plan = ClaimTouchSetAdapter.planMultiTouch "operation-43" "worker-a" touches domains |> Result.defaultWith (failwithf "%A")
+    let persisted = ClaimTouchSetAdapter.persistPlan plan
+    let primaryAuthority = { baseAuthority with Touches = touches; OperationId = "multi-root" }
+    let primaryCommit = claimCommit primaryAuthority 1L None None (oid "2")
+    let primaryObservation =
+        { Complete = true
+          Journal = JournalComplete("multi-primary", [ primaryCommit ])
+          Current = primaryAuthority }
+    let primaryGrant =
+        { Address = primaryCommit.Head.Address
+          Subject = primaryAuthority.Subject.ToLowerInvariant()
+          Owner = primaryAuthority.Owner
+          Touches = plan.Touches
+          JournalCommit = primaryCommit.CommitOid
+          Generation = 1L }
+    let proofs =
+        plan.Domains
+        |> List.mapi (fun index domain ->
+            let commit = domainCommit domain.Address (if index = 0 then oid "f" else oid "1")
+            ({ Touch = domain.Touch; JournalCommit = commit.CommitOid; Generation = domain.ExpectedGeneration },
+             JournalComplete($"domain-{index}", [ commit ])))
+    let authorized =
+        ClaimTouchSetAdapter.authorizeMultiTouchEffects plan (Some persisted) (primaryGrant, primaryObservation) proofs
+        |> Result.defaultWith (failwithf "%A")
+    Assert.Equal(3, authorized.Length)
+
+    let duplicate = [ proofs.Head; proofs.Head ]
+    match ClaimTouchSetAdapter.authorizeMultiTouchEffects plan (Some persisted) (primaryGrant, primaryObservation) duplicate with
+    | Error failures ->
+        Assert.Contains(failures, function DuplicateDomainProof _ -> true | _ -> false)
+        Assert.Contains(failures, function MissingDomainProof _ -> true | _ -> false)
+    | Ok _ -> failwith "a duplicate domain proof replaced an unproved touch"
+
+    let staleProof, staleObservation = proofs.Head
+    let stale = ({ staleProof with Generation = 2L }, staleObservation) :: proofs.Tail
+    match ClaimTouchSetAdapter.authorizeMultiTouchEffects plan (Some persisted) (primaryGrant, primaryObservation) stale with
+    | Error failures -> Assert.Contains(failures, function WrongDomainGeneration _ -> true | _ -> false)
+    | Ok _ -> failwith "a stale domain generation authorized effects"
 
 [<Fact>]
 let ``multi-touch cost and seal ignore unrelated projection cardinality`` () =

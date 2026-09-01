@@ -32,10 +32,16 @@ type ClaimRefusal =
     | WrongClaimOwner
     | WrongClaimTouches
     | ClaimEffectRefused of EffectRefusal
+    | MissingDomainProof of string
+    | DuplicateDomainProof of string
+    | WrongDomainGeneration of touch: string * expected: int64 * observed: int64
+    | ClaimDomainEffectRefused of touch: string * refusal: EffectRefusal
 type ClaimAcquireResult = ClaimAcquired of ClaimGrant | ClaimParentConflict | ClaimDefiniteRefusal of string | ClaimResponseUnknownRequiresReread | ClaimAcquireRefused of ClaimRefusal
 type ClaimDomainObservation = { Touch: ClaimTouch; ExpectedGeneration: int64; ActiveGrant: ClaimGrant option }
-type ClaimMultiTouchPlan = { OperationId: string; Owner: string; Touches: ClaimTouch list; Saga: SagaPlan; Seal: string; Cost: ClaimCost }
-type ClaimPersistedPlan = { OperationId: string; PlanSeal: string; Touches: ClaimTouch list; ExpectedGenerations: int64 list }
+type ClaimDomainExpectation = { Touch: ClaimTouch; Address: AggregateAddress; ExpectedGeneration: int64 }
+type ClaimDomainEffectProof = { Touch: ClaimTouch; JournalCommit: string; Generation: int64 }
+type ClaimMultiTouchPlan = { OperationId: string; Owner: string; Touches: ClaimTouch list; Domains: ClaimDomainExpectation list; Saga: SagaPlan; Seal: string; Cost: ClaimCost }
+type ClaimPersistedPlan = { OperationId: string; PlanSeal: string; Touches: ClaimTouch list; ExpectedGenerations: int64 list; Domains: ClaimDomainExpectation list }
 
 [<RequireQualifiedAccess>]
 module ClaimTouchSetAdapter =
@@ -254,10 +260,15 @@ module ClaimTouchSetAdapter =
                     observation.Journal
                 |> Result.mapError ClaimEffectRefused
 
-    let private multiSeal (operationId: string) (owner: string) (touches: ClaimTouch list) (expectedGenerations: int64 list) =
-        let touchText = touches |> List.map (fun touch -> touch.Repository + ":" + touch.Path) |> String.concat "|"
-        let generationText = expectedGenerations |> List.map (fun value -> value.ToString(CultureInfo.InvariantCulture)) |> String.concat "|"
-        sha256Text $"{operationId}|{owner}|{touchText}|{generationText}"
+    let private domainKey (touch: ClaimTouch) = touch.Repository + ":" + touch.Path
+
+    let private multiSeal (operationId: string) (owner: string) (domains: ClaimDomainExpectation list) =
+        let domainText =
+            domains
+            |> List.map (fun domain ->
+                $"{domainKey domain.Touch}:{ShardedJournalAdapter.journalKind domain.Address.Kind}:{domain.Address.Shard}:{domain.Address.Digest}:{domain.ExpectedGeneration.ToString(CultureInfo.InvariantCulture)}")
+            |> String.concat "|"
+        sha256Text $"{operationId}|{owner}|{domainText}"
 
     let planMultiTouch (operationId: string) (owner: string) (touches: ClaimTouch list) (domains: ClaimDomainObservation list) =
         let canonicalOwnerResult = canonicalOwner owner
@@ -298,27 +309,73 @@ module ClaimTouchSetAdapter =
             match ShardedJournalAdapter.planSaga operationId sagaTouches with
             | Error _ -> Error [ AlteredClaimPlan ]
             | Ok saga ->
-                let generations = saga.AcquisitionOrder |> List.map _.ExpectedGeneration
-                Ok { OperationId = operationId; Owner = canonicalOwner; Touches = canonicalTouches; Saga = saga; Seal = multiSeal operationId canonicalOwner canonicalTouches generations; Cost = { AuthorityReads = canonicalTouches.Length + 1; MaximumEffects = canonicalTouches.Length * 2 + 1 } }
+                let touchByAddress = List.zip sagaTouches domainTouches |> Map.ofList
+                let expectations =
+                    saga.AcquisitionOrder
+                    |> List.map (fun sagaTouch ->
+                        { Touch = touchByAddress[sagaTouch]
+                          Address = sagaTouch.Address
+                          ExpectedGeneration = sagaTouch.ExpectedGeneration })
+                Ok { OperationId = operationId; Owner = canonicalOwner; Touches = canonicalTouches; Domains = expectations; Saga = saga; Seal = multiSeal operationId canonicalOwner expectations; Cost = { AuthorityReads = canonicalTouches.Length + 1; MaximumEffects = canonicalTouches.Length * 2 + 1 } }
 
     let persistPlan (plan: ClaimMultiTouchPlan) =
         { OperationId = plan.OperationId
           PlanSeal = plan.Seal
           Touches = plan.Touches
-          ExpectedGenerations = plan.Saga.AcquisitionOrder |> List.map _.ExpectedGeneration }
+          ExpectedGenerations = plan.Saga.AcquisitionOrder |> List.map _.ExpectedGeneration
+          Domains = plan.Domains }
 
-    let authorizeMultiTouchEffects (plan: ClaimMultiTouchPlan) (persisted: ClaimPersistedPlan option) (grants: (ClaimGrant * ClaimAuthorityObservation) list) =
+    let authorizeMultiTouchEffects (plan: ClaimMultiTouchPlan) (persisted: ClaimPersistedPlan option) (primary: ClaimGrant * ClaimAuthorityObservation) (domains: (ClaimDomainEffectProof * JournalObservation) list) =
+        let primaryGrant, primaryObservation = primary
+        let domainProofs = domains
         match persisted with
         | None -> Error [ PersistedPlanMissing ]
         | Some receipt ->
             let expected = persistPlan plan
-            if receipt <> expected || multiSeal plan.OperationId plan.Owner plan.Touches receipt.ExpectedGenerations <> plan.Seal then
+            if receipt <> expected || multiSeal plan.OperationId plan.Owner receipt.Domains <> plan.Seal then
                 Error [ AlteredClaimPlan ]
-            elif grants.Length <> plan.Touches.Length then
-                Error [ WrongClaimTouches ]
             else
-                let results = grants |> List.map (fun (grant, observation) -> authorizeEffect grant observation)
-                let failures = results |> List.choose (function Error failure -> Some failure | _ -> None)
+                let primaryResult =
+                    match normalizeTouches primaryGrant.Touches with
+                    | Error _ -> Error WrongClaimTouches
+                    | Ok touches when primaryGrant.Owner <> plan.Owner -> Error WrongClaimOwner
+                    | Ok touches when touches <> plan.Touches -> Error WrongClaimTouches
+                    | Ok _ -> authorizeEffect primaryGrant primaryObservation
+
+                let normalizedProofs =
+                    domainProofs
+                    |> List.map (fun (proof, observation) ->
+                        normalizeTouch proof.Touch
+                        |> Result.map (fun touch -> touch, proof, observation))
+                let normalizationFailures = normalizedProofs |> List.choose (function Error failure -> Some failure | _ -> None)
+                let proofValues = normalizedProofs |> List.choose Result.toOption
+                let duplicateFailures =
+                    proofValues
+                    |> List.countBy (fun (touch, _, _) -> domainKey touch)
+                    |> List.choose (fun (key, count) -> if count > 1 then Some(DuplicateDomainProof key) else None)
+                let domainResults =
+                    plan.Domains
+                    |> List.map (fun expectedDomain ->
+                        let key = domainKey expectedDomain.Touch
+                        match proofValues |> List.filter (fun (touch, _, _) -> touch = expectedDomain.Touch) with
+                        | [] -> Error(MissingDomainProof key)
+                        | [ _, proof, observation ] when proof.Generation <> expectedDomain.ExpectedGeneration ->
+                            Error(WrongDomainGeneration(key, expectedDomain.ExpectedGeneration, proof.Generation))
+                        | [ _, proof, observation ] ->
+                            ShardedJournalAdapter.authorizeEffect
+                                { Address = expectedDomain.Address
+                                  JournalCommit = proof.JournalCommit
+                                  Generation = proof.Generation }
+                                observation
+                            |> Result.mapError (fun refusal -> ClaimDomainEffectRefused(key, refusal))
+                        | _ -> Error(DuplicateDomainProof key))
+                let extraFailures =
+                    proofValues
+                    |> List.choose (fun (touch, _, _) ->
+                        if plan.Domains |> List.exists (fun expectedDomain -> expectedDomain.Touch = touch) then None
+                        else Some(WrongClaimTouches))
+                let results = primaryResult :: domainResults
+                let failures = normalizationFailures @ duplicateFailures @ extraFailures @ (results |> List.choose (function Error failure -> Some failure | _ -> None))
                 if List.isEmpty failures then Ok(results |> List.choose Result.toOption) else Error failures
 
     let planConflict (plan: ClaimMultiTouchPlan) (acquired: SagaTouch list) (applied: SagaTouch list) =

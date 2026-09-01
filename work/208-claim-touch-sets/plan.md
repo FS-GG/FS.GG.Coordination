@@ -76,7 +76,8 @@ No blocking planning findings recorded.
 
 ## Implementation Status
 - Registration and prerequisite proof: DONE — GS2-05.5 resolves against roadmap `b776da76`, exact Q3 command digest, and accepted GS2-05.4 receipt only.
-- Claim/touch-set qualification and controlled-fixture adapter: DONE — warning-free Release build, 7 focused unit tests, 12 focused architecture tests, and 18 generated plus independent Q3 controls pass.
+- Claim/touch-set qualification and controlled-fixture adapter: DONE — warning-free Release build, 8 focused unit tests, 13 focused architecture tests, and 18 generated plus independent Q3 controls pass.
+- Independent-review repair: DONE — multi-touch persistence now seals every ordered touch/address/generation tuple; effect authorization requires the primary subject claim plus one distinct complete domain-journal proof per planned touch and refuses duplicate, missing, extra, or stale-generation proofs.
 - Formal source delta: NONE — `Protocol.md` remains `7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218`.
 - Formal post-implementation checkpoint: DONE — the pinned canonical compiler, all eleven TLC-backed witnesses, and all 126 mutation controls passed against the unchanged protocol source; retained summary: `artifacts/canonical-quint/gs2-05-5-post-implementation.json`.
 - Current checkpoint: run the complete repository build, unit, architecture, Q3, SDD, and roadmap-work delivery gates over the final candidate.
