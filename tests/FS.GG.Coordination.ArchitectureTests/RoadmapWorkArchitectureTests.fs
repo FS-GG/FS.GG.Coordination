@@ -134,7 +134,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through registered GS2-04-9 boundary`` () =
+let ``roadmap unit index advances through registered GS2-05-1 boundary`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -181,7 +181,8 @@ let ``roadmap unit index advances through registered GS2-04-9 boundary`` () =
              "GS2-04.6"
              "GS2-04.7"
              "GS2-04.8"
-             "GS2-04.9" ]
+             "GS2-04.9"
+             "GS2-05.1" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -984,6 +985,48 @@ let ``roadmap unit index advances through registered GS2-04-9 boundary`` () =
           "omitted-adapter inversions all fail closed" ] do
         Assert.Contains(requiredTerm, sandboxClosureExitGate)
 
+    let workTaxonomyUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-05.1")
+
+    Assert.Equal("Finalize taxonomy", workTaxonomyUnit.GetProperty("title").GetString())
+    Assert.Equal("FS.GG.Coordination", workTaxonomyUnit.GetProperty("owner").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-04.9" ],
+        workTaxonomyUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q2" ],
+        workTaxonomyUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-work-taxonomy-contract" ],
+        workTaxonomyUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    let workTaxonomyExitGate = workTaxonomyUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "Epic, Feature, Task, Bug, Decision, Register, and Directive"
+          "sole classification authority"
+          "without retaining Class or Kind as parallel semantic input"
+          "standing Register and Directive exemptions"
+          "every current native-type, Class, Kind"
+          "complete fingerprinted corpus"
+          "one deterministic canonical migration disposition"
+          "exact pre-state fingerprint"
+          "retired projections"
+          "refusing missing, unknown, contradictory, ambiguous"
+          "proves totality, uniqueness, deterministic ordering, idempotent replay"
+          "omitted-combination inversions all fail closed"
+          "without mutating GitHub"
+          "without claiming GS2-05.2" ] do
+        Assert.Contains(requiredTerm, workTaxonomyExitGate)
+
     use acceptedPrerequisite =
         JsonDocument.Parse(
             File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.2.json"))
@@ -1044,6 +1087,16 @@ let ``roadmap unit index advances through registered GS2-04-9 boundary`` () =
         acceptedActionsReleaseFeed.RootElement.GetProperty("unitContractSha256").GetString()
     )
 
+    use acceptedSandboxClosure =
+        JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.9.json"))
+        )
+
+    Assert.Equal(
+        sandboxClosureUnit.GetProperty("contractSha256").GetString(),
+        acceptedSandboxClosure.RootElement.GetProperty("unitContractSha256").GetString()
+    )
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -1055,7 +1108,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(17, commands.Length)
+    Assert.Equal(18, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -1180,6 +1233,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-sandbox-closure.fsx"; "--"; "." ],
         sandboxClosureCommand.GetProperty("args").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let workTaxonomyCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-work-taxonomy-contract")
+    Assert.Equal("Q2", workTaxonomyCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-work-taxonomy.fsx"; "--"; "." ],
+        workTaxonomyCommand.GetProperty("args").EnumerateArray()
         |> Seq.map _.GetString()
         |> Seq.toList
     )
