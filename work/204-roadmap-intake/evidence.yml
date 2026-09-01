@@ -1,0 +1,902 @@
+schemaVersion: 1
+workId: 204-roadmap-intake
+stage: evidence
+status: evidenceReady
+sourceSpec: work/204-roadmap-intake/spec.md
+sourceClarifications: work/204-roadmap-intake/clarifications.md
+sourceChecklist: work/204-roadmap-intake/checklist.md
+sourcePlan: work/204-roadmap-intake/plan.md
+sourceTasks: work/204-roadmap-intake/tasks.yml
+sourceAnalysis: readiness/204-roadmap-intake/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/204-roadmap-intake/analysis.json
+    digest: c726fc5eae9555d012e65226f2cec64ba451460e673b096ea04ad5a9f7daa062
+    schemaVersion: 1
+  - label: checklist
+    path: work/204-roadmap-intake/checklist.md
+    digest: 8dd8985fe9dd4eb8a5c8230b07214d812e542ea86f8122d4ec3ddb5bb041dc80
+    schemaVersion: 1
+  - label: clarifications
+    path: work/204-roadmap-intake/clarifications.md
+    digest: 7d922b700d8c70ac409e8465c47b1c23647b15de7a822e76f8011099723f19df
+    schemaVersion: 1
+  - label: plan
+    path: work/204-roadmap-intake/plan.md
+    digest: 1380013e433b97df5f9c99fc1d44eb6485a742e3c8df1e74eb281876948cdaaf
+    schemaVersion: 1
+  - label: spec
+    path: work/204-roadmap-intake/spec.md
+    digest: ef8ef8cb8c07fbaa55666e8818d9e96e635007398e1087212ddd9bde6db091c6
+    schemaVersion: 1
+  - label: tasks
+    path: work/204-roadmap-intake/tasks.yml
+    digest: a617e5d73a3e5fcecca4dbb13b237e27bf824c499a9dfd12d8c16ee658d17ead
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV017]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV018]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV019]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV020]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV021]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV022]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006]
+    obligationRefs: [EV023]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV024]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV025]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV026]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV027]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV028]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV029]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV030]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV031
+    kind: verification
+    subject:
+      type: task
+      id: T031
+    taskRefs: [T031]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV031]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+  - id: EV032
+    kind: verification
+    subject:
+      type: task
+      id: T032
+    taskRefs: [T032]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV032]
+    artifacts: [eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, eng/validate-github-roadmap-intake.fsx, evidence/github-substrate-v2/gs2-05-4/corpus.json, evidence/github-substrate-v2/gs2-05-4/independent-expectations.json, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fs, src/FS.GG.Coordination.GitHub/RoadmapIntakeAdapter.fsi, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubRoadmapIntakeQualification.fsi, tests/FS.GG.Coordination.ArchitectureTests/GitHubRoadmapIntakeArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRoadmapIntakeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-4/gs2-05-4-unit.trx
+      digest: "sha256:ad839b4d1184e7e0c7e418dbde78ccc85b19cc49464b1471bc68eefedaee7eb1"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 107
+      failed: 0
+      skipped: 0
+    notes: [The typed roadmap compiler, and independent Q3 inversions passed without production GitHub writes., controlled application, fixed cost, generated corpus, owned drift, sealed plan]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

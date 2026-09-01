@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="ce349afb-8781-4e1a-8f29-03bf534440eb" name="@991ca70644d4 2026-09-01 20:21:53" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-01T20:21:53.3707000+02:00" queuing="2026-09-01T20:21:53.3707001+02:00" start="2026-09-01T20:21:51.6866322+02:00" finish="2026-09-01T20:21:53.5261203+02:00" />
+  <TestSettings name="default" id="22fe78dd-b446-45c4-b11f-49bbba12fdef">
+    <Deployment runDeploymentRoot="_991ca70644d4_2026-09-01_20_21_53" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="e4c6cb12-fdf1-4583-bffe-6842b2980409" testId="8ff258a5-cff1-1894-a06a-3478980d5cfa" testName="FS.GG.Coordination.GitHubRoadmapIntakeTests.typed roadmap compiles deterministically to bounded native effects" computerName="991ca70644d4" duration="00:00:00.0342185" startTime="2026-09-01T20:21:52.0106596+02:00" endTime="2026-09-01T20:21:52.0470387+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e4c6cb12-fdf1-4583-bffe-6842b2980409" />
+    <UnitTestResult executionId="9c550414-99e4-4a91-ad11-06485dfc79e8" testId="231eccad-5d8a-08f0-3f4f-f5e806c4e7d6" testName="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests.registered roadmap intake gate runs cold offline and without production writes" computerName="991ca70644d4" duration="00:00:01.4655257" startTime="2026-09-01T20:21:52.0278811+02:00" endTime="2026-09-01T20:21:53.4879088+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9c550414-99e4-4a91-ad11-06485dfc79e8" />
+    <UnitTestResult executionId="145ceeed-20d4-4ca5-bd6f-edfbcefa254f" testId="88496be7-56a6-2a73-5e98-2cf7b1adca0a" testName="FS.GG.Coordination.GitHubRoadmapIntakeTests.Project state is projection only while owned drift and controlled failures remain explicit" computerName="991ca70644d4" duration="00:00:00.0036865" startTime="2026-09-01T20:21:52.0512644+02:00" endTime="2026-09-01T20:21:52.0549035+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="145ceeed-20d4-4ca5-bd6f-edfbcefa254f" />
+    <UnitTestResult executionId="12103192-15fe-466e-82da-af9688e88d3e" testId="9e3def06-6d10-936e-0986-326529a0fd8a" testName="FS.GG.Coordination.GitHubRoadmapIntakeTests.identity graph date field observation and sealed plan failures close" computerName="991ca70644d4" duration="00:00:00.0033526" startTime="2026-09-01T20:21:52.0476103+02:00" endTime="2026-09-01T20:21:52.0504092+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="12103192-15fe-466e-82da-af9688e88d3e" />
+    <UnitTestResult executionId="39eab442-c78b-4998-b6b0-d981c744b947" testId="378f17bd-32ce-db43-5c35-0d57950de683" testName="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests.roadmap intake Q3 evidence is independently inventoried and predecessor bound" computerName="991ca70644d4" duration="00:00:00.0082360" startTime="2026-09-01T20:21:52.0113724+02:00" endTime="2026-09-01T20:21:52.0222969+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="39eab442-c78b-4998-b6b0-d981c744b947" />
+    <UnitTestResult executionId="f8520342-792f-48f1-aca1-f4eb11a14281" testId="50db3ca1-7f21-a232-b07d-41a3d88b3130" testName="FS.GG.Coordination.GitHubRoadmapIntakeTests.roadmap qualification inventory requires independent mutation sensitivity" computerName="991ca70644d4" duration="00:00:00.0007577" startTime="2026-09-01T20:21:52.0505275+02:00" endTime="2026-09-01T20:21:52.0511826+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f8520342-792f-48f1-aca1-f4eb11a14281" />
+    <UnitTestResult executionId="67454467-0477-462e-857d-7bfb6ca13ff9" testId="5c691aa7-fa03-9015-32b1-efeef23b6af9" testName="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests.roadmap intake boundary is signature first bounded and transport free" computerName="991ca70644d4" duration="00:00:00.0003123" startTime="2026-09-01T20:21:53.4882056+02:00" endTime="2026-09-01T20:21:53.4882342+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="67454467-0477-462e-857d-7bfb6ca13ff9" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubRoadmapIntakeTests.roadmap qualification inventory requires independent mutation sensitivity" storage="/home/developer/projects/fs.gg.coordination-204/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="50db3ca1-7f21-a232-b07d-41a3d88b3130">
+      <Execution id="f8520342-792f-48f1-aca1-f4eb11a14281" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-204/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubRoadmapIntakeTests" name="roadmap qualification inventory requires independent mutation sensitivity" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubRoadmapIntakeTests.identity graph date field observation and sealed plan failures close" storage="/home/developer/projects/fs.gg.coordination-204/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="9e3def06-6d10-936e-0986-326529a0fd8a">
+      <Execution id="12103192-15fe-466e-82da-af9688e88d3e" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-204/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubRoadmapIntakeTests" name="identity graph date field observation and sealed plan failures close" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubRoadmapIntakeTests.Project state is projection only while owned drift and controlled failures remain explicit" storage="/home/developer/projects/fs.gg.coordination-204/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="88496be7-56a6-2a73-5e98-2cf7b1adca0a">
+      <Execution id="145ceeed-20d4-4ca5-bd6f-edfbcefa254f" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-204/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubRoadmapIntakeTests" name="Project state is projection only while owned drift and controlled failures remain explicit" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests.roadmap intake Q3 evidence is independently inventoried and predecessor bound" storage="/home/developer/projects/fs.gg.coordination-204/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="378f17bd-32ce-db43-5c35-0d57950de683">
+      <Execution id="39eab442-c78b-4998-b6b0-d981c744b947" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-204/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests" name="roadmap intake Q3 evidence is independently inventoried and predecessor bound" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubRoadmapIntakeTests.typed roadmap compiles deterministically to bounded native effects" storage="/home/developer/projects/fs.gg.coordination-204/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="8ff258a5-cff1-1894-a06a-3478980d5cfa">
+      <Execution id="e4c6cb12-fdf1-4583-bffe-6842b2980409" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-204/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubRoadmapIntakeTests" name="typed roadmap compiles deterministically to bounded native effects" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests.registered roadmap intake gate runs cold offline and without production writes" storage="/home/developer/projects/fs.gg.coordination-204/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="231eccad-5d8a-08f0-3f4f-f5e806c4e7d6">
+      <Execution id="9c550414-99e4-4a91-ad11-06485dfc79e8" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-204/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests" name="registered roadmap intake gate runs cold offline and without production writes" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests.roadmap intake boundary is signature first bounded and transport free" storage="/home/developer/projects/fs.gg.coordination-204/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="5c691aa7-fa03-9015-32b1-efeef23b6af9">
+      <Execution id="67454467-0477-462e-857d-7bfb6ca13ff9" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-204/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubRoadmapIntakeArchitectureTests" name="roadmap intake boundary is signature first bounded and transport free" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="8ff258a5-cff1-1894-a06a-3478980d5cfa" executionId="e4c6cb12-fdf1-4583-bffe-6842b2980409" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="231eccad-5d8a-08f0-3f4f-f5e806c4e7d6" executionId="9c550414-99e4-4a91-ad11-06485dfc79e8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="88496be7-56a6-2a73-5e98-2cf7b1adca0a" executionId="145ceeed-20d4-4ca5-bd6f-edfbcefa254f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9e3def06-6d10-936e-0986-326529a0fd8a" executionId="12103192-15fe-466e-82da-af9688e88d3e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="378f17bd-32ce-db43-5c35-0d57950de683" executionId="39eab442-c78b-4998-b6b0-d981c744b947" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="50db3ca1-7f21-a232-b07d-41a3d88b3130" executionId="f8520342-792f-48f1-aca1-f4eb11a14281" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5c691aa7-fa03-9015-32b1-efeef23b6af9" executionId="67454467-0477-462e-857d-7bfb6ca13ff9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="7" executed="7" passed="7" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.12]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:01.61]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

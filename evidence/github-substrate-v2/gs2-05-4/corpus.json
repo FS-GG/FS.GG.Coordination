@@ -1,0 +1,14 @@
+{
+  "schema": "fsgg.coordination.github-roadmap-intake-corpus/1",
+  "registeredContractSha256": "46df348d73b6a5d953e78286f23e794432f389752eb77e9d085d694f7d4e2fc7",
+  "acceptedPredecessorReceiptSha256": "c63acc912261dd5e14951423a5de24b27da0c35e2d96bf071e6a8c6734848345",
+  "acceptedPredecessorReceiptDigest": "59398e603e39b04ff6d971ef923d19513e03d3990a970323add90cf7ce593861",
+  "roadmapRevision": "2ff646743e770f0ec6be5566acd04df0b1a83dec",
+  "roadmapSha256": "e10e4a4245d11d1ae955d3a11c7cc25aa92e52a1c1b6bf6398e4249acc8ee581",
+  "controls": [
+    "canonical-plan", "create-or-reuse", "hierarchy", "dependencies", "dates", "fields",
+    "identity-collision", "duplicate-target", "stale-observation", "altered-plan",
+    "cardinality-invariant", "projection-not-ledger", "owned-drift", "replay",
+    "partial-apply", "unauthorized", "unsupported", "indeterminate"
+  ]
+}

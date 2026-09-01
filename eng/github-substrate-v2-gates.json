@@ -120,6 +120,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-intake.fsx", "--", "."]
+    },
+    {
+      "id": "github-roadmap-intake-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-roadmap-intake.fsx", "--", "."]
     }
   ]
 }

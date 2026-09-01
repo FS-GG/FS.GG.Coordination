@@ -1,0 +1,9 @@
+{
+  "schema": "fsgg.coordination.github-roadmap-intake-expectations/1",
+  "controls": [
+    "canonical-plan", "create-or-reuse", "hierarchy", "dependencies", "dates", "fields",
+    "identity-collision", "duplicate-target", "stale-observation", "altered-plan",
+    "cardinality-invariant", "projection-not-ledger", "owned-drift", "replay",
+    "partial-apply", "unauthorized", "unsupported", "indeterminate"
+  ]
+}
