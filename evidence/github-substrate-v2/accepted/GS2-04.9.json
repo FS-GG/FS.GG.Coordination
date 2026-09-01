@@ -1,0 +1,79 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-04.9",
+  "state": "accepted",
+  "unitContractSha256": "00ced881abe69940f8b4663014c8fb1dd1f8d8a586302b4bc9685d9a9f2c0e9e",
+  "sourceRevision": "b0a2a8eb6827fd66cd04f20c7356080074e35289",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-04.1-receipt",
+      "sha256": "867e1d9842f0821be0af1bacfc175ef23da1351f22bb353de6ffb3671229a58e"
+    },
+    {
+      "name": "accepted-GS2-04.2-receipt",
+      "sha256": "5f7bea734709fa23a9da8056701e6d109b87e6d4702e6439943742e1addbf5a1"
+    },
+    {
+      "name": "accepted-GS2-04.3-receipt",
+      "sha256": "210ae250d081c39ec422d59c9bd4a72c653650380497aef586164b6fc3a52507"
+    },
+    {
+      "name": "accepted-GS2-04.4-receipt",
+      "sha256": "a2a71df6fe5f871c8f40b353c161b58fbb2206643b02dcb3ef5987802a82c252"
+    },
+    {
+      "name": "accepted-GS2-04.5-receipt",
+      "sha256": "27b27b76cf52fca137059aa466c7922dc096cae33c0a4e1045735bd937497091"
+    },
+    {
+      "name": "accepted-GS2-04.6-receipt",
+      "sha256": "4011bbe0d7e2db27aff2b6e0a36d9bc342dc89e8310b56d4e358b6d73bc96511"
+    },
+    {
+      "name": "accepted-GS2-04.7-receipt",
+      "sha256": "5a54e22d217044a4b5cc2424c8d7e8e24f86dbbe8c6d6373c0c487819a930acf"
+    },
+    {
+      "name": "accepted-GS2-04.8-receipt",
+      "sha256": "9f80d0048b06a7ca3c06491ee4c1e6f2baad6bf704f763b7ed018ff43b62e19b"
+    },
+    {
+      "name": "protected-comprehensive-q3-q4-results",
+      "sha256": "d5ed2db7dfc7036197f4ea1b54e6160ca969fd661b255bd32dfc8fef8dc2a57d"
+    },
+    {
+      "name": "protected-q4-closure",
+      "sha256": "c0ada4be4aab23f16650d96c5c1ced8c3e2592ed40d1855177251342c4501def"
+    },
+    {
+      "name": "protected-live-execution",
+      "sha256": "1db89ddd21ea45b0e2d1508526bc55219e4814333a8a12756f2f4ca804db94ab"
+    },
+    {
+      "name": "protected-reverse-cleanup",
+      "sha256": "490d81909ad664eff3f72fbc7818306e9f8eaa94addef54a3a074df601bfbef4"
+    },
+    {
+      "name": "protected-release-asset",
+      "sha256": "c8d89b693ef58426a73d6bd5b64346ec7fecc7be46608ad693018abc9e39663d"
+    },
+    {
+      "name": "independent-residue-census-comment-5488597638",
+      "sha256": "d58aa126eb53ae2a7c9ec5bb3709ad3793efa65b38ceaed0b3630ff52632674b"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "510886313ba9cb768603c091a3aa0cfc53ebc363d6bd29d93f1fd76c74caef6a"
+    },
+    {
+      "name": "structured-review-acceptance",
+      "sha256": "973e4d3d6998d8db365eec3a46a5272486de40e70388dce5916dff614c6c7ae4"
+    },
+    {
+      "name": "delivery-completion",
+      "sha256": "3aeaa3e10a3664f1585eab9a87dcf61b3a894ac957b36a195e7aa160c8f477e4"
+    }
+  ],
+  "acceptedAt": "2026-09-01T03:54:23Z",
+  "digest": "11defafd12353bbcb9b96cc06d3d9e29553ddca4ba912bacd7476c067f9802ed"
+}
