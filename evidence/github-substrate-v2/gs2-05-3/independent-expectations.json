@@ -1,0 +1,9 @@
+{
+  "schema": "fsgg.coordination.github-intake-independent-expectations/1",
+  "producer": "independent-fixture-reader",
+  "expectedControlCount": 12,
+  "requiresGeneratedAndIndependentBaselines": true,
+  "requiresEveryMutationRed": true,
+  "requiresCanonicalReplay": true,
+  "allowsProductionWrites": false
+}

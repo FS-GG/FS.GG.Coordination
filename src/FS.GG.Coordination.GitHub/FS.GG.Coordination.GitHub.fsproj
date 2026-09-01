@@ -9,6 +9,8 @@
     <Compile Include="NativeRelations.fs" />
     <Compile Include="ProjectAdapter.fsi" />
     <Compile Include="ProjectAdapter.fs" />
+    <Compile Include="IntakeAdapter.fsi" />
+    <Compile Include="IntakeAdapter.fs" />
     <Compile Include="CommentProjectionAdapter.fsi" />
     <Compile Include="CommentProjectionAdapter.fs" />
     <Compile Include="ShardedJournalAdapter.fsi" />

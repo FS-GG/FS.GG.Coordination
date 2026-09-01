@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="fd424fb6-a975-4c13-9ca5-10469dce7da9" name="@991ca70644d4 2026-09-01 10:34:48" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-01T10:34:48.7787997+02:00" queuing="2026-09-01T10:34:48.7787998+02:00" start="2026-09-01T10:34:47.1045327+02:00" finish="2026-09-01T10:34:48.8232494+02:00" />
+  <TestSettings name="default" id="684a1daf-1894-4aff-8c6c-7f8c0c99db20">
+    <Deployment runDeploymentRoot="_991ca70644d4_2026-09-01_10_34_48" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="b356f542-dd9c-4811-b1f3-926e8419a1d1" testId="279e8ecc-71ee-e38b-ab32-965e7fda4732" testName="FS.GG.Coordination.GitHubIntakeArchitectureTests.intake boundary is signature first and contains no production transport" computerName="991ca70644d4" duration="00:00:00.0003332" startTime="2026-09-01T10:34:48.7862927+02:00" endTime="2026-09-01T10:34:48.7863208+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b356f542-dd9c-4811-b1f3-926e8419a1d1" />
+    <UnitTestResult executionId="719f8540-ff60-49d1-b1f1-93e136d7a160" testId="fa026685-e353-c15d-bdda-719e239b56bb" testName="FS.GG.Coordination.GitHubIntakeTests.intake qualification inventory is independently exact" computerName="991ca70644d4" duration="00:00:00.0013977" startTime="2026-09-01T10:34:47.4696161+02:00" endTime="2026-09-01T10:34:47.4709734+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="719f8540-ff60-49d1-b1f1-93e136d7a160" />
+    <UnitTestResult executionId="f2ff33f5-4319-4f13-80a4-9f9ac4679396" testId="0616598c-afe3-151e-377b-805ca91a78cd" testName="FS.GG.Coordination.GitHubIntakeArchitectureTests.intake fixture inventory is canonical and independently owned" computerName="991ca70644d4" duration="00:00:00.0031244" startTime="2026-09-01T10:34:47.4113470+02:00" endTime="2026-09-01T10:34:47.4170136+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f2ff33f5-4319-4f13-80a4-9f9ac4679396" />
+    <UnitTestResult executionId="ea523df2-1d6c-4256-895a-8749f5e916ab" testId="837f3f3d-1ad9-5570-5eac-38537281a014" testName="FS.GG.Coordination.GitHubIntakeTests.controlled apply fences orders rereads and verifies exact post state" computerName="991ca70644d4" duration="00:00:00.0094152" startTime="2026-09-01T10:34:47.4550570+02:00" endTime="2026-09-01T10:34:47.4640993+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ea523df2-1d6c-4256-895a-8749f5e916ab" />
+    <UnitTestResult executionId="c1930b6e-dfab-4a62-b203-81306e21de0b" testId="b9d856f1-f96b-c11b-a299-83708e6b659f" testName="FS.GG.Coordination.GitHubIntakeTests.intake observation is exhaustive ordered and preserves typed outcomes" computerName="991ca70644d4" duration="00:00:00.0020782" startTime="2026-09-01T10:34:47.4675114+02:00" endTime="2026-09-01T10:34:47.4695385+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c1930b6e-dfab-4a62-b203-81306e21de0b" />
+    <UnitTestResult executionId="cd949689-0e20-4377-8b32-cb0ad0410a44" testId="bf319a7d-9805-3b1d-0e76-85cdcb48f07e" testName="FS.GG.Coordination.GitHubIntakeArchitectureTests.registered intake gate runs cold and offline" computerName="991ca70644d4" duration="00:00:01.3688039" startTime="2026-09-01T10:34:47.4231261+02:00" endTime="2026-09-01T10:34:48.7859766+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cd949689-0e20-4377-8b32-cb0ad0410a44" />
+    <UnitTestResult executionId="a440b089-f2ae-48e8-a4d6-4484d20b9da8" testId="f78805a9-0bb0-fe62-bc52-d84b0d8acb3c" testName="FS.GG.Coordination.GitHubIntakeTests.resume skips proven effects and compensation is reverse ordered" computerName="991ca70644d4" duration="00:00:00.0033095" startTime="2026-09-01T10:34:47.4641800+02:00" endTime="2026-09-01T10:34:47.4674317+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a440b089-f2ae-48e8-a4d6-4484d20b9da8" />
+    <UnitTestResult executionId="02667bc8-df30-4232-8cb0-44e58c726cad" testId="9641a3d1-0d6f-1bbc-cc49-5b26f705ad1a" testName="FS.GG.Coordination.GitHubIntakeTests.planning is sealed canonical bounded and no-op aware" computerName="991ca70644d4" duration="00:00:00.0420084" startTime="2026-09-01T10:34:47.4105945+02:00" endTime="2026-09-01T10:34:47.4546860+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="02667bc8-df30-4232-8cb0-44e58c726cad" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubIntakeTests.intake observation is exhaustive ordered and preserves typed outcomes" storage="/home/developer/projects/fs.gg.coordination-196/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="b9d856f1-f96b-c11b-a299-83708e6b659f">
+      <Execution id="c1930b6e-dfab-4a62-b203-81306e21de0b" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-196/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIntakeTests" name="intake observation is exhaustive ordered and preserves typed outcomes" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIntakeTests.intake qualification inventory is independently exact" storage="/home/developer/projects/fs.gg.coordination-196/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="fa026685-e353-c15d-bdda-719e239b56bb">
+      <Execution id="719f8540-ff60-49d1-b1f1-93e136d7a160" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-196/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIntakeTests" name="intake qualification inventory is independently exact" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIntakeTests.controlled apply fences orders rereads and verifies exact post state" storage="/home/developer/projects/fs.gg.coordination-196/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="837f3f3d-1ad9-5570-5eac-38537281a014">
+      <Execution id="ea523df2-1d6c-4256-895a-8749f5e916ab" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-196/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIntakeTests" name="controlled apply fences orders rereads and verifies exact post state" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIntakeArchitectureTests.registered intake gate runs cold and offline" storage="/home/developer/projects/fs.gg.coordination-196/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="bf319a7d-9805-3b1d-0e76-85cdcb48f07e">
+      <Execution id="cd949689-0e20-4377-8b32-cb0ad0410a44" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-196/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIntakeArchitectureTests" name="registered intake gate runs cold and offline" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIntakeTests.planning is sealed canonical bounded and no-op aware" storage="/home/developer/projects/fs.gg.coordination-196/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="9641a3d1-0d6f-1bbc-cc49-5b26f705ad1a">
+      <Execution id="02667bc8-df30-4232-8cb0-44e58c726cad" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-196/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIntakeTests" name="planning is sealed canonical bounded and no-op aware" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIntakeArchitectureTests.intake fixture inventory is canonical and independently owned" storage="/home/developer/projects/fs.gg.coordination-196/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="0616598c-afe3-151e-377b-805ca91a78cd">
+      <Execution id="f2ff33f5-4319-4f13-80a4-9f9ac4679396" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-196/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIntakeArchitectureTests" name="intake fixture inventory is canonical and independently owned" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIntakeTests.resume skips proven effects and compensation is reverse ordered" storage="/home/developer/projects/fs.gg.coordination-196/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="f78805a9-0bb0-fe62-bc52-d84b0d8acb3c">
+      <Execution id="a440b089-f2ae-48e8-a4d6-4484d20b9da8" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-196/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIntakeTests" name="resume skips proven effects and compensation is reverse ordered" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubIntakeArchitectureTests.intake boundary is signature first and contains no production transport" storage="/home/developer/projects/fs.gg.coordination-196/tests/fs.gg.coordination.architecturetests/bin/debug/net10.0/fs.gg.coordination.architecturetests.dll" id="279e8ecc-71ee-e38b-ab32-965e7fda4732">
+      <Execution id="b356f542-dd9c-4811-b1f3-926e8419a1d1" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-196/tests/FS.GG.Coordination.ArchitectureTests/bin/Debug/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubIntakeArchitectureTests" name="intake boundary is signature first and contains no production transport" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="279e8ecc-71ee-e38b-ab32-965e7fda4732" executionId="b356f542-dd9c-4811-b1f3-926e8419a1d1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fa026685-e353-c15d-bdda-719e239b56bb" executionId="719f8540-ff60-49d1-b1f1-93e136d7a160" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0616598c-afe3-151e-377b-805ca91a78cd" executionId="f2ff33f5-4319-4f13-80a4-9f9ac4679396" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="837f3f3d-1ad9-5570-5eac-38537281a014" executionId="ea523df2-1d6c-4256-895a-8749f5e916ab" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b9d856f1-f96b-c11b-a299-83708e6b659f" executionId="c1930b6e-dfab-4a62-b203-81306e21de0b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bf319a7d-9805-3b1d-0e76-85cdcb48f07e" executionId="cd949689-0e20-4377-8b32-cb0ad0410a44" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f78805a9-0bb0-fe62-bc52-d84b0d8acb3c" executionId="a440b089-f2ae-48e8-a4d6-4484d20b9da8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9641a3d1-0d6f-1bbc-cc49-5b26f705ad1a" executionId="02667bc8-df30-4232-8cb0-44e58c726cad" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="8" executed="8" passed="8" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.11]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:01.50]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

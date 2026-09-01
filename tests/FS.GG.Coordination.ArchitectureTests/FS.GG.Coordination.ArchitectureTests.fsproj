@@ -12,6 +12,8 @@
     <Compile Include="GitHubNativeRelationArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubProjectAdapterTests.fs" Link="GitHubProjectAdapterUnitTests.fs" />
     <Compile Include="GitHubProjectAdapterArchitectureTests.fs" />
+    <Compile Include="../FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs" Link="GitHubIntakeUnitTests.fs" />
+    <Compile Include="GitHubIntakeArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs" Link="GitHubCommentProjectionUnitTests.fs" />
     <Compile Include="GitHubCommentProjectionArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs" Link="GitHubShardedJournalUnitTests.fs" />

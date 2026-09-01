@@ -33,6 +33,8 @@
     <Compile Include="GitHubNativeRelationQualification.fs" />
     <Compile Include="GitHubProjectAdapterQualification.fsi" />
     <Compile Include="GitHubProjectAdapterQualification.fs" />
+    <Compile Include="GitHubIntakeQualification.fsi" />
+    <Compile Include="GitHubIntakeQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />
