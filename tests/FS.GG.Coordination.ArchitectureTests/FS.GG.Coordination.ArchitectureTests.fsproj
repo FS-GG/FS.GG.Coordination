@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="OrganizationIssueFieldsArchitectureTests.fs" />
     <Compile Include="WorkTaxonomyArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/Tests.fs" Link="BoundaryTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/RoadmapWorkTests.fs" Link="RoadmapWorkUnitTests.fs" />

@@ -1,0 +1,35 @@
+{
+  "schema": "fsgg.github-substrate-v2.organization-issue-fields-qualification/1",
+  "unitContractSha256": "054ee50545c55b314447b7636ee35faf866adba40f6ff9b5ef07effb2009b41f",
+  "gateCommandSha256": "6311e9ca2c92315c48981983efcb93f2717b6b5273aa6fafa75c3fb8496ebcbd",
+  "artifacts": [
+    {
+      "path": "src/FS.GG.Coordination.Core/OrganizationIssueFields.fsi",
+      "sha256": "c3efe770bb285bd7ccd1f60b610328e7dbcee828f382b078a6495428581a1992"
+    },
+    {
+      "path": "src/FS.GG.Coordination.Core/OrganizationIssueFields.fs",
+      "sha256": "6b6a4e2cfd831ee92876207ca09dbdd78622c8c32be85ed243e830831b80df73"
+    },
+    {
+      "path": "evidence/github-substrate-v2/gs2-05-2/corpus.json",
+      "sha256": "4cf18d3c38f92d58b52bd6244c322555695b1b08cef4c79a2678d0cb529c6a0b"
+    },
+    {
+      "path": "evidence/github-substrate-v2/gs2-05-2/independent-expectations.json",
+      "sha256": "6fd672f33f0bd117be8a217a0e70675edce0f192f681ce4678c4b6c2a0e6e2c4"
+    },
+    {
+      "path": "evidence/github-substrate-v2/gs2-05-2/organizationIssueFields.quint",
+      "sha256": "84b39660c07f83ed088f29a63c30f9cc4607f93c4711d44e22d73c06f0261f5a"
+    },
+    {
+      "path": "evidence/github-substrate-v2/gs2-05-2/organizationIssueFields_test.quint",
+      "sha256": "974034f9719d46ff48b2cb57185b4d44329eb0ff1f13480ecd4d6a0dd823d825"
+    },
+    {
+      "path": "eng/validate-github-organization-issue-fields.fsx",
+      "sha256": "b27b1152148b04ed50f94e2b0127a72fa66191ee38682b86f119c3b841925aa9"
+    }
+  ]
+}

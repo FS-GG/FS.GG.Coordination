@@ -1,0 +1,497 @@
+schemaVersion: 1
+workId: gs2-05-2-organization-issue-fields
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-05-2-organization-issue-fields/spec.md
+sourceClarifications: work/gs2-05-2-organization-issue-fields/clarifications.md
+sourceChecklist: work/gs2-05-2-organization-issue-fields/checklist.md
+sourcePlan: work/gs2-05-2-organization-issue-fields/plan.md
+sourceTasks: work/gs2-05-2-organization-issue-fields/tasks.yml
+sourceAnalysis: readiness/gs2-05-2-organization-issue-fields/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-05-2-organization-issue-fields/analysis.json
+    digest: 60c0a35b494ae8405116d20c8762528c4c088859b318f87864fa10900b545266
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-05-2-organization-issue-fields/checklist.md
+    digest: 7cc9db952d6559ab41e3096d2ff31d9093e220fbe2937f50a6b8135cf96ecb9d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-05-2-organization-issue-fields/clarifications.md
+    digest: d6069e585a727197ddb4fca058eacfa942cf03f167aac55c0faac57885db2c44
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-05-2-organization-issue-fields/plan.md
+    digest: a04553cb0ef0e53645a905641e672012b806a3ea57eb4d24a0f65c27041de608
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-05-2-organization-issue-fields/spec.md
+    digest: 84ccbe1d52121c10edca7c496a4a74d28c046785664db2f04f1066be8ac878fc
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-05-2-organization-issue-fields/tasks.yml
+    digest: 997903a8b507e6467a6bae5f270a52cf2ee6622b5f52c72ab0f600ab73cc72a4
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-006, PD-009]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006, PD-007, PD-008, PD-009]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-009]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/OrganizationIssueFieldsTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-2/qualification.trx
+      digest: "sha256:38b4c89ea4ba81f3fc7ab5c942921bc768f01591ebfacef8ded2b865c97f6154"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 3
+      failed: 0
+      skipped: 0
+    notes: ["Observed contract unit suite passed; the independent offline Q2 gate and architecture suite also passed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

@@ -1,0 +1,28 @@
+module organizationIssueFields_test {
+  import organizationIssueFields.* from "./organizationIssueFields"
+
+  run intentStatusTest =
+    init.then(planAction(ValidPaused)).expect(all {
+      intentFor(ValidBacklog) == Backlog,
+      intentFor(ValidReady) == Ready,
+      intentFor(ValidPaused) == Paused,
+      intentFor(ValidCancelled) == Cancelled,
+      state.intent == Paused,
+      state.status == StatusBlocked,
+      state.authorityBound,
+      state.relationsPreserved,
+    })
+
+  run refusalTest =
+    init.then(refuseAction(Contradictory)).expect(all {
+      not(acceptedSignals.contains(Missing)),
+      not(acceptedSignals.contains(Unknown)),
+      not(acceptedSignals.contains(Contradictory)),
+      not(acceptedSignals.contains(Lossy)),
+      not(acceptedSignals.contains(Stale)),
+      not(acceptedSignals.contains(Unreadable)),
+      state.outcome == Refused,
+      state.dispositionCount == 0,
+      not(state.authorityBound),
+    })
+}
