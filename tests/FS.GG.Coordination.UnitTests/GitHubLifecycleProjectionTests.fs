@@ -73,7 +73,16 @@ let ``exact plan fences source and status revisions and verifies authoritative p
     | Error [ LifecycleStatusPreStateRefused(StatusReReadRequired("status-1", "status-2")) ] -> ()
     | value -> failwithf "%A" value
     let applied = { status with Revision = "status-2"; SelectedOptionId = Some options[1].Id }
-    Assert.True(LifecycleProjectionAdapter.verify "status-2" plan (statusObservation applied) |> Result.isOk)
+    Assert.True(LifecycleProjectionAdapter.verify "status-2" plan requested (statusObservation applied) |> Result.isOk)
+    let alteredCost = { plan with Cost = { plan.Cost with MaximumEffects = 0 } }
+    Assert.Equal(Error [ AlteredLifecyclePlan ], LifecycleProjectionAdapter.authorize alteredCost requested (statusObservation status))
+    let alteredDecision =
+        match plan.StatusDecision with
+        | StatusPlanned value -> { plan with StatusDecision = StatusPlanned { value with Operation = SetStatusOperation options[5].Id } }
+        | StatusNoOp _ -> failwith "expected mutation plan"
+    Assert.Equal(Error [ AlteredLifecyclePlan ], LifecycleProjectionAdapter.authorize alteredDecision requested (statusObservation status))
+    let alteredVerification = { plan with Stage = StageDelivered }
+    Assert.Equal(Error [ AlteredLifecyclePlan ], LifecycleProjectionAdapter.verify "status-2" alteredVerification requested (statusObservation applied))
 
 [<Fact>]
 let ``exact equality is a zero-effect replay and qualification inventory is closed`` () =

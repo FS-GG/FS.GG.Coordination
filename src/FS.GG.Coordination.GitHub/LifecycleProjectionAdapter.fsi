@@ -58,4 +58,4 @@ module LifecycleProjectionAdapter =
     val statusName: DerivedLifecycleStage -> string
     val plan: causationIdentity: string -> LifecycleProjectionObservation -> Result<LifecycleProjectionPlan, LifecycleProjectionRefusal list>
     val authorize: LifecycleProjectionPlan -> LifecycleProjectionObservation -> StatusObservation -> Result<StatusSnapshot, LifecycleProjectionRefusal list>
-    val verify: expectedResultRevision: string -> LifecycleProjectionPlan -> StatusObservation -> Result<StatusSnapshot, LifecycleProjectionRefusal list>
+    val verify: expectedResultRevision: string -> LifecycleProjectionPlan -> LifecycleProjectionObservation -> StatusObservation -> Result<StatusSnapshot, LifecycleProjectionRefusal list>

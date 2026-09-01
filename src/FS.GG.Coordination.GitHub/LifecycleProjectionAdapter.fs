@@ -33,6 +33,8 @@ module LifecycleProjectionAdapter =
     let private canonicalSubject (value: string) = if isNull value then "" else value.Trim().ToLowerInvariant()
     let private sha256 (value: string) =
         value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let private frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let private hashParts values = values |> List.map frame |> String.concat "" |> sha256
     let private outcomeName = function
         | FactObserved -> "observed" | FactProvenAbsent -> "proven-absent" | FactIncomplete -> "incomplete"
         | FactUnauthorized -> "unauthorized" | FactUnreadable -> "unreadable" | FactStale -> "stale"
@@ -107,15 +109,34 @@ module LifecycleProjectionAdapter =
                                 | IntentBacklog -> StageBacklog | IntentCancelled -> StageCancelled
                         Ok stage
 
-    let private seal observation stage statusNameValue decision =
-        let decisionIdentity =
-            match decision with
-            | StatusPlanned value -> value.IdempotencyIdentity
-            | StatusNoOp value -> value.IdempotencyIdentity
+    let private optionParts (option: StatusOptionProjection) = [ LiveId.value option.Id; SemanticName.value option.Name ]
+    let private snapshotParts (snapshot: StatusSnapshot) =
+        [ snapshot.Revision; LiveId.value snapshot.ProjectId; LiveId.value snapshot.ItemId
+          LiveId.value snapshot.FieldId; SemanticName.value snapshot.FieldName
+          snapshot.SelectedOptionId |> Option.map LiveId.value |> Option.defaultValue "" ]
+        @ (snapshot.Options |> List.collect optionParts)
+    let private operationParts = function
+        | SetStatusOperation option -> [ "set-status"; LiveId.value option ]
+        | ClearStatusOperation -> [ "clear-status" ]
+    let private intentParts = function
+        | SetStatus option -> [ "set-status"; LiveId.value option ]
+        | ClearStatus -> [ "clear-status" ]
+    let private decisionParts = function
+        | StatusPlanned value ->
+            [ "planned"; value.CausationIdentity; value.IdempotencyIdentity ]
+            @ snapshotParts value.Before
+            @ operationParts value.Operation
+        | StatusNoOp value ->
+            [ "no-op"; value.ObservedRevision; value.IdempotencyIdentity ] @ intentParts value.Intent
+    let private expectedCost = function
+        | StatusPlanned _ -> { AuthorityReads = 8; MaximumEffects = 1 }
+        | StatusNoOp _ -> { AuthorityReads = 8; MaximumEffects = 0 }
+    let private seal observation stage statusNameValue decision cost =
         let facts =
             namedFacts observation
             |> List.collect (fun (name, authority, fact) -> [ name; string authority; fact.Revision; outcomeName fact.Outcome; string fact.Current ])
-        sha256 (String.concat "\u001f" ([ canonicalSubject observation.Subject; observation.Revision; stageName stage; statusNameValue; decisionIdentity ] @ facts))
+        hashParts ([ canonicalSubject observation.Subject; observation.Revision; stageName stage; statusNameValue
+                     string cost.AuthorityReads; string cost.MaximumEffects ] @ decisionParts decision @ facts)
 
     let plan causationIdentity observation =
         match derive observation with
@@ -128,16 +149,29 @@ module LifecycleProjectionAdapter =
                 match ProjectAdapter.planStatus observation.Status.Revision causationIdentity (SetStatus option.Id) observation.Status with
                 | Error refusal -> Error [ LifecycleStatusPlanRefused refusal ]
                 | Ok decision ->
+                    let cost = expectedCost decision
                     Ok
                         { Subject = canonicalSubject observation.Subject; SourceRevision = observation.Revision; Stage = stage
-                          StatusName = desiredName; StatusDecision = decision; Seal = seal observation stage desiredName decision
-                          Cost = { AuthorityReads = 8; MaximumEffects = match decision with StatusPlanned _ -> 1 | StatusNoOp _ -> 0 } }
+                          StatusName = desiredName; StatusDecision = decision; Seal = seal observation stage desiredName decision cost
+                          Cost = cost }
 
-    let authorize plan observation statusObservation =
+    let private validatePlan plan observation =
         match derive observation with
         | Error refusals -> Error refusals
-        | Ok stage when canonicalSubject observation.Subject <> plan.Subject || observation.Revision <> plan.SourceRevision -> Error [ AlteredLifecyclePlan ]
-        | Ok stage when stage <> plan.Stage || statusName stage <> plan.StatusName || seal observation stage plan.StatusName plan.StatusDecision <> plan.Seal -> Error [ AlteredLifecyclePlan ]
+        | Ok stage ->
+            let cost = expectedCost plan.StatusDecision
+            if canonicalSubject observation.Subject <> plan.Subject
+               || observation.Revision <> plan.SourceRevision
+               || stage <> plan.Stage
+               || statusName stage <> plan.StatusName
+               || cost <> plan.Cost
+               || seal observation stage plan.StatusName plan.StatusDecision cost <> plan.Seal
+            then Error [ AlteredLifecyclePlan ]
+            else Ok stage
+
+    let authorize plan observation statusObservation =
+        match validatePlan plan observation with
+        | Error refusals -> Error refusals
         | Ok _ ->
             match plan.StatusDecision with
             | StatusPlanned statusPlan ->
@@ -150,10 +184,13 @@ module LifecycleProjectionAdapter =
                 | Ok _ -> Error [ AlteredLifecyclePlan ]
                 | Error refusal -> Error [ LifecycleStatusPreStateRefused(StatusPreStateReadRefused refusal) ]
 
-    let verify expectedResultRevision plan statusObservation =
-        match plan.StatusDecision with
-        | StatusNoOp _ -> Error [ AlteredLifecyclePlan ]
-        | StatusPlanned statusPlan ->
-            match ProjectAdapter.verifyStatusPostState expectedResultRevision statusPlan statusObservation with
-            | Ok snapshot -> Ok snapshot
-            | Error refusal -> Error [ LifecycleStatusPostStateRefused refusal ]
+    let verify expectedResultRevision plan observation statusObservation =
+        match validatePlan plan observation with
+        | Error refusals -> Error refusals
+        | Ok _ ->
+            match plan.StatusDecision with
+            | StatusNoOp _ -> Error [ AlteredLifecyclePlan ]
+            | StatusPlanned statusPlan ->
+                match ProjectAdapter.verifyStatusPostState expectedResultRevision statusPlan statusObservation with
+                | Ok snapshot -> Ok snapshot
+                | Error refusal -> Error [ LifecycleStatusPostStateRefused refusal ]
