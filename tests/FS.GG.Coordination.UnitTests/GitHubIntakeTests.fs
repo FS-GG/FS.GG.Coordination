@@ -72,6 +72,10 @@ let ``sealed plan has stable operation identities dependencies and exact contrac
     Assert.Equal(Error InvalidSealedPlan, IntakeAdapter.applyControlled altered baseline Execute [])
     let reordered = { first with Effects = List.rev first.Effects }
     Assert.Equal(Error InvalidSealedPlan, IntakeAdapter.applyControlled reordered baseline Execute [])
+    let forgedIntent = { canonical intents with Repository = "FS-GG/Other" }
+    match IntakeAdapter.plan forgedIntent baseline with Error findings -> Assert.Contains(findings, fun value -> value.Code = "INTAKE-INTENT-SEAL") | Ok _ -> failwith "accepted altered intent"
+    let current = observation "rev-1" (Map.ofList [ (InitialJournal, Observed "journal-ready"); (SchedulingIntent, Observed "Ready") ])
+    match IntakeAdapter.plan (canonical intents) current with Ok(IntakeNoOp value) -> Assert.Equal("rev-1", value.Revision) | value -> failwithf "%A" value
 
 [<Fact>]
 let ``controlled apply fences order post state and partial failures`` () =
@@ -83,9 +87,9 @@ let ``controlled apply fences order post state and partial failures`` () =
     Assert.Equal(2, receipt.AcceptedEffects.Length)
     Assert.Equal(Error FullFenceChanged, IntakeAdapter.applyControlled plan { baseline with Revision = "rev-drift" } Execute script)
     let wrongOrder = [ { script[0] with Ordinal = 2 }; script[1] ]
-    Assert.Equal(Error(DurableResultMismatch 1), IntakeAdapter.applyControlled plan baseline Execute wrongOrder)
+    Assert.Equal(Error(EffectIdentityMismatch(1, [])), IntakeAdapter.applyControlled plan baseline Execute wrongOrder)
     let mismatch = [ { script[0] with After = { baseline with Revision = "rev-2" } }; script[1] ]
-    Assert.Equal(Error(EffectPostStateMismatch 1), IntakeAdapter.applyControlled plan baseline Execute mismatch)
+    Assert.Equal(Error(EffectPostStateMismatch(1, [])), IntakeAdapter.applyControlled plan baseline Execute mismatch)
     let rejected = [ script[0]; { script[1] with Accepted = false; Reason = Some "fixture-failure" } ]
     match IntakeAdapter.applyControlled plan baseline Execute rejected with
     | Error(EffectRejected(2, "fixture-failure", accepted)) -> Assert.Single(accepted) |> ignore

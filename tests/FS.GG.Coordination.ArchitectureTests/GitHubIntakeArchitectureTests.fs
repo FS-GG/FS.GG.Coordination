@@ -20,9 +20,15 @@ let ``intake boundary is signature first and contains no production transport`` 
 [<Fact>]
 let ``intake fixture inventory is canonical and independently owned`` () =
     let fixture = File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/gs2-05-3/corpus.json"))
-    for control in GitHubIntakeQualification.requiredControls |> List.map GitHubIntakeQualification.controlId do Assert.Contains("\"" + control + "\"", fixture, StringComparison.Ordinal)
+    let independent = File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/gs2-05-3/independent-expectations.json"))
+    for control in GitHubIntakeQualification.requiredControls |> List.map GitHubIntakeQualification.controlId do
+        Assert.Contains("\"" + control + "\"", fixture, StringComparison.Ordinal)
+        Assert.Contains("\"" + control + "\"", independent, StringComparison.Ordinal)
     let qualification = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/GitHubIntakeQualification.fs"))
     Assert.DoesNotContain("FS.GG.Coordination.GitHub", qualification, StringComparison.Ordinal)
+    let validator = File.ReadAllText(Path.Combine(root, "eng/validate-github-intake.fsx"))
+    Assert.Contains("let independentMutation", validator, StringComparison.Ordinal)
+    Assert.DoesNotContain("MutationRed = true", validator, StringComparison.Ordinal)
 
 [<Fact>]
 let ``registered intake gate runs cold and offline`` () =

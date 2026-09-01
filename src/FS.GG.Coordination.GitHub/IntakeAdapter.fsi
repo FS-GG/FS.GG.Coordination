@@ -40,7 +40,8 @@ type DurableEffect = { PlanDigest: string; Ordinal: int; OperationIdentity: stri
 type IntakeApplyFailure =
     | InvalidSealedPlan | PreStateRefused of IntakeDiagnostic list | FullFenceChanged | ScriptLengthMismatch
     | EffectRejected of ordinal: int * reason: string * accepted: DurableEffect list | EffectPostStateRefused of ordinal: int * IntakeDiagnostic list * accepted: DurableEffect list
-    | EffectPostStateMismatch of ordinal: int | DurableResultMismatch of ordinal: int | FinalPostStateMismatch
+    | EffectPreconditionChanged of ordinal: int * accepted: DurableEffect list | EffectIdentityMismatch of ordinal: int * accepted: DurableEffect list
+    | EffectPostStateMismatch of ordinal: int * accepted: DurableEffect list | DurableResultMismatch of ordinal: int | FinalPostStateMismatch of accepted: DurableEffect list
 
 type ScriptedEffectResult = { Ordinal: int; OperationIdentity: string; Accepted: bool; Reason: string option; After: IntakeObservation }
 type IntakeApplyReceipt = { PlanDigest: string; FinalRevision: string; AcceptedEffects: DurableEffect list; CompensatedOrdinals: int list }

@@ -19,7 +19,7 @@ type IntakePlan = { Identity: string; Repository: string; Causation: string; Bef
 type IntakeNoOp = { Identity: string; Revision: string; Digest: string }
 type IntakePlanDecision = IntakePlanned of IntakePlan | IntakeNoOp of IntakeNoOp
 type DurableEffect = { PlanDigest: string; Ordinal: int; OperationIdentity: string; ResultRevision: string; PostStateDigest: string }
-type IntakeApplyFailure = InvalidSealedPlan | PreStateRefused of IntakeDiagnostic list | FullFenceChanged | ScriptLengthMismatch | EffectRejected of ordinal: int * reason: string * accepted: DurableEffect list | EffectPostStateRefused of ordinal: int * IntakeDiagnostic list * accepted: DurableEffect list | EffectPostStateMismatch of ordinal: int | DurableResultMismatch of ordinal: int | FinalPostStateMismatch
+type IntakeApplyFailure = InvalidSealedPlan | PreStateRefused of IntakeDiagnostic list | FullFenceChanged | ScriptLengthMismatch | EffectRejected of ordinal: int * reason: string * accepted: DurableEffect list | EffectPostStateRefused of ordinal: int * IntakeDiagnostic list * accepted: DurableEffect list | EffectPreconditionChanged of ordinal: int * accepted: DurableEffect list | EffectIdentityMismatch of ordinal: int * accepted: DurableEffect list | EffectPostStateMismatch of ordinal: int * accepted: DurableEffect list | DurableResultMismatch of ordinal: int | FinalPostStateMismatch of accepted: DurableEffect list
 type ScriptedEffectResult = { Ordinal: int; OperationIdentity: string; Accepted: bool; Reason: string option; After: IntakeObservation }
 type IntakeApplyReceipt = { PlanDigest: string; FinalRevision: string; AcceptedEffects: DurableEffect list; CompensatedOrdinals: int list }
 type IntakeApplyMode = Execute | Resume of DurableEffect list | RollForward of DurableEffect list | Compensate of DurableEffect list
@@ -32,7 +32,7 @@ module IntakeAdapter =
     let private frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
     let private digest values = values |> List.map frame |> String.concat "" |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
     let private validText (value: string) = not (String.IsNullOrWhiteSpace value) && value = value.Trim()
-    let private canonicalValues (values: string list) = values |> List.map (fun value -> if isNull value then "" else value.Trim()) |> List.distinct |> List.sort
+    let private canonicalValues (values: string list) = if obj.ReferenceEquals(values, null) then [] else values |> List.map (fun value -> if isNull value then "" else value.Trim()) |> List.distinct |> List.sort
     let private factText (fact: IntakeFact) = surfaceText fact.Surface + "=" + outcomeText fact.Outcome
     let private diag code surface message : IntakeDiagnostic = { Code = code; Surface = surface; Message = message }
     let private intentSurface = function InitializeJournal _ -> InitialJournal | InitializeSchedulingIntent _ -> SchedulingIntent | InitializeContract _ -> Contract | InitializeTouchSet _ -> TouchSet | InitializeProjections _ -> Projections
@@ -40,20 +40,23 @@ module IntakeAdapter =
     let private normalizeIntent = function InitializeJournal v -> InitializeJournal(canonicalText v) | InitializeSchedulingIntent v -> InitializeSchedulingIntent(canonicalText v) | InitializeContract v -> InitializeContract(canonicalText v) | InitializeTouchSet v -> InitializeTouchSet(canonicalValues v) | InitializeProjections v -> InitializeProjections(canonicalValues v)
     let private intentValue = function InitializeJournal v | InitializeSchedulingIntent v | InitializeContract v -> v | InitializeTouchSet values | InitializeProjections values -> String.concat "," values
     let private intentText intent = surfaceText (intentSurface intent) + "=" + intentValue intent
+    let private intentDigest identity repository causation initializations = digest ([ identity; repository; causation ] @ (initializations |> List.map intentText))
 
     let validate (request: IntakeRequest) =
         if obj.ReferenceEquals(request, null) then Error [ diag "INTAKE-REQUEST-NULL" None "request is required" ] else
-        let normalized = if obj.ReferenceEquals(request.Initializations, null) then [] else request.Initializations |> List.map normalizeIntent |> List.sortBy (intentSurface >> surfaceText)
+        let hasNullIntent = not (obj.ReferenceEquals(request.Initializations, null)) && request.Initializations |> List.exists (fun value -> obj.ReferenceEquals(value, null))
+        let normalized = if obj.ReferenceEquals(request.Initializations, null) || hasNullIntent then [] else request.Initializations |> List.map normalizeIntent |> List.sortBy (intentSurface >> surfaceText)
         let findings =
             [ if not (validText request.Identity) then yield diag "INTAKE-IDENTITY" None "identity must be canonical non-empty text"
               if not (validText request.Repository) then yield diag "INTAKE-REPOSITORY" (Some RepositoryScope) "repository must be canonical non-empty text"
               if not (validText request.Causation) then yield diag "INTAKE-CAUSATION" None "causation must be canonical non-empty text"
+              if hasNullIntent then yield diag "INTAKE-INTENT-NULL" None "initialization intents must be typed values"
               if List.isEmpty normalized then yield diag "INTAKE-INTENTS" None "at least one initialization intent is required"
               for surface, values in normalized |> List.groupBy intentSurface do if values.Length > 1 then yield diag "INTAKE-DUPLICATE-INTENT" (Some surface) "initialization family occurred more than once"
               for intent in normalized do if not (validText (intentValue intent)) then yield diag "INTAKE-INTENT-VALUE" (Some(intentSurface intent)) "initialization value must be non-empty canonical text" ]
         if not (List.isEmpty findings) then Error findings else
         let identity, repository, causation = request.Identity.Trim(), request.Repository.Trim(), request.Causation.Trim()
-        Ok { Identity = identity; Repository = repository; Causation = causation; Initializations = normalized; Digest = digest ([ identity; repository; causation ] @ (normalized |> List.map intentText)) }
+        Ok { Identity = identity; Repository = repository; Causation = causation; Initializations = normalized; Digest = intentDigest identity repository causation normalized }
 
     let inspect (observation: IntakeObservation) =
         if obj.ReferenceEquals(observation, null) then Error [ diag "INTAKE-OBSERVATION-NULL" None "observation is required" ]
@@ -61,7 +64,7 @@ module IntakeAdapter =
         elif not (validText observation.Revision) then Error [ diag "INTAKE-REVISION" None "observation revision is invalid" ]
         elif obj.ReferenceEquals(observation.Pages, null) || List.isEmpty observation.Pages then Error [ diag "INTAKE-PAGES" None "a complete page chain is required" ]
         else
-            let nonNullPages = observation.Pages |> List.forall (fun page -> not (obj.ReferenceEquals(page, null)) && not (obj.ReferenceEquals(page.Facts, null)))
+            let nonNullPages = observation.Pages |> List.forall (fun page -> not (obj.ReferenceEquals(page, null)) && not (obj.ReferenceEquals(page.Facts, null)) && page.Facts |> List.forall (fun fact -> not (obj.ReferenceEquals(fact, null))))
             if not nonNullPages then Error [ diag "INTAKE-PAGE-NULL" None "pages and page facts are required" ] else
             let pageShape = observation.Pages |> List.mapi (fun index (page: IntakePage) -> page.Number = index + 1 && page.TerminalPage = (index = observation.Pages.Length - 1) && page.TerminalPage = page.NextCursor.IsNone && (if index = 0 then page.Cursor.IsNone else page.Cursor = observation.Pages[index - 1].NextCursor)) |> List.forall id
             let cursors = (observation.Pages |> List.choose _.Cursor) @ (observation.Pages |> List.choose _.NextCursor)
@@ -86,7 +89,13 @@ module IntakeAdapter =
     let private operationIdentity intent (before: IntakeSnapshot) = digest [ before.Digest; intentText intent ]
     let private sealPlan identity repository causation (before: IntakeSnapshot) (effects: IntakeEffect list) (intended: IntakeFact list) = digest ([ identity; repository; causation; before.Digest ] @ (effects |> List.collect (fun effect -> [ string effect.Ordinal; effect.OperationIdentity; String.concat "," effect.Dependencies; effect.ExpectedRevision; factText effect.Precondition; factText effect.Postcondition; factText effect.Compensation ])) @ (intended |> List.map factText))
 
+    let private validIntent (intent: CanonicalIntakeIntent) =
+        if obj.ReferenceEquals(intent, null) || obj.ReferenceEquals(intent.Initializations, null) || intent.Initializations |> List.exists (fun value -> obj.ReferenceEquals(value, null)) then false else
+        let normalized = intent.Initializations |> List.map normalizeIntent |> List.sortBy (intentSurface >> surfaceText)
+        validText intent.Identity && validText intent.Repository && validText intent.Causation && not (List.isEmpty normalized) && normalized = intent.Initializations && (normalized |> List.groupBy intentSurface |> List.forall (fun (_, values) -> values.Length = 1)) && (normalized |> List.forall (intentValue >> validText)) && intent.Digest = intentDigest intent.Identity intent.Repository intent.Causation normalized
+
     let plan (intent: CanonicalIntakeIntent) observation =
+        if not (validIntent intent) then Error [ diag "INTAKE-INTENT-SEAL" None "canonical intake intent is invalid or altered" ] else
         match inspect observation with
         | Error findings -> Error findings
         | Ok before when before.Identity <> intent.Identity -> Error [ diag "INTAKE-IDENTITY-DRIFT" None "request and observation identities differ" ]
@@ -122,7 +131,8 @@ module IntakeAdapter =
             let rec run (accepted: DurableEffect list) (state: IntakeSnapshot) (pairs: (IntakeEffect * ScriptedEffectResult) list) : Result<DurableEffect list * IntakeSnapshot, IntakeApplyFailure> =
                 match pairs with
                 | [] -> Ok(accepted, state)
-                | (effect, result) :: _ when result.Ordinal <> effect.Ordinal || result.OperationIdentity <> effect.OperationIdentity -> Error(DurableResultMismatch effect.Ordinal)
+                | (effect, _) :: _ when state.Facts |> List.tryFind (fun fact -> fact.Surface = effect.Precondition.Surface) <> Some(if compensate then effect.Postcondition else effect.Precondition) -> Error(EffectPreconditionChanged(effect.Ordinal, durable @ accepted))
+                | (effect, result) :: _ when result.Ordinal <> effect.Ordinal || result.OperationIdentity <> effect.OperationIdentity -> Error(EffectIdentityMismatch(effect.Ordinal, durable @ accepted))
                 | (effect, result) :: _ when not result.Accepted -> Error(EffectRejected(effect.Ordinal, defaultArg result.Reason "controlled effect rejected", durable @ accepted))
                 | (effect, result) :: rest ->
                     match inspect result.After with
@@ -130,7 +140,7 @@ module IntakeAdapter =
                     | Ok after ->
                         let completed = targets |> List.take (accepted.Length + 1)
                         let expected = if compensate then stateCompensated completed plan.IntendedPostState else stateAfter (durableEffects @ completed) plan.Before.Facts
-                        if after.Identity <> plan.Identity || after.Facts <> expected || after.Revision = state.Revision then Error(EffectPostStateMismatch effect.Ordinal) else let receipt = { PlanDigest = plan.Digest; Ordinal = effect.Ordinal; OperationIdentity = effect.OperationIdentity; ResultRevision = after.Revision; PostStateDigest = after.Digest } in run (accepted @ [ receipt ]) after rest
+                        if after.Identity <> plan.Identity || after.Facts <> expected || after.Revision = state.Revision then Error(EffectPostStateMismatch(effect.Ordinal, durable @ accepted)) else let receipt = { PlanDigest = plan.Digest; Ordinal = effect.Ordinal; OperationIdentity = effect.OperationIdentity; ResultRevision = after.Revision; PostStateDigest = after.Digest } in run (accepted @ [ receipt ]) after rest
             match run [] current (List.zip targets scripted) with
             | Error failure -> Error failure
-            | Ok(accepted, finalState) -> if not compensate && durable.Length + accepted.Length = plan.Effects.Length && finalState.Facts <> plan.IntendedPostState then Error FinalPostStateMismatch else Ok { PlanDigest = plan.Digest; FinalRevision = finalState.Revision; AcceptedEffects = (if compensate then durable else durable @ accepted); CompensatedOrdinals = (if compensate then targets |> List.map _.Ordinal else []) }
+            | Ok(accepted, finalState) -> if not compensate && durable.Length + accepted.Length = plan.Effects.Length && finalState.Facts <> plan.IntendedPostState then Error(FinalPostStateMismatch(durable @ accepted)) else Ok { PlanDigest = plan.Digest; FinalRevision = finalState.Revision; AcceptedEffects = (if compensate then durable else durable @ accepted); CompensatedOrdinals = (if compensate then targets |> List.map _.Ordinal else []) }
