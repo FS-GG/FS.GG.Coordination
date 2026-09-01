@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "e828ec9a1bd43451f0778e7bf6eff34919dd3d3d",
+    "revision": "a4ef0ad99841e5957ee2ca0a64057a753a14ed8d",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "af144062bc0c5b837c3155eb0686ec5c043ece2234851f1091f7484696f57502"
+    "sha256": "6cbb9aaaafd8d2cdfd075617c87f9075cd4dcb08791fc4282fa35539edba7523"
   },
   "units": [
     {
@@ -524,6 +524,28 @@
         { "id": "github-actions-release-feed-contract", "qGate": "Q3", "commandSha256": "7356954a9c95b89ef22692783137735bb047bc946437608acbccf5f50ab991f5" }
       ],
       "contractSha256": "61608b57b5cc3a6e87e1806bf789c46d082656efc2142171a50996e250686325"
+    },
+    {
+      "id": "GS2-04.9",
+      "title": "Sandbox qualification and comprehensive GS2-04 closure",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.8"],
+      "permissionCeiling": ["destructive create, update, delete, rollback, compensation, retry, reread, and post-state verification qualification across every GS2-04 adapter, restricted to isolated test repositories and one test Project using explicitly non-production identities, credentials, names, quotas, and cleanup receipts", "cold comprehensive Q3 and Q4 execution, retained immutable evidence, and protected GS2-04 closure are allowed; no production organization, repository, Project, package, release, feed, environment, ruleset, security, dependency, workflow, issue, relation, comment, or journal mutation; no production credential, deployment, publication, stable release, GS2-05 consumption, or successor-unit implementation authority"],
+      "exitGate": "the Q4 sandbox qualification provisions uniquely named isolated test repositories and a test Project through non-production identities and bounded quotas; records exact pre-state before every effect; exercises create, update, delete, rollback, compensation, stale-prestate, concurrent-change, rate-limit, permission-refusal, unavailable, incomplete, ambiguous-response, retry, idempotent replay, partial-failure, and cleanup outcomes across transport, issue/type/field, native relation, Project, comment/projection, sharded Git journal, repository/settings, and Actions/release/feed adapters; verifies every successful effect by authoritative reread rather than response inference; proves unrelated state preservation, stable operation identity, expected-revision fencing, reverse-order compensation, retry safety, and deterministic convergence; emits cleanup receipts proving all sandbox resources removed or a fail-closed retained-resource inventory with accountable expiry; binds the accepted GS2-04.1 through GS2-04.8 receipts; executes every registered GS2-04 Q3 adapter command and the Q4 sandbox closure command cold under ADR-0080 comprehensive mode; retains immutable Q3/Q4 evidence and a protected GS2-04 closure receipt before GS2-05 may consume the milestone; independent wrong-identity, production-target, production-credential, quota, stale-fence, response-unknown, partial-cleanup, receipt-substitution, warm-reuse, and omitted-adapter inversions all fail closed",
+      "qGates": ["Q3", "Q4"],
+      "gateCommands": ["github-transport-contract", "github-issue-field-contract", "github-native-relation-contract", "github-project-adapter-contract", "github-comment-projection-contract", "github-sharded-journal-contract", "github-repository-settings-contract", "github-actions-release-feed-contract", "github-sandbox-closure-contract"],
+      "gateContracts": [
+        { "id": "github-transport-contract", "qGate": "Q3", "commandSha256": "e3b5522bd99a4c78f18546f4aa5ae290b0b3c66be6b58bc84a8a90d44651c7dc" },
+        { "id": "github-issue-field-contract", "qGate": "Q3", "commandSha256": "c0a4cdeacfb6f5df45671bff6fa9562793490eabcd522e44a3b6f99d5db345e2" },
+        { "id": "github-native-relation-contract", "qGate": "Q3", "commandSha256": "3b945e7eaa6244d5cc7cfb5d086bf2cc1e2ea5476ba19301dfd5e411f2a51556" },
+        { "id": "github-project-adapter-contract", "qGate": "Q3", "commandSha256": "c782afca818ccd8c0b9845a4abcfa2d14bc70cfc5b762d0fac4a600875b82fcc" },
+        { "id": "github-comment-projection-contract", "qGate": "Q3", "commandSha256": "13084a2c361986eb4a5046c7034dfe81f9a7a3e8fa8732f3cce9ac2cf7ef27af" },
+        { "id": "github-sharded-journal-contract", "qGate": "Q3", "commandSha256": "42f5c89ee83ba05261ebecb7e6ce3fd68d6a6f371a764039f4371200831cea42" },
+        { "id": "github-repository-settings-contract", "qGate": "Q3", "commandSha256": "c65c99b5ea6a934aba8418d7abcc2220eb2b1a5b9e41d50829cb6bfb78047d77" },
+        { "id": "github-actions-release-feed-contract", "qGate": "Q3", "commandSha256": "7356954a9c95b89ef22692783137735bb047bc946437608acbccf5f50ab991f5" },
+        { "id": "github-sandbox-closure-contract", "qGate": "Q4", "commandSha256": "eaa89a6bdd1ff50ecb52835f7ead2f49cb94bede7e957d87d74053070f91e926" }
+      ],
+      "contractSha256": "00ced881abe69940f8b4663014c8fb1dd1f8d8a586302b4bc9685d9a9f2c0e9e"
     }
   ]
 }

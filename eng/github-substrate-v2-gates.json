@@ -96,6 +96,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-actions-release-feed.fsx", "--", "."]
+    },
+    {
+      "id": "github-sandbox-closure-contract",
+      "qGate": "Q4",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-sandbox-closure.fsx", "--", "."]
     }
   ]
 }
