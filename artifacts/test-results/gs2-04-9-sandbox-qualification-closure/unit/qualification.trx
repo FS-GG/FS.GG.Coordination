@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="8999dd88-e663-4801-a3b0-5830ad9ef37b" name="@991ca70644d4 2026-09-01 05:28:00" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-01T05:28:00.9461843+02:00" queuing="2026-09-01T05:28:00.9461843+02:00" start="2026-09-01T05:28:00.5651904+02:00" finish="2026-09-01T05:28:00.9491568+02:00" />
+  <TestSettings name="default" id="351efb6e-d424-4030-b5df-f93f5201a8b1">
+    <Deployment runDeploymentRoot="_991ca70644d4_2026-09-01_05_28_00" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="68657c49-3755-4cb3-9a5e-04c065472cd1" testId="4ba1ebb8-b117-2143-abc7-171f03572f16" testName="FS.GG.Coordination.GitHubSandboxClosureTests.ambiguousEffectResidualCleanupAndWarmReuseFailIndependently" computerName="991ca70644d4" duration="00:00:00.0320399" startTime="2026-09-01T05:28:00.8486322+02:00" endTime="2026-09-01T05:28:00.8840146+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="68657c49-3755-4cb3-9a5e-04c065472cd1" />
+    <UnitTestResult executionId="1f536750-f4d1-4b3c-8d4b-dfba81b10865" testId="9c5b0143-0c78-0360-20de-5bcde8070ba6" testName="FS.GG.Coordination.GitHubSandboxClosureTests.exactPlanAndClosureValidate" computerName="991ca70644d4" duration="00:00:00.0061744" startTime="2026-09-01T05:28:00.8894497+02:00" endTime="2026-09-01T05:28:00.8908393+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1f536750-f4d1-4b3c-8d4b-dfba81b10865" />
+    <UnitTestResult executionId="e9784383-1f27-4ed2-b806-b438359de995" testId="df542948-895d-a197-b689-3b00fe0ff245" testName="FS.GG.Coordination.GitHubSandboxClosureTests.productionOrUnknownAuthorityFailsBeforeEffects" computerName="991ca70644d4" duration="00:00:00.0004905" startTime="2026-09-01T05:28:00.8891273+02:00" endTime="2026-09-01T05:28:00.8891482+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e9784383-1f27-4ed2-b806-b438359de995" />
+    <UnitTestResult executionId="57faa16d-e275-472d-833c-ace2a18038f4" testId="539df7da-8265-453e-29c0-d88d53988cf5" testName="FS.GG.Coordination.GitHubSandboxClosureTests.qualificationInventoryRequiresEveryIndependentControl" computerName="991ca70644d4" duration="00:00:00.0011842" startTime="2026-09-01T05:28:00.8909518+02:00" endTime="2026-09-01T05:28:00.8920519+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="57faa16d-e275-472d-833c-ace2a18038f4" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubSandboxClosureTests.exactPlanAndClosureValidate" storage="/home/developer/projects/fs.gg.coordination-178/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="9c5b0143-0c78-0360-20de-5bcde8070ba6">
+      <Execution id="1f536750-f4d1-4b3c-8d4b-dfba81b10865" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-178/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubSandboxClosureTests" name="exactPlanAndClosureValidate" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubSandboxClosureTests.qualificationInventoryRequiresEveryIndependentControl" storage="/home/developer/projects/fs.gg.coordination-178/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="539df7da-8265-453e-29c0-d88d53988cf5">
+      <Execution id="57faa16d-e275-472d-833c-ace2a18038f4" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-178/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubSandboxClosureTests" name="qualificationInventoryRequiresEveryIndependentControl" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubSandboxClosureTests.ambiguousEffectResidualCleanupAndWarmReuseFailIndependently" storage="/home/developer/projects/fs.gg.coordination-178/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="4ba1ebb8-b117-2143-abc7-171f03572f16">
+      <Execution id="68657c49-3755-4cb3-9a5e-04c065472cd1" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-178/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubSandboxClosureTests" name="ambiguousEffectResidualCleanupAndWarmReuseFailIndependently" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubSandboxClosureTests.productionOrUnknownAuthorityFailsBeforeEffects" storage="/home/developer/projects/fs.gg.coordination-178/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="df542948-895d-a197-b689-3b00fe0ff245">
+      <Execution id="e9784383-1f27-4ed2-b806-b438359de995" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-178/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubSandboxClosureTests" name="productionOrUnknownAuthorityFailsBeforeEffects" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="4ba1ebb8-b117-2143-abc7-171f03572f16" executionId="68657c49-3755-4cb3-9a5e-04c065472cd1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9c5b0143-0c78-0360-20de-5bcde8070ba6" executionId="1f536750-f4d1-4b3c-8d4b-dfba81b10865" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="df542948-895d-a197-b689-3b00fe0ff245" executionId="e9784383-1f27-4ed2-b806-b438359de995" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="539df7da-8265-453e-29c0-d88d53988cf5" executionId="57faa16d-e275-472d-833c-ace2a18038f4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="4" executed="4" passed="4" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.07]   Discovered:  FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.08]   Starting:    FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.14]   Finished:    FS.GG.Coordination.UnitTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

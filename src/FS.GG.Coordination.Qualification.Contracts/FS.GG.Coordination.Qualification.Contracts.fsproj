@@ -41,6 +41,8 @@
     <Compile Include="GitHubRepositorySettingsQualification.fs" />
     <Compile Include="GitHubActionsReleaseFeedQualification.fsi" />
     <Compile Include="GitHubActionsReleaseFeedQualification.fs" />
+    <Compile Include="GitHubSandboxClosureQualification.fsi" />
+    <Compile Include="GitHubSandboxClosureQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -9,6 +9,7 @@
     <Compile Include="GitHubShardedJournalTests.fs" />
     <Compile Include="GitHubRepositorySettingsTests.fs" />
     <Compile Include="GitHubActionsReleaseFeedTests.fs" />
+    <Compile Include="GitHubSandboxClosureTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />
     <Compile Include="CritiqueEvidenceTests.fs" />

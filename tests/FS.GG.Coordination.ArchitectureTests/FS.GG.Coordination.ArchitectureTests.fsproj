@@ -18,6 +18,7 @@
     <Compile Include="GitHubRepositorySettingsArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubActionsReleaseFeedTests.fs" Link="GitHubActionsReleaseFeedUnitTests.fs" />
     <Compile Include="GitHubActionsReleaseFeedArchitectureTests.fs" />
+    <Compile Include="GitHubSandboxClosureArchitectureTests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
     <Compile Include="RoadmapWorkArchitectureTests.fs" />
     <Compile Include="EvidenceStorageTests.fs" />
