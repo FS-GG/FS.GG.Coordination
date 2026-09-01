@@ -608,12 +608,14 @@
       "title": "Implement roadmap intake",
       "owner": "FS.GG.Coordination",
       "prerequisites": ["GS2-05.9"],
-      "permissionCeiling": ["repository-local roadmap-intake contract design and qualification scoped to compiling one roadmap into bounded native GitHub work projections", "no implementation, production GitHub mutation, Project-field execution ledger, deployment, publication, stable release, or successor-unit authority until the unit's own accepted route and qualification are registered"],
-      "exitGate": "compile a roadmap into an Epic, bounded work issues, parent edges, dependency edges, dates and fields, and drift inspection without making Project fields the execution ledger; begin only from the accepted GS2-05.9 receipt",
-      "qGates": [],
-      "gateCommands": [],
-      "gateContracts": [],
-      "contractSha256": "5777b9fe5f8fa757a073679751f792505631f2965404ede543b86bdd04fb15f2"
+      "permissionCeiling": ["repository-local additive roadmap-intake contracts, pure deterministic compilation and drift inspection, controlled-fixture application, fixed cost accounting, validation, and retained evidence", "no production GitHub write, organization-wide or full-Project traversal, Project-field execution ledger, production credential, deployment, publication, stable release, or successor-unit implementation authority"],
+      "exitGate": "the Q3 roadmap-intake contract begins from the accepted GS2-05.9 receipt and accepts one typed versioned roadmap authority with stable source keys; it deterministically creates or reuses exactly one native Epic and bounded native Feature, Task, Bug, or Decision issues, native parent and dependency edges, ISO start and target dates, closed organization fields, and Project membership projections; zero stable-key matches create, one compatible owned match reuses or updates, while duplicate targets, foreign identity collisions, stale owned revisions, invalid types, fields, dates, graphs, incomplete observations, and altered plans fail closed; its sealed plan and fixed operation cost derive only from owned roadmap nodes and edges and remain byte-identical as unrelated Project or Backlog cardinality grows; Project membership and Project field values are projections only and cannot drive planning, replay, or drift verdicts; drift inspection reports only authoritative owned issue, type, hierarchy, dependency, date, and organization-field differences; controlled-fixture execution proves authorization, support, observation fencing, idempotent replay, partial application, and indeterminate outcomes without production GitHub mutation; generated and independently authored inversions cover the exact control inventory and all fail closed without claiming successor-unit behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-roadmap-intake-contract"],
+      "gateContracts": [
+        { "id": "github-roadmap-intake-contract", "qGate": "Q3", "commandSha256": "2af25e59eb20c21c0c56abe002daea468c93555465651f9b145daa822c570fc2" }
+      ],
+      "contractSha256": "46df348d73b6a5d953e78286f23e794432f389752eb77e9d085d694f7d4e2fc7"
     }
   ]
 }

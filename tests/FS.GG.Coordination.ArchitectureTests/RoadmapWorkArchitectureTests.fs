@@ -1220,6 +1220,21 @@ let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-4
         |> Seq.toList
     )
     Assert.Contains("accepted GS2-05.9 receipt", roadmapIntakeUnit.GetProperty("exitGate").GetString())
+    Assert.Equal<string list>(
+        [ "Q3" ],
+        roadmapIntakeUnit.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-roadmap-intake-contract" ],
+        roadmapIntakeUnit.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    let roadmapIntakeExitGate = roadmapIntakeUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "stable source keys"; "native Epic"; "native parent and dependency edges"; "ISO start and target dates"
+          "duplicate targets, foreign identity collisions, stale owned revisions"; "fixed operation cost"
+          "Project membership and Project field values are projections only"; "drift inspection reports only authoritative owned"
+          "idempotent replay, partial application, and indeterminate outcomes"; "without production GitHub mutation" ] do
+        Assert.Contains(requiredTerm, roadmapIntakeExitGate)
 
     use acceptedOrganizationIssueFields =
         JsonDocument.Parse(
@@ -1322,7 +1337,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(20, commands.Length)
+    Assert.Equal(21, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -1503,8 +1518,18 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let roadmapIntakeUnit =
         index.RootElement.GetProperty("units").EnumerateArray()
         |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-05.4")
-    Assert.Empty(roadmapIntakeUnit.GetProperty("qGates").EnumerateArray())
-    Assert.Empty(roadmapIntakeUnit.GetProperty("gateCommands").EnumerateArray())
+    let roadmapIntakeCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-roadmap-intake-contract")
+    Assert.Equal("Q3", roadmapIntakeCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-roadmap-intake.fsx"; "--"; "." ],
+        roadmapIntakeCommand.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    let roadmapIntakeGateContract = roadmapIntakeUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
+    Assert.Equal(roadmapIntakeCommand.GetProperty("id").GetString(), roadmapIntakeGateContract.GetProperty("id").GetString())
+    Assert.Equal(roadmapIntakeCommand.GetProperty("qGate").GetString(), roadmapIntakeGateContract.GetProperty("qGate").GetString())
+    Assert.Equal(gateCommandSha256 roadmapIntakeCommand, roadmapIntakeGateContract.GetProperty("commandSha256").GetString())
 
     let protocolUnit =
         index.RootElement.GetProperty("units").EnumerateArray()
