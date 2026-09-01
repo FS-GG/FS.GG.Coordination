@@ -17,6 +17,8 @@
     <Compile Include="RepositorySettingsAdapter.fs" />
     <Compile Include="ActionsReleaseFeedAdapter.fsi" />
     <Compile Include="ActionsReleaseFeedAdapter.fs" />
+    <Compile Include="GitHubSandboxClosure.fsi" />
+    <Compile Include="GitHubSandboxClosure.fs" />
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
   </ItemGroup>

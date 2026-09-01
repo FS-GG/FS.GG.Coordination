@@ -1,0 +1,63 @@
+name: GitHub sandbox qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Synthetic contract proof or live isolated sandbox readiness
+        required: true
+        type: choice
+        options: [synthetic, live]
+        default: synthetic
+      candidate_sha:
+        description: Exact commit to qualify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-sandbox-qualification-${{ inputs.candidate_sha }}
+  cancel-in-progress: false
+
+jobs:
+  comprehensive:
+    name: github-sandbox-comprehensive
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: github-sandbox-qualification
+    env:
+      FSGG_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      FSGG_SANDBOX_MODE: ${{ inputs.mode }}
+      FSGG_SANDBOX_RUN_NONCE: ${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.candidate_sha }}
+      FSGG_SANDBOX_EVIDENCE_DIR: ${{ runner.temp }}/github-sandbox-closure
+      FSGG_SANDBOX_TOKEN: ${{ secrets.FSGG_SANDBOX_TOKEN }}
+      FSGG_SANDBOX_ACTOR: ${{ vars.FSGG_SANDBOX_ACTOR }}
+      FSGG_SANDBOX_ACTOR_ID: ${{ vars.FSGG_SANDBOX_ACTOR_ID }}
+      FSGG_SANDBOX_OWNER: ${{ vars.FSGG_SANDBOX_OWNER }}
+      FSGG_SANDBOX_REPOSITORY: ${{ vars.FSGG_SANDBOX_REPOSITORY }}
+      FSGG_SANDBOX_REPOSITORY_NODE_ID: ${{ vars.FSGG_SANDBOX_REPOSITORY_NODE_ID }}
+      FSGG_SANDBOX_PROJECT_NODE_ID: ${{ vars.FSGG_SANDBOX_PROJECT_NODE_ID }}
+      FSGG_SANDBOX_PURPOSE: ${{ vars.FSGG_SANDBOX_PURPOSE }}
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+      - name: Verify exact checkout
+        run: test "$(git rev-parse HEAD)" = "$FSGG_CANDIDATE_SHA"
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Execute cold comprehensive qualification
+        run: bash eng/qualify-github-sandbox-closure.sh .
+      - name: Retain closure evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: github-sandbox-closure-${{ inputs.candidate_sha }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SANDBOX_EVIDENCE_DIR }}
+          if-no-files-found: error
