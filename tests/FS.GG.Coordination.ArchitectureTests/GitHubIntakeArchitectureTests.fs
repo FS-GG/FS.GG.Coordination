@@ -15,7 +15,7 @@ let ``intake boundary is signature first and contains no production transport`` 
     let implementation = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/IntakeAdapter.fs"))
     for forbidden in [ "HttpClient"; "GITHUB_TOKEN"; "Environment.GetEnvironmentVariable"; "api.github.com" ] do Assert.DoesNotContain(forbidden, implementation, StringComparison.Ordinal)
     let signature = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/IntakeAdapter.fsi"))
-    for required in [ "ProtocolInitializationIntent"; "IntakePlan"; "applyControlled"; "Compensate" ] do Assert.Contains(required, signature, StringComparison.Ordinal)
+    for required in [ "IntakeRequest"; "CanonicalIntakeIntent"; "InitializeJournal"; "InitializeSchedulingIntent"; "InitializeContract"; "InitializeTouchSet"; "InitializeProjections"; "OperationIdentity"; "Dependencies"; "ExpectedRevision"; "applyControlled"; "Compensate" ] do Assert.Contains(required, signature, StringComparison.Ordinal)
 
 [<Fact>]
 let ``intake fixture inventory is canonical and independently owned`` () =
@@ -36,4 +36,4 @@ let ``registered intake gate runs cold and offline`` () =
     let errors = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, errors + output)
-    Assert.Contains("github-intake-contract OK controls=12 q=Q3 network=offline provenance=synthetic", output, StringComparison.Ordinal)
+    Assert.Contains("github-intake-contract OK controls=19 q=Q3 network=offline provenance=synthetic", output, StringComparison.Ordinal)

@@ -2,7 +2,8 @@ namespace FS.GG.Coordination.Qualification.Contracts
 
 open System
 
-type GitHubIntakeControl = CompleteObservation | DuplicateSurface | IncompletePagination | TypedOutcome | CanonicalPlan | FullFence | EffectOrder | PostState | Replay | Resume | Compensation | IntentBoundary
+[<RequireQualifiedAccess>]
+type GitHubIntakeControl = MissingPage | RepeatedPage | CursorCycle | MissingField | UnknownType | DuplicateMembership | HierarchyCycle | DependencyCycle | StaleRevision | AlteredPlan | ReorderedOperation | PreconditionDrift | PostconditionMismatch | PartialApply | Replay | Compensation | Unauthorized | Unsupported | Indeterminate
 type GitHubIntakeControlResult = { Control: GitHubIntakeControl; MutationRed: bool; BaselineGreen: bool }
 type GitHubIntakeFinding = { Code: string; ControlId: string; Message: string }
 
@@ -10,8 +11,8 @@ type GitHubIntakeFinding = { Code: string; ControlId: string; Message: string }
 module GitHubIntakeQualification =
     [<Literal>]
     let Schema = "fsgg.coordination.github-intake-qualification/1"
-    let requiredControls = [ CompleteObservation; DuplicateSurface; IncompletePagination; TypedOutcome; CanonicalPlan; FullFence; EffectOrder; PostState; Replay; Resume; Compensation; IntentBoundary ]
-    let controlId = function CompleteObservation -> "complete-observation" | DuplicateSurface -> "duplicate-surface" | IncompletePagination -> "incomplete-pagination" | TypedOutcome -> "typed-outcome" | CanonicalPlan -> "canonical-plan" | FullFence -> "full-fence" | EffectOrder -> "effect-order" | PostState -> "post-state" | Replay -> "replay" | Resume -> "resume" | Compensation -> "compensation" | IntentBoundary -> "intent-boundary"
+    let requiredControls = [ GitHubIntakeControl.MissingPage; GitHubIntakeControl.RepeatedPage; GitHubIntakeControl.CursorCycle; GitHubIntakeControl.MissingField; GitHubIntakeControl.UnknownType; GitHubIntakeControl.DuplicateMembership; GitHubIntakeControl.HierarchyCycle; GitHubIntakeControl.DependencyCycle; GitHubIntakeControl.StaleRevision; GitHubIntakeControl.AlteredPlan; GitHubIntakeControl.ReorderedOperation; GitHubIntakeControl.PreconditionDrift; GitHubIntakeControl.PostconditionMismatch; GitHubIntakeControl.PartialApply; GitHubIntakeControl.Replay; GitHubIntakeControl.Compensation; GitHubIntakeControl.Unauthorized; GitHubIntakeControl.Unsupported; GitHubIntakeControl.Indeterminate ]
+    let controlId = function GitHubIntakeControl.MissingPage -> "missing-page" | GitHubIntakeControl.RepeatedPage -> "repeated-page" | GitHubIntakeControl.CursorCycle -> "cursor-cycle" | GitHubIntakeControl.MissingField -> "missing-field" | GitHubIntakeControl.UnknownType -> "unknown-type" | GitHubIntakeControl.DuplicateMembership -> "duplicate-membership" | GitHubIntakeControl.HierarchyCycle -> "hierarchy-cycle" | GitHubIntakeControl.DependencyCycle -> "dependency-cycle" | GitHubIntakeControl.StaleRevision -> "stale-revision" | GitHubIntakeControl.AlteredPlan -> "altered-plan" | GitHubIntakeControl.ReorderedOperation -> "reordered-operation" | GitHubIntakeControl.PreconditionDrift -> "precondition-drift" | GitHubIntakeControl.PostconditionMismatch -> "postcondition-mismatch" | GitHubIntakeControl.PartialApply -> "partial-apply" | GitHubIntakeControl.Replay -> "replay" | GitHubIntakeControl.Compensation -> "compensation" | GitHubIntakeControl.Unauthorized -> "unauthorized" | GitHubIntakeControl.Unsupported -> "unsupported" | GitHubIntakeControl.Indeterminate -> "indeterminate"
     let validate generated independent =
         let expected = requiredControls |> List.map controlId
         let inspect producer (results: GitHubIntakeControlResult list) =

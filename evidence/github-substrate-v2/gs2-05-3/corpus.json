@@ -1,19 +1,26 @@
 {
   "schema": "fsgg.coordination.github-intake-corpus/1",
   "registeredContractSha256": "01e29e3b7f0f049364a64b85c3b75f1e47f37f256778052e66d3894b23632ae6",
-  "acceptedPredecessorReceiptSha256": "a8474fbd59a6643317b1e2e8fc97517a0c8bed6f754865c19d5780e0da1da5d8",
+  "acceptedPredecessorReceiptSha256": "a8474e696d2c1ff149ec1efb6a4c4b4cb6fe6e56b86ec840871b4430864f0a50",
   "controls": [
-    "complete-observation",
-    "duplicate-surface",
-    "incomplete-pagination",
-    "typed-outcome",
-    "canonical-plan",
-    "full-fence",
-    "effect-order",
-    "post-state",
+    "missing-page",
+    "repeated-page",
+    "cursor-cycle",
+    "missing-field",
+    "unknown-type",
+    "duplicate-membership",
+    "hierarchy-cycle",
+    "dependency-cycle",
+    "stale-revision",
+    "altered-plan",
+    "reordered-operation",
+    "precondition-drift",
+    "postcondition-mismatch",
+    "partial-apply",
     "replay",
-    "resume",
     "compensation",
-    "intent-boundary"
+    "unauthorized",
+    "unsupported",
+    "indeterminate"
   ]
 }

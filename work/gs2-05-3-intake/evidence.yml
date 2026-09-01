@@ -11,7 +11,7 @@ sourceAnalysis: readiness/gs2-05-3-intake/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/gs2-05-3-intake/analysis.json
-    digest: 0dbfb9befa942688d990cd7d7fefbb800c77e3ed81abdf022f4fd0fce71edf56
+    digest: c7b21f694619ec57d6a23f11b23563d0487ae1292f5244f16eb2eedc885da9e0
     schemaVersion: 1
   - label: checklist
     path: work/gs2-05-3-intake/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/gs2-05-3-intake/plan.md
-    digest: 282029056c8956defb6043fd4f79956eb3cfb7fe6ac1eee5a35c03b1947bdd09
+    digest: 277e4333cbdbfe08134e0e3fa65471ad2578ec165800f066cfd180aa60ce70f0
     schemaVersion: 1
   - label: spec
     path: work/gs2-05-3-intake/spec.md
@@ -58,10 +58,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -89,10 +89,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -120,10 +120,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -151,10 +151,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -182,10 +182,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -213,10 +213,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -244,10 +244,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -275,10 +275,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -306,10 +306,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -337,10 +337,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -368,10 +368,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -399,10 +399,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -430,10 +430,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -461,10 +461,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -492,10 +492,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -523,10 +523,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -554,10 +554,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -585,10 +585,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -616,10 +616,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -647,10 +647,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -678,10 +678,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -709,10 +709,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -740,10 +740,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -771,10 +771,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -802,10 +802,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -833,10 +833,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
@@ -864,10 +864,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
-      digest: "sha256:97c620235df3582476583e5f5b04fedeee8563dcaa81e95dfe75858bef320315"
+      digest: "sha256:8337219d2090b26fa3087f976ed29a6aaf13cbc69aba60514b08838645e0e40d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 97
+      passed: 99
       failed: 0
       skipped: 0
     notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
