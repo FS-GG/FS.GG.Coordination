@@ -100,9 +100,9 @@ module ReviewDeliveryAdapter =
                 reviewAuthorityBytes observation.Current |> Result.mapError List.head
                 |> Result.bind (fun bytes -> if snapshot.Current.Event.Bytes = bytes && snapshot.Current.OperationId = observation.Current.OperationId then Ok snapshot else Error ReviewPayloadMismatch)))
 
-    let private makeCommit (address: AggregateAddress) (generation: int64) (parent: string) (prior: string option) (operationId: string) (bytes: byte array) (material: ReviewCommitMaterial) : JournalCommit =
+    let private makeCommit (address: AggregateAddress) (generation: int64) (parent: string) (prior: string option) (terminal: bool) (operationId: string) (bytes: byte array) (material: ReviewCommitMaterial) : JournalCommit =
         let event = { Bytes = bytes; Digest = ShardedJournalAdapter.sha256 bytes }
-        let unsigned = { SchemaVersion = 1; Address = address; Generation = generation; EventDigest = event.Digest; SnapshotDigest = None; Terminal = false; PriorHeadDigest = prior; HeadDigest = String.replicate 64 "0" }
+        let unsigned = { SchemaVersion = 1; Address = address; Generation = generation; EventDigest = event.Digest; SnapshotDigest = None; Terminal = terminal; PriorHeadDigest = prior; HeadDigest = String.replicate 64 "0" }
         let head = { unsigned with HeadDigest = ShardedJournalAdapter.journalHeadBytes unsigned |> ShardedJournalAdapter.sha256 }
         { CommitOid = material.CommitOid; ParentOid = Some parent; TreeOid = material.TreeOid; OperationId = operationId; Head = head; HeadBytes = ShardedJournalAdapter.journalHeadBytes head; Event = event; Checkpoint = None }
 
@@ -135,7 +135,7 @@ module ReviewDeliveryAdapter =
             let operationId = "review:" + shaText ($"{chainValue}|{epoch}|{seat}|{verdictText verdict}|{currentSnapshot.Current.CommitOid}")
             let authority = { SchemaVersion = 1; ChainId = chainValue; EpochKey = epoch; SnapshotDigest = snapshotDigest; AccountableAuthority = accountableAuthority.ToLowerInvariant(); PhaseSeat = seat; SeatOrdinal = seatOrdinal; Verdict = verdict; OperationId = operationId }
             let authorityBytes = reviewAuthorityBytes authority |> Result.defaultWith (fun _ -> invalidOp "validated")
-            let proposed = makeCommit currentSnapshot.Current.Head.Address (currentSnapshot.Current.Head.Generation + 1L) currentSnapshot.Current.CommitOid (Some currentSnapshot.Current.Head.HeadDigest) operationId authorityBytes material
+            let proposed = makeCommit currentSnapshot.Current.Head.Address (currentSnapshot.Current.Head.Generation + 1L) currentSnapshot.Current.CommitOid (Some currentSnapshot.Current.Head.HeadDigest) false operationId authorityBytes material
             match ShardedJournalAdapter.planCas operationId currentSnapshot proposed with
             | Error failure -> Error [ ReviewJournalFailure failure ]
             | Ok proposal ->
@@ -203,7 +203,17 @@ module ReviewDeliveryAdapter =
             | Ok snapshot ->
                 match deliveryAuthorityBytes observation.Current with
                 | Error failures -> Error(List.head failures)
-                | Ok bytes when snapshot.Current.Event.Bytes = bytes && snapshot.Current.OperationId = observation.Current.OperationId -> Ok snapshot
+                | Ok bytes when snapshot.Current.Event.Bytes = bytes && snapshot.Current.OperationId = observation.Current.OperationId ->
+                    let expectedGeneration, expectedCount, expectedTerminal =
+                        match observation.Current.Kind with
+                        | DeliveryGenesis -> 1L, 1, false
+                        | DeliveryReceipt -> 2L, 2, false
+                        | DoneReceipt -> 3L, 3, true
+                    if snapshot.Current.Head.Generation <> expectedGeneration
+                       || snapshot.Commits.Length <> expectedCount
+                       || snapshot.Current.Head.Terminal <> expectedTerminal
+                       || (observation.Current.Kind = DeliveryGenesis && snapshot.Current.ParentOid.IsSome) then Error DeliveryPayloadMismatch
+                    else Ok snapshot
                 | Ok _ -> Error DeliveryPayloadMismatch
 
     let planDelivery (kind: DeliveryReceiptKind) (grant: ReviewGrant) (snapshot: ReviewSnapshot) (reviewObservation: ReviewAuthorityObservation) (state: DeliveryState) (operationObservation: DeliveryAuthorityObservation) (material: ReviewCommitMaterial) =
@@ -255,7 +265,7 @@ module ReviewDeliveryAdapter =
                  || operationObservation.Current.MergeCommit <> record.MergeCommit) then Error [ DeliveryPredecessorMismatch ]
         elif not (validOid material.CommitOid && validOid material.TreeOid) then Error [ InvalidDeliveryCommitMaterial ]
         else
-            let proposed: JournalCommit = makeCommit journal.Current.Head.Address (journal.Current.Head.Generation + 1L) journal.Current.CommitOid (Some journal.Current.Head.HeadDigest) operationId bytes material
+            let proposed: JournalCommit = makeCommit journal.Current.Head.Address (journal.Current.Head.Generation + 1L) journal.Current.CommitOid (Some journal.Current.Head.HeadDigest) (kind = DoneReceipt) operationId bytes material
             match ShardedJournalAdapter.planCas operationId journal proposed with
             | Error failure -> Error [ DeliveryJournalFailure failure ]
             | Ok proposal ->

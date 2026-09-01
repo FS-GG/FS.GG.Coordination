@@ -77,7 +77,11 @@ let ``merged and protected verified are distinct receipt boundaries`` () =
     Assert.Equal(Error [ DeliveryReceiptRequired ], ReviewDeliveryAdapter.planDelivery DoneReceipt grant snapshot reviewObservation (ProtectedVerified(oid "9", 42L, oid "9", "success")) deliveryObservation { CommitOid = oid "3"; TreeOid = oid "4" })
     let completedPlan = match donePlan with Ok(DeliveryPlanned plan) -> plan | _ -> failwith "expected done plan"
     let doneObservation: DeliveryAuthorityObservation = { Complete = true; Journal = JournalComplete("delivery-3", [ operationCommit; delivered.Proposal.ProposedCommit; completedPlan.Proposal.ProposedCommit ]); Current = completedPlan.ProposedAuthority }
+    Assert.True(completedPlan.Proposal.ProposedCommit.Head.Terminal)
     Assert.Equal(Error [ DeliveryAlreadyCompleted ], ReviewDeliveryAdapter.planDelivery DeliveryReceipt grant snapshot reviewObservation (Merged(oid "9")) doneObservation { CommitOid = oid "5"; TreeOid = oid "6" })
+    let resetGenesis = commit operationAddress 2L (Some operationCommit.CommitOid) (Some operationCommit.Head.HeadDigest) deliveryRecord.OperationId deliveryBytes (oid "6")
+    let resetObservation: DeliveryAuthorityObservation = { Complete = true; Journal = JournalComplete("reset", [ operationCommit; resetGenesis ]); Current = deliveryRecord }
+    Assert.Equal(Error [ DeliveryPayloadMismatch ], ReviewDeliveryAdapter.planDelivery DeliveryReceipt grant snapshot reviewObservation (Merged(oid "9")) resetObservation { CommitOid = oid "5"; TreeOid = oid "6" })
 
 [<Fact>]
 let ``exact delivery replay is idempotent and qualification inventory is closed`` () =
