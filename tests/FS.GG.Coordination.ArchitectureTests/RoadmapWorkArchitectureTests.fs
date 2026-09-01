@@ -134,7 +134,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through registered GS2-04-8 boundary`` () =
+let ``roadmap unit index advances through registered GS2-04-9 boundary`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -180,7 +180,8 @@ let ``roadmap unit index advances through registered GS2-04-8 boundary`` () =
              "GS2-04.5"
              "GS2-04.6"
              "GS2-04.7"
-             "GS2-04.8" ]
+             "GS2-04.8"
+             "GS2-04.9" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -946,6 +947,43 @@ let ``roadmap unit index advances through registered GS2-04-8 boundary`` () =
           "without claiming Q4" ] do
         Assert.Contains(requiredTerm, actionsReleaseFeedExitGate)
 
+    let sandboxClosureUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-04.9")
+
+    Assert.Equal(
+        "Sandbox qualification and comprehensive GS2-04 closure",
+        sandboxClosureUnit.GetProperty("title").GetString()
+    )
+    Assert.Equal<string list>(
+        [ "GS2-04.8" ],
+        sandboxClosureUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3"; "Q4" ],
+        sandboxClosureUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal(9, sandboxClosureUnit.GetProperty("gateCommands").GetArrayLength())
+    let sandboxClosureExitGate = sandboxClosureUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "isolated test repositories"
+          "non-production identities"
+          "records exact pre-state"
+          "authoritative reread rather than response inference"
+          "reverse-order compensation"
+          "cleanup receipts"
+          "GS2-04.1 through GS2-04.8 receipts"
+          "ADR-0080 comprehensive mode"
+          "protected GS2-04 closure receipt"
+          "before GS2-05 may consume"
+          "production-target"
+          "omitted-adapter inversions all fail closed" ] do
+        Assert.Contains(requiredTerm, sandboxClosureExitGate)
+
     use acceptedPrerequisite =
         JsonDocument.Parse(
             File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.2.json"))
@@ -996,6 +1034,16 @@ let ``roadmap unit index advances through registered GS2-04-8 boundary`` () =
         acceptedRepositorySettings.RootElement.GetProperty("unitContractSha256").GetString()
     )
 
+    use acceptedActionsReleaseFeed =
+        JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.8.json"))
+        )
+
+    Assert.Equal(
+        actionsReleaseFeedUnit.GetProperty("contractSha256").GetString(),
+        acceptedActionsReleaseFeed.RootElement.GetProperty("unitContractSha256").GetString()
+    )
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -1007,7 +1055,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(16, commands.Length)
+    Assert.Equal(17, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -1121,6 +1169,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-actions-release-feed.fsx"; "--"; "." ],
         actionsReleaseFeedCommand.GetProperty("args").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let sandboxClosureCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-sandbox-closure-contract")
+    Assert.Equal("Q4", sandboxClosureCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-sandbox-closure.fsx"; "--"; "." ],
+        sandboxClosureCommand.GetProperty("args").EnumerateArray()
         |> Seq.map _.GetString()
         |> Seq.toList
     )
