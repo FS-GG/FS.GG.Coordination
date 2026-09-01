@@ -21,6 +21,8 @@
     <Compile Include="ClaimTouchSetAdapter.fs" />
     <Compile Include="ReviewDeliveryAdapter.fsi" />
     <Compile Include="ReviewDeliveryAdapter.fs" />
+    <Compile Include="LifecycleProjectionAdapter.fsi" />
+    <Compile Include="LifecycleProjectionAdapter.fs" />
     <Compile Include="RepositorySettingsAdapter.fsi" />
     <Compile Include="RepositorySettingsAdapter.fs" />
     <Compile Include="ActionsReleaseFeedAdapter.fsi" />

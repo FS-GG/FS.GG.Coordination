@@ -138,6 +138,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-review-delivery.fsx", "--", "."]
+    },
+    {
+      "id": "github-lifecycle-projection-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-lifecycle-projection.fsx", "--", "."]
     }
   ]
 }

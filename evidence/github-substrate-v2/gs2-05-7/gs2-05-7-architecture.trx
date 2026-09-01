@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d5c44518-aa85-4a93-b895-c84528f39aa8" name="@8b082ee11b3f 2026-09-02 01:20:03" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-02T01:20:03.5579343+02:00" queuing="2026-09-02T01:20:03.5579343+02:00" start="2026-09-02T01:20:03.1774700+02:00" finish="2026-09-02T01:20:03.5611374+02:00" />
+  <TestSettings name="default" id="5f16812b-d6d5-43d5-b747-57a118672b4b">
+    <Deployment runDeploymentRoot="_8b082ee11b3f_2026-09-02_01_20_03" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="13f28127-0efd-43ea-8340-4fd72cfa2412" testId="29f9e9d7-220a-c683-bc2b-38bc81ea5e57" testName="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests.lifecycle projection evidence has independent closed controls" computerName="8b082ee11b3f" duration="00:00:00.0067621" startTime="2026-09-02T01:20:03.5008892+02:00" endTime="2026-09-02T01:20:03.5009355+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="13f28127-0efd-43ea-8340-4fd72cfa2412" />
+    <UnitTestResult executionId="32c27aaa-282c-470c-8c52-7ed2b95ee994" testId="58a64140-8136-b6db-dbab-068af5b34cb5" testName="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests.lifecycle projection preserves canonical Quint source" computerName="8b082ee11b3f" duration="00:00:00.0007764" startTime="2026-09-02T01:20:03.5012869+02:00" endTime="2026-09-02T01:20:03.5017006+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="32c27aaa-282c-470c-8c52-7ed2b95ee994" />
+    <UnitTestResult executionId="89e7e379-7459-4dee-987a-9ebaae9592fe" testId="54d8e3ec-b430-b63d-153d-16665b708c10" testName="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests.GS2-05-7 registration binds accepted predecessor and exact gate" computerName="8b082ee11b3f" duration="00:00:00.0027981" startTime="2026-09-02T01:20:03.5017835+02:00" endTime="2026-09-02T01:20:03.5045242+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="89e7e379-7459-4dee-987a-9ebaae9592fe" />
+    <UnitTestResult executionId="39ae17c5-7a04-4c59-86e4-c03cc6f0e209" testId="7a95a78d-fd0c-3cec-6e67-53189307b828" testName="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests.lifecycle projection composes derived facts through the existing Project adapter only" computerName="8b082ee11b3f" duration="00:00:00.0087569" startTime="2026-09-02T01:20:03.4825278+02:00" endTime="2026-09-02T01:20:03.4941854+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="39ae17c5-7a04-4c59-86e4-c03cc6f0e209" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests.lifecycle projection composes derived facts through the existing Project adapter only" storage="/tmp/fsgg-coordination-216/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="7a95a78d-fd0c-3cec-6e67-53189307b828">
+      <Execution id="39ae17c5-7a04-4c59-86e4-c03cc6f0e209" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-216/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests" name="lifecycle projection composes derived facts through the existing Project adapter only" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests.lifecycle projection evidence has independent closed controls" storage="/tmp/fsgg-coordination-216/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="29f9e9d7-220a-c683-bc2b-38bc81ea5e57">
+      <Execution id="13f28127-0efd-43ea-8340-4fd72cfa2412" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-216/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests" name="lifecycle projection evidence has independent closed controls" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests.GS2-05-7 registration binds accepted predecessor and exact gate" storage="/tmp/fsgg-coordination-216/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="54d8e3ec-b430-b63d-153d-16665b708c10">
+      <Execution id="89e7e379-7459-4dee-987a-9ebaae9592fe" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-216/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests" name="GS2-05-7 registration binds accepted predecessor and exact gate" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests.lifecycle projection preserves canonical Quint source" storage="/tmp/fsgg-coordination-216/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="58a64140-8136-b6db-dbab-068af5b34cb5">
+      <Execution id="32c27aaa-282c-470c-8c52-7ed2b95ee994" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-216/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubLifecycleProjectionArchitectureTests" name="lifecycle projection preserves canonical Quint source" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="29f9e9d7-220a-c683-bc2b-38bc81ea5e57" executionId="13f28127-0efd-43ea-8340-4fd72cfa2412" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="58a64140-8136-b6db-dbab-068af5b34cb5" executionId="32c27aaa-282c-470c-8c52-7ed2b95ee994" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="54d8e3ec-b430-b63d-153d-16665b708c10" executionId="89e7e379-7459-4dee-987a-9ebaae9592fe" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7a95a78d-fd0c-3cec-6e67-53189307b828" executionId="39ae17c5-7a04-4c59-86e4-c03cc6f0e209" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="4" executed="4" passed="4" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.11]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.15]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
