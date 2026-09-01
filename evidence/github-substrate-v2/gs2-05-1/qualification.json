@@ -1,0 +1,35 @@
+{
+  "schema": "fsgg.github-substrate-v2.work-taxonomy-qualification/1",
+  "unitId": "GS2-05.1",
+  "qGate": "Q2",
+  "unitContractSha256": "ed9ae9d198d6eaaf89030f85d214a0a359333598be7ceb3597c2c4aeb629ef28",
+  "prerequisiteReceiptSha256": "11defafd12353bbcb9b96cc06d3d9e29553ddca4ba912bacd7476c067f9802ed",
+  "gateCommandId": "github-work-taxonomy-contract",
+  "gateCommandSha256": "c10ddf0ee6bb9328e09fceae4d0deebcc688478c1b2ae80c3fc3b4fbc766ef7f",
+  "network": "offline",
+  "corpusCases": 32,
+  "acceptedCases": 18,
+  "refusedCases": 14,
+  "independentInversions": 16,
+  "artifacts": [
+    {"path":"src/FS.GG.Coordination.Core/WorkTaxonomy.fsi","sha256":"4d06644805a645965bc1cfb4bbc3902d228104f707e163a2f487ddd93fe26439"},
+    {"path":"src/FS.GG.Coordination.Core/WorkTaxonomy.fs","sha256":"625ecf2cdfef2ff6cf34fcc151384df553f33e134d5d275b10901ed7f8bc1ed2"},
+    {"path":"evidence/github-substrate-v2/gs2-05-1/corpus.json","sha256":"c89d6acbbb8b47ad928eb3ed29e8044d2e33ee66d165dd5d6243c8e42d597ae8"},
+    {"path":"evidence/github-substrate-v2/gs2-05-1/independent-expectations.json","sha256":"0ead0c765ec062ed3f30bd7ddb43287176b3614e83eda5cb8410d2a95a5fea37"},
+    {"path":"evidence/github-substrate-v2/gs2-05-1/workTaxonomy.qnt","sha256":"8680121e827ecf950e4d05e545359f4e13f368775b96f2de2947e8b41f6af729"},
+    {"path":"evidence/github-substrate-v2/gs2-05-1/workTaxonomy_test.qnt","sha256":"0c19b795bd2ff2e5d7fa01817b2ba2bcb5ce2112644f6752c348fc2b606b5887"},
+    {"path":"eng/validate-github-work-taxonomy.fsx","sha256":"6fd1fa30511160a5478bad075540893ea9ab6c2327449c28ba8955fa8bc43aa1"}
+  ],
+  "obligations": [
+    "native-issue-type-is-sole-authority",
+    "work-standing-lifecycle-exemption-is-exact",
+    "legacy-cross-product-is-total",
+    "migration-plan-is-unique-and-canonical",
+    "prestate-is-fingerprinted",
+    "hierarchy-and-repository-scope-are-preserved",
+    "no-op-and-idempotency-are-byte-stable",
+    "every-refusal-family-is-independent",
+    "omitted-combination-turns-red",
+    "quint-planned-and-refused-witnesses-are-reachable"
+  ]
+}
