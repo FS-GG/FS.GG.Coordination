@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "9bd7849e4c90adb89a08f6377d807422504213b1",
+    "revision": "43209b79634cc56994876329d3ab8a0ce7c9ef79",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "0007cfbfedfa8982e45c22f90a6231903ddf5ff663507a051bc9c8f8db5379a5"
+    "sha256": "d4d1e83c11428d2c7b035cfb302d44e6a9dac665d780410f78b731829e884265"
   },
   "units": [
     {
@@ -644,6 +644,20 @@
         { "id": "github-review-delivery-contract", "qGate": "Q3", "commandSha256": "e7b6af01c1ebfd5525452b6e9922b4cde180f5235f75b4ed5bf93eff972177c1" }
       ],
       "contractSha256": "19632427bf85a51cec369e24d2c82568c8e58c143f7717964f92790f677994fc"
+    },
+    {
+      "id": "GS2-05.7",
+      "title": "Implement lifecycle projection",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-05.6"],
+      "permissionCeiling": ["repository-local additive lifecycle-projection contracts, pure deterministic composition of scheduling intent with complete native and protected-journal facts, controlled-fixture revision-bound Project Status planning and authoritative readback, validation, and retained evidence", "no production GitHub or journal write, production credential, human-intent rewrite, issue closure, Project administration, fleet shadowing, deployment, publication, stable release, or successor-unit implementation authority"],
+      "exitGate": "the Q3 lifecycle-projection contract begins from the accepted GS2-05.6 receipt and the exact accepted roadmap revision without changing the canonical Quint protocol; scheduling intent is the sole human or policy input and the visible Project Status is never read as intent; complete source-bound knowledge of holds, native dependencies, current claim generation, pull-request state, current review authority, terminal protected delivery, and issue state derives the formal backlog, ready, paused, cancelled, blocked, claimed, in-review, accepted, or delivered lifecycle stage using the canonical precedence; those stages map deterministically to the existing Backlog, Ready, Blocked, In progress, In review, and Done Project options; historical generations and review epochs, unprotected delivery, closed issues without cancellation or terminal delivery, incomplete, unreadable, unauthorized, stale, contradictory, cross-subject, and indeterminate facts fail closed; exact revision-bound plans rederive every source fact and the target option before one controlled-fixture effect, exact equality is a zero-effect replay, altered plans and concurrent status changes refuse, and authoritative post-state readback rather than response inference completes the projection; deterministic seals and fixed costs depend only on declared facts; generated and independently authored intent, knowledge, precedence, hold, dependency, claim, pull-request, review, delivery, issue-state, mapping, historical-authority, protected-delivery, plan, revision, replay, bounded-cost, Quint, and prerequisite inversions all fail closed without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-lifecycle-projection-contract"],
+      "gateContracts": [
+        { "id": "github-lifecycle-projection-contract", "qGate": "Q3", "commandSha256": "045930084b784baf6df371182b3227f7cce6df44f70f6f37a4825cadc9ef55e3" }
+      ],
+      "contractSha256": "3da7bf73fdfa4729b8950c23be908927c4ced57c4680d4f0e3f3218cc93c392d"
     }
   ]
 }

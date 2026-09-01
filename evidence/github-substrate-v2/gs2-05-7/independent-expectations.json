@@ -1,0 +1,24 @@
+{
+  "schema": "fsgg.coordination.github-lifecycle-projection-expectations/1",
+  "authoring": "independent-from-generated-cases",
+  "controls": [
+    "intent-authority",
+    "complete-knowledge",
+    "formal-precedence",
+    "hold-dependency",
+    "claim",
+    "pull-request",
+    "review",
+    "delivery",
+    "issue-state",
+    "status-mapping",
+    "status-not-intent",
+    "historical-fact",
+    "protected-delivery",
+    "exact-plan",
+    "revision-fence",
+    "exact-replay",
+    "bounded-cost",
+    "quint-and-prerequisite"
+  ]
+}

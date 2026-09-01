@@ -1,0 +1,29 @@
+{
+  "schema": "fsgg.coordination.github-lifecycle-projection-corpus/1",
+  "registeredContractSha256": "3da7bf73fdfa4729b8950c23be908927c4ced57c4680d4f0e3f3218cc93c392d",
+  "acceptedPredecessorReceiptSha256": "3495a9c901bf780606b84e5ca53bb25366cc9d18c59882f2b9298a8ee0b005f2",
+  "acceptedPredecessorReceiptDigest": "24de35789ad18aff1409e873e9aa63edc2d2cff313d8b63f34168c70f7494368",
+  "roadmapRevision": "43209b79634cc56994876329d3ab8a0ce7c9ef79",
+  "roadmapSha256": "d4d1e83c11428d2c7b035cfb302d44e6a9dac665d780410f78b731829e884265",
+  "quintSourceSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "controls": [
+    "intent-authority",
+    "complete-knowledge",
+    "formal-precedence",
+    "hold-dependency",
+    "claim",
+    "pull-request",
+    "review",
+    "delivery",
+    "issue-state",
+    "status-mapping",
+    "status-not-intent",
+    "historical-fact",
+    "protected-delivery",
+    "exact-plan",
+    "revision-fence",
+    "exact-replay",
+    "bounded-cost",
+    "quint-and-prerequisite"
+  ]
+}
