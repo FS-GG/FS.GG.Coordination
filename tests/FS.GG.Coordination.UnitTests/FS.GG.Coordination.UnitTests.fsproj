@@ -8,6 +8,7 @@
     <Compile Include="GitHubProjectAdapterTests.fs" />
     <Compile Include="GitHubIntakeTests.fs" />
     <Compile Include="GitHubRoadmapIntakeTests.fs" />
+    <Compile Include="GitHubClaimTouchSetTests.fs" />
     <Compile Include="GitHubCommentProjectionTests.fs" />
     <Compile Include="GitHubTransportTests.fs" />
     <Compile Include="GitHubShardedJournalTests.fs" />

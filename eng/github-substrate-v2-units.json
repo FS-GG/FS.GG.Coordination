@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "2ff646743e770f0ec6be5566acd04df0b1a83dec",
+    "revision": "b776da763a490c2c3310a10c8db234a62a5b6bc4",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "e10e4a4245d11d1ae955d3a11c7cc25aa92e52a1c1b6bf6398e4249acc8ee581"
+    "sha256": "2fbf6711b814ef3fbcf77a17d31d5d00255dddcd5d471a582db00942785bdc9d"
   },
   "units": [
     {
@@ -616,6 +616,20 @@
         { "id": "github-roadmap-intake-contract", "qGate": "Q3", "commandSha256": "2af25e59eb20c21c0c56abe002daea468c93555465651f9b145daa822c570fc2" }
       ],
       "contractSha256": "46df348d73b6a5d953e78286f23e794432f389752eb77e9d085d694f7d4e2fc7"
+    },
+    {
+      "id": "GS2-05.5",
+      "title": "Implement claims/touch sets",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-05.4"],
+      "permissionCeiling": ["repository-local additive claim and touch-set contracts, pure deterministic claim decisions, controlled-fixture journal-CAS composition, successor eligibility, canonical conflict detection, ordered multi-touch saga planning, effect-time fencing, validation, and retained evidence", "no production GitHub or journal write, production credential, Project-field or comment concurrency authority, ruleset administration, review or delivery implementation, lifecycle projection, fleet shadowing, deployment, publication, stable release, or successor-unit implementation authority"],
+      "exitGate": "the Q3 claim and touch-set contract begins from the accepted GS2-05.4 receipt and composes the existing protected sharded-journal adapter without changing the canonical Quint protocol; it canonicalizes qualified subjects, repositories, touch paths, and conflict domains while refusing empty, duplicate, traversal, root-wide, and noncanonical touches; expected-parent CAS and an exact authoritative reread assign monotonically increasing fencing generations and exclude sibling owners; lease expiry grants only successor eligibility and never revokes, transfers, or authorizes before the accepted successor CAS is reread; equal and ancestor-descendant paths conflict within one repository while native fields, Project fields, comments, labels, webhooks, clocks, responses, and object existence remain non-authorizing projections or hints; multi-touch acquisition uses the existing journal-kind, shard, aggregate-digest total order, persists the complete touch set and expected generations before effects, releases the unconsumed suffix on conflict, and appends reverse-order fenced compensation while retaining original results; every controlled-fixture external effect rereads complete authoritative journals and matches subject, owner, touch set, commit, generation, and nonterminal state; deterministic sealed plans, exact replay, indeterminate recovery, and fixed costs depend only on declared touches; generated and independently authored sibling-CAS, generation, active and expired lease, successor, projection, overlap, ordering, persistence, stale-fence, terminal, incomplete, divergent, compensation, replay, bounded-cost, Quint, and prerequisite inversions all fail closed without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-claim-touch-set-contract"],
+      "gateContracts": [
+        { "id": "github-claim-touch-set-contract", "qGate": "Q3", "commandSha256": "bdca04dbe86f9740e4320bf900114bef014b965d9ecb98d1d91aef58ea60b08d" }
+      ],
+      "contractSha256": "a6962b43fff0c109cb7d4cbcd5d39465b20a0f3fb71e28460a541b1ace04ad41"
     }
   ]
 }

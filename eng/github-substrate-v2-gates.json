@@ -126,6 +126,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-roadmap-intake.fsx", "--", "."]
+    },
+    {
+      "id": "github-claim-touch-set-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-claim-touch-set.fsx", "--", "."]
     }
   ]
 }

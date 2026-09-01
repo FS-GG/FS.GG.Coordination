@@ -176,15 +176,15 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-4`` () =
+let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-5`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
     let units = document.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
 
     let roadmap = document.RootElement.GetProperty("roadmap")
-    Assert.Equal("2ff646743e770f0ec6be5566acd04df0b1a83dec", roadmap.GetProperty("revision").GetString())
-    Assert.Equal("e10e4a4245d11d1ae955d3a11c7cc25aa92e52a1c1b6bf6398e4249acc8ee581", roadmap.GetProperty("sha256").GetString())
+    Assert.Equal("b776da763a490c2c3310a10c8db234a62a5b6bc4", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("2fbf6711b814ef3fbcf77a17d31d5d00255dddcd5d471a582db00942785bdc9d", roadmap.GetProperty("sha256").GetString())
 
     let ids =
         units |> List.map (fun unitValue -> unitValue.GetProperty("id").GetString())
@@ -232,7 +232,8 @@ let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-4
              "GS2-05.2"
              "GS2-05.3"
              "GS2-05.9"
-             "GS2-05.4" ]
+             "GS2-05.4"
+             "GS2-05.5" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -1236,6 +1237,29 @@ let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-4
           "idempotent replay, partial application, and indeterminate outcomes"; "without production GitHub mutation" ] do
         Assert.Contains(requiredTerm, roadmapIntakeExitGate)
 
+    let claimTouchSetUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-05.5")
+
+    Assert.Equal<string list>(
+        [ "GS2-05.4" ],
+        claimTouchSetUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3" ],
+        claimTouchSetUnit.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-claim-touch-set-contract" ],
+        claimTouchSetUnit.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Equal(
+        "a6962b43fff0c109cb7d4cbcd5d39465b20a0f3fb71e28460a541b1ace04ad41",
+        claimTouchSetUnit.GetProperty("contractSha256").GetString()
+    )
+
     use acceptedOrganizationIssueFields =
         JsonDocument.Parse(
             File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-05.2.json"))
@@ -1337,7 +1361,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(21, commands.Length)
+    Assert.Equal(22, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -1530,6 +1554,22 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal(roadmapIntakeCommand.GetProperty("id").GetString(), roadmapIntakeGateContract.GetProperty("id").GetString())
     Assert.Equal(roadmapIntakeCommand.GetProperty("qGate").GetString(), roadmapIntakeGateContract.GetProperty("qGate").GetString())
     Assert.Equal(gateCommandSha256 roadmapIntakeCommand, roadmapIntakeGateContract.GetProperty("commandSha256").GetString())
+
+    let claimTouchSetUnit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-05.5")
+    let claimTouchSetCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-claim-touch-set-contract")
+    Assert.Equal("Q3", claimTouchSetCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-claim-touch-set.fsx"; "--"; "." ],
+        claimTouchSetCommand.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    let claimTouchSetGateContract = claimTouchSetUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
+    Assert.Equal(claimTouchSetCommand.GetProperty("id").GetString(), claimTouchSetGateContract.GetProperty("id").GetString())
+    Assert.Equal(claimTouchSetCommand.GetProperty("qGate").GetString(), claimTouchSetGateContract.GetProperty("qGate").GetString())
+    Assert.Equal(gateCommandSha256 claimTouchSetCommand, claimTouchSetGateContract.GetProperty("commandSha256").GetString())
 
     let protocolUnit =
         index.RootElement.GetProperty("units").EnumerateArray()

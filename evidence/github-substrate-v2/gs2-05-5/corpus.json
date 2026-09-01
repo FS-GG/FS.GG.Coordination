@@ -1,0 +1,16 @@
+{
+  "schema": "fsgg.coordination.github-claim-touch-set-corpus/1",
+  "registeredContractSha256": "a6962b43fff0c109cb7d4cbcd5d39465b20a0f3fb71e28460a541b1ace04ad41",
+  "acceptedPredecessorReceiptSha256": "12b80b146b3c17d5090603dfe7bd8ee16d2fc5f7736fc7fc5ab98ccc0e43ab4e",
+  "acceptedPredecessorReceiptDigest": "0017ef59099ee14e6c3d0df73b4fb05a9c45a34f2067cecdf19a4b29e0a7a0fe",
+  "roadmapRevision": "b776da763a490c2c3310a10c8db234a62a5b6bc4",
+  "roadmapSha256": "2fbf6711b814ef3fbcf77a17d31d5d00255dddcd5d471a582db00942785bdc9d",
+  "quintSourceSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "controls": [
+    "canonical-identity", "unsafe-touch", "sibling-cas", "monotonic-generation",
+    "active-lease", "expired-lease", "successor-cas", "projection-not-authority",
+    "touch-overlap", "repository-partition", "acquisition-order", "full-plan-persistence",
+    "stale-fence", "terminal-authority", "reverse-compensation", "exact-replay",
+    "bounded-cost", "quint-and-prerequisite"
+  ]
+}
