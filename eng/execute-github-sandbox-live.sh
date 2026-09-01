@@ -130,7 +130,14 @@ execute_plan() {
   release_updated="$(api_json --method PATCH "repos/$repo_full/releases/$(jq -r .id <<<"$release_created")" -f name="$tag-updated")"
   asset_file="$evidence/release-asset.txt"
   printf 'GS2-04.9 release asset %s\n' "$nonce" > "$asset_file"
-  asset_uploaded="$(gh api --hostname uploads.github.com --method POST -H 'Content-Type: text/plain' "repos/$repo_full/releases/$(jq -r .id <<<"$release_created")/assets?name=qualification.txt" --input "$asset_file")"
+  asset_uploaded="$(curl --fail-with-body --silent --show-error \
+    --request POST \
+    --header "Authorization: Bearer $FSGG_SANDBOX_TOKEN" \
+    --header 'Accept: application/vnd.github+json' \
+    --header 'Content-Type: text/plain' \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
+    --data-binary "@$asset_file" \
+    "https://uploads.github.com/repos/$repo_full/releases/$(jq -r .id <<<"$release_created")/assets?name=qualification.txt")"
   write_state --argjson id "$(jq -r .id <<<"$asset_uploaded")" '.resources.releaseAssetId=$id'
   gh api -H 'Accept: application/octet-stream' "repos/$repo_full/releases/assets/$(jq -r .id <<<"$asset_uploaded")" > "$evidence/retrieved-asset.txt"
   asset_digest="$(sha256sum "$evidence/retrieved-asset.txt" | cut -d' ' -f1)"
