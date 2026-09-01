@@ -1,0 +1,39 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-05.2",
+  "state": "accepted",
+  "unitContractSha256": "054ee50545c55b314447b7636ee35faf866adba40f6ff9b5ef07effb2009b41f",
+  "sourceRevision": "775bb0d350119c370089710f1847fe7609b080a8",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-05.1-receipt",
+      "sha256": "6a2c26033946b986b25fc4fc99257d21d6fa5d728e1f365170d9bc17a9226df5"
+    },
+    {
+      "name": "organization-issue-fields-qualification",
+      "sha256": "062b0080c4e488653b70d9a0656d892404a8967a13451f5cbcc4f500d24709d8"
+    },
+    {
+      "name": "organization-issue-fields-q2-validator",
+      "sha256": "b27b1152148b04ed50f94e2b0127a72fa66191ee38682b86f119c3b841925aa9"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "81ee67d20c64ce69409e3c2397b327fea42646fdb0f29c80ef664bd0e71cbb45"
+    },
+    {
+      "name": "structured-review-acceptance",
+      "sha256": "7e2574ae28b11e0a7baa1da7bf5383396311c4a8267d28b15172319cd5d3b9ae"
+    },
+    {
+      "name": "delivery-completion",
+      "sha256": "83788d98be7289556d0bcea15151d377ac5ba7f4d66ae6dc1a90e305c40b4e0f"
+    },
+    {
+      "name": "protected-main-bootstrap-evidence-run-33480138353",
+      "sha256": "f1d0d5b651c9a3cbfbae6b6e0a5e5f0a268b47fd2322a66593184696453f42be"
+    }
+  ],
+  "acceptedAt": "2026-09-01T07:08:00Z",
+  "digest": "a8474e696d2c1ff149ec1efb6a4c4b4cb6fe6e56b86ec840871b4430864f0a50"
+}
