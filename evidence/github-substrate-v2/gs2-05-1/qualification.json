@@ -10,15 +10,15 @@
   "corpusCases": 32,
   "acceptedCases": 18,
   "refusedCases": 14,
-  "independentInversions": 16,
+  "independentInversions": 17,
   "artifacts": [
     {"path":"src/FS.GG.Coordination.Core/WorkTaxonomy.fsi","sha256":"4d06644805a645965bc1cfb4bbc3902d228104f707e163a2f487ddd93fe26439"},
-    {"path":"src/FS.GG.Coordination.Core/WorkTaxonomy.fs","sha256":"625ecf2cdfef2ff6cf34fcc151384df553f33e134d5d275b10901ed7f8bc1ed2"},
+    {"path":"src/FS.GG.Coordination.Core/WorkTaxonomy.fs","sha256":"50bfbcb268376b8d5970b0a361046f77f574fe98d8bb7003ada6c3df53c6cc43"},
     {"path":"evidence/github-substrate-v2/gs2-05-1/corpus.json","sha256":"c89d6acbbb8b47ad928eb3ed29e8044d2e33ee66d165dd5d6243c8e42d597ae8"},
     {"path":"evidence/github-substrate-v2/gs2-05-1/independent-expectations.json","sha256":"0ead0c765ec062ed3f30bd7ddb43287176b3614e83eda5cb8410d2a95a5fea37"},
     {"path":"evidence/github-substrate-v2/gs2-05-1/workTaxonomy.quint","sha256":"8680121e827ecf950e4d05e545359f4e13f368775b96f2de2947e8b41f6af729"},
     {"path":"evidence/github-substrate-v2/gs2-05-1/workTaxonomy_test.quint","sha256":"0c19b795bd2ff2e5d7fa01817b2ba2bcb5ce2112644f6752c348fc2b606b5887"},
-    {"path":"eng/validate-github-work-taxonomy.fsx","sha256":"dfbbe7d619677dcf95690f43a4b87316aceed50a2d491101984a6462b262ae4d"}
+    {"path":"eng/validate-github-work-taxonomy.fsx","sha256":"8e07c667f90652ce061d073429d76a01f6eb75e42a7b043ab4bfc5d9be516506"}
   ],
   "obligations": [
     "native-issue-type-is-sole-authority",

@@ -53,6 +53,8 @@ let ``already native rows are explicit no ops and native authority rejects contr
     Assert.Contains("WTX-CONTRADICTORY", codes contradictory)
     let standingAsWork = observation "9b" (Some "Register") None (Some "work")
     Assert.Contains("WTX-CONTRADICTORY", codes standingAsWork)
+    let ambiguousLegacySignals = observation "9c" (Some "Feature") (Some "defect") (Some "anchor")
+    Assert.Contains("WTX-AMBIGUOUS", codes ambiguousLegacySignals)
 
 [<Fact>]
 let ``every fail closed observation family has a stable diagnostic`` () =

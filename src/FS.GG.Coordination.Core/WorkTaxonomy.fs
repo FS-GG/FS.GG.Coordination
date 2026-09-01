@@ -207,7 +207,10 @@ module WorkTaxonomy =
                 match nativeValue, legacy with
                 | Some _, _ when standingKindConflict -> Error [ WorkTaxonomyDiagnostic.ContradictorySignals ]
                 | Some native, Ok legacy when native <> legacy -> Error [ WorkTaxonomyDiagnostic.ContradictorySignals ]
-                | Some native, _ ->
+                | Some native, Error [ WorkTaxonomyDiagnostic.MissingClassification ] ->
+                    Ok { TargetType = native; Lifecycle = lifecycle native; RetiredProjections = retiredProjections observation }
+                | Some _, Error diagnostics -> Error diagnostics
+                | Some native, Ok _ ->
                     Ok { TargetType = native; Lifecycle = lifecycle native; RetiredProjections = retiredProjections observation }
                 | None, Ok target ->
                     Ok { TargetType = target; Lifecycle = lifecycle target; RetiredProjections = retiredProjections observation }

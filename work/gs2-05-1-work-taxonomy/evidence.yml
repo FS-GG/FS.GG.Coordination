@@ -60,7 +60,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV002
     kind: verification
     subject:
@@ -87,7 +87,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV003
     kind: verification
     subject:
@@ -114,7 +114,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV004
     kind: verification
     subject:
@@ -141,7 +141,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV005
     kind: verification
     subject:
@@ -168,7 +168,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV006
     kind: verification
     subject:
@@ -195,7 +195,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV007
     kind: verification
     subject:
@@ -222,7 +222,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV008
     kind: verification
     subject:
@@ -249,7 +249,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV009
     kind: verification
     subject:
@@ -276,7 +276,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV010
     kind: verification
     subject:
@@ -303,7 +303,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV011
     kind: verification
     subject:
@@ -330,7 +330,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV012
     kind: verification
     subject:
@@ -357,7 +357,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV013
     kind: verification
     subject:
@@ -384,7 +384,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV014
     kind: verification
     subject:
@@ -411,7 +411,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV015
     kind: verification
     subject:
@@ -438,7 +438,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV016
     kind: verification
     subject:
@@ -465,7 +465,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV017
     kind: verification
     subject:
@@ -492,7 +492,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV018
     kind: verification
     subject:
@@ -519,7 +519,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV019
     kind: verification
     subject:
@@ -546,7 +546,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV020
     kind: verification
     subject:
@@ -573,7 +573,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV021
     kind: verification
     subject:
@@ -600,7 +600,7 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
   - id: EV022
     kind: verification
     subject:
@@ -627,6 +627,6 @@ evidence:
       passed: 4
       failed: 0
       skipped: 0
-    notes: [16 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

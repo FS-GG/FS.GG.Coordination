@@ -164,6 +164,7 @@ let independentRefusals =
       { baseObservation with NativeIssueType = Some "Incident"; LegacyClass = None }, "WTX-UNSUPPORTED-NATIVE:incident"
       { baseObservation with NativeIssueType = Some "Feature"; LegacyClass = Some "defect" }, "WTX-CONTRADICTORY"
       { baseObservation with LegacyClass = Some "defect"; LegacyKind = Some "anchor" }, "WTX-AMBIGUOUS"
+      { baseObservation with NativeIssueType = Some "Feature"; LegacyClass = Some "defect"; LegacyKind = Some "anchor" }, "WTX-AMBIGUOUS"
       { baseObservation with HierarchyPresent = true; HierarchyPreservable = false }, "WTX-LOSSY-HIERARCHY"
       { baseObservation with RepositoryScopePreservable = false }, "WTX-LOSSY-REPOSITORY-SCOPE" ]
 
