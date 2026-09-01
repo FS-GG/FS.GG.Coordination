@@ -114,6 +114,12 @@
       "qGate": "Q2",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-organization-issue-fields.fsx", "--", "."]
+    },
+    {
+      "id": "github-intake-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-intake.fsx", "--", "."]
     }
   ]
 }

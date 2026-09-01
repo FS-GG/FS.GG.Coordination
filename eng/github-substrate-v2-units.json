@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "c43deab898d04b63c97aeed10168e7739c8f2984",
+    "revision": "8de7e621cda3fcc3eb06b9c053cf883288e5ef72",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "93a4e439bf26d3c27290dff50d0ef4d5348c9720ef7512571d07d91a258f5077"
+    "sha256": "a5d2eb1e821af5742f6a76fc3bf630e4100839d4d947964757cf30da446db291"
   },
   "units": [
     {
@@ -574,6 +574,20 @@
         { "id": "github-organization-issue-fields-contract", "qGate": "Q2", "commandSha256": "6311e9ca2c92315c48981983efcb93f2717b6b5273aa6fafa75c3fb8496ebcbd" }
       ],
       "contractSha256": "054ee50545c55b314447b7636ee35faf866adba40f6ff9b5ef07effb2009b41f"
+    },
+    {
+      "id": "GS2-05.3",
+      "title": "Implement intake",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-05.2"],
+      "permissionCeiling": ["repository-local intake contracts, pure deterministic validation and planning, exact sealed-plan application over controlled fixtures, complete paginated live-inspection abstractions, protocol initialization, validation, and retained evidence", "local pure-model, deterministic fixture, and read-only recorded-adapter execution is allowed; no production GitHub write, organization issue-type or field mutation, Project mutation, live issue mutation, production credential, deployment, publication, stable release, GS2-05.4 roadmap-intake implementation, or successor-unit implementation authority"],
+      "exitGate": "the Q3 intake contract provides one typed request and result boundary across issues, native types and organization fields, Project membership, hierarchy, dependencies, and protocol initialization; validate is pure, total, and deterministic and returns canonical normalized intent or stable diagnostics without observing or mutating GitHub; plan consumes a complete revision-bound observation, emits a byte-stable ordered immutable plan with stable operation identities, exact expected revisions and preconditions, postconditions, compensations, and an integrity digest, and makes a repeated satisfied request a canonical no-op; apply accepts only the exact sealed plan, re-observes and proves every precondition and fencing revision before each external effect, refuses drift before mutation, executes effects in deterministic dependency order, verifies authoritative post-state rather than response inference, records durable step outcomes, and supports idempotent replay, partial-failure resume, roll-forward, and reverse-order compensation; inspect is read-only, follows every page, proves terminal pagination and observation completeness, preserves issue identity, native type, fields, Project membership, hierarchy, dependencies, and repository scope, and distinguishes absent, unauthorized, unsupported, partial, stale, and indeterminate state; protocol initialization creates only the revision-bound initial journal, scheduling-intent, contract, touch-set, and projection intents needed to admit work while keeping Project fields as projections rather than an execution ledger; canonical fixtures and independently authored positive and missing-page, repeated-page, cursor-cycle, missing-field, unknown-type, duplicate-membership, hierarchy-cycle, dependency-cycle, stale-revision, altered-plan, reordered-operation, precondition-drift, postcondition-mismatch, partial-apply, replay, compensation, unauthorized, unsupported, and indeterminate inversions prove exact observable-state correspondence and all fail closed; the unit performs no production write and claims no GS2-05.4 roadmap-intake behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-intake-contract"],
+      "gateContracts": [
+        { "id": "github-intake-contract", "qGate": "Q3", "commandSha256": "1db2b6e766e4a024a31c918b68dea21420728b6ad280661799b76e022412002a" }
+      ],
+      "contractSha256": "01e29e3b7f0f049364a64b85c3b75f1e47f37f256778052e66d3894b23632ae6"
     }
   ]
 }
