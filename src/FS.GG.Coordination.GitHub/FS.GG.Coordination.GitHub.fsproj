@@ -17,6 +17,8 @@
     <Compile Include="CommentProjectionAdapter.fs" />
     <Compile Include="ShardedJournalAdapter.fsi" />
     <Compile Include="ShardedJournalAdapter.fs" />
+    <Compile Include="ClaimTouchSetAdapter.fsi" />
+    <Compile Include="ClaimTouchSetAdapter.fs" />
     <Compile Include="RepositorySettingsAdapter.fsi" />
     <Compile Include="RepositorySettingsAdapter.fs" />
     <Compile Include="ActionsReleaseFeedAdapter.fsi" />

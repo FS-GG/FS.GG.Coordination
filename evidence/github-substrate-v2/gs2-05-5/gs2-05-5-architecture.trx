@@ -1,0 +1,100 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="35e876a5-0b29-4bc3-858a-7d2d6eb4dfdb" name="@8b082ee11b3f 2026-09-01 22:22:07" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-01T22:22:07.7074179+02:00" queuing="2026-09-01T22:22:07.7074179+02:00" start="2026-09-01T22:22:07.3195819+02:00" finish="2026-09-01T22:22:07.7290642+02:00" />
+  <TestSettings name="default" id="ab885842-aef4-4ac0-a8e9-36b08c4ff22d">
+    <Deployment runDeploymentRoot="_8b082ee11b3f_2026-09-01_22_22_07" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="397acaef-00bd-43f0-90c8-c0d5d3de4b70" testId="8b559bb8-f35f-1849-fbf1-9cae8e2ca9f1" testName="FS.GG.Coordination.GitHubClaimTouchSetTests.touches are canonical repository-scoped and ancestry conflicts" computerName="8b082ee11b3f" duration="00:00:00.0036180" startTime="2026-09-01T22:22:07.6703039+02:00" endTime="2026-09-01T22:22:07.6739086+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="397acaef-00bd-43f0-90c8-c0d5d3de4b70" />
+    <UnitTestResult executionId="b4ba42e6-579a-4900-975b-c52a644951d9" testId="889e358b-9e00-212f-ec94-810226e0023b" testName="FS.GG.Coordination.GitHubClaimTouchSetTests.multi-touch plan persists the full ordered acquisition and compensates in reverse" computerName="8b082ee11b3f" duration="00:00:00.0044871" startTime="2026-09-01T22:22:07.6874377+02:00" endTime="2026-09-01T22:22:07.6874501+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b4ba42e6-579a-4900-975b-c52a644951d9" />
+    <UnitTestResult executionId="edefe6d0-5e79-416d-b644-12f3cd695da0" testId="3c1daa92-aded-5ab8-d2f9-32a7bc88c881" testName="FS.GG.Coordination.GitHubClaimTouchSetTests.claim qualification inventory is closed and every mutation must be red" computerName="8b082ee11b3f" duration="00:00:00.0026641" startTime="2026-09-01T22:22:07.6914259+02:00" endTime="2026-09-01T22:22:07.6940309+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="edefe6d0-5e79-416d-b644-12f3cd695da0" />
+    <UnitTestResult executionId="71252d86-9c34-4c6e-83e3-ba6bfb6075c6" testId="6893fe6b-5d6c-691e-59c1-168a76c213ae" testName="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.claim authority and projection hints are structurally separate" computerName="8b082ee11b3f" duration="00:00:00.0001989" startTime="2026-09-01T22:22:07.6595249+02:00" endTime="2026-09-01T22:22:07.6596765+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="71252d86-9c34-4c6e-83e3-ba6bfb6075c6" />
+    <UnitTestResult executionId="cdad6961-fe32-4102-ac64-4299503cfd22" testId="1510972d-47b1-5190-9688-8dd9e2a90931" testName="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.claim qualification evidence has independent closed controls" computerName="8b082ee11b3f" duration="00:00:00.0055715" startTime="2026-09-01T22:22:07.6573892+02:00" endTime="2026-09-01T22:22:07.6574001+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cdad6961-fe32-4102-ac64-4299503cfd22" />
+    <UnitTestResult executionId="709b1aa5-73ea-41e2-adfc-f98bddd2b6e5" testId="dacd8005-0755-c376-0b76-88678659cc29" testName="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.canonical Quint protocol source remains byte-identical" computerName="8b082ee11b3f" duration="00:00:00.0007986" startTime="2026-09-01T22:22:07.6569618+02:00" endTime="2026-09-01T22:22:07.6569907+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="709b1aa5-73ea-41e2-adfc-f98bddd2b6e5" />
+    <UnitTestResult executionId="803580f4-fb55-4d91-b270-d6ee0c195fa4" testId="6fad4a75-f472-c370-5db4-a48f22a0027e" testName="FS.GG.Coordination.GitHubClaimTouchSetTests.successor acquisition is expected-parent CAS with a new fencing generation" computerName="8b082ee11b3f" duration="00:00:00.0038718" startTime="2026-09-01T22:22:07.6875670+02:00" endTime="2026-09-01T22:22:07.6913301+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="803580f4-fb55-4d91-b270-d6ee0c195fa4" />
+    <UnitTestResult executionId="6150d841-df11-47bc-945c-fea0a4fef52e" testId="fb706287-78ae-9f42-b7b2-1f4d9d814fe4" testName="FS.GG.Coordination.GitHubClaimTouchSetTests.multi-touch cost and seal ignore unrelated projection cardinality" computerName="8b082ee11b3f" duration="00:00:00.0089786" startTime="2026-09-01T22:22:07.6740213+02:00" endTime="2026-09-01T22:22:07.6829204+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6150d841-df11-47bc-945c-fea0a4fef52e" />
+    <UnitTestResult executionId="14fb7544-e6ed-4245-a722-d37e76c3925a" testId="edbeefad-7108-55e2-65ed-d46ad0b7d6cc" testName="FS.GG.Coordination.GitHubClaimTouchSetTests.expiry grants successor eligibility but never changes current authority" computerName="8b082ee11b3f" duration="00:00:00.0310863" startTime="2026-09-01T22:22:07.6354360+02:00" endTime="2026-09-01T22:22:07.6689148+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="14fb7544-e6ed-4245-a722-d37e76c3925a" />
+    <UnitTestResult executionId="c392575b-f97d-46a5-8ac3-f1ab5c514a42" testId="08719bd5-7b84-8ebb-a406-71d7ca54ff1c" testName="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.GS2-05-5 registration binds accepted predecessor and exact gate" computerName="8b082ee11b3f" duration="00:00:00.0028083" startTime="2026-09-01T22:22:07.6574585+02:00" endTime="2026-09-01T22:22:07.6594589+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c392575b-f97d-46a5-8ac3-f1ab5c514a42" />
+    <UnitTestResult executionId="f8d55e6e-6321-4490-85cc-7bb3cfdb3498" testId="ca9a4281-5aa4-2106-35ae-b0651451296b" testName="FS.GG.Coordination.GitHubClaimTouchSetTests.active foreign lease blocks proposal even when projections claim otherwise" computerName="8b082ee11b3f" duration="00:00:00.0012918" startTime="2026-09-01T22:22:07.6690398+02:00" endTime="2026-09-01T22:22:07.6702442+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f8d55e6e-6321-4490-85cc-7bb3cfdb3498" />
+    <UnitTestResult executionId="24a6b721-ab51-49f0-8d71-35a747009454" testId="31de3c36-b2d9-f223-26ff-95b63ecc66ff" testName="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.claim adapter is additive pure and composes canonical journal primitives" computerName="8b082ee11b3f" duration="00:00:00.0106101" startTime="2026-09-01T22:22:07.6361395+02:00" endTime="2026-09-01T22:22:07.6499732+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="24a6b721-ab51-49f0-8d71-35a747009454" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetTests.multi-touch cost and seal ignore unrelated projection cardinality" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="fb706287-78ae-9f42-b7b2-1f4d9d814fe4">
+      <Execution id="6150d841-df11-47bc-945c-fea0a4fef52e" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetTests" name="multi-touch cost and seal ignore unrelated projection cardinality" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.claim adapter is additive pure and composes canonical journal primitives" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="31de3c36-b2d9-f223-26ff-95b63ecc66ff">
+      <Execution id="24a6b721-ab51-49f0-8d71-35a747009454" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests" name="claim adapter is additive pure and composes canonical journal primitives" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.claim authority and projection hints are structurally separate" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="6893fe6b-5d6c-691e-59c1-168a76c213ae">
+      <Execution id="71252d86-9c34-4c6e-83e3-ba6bfb6075c6" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests" name="claim authority and projection hints are structurally separate" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.claim qualification evidence has independent closed controls" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="1510972d-47b1-5190-9688-8dd9e2a90931">
+      <Execution id="cdad6961-fe32-4102-ac64-4299503cfd22" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests" name="claim qualification evidence has independent closed controls" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetTests.claim qualification inventory is closed and every mutation must be red" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="3c1daa92-aded-5ab8-d2f9-32a7bc88c881">
+      <Execution id="edefe6d0-5e79-416d-b644-12f3cd695da0" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetTests" name="claim qualification inventory is closed and every mutation must be red" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetTests.touches are canonical repository-scoped and ancestry conflicts" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="8b559bb8-f35f-1849-fbf1-9cae8e2ca9f1">
+      <Execution id="397acaef-00bd-43f0-90c8-c0d5d3de4b70" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetTests" name="touches are canonical repository-scoped and ancestry conflicts" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetTests.active foreign lease blocks proposal even when projections claim otherwise" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="ca9a4281-5aa4-2106-35ae-b0651451296b">
+      <Execution id="f8d55e6e-6321-4490-85cc-7bb3cfdb3498" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetTests" name="active foreign lease blocks proposal even when projections claim otherwise" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetTests.successor acquisition is expected-parent CAS with a new fencing generation" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="6fad4a75-f472-c370-5db4-a48f22a0027e">
+      <Execution id="803580f4-fb55-4d91-b270-d6ee0c195fa4" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetTests" name="successor acquisition is expected-parent CAS with a new fencing generation" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetTests.expiry grants successor eligibility but never changes current authority" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="edbeefad-7108-55e2-65ed-d46ad0b7d6cc">
+      <Execution id="14fb7544-e6ed-4245-a722-d37e76c3925a" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetTests" name="expiry grants successor eligibility but never changes current authority" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.GS2-05-5 registration binds accepted predecessor and exact gate" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="08719bd5-7b84-8ebb-a406-71d7ca54ff1c">
+      <Execution id="c392575b-f97d-46a5-8ac3-f1ab5c514a42" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests" name="GS2-05-5 registration binds accepted predecessor and exact gate" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetTests.multi-touch plan persists the full ordered acquisition and compensates in reverse" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="889e358b-9e00-212f-ec94-810226e0023b">
+      <Execution id="b4ba42e6-579a-4900-975b-c52a644951d9" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetTests" name="multi-touch plan persists the full ordered acquisition and compensates in reverse" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests.canonical Quint protocol source remains byte-identical" storage="/tmp/fsgg-coordination-208-akywnm/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="dacd8005-0755-c376-0b76-88678659cc29">
+      <Execution id="709b1aa5-73ea-41e2-adfc-f98bddd2b6e5" />
+      <TestMethod codeBase="/tmp/fsgg-coordination-208-AkyWNm/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubClaimTouchSetArchitectureTests" name="canonical Quint protocol source remains byte-identical" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="8b559bb8-f35f-1849-fbf1-9cae8e2ca9f1" executionId="397acaef-00bd-43f0-90c8-c0d5d3de4b70" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="889e358b-9e00-212f-ec94-810226e0023b" executionId="b4ba42e6-579a-4900-975b-c52a644951d9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3c1daa92-aded-5ab8-d2f9-32a7bc88c881" executionId="edefe6d0-5e79-416d-b644-12f3cd695da0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6893fe6b-5d6c-691e-59c1-168a76c213ae" executionId="71252d86-9c34-4c6e-83e3-ba6bfb6075c6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1510972d-47b1-5190-9688-8dd9e2a90931" executionId="cdad6961-fe32-4102-ac64-4299503cfd22" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="dacd8005-0755-c376-0b76-88678659cc29" executionId="709b1aa5-73ea-41e2-adfc-f98bddd2b6e5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6fad4a75-f472-c370-5db4-a48f22a0027e" executionId="803580f4-fb55-4d91-b270-d6ee0c195fa4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fb706287-78ae-9f42-b7b2-1f4d9d814fe4" executionId="6150d841-df11-47bc-945c-fea0a4fef52e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="edbeefad-7108-55e2-65ed-d46ad0b7d6cc" executionId="14fb7544-e6ed-4245-a722-d37e76c3925a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="08719bd5-7b84-8ebb-a406-71d7ca54ff1c" executionId="c392575b-f97d-46a5-8ac3-f1ab5c514a42" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ca9a4281-5aa4-2106-35ae-b0651451296b" executionId="f8d55e6e-6321-4490-85cc-7bb3cfdb3498" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="31de3c36-b2d9-f223-26ff-95b63ecc66ff" executionId="24a6b721-ab51-49f0-8d71-35a747009454" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="12" executed="12" passed="12" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.11]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.19]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

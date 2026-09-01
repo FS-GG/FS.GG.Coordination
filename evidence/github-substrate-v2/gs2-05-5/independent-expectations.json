@@ -1,0 +1,10 @@
+{
+  "schema": "fsgg.coordination.github-claim-touch-set-expectations/1",
+  "controls": [
+    "canonical-identity", "unsafe-touch", "sibling-cas", "monotonic-generation",
+    "active-lease", "expired-lease", "successor-cas", "projection-not-authority",
+    "touch-overlap", "repository-partition", "acquisition-order", "full-plan-persistence",
+    "stale-fence", "terminal-authority", "reverse-compensation", "exact-replay",
+    "bounded-cost", "quint-and-prerequisite"
+  ]
+}
