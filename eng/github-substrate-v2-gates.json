@@ -90,6 +90,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-repository-settings.fsx", "--", "."]
+    },
+    {
+      "id": "github-actions-release-feed-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-actions-release-feed.fsx", "--", "."]
     }
   ]
 }

@@ -134,7 +134,7 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through registered GS2-04-7 boundary`` () =
+let ``roadmap unit index advances through registered GS2-04-8 boundary`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -179,7 +179,8 @@ let ``roadmap unit index advances through registered GS2-04-7 boundary`` () =
              "GS2-04.4"
              "GS2-04.5"
              "GS2-04.6"
-             "GS2-04.7" ]
+             "GS2-04.7"
+             "GS2-04.8" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -903,6 +904,48 @@ let ``roadmap unit index advances through registered GS2-04-7 boundary`` () =
           "without claiming Q4" ] do
         Assert.Contains(requiredTerm, repositorySettingsExitGate)
 
+    let actionsReleaseFeedUnit =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-04.8")
+
+    Assert.Equal("Actions/release/feed adapter", actionsReleaseFeedUnit.GetProperty("title").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-04.7" ],
+        actionsReleaseFeedUnit.GetProperty("prerequisites").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-actions-release-feed-contract" ],
+        actionsReleaseFeedUnit.GetProperty("gateCommands").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3" ],
+        actionsReleaseFeedUnit.GetProperty("qGates").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+    let actionsReleaseFeedExitGate = actionsReleaseFeedUnit.GetProperty("exitGate").GetString()
+    for requiredTerm in
+        [ "run attempt"
+          "check suite"
+          "merge-group head"
+          "without conflating check state with merge authority"
+          "immutable, deleted, and tampered"
+          "artifact-attestation subjects"
+          "package, version, and feed identities"
+          "separates upload acceptance"
+          "anonymous public served-download bytes"
+          "redirect and content identity"
+          "without inventing absence, provenance, or served availability"
+          "explicit pagination completeness"
+          "upload-response"
+          "without performing live writes"
+          "without claiming Q4" ] do
+        Assert.Contains(requiredTerm, actionsReleaseFeedExitGate)
+
     use acceptedPrerequisite =
         JsonDocument.Parse(
             File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.2.json"))
@@ -943,6 +986,16 @@ let ``roadmap unit index advances through registered GS2-04-7 boundary`` () =
         acceptedShardedJournal.RootElement.GetProperty("unitContractSha256").GetString()
     )
 
+    use acceptedRepositorySettings =
+        JsonDocument.Parse(
+            File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-04.7.json"))
+        )
+
+    Assert.Equal(
+        repositorySettingsUnit.GetProperty("contractSha256").GetString(),
+        acceptedRepositorySettings.RootElement.GetProperty("unitContractSha256").GetString()
+    )
+
 [<Fact>]
 let ``gate catalog is literal dotnet only and matches selected unit`` () =
     use catalog =
@@ -954,7 +1007,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(15, commands.Length)
+    Assert.Equal(16, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -1057,6 +1110,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-repository-settings.fsx"; "--"; "." ],
         repositorySettingsCommand.GetProperty("args").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    let actionsReleaseFeedCommand =
+        commands
+        |> List.find (fun command -> command.GetProperty("id").GetString() = "github-actions-release-feed-contract")
+    Assert.Equal("Q3", actionsReleaseFeedCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-actions-release-feed.fsx"; "--"; "." ],
+        actionsReleaseFeedCommand.GetProperty("args").EnumerateArray()
         |> Seq.map _.GetString()
         |> Seq.toList
     )
