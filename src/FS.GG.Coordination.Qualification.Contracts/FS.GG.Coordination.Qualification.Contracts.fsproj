@@ -39,6 +39,8 @@
     <Compile Include="GitHubShardedJournalQualification.fs" />
     <Compile Include="GitHubRepositorySettingsQualification.fsi" />
     <Compile Include="GitHubRepositorySettingsQualification.fs" />
+    <Compile Include="GitHubActionsReleaseFeedQualification.fsi" />
+    <Compile Include="GitHubActionsReleaseFeedQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

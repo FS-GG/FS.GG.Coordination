@@ -1,0 +1,24 @@
+{
+  "controls": [
+    "run-attempt",
+    "rerun",
+    "check-suite",
+    "merge-group",
+    "pagination",
+    "immutable-release",
+    "asset-deletion",
+    "attestation-subject",
+    "package-version",
+    "authenticated-feed",
+    "public-download",
+    "redirect",
+    "byte-digest",
+    "upload-response",
+    "unauthorized",
+    "unavailable",
+    "incomplete",
+    "stale"
+  ],
+  "schema": "fsgg.coordination.github-actions-release-feed-fixture/1",
+  "synthetic": true
+}
