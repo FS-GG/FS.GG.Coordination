@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "b776da763a490c2c3310a10c8db234a62a5b6bc4",
+    "revision": "9bd7849e4c90adb89a08f6377d807422504213b1",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "2fbf6711b814ef3fbcf77a17d31d5d00255dddcd5d471a582db00942785bdc9d"
+    "sha256": "0007cfbfedfa8982e45c22f90a6231903ddf5ff663507a051bc9c8f8db5379a5"
   },
   "units": [
     {
@@ -630,6 +630,20 @@
         { "id": "github-claim-touch-set-contract", "qGate": "Q3", "commandSha256": "bdca04dbe86f9740e4320bf900114bef014b965d9ecb98d1d91aef58ea60b08d" }
       ],
       "contractSha256": "a6962b43fff0c109cb7d4cbcd5d39465b20a0f3fb71e28460a541b1ace04ad41"
+    },
+    {
+      "id": "GS2-05.6",
+      "title": "Implement review/delivery",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-05.5"],
+      "permissionCeiling": ["repository-local additive review and delivery contracts, pure deterministic full-snapshot epoch and phase-seat decisions, controlled-fixture Review and Operation journal-CAS composition, effect-time fencing, protected-main verification, validation, and retained evidence", "no production GitHub or journal write, production credential, reviewer dispatch, merge execution, branch administration, mutable projection authority, lifecycle projection, fleet shadowing, deployment, publication, stable release, or successor-unit implementation authority"],
+      "exitGate": "the Q3 review and delivery contract begins from the accepted GS2-05.5 receipt and composes the existing protected sharded-journal adapter without changing the canonical Quint protocol; a stable review chain identity excludes mutable snapshot facts while each canonical complete full snapshot derives one immutable ReviewEpochKey; snapshot changes preserve the one accountable authority but require a fresh phase seat and invalidate historical passing verdicts, while succession is allowed only inside one unchanged epoch and also requires a fresh seat; every review-dependent effect rereads the complete nonterminal Review journal and matches chain, epoch, snapshot digest, current seat, pass verdict, journal commit, and fencing generation; NotMerged, Merged, and ProtectedVerified are distinct states, merge acceptance cannot produce done, and protected verification requires one successful protected-main run for the exact merge commit; canonical delivery and done receipts are sealed through expected-parent CAS in the Operation journal and bind the current review grant, merge commit, run evidence, operation commit, and generation; exact replay is idempotent, divergent replay and incomplete, stale, terminal, wrong-chain, wrong-epoch, wrong-seat, non-pass, or merge-run mismatches fail closed; deterministic plans and fixed costs depend only on declared review and delivery facts; generated and independently authored epoch, seat, accountability, historical-pass, current-fence, merge, protected-main, receipt, replay, bounded-cost, Quint, and prerequisite inversions all fail closed without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-review-delivery-contract"],
+      "gateContracts": [
+        { "id": "github-review-delivery-contract", "qGate": "Q3", "commandSha256": "e7b6af01c1ebfd5525452b6e9922b4cde180f5235f75b4ed5bf93eff972177c1" }
+      ],
+      "contractSha256": "19632427bf85a51cec369e24d2c82568c8e58c143f7717964f92790f677994fc"
     }
   ]
 }

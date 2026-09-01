@@ -132,6 +132,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-claim-touch-set.fsx", "--", "."]
+    },
+    {
+      "id": "github-review-delivery-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-review-delivery.fsx", "--", "."]
     }
   ]
 }

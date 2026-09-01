@@ -1,0 +1,875 @@
+schemaVersion: 1
+workId: 212-review-delivery
+stage: evidence
+status: evidenceReady
+sourceSpec: work/212-review-delivery/spec.md
+sourceClarifications: work/212-review-delivery/clarifications.md
+sourceChecklist: work/212-review-delivery/checklist.md
+sourcePlan: work/212-review-delivery/plan.md
+sourceTasks: work/212-review-delivery/tasks.yml
+sourceAnalysis: readiness/212-review-delivery/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/212-review-delivery/analysis.json
+    digest: 2b2c4d038bd23000c5ae50bc7e4af926df8a76dd4d58864107c12c869a907b4a
+    schemaVersion: 1
+  - label: checklist
+    path: work/212-review-delivery/checklist.md
+    digest: 8da358771f06b201f4a8f88bfaef59af1baa73e163c72bdb611cc4baf9587daa
+    schemaVersion: 1
+  - label: clarifications
+    path: work/212-review-delivery/clarifications.md
+    digest: 8c33ee37b0aeb5ef28e81e56980203d5c5cb3c8ee9b99cc9fc9589159fd0af6c
+    schemaVersion: 1
+  - label: plan
+    path: work/212-review-delivery/plan.md
+    digest: e673050a0b9f80ac5a7ba365323cf6dc556ec154a241e8c1c8b3023856ff79f6
+    schemaVersion: 1
+  - label: spec
+    path: work/212-review-delivery/spec.md
+    digest: b4ef6149cc6054c9263fbad5cf2779312aa0ec7f4528a88339ff0b7d40e1129a
+    schemaVersion: 1
+  - label: tasks
+    path: work/212-review-delivery/tasks.yml
+    digest: 2cd2c6b5dba7a297f2f0b2a67fe38ba4525a9cee4e48250c090c27f0b772fba7
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-009]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-005]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-005]
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-005]
+    obligationRefs: [EV024]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-006]
+    obligationRefs: [EV025]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV026]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV027]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV028
+    kind: verification
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV028]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV029
+    kind: verification
+    subject:
+      type: task
+      id: T029
+    taskRefs: [T029]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV029]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV030
+    kind: verification
+    subject:
+      type: task
+      id: T030
+    taskRefs: [T030]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV030]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+  - id: EV031
+    kind: verification
+    subject:
+      type: task
+      id: T031
+    taskRefs: [T031]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV031]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-6/gs2-05-6-unit.trx
+      digest: "sha256:938e81de33e3001d8d7ea31703347e5539e34e45d1ae88b7257e930b880abcf4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 120
+      failed: 0
+      skipped: 0
+    notes: [Typed review-delivery tests passed against the controlled journal fixture.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
