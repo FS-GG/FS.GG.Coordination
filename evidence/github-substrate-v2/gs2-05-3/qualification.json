@@ -1,0 +1,35 @@
+{
+  "schema": "fsgg.github-substrate-v2.intake-qualification/1",
+  "unitId": "GS2-05.3",
+  "qGate": "Q3",
+  "unitContractSha256": "01e29e3b7f0f049364a64b85c3b75f1e47f37f256778052e66d3894b23632ae6",
+  "prerequisiteReceiptSha256": "a8474e696d2c1ff149ec1efb6a4c4b4cb6fe6e56b86ec840871b4430864f0a50",
+  "gateCommandId": "github-intake-contract",
+  "gateCommandSha256": "1db2b6e766e4a024a31c918b68dea21420728b6ad280661799b76e022412002a",
+  "network": "offline",
+  "controlCount": 19,
+  "generatedBaselineGreen": 19,
+  "independentBaselineGreen": 19,
+  "mutationsRed": 19,
+  "unitTestsPassed": 99,
+  "focusedArchitectureTestsPassed": 10,
+  "artifacts": [
+    {"path":"src/FS.GG.Coordination.GitHub/IntakeAdapter.fsi","sha256":"d1db88ebb1536a5e40c9477bfc00957f3aa966948e6bca373061da515072cdde"},
+    {"path":"src/FS.GG.Coordination.GitHub/IntakeAdapter.fs","sha256":"28e60d8ce39512222b49c622795c849d8f731a59ccdf0b4c66cd7ebcbe8ee476"},
+    {"path":"src/FS.GG.Coordination.Qualification.Contracts/GitHubIntakeQualification.fsi","sha256":"3e90ce67d14b029494892a495ac84e555ef29d0835008577cee23aee91432ea8"},
+    {"path":"src/FS.GG.Coordination.Qualification.Contracts/GitHubIntakeQualification.fs","sha256":"fdf339afb00fe47c07ba2b2ff79ad133745c61293e5178f203804d05e448df97"},
+    {"path":"eng/validate-github-intake.fsx","sha256":"0ec54cc5fa01e01341c0feb4b5f3a518c3fba13b5bd035c68b82d046b5b66a23"},
+    {"path":"evidence/github-substrate-v2/gs2-05-3/corpus.json","sha256":"28d61cdeb6dbe051ed004bff0cb1a0328b70bc5edeaa2c643c1b02c1d1065e6c"},
+    {"path":"evidence/github-substrate-v2/gs2-05-3/independent-expectations.json","sha256":"4bcac72cbef2b7371939c730192f18310f04bc5dbcda5db79f04646e704b2613"}
+  ],
+  "obligations": [
+    "complete-exhaustive-observation",
+    "canonical-sealed-plan",
+    "full-fence-controlled-apply",
+    "idempotent-resume-and-roll-forward",
+    "reverse-order-compensation",
+    "closed-five-family-intent-boundary",
+    "generated-independent-control-agreement",
+    "no-production-transport-or-credentials"
+  ]
+}

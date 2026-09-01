@@ -1,0 +1,875 @@
+schemaVersion: 1
+workId: gs2-05-3-intake
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-05-3-intake/spec.md
+sourceClarifications: work/gs2-05-3-intake/clarifications.md
+sourceChecklist: work/gs2-05-3-intake/checklist.md
+sourcePlan: work/gs2-05-3-intake/plan.md
+sourceTasks: work/gs2-05-3-intake/tasks.yml
+sourceAnalysis: readiness/gs2-05-3-intake/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-05-3-intake/analysis.json
+    digest: 009b69fd109414de342bd4bd7d33c965662238f3b7538e8335d3d4530d3f7bb6
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-05-3-intake/checklist.md
+    digest: 9aa61287e7a8250029ce023f9795cf9a2dec103e8cbd1e241fd4ae9b5dbcb753
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-05-3-intake/clarifications.md
+    digest: 6cafd5e9d60caf8d58ff0826478a1a78d79cbe7ea905ec279512c407b405918b
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-05-3-intake/plan.md
+    digest: 277e4333cbdbfe08134e0e3fa65471ad2578ec165800f066cfd180aa60ce70f0
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-05-3-intake/spec.md
+    digest: edb8c4f33cfcc4562924a099582ad2d7b71020060e906d4581311239977ac911
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-05-3-intake/tasks.yml
+    digest: 2130c445b9c04544e3541f50abf059453741c5ed0b4102c7a220764fbbb2ac90
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV024]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV025
+    kind: verification
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV025]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV026
+    kind: verification
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV026]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV027]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubIntakeTests.fs
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubIntakeArchitectureTests.fs
+      - kind: verification
+        path: eng/validate-github-intake.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-05-3/gs2-05-3-unit.trx
+      digest: "sha256:34f0cd940c89031f51c2c9e268834a674a69b91504784e7810685c21017fa301"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 99
+      failed: 0
+      skipped: 0
+    notes: ["Observed full unit suite passed; focused architecture and literal Q3 gate also passed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

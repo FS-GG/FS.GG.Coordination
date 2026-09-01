@@ -1,0 +1,30 @@
+{
+  "schema": "fsgg.coordination.github-intake-independent-expectations/1",
+  "producer": "independent-fixture-reader",
+  "expectedControlCount": 19,
+  "controls": [
+    "missing-page",
+    "repeated-page",
+    "cursor-cycle",
+    "missing-field",
+    "unknown-type",
+    "duplicate-membership",
+    "hierarchy-cycle",
+    "dependency-cycle",
+    "stale-revision",
+    "altered-plan",
+    "reordered-operation",
+    "precondition-drift",
+    "postcondition-mismatch",
+    "partial-apply",
+    "replay",
+    "compensation",
+    "unauthorized",
+    "unsupported",
+    "indeterminate"
+  ],
+  "requiresGeneratedAndIndependentBaselines": true,
+  "requiresEveryMutationRed": true,
+  "requiresCanonicalReplay": true,
+  "allowsProductionWrites": false
+}
