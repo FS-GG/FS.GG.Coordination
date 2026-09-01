@@ -65,7 +65,10 @@ execute_plan() {
   base="$(api_json "repos/$repo_full/git/ref/heads/main" --jq .object.sha)"
   ref_name="fsgg/sandbox/$nonce"
   tag="fsgg-sandbox-$nonce"
-  label="fsgg-sandbox-$nonce"
+  # GitHub label names are limited to 50 characters. Keep the authoritative
+  # nonce intact in evidence while using a bounded, run-unique resource name.
+  label="fsgg-sandbox-${nonce:0:32}"
+  [[ ${#label} -le 50 ]]
 
   jq -n --arg schema 'fsgg.github-substrate-v2.live-state/1' --arg candidate "$candidate" --arg nonce "$nonce" --arg repo "$repo_full" --arg repoNode "$repo_node" --arg projectNode "$project_node" \
     --argjson issue1 "$issue1" --argjson issue2 "$issue2" --argjson repository "$repository" --arg base "$base" --arg ref "$ref_name" --arg tag "$tag" --arg label "$label" \
