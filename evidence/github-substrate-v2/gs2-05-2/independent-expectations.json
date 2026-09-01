@@ -1,0 +1,13 @@
+{
+  "schema": "fsgg.github-substrate-v2.organization-issue-fields-expectations/1",
+  "requiredFields": ["Blocked by","Class","Contract","Effort","Kind","Phase","Repo Scope","Severity","Start","Status","Target","Workstream"],
+  "schedulingIntents": ["Backlog","Ready","Paused","Cancelled"],
+  "holdReasons": ["not-yet-actionable","dependency","decision","external","operator"],
+  "priorities": ["Critical","High","Normal","Low"],
+  "efforts": ["S","M","L","XL"],
+  "severities": ["Critical","High","Medium","Low","Unset"],
+  "phases": ["Planning","Execution","Verification","Operations"],
+  "workstreams": ["Composition","Coordination","Docs","Governance","Lifecycle","Versioning"],
+  "requiredRefusalCodes": ["OIF-UNREADABLE","OIF-INCOMPLETE","OIF-STALE","OIF-MISSING-STABLE-ID","OIF-MISSING-REVISION","OIF-MISSING-REPOSITORY-SCOPE","OIF-MISSING-NATIVE-TYPE","OIF-MISSING-INTENT","OIF-UNKNOWN-INTENT","OIF-MISSING-STATUS","OIF-UNKNOWN-STATUS","OIF-INTENT-STATUS-AUTHORITY","OIF-MISSING-HOLD","OIF-UNEXPECTED-HOLD","OIF-UNKNOWN-HOLD","OIF-MISSING-PRIORITY","OIF-UNKNOWN-PRIORITY","OIF-MISSING-EFFORT","OIF-UNKNOWN-EFFORT","OIF-INVALID-START-DATE","OIF-INVALID-TARGET-DATE","OIF-REVERSED-DATE-RANGE","OIF-MISSING-SEVERITY","OIF-UNKNOWN-SEVERITY","OIF-MISSING-PHASE","OIF-UNKNOWN-PHASE","OIF-MISSING-WORKSTREAM","OIF-UNKNOWN-WORKSTREAM","OIF-INVALID-CONTRACT","OIF-UNBOUND-CONTRACT","OIF-NONCANONICAL-TOUCH-SET","OIF-UNBOUND-TOUCH-SET","OIF-LOSSY-HIERARCHY","OIF-LOSSY-DEPENDENCIES","OIF-LOSSY-REPOSITORY-SCOPE","OIF-DUPLICATE-STABLE-ID"],
+  "preserved": ["stable-row-id","native-issue-type","hierarchy","dependencies","repository-scope","lifecycle-exemption"]
+}

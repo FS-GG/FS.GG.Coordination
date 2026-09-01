@@ -1,0 +1,24 @@
+{
+  "schema": "fsgg.github-substrate-v2.organization-issue-fields-corpus/1",
+  "source": "FS-GG Coordination Project observed 2026-09-01",
+  "fieldDefinitions": [
+    {"name":"Blocked by","type":"TEXT","options":[]},
+    {"name":"Class","type":"SINGLE_SELECT","options":["decision","defect","hardening"]},
+    {"name":"Contract","type":"TEXT","options":[]},
+    {"name":"Effort","type":"SINGLE_SELECT","options":["L","M","S","XL"]},
+    {"name":"Kind","type":"SINGLE_SELECT","options":["anchor","directive","register","work"]},
+    {"name":"Phase","type":"SINGLE_SELECT","options":["P0 Decisions","P1 Rendering","P2 SDD","P3 Governance","P4 Templates","P5 Versioning","P6 Game","P7 Audio","P8 Net"]},
+    {"name":"Repo Scope","type":"SINGLE_SELECT","options":[".github","audio","coordination","cross-repo","game","governance","net","rendering","sdd","sir","templates"]},
+    {"name":"Severity","type":"SINGLE_SELECT","options":["Critical","High","Low","Medium","Unset"]},
+    {"name":"Start","type":"DATE","options":[]},
+    {"name":"Status","type":"SINGLE_SELECT","options":["Backlog","Blocked","Done","In progress","In review","Ready"]},
+    {"name":"Target","type":"DATE","options":[]},
+    {"name":"Workstream","type":"SINGLE_SELECT","options":["Composition","Coordination","Docs","Governance","Lifecycle","Versioning"]}
+  ],
+  "cases": [
+    {"id":"intent-backlog","intent":"Backlog","status":"Backlog","hold":"not-yet-actionable","priority":"Normal","effort":"M","severity":"Unset","phase":"Planning","workstream":"Coordination"},
+    {"id":"intent-ready","intent":"Ready","status":"Ready","hold":null,"priority":"High","effort":"S","severity":"High","phase":"Execution","workstream":"Lifecycle"},
+    {"id":"intent-paused","intent":"Paused","status":"Blocked","hold":"operator","priority":"Low","effort":"L","severity":"Low","phase":"Verification","workstream":"Governance"},
+    {"id":"intent-cancelled","intent":"Cancelled","status":"Done","hold":null,"priority":"Critical","effort":"XL","severity":"Critical","phase":"Operations","workstream":"Versioning"}
+  ]
+}

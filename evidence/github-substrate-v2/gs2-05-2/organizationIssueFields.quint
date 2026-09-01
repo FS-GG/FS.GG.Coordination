@@ -1,0 +1,38 @@
+module organizationIssueFields {
+  type Signal = ValidBacklog | ValidReady | ValidPaused | ValidCancelled | Missing | Unknown | Contradictory | Lossy | Stale | Unreadable
+  type Intent = NoIntent | Backlog | Ready | Paused | Cancelled
+  type Status = NoStatus | StatusBacklog | StatusReady | StatusBlocked | StatusDone
+  type Outcome = Pending | Planned | Refused
+
+  type State = { signal: Signal, outcome: Outcome, intent: Intent, status: Status, dispositionCount: int, authorityBound: bool, relationsPreserved: bool }
+  var state: State
+
+  pure val acceptedSignals: Set[Signal] = Set(ValidBacklog, ValidReady, ValidPaused, ValidCancelled)
+  pure val allSignals: Set[Signal] = acceptedSignals.union(Set(Missing, Unknown, Contradictory, Lossy, Stale, Unreadable))
+  pure def intentFor(signal: Signal): Intent = match signal { | ValidBacklog => Backlog | ValidReady => Ready | ValidPaused => Paused | ValidCancelled => Cancelled | _ => NoIntent }
+  pure def statusFor(intent: Intent): Status = match intent { | Backlog => StatusBacklog | Ready => StatusReady | Paused => StatusBlocked | Cancelled => StatusDone | _ => NoStatus }
+  pure def canPlan(s: State, signal: Signal): bool = s.outcome == Pending and acceptedSignals.contains(signal)
+  pure def canRefuse(s: State, signal: Signal): bool = s.outcome == Pending and not(acceptedSignals.contains(signal))
+
+  pure def applyPlan(s: State, signal: Signal): State = {
+    val intent = intentFor(signal)
+    { ...s, signal: signal, outcome: Planned, intent: intent, status: statusFor(intent), dispositionCount: 1, authorityBound: true, relationsPreserved: true }
+  }
+  pure def applyRefusal(s: State, signal: Signal): State =
+    { ...s, signal: signal, outcome: Refused, intent: NoIntent, status: NoStatus, dispositionCount: 0, authorityBound: false }
+
+  action init: bool = state' = { signal: Missing, outcome: Pending, intent: NoIntent, status: NoStatus, dispositionCount: 0, authorityBound: false, relationsPreserved: true }
+  action planAction(signal: Signal): bool = all { canPlan(state, signal), state' = applyPlan(state, signal) }
+  action refuseAction(signal: Signal): bool = all { canRefuse(state, signal), state' = applyRefusal(state, signal) }
+  action step: bool = { nondet signal = allSignals.oneOf() any { planAction(signal), refuseAction(signal) } }
+
+  val plannedWitness: bool = state.outcome == Planned
+  val refusedWitness: bool = state.outcome == Refused
+  val intentIsAuthority: bool = state.outcome == Planned implies state.intent != NoIntent
+  val statusIsDerived: bool = state.outcome == Planned implies state.status == statusFor(state.intent)
+  val refusedHasNoDisposition: bool = state.outcome == Refused implies state.dispositionCount == 0
+  val uniqueDisposition: bool = state.dispositionCount >= 0 and state.dispositionCount <= 1
+  val authorityProjectionBound: bool = state.outcome == Planned implies state.authorityBound
+  val preservation: bool = state.outcome == Planned implies state.relationsPreserved
+  val deterministicOutcome: bool = state.outcome == Planned implies state.intent == intentFor(state.signal)
+}
