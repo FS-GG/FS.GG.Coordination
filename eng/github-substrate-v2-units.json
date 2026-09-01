@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "66dc685921e5465e503e3932eab7faff0ad2099b",
+    "revision": "e828ec9a1bd43451f0778e7bf6eff34919dd3d3d",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "82d0a4d2fa41de439c9dd1b94ca5ad85d492b5bfe61df94392be75ee99c91943"
+    "sha256": "af144062bc0c5b837c3155eb0686ec5c043ece2234851f1091f7484696f57502"
   },
   "units": [
     {
@@ -510,6 +510,20 @@
         { "id": "github-repository-settings-contract", "qGate": "Q3", "commandSha256": "c65c99b5ea6a934aba8418d7abcc2220eb2b1a5b9e41d50829cb6bfb78047d77" }
       ],
       "contractSha256": "a04f3ef2182825d3b9fa71081fe56cee8ee85e79bdee49e25dc404f9aaf4c3d9"
+    },
+    {
+      "id": "GS2-04.8",
+      "title": "Actions/release/feed adapter",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.7"],
+      "permissionCeiling": ["repository-local Actions, checks, merge-group, release, attestation, package, feed, and served-download observation contracts, complete paginated fixtures, canonical identities and digests, provenance and availability classification, validation, and evidence", "local loopback fixture execution plus consumption of already-published immutable artifacts are allowed; no live GitHub write, workflow dispatch, rerun, cancellation, deletion, upload, package or release publication, production credential, deployment, stable release, Q4 sandbox claim, comprehensive GS2-04 closure, or successor-unit implementation authority"],
+      "exitGate": "the Q3 Actions, release, and feed adapter identifies exact repository, workflow, run attempt, job, check suite, check run, commit, and merge-group head identities; observes complete paginated run and check histories and preserves requested, queued, in-progress, completed, skipped, cancelled, stale, neutral, timed-out, and action-required outcomes without conflating check state with merge authority; observes releases, tags, and assets with immutable, deleted, and tampered distinctions; validates artifact-attestation subjects, predicates, and digests plus package, version, and feed identities; separates upload acceptance from durable release-asset metadata, authenticated package retrieval, and anonymous public served-download bytes; hashes served bytes and records redirect and content identity; preserves per-surface supported, unauthorized, unavailable, incomplete, expired, deleted, and unreadable outcomes without inventing absence, provenance, or served availability; binds observations to stable fingerprints and explicit pagination completeness; generated cases and independent run-attempt, rerun, check-suite, merge-group, pagination, immutable-release, asset-deletion, attestation-subject, package-version, authenticated-feed, public-download, redirect, byte-digest, upload-response, unauthorized, unavailable, incomplete, and stale controls all pass without performing live writes and without claiming Q4 sandbox behavior",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-actions-release-feed-contract"],
+      "gateContracts": [
+        { "id": "github-actions-release-feed-contract", "qGate": "Q3", "commandSha256": "7356954a9c95b89ef22692783137735bb047bc946437608acbccf5f50ab991f5" }
+      ],
+      "contractSha256": "61608b57b5cc3a6e87e1806bf789c46d082656efc2142171a50996e250686325"
     }
   ]
 }
