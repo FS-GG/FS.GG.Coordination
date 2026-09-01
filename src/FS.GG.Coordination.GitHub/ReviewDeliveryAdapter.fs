@@ -17,7 +17,7 @@ type ReviewPlan = { ProposedAuthority: ReviewAuthorityRecord; Proposal: CasPropo
 type ReviewRefusal = InvalidReviewSubject | IncompleteReviewSnapshot | InvalidReviewSnapshot of string | InvalidAccountableAuthority | InvalidSeatOrdinal | ReusedPhaseSeat | ReviewObservationIncomplete | ReviewJournalFailure of JournalFailure | ReviewPayloadMismatch | WrongReviewChain | WrongReviewEpoch | WrongReviewSnapshot | WrongReviewSeat | ReviewNotPassed | ReviewEffectRefused of EffectRefusal | InvalidReviewCommitMaterial
 type DeliveryState = NotMerged | Merged of mergeCommit: string | ProtectedVerified of mergeCommit: string * runId: int64 * runCommit: string * conclusion: string
 type DeliveryReceiptKind = DeliveryGenesis | DeliveryReceipt | DoneReceipt
-type DeliveryAuthorityRecord = { SchemaVersion: int; Subject: string; Kind: DeliveryReceiptKind; ReviewChainId: string; ReviewEpochKey: string; ReviewSeat: string; MergeCommit: string; ProtectedRunId: int64 option; OperationId: string }
+type DeliveryAuthorityRecord = { SchemaVersion: int; Subject: string; Kind: DeliveryReceiptKind; ReviewChainId: string; ReviewEpochKey: string; ReviewSeat: string; MergeCommit: string; ProtectedRunId: int64 option; ProtectedRunCommit: string option; ProtectedRunConclusion: string option; OperationId: string }
 type DeliveryAuthorityObservation = { Complete: bool; Journal: JournalObservation; Current: DeliveryAuthorityRecord }
 type DeliveryReceipt = { Address: AggregateAddress; Record: DeliveryAuthorityRecord; JournalCommit: string; Generation: int64; Digest: string }
 type DeliveryPlan = { ProposedAuthority: DeliveryAuthorityRecord; Proposal: CasProposal; Receipt: DeliveryReceipt; Seal: string; Cost: ReviewDeliveryCost }
@@ -167,19 +167,28 @@ module ReviewDeliveryAdapter =
             [ if record.SchemaVersion <> 1 || not (validText record.Subject) || not (validText record.OperationId) then yield DeliveryPayloadMismatch
               match record.Kind with
               | DeliveryGenesis ->
-                  if record.ReviewChainId <> "" || record.ReviewEpochKey <> "" || record.ReviewSeat <> "" || record.MergeCommit <> "" || record.ProtectedRunId.IsSome then yield DeliveryPayloadMismatch
+                  if record.ReviewChainId <> "" || record.ReviewEpochKey <> "" || record.ReviewSeat <> "" || record.MergeCommit <> "" || record.ProtectedRunId.IsSome || record.ProtectedRunCommit.IsSome || record.ProtectedRunConclusion.IsSome then yield DeliveryPayloadMismatch
               | DeliveryReceipt ->
                   if not (validText record.ReviewChainId && validText record.ReviewEpochKey && validText record.ReviewSeat) then yield DeliveryPayloadMismatch
                   if not (validOid record.MergeCommit) then yield InvalidMergeCommit
-                  if record.ProtectedRunId.IsSome then yield DeliveryPayloadMismatch
+                  if record.ProtectedRunId.IsSome || record.ProtectedRunCommit.IsSome || record.ProtectedRunConclusion.IsSome then yield DeliveryPayloadMismatch
               | DoneReceipt ->
                   if not (validText record.ReviewChainId && validText record.ReviewEpochKey && validText record.ReviewSeat) then yield DeliveryPayloadMismatch
                   if not (validOid record.MergeCommit) then yield InvalidMergeCommit
-                  if record.ProtectedRunId.IsNone then yield ProtectedVerificationRequired ]
+                  if record.ProtectedRunId.IsNone then yield ProtectedVerificationRequired
+                  match record.ProtectedRunCommit with
+                  | Some value when validOid value && String.Equals(value, record.MergeCommit, StringComparison.OrdinalIgnoreCase) -> ()
+                  | _ -> yield ProtectedRunCommitMismatch
+                  match record.ProtectedRunConclusion with
+                  | Some value when String.Equals(value, "success", StringComparison.OrdinalIgnoreCase) -> ()
+                  | _ -> yield ProtectedRunNotSuccessful ]
         if not (List.isEmpty failures) then Error failures else
         let root = JsonObject()
         root.Add("kind", kindText record.Kind); root.Add("mergeCommit", record.MergeCommit.ToLowerInvariant())
-        root.Add("operationId", record.OperationId); match record.ProtectedRunId with Some value -> root.Add("protectedRunId", value) | None -> root.Add("protectedRunId", null)
+        root.Add("operationId", record.OperationId)
+        match record.ProtectedRunId with Some value -> root.Add("protectedRunId", value) | None -> root.Add("protectedRunId", null)
+        match record.ProtectedRunCommit with Some value -> root.Add("protectedRunCommit", value.ToLowerInvariant()) | None -> root.Add("protectedRunCommit", null)
+        match record.ProtectedRunConclusion with Some value -> root.Add("protectedRunConclusion", value.ToLowerInvariant()) | None -> root.Add("protectedRunConclusion", null)
         root.Add("reviewChainId", record.ReviewChainId); root.Add("reviewEpochKey", record.ReviewEpochKey); root.Add("reviewSeat", record.ReviewSeat)
         root.Add("schemaVersion", record.SchemaVersion); root.Add("subject", record.Subject.ToLowerInvariant())
         root.ToJsonString() |> ShardedJournalAdapter.canonicalJson |> Result.mapError (fun _ -> [ DeliveryPayloadMismatch ])
@@ -204,20 +213,20 @@ module ReviewDeliveryAdapter =
             match kind, state with
             | DeliveryGenesis, _ -> Error InvalidDeliveryKind
             | _, NotMerged -> Error MergeRequired
-            | DeliveryReceipt, Merged merge when validOid merge -> Ok(merge.ToLowerInvariant(), None)
+            | DeliveryReceipt, Merged merge when validOid merge -> Ok(merge.ToLowerInvariant(), None, None, None)
             | DoneReceipt, Merged _ -> Error ProtectedVerificationRequired
             | DeliveryReceipt, ProtectedVerified(merge, runId, runCommit, conclusion) ->
                 if not (validOid merge) then Error InvalidMergeCommit
                 elif runId < 1L then Error InvalidProtectedRun
                 elif not (validOid runCommit) || not (String.Equals(merge, runCommit, StringComparison.OrdinalIgnoreCase)) then Error ProtectedRunCommitMismatch
                 elif not (String.Equals(conclusion, "success", StringComparison.OrdinalIgnoreCase)) then Error ProtectedRunNotSuccessful
-                else Ok(merge.ToLowerInvariant(), None)
+                else Ok(merge.ToLowerInvariant(), None, None, None)
             | DoneReceipt, ProtectedVerified(merge, runId, runCommit, conclusion) ->
                 if not (validOid merge) then Error InvalidMergeCommit
                 elif runId < 1L then Error InvalidProtectedRun
                 elif not (validOid runCommit) || not (String.Equals(merge, runCommit, StringComparison.OrdinalIgnoreCase)) then Error ProtectedRunCommitMismatch
                 elif not (String.Equals(conclusion, "success", StringComparison.OrdinalIgnoreCase)) then Error ProtectedRunNotSuccessful
-                else Ok(merge.ToLowerInvariant(), Some runId)
+                else Ok(merge.ToLowerInvariant(), Some runId, Some(runCommit.ToLowerInvariant()), Some(conclusion.ToLowerInvariant()))
             | DeliveryReceipt, Merged _ -> Error InvalidMergeCommit
         let failures =
             [ match review with Error failure -> yield ReviewAuthorizationRefused failure | _ -> ()
@@ -225,9 +234,11 @@ module ReviewDeliveryAdapter =
               match stateResult with Error failure -> yield failure | _ -> () ]
         if not (List.isEmpty failures) then Error failures else
         let journal: JournalSnapshot = Result.defaultWith (fun _ -> invalidOp "validated") operation
-        let merge, runId = Result.defaultWith (fun _ -> invalidOp "validated") stateResult
-        let operationId = "delivery:" + shaText ($"{kindText kind}|{grant.ChainId}|{grant.EpochKey}|{grant.PhaseSeat}|{merge}|{defaultArg runId 0L}")
-        let record = { SchemaVersion = 1; Subject = snapshot.Subject.ToLowerInvariant(); Kind = kind; ReviewChainId = grant.ChainId; ReviewEpochKey = grant.EpochKey; ReviewSeat = grant.PhaseSeat; MergeCommit = merge; ProtectedRunId = runId; OperationId = operationId }
+        let merge, runId, runCommit, runConclusion = Result.defaultWith (fun _ -> invalidOp "validated") stateResult
+        let runCommitValue = defaultArg runCommit ""
+        let runConclusionValue = defaultArg runConclusion ""
+        let operationId = "delivery:" + shaText ($"{kindText kind}|{grant.ChainId}|{grant.EpochKey}|{grant.PhaseSeat}|{merge}|{defaultArg runId 0L}|{runCommitValue}|{runConclusionValue}")
+        let record = { SchemaVersion = 1; Subject = snapshot.Subject.ToLowerInvariant(); Kind = kind; ReviewChainId = grant.ChainId; ReviewEpochKey = grant.EpochKey; ReviewSeat = grant.PhaseSeat; MergeCommit = merge; ProtectedRunId = runId; ProtectedRunCommit = runCommit; ProtectedRunConclusion = runConclusion; OperationId = operationId }
         let bytes = deliveryAuthorityBytes record |> Result.defaultWith (fun _ -> invalidOp "validated")
         let digest = ShardedJournalAdapter.sha256 bytes
         if operationObservation.Current.OperationId = operationId then

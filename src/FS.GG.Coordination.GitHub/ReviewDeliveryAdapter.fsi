@@ -80,6 +80,8 @@ type DeliveryAuthorityRecord =
       ReviewSeat: string
       MergeCommit: string
       ProtectedRunId: int64 option
+      ProtectedRunCommit: string option
+      ProtectedRunConclusion: string option
       OperationId: string }
 
 type DeliveryAuthorityObservation =
