@@ -72,7 +72,7 @@ execute_plan() {
 
   jq -n --arg schema 'fsgg.github-substrate-v2.live-state/1' --arg candidate "$candidate" --arg nonce "$nonce" --arg repo "$repo_full" --arg repoNode "$repo_node" --arg projectNode "$project_node" \
     --argjson issue1 "$issue1" --argjson issue2 "$issue2" --argjson repository "$repository" --arg base "$base" --arg ref "$ref_name" --arg tag "$tag" --arg label "$label" \
-    '{schema:$schema,candidateSha:$candidate,runNonce:$nonce,repository:$repo,repositoryNodeId:$repoNode,projectNodeId:$projectNode,pre:{issue1:{title:$issue1.title,body:$issue1.body,state:$issue1.state,nodeId:$issue1.node_id,databaseId:$issue1.id},issue2:{nodeId:$issue2.node_id,databaseId:$issue2.id},repository:{description:$repository.description,homepage:$repository.homepage}},resources:{relation:false,projectItemId:null,commentId:null,ref:null,releaseId:null,releaseAssetId:null,tag:null,label:null},effects:[]}' > "$state"
+    '{schema:$schema,candidateSha:$candidate,runNonce:$nonce,repository:$repo,repositoryNodeId:$repoNode,projectNodeId:$projectNode,pre:{issue1:{title:$issue1.title,body:$issue1.body,state:$issue1.state,labels:[$issue1.labels[].name],nodeId:$issue1.node_id,databaseId:$issue1.id},issue2:{nodeId:$issue2.node_id,databaseId:$issue2.id},repository:{description:$repository.description,homepage:$repository.homepage}},resources:{relation:false,projectItemId:null,commentId:null,ref:null,releaseId:null,releaseAssetId:null,tag:null,label:null},effects:[]}' > "$state"
 
   local transport post issue_mutated relation project_add comment_created comment_updated ref_created file_created repo_mutated release_created release_updated asset_file asset_uploaded asset_digest
   transport="$(api_json rate_limit)"
@@ -154,7 +154,7 @@ cleanup_plan() {
   verify_authority
   [[ "$(jq -r .candidateSha "$state")" == "$candidate" && "$(jq -r .runNonce "$state")" == "$nonce" ]]
 
-  local release_id tag homepage description ref comment_id project_item relation label issue_title issue_body
+  local release_id tag homepage description ref comment_id project_item relation label issue_title issue_body issue_labels
   release_id="$(jq -r '.resources.releaseId // empty' "$state")"
   tag="$(jq -r '.resources.tag // empty' "$state")"
   [[ -z "$release_id" ]] || api_json --method DELETE "repos/$repo_full/releases/$release_id" >/dev/null
@@ -179,7 +179,8 @@ cleanup_plan() {
 
   issue_title="$(jq -r .pre.issue1.title "$state")"
   issue_body="$(jq -r '.pre.issue1.body // ""' "$state")"
-  jq -n --arg title "$issue_title" --arg body "$issue_body" '{title:$title,body:$body,state:"open",labels:[]}' > "$evidence/issue-restore.json"
+  issue_labels="$(jq -c '.pre.issue1.labels // []' "$state")"
+  jq -n --arg title "$issue_title" --arg body "$issue_body" --argjson labels "$issue_labels" '{title:$title,body:$body,state:"open",labels:$labels}' > "$evidence/issue-restore.json"
   api_json --method PATCH "repos/$repo_full/issues/1" --input "$evidence/issue-restore.json" >/dev/null
   label="$(jq -r '.resources.label // empty' "$state")"
   [[ -z "$label" ]] || api_json --method DELETE "repos/$repo_full/labels/$label" >/dev/null
@@ -190,7 +191,7 @@ cleanup_plan() {
   [[ "$(jq -r .title <<<"$final_issue")" == "$issue_title" ]] || residue=$((residue+1))
   [[ "$(jq -r '.body // ""' <<<"$final_issue")" == "$issue_body" ]] || residue=$((residue+1))
   [[ "$(jq -r .state <<<"$final_issue")" == open ]] || residue=$((residue+1))
-  [[ "$(jq -r '.labels|length' <<<"$final_issue")" == 0 ]] || residue=$((residue+1))
+  [[ "$(jq -c '[.labels[].name]|sort' <<<"$final_issue")" == "$(jq -c 'sort' <<<"$issue_labels")" ]] || residue=$((residue+1))
   [[ "$(jq -r '.homepage // ""' <<<"$final_repo")" == "$homepage" ]] || residue=$((residue+1))
   [[ "$(jq -r '.description // ""' <<<"$final_repo")" == "$description" ]] || residue=$((residue+1))
   [[ "$(api_json "repos/$repo_full/issues/1/comments" --paginate --jq ".[]|select(.body|contains(\"$nonce\"))|.id" | wc -l)" == 0 ]] || residue=$((residue+1))
