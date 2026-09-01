@@ -1,0 +1,27 @@
+{
+  "schema": "fsgg.coordination.github-staged-intake-corpus/1",
+  "registeredContractSha256": "594702c526db8858ba5fd82ed4d4f18c0300ad0c8b33c7cb0608356d748db6c8",
+  "acceptedPredecessorReceiptSha256": "f5833e55b7a90a1986693f81ef26e9cc5e82a0991d563ba4accbb5ea5048dd48",
+  "roadmapRevision": "2ff646743e770f0ec6be5566acd04df0b1a83dec",
+  "roadmapSha256": "e10e4a4245d11d1ae955d3a11c7cc25aa92e52a1c1b6bf6398e4249acc8ee581",
+  "controls": [
+    "unknown-root-cause",
+    "deferred-verification",
+    "unspecified-touch-set",
+    "cardinality-invariance",
+    "authority-read-budget",
+    "forbidden-global-operation",
+    "missing-promotion-root-cause",
+    "missing-promotion-touch-set",
+    "missing-promotion-verification-contract",
+    "missing-promotion-dependencies",
+    "missing-promotion-route-decision",
+    "missing-promotion-native-issue-type",
+    "missing-promotion-organization-fields",
+    "missing-promotion-repository-scope",
+    "missing-promotion-work-classification",
+    "duplicate-promotion",
+    "invalid-promotion",
+    "v1-application"
+  ]
+}

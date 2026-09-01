@@ -25,7 +25,57 @@ type IntakeApplyReceipt = { PlanDigest: string; FinalRevision: string; AcceptedE
 type IntakeApplyMode = Execute | Resume of DurableEffect list | RollForward of DurableEffect list | Compensate of DurableEffect list
 
 [<RequireQualifiedAccess>]
+type DiscoveryDetail = Known of string | ExplicitlyUnknown of reason: string | Deferred of reason: string
+
+[<RequireQualifiedAccess>]
+type CaptureIdentityMode = CreateOrReuse
+
+[<RequireQualifiedAccess>]
+type CaptureAuthorityRead = IssueIdentity | NativeTypeAndFields | ProjectMembership | Relations | RepositoryScope | ProtocolState
+
+type StagedCaptureRequest =
+    { Identity: string
+      IdentityMode: CaptureIdentityMode
+      Repository: string
+      Causation: string
+      RootCause: DiscoveryDetail
+      Verification: DiscoveryDetail
+      TouchSet: string list option }
+
+type StagedCaptureObservation =
+    { Intake: IntakeObservation
+      AuthorityReads: CaptureAuthorityRead list
+      UnrelatedProjectItems: int
+      UnrelatedBacklogItems: int }
+
+type IntakeOperationBudget = { AuthorityReads: int; Mutations: int }
+type StagedCapturePlan = { ContractSchema: string; Intent: CanonicalIntakeIntent; Decision: IntakePlanDecision; Budget: IntakeOperationBudget }
+
+[<RequireQualifiedAccess>]
+type ReadyPromotionSurface = RootCause | TouchSet | VerificationContract | Dependencies | RouteDecision | NativeIssueType | OrganizationFields | RepositoryScope | WorkClassification
+
+type ReadyPromotionFact = { Surface: ReadyPromotionSurface; Value: string }
+
+[<RequireQualifiedAccess>]
 module IntakeAdapter =
+    let stagedContractSchema = "fsgg.coord.intake/v1"
+    let requiredCaptureReads =
+        [ CaptureAuthorityRead.IssueIdentity
+          CaptureAuthorityRead.NativeTypeAndFields
+          CaptureAuthorityRead.ProjectMembership
+          CaptureAuthorityRead.Relations
+          CaptureAuthorityRead.RepositoryScope
+          CaptureAuthorityRead.ProtocolState ]
+    let requiredReadyPromotionSurfaces =
+        [ ReadyPromotionSurface.RootCause
+          ReadyPromotionSurface.TouchSet
+          ReadyPromotionSurface.VerificationContract
+          ReadyPromotionSurface.Dependencies
+          ReadyPromotionSurface.RouteDecision
+          ReadyPromotionSurface.NativeIssueType
+          ReadyPromotionSurface.OrganizationFields
+          ReadyPromotionSurface.RepositoryScope
+          ReadyPromotionSurface.WorkClassification ]
     let private surfaces = [ IssueIdentity; NativeIssueType; OrganizationFields; ProjectMembership; Hierarchy; Dependencies; RepositoryScope; InitialJournal; SchedulingIntent; Contract; TouchSet; Projections ]
     let private surfaceText = function IssueIdentity -> "issue-identity" | NativeIssueType -> "native-issue-type" | OrganizationFields -> "organization-fields" | ProjectMembership -> "project-membership" | Hierarchy -> "hierarchy" | Dependencies -> "dependencies" | RepositoryScope -> "repository-scope" | InitialJournal -> "initial-journal" | SchedulingIntent -> "scheduling-intent" | Contract -> "contract" | TouchSet -> "touch-set" | Projections -> "projections"
     let private outcomeText = function Observed v -> "observed:" + v | Missing -> "missing" | Redacted -> "redacted" | Unauthorized v -> "unauthorized:" + v | Archived -> "archived" | External -> "external" | Draft -> "draft" | Unknown v -> "unknown:" + v | Duplicate v -> "duplicate:" + v | Cycle v -> "cycle:" + v | Partial v -> "partial:" + v | Stale(o, e) -> "stale:" + o + ":" + e | Unsupported v -> "unsupported:" + v | Unreadable v -> "unreadable:" + v | Indeterminate v -> "indeterminate:" + v
@@ -144,3 +194,155 @@ module IntakeAdapter =
             match run [] current (List.zip targets scripted) with
             | Error failure -> Error failure
             | Ok(accepted, finalState) -> if not compensate && durable.Length + accepted.Length = plan.Effects.Length && finalState.Facts <> plan.IntendedPostState then Error(FinalPostStateMismatch(durable @ accepted)) else Ok { PlanDigest = plan.Digest; FinalRevision = finalState.Revision; AcceptedEffects = (if compensate then durable else durable @ accepted); CompensatedOrdinals = (if compensate then targets |> List.map _.Ordinal else []) }
+
+    let private detailText = function
+        | DiscoveryDetail.Known value -> "known:" + canonicalText value
+        | DiscoveryDetail.ExplicitlyUnknown reason -> "unknown:" + canonicalText reason
+        | DiscoveryDetail.Deferred reason -> "deferred:" + canonicalText reason
+
+    let private validDetail = function
+        | DiscoveryDetail.Known value
+        | DiscoveryDetail.ExplicitlyUnknown value
+        | DiscoveryDetail.Deferred value -> validText value
+
+    let private canonicalTouchSet = function
+        | None -> Ok None
+        | Some values when obj.ReferenceEquals(values, null) -> Error "touch set must be declared values or explicitly unspecified"
+        | Some values ->
+            let normalized = canonicalValues values
+            if List.isEmpty normalized || normalized |> List.exists (validText >> not) then
+                Error "declared touch set must contain canonical non-empty paths"
+            else
+                Ok(Some normalized)
+
+    let validateCapture (request: StagedCaptureRequest) =
+        if obj.ReferenceEquals(request, null) then
+            Error [ diag "INTAKE-CAPTURE-REQUEST-NULL" None "staged capture request is required" ]
+        else
+            let touchSet = canonicalTouchSet request.TouchSet
+            let findings =
+                [ if not (validDetail request.RootCause) then
+                      yield diag "INTAKE-CAPTURE-ROOT-CAUSE" None "root-cause evidence must carry canonical non-empty text"
+                  match request.RootCause with
+                  | DiscoveryDetail.Deferred _ ->
+                      yield diag "INTAKE-CAPTURE-ROOT-CAUSE-KIND" None "root cause must be known or explicitly unknown"
+                  | _ -> ()
+                  if not (validDetail request.Verification) then
+                      yield diag "INTAKE-CAPTURE-VERIFICATION" None "verification evidence must carry canonical non-empty text"
+                  match request.Verification with
+                  | DiscoveryDetail.ExplicitlyUnknown _ ->
+                      yield diag "INTAKE-CAPTURE-VERIFICATION-KIND" None "verification must be known or explicitly deferred"
+                  | _ -> ()
+                  match touchSet with
+                  | Error message -> yield diag "INTAKE-CAPTURE-TOUCH-SET" (Some TouchSet) message
+                  | Ok _ -> () ]
+            if not (List.isEmpty findings) then Error findings else
+            let canonicalTouchSet = touchSet |> Result.defaultValue None
+            let contract =
+                String.concat ";"
+                    [ "schema=" + stagedContractSchema
+                      "identity=create-or-reuse"
+                      "root-cause=" + detailText request.RootCause
+                      "verification=" + detailText request.Verification
+                      "touch-set=" + (canonicalTouchSet |> Option.map (String.concat ",") |> Option.defaultValue "unspecified") ]
+            let initializations =
+                [ InitializeJournal(canonicalText request.Causation)
+                  InitializeSchedulingIntent "Backlog"
+                  InitializeContract contract
+                  InitializeProjections [ "status"; "type" ] ]
+                @ (canonicalTouchSet |> Option.map (fun values -> [ InitializeTouchSet values ]) |> Option.defaultValue [])
+            validate
+                { Identity = request.Identity
+                  Repository = request.Repository
+                  Causation = request.Causation
+                  Initializations = initializations }
+
+    let private captureReadText = function
+        | CaptureAuthorityRead.IssueIdentity -> "issue-identity"
+        | CaptureAuthorityRead.NativeTypeAndFields -> "native-type-and-fields"
+        | CaptureAuthorityRead.ProjectMembership -> "project-membership"
+        | CaptureAuthorityRead.Relations -> "relations"
+        | CaptureAuthorityRead.RepositoryScope -> "repository-scope"
+        | CaptureAuthorityRead.ProtocolState -> "protocol-state"
+
+    let planCapture request (observation: StagedCaptureObservation) =
+        if obj.ReferenceEquals(observation, null) then
+            Error [ diag "INTAKE-CAPTURE-OBSERVATION-NULL" None "staged capture observation is required" ]
+        elif obj.ReferenceEquals(observation.AuthorityReads, null) then
+            Error [ diag "INTAKE-CAPTURE-READS" None "the complete item-local authority-read inventory is required" ]
+        else
+            let reads = observation.AuthorityReads |> List.sortBy captureReadText
+            let duplicates = reads |> List.groupBy id |> List.choose (fun (read, values) -> if values.Length > 1 then Some read else None)
+            let missing = requiredCaptureReads |> List.filter (fun required -> reads |> List.contains required |> not)
+            let readFindings =
+                [ for read in duplicates do
+                      yield diag "INTAKE-CAPTURE-READ-DUPLICATE" None $"authority read occurred more than once: %s{captureReadText read}"
+                  for read in missing do
+                      yield diag "INTAKE-CAPTURE-READ-MISSING" None $"required item-local authority read is missing: %s{captureReadText read}"
+                  if reads.Length > 6 then
+                      yield diag "INTAKE-CAPTURE-READ-BUDGET" None $"capture declared %d{reads.Length} authority reads; maximum is 6"
+                  if observation.UnrelatedProjectItems < 0 || observation.UnrelatedBacklogItems < 0 then
+                      yield diag "INTAKE-CAPTURE-CARDINALITY" None "unrelated Project and Backlog cardinalities cannot be negative" ]
+            if not (List.isEmpty readFindings) then Error readFindings else
+            match validateCapture request with
+            | Error findings -> Error findings
+            | Ok intent ->
+                match plan intent observation.Intake with
+                | Error findings -> Error findings
+                | Ok decision ->
+                    let mutations = match decision with IntakePlanned value -> value.Effects.Length | IntakeNoOp _ -> 0
+                    if mutations > 6 then
+                        Error [ diag "INTAKE-CAPTURE-MUTATION-BUDGET" None $"capture planned %d{mutations} mutations; maximum is 6" ]
+                    else
+                        Ok
+                            { ContractSchema = stagedContractSchema
+                              Intent = intent
+                              Decision = decision
+                              Budget = { AuthorityReads = reads.Length; Mutations = mutations } }
+
+    let private promotionSurfaceText = function
+        | ReadyPromotionSurface.RootCause -> "root-cause"
+        | ReadyPromotionSurface.TouchSet -> "touch-set"
+        | ReadyPromotionSurface.VerificationContract -> "verification-contract"
+        | ReadyPromotionSurface.Dependencies -> "dependencies"
+        | ReadyPromotionSurface.RouteDecision -> "route-decision"
+        | ReadyPromotionSurface.NativeIssueType -> "native-issue-type"
+        | ReadyPromotionSurface.OrganizationFields -> "organization-fields"
+        | ReadyPromotionSurface.RepositoryScope -> "repository-scope"
+        | ReadyPromotionSurface.WorkClassification -> "work-classification"
+
+    let private promotionCode surface = (promotionSurfaceText surface).ToUpperInvariant().Replace('-', '_')
+
+    let prepareReadyPromotion identity repository causation (facts: ReadyPromotionFact list) =
+        if obj.ReferenceEquals(facts, null) || facts |> List.exists (fun fact -> obj.ReferenceEquals(fact, null)) then
+            Error [ diag "INTAKE-PROMOTION-FACTS" None "typed Ready-promotion facts are required" ]
+        else
+            let canonical = facts |> List.map (fun fact -> { fact with Value = canonicalText fact.Value }) |> List.sortBy (fun fact -> promotionSurfaceText fact.Surface)
+            let duplicates = canonical |> List.groupBy _.Surface |> List.choose (fun (surface, values) -> if values.Length > 1 then Some surface else None)
+            let missing = requiredReadyPromotionSurfaces |> List.filter (fun required -> canonical |> List.exists (fun fact -> fact.Surface = required) |> not)
+            let findings =
+                [ for surface in duplicates do
+                      yield diag ($"INTAKE-PROMOTION-DUPLICATE-%s{promotionCode surface}") None $"Ready-promotion fact occurred more than once: %s{promotionSurfaceText surface}"
+                  for surface in missing do
+                      yield diag ($"INTAKE-PROMOTION-MISSING-%s{promotionCode surface}") None $"Ready-promotion fact is missing: %s{promotionSurfaceText surface}"
+                  for fact in canonical do
+                      if not (validText fact.Value) then
+                          yield diag ($"INTAKE-PROMOTION-VALUE-%s{promotionCode fact.Surface}") None $"Ready-promotion fact must be canonical non-empty text: %s{promotionSurfaceText fact.Surface}" ]
+            if not (List.isEmpty findings) then Error findings else
+            let values = canonical |> List.map (fun fact -> fact.Surface, fact.Value) |> Map.ofList
+            let touchSet =
+                values[ReadyPromotionSurface.TouchSet].Split(',', StringSplitOptions.RemoveEmptyEntries)
+                |> Array.toList
+                |> canonicalValues
+            if List.isEmpty touchSet || touchSet |> List.exists (validText >> not) then
+                Error [ diag "INTAKE-PROMOTION-VALUE-TOUCH_SET" (Some TouchSet) "Ready-promotion touch set must contain canonical comma-separated paths" ]
+            else
+                let contract =
+                    canonical
+                    |> List.map (fun fact -> promotionSurfaceText fact.Surface + "=" + fact.Value)
+                    |> fun values -> String.concat ";" ("schema=" + stagedContractSchema :: values)
+                validate
+                    { Identity = identity
+                      Repository = repository
+                      Causation = causation
+                      Initializations = [ InitializeSchedulingIntent "Ready"; InitializeContract contract; InitializeTouchSet touchSet ] }
