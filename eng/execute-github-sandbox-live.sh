@@ -58,8 +58,8 @@ execute_plan() {
   [[ "$(jq -r .state <<<"$issue1")" == open && "$(jq -r .state <<<"$issue2")" == open ]]
   [[ "$(jq -r .title <<<"$issue1")" == 'fsgg-sandbox-gs2-04-9 fixture primary' ]]
   [[ "$(jq -r .title <<<"$issue2")" == 'fsgg-sandbox-gs2-04-9 fixture secondary' ]]
-  project_items="$(api_json graphql -f query='query($id:ID!){node(id:$id){... on ProjectV2{items(first:100){nodes{id content{... on Issue{id}}}}}}}' -F id="$project_node" --jq '.data.node.items.nodes')"
-  [[ "$(jq --arg id "$(jq -r .node_id <<<"$issue1")" '[.[]|select(.content.id==$id)]|length' <<<"$project_items")" == 0 ]]
+  project_items="$(api_json graphql -f query='query($id:ID!){node(id:$id){... on Issue{projectItems(first:100){nodes{id project{id}}}}}}' -F id="$(jq -r .node_id <<<"$issue1")" --jq '.data.node.projectItems.nodes')"
+  [[ "$(jq --arg id "$project_node" '[.[]|select(.project.id==$id)]|length' <<<"$project_items")" == 0 ]]
   [[ "$(api_json "repos/$repo_full/issues/1/sub_issues" --paginate --jq ".[]|select(.number==2)|.number" | wc -l)" == 0 ]]
   [[ "$(api_json "repos/$repo_full/issues/1/comments" --paginate --jq ".[]|select(.body|contains(\"$nonce\"))|.id" | wc -l)" == 0 ]]
   base="$(api_json "repos/$repo_full/git/ref/heads/main" --jq .object.sha)"
@@ -94,14 +94,17 @@ execute_plan() {
   project_add="$(api_json graphql -f query='mutation($project:ID!,$content:ID!){addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{id}}}' -F project="$project_node" -F content="$(jq -r .node_id <<<"$issue1")" --jq '.data.addProjectV2ItemById.item')"
   write_state --arg id "$(jq -r .id <<<"$project_add")" '.resources.projectItemId=$id'
   # ProjectV2 membership is eventually consistent after addProjectV2ItemById.
-  # Poll the authoritative read instead of treating propagation delay as a
-  # failed operation; the bounded loop still fails closed.
+  # The scoped App may not receive Project item content, so prove membership
+  # with the authoritative item ID returned by the mutation. The bounded poll
+  # handles propagation delay and still fails closed.
+  local project_item_id
+  project_item_id="$(jq -r .id <<<"$project_add")"
   for _ in {1..10}; do
     project_items="$(api_json graphql -f query='query($id:ID!){node(id:$id){... on ProjectV2{items(first:100){nodes{id content{... on Issue{id}}}}}}}' -F id="$project_node" --jq '.data.node.items.nodes')"
-    [[ "$(jq --arg id "$(jq -r .node_id <<<"$issue1")" '[.[]|select(.content.id==$id)]|length' <<<"$project_items")" == 1 ]] && break
+    [[ "$(jq --arg id "$project_item_id" '[.[]|select(.id==$id)]|length' <<<"$project_items")" == 1 ]] && break
     sleep 1
   done
-  [[ "$(jq --arg id "$(jq -r .node_id <<<"$issue1")" '[.[]|select(.content.id==$id)]|length' <<<"$project_items")" == 1 ]]
+  [[ "$(jq --arg id "$project_item_id" '[.[]|select(.id==$id)]|length' <<<"$project_items")" == 1 ]]
   record_effect project project "$(sha256_text absent)" "$(sha256_text "$project_add")" "$(jq -r .id <<<"$project_add")"
 
   comment_created="$(api_json --method POST "repos/$repo_full/issues/1/comments" -f body="fsgg-sandbox-created $nonce")"
@@ -186,7 +189,7 @@ cleanup_plan() {
   [[ "$(api_json "repos/$repo_full/issues/1/comments" --paginate --jq ".[]|select(.body|contains(\"$nonce\"))|.id" | wc -l)" == 0 ]] || residue=$((residue+1))
   [[ "$(api_json "repos/$repo_full/issues/1/sub_issues" --paginate --jq '.[]|select(.number==2)|.number' | wc -l)" == 0 ]] || residue=$((residue+1))
   project_items="$(api_json graphql -f query='query($id:ID!){node(id:$id){... on ProjectV2{items(first:100){nodes{id content{... on Issue{id}}}}}}}' -F id="$project_node" --jq '.data.node.items.nodes')"
-  [[ "$(jq --arg id "$(jq -r .pre.issue1.nodeId "$state")" '[.[]|select(.content.id==$id)]|length' <<<"$project_items")" == 0 ]] || residue=$((residue+1))
+  [[ -z "$project_item" ]] || [[ "$(jq --arg id "$project_item" '[.[]|select(.id==$id)]|length' <<<"$project_items")" == 0 ]] || residue=$((residue+1))
   [[ -z "$ref" ]] || { api_json "repos/$repo_full/git/ref/heads/$ref" >/dev/null 2>&1 && residue=$((residue+1)) || true; }
   [[ -z "$release_id" ]] || { api_json "repos/$repo_full/releases/$release_id" >/dev/null 2>&1 && residue=$((residue+1)) || true; }
 
