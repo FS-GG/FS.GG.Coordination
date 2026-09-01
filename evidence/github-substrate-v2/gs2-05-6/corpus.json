@@ -1,0 +1,10 @@
+{
+  "schema": "fsgg.coordination.github-review-delivery-corpus/1",
+  "registeredContractSha256": "19632427bf85a51cec369e24d2c82568c8e58c143f7717964f92790f677994fc",
+  "acceptedPredecessorReceiptSha256": "76257b60899ee502f41c137b3eb9e3ae5a01bc91f14edb2738c0c2ec0688da5e",
+  "acceptedPredecessorReceiptDigest": "f382502968cf634bf93c7318d24f629eb3ccfbbac6cf759a99434f1a33975059",
+  "quintSourceSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "roadmapRevision": "9bd7849e4c90adb89a08f6377d807422504213b1",
+  "roadmapSha256": "0007cfbfedfa8982e45c22f90a6231903ddf5ff663507a051bc9c8f8db5379a5",
+  "controls": ["stable-chain", "immutable-epoch", "complete-snapshot", "fresh-epoch-seat", "same-epoch-succession", "accountable-authority", "historical-pass", "current-pass", "review-fence", "merge-distinct", "protected-main", "exact-merge-run", "delivery-receipt", "done-receipt", "exact-replay", "divergent-replay", "bounded-cost", "quint-and-prerequisite"]
+}

@@ -1,0 +1,5 @@
+{
+  "schema": "fsgg.coordination.github-review-delivery-expectations/1",
+  "producer": "independent-review-delivery-oracle",
+  "controls": ["stable-chain", "immutable-epoch", "complete-snapshot", "fresh-epoch-seat", "same-epoch-succession", "accountable-authority", "historical-pass", "current-pass", "review-fence", "merge-distinct", "protected-main", "exact-merge-run", "delivery-receipt", "done-receipt", "exact-replay", "divergent-replay", "bounded-cost", "quint-and-prerequisite"]
+}

@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="OrganizationIssueFieldsArchitectureTests.fs" />
     <Compile Include="WorkTaxonomyArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/Tests.fs" Link="BoundaryTests.fs" />
@@ -18,6 +19,8 @@
     <Compile Include="GitHubRoadmapIntakeArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubClaimTouchSetTests.fs" Link="GitHubClaimTouchSetUnitTests.fs" />
     <Compile Include="GitHubClaimTouchSetArchitectureTests.fs" />
+    <Compile Include="../FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs" Link="GitHubReviewDeliveryUnitTests.fs" />
+    <Compile Include="GitHubReviewDeliveryArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs" Link="GitHubCommentProjectionUnitTests.fs" />
     <Compile Include="GitHubCommentProjectionArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs" Link="GitHubShardedJournalUnitTests.fs" />

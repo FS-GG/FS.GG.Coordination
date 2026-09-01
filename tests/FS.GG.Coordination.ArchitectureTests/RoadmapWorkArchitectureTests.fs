@@ -176,15 +176,15 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-5`` () =
+let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-6`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
     let units = document.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
 
     let roadmap = document.RootElement.GetProperty("roadmap")
-    Assert.Equal("b776da763a490c2c3310a10c8db234a62a5b6bc4", roadmap.GetProperty("revision").GetString())
-    Assert.Equal("2fbf6711b814ef3fbcf77a17d31d5d00255dddcd5d471a582db00942785bdc9d", roadmap.GetProperty("sha256").GetString())
+    Assert.Equal("9bd7849e4c90adb89a08f6377d807422504213b1", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("0007cfbfedfa8982e45c22f90a6231903ddf5ff663507a051bc9c8f8db5379a5", roadmap.GetProperty("sha256").GetString())
 
     let ids =
         units |> List.map (fun unitValue -> unitValue.GetProperty("id").GetString())
@@ -233,7 +233,8 @@ let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-5
              "GS2-05.3"
              "GS2-05.9"
              "GS2-05.4"
-             "GS2-05.5" ]
+             "GS2-05.5"
+             "GS2-05.6" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -1361,7 +1362,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(22, commands.Length)
+    Assert.Equal(23, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())

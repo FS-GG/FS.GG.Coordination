@@ -39,6 +39,8 @@
     <Compile Include="GitHubRoadmapIntakeQualification.fs" />
     <Compile Include="GitHubClaimTouchSetQualification.fsi" />
     <Compile Include="GitHubClaimTouchSetQualification.fs" />
+    <Compile Include="GitHubReviewDeliveryQualification.fsi" />
+    <Compile Include="GitHubReviewDeliveryQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />
