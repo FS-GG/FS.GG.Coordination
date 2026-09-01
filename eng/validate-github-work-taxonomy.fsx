@@ -13,8 +13,8 @@ let root = if args.Length = 0 then "." else args[0]
 let atRoot path = Path.Combine(root, path)
 let corpusPath = atRoot "evidence/github-substrate-v2/gs2-05-1/corpus.json"
 let expectationsPath = atRoot "evidence/github-substrate-v2/gs2-05-1/independent-expectations.json"
-let modelPath = atRoot "evidence/github-substrate-v2/gs2-05-1/workTaxonomy.qnt"
-let testModelPath = atRoot "evidence/github-substrate-v2/gs2-05-1/workTaxonomy_test.qnt"
+let modelPath = atRoot "evidence/github-substrate-v2/gs2-05-1/workTaxonomy.quint"
+let testModelPath = atRoot "evidence/github-substrate-v2/gs2-05-1/workTaxonomy_test.quint"
 let qualificationPath = atRoot "evidence/github-substrate-v2/gs2-05-1/qualification.json"
 
 let sha256 (bytes: byte array) =
@@ -196,18 +196,28 @@ let run executable arguments code =
     if child.ExitCode <> 0 then fail code $"exit={child.ExitCode}\n{output}\n{error}"
     output
 
-run "quint" [ "typecheck"; modelPath ] "WTX-QUINT-TYPECHECK" |> ignore
-run "quint" [ "typecheck"; testModelPath ] "WTX-QUINT-TEST-TYPECHECK" |> ignore
-run "quint" [ "test"; testModelPath; "--main=workTaxonomy_test" ] "WTX-QUINT-TEST" |> ignore
+// The canonical-protocol gate reserves tracked *.qnt files. Stage the two evidence sources with
+// Quint's conventional extension in an isolated temporary directory, preserving the separate
+// model/test layout without creating a second tracked protocol authority.
+let quintScratch = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-05-1-{Guid.NewGuid():N}")
+Directory.CreateDirectory quintScratch |> ignore
+let stagedModelPath = Path.Combine(quintScratch, "workTaxonomy.qnt")
+let stagedTestModelPath = Path.Combine(quintScratch, "workTaxonomy_test.qnt")
+File.Copy(modelPath, stagedModelPath)
+File.Copy(testModelPath, stagedTestModelPath)
+run "quint" [ "typecheck"; stagedModelPath ] "WTX-QUINT-TYPECHECK" |> ignore
+run "quint" [ "typecheck"; stagedTestModelPath ] "WTX-QUINT-TEST-TYPECHECK" |> ignore
+run "quint" [ "test"; stagedTestModelPath; "--main=workTaxonomy_test" ] "WTX-QUINT-TEST" |> ignore
 let simulation =
     run "quint"
-        [ "run"; modelPath; "--main=workTaxonomy"
+        [ "run"; stagedModelPath; "--main=workTaxonomy"
           "--invariants"; "soleNativeAuthority"; "refusedHasNoDisposition"; "uniqueDisposition"; "preservation"; "standingExemptionExact"; "deterministicOutcome"
           "--witnesses"; "plannedWitness"; "refusedWitness"; "--max-steps=2"; "--max-samples=200"; "--seed=0x8c07c89db6e926ff" ]
         "WTX-QUINT-RUN"
 if not (simulation.Contains("plannedWitness was witnessed", StringComparison.Ordinal)
         && simulation.Contains("refusedWitness was witnessed", StringComparison.Ordinal)) then
     fail "WTX-QUINT-WITNESS" simulation
+Directory.Delete(quintScratch, true)
 
 if not (File.Exists qualificationPath) then fail "WTX-QUALIFICATION-MISSING" qualificationPath
 let qualificationDocument = JsonDocument.Parse(File.ReadAllBytes qualificationPath)
@@ -220,8 +230,8 @@ let expectedArtifactPaths =
       "src/FS.GG.Coordination.Core/WorkTaxonomy.fs"
       "evidence/github-substrate-v2/gs2-05-1/corpus.json"
       "evidence/github-substrate-v2/gs2-05-1/independent-expectations.json"
-      "evidence/github-substrate-v2/gs2-05-1/workTaxonomy.qnt"
-      "evidence/github-substrate-v2/gs2-05-1/workTaxonomy_test.qnt"
+      "evidence/github-substrate-v2/gs2-05-1/workTaxonomy.quint"
+      "evidence/github-substrate-v2/gs2-05-1/workTaxonomy_test.quint"
       "eng/validate-github-work-taxonomy.fsx" ]
 let artifactRows = qualification.GetProperty("artifacts").EnumerateArray() |> Seq.toList
 let artifactPaths = artifactRows |> List.map (fun item -> item.GetProperty("path").GetString())
