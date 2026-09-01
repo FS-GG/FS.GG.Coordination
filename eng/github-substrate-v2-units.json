@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "cf3575bf0113a2f9a02758236d5da8c98d9634b7",
+    "revision": "c43deab898d04b63c97aeed10168e7739c8f2984",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "582e2ffbe23da54eddd365725d44aedd3f7e6165db78a3e762ff8bb1ee095d82"
+    "sha256": "93a4e439bf26d3c27290dff50d0ef4d5348c9720ef7512571d07d91a258f5077"
   },
   "units": [
     {
@@ -560,6 +560,20 @@
         { "id": "github-work-taxonomy-contract", "qGate": "Q2", "commandSha256": "c10ddf0ee6bb9328e09fceae4d0deebcc688478c1b2ae80c3fc3b4fbc766ef7f" }
       ],
       "contractSha256": "ed9ae9d198d6eaaf89030f85d214a0a359333598be7ceb3597c2c4aeb629ef28"
+    },
+    {
+      "id": "GS2-05.2",
+      "title": "Finalize organization issue fields",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-05.1"],
+      "permissionCeiling": ["repository-local pure organization issue-field contracts, the complete frozen current Project-field corpus, minimal closed vocabularies, deterministic migration plans, validation, and retained evidence", "local pure-model and deterministic fixture execution is allowed; no live GitHub write, organization issue-type or field mutation, Project field mutation, issue conversion, production credential, deployment, publication, stable release, GS2-05.3 intake implementation, or successor-unit implementation authority"],
+      "exitGate": "the Q2 organization issue-field contract defines scheduling intent as the authoritative human or policy input with exactly Backlog, Ready, Paused, and Cancelled values while lifecycle Status is only its derived projection; defines an optional hold reason with the minimal not-yet-actionable, dependency, decision, external, and operator vocabulary and requires it exactly when intent is Backlog or Paused; defines priority Critical, High, Normal, and Low, effort S, M, L, and XL, optional canonical ISO start and target dates with target not before start, severity Critical, High, Medium, Low, and Unset, phase Planning, Execution, Verification, and Operations, workstream Composition, Coordination, Docs, Governance, Lifecycle, and Versioning, an optional revision-bound contract reference, and an ordered canonical touch-set projection; makes Contract and touch set projections of their authoritative revision-bound records rather than competing ledgers; inventories every current field name, type, option, value, issue identity, native type, hierarchy, dependency, repository scope, lifecycle state, and exemption from a complete fingerprinted corpus; derives one deterministic canonical migration disposition with stable row identity, exact pre-state fingerprint, normalized target fields, retired fields and options, and explicit diagnostics while preserving issue identity, native type, hierarchy, dependencies, repository scope, and lifecycle exemptions; refuses missing, unknown, contradictory, ambiguous, lossy, duplicate, incomplete, stale, unreadable, invalid-date, reversed-date, unbound-contract, and noncanonical-touch-set inputs; proves totality, uniqueness, deterministic ordering, idempotent replay, no-op stability, and byte-stable evidence; generated cases and independent missing-field, unknown-field, wrong-type, unknown-option, intent-status-authority, hold-reason, priority, effort, date, severity, phase, workstream, contract-authority, touch-set-authority, identity-loss, hierarchy-loss, dependency-loss, repository-scope, lifecycle-exemption, duplicate-row, incomplete-corpus, stale-fingerprint, ambiguity, idempotency, and omitted-combination inversions all fail closed without mutating GitHub and without claiming GS2-05.3 intake behavior",
+      "qGates": ["Q2"],
+      "gateCommands": ["github-organization-issue-fields-contract"],
+      "gateContracts": [
+        { "id": "github-organization-issue-fields-contract", "qGate": "Q2", "commandSha256": "6311e9ca2c92315c48981983efcb93f2717b6b5273aa6fafa75c3fb8496ebcbd" }
+      ],
+      "contractSha256": "054ee50545c55b314447b7636ee35faf866adba40f6ff9b5ef07effb2009b41f"
     }
   ]
 }
