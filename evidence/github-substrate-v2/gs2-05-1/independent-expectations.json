@@ -1,0 +1,32 @@
+{
+  "schema": "fsgg.github-substrate-v2.work-taxonomy-expectations/1",
+  "requiredLegacyClasses": [null, "capability", "hardening", "defect", "decision"],
+  "requiredLegacyKinds": [null, "work", "anchor", "register", "directive"],
+  "requiredNativeTypes": ["Epic", "Feature", "Task", "Bug", "Decision", "Register", "Directive"],
+  "mapping": [
+    {"signal":"kind:anchor","target":"Epic","lifecycle":"work"},
+    {"signal":"class:capability","target":"Feature","lifecycle":"work"},
+    {"signal":"class:hardening","target":"Task","lifecycle":"work"},
+    {"signal":"class:defect","target":"Bug","lifecycle":"work"},
+    {"signal":"class:decision","target":"Decision","lifecycle":"work"},
+    {"signal":"kind:register","target":"Register","lifecycle":"standing-exempt"},
+    {"signal":"kind:directive","target":"Directive","lifecycle":"standing-exempt"}
+  ],
+  "requiredRefusalCodes": [
+    "WTX-UNREADABLE",
+    "WTX-INCOMPLETE",
+    "WTX-STALE",
+    "WTX-MISSING-STABLE-ID",
+    "WTX-MISSING-REPOSITORY-SCOPE",
+    "WTX-MISSING-REVISION",
+    "WTX-MISSING-CLASSIFICATION",
+    "WTX-UNKNOWN-CLASS",
+    "WTX-UNKNOWN-KIND",
+    "WTX-UNSUPPORTED-NATIVE",
+    "WTX-CONTRADICTORY",
+    "WTX-AMBIGUOUS",
+    "WTX-LOSSY-HIERARCHY",
+    "WTX-LOSSY-REPOSITORY-SCOPE",
+    "WTX-DUPLICATE-STABLE-ID"
+  ]
+}

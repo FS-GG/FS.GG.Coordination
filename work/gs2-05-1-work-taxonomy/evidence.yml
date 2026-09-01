@@ -1,0 +1,632 @@
+schemaVersion: 1
+workId: gs2-05-1-work-taxonomy
+stage: evidence
+status: evidenceReady
+sourceSpec: work/gs2-05-1-work-taxonomy/spec.md
+sourceClarifications: work/gs2-05-1-work-taxonomy/clarifications.md
+sourceChecklist: work/gs2-05-1-work-taxonomy/checklist.md
+sourcePlan: work/gs2-05-1-work-taxonomy/plan.md
+sourceTasks: work/gs2-05-1-work-taxonomy/tasks.yml
+sourceAnalysis: readiness/gs2-05-1-work-taxonomy/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/gs2-05-1-work-taxonomy/analysis.json
+    digest: 8f073ca17996a7610889fef8ebd0ee54c6492bde6edb8574fd1ec9ef0a56858f
+    schemaVersion: 1
+  - label: checklist
+    path: work/gs2-05-1-work-taxonomy/checklist.md
+    digest: df65ad6c18aaf87d7b4929e2c138257283ebceb23bc9d3deb1eb7abea9063e67
+    schemaVersion: 1
+  - label: clarifications
+    path: work/gs2-05-1-work-taxonomy/clarifications.md
+    digest: 937522520daca933608925d475a7b15ac69ee8584546dd1ea6c20a5524679e62
+    schemaVersion: 1
+  - label: plan
+    path: work/gs2-05-1-work-taxonomy/plan.md
+    digest: d0c0ee78a6d6b22dcebabb86f99b10fa60d24af959271463b4b7707e9afa4b39
+    schemaVersion: 1
+  - label: spec
+    path: work/gs2-05-1-work-taxonomy/spec.md
+    digest: 027b4574aad85b51732ec5857beb2ee0367d1b6a476eb7d19e0f1352a0cf9400
+    schemaVersion: 1
+  - label: tasks
+    path: work/gs2-05-1-work-taxonomy/tasks.yml
+    digest: 7b535456d634e72a99bc4f68b1c8c303fcf308bc8fd45328a65524365a1b0df5
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV013]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV014]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-005]
+    obligationRefs: [EV016]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV017]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV018]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV019]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV020]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV021]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV022]
+    artifacts: [eng/validate-github-work-taxonomy.fsx, evidence/github-substrate-v2/gs2-05-1/qualification.json, tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs, tests/FS.GG.Coordination.UnitTests/WorkTaxonomyTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/WorkTaxonomyArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/gs2-05-1-work-taxonomy/qualification.trx
+      digest: "sha256:93cb753e76da9c7141a61b29e70aa278b4414347e27a3707d52717bb254719eb"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [17 independent inversions, Registered offline Q2 validator passed 32 frozen cases, "and planned/refused Quint witnesses; focused architecture report passed 4 of 4."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

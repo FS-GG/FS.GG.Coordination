@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="WorkTaxonomyTests.fs" />
     <Compile Include="GitHubIssueFieldTests.fs" />
     <Compile Include="GitHubNativeRelationTests.fs" />
     <Compile Include="GitHubProjectAdapterTests.fs" />
