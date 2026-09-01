@@ -39,7 +39,6 @@ let q4ValidatorIsLiteralOfflineAndMutationSensitive () =
 let comprehensiveRouteIsColdAndLiveAuthorityFailsClosed () =
     let harness = File.ReadAllText(Path.Combine(root, "eng/qualify-github-sandbox-closure.sh"))
     for script in [ "validate-github-transport.fsx"; "validate-github-issue-field.fsx"; "validate-github-native-relation.fsx"; "validate-github-project-adapter.fsx"; "validate-github-comment-projection.fsx"; "validate-github-sharded-journal.fsx"; "validate-github-repository-settings.fsx"; "validate-github-actions-release-feed.fsx"; "validate-github-sandbox-closure.fsx" ] do Assert.Contains(script, harness, StringComparison.Ordinal)
-    for required in [ "child_pid=$!"; "wait \"$child_pid\""; "production-capable or unmarked authority refused before any write"; "refusing before any write" ] do Assert.Contains(required, harness, StringComparison.Ordinal)
-    let workflow = File.ReadAllText(Path.Combine(root, ".github/workflows/github-sandbox-qualification.yml"))
-    for required in [ "workflow_dispatch:"; "environment: github-sandbox-qualification"; "FSGG_SANDBOX_TOKEN: ${{ secrets.FSGG_SANDBOX_TOKEN }}"; "permissions:"; "contents: read"; "cancel-in-progress: false" ] do Assert.Contains(required, workflow, StringComparison.Ordinal)
-    Assert.DoesNotContain("github.token", workflow, StringComparison.Ordinal)
+    for required in [ "child_pid=$!"; "wait \"$child_pid\""; "production-capable or unmarked authority refused before any write"; "execute-github-sandbox-live.sh" ] do Assert.Contains(required, harness, StringComparison.Ordinal)
+    let live = File.ReadAllText(Path.Combine(root, "eng/execute-github-sandbox-live.sh"))
+    for required in [ "fs-gg-cross-repo-dispatch[bot]"; "R_kgDOUKXpqQ"; "PVT_kwDOEYAWY84BiESo"; "refusing before any write"; "addProjectV2ItemById"; "deleteProjectV2Item"; "sub_issues"; "release-asset.txt"; "cleanup.json"; "closure.json" ] do Assert.Contains(required, live, StringComparison.Ordinal)

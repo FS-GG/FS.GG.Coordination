@@ -25,8 +25,11 @@ if [[ "$mode" == "live" ]]; then
     echo "GSQ-LIVE-AUTHORITY: production-capable or unmarked authority refused before any write" >&2
     exit 1
   fi
-  echo "GSQ-LIVE-EXECUTOR: readiness passed, but no signed operation plan was supplied; refusing before any write" >&2
-  exit 1
+  phase="${FSGG_SANDBOX_PHASE:-execute}"
+  if [[ "$phase" == cleanup ]]; then
+    exec bash "$root/eng/execute-github-sandbox-live.sh" cleanup
+  fi
+  [[ "$phase" == execute ]] || { echo "GSQ-LIVE-PHASE: expected execute or cleanup" >&2; exit 1; }
 elif [[ "$mode" != "synthetic" ]]; then
   echo "GSQ-MODE: expected synthetic or live" >&2
   exit 1
@@ -55,9 +58,13 @@ done
 
 FSGG_SANDBOX_RUN_NONCE="$run_nonce" FSGG_CANDIDATE_SHA="$candidate" dotnet fsi "$root/eng/validate-github-sandbox-closure.fsx" -- "$root" > "$evidence_root/q4.txt"
 
-python3 - "$candidate" "$run_nonce" "$evidence_root" <<'PY'
+if [[ "$mode" == live ]]; then
+  bash "$root/eng/execute-github-sandbox-live.sh" execute
+fi
+
+python3 - "$candidate" "$run_nonce" "$evidence_root" "$mode" <<'PY'
 import hashlib, json, pathlib, sys
-candidate, nonce, root = sys.argv[1:]
+candidate, nonce, root, mode = sys.argv[1:]
 root = pathlib.Path(root)
 children = []
 for line in (root / "children.tsv").read_text().splitlines():
@@ -67,7 +74,7 @@ payload = {
     "schema": "fsgg.coordination.github-sandbox-comprehensive/1",
     "candidateSha": candidate,
     "runNonce": nonce,
-    "mode": "synthetic",
+    "mode": mode,
     "coldStart": True,
     "children": children,
     "q4Digest": hashlib.sha256((root / "q4.txt").read_bytes()).hexdigest(),
@@ -75,4 +82,4 @@ payload = {
 (root / "comprehensive.json").write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n")
 PY
 
-echo "github-sandbox-comprehensive OK mode=synthetic candidate=$candidate nonce=$run_nonce evidence=$evidence_root/comprehensive.json"
+echo "github-sandbox-comprehensive OK mode=$mode candidate=$candidate nonce=$run_nonce evidence=$evidence_root/comprehensive.json"
