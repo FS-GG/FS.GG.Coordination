@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "a4ef0ad99841e5957ee2ca0a64057a753a14ed8d",
+    "revision": "cf3575bf0113a2f9a02758236d5da8c98d9634b7",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "6cbb9aaaafd8d2cdfd075617c87f9075cd4dcb08791fc4282fa35539edba7523"
+    "sha256": "582e2ffbe23da54eddd365725d44aedd3f7e6165db78a3e762ff8bb1ee095d82"
   },
   "units": [
     {
@@ -546,6 +546,20 @@
         { "id": "github-sandbox-closure-contract", "qGate": "Q4", "commandSha256": "eaa89a6bdd1ff50ecb52835f7ead2f49cb94bede7e957d87d74053070f91e926" }
       ],
       "contractSha256": "00ced881abe69940f8b4663014c8fb1dd1f8d8a586302b4bc9685d9a9f2c0e9e"
+    },
+    {
+      "id": "GS2-05.1",
+      "title": "Finalize taxonomy",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-04.9"],
+      "permissionCeiling": ["repository-local pure work-taxonomy contracts, the complete frozen current Class, Kind, and native issue-type combination corpus, deterministic migration plans, explicit lifecycle exemptions, validation, and retained evidence", "local pure-model and deterministic fixture execution is allowed; no live GitHub write, organization issue-type or field mutation, issue conversion, Project mutation, production credential, deployment, publication, stable release, GS2-05.2 field contract, intake implementation, or successor-unit implementation authority"],
+      "exitGate": "the Q2 work taxonomy contract ratifies native Epic, Feature, Task, Bug, Decision, Register, and Directive issue types as the sole classification authority; replaces hierarchical anchor and capability, hardening, defect, and decision Class or Kind meanings without retaining Class or Kind as parallel semantic input; distinguishes lifecycle-bearing Epic, Feature, Task, Bug, and Decision work from standing Register and Directive exemptions; inventories every current native-type, Class, Kind, repository, hierarchy, lifecycle, and standing-row combination from a complete fingerprinted corpus; derives one deterministic canonical migration disposition with stable row identity, exact pre-state fingerprint, target native type, retired projections, lifecycle applicability, and explicit diagnostics; preserves hierarchy and repository scope while refusing missing, unknown, contradictory, ambiguous, unsupported, lossy, duplicate, incomplete, stale, or unreadable combinations; proves totality, uniqueness, deterministic ordering, idempotent replay, no-op stability, and byte-stable evidence; generated cases and independent missing-type, unknown-type, Class-only, Kind-only, Class-Kind contradiction, native-type contradiction, standing-row lifecycle, hierarchy-loss, repository-scope, duplicate-row, incomplete-corpus, stale-fingerprint, ambiguity, idempotency, and omitted-combination inversions all fail closed without mutating GitHub and without claiming GS2-05.2 field or intake behavior",
+      "qGates": ["Q2"],
+      "gateCommands": ["github-work-taxonomy-contract"],
+      "gateContracts": [
+        { "id": "github-work-taxonomy-contract", "qGate": "Q2", "commandSha256": "c10ddf0ee6bb9328e09fceae4d0deebcc688478c1b2ae80c3fc3b4fbc766ef7f" }
+      ],
+      "contractSha256": "ed9ae9d198d6eaaf89030f85d214a0a359333598be7ceb3597c2c4aeb629ef28"
     }
   ]
 }
