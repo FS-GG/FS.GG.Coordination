@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d6319537-56d8-41de-852e-d5779b1c07fe" name="@991ca70644d4 2026-09-01 02:49:03" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-01T02:49:03.8600171+02:00" queuing="2026-09-01T02:49:03.8600172+02:00" start="2026-09-01T02:49:02.1974705+02:00" finish="2026-09-01T02:49:03.8636237+02:00" />
+  <TestSettings name="default" id="1c5130d9-e45c-41e7-b8a0-d8a0dfde32ef">
+    <Deployment runDeploymentRoot="_991ca70644d4_2026-09-01_02_49_03" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="1171c978-e598-454c-ab35-07b4b41cc9d9" testId="e2a5825e-54e3-dcb5-927e-271447fa1d58" testName="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests.fixtureIsCanonicalSyntheticAndComplete" computerName="991ca70644d4" duration="00:00:00.0042995" startTime="2026-09-01T02:49:03.8001283+02:00" endTime="2026-09-01T02:49:03.8041755+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1171c978-e598-454c-ab35-07b4b41cc9d9" />
+    <UnitTestResult executionId="a041a23b-f486-4346-b7b5-afc03e9f4dce" testId="e2519442-9702-b6e5-957b-698f63d44240" testName="FS.GG.Coordination.GitHubActionsReleaseFeedTests.attemptPaginationAndAvailabilityFailClosed" computerName="991ca70644d4" duration="00:00:00.0006214" startTime="2026-09-01T02:49:02.5723163+02:00" endTime="2026-09-01T02:49:02.5728663+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a041a23b-f486-4346-b7b5-afc03e9f4dce" />
+    <UnitTestResult executionId="3ed22442-603e-4f4c-a164-772db68bf907" testId="fe749737-040c-b565-d585-49cb7ff1969d" testName="FS.GG.Coordination.GitHubActionsReleaseFeedTests.completeExactObservationsValidate" computerName="991ca70644d4" duration="00:00:00.0038379" startTime="2026-09-01T02:49:02.5616327+02:00" endTime="2026-09-01T02:49:02.5650438+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3ed22442-603e-4f4c-a164-772db68bf907" />
+    <UnitTestResult executionId="36577a71-0f2a-43a4-92cc-f8ea0e7594ab" testId="f7e9f56a-5014-9a4d-377b-54a8a791c17d" testName="FS.GG.Coordination.GitHubActionsReleaseFeedTests.evidenceLadderDoesNotPromoteUploadAcceptance" computerName="991ca70644d4" duration="00:00:00.0079648" startTime="2026-09-01T02:49:02.5295228+02:00" endTime="2026-09-01T02:49:02.5405784+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="36577a71-0f2a-43a4-92cc-f8ea0e7594ab" />
+    <UnitTestResult executionId="f21305ee-c6e6-432b-a9ae-49262d80792a" testId="d66c1f6d-b2b2-51a6-d611-58cf4ca7d748" testName="FS.GG.Coordination.GitHubActionsReleaseFeedTests.servedBytesBindRedirectsAndRetrievalClass" computerName="991ca70644d4" duration="00:00:00.0041688" startTime="2026-09-01T02:49:02.5681160+02:00" endTime="2026-09-01T02:49:02.5722344+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f21305ee-c6e6-432b-a9ae-49262d80792a" />
+    <UnitTestResult executionId="902a6c6a-4ff2-4c82-a68a-f4ac726896e1" testId="e4adc279-e61b-80fa-5a07-fd8ec6193fa2" testName="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests.registeredValidatorIsOfflineIndependentAndPasses" computerName="991ca70644d4" duration="00:00:01.2683329" startTime="2026-09-01T02:49:02.5302780+02:00" endTime="2026-09-01T02:49:03.7998606+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="902a6c6a-4ff2-4c82-a68a-f4ac726896e1" />
+    <UnitTestResult executionId="1388d165-4fa5-4c83-a907-974ad5c6d4a4" testId="486794ec-9fa7-25c9-80aa-4abc7ac38cec" testName="FS.GG.Coordination.GitHubActionsReleaseFeedTests.attestationPackageAndSecretCoordinatesAreExact" computerName="991ca70644d4" duration="00:00:00.0206014" startTime="2026-09-01T02:49:02.5469454+02:00" endTime="2026-09-01T02:49:02.5612024+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1388d165-4fa5-4c83-a907-974ad5c6d4a4" />
+    <UnitTestResult executionId="e7bd68c9-e912-4df2-854d-729cd8134cda" testId="816584cf-bac6-97fe-4558-2b453266a0a6" testName="FS.GG.Coordination.GitHubActionsReleaseFeedTests.qualificationInventoryIsMutationSensitive" computerName="991ca70644d4" duration="00:00:00.0029659" startTime="2026-09-01T02:49:02.5651307+02:00" endTime="2026-09-01T02:49:02.5680352+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e7bd68c9-e912-4df2-854d-729cd8134cda" />
+    <UnitTestResult executionId="1e6557b3-ff22-494b-b463-df7bae60a067" testId="4b067fab-1dc8-f7f5-da38-4337709624da" testName="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests.signaturePrecedesPureImplementation" computerName="991ca70644d4" duration="00:00:00.0002250" startTime="2026-09-01T02:49:03.8043219+02:00" endTime="2026-09-01T02:49:03.8044286+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1e6557b3-ff22-494b-b463-df7bae60a067" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedTests.attestationPackageAndSecretCoordinatesAreExact" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="486794ec-9fa7-25c9-80aa-4abc7ac38cec">
+      <Execution id="1388d165-4fa5-4c83-a907-974ad5c6d4a4" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedTests" name="attestationPackageAndSecretCoordinatesAreExact" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedTests.qualificationInventoryIsMutationSensitive" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="816584cf-bac6-97fe-4558-2b453266a0a6">
+      <Execution id="e7bd68c9-e912-4df2-854d-729cd8134cda" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedTests" name="qualificationInventoryIsMutationSensitive" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedTests.servedBytesBindRedirectsAndRetrievalClass" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="d66c1f6d-b2b2-51a6-d611-58cf4ca7d748">
+      <Execution id="f21305ee-c6e6-432b-a9ae-49262d80792a" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedTests" name="servedBytesBindRedirectsAndRetrievalClass" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests.fixtureIsCanonicalSyntheticAndComplete" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="e2a5825e-54e3-dcb5-927e-271447fa1d58">
+      <Execution id="1171c978-e598-454c-ab35-07b4b41cc9d9" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests" name="fixtureIsCanonicalSyntheticAndComplete" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedTests.completeExactObservationsValidate" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="fe749737-040c-b565-d585-49cb7ff1969d">
+      <Execution id="3ed22442-603e-4f4c-a164-772db68bf907" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedTests" name="completeExactObservationsValidate" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests.registeredValidatorIsOfflineIndependentAndPasses" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="e4adc279-e61b-80fa-5a07-fd8ec6193fa2">
+      <Execution id="902a6c6a-4ff2-4c82-a68a-f4ac726896e1" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests" name="registeredValidatorIsOfflineIndependentAndPasses" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedTests.evidenceLadderDoesNotPromoteUploadAcceptance" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="f7e9f56a-5014-9a4d-377b-54a8a791c17d">
+      <Execution id="36577a71-0f2a-43a4-92cc-f8ea0e7594ab" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedTests" name="evidenceLadderDoesNotPromoteUploadAcceptance" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests.signaturePrecedesPureImplementation" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="4b067fab-1dc8-f7f5-da38-4337709624da">
+      <Execution id="1e6557b3-ff22-494b-b463-df7bae60a067" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedArchitectureTests" name="signaturePrecedesPureImplementation" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubActionsReleaseFeedTests.attemptPaginationAndAvailabilityFailClosed" storage="/home/developer/projects/fs.gg.coordination-170/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="e2519442-9702-b6e5-957b-698f63d44240">
+      <Execution id="a041a23b-f486-4346-b7b5-afc03e9f4dce" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-170/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubActionsReleaseFeedTests" name="attemptPaginationAndAvailabilityFailClosed" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="e2a5825e-54e3-dcb5-927e-271447fa1d58" executionId="1171c978-e598-454c-ab35-07b4b41cc9d9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e2519442-9702-b6e5-957b-698f63d44240" executionId="a041a23b-f486-4346-b7b5-afc03e9f4dce" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fe749737-040c-b565-d585-49cb7ff1969d" executionId="3ed22442-603e-4f4c-a164-772db68bf907" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f7e9f56a-5014-9a4d-377b-54a8a791c17d" executionId="36577a71-0f2a-43a4-92cc-f8ea0e7594ab" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d66c1f6d-b2b2-51a6-d611-58cf4ca7d748" executionId="f21305ee-c6e6-432b-a9ae-49262d80792a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e4adc279-e61b-80fa-5a07-fd8ec6193fa2" executionId="902a6c6a-4ff2-4c82-a68a-f4ac726896e1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="486794ec-9fa7-25c9-80aa-4abc7ac38cec" executionId="1388d165-4fa5-4c83-a907-974ad5c6d4a4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="816584cf-bac6-97fe-4558-2b453266a0a6" executionId="e7bd68c9-e912-4df2-854d-729cd8134cda" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4b067fab-1dc8-f7f5-da38-4337709624da" executionId="1e6557b3-ff22-494b-b463-df7bae60a067" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="9" executed="9" passed="9" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.11]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:01.40]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
