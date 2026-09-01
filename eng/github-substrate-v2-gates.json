@@ -108,6 +108,12 @@
       "qGate": "Q2",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-work-taxonomy.fsx", "--", "."]
+    },
+    {
+      "id": "github-organization-issue-fields-contract",
+      "qGate": "Q2",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-organization-issue-fields.fsx", "--", "."]
     }
   ]
 }
