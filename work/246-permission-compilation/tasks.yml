@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 246-permission-compilation
+  title: "GS2-06.5 permission compilation"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/246-permission-compilation/spec.md
+  sourceClarifications: work/246-permission-compilation/clarifications.md
+  sourceChecklist: work/246-permission-compilation/checklist.md
+  sourcePlan: work/246-permission-compilation/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/246-permission-compilation/spec.md
+    digest: fa434e68f41ffa806ba9310a096f56f8455613183ba0bb185b5434fbad9f4efb
+    schemaVersion: 1
+  - label: clarifications
+    path: work/246-permission-compilation/clarifications.md
+    digest: f9a5da610892a28d7fb6be79afc3a9a6c25008756329f2b3ccde69bcc578c57e
+    schemaVersion: 1
+  - label: checklist
+    path: work/246-permission-compilation/checklist.md
+    digest: d93089056fb39d541f92966e5259083d7d3a7a22653bb8912c67afe512cfa387
+    schemaVersion: 1
+  - label: plan
+    path: work/246-permission-compilation/plan.md
+    digest: 1709dd0dfa3ac5c873d5967f669f9408684f32abb6bb13219cc1edc0682a358a
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 246-permission-compilation."

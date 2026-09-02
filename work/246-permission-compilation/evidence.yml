@@ -1,0 +1,173 @@
+schemaVersion: 1
+workId: 246-permission-compilation
+stage: evidence
+status: evidenceReady
+sourceSpec: work/246-permission-compilation/spec.md
+sourceClarifications: work/246-permission-compilation/clarifications.md
+sourceChecklist: work/246-permission-compilation/checklist.md
+sourcePlan: work/246-permission-compilation/plan.md
+sourceTasks: work/246-permission-compilation/tasks.yml
+sourceAnalysis: readiness/246-permission-compilation/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/246-permission-compilation/analysis.json
+    digest: 1824701dd8c9fbcaae164866fa24af940df989a1480c894267340583b69c4c82
+    schemaVersion: 1
+  - label: checklist
+    path: work/246-permission-compilation/checklist.md
+    digest: d93089056fb39d541f92966e5259083d7d3a7a22653bb8912c67afe512cfa387
+    schemaVersion: 1
+  - label: clarifications
+    path: work/246-permission-compilation/clarifications.md
+    digest: f9a5da610892a28d7fb6be79afc3a9a6c25008756329f2b3ccde69bcc578c57e
+    schemaVersion: 1
+  - label: plan
+    path: work/246-permission-compilation/plan.md
+    digest: 1709dd0dfa3ac5c873d5967f669f9408684f32abb6bb13219cc1edc0682a358a
+    schemaVersion: 1
+  - label: spec
+    path: work/246-permission-compilation/spec.md
+    digest: fa434e68f41ffa806ba9310a096f56f8455613183ba0bb185b5434fbad9f4efb
+    schemaVersion: 1
+  - label: tasks
+    path: work/246-permission-compilation/tasks.yml
+    digest: f71528491a0bfe25f7b320f26b526ed122abc24f6db900c78515ad467744ff3a
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubPermissionCompilationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/246-permission-compilation/qualification.trx
+      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubPermissionCompilationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/246-permission-compilation/qualification.trx
+      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubPermissionCompilationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/246-permission-compilation/qualification.trx
+      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubPermissionCompilationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/246-permission-compilation/qualification.trx
+      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubPermissionCompilationTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/246-permission-compilation/qualification.trx
+      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

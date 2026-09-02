@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "repository": "FS-GG/FS.GG.Coordination",
+  "interpreterIds": ["admin-cutover", "coordination-inspect", "coordination-issue", "release-publish"],
+  "operationIds": ["apply-repository-cutover", "inspect-coordination", "coordinate-issue", "publish-release"],
+  "principalClasses": {"normal": 2, "admin-cutover": 1, "release": 1},
+  "environments": ["coordination", "coordination-admin", "release"],
+  "expectedSeal": "9c163a82c561fab7deeda900be63567f0d87e616e6449a8692d430e05f1db265",
+  "controls": [
+    "prerequisite-receipt", "corpus-completeness", "source-binding", "permission-producer-agreement",
+    "interpreter-inventory", "interpreter-uniqueness", "least-privilege-app", "least-privilege-workflow", "no-wildcard-permission",
+    "no-permission-escalation", "normal-principal-separation", "admin-principal-separation",
+    "release-principal-separation", "environment-separation", "stable-ordering", "exact-seal",
+    "exact-replay", "quint-unchanged", "no-mutation-surface"
+  ]
+}
