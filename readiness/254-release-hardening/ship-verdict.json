@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "254-release-hardening",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "b0243b703408d3b1ab1bc6d90ee687993a6c077aaedbd7f4784072dd57687fc7"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 10,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 10
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

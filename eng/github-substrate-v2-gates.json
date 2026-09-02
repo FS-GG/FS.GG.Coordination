@@ -180,6 +180,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-permission-compilation.fsx", "--", "."]
+    },
+    {
+      "id": "github-release-hardening-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-release-hardening.fsx", "--", "."]
     }
   ]
 }

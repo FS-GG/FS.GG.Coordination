@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "stageCount": 11,
+  "feedCount": 2,
+  "packCount": 1,
+  "expectedSeal": "430ba76d264ccd7a43236e051b8414f231a2b466664428a2f6cb055c8ddd9483",
+  "controls": [
+    "release-prerequisite", "release-completeness", "release-source-binding", "release-roadmap-binding",
+    "protected-release-environment", "oidc-only-identity", "immutable-release-tag", "release-stage-ordering",
+    "one-pack-identity", "dual-feed-publication", "no-repack-recovery", "sbom-binding", "attestation-binding",
+    "dependency-submission", "dependency-review", "public-download", "release-digest-agreement",
+    "exact-release-seal", "exact-release-replay", "quint-release-unchanged", "no-release-mutation-surface"
+  ],
+  "independentCases": [
+    { "control": "release-prerequisite", "fixture": "alternate-prerequisite-digest" },
+    { "control": "release-completeness", "fixture": "incomplete-empty-stage-inventory" },
+    { "control": "release-source-binding", "fixture": "alternate-forty-hex-source" },
+    { "control": "release-roadmap-binding", "fixture": "alternate-forty-hex-roadmap" },
+    { "control": "protected-release-environment", "fixture": "zero-required-reviewers" },
+    { "control": "oidc-only-identity", "fixture": "static-token-provider" },
+    { "control": "immutable-release-tag", "fixture": "mutable-release-record" },
+    { "control": "release-stage-ordering", "fixture": "first-two-stages-swapped" },
+    { "control": "one-pack-identity", "fixture": "zero-pack-count" },
+    { "control": "dual-feed-publication", "fixture": "feed-order-reversed" },
+    { "control": "no-repack-recovery", "fixture": "recovery-source-bytes-diverge" },
+    { "control": "sbom-binding", "fixture": "wrong-sbom-format" },
+    { "control": "attestation-binding", "fixture": "wrong-attestation-predicate" },
+    { "control": "dependency-submission", "fixture": "submission-absent" },
+    { "control": "dependency-review", "fixture": "review-absent" },
+    { "control": "public-download", "fixture": "anonymous-download-unauthorized" },
+    { "control": "release-digest-agreement", "fixture": "public-download-bytes-diverge" },
+    { "control": "exact-release-seal", "fixture": "one-nibble-seal-divergence" },
+    { "control": "exact-release-replay", "fixture": "post-seal-download-status-change" },
+    { "control": "quint-release-unchanged", "fixture": "protocol-byte-append" },
+    { "control": "no-release-mutation-surface", "fixture": "forbidden-http-client-surface" }
+  ],
+  "shapeCases": [
+    "corpus-top-level-extra",
+    "feed-publication-extra",
+    "recovery-extra",
+    "expectations-top-level-extra",
+    "independent-case-extra"
+  ]
+}

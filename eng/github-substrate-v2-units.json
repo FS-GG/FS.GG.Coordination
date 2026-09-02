@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "96ed5fc67fa6f4a7d7251ea9c6540fa9fb60f412",
+    "revision": "185494fa8ba3986834141c2ddc4e8325410df260",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "889b5cde4bcd8f184d1982bfe75294eb511a72246dcba7ad6d6eab97cebd4df3"
+    "sha256": "4a7229b7e1fc5b9417d7d6cf14a4f22ba60e6d8a69cac4ce369d908d9e37ed39"
   },
   "units": [
     {
@@ -742,6 +742,20 @@
         { "id": "github-permission-compilation-contract", "qGate": "Q3", "commandSha256": "f65461c2982a828c93d249e6c49bba09b7fd7992e67efd5295c632ab53201857" }
       ],
       "contractSha256": "f4100c6e3c8fd3f3a6aaf0a9c8e5f4ec6a693886e9e12e7f68715754562fd423"
+    },
+    {
+      "id": "GS2-06.6",
+      "title": "Release hardening",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-06.5"],
+      "permissionCeiling": ["repository-local additive release-hardening contracts, pure deterministic compilation of protected OIDC release environments, immutable releases and tags, one-pack dual-feed saga plans, SBOMs, attestations, dependency submission and review, public-download verification, validation, and retained evidence", "read-only consumption of accepted GS2-06.5 and exact accepted roadmap evidence is allowed; no production GitHub setting, workflow, release, tag, package, feed, environment, deployment, stable-channel, or successor-unit mutation and no GS2-06.7 inspection, preparation, or implementation authority"],
+      "exitGate": "the Q3 release-hardening contract begins from the accepted GS2-06.5 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds repository and source, roadmap revision and digest, prerequisite receipt, a complete ordered release-stage inventory, protected release environment, OIDC-only short-lived identity, immutable release and tag policy, exactly one package build, exact package identity and bytes, SBOM and attestation subjects and predicate, dependency submission and review, both ordered publication feeds, no-repack recovery from the original package bytes, and anonymous public served-download bytes; every publication, recovery, SBOM, attestation, and served-download digest equals the single packed subject; publication begins only after dependency review and attestation, the second-feed failure path resumes from the original packed bytes without repacking, and release creation and public-byte verification follow both feeds; incomplete, missing, duplicate, unknown, malformed, stale, reordered, mutable, unprotected-environment, long-lived-credential, repacked, divergent-feed, altered-SBOM, altered-attestation, missing-dependency-control, non-public-download, altered-seal, and replay inputs fail closed; the retained FS.GG.Coordination corpus compiles one protected release plan, one pack, two feed publications, one no-repack recovery, one SBOM, one attestation, and one anonymous public-byte verification with exact replay; generated adversarial mutations and independently authored prerequisite, completeness, source, roadmap, environment, OIDC, immutability, stage ordering, one-pack, package identity, dual-feed, recovery, SBOM, attestation, dependency submission, dependency review, public download, digest agreement, seal, replay, Quint, and no-mutation controls all pass without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-release-hardening-contract"],
+      "gateContracts": [
+        { "id": "github-release-hardening-contract", "qGate": "Q3", "commandSha256": "51208bb68cea93e3c704383ced266ecac19ca71c9819a22d374fd73ed3c785c8" }
+      ],
+      "contractSha256": "87ddf9814990e2d46a21b96b47336b4078c78ab1564f208187c9ac9429495c13"
     }
   ]
 }
