@@ -1,0 +1,763 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "254-release-hardening",
+  "project": {
+    "id": "fs.gg.coordination",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "70f2a125e819d30332e8178911cfbfaf819dac8fc85fc3d77b309660838da381"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/254-release-hardening/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "cead50f8e5aa79a13c0aa363840e483e398c0824c05b07339085402e4e63dbb6"
+      }
+    },
+    {
+      "path": "work/254-release-hardening/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "49d82bb957021d036f9802926abe73748c0803043e48e37c8c81c028e8051a39"
+      }
+    },
+    {
+      "path": "work/254-release-hardening/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "622162f2a6dbbace1da13c3d67425c1e7531431a5537cb8cdf294c88c05d2474"
+      }
+    },
+    {
+      "path": "work/254-release-hardening/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "0f2f2888c08bee92079905dfe632904945b81f8db78d7ac4c90c0a7d4c4f1276"
+      }
+    },
+    {
+      "path": "work/254-release-hardening/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "91a5452ac2ba5976f6194c365ef37689539dc7413ce6f10eea916f840992898a"
+      }
+    },
+    {
+      "path": "work/254-release-hardening/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "dfb162070828ebf4ccbb5e1a455905781950d30a5c8778e47e8b08d2d1460784"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "254-release-hardening",
+    "title": "Release Hardening",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The exact GS2-06.6 Q3 gate passes only for one protected OIDC release plan with immutable tags and releases, one-pack byte identity, SBOM and attestation binding, dependency controls, dual-feed recovery, and public-download verification. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The exact GS2-06.6 Q3 gate passes only for one protected OIDC release plan with immutable tags and releases, one-pack byte identity, SBOM and attestation binding, dependency controls, dual-feed recovery, and public-download verification. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/254-release-hardening/spec.md",
+      "sourceLocation": {
+        "line": 32,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "Keep GS2-06.6 pure and mutation-free; protected-environment, immutable-release, publication, and verification facts are sealed inputs and compiled outputs.",
+      "decision": "Keep GS2-06.6 pure and mutation-free; protected-environment, immutable-release, publication, and verification facts are sealed inputs and compiled outputs.",
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [
+        "AC-001"
+      ],
+      "source": "work/254-release-hardening/clarifications.md",
+      "sourceLocation": {
+        "line": 24,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001",
+        "PD-002",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement clarification decision DEC-001",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [
+        "DEC-001"
+      ],
+      "sourceIds": [
+        "DEC-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Update contract surface PC-002",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Update contract surface PC-003",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Record verification evidence VO-002",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-002",
+        "VO-002"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Record verification evidence VO-003",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-003",
+        "VO-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "codex",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/254-release-hardening/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/254-release-hardening/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/254-release-hardening/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "70f2a125e819d30332e8178911cfbfaf819dac8fc85fc3d77b309660838da381"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/254-release-hardening/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "cead50f8e5aa79a13c0aa363840e483e398c0824c05b07339085402e4e63dbb6"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/254-release-hardening/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "49d82bb957021d036f9802926abe73748c0803043e48e37c8c81c028e8051a39"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/254-release-hardening/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "622162f2a6dbbace1da13c3d67425c1e7531431a5537cb8cdf294c88c05d2474"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/254-release-hardening/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "0f2f2888c08bee92079905dfe632904945b81f8db78d7ac4c90c0a7d4c4f1276"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/254-release-hardening/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "91a5452ac2ba5976f6194c365ef37689539dc7413ce6f10eea916f840992898a"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/254-release-hardening/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "dfb162070828ebf4ccbb5e1a455905781950d30a5c8778e47e8b08d2d1460784"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "10204925f0139dd2b9f3af1d99d105f89cb375901cff638a0efa2727979df7fd"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

@@ -6,11 +6,25 @@ open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Xml.Linq
 open Xunit
 
 let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 let private read path = File.ReadAllText(Path.Combine(root, path))
 let private sha (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+let private shaFile path = File.ReadAllBytes(path) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+let private tracked paths =
+    let startInfo = ProcessStartInfo("git")
+    startInfo.WorkingDirectory <- root
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    for argument in [ "ls-files"; "--error-unmatch"; "--" ] @ paths do startInfo.ArgumentList.Add(argument)
+    use child = Process.Start(startInfo)
+    let output = child.StandardOutput.ReadToEnd() + child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    child.ExitCode, output
 
 [<Fact>]
 let ``release hardening public surface is pure and mutation free`` () =
@@ -66,3 +80,41 @@ let ``release hardening corpus rejects unknown properties at every object bounda
     for required in [ "corpus-top-level-extra"; "feed-publication-extra"; "recovery-extra"; "expectations-top-level-extra"; "independent-case-extra" ] do
         Assert.Contains(required, validator)
     Assert.Contains("unknown-property fail-closed self-test failed", validator)
+
+[<Fact>]
+let ``accepted release hardening provider evidence is durable in the candidate Git tree`` () =
+    let analysis = "readiness/254-release-hardening/analysis.json"
+    let qualification = "artifacts/test-results/254-release-hardening/qualification.trx"
+    let workModel = "readiness/254-release-hardening/work-model.json"
+    let verification = "readiness/254-release-hardening/verify.json"
+    let paths = [ analysis; qualification; workModel; verification ]
+    let code, output = tracked paths
+    if code <> 0 then failwith output
+
+    let expected =
+        [ analysis, "7cc01dce90044e0b765a77d86feb8fa869441ceeba81b94ed15aa1843307dd80"
+          qualification, "892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
+          workModel, "21cdd50ce4cc4c68ee83798b42dca65331c61e4ef3ef08061c951f39c7ef0a68"
+          verification, "0c78fccbe4c2a6519b896f214a324dd0dbc1fd4f9f4bc3b7cba5fef7dd09d11b" ]
+    for relative, digest in expected do
+        let path = Path.Combine(root, relative)
+        Assert.True(File.Exists(path), $"provider evidence is absent: {relative}")
+        Assert.Equal(digest, shaFile(path))
+
+    let evidence = read "work/254-release-hardening/evidence.yml"
+    Assert.Contains($"path: {analysis}", evidence)
+    Assert.Equal(10, evidence.Split($"source: {qualification}", StringSplitOptions.None).Length - 1)
+    Assert.Equal(10, evidence.Split("sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d", StringSplitOptions.None).Length - 1)
+    let verify = read verification
+    Assert.Contains($"\"path\": \"{workModel}\"", verify)
+    Assert.Contains("21cdd50ce4cc4c68ee83798b42dca65331c61e4ef3ef08061c951f39c7ef0a68", verify)
+
+    let results =
+        XDocument.Load(Path.Combine(root, qualification)).Descendants()
+        |> Seq.filter (fun element -> element.Name.LocalName = "UnitTestResult")
+        |> Seq.map (fun element -> element.Attribute(XName.Get("outcome")).Value)
+        |> Seq.countBy id
+        |> Map.ofSeq
+    Assert.Equal(182, results |> Map.tryFind "Passed" |> Option.defaultValue 0)
+    Assert.Equal(0, results |> Map.tryFind "Failed" |> Option.defaultValue 0)
+    Assert.Equal(0, results |> Map.tryFind "NotExecuted" |> Option.defaultValue 0)
