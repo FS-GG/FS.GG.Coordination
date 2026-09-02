@@ -11,7 +11,7 @@ sourceAnalysis: readiness/239-immutable-execution-pins/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/239-immutable-execution-pins/analysis.json
-    digest: 5db777412946ad127d0e4bc1ce515add3e70380870a7bf483c92f6019dd6e15f
+    digest: 6aadc9f6416f01264fcfcae8cb1e545393be2887f7f1dd44d16c7fb772531e4b
     schemaVersion: 1
   - label: checklist
     path: work/239-immutable-execution-pins/checklist.md
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:f1ca4cf2f873b8aa6ec23601dc41ccdd68232657a95613634133279e64ff657f"
+      digest: "sha256:2f37114d571fae8f9e498beed6204afab6a97257278bae485bb563b4862ecb07"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 5
+      passed: 7
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
