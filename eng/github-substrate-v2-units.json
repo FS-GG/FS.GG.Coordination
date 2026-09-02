@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "43209b79634cc56994876329d3ab8a0ce7c9ef79",
+    "revision": "1da112a0d80fd38e5b2a9780db77a4fb98c873ca",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "d4d1e83c11428d2c7b035cfb302d44e6a9dac665d780410f78b731829e884265"
+    "sha256": "d56501e23db681f49c772d238f013a78d311db55b08ea194ca78648c47e5596f"
   },
   "units": [
     {
@@ -672,6 +672,20 @@
         { "id": "github-fleet-shadow-contract", "qGate": "Q4", "commandSha256": "ac17d8cb59be06a6faf0e1d2f07907d28e2ca678a72ead74cb2a0c9c1eaaa0cb" }
       ],
       "contractSha256": "b738d44b1bfafd6a5bbd2e00e4e4817c3dd607cefff5e0833c23112e82440c59"
+    },
+    {
+      "id": "GS2-06.1",
+      "title": "Repository profiles",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-02.11", "GS2-03.9", "GS2-04.9", "GS2-05.8", "GS2-05.9"],
+      "permissionCeiling": ["repository-local additive repository-profile contracts, pure deterministic compilation over a sealed reviewed roster snapshot, bounded native custom-property projection plans, validation, and retained evidence", "read-only consumption of reviewed roster authority is allowed; no production GitHub write, custom-property application, required-check census, ruleset plan, repository administration, external-owner mutation, deployment, publication, stable release, GS2-06.2 implementation, or successor-unit implementation authority"],
+      "exitGate": "the Q3 repository-profile contract begins from the accepted terminal GS2-02.11, GS2-03.9, GS2-04.9, GS2-05.8, and GS2-05.9 receipts and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical seal binds the exact reviewed registry/repos.yml revision and artifact digest to every unique owner-qualified roster row in stable order; every profile retains role, complete capability list, kit-delivery and absence-cover metadata, reason, ownership boundary, and richer registry facts while deriving a closed authority, framework-receiver, organization-inert, or external-observe-only profile; exactly the bounded controlled-vocabulary fsgg_role, fsgg_owner_scope, and fsgg_coordination_mode attributes project for organization-administered repositories, while external rows remain first-class profiles with zero native-property mutation permission or plan; missing, duplicate, malformed, stale, unsupported-role, unsupported-capability, cross-owner, incomplete, lossy, overflow, altered-source, and altered-seal inputs fail closed; exact replay is byte-identical, properties meet native name and value bounds, and no apply path exists; generated and independently authored source-binding, completeness, ordering, identity, vocabulary, rich-authority, organization-projection, external-owner, property-bound, freshness, seal, replay, prerequisite, Quint, and no-apply inversions all fail closed over the complete ten-row roster without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-repository-profile-contract"],
+      "gateContracts": [
+        { "id": "github-repository-profile-contract", "qGate": "Q3", "commandSha256": "e90aa38109dbdee42f9af157b846192e44286dca059ec549fcf1b3609e4db3e5" }
+      ],
+      "contractSha256": "6de48b57654910625bf65f0bc4d30a8b399dbf0aa9e6d9e6c79b7a209f53a89e"
     }
   ]
 }
