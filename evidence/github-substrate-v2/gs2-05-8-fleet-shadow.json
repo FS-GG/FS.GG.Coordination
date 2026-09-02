@@ -1,0 +1,2823 @@
+{
+  "schema": "fsgg.coordination.github-fleet-shadow-evidence/1",
+  "unitId": "GS2-05.8",
+  "prerequisite": {
+    "unitId": "GS2-05.7",
+    "receiptDigest": "77ba4ae9ddf350ec93afe7021b320474c5f04ed5f7a255fa2136a3f15af5af12",
+    "receiptCommit": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+  },
+  "roadmap": {
+    "revision": "2d2caf0087d2c3ec47e95f4931ff88a3243953e8",
+    "sha256": "52087f0b26db0fd558d84a38e4e4334a293d5d6f64a22a887fa5d4d783b6938c"
+  },
+  "observation": {
+    "complete": true,
+    "rosterRevision": "838f80598dcebea1019ae1b0b38f55180502fb2de155d274c891bc245dd8c29d",
+    "roster": [
+      "EHotwagner/S.I.R.",
+      "FS-GG/.github",
+      "FS-GG/FS.GG.Audio",
+      "FS-GG/FS.GG.Coordination",
+      "FS-GG/FS.GG.Game",
+      "FS-GG/FS.GG.Governance",
+      "FS-GG/FS.GG.Net",
+      "FS-GG/FS.GG.Rendering",
+      "FS-GG/FS.GG.SDD",
+      "FS-GG/FS.GG.Templates"
+    ],
+    "windowStartedAt": "2026-09-02T00:22:06Z",
+    "windowEndedAt": "2026-09-02T00:23:06Z",
+    "capabilities": [
+      "roster-read",
+      "metadata-read",
+      "issue-read",
+      "project-read",
+      "journal-read",
+      "check-read"
+    ],
+    "mutationAttempts": [],
+    "source": {
+      "command": "fsgg-coord ready --all --json",
+      "sha256": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f",
+      "itemCount": 180,
+      "credentialsRetained": false
+    },
+    "repositories": [
+      {
+        "repository": "EHotwagner/S.I.R.",
+        "expectedItemCount": 1,
+        "terminalPageObserved": true,
+        "items": [
+          {
+            "repository": "EHotwagner/S.I.R.",
+            "item": "EHotwagner/S.I.R.#352",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          }
+        ]
+      },
+      {
+        "repository": "FS-GG/.github",
+        "expectedItemCount": 89,
+        "terminalPageObserved": true,
+        "items": [
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2130",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#266",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2695",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2726",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2728",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2729",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2737",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2774",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2835",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2837",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2840",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2841",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2842",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2843",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2844",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2845",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2846",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2848",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2849",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2850",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2852",
+            "v1": {
+              "raw": "In review",
+              "normalized": "in review",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:In review",
+              "normalized": "in review",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2853",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2857",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2858",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2862",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2863",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2864",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2867",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2872",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2873",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2874",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2884",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2893",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2896",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2903",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2952",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2953",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2954",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2955",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2956",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2957",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2958",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2959",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2960",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2961",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2962",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2963",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2964",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2965",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2994",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2995",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2996",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#2997",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3006",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3008",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3009",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3010",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3052",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3053",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3054",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3061",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3063",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3065",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3068",
+            "v1": {
+              "raw": "In review",
+              "normalized": "in review",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:In review",
+              "normalized": "in review",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3070",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3091",
+            "v1": {
+              "raw": "In review",
+              "normalized": "in review",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:In review",
+              "normalized": "in review",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3093",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3100",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3102",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3105",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3106",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3110",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3112",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3114",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3116",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3118",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3120",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3122",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3124",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3126",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3128",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3132",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3134",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3136",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3142",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3144",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3146",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3148",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/.github",
+            "item": "FS-GG/.github#3150",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          }
+        ]
+      },
+      {
+        "repository": "FS-GG/FS.GG.Audio",
+        "expectedItemCount": 0,
+        "terminalPageObserved": true,
+        "items": []
+      },
+      {
+        "repository": "FS-GG/FS.GG.Coordination",
+        "expectedItemCount": 70,
+        "terminalPageObserved": true,
+        "items": [
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#100",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#102",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#104",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#107",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#123",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#125",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#128",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#130",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#132",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#135",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#137",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#139",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#141",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#143",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#145",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#147",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#149",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#151",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#153",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#155",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#157",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#159",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#161",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#163",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#165",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#166",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#168",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#170",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#172",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#174",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#175",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#178",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#180",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#182",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#184",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#186",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#188",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#190",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#192",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#194",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#196",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#198",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#200",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#202",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#204",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#206",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#208",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#210",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#212",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#214",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#216",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#218",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#220",
+            "v1": {
+              "raw": "In progress",
+              "normalized": "in progress",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:In progress",
+              "normalized": "in progress",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#24",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#66",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#68",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#70",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#72",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#74",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#77",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#78",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#79",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#80",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#81",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#86",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#88",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#90",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#94",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#96",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Coordination",
+            "item": "FS-GG/FS.GG.Coordination#98",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          }
+        ]
+      },
+      {
+        "repository": "FS-GG/FS.GG.Game",
+        "expectedItemCount": 0,
+        "terminalPageObserved": true,
+        "items": []
+      },
+      {
+        "repository": "FS-GG/FS.GG.Governance",
+        "expectedItemCount": 2,
+        "terminalPageObserved": true,
+        "items": [
+          {
+            "repository": "FS-GG/FS.GG.Governance",
+            "item": "FS-GG/FS.GG.Governance#422",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Governance",
+            "item": "FS-GG/FS.GG.Governance#423",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          }
+        ]
+      },
+      {
+        "repository": "FS-GG/FS.GG.Net",
+        "expectedItemCount": 0,
+        "terminalPageObserved": true,
+        "items": []
+      },
+      {
+        "repository": "FS-GG/FS.GG.Rendering",
+        "expectedItemCount": 1,
+        "terminalPageObserved": true,
+        "items": [
+          {
+            "repository": "FS-GG/FS.GG.Rendering",
+            "item": "FS-GG/FS.GG.Rendering#1274",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          }
+        ]
+      },
+      {
+        "repository": "FS-GG/FS.GG.SDD",
+        "expectedItemCount": 11,
+        "terminalPageObserved": true,
+        "items": [
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#924",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#927",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#928",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#934",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#935",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#936",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#937",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#942",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#944",
+            "v1": {
+              "raw": "In review",
+              "normalized": "in review",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:In review",
+              "normalized": "in review",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#947",
+            "v1": {
+              "raw": "Done",
+              "normalized": "done",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Done",
+              "normalized": "done",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.SDD",
+            "item": "FS-GG/FS.GG.SDD#948",
+            "v1": {
+              "raw": "Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Backlog",
+              "normalized": "backlog",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          }
+        ]
+      },
+      {
+        "repository": "FS-GG/FS.GG.Templates",
+        "expectedItemCount": 6,
+        "terminalPageObserved": true,
+        "items": [
+          {
+            "repository": "FS-GG/FS.GG.Templates",
+            "item": "FS-GG/FS.GG.Templates#438",
+            "v1": {
+              "raw": "Ready",
+              "normalized": "ready",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Ready",
+              "normalized": "ready",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Templates",
+            "item": "FS-GG/FS.GG.Templates#440",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Templates",
+            "item": "FS-GG/FS.GG.Templates#441",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Templates",
+            "item": "FS-GG/FS.GG.Templates#442",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Templates",
+            "item": "FS-GG/FS.GG.Templates#443",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          },
+          {
+            "repository": "FS-GG/FS.GG.Templates",
+            "item": "FS-GG/FS.GG.Templates#444",
+            "v1": {
+              "raw": "Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "3c203f1ab1360ed63c9d1dd15cb9e9436f6c552813339172345c64ca73090c0f"
+            },
+            "v2": {
+              "raw": "lifecycle-project-status:Blocked",
+              "normalized": "blocked",
+              "sourceRevision": "4f33cc536b2becc4faa8e356e51fb370ef929c51"
+            },
+            "divergence": null
+          }
+        ]
+      }
+    ]
+  },
+  "report": {
+    "repositoryCount": 10,
+    "itemCount": 180,
+    "equalDecisionCount": 180,
+    "classifiedDivergenceCount": 0,
+    "unexplainedDivergenceCount": 0,
+    "seal": "87702feb6d00de51ffe5f0e2cb00d1e00654e86d21801f6b8102db13a9695560"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "fsgg.coordination.github-fleet-shadow-expectations/1",
+  "unitId": "GS2-05.8",
+  "authorship": "independent black-box expectations over the public adapter and retained live evidence",
+  "controls": [
+    "roster-completeness",
+    "pagination-completeness",
+    "stable-ordering",
+    "decision-preservation",
+    "equal-decision",
+    "v1-defect-classification",
+    "v2-defect-classification",
+    "version-change-classification",
+    "zero-unexplained",
+    "read-only-manifest",
+    "no-mutation-attempt",
+    "fresh-observation",
+    "exact-seal",
+    "exact-replay",
+    "cross-subject",
+    "partial-unreadable",
+    "quint-and-prerequisite",
+    "live-evidence"
+  ],
+  "oracles": [
+    "a zero-item roster repository is covered, not omitted",
+    "a nonterminal page is incomplete even when every returned item compares equal",
+    "raw v1 and v2 decisions remain sealed when their normalized decisions agree",
+    "an unequal decision without exactly one accountable supported classification is unexplained",
+    "read-only permission is positively enumerated and mutation attempts are an independent refusal",
+    "a retained observation is immutable; later churn creates a successor rather than rewriting it"
+  ]
+}

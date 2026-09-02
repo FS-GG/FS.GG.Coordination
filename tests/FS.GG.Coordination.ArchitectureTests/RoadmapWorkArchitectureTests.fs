@@ -235,7 +235,8 @@ let ``roadmap unit index advances through staged GS2-05-9 and sequences GS2-05-7
              "GS2-05.4"
              "GS2-05.5"
              "GS2-05.6"
-             "GS2-05.7" ]
+             "GS2-05.7"
+             "GS2-05.8" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -1363,7 +1364,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(24, commands.Length)
+    Assert.Equal(25, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
