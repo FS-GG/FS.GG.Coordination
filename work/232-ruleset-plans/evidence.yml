@@ -1,0 +1,335 @@
+schemaVersion: 1
+workId: 232-ruleset-plans
+stage: evidence
+status: evidenceReady
+sourceSpec: work/232-ruleset-plans/spec.md
+sourceClarifications: work/232-ruleset-plans/clarifications.md
+sourceChecklist: work/232-ruleset-plans/checklist.md
+sourcePlan: work/232-ruleset-plans/plan.md
+sourceTasks: work/232-ruleset-plans/tasks.yml
+sourceAnalysis: readiness/232-ruleset-plans/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/232-ruleset-plans/analysis.json
+    digest: b0cd4a53da43bf0ad8ce2d299c384097c0aaf354ecf8bfdb576217a5886a76a7
+    schemaVersion: 1
+  - label: checklist
+    path: work/232-ruleset-plans/checklist.md
+    digest: ff64e5e5d2bff8bda994410e79b8c665cfc727a0392dc748a1f88deeed6154c5
+    schemaVersion: 1
+  - label: clarifications
+    path: work/232-ruleset-plans/clarifications.md
+    digest: 6ab1773633f4f8e001846dc94f49784a36c2d3114c787d33c990ff185a306e14
+    schemaVersion: 1
+  - label: plan
+    path: work/232-ruleset-plans/plan.md
+    digest: 565aae70c485558e36c45f15df4a90e188135248efa8daaad7bc39a148c7c36d
+    schemaVersion: 1
+  - label: spec
+    path: work/232-ruleset-plans/spec.md
+    digest: 71fc072a3e1249fc10b5a0bd43b9127e951a002a007994d0ba9a2005f4c9e38f
+    schemaVersion: 1
+  - label: tasks
+    path: work/232-ruleset-plans/tasks.yml
+    digest: b3c1bae05add076a2d7171c481b4a3d5ccc252a0e3dc7fe18d55e7dbc69fc7cf
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubRulesetPlanArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/232-ruleset-plans/qualification.trx
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 20
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

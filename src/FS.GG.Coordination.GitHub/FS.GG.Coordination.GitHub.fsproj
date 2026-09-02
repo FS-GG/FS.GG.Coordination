@@ -29,6 +29,8 @@
     <Compile Include="RepositoryProfileAdapter.fs" />
     <Compile Include="RequiredCheckCensusAdapter.fsi" />
     <Compile Include="RequiredCheckCensusAdapter.fs" />
+    <Compile Include="RulesetPlanAdapter.fsi" />
+    <Compile Include="RulesetPlanAdapter.fs" />
     <Compile Include="RepositorySettingsAdapter.fsi" />
     <Compile Include="RepositorySettingsAdapter.fs" />
     <Compile Include="ActionsReleaseFeedAdapter.fsi" />

@@ -108,7 +108,7 @@
       "artifact": "compiler-and-tests/architecture.trx",
       "timeoutMinutes": 20,
       "entryPoint": "bash eng/bootstrap-gates/compiler-and-tests.sh",
-      "fetchDepth": 1,
+      "fetchDepth": 0,
       "alwaysUpload": false,
       "downloadArtifacts": false,
       "environment": {},
