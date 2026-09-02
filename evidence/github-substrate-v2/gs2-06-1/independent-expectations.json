@@ -1,0 +1,51 @@
+{
+  "schema": "fsgg.github.repository-profile-expectations/1",
+  "unitId": "GS2-06.1",
+  "sourceRevision": "1da112a0d80fd38e5b2a9780db77a4fb98c873ca",
+  "repositoryCount": 10,
+  "organizationAdministeredCount": 9,
+  "externalObserveOnlyCount": 1,
+  "controls": [
+      "roster-source-binding",
+      "complete-roster",
+      "stable-ordering",
+      "identity-uniqueness",
+      "role-vocabulary",
+      "capability-vocabulary",
+      "rich-authority-retention",
+      "organization-property-projection",
+      "external-observe-only",
+      "property-bounds",
+      "freshness",
+      "exact-seal",
+      "exact-replay",
+      "prerequisite-receipts",
+      "quint-unchanged",
+      "no-apply-surface"
+    ],
+  "expectedOrder": [
+    "EHotwagner/S.I.R.",
+    "FS-GG/.github",
+    "FS-GG/FS.GG.Audio",
+    "FS-GG/FS.GG.Coordination",
+    "FS-GG/FS.GG.Game",
+    "FS-GG/FS.GG.Governance",
+    "FS-GG/FS.GG.Net",
+    "FS-GG/FS.GG.Rendering",
+    "FS-GG/FS.GG.SDD",
+    "FS-GG/FS.GG.Templates"
+  ],
+  "selectedNativeProperties": ["fsgg_coordination_mode", "fsgg_owner_scope", "fsgg_role"],
+  "external": {
+    "fullName": "EHotwagner/S.I.R.",
+    "administration": "external-observe-only",
+    "propertyMutationPermitted": false,
+    "nativePropertyCount": 0
+  },
+  "organizationModes": {
+    "FS-GG/.github": "source",
+    "FS-GG/FS.GG.Coordination": "inert",
+    "framework": "receiver"
+  },
+  "expectedSeal": "f3524e8edbd6b88b0783551c14377881dee5dd958ebd4835d77a57913d30d74b"
+}

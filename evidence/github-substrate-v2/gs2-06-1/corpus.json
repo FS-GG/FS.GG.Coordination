@@ -1,0 +1,23 @@
+{
+  "schema": "fsgg.github.repository-profile-corpus/1",
+  "unitId": "GS2-06.1",
+  "sourceRevision": "1da112a0d80fd38e5b2a9780db77a4fb98c873ca",
+  "controls": [
+    "roster-source-binding",
+    "complete-roster",
+    "stable-ordering",
+    "identity-uniqueness",
+    "role-vocabulary",
+    "capability-vocabulary",
+    "rich-authority-retention",
+    "organization-property-projection",
+    "external-observe-only",
+    "property-bounds",
+    "freshness",
+    "exact-seal",
+    "exact-replay",
+    "prerequisite-receipts",
+    "quint-unchanged",
+    "no-apply-surface"
+  ]
+}

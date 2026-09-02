@@ -1,0 +1,26 @@
+{
+  "schema": "fsgg.github.repository-roster-snapshot/1",
+  "unitId": "GS2-06.1",
+  "schemaVersion": 1,
+  "source": {
+    "repository": "FS-GG/.github",
+    "path": "registry/repos.yml",
+    "revision": "1da112a0d80fd38e5b2a9780db77a4fb98c873ca",
+    "artifactSha256": "838f80598dcebea1019ae1b0b38f55180502fb2de155d274c891bc245dd8c29d",
+    "reviewedAt": "2026-09-02T01:33:54Z"
+  },
+  "complete": true,
+  "canonicalRosterSha256": "d81cca958a9b261f4d70d62eb9b4af8eba8e3dd8c7cdcf1820848120743edf95",
+  "rows": [
+    { "id": ".github", "fullName": "FS-GG/.github", "role": "authority", "capabilities": ["labels"], "kitDelivery": null, "absenceCover": null, "reason": null },
+    { "id": "sdd", "fullName": "FS-GG/FS.GG.SDD", "role": "framework", "capabilities": ["labels", "coordination-kit", "build-config", "lockfile-sync", "contract-coherence"], "kitDelivery": "package", "absenceCover": "required", "reason": null },
+    { "id": "rendering", "fullName": "FS-GG/FS.GG.Rendering", "role": "framework", "capabilities": ["labels", "coordination-kit", "build-config", "lockfile-sync", "contract-coherence"], "kitDelivery": "package", "absenceCover": "required", "reason": null },
+    { "id": "governance", "fullName": "FS-GG/FS.GG.Governance", "role": "framework", "capabilities": ["labels", "coordination-kit", "build-config", "lockfile-sync", "contract-coherence"], "kitDelivery": "package", "absenceCover": "required", "reason": null },
+    { "id": "templates", "fullName": "FS-GG/FS.GG.Templates", "role": "framework", "capabilities": ["labels", "coordination-kit", "lockfile-sync", "contract-coherence"], "kitDelivery": "package", "absenceCover": "required", "reason": null },
+    { "id": "game", "fullName": "FS-GG/FS.GG.Game", "role": "framework", "capabilities": ["labels", "coordination-kit", "build-config", "lockfile-sync", "contract-coherence"], "kitDelivery": "package", "absenceCover": "required", "reason": null },
+    { "id": "audio", "fullName": "FS-GG/FS.GG.Audio", "role": "framework", "capabilities": ["labels", "coordination-kit", "lockfile-sync", "contract-coherence"], "kitDelivery": "package", "absenceCover": "required", "reason": null },
+    { "id": "net", "fullName": "FS-GG/FS.GG.Net", "role": "framework", "capabilities": ["labels", "coordination-kit", "lockfile-sync", "contract-coherence"], "kitDelivery": "package", "absenceCover": "required", "reason": null },
+    { "id": "coordination", "fullName": "FS-GG/FS.GG.Coordination", "role": "non-participant", "capabilities": [], "kitDelivery": null, "absenceCover": null, "reason": "ADR-0078 new-only v2 product at inert bootstrap: organization-owned; no release exists and no v1 fabric, App writer, hosted runtime, webhook, or production authority is admitted before its qualified roadmap units and protected OpenV2 transition" },
+    { "id": "sir", "fullName": "EHotwagner/S.I.R.", "role": "non-participant", "capabilities": [], "kitDelivery": null, "absenceCover": null, "reason": "user-owned and doing org work — S.I.R.#138 is a child of epic .github#2067 M6 and an open blocker on the .github#2070 release epic; it takes no org fabric; feedback-report bridge decision .github#2548 (consumer PR EHotwagner/S.I.R.#209), with structural delivery tracked by .github#2545" }
+  ]
+}

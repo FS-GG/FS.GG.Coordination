@@ -150,6 +150,12 @@
       "qGate": "Q4",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-fleet-shadow.fsx", "--", "."]
+    },
+    {
+      "id": "github-repository-profile-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-repository-profiles.fsx", "--", "."]
     }
   ]
 }

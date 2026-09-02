@@ -25,6 +25,8 @@
     <Compile Include="LifecycleProjectionAdapter.fs" />
     <Compile Include="FleetShadowAdapter.fsi" />
     <Compile Include="FleetShadowAdapter.fs" />
+    <Compile Include="RepositoryProfileAdapter.fsi" />
+    <Compile Include="RepositoryProfileAdapter.fs" />
     <Compile Include="RepositorySettingsAdapter.fsi" />
     <Compile Include="RepositorySettingsAdapter.fs" />
     <Compile Include="ActionsReleaseFeedAdapter.fsi" />
