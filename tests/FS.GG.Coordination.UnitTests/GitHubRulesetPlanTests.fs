@@ -52,6 +52,11 @@ let ``administered profile compiles the complete secure desired target`` () =
     let report = compile (snapshot false) |> Result.defaultWith (failwithf "%A")
     Assert.Equal(FrameworkPlan, report.ProfileClass)
     Assert.True(report.MutationPermitted)
+    Assert.Equal(repository.FullName, report.CurrentPolicyRepository)
+    Assert.Equal(revision, report.CurrentPolicyRevision)
+    Assert.Equal(digest, report.CurrentPolicyEvidenceSha256)
+    Assert.Equal(observedAt, report.CurrentPolicyObservedAt)
+    Assert.True(report.CurrentPolicyComplete)
     let branch = report.DefaultBranch.Value
     Assert.Equal<string list>([ "~DEFAULT_BRANCH" ], branch.Include)
     Assert.True(branch.ProtectDeletion)
@@ -199,10 +204,10 @@ let ``qualification requires every generated and independent inversion`` () =
         GitHubRulesetPlanQualification.requiredControls
         |> List.map (fun control ->
             { GitHubRulesetPlanControlResult.Control = control
-              MutationRed = true
+              ControlPassed = true
               BaselineGreen = true })
     Assert.Equal(Ok(), GitHubRulesetPlanQualification.validate passing passing)
-    let broken = passing |> List.map (fun value -> if value.Control = GitHubRulesetPlanControl.MergeQueue then { value with MutationRed = false } else value)
+    let broken = passing |> List.map (fun value -> if value.Control = GitHubRulesetPlanControl.MergeQueue then { value with ControlPassed = false } else value)
     match GitHubRulesetPlanQualification.validate passing broken with
     | Ok _ -> Assert.Fail("merge-queue mutation survived independent qualification")
-    | Error findings -> Assert.Contains("RP-MUTATION-SURVIVED", findings |> List.map _.Code)
+    | Error findings -> Assert.Contains("RP-CONTROL-FAILED", findings |> List.map _.Code)

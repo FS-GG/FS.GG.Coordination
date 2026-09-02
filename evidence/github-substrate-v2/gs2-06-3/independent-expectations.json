@@ -15,6 +15,6 @@
   "deleteBranchOnMerge": true,
   "bypassCount": 0,
   "exceptionCount": 0,
-  "expectedSeal": "13ced8bf7eb4e257c386499f623f26fb8796256efa75d549f414176079c3ea35",
+  "expectedSeal": "f16a8e3cde6e2a6e607e53b4e97c4165e895113aab9353bb1edb95a4fb5ffaea",
   "controls": ["prerequisite-receipt", "profile-binding", "census-binding", "current-policy-binding", "complete-observation", "repository-boundary", "stable-ordering", "default-branch-target", "release-tag-target", "required-checks", "review-policy", "conversation-resolution", "merge-methods", "auto-merge", "merge-queue", "branch-deletion", "bypass-authorization", "exception-identity", "exception-window", "exception-scope", "observe-only", "freshness", "exact-seal", "exact-replay", "quint-unchanged", "no-apply-surface"]
 }

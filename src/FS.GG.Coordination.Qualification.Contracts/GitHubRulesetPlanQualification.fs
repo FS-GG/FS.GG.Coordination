@@ -9,7 +9,7 @@ type GitHubRulesetPlanControl =
 
 type GitHubRulesetPlanControlResult =
     { Control: GitHubRulesetPlanControl
-      MutationRed: bool
+      ControlPassed: bool
       BaselineGreen: bool }
 
 type GitHubRulesetPlanFinding = { Code: string; ControlId: string; Message: string }
@@ -63,7 +63,7 @@ module GitHubRulesetPlanQualification =
                       let result = results.Head
                       if not result.BaselineGreen then
                           { Code = "RP-BASELINE-RED"; ControlId = control; Message = $"{source} baseline is not green" }
-                      if not result.MutationRed then
-                          { Code = "RP-MUTATION-SURVIVED"; ControlId = control; Message = $"{source} mutation did not fail" } ]
+                      if not result.ControlPassed then
+                          { Code = "RP-CONTROL-FAILED"; ControlId = control; Message = $"{source} control did not pass" } ]
         let findings = findingsFor "generated" generated @ findingsFor "independent" independent
         if findings.IsEmpty then Ok() else Error findings

@@ -89,8 +89,11 @@ type RulesetPlanReport =
       PrerequisiteReceiptDigest: string
       ProfileReportSeal: string
       CensusSeal: string option
+      CurrentPolicyRepository: string
       CurrentPolicyRevision: string
       CurrentPolicyEvidenceSha256: string
+      CurrentPolicyObservedAt: DateTimeOffset
+      CurrentPolicyComplete: bool
       DefaultBranch: DefaultBranchRulesetTarget option
       ReleaseTags: ReleaseTagRulesetTarget option
       RepositoryPolicy: RepositoryMergePolicyTarget option
@@ -369,8 +372,11 @@ module RulesetPlanAdapter =
                   PrerequisiteReceiptDigest = snapshot.PrerequisiteReceiptDigest.ToLowerInvariant()
                   ProfileReportSeal = snapshot.ExpectedProfileSeal.ToLowerInvariant()
                   CensusSeal = censusReport |> Option.map (_.Seal >> _.ToLowerInvariant())
+                  CurrentPolicyRepository = snapshot.CurrentPolicyRepository
                   CurrentPolicyRevision = snapshot.CurrentPolicyRevision.ToLowerInvariant()
                   CurrentPolicyEvidenceSha256 = snapshot.CurrentPolicyEvidenceSha256.ToLowerInvariant()
+                  CurrentPolicyObservedAt = snapshot.CurrentPolicyObservedAt
+                  CurrentPolicyComplete = snapshot.CurrentPolicyComplete
                   DefaultBranch = defaultBranch
                   ReleaseTags = releaseTags
                   RepositoryPolicy = repositoryPolicy

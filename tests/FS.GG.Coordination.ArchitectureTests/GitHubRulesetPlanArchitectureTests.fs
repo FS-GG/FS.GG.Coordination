@@ -67,7 +67,7 @@ let ``ruleset plan Q3 validator rejects its closed mutation inventory`` () =
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.Equal(0, child.ExitCode)
-    Assert.Contains("GITHUB_RULESET_PLANS_OK repository=FS-GG/FS.GG.Coordination checks=6 mergeQueue=false bypass=0 exceptions=0 controls=26 seal=13ced8bf7eb4e257c386499f623f26fb8796256efa75d549f414176079c3ea35", output)
+    Assert.Contains("GITHUB_RULESET_PLANS_OK repository=FS-GG/FS.GG.Coordination checks=6 mergeQueue=false bypass=0 exceptions=0 controls=26 seal=f16a8e3cde6e2a6e607e53b4e97c4165e895113aab9353bb1edb95a4fb5ffaea", output)
     Assert.Equal("", error)
 
 [<Fact>]

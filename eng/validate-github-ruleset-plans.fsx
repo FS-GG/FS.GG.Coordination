@@ -5,6 +5,7 @@
 
 open System
 open System.IO
+open System.Diagnostics
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json.Nodes
@@ -81,6 +82,32 @@ let policyRepository = text policyRepositoryObject "nameWithOwner"
 let policyObservedAt = DateTimeOffset.Parse(text policyEvidence "observedAt")
 if policyRepository <> text corpus "currentPolicyRepository" || policyObservedAt <> DateTimeOffset.Parse(text corpus "currentPolicyObservedAt") then
     failwith "current policy identity or observation time differs"
+let policyRevision = text corpus "currentPolicyRevision"
+let gitShow = ProcessStartInfo("git")
+gitShow.WorkingDirectory <- root
+gitShow.UseShellExecute <- false
+gitShow.RedirectStandardOutput <- true
+gitShow.RedirectStandardError <- true
+gitShow.ArgumentList.Add "show"
+gitShow.ArgumentList.Add $"{policyRevision}:eng/repository-settings/prestate.json"
+let gitChild = Process.Start gitShow
+let gitBytes = new MemoryStream()
+gitChild.StandardOutput.BaseStream.CopyTo gitBytes
+let gitError = gitChild.StandardError.ReadToEnd()
+gitChild.WaitForExit()
+if gitChild.ExitCode <> 0 || sha256Bytes (gitBytes.ToArray()) <> sha256Bytes policyBytes then failwith $"current policy revision does not identify the retained artifact: {gitError}"
+gitChild.Dispose()
+gitBytes.Dispose()
+let requiredPolicyOperations =
+    [ "actions-permissions"; "code-security-association"; "code-security-configuration"
+      "codeql-default-setup"; "dependabot-alerts"; "dependency-graph"; "main-ruleset"; "organization-actions-permissions"
+      "private-vulnerability-reporting"; "release-tag-ruleset"; "repository"; "security"; "selected-actions"; "teams"; "workflow-permissions" ]
+let policyOperations = policyEvidence["operations"].AsArray() |> Seq.map _.AsObject() |> List.ofSeq
+let observedPolicyOperations = policyOperations |> List.map (fun value -> text value "name") |> Set.ofList
+let policyComplete =
+    requiredPolicyOperations |> List.forall observedPolicyOperations.Contains
+    && policyOperations |> List.forall (fun value -> let status = text value "status" in status = "verified" || status = "unsupported")
+if policyComplete <> corpus["currentPolicyComplete"].GetValue<bool>() then failwith "current policy completeness differs from the required operation inventory"
 let acceptedReceipt = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-06.2.json"))).AsObject()
 if text acceptedReceipt "digest" <> text corpus "prerequisiteReceiptDigest" then failwith "accepted GS2-06.2 receipt differs"
 
@@ -91,9 +118,9 @@ let snapshot =
     { SchemaVersion = 1; Repository = repository; PrerequisiteReceiptDigest = text corpus "prerequisiteReceiptDigest"
       ProfileSnapshot = profileSnapshot; ExpectedProfileSeal = text corpus "profileSeal"
       CensusSnapshot = Some censusSnapshot; ExpectedCensusSeal = Some(text corpus "censusSeal")
-      CurrentPolicyRepository = text corpus "currentPolicyRepository"; CurrentPolicyRevision = text corpus "currentPolicyRevision"
+      CurrentPolicyRepository = policyRepository; CurrentPolicyRevision = policyRevision
       CurrentPolicyEvidenceSha256 = text corpus "currentPolicyEvidenceSha256"; CurrentPolicyObservedAt = DateTimeOffset.Parse(text corpus "currentPolicyObservedAt")
-      CurrentPolicyComplete = corpus["currentPolicyComplete"].GetValue<bool>()
+      CurrentPolicyComplete = policyComplete
       ObservedAt = asOf; Complete = corpus["complete"].GetValue<bool>(); ApprovedBypass = []; RequestedBypass = []; Exceptions = [] }
 let compile candidate = RulesetPlanAdapter.compile asOf maxAge candidate
 let refused candidate = compile candidate |> Result.isError
@@ -101,16 +128,28 @@ let report = compile snapshot |> Result.defaultWith (failwithf "ruleset-plan bas
 let branch = report.DefaultBranch.Value
 let tags = report.ReleaseTags.Value
 let policy = report.RepositoryPolicy.Value
-let planSource = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/RulesetPlanAdapter.fs"))
-let sourceMutationRejected (original: string) (replacement: string) (required: string) =
-    planSource.Contains(original) && not (planSource.Replace(original, replacement).Contains(required))
 let profileClassText = function AuthorityPlan -> "authority" | FrameworkPlan -> "framework" | HostedNonParticipantPlan -> "hosted-non-participant" | ObserveOnlyPlan -> "observe-only"
 
 if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal
 else
+    let mutantInfo = ProcessStartInfo("dotnet")
+    mutantInfo.WorkingDirectory <- root
+    mutantInfo.UseShellExecute <- false
+    mutantInfo.RedirectStandardOutput <- true
+    mutantInfo.RedirectStandardError <- true
+    mutantInfo.ArgumentList.Add "fsi"
+    mutantInfo.ArgumentList.Add "eng/qualify-github-ruleset-plan-mutants.fsx"
+    use mutantChild = Process.Start mutantInfo
+    let mutantOutput = mutantChild.StandardOutput.ReadToEnd().Trim()
+    let mutantError = mutantChild.StandardError.ReadToEnd()
+    mutantChild.WaitForExit()
+    let mutantPrefix = "RULESET_PLAN_MUTANTS_OK controls="
+    if mutantChild.ExitCode <> 0 || not (mutantOutput.StartsWith mutantPrefix) then failwith $"executable source mutation qualification failed: {mutantError}{mutantOutput}"
+    let killedMutants = mutantOutput.Substring(mutantPrefix.Length).Split(',') |> Set.ofArray
     let expectedControls = GitHubRulesetPlanQualification.requiredControls |> List.map GitHubRulesetPlanQualification.controlId
     if texts expectations "controls" <> expectedControls then failwith "independent control inventory differs"
     if report.Repository <> text expectations "repository" || report.Seal <> text expectations "expectedSeal" then failwith "baseline identity or seal differs"
+    if report.CurrentPolicyRepository <> policyRepository || report.CurrentPolicyRevision <> policyRevision || report.CurrentPolicyEvidenceSha256 <> sha256Bytes policyBytes || report.CurrentPolicyObservedAt <> policyObservedAt || report.CurrentPolicyComplete <> policyComplete then failwith "reported current-policy provenance differs"
     if profileClassText report.ProfileClass <> text expectations "profileClass" || report.MutationPermitted <> expectations["mutationPermitted"].GetValue<bool>() then failwith "profile class or mutation permission differs"
     if branch.RequiredChecks |> List.map _.Context <> texts expectations "requiredChecks" then failwith "required checks differ"
     if branch.Include <> texts expectations "defaultBranchInclude" || tags.Include <> texts expectations "releaseTagInclude" then failwith "target include differs"
@@ -131,23 +170,24 @@ else
             && refused { snapshot with CurrentPolicyComplete = false }
             && refused { snapshot with CurrentPolicyRepository = "FS-GG/other" }
             && refused { snapshot with CurrentPolicyObservedAt = asOf.AddDays(-8) }
+            && (RulesetPlanAdapter.verify report.Seal asOf maxAge { snapshot with CurrentPolicyRevision = String.replicate 40 "c" } |> Result.isError)
         | CompleteObservation -> refused { snapshot with Complete = false }
         | RepositoryBoundary -> refused { snapshot with Repository = "FS-GG/other" }
         | StableOrdering ->
             let reorderedProfile = { profileSnapshot with Rows = List.rev profileSnapshot.Rows }
             let reorderedCensus = { censusSnapshot with Requirements = List.rev censusSnapshot.Requirements; Producers = List.rev censusSnapshot.Producers }
             compile { snapshot with ProfileSnapshot = reorderedProfile; CensusSnapshot = Some reorderedCensus } = Ok report
-        | DefaultBranchTarget -> sourceMutationRejected "Include = [ \"~DEFAULT_BRANCH\" ]" "Include = []" "Include = [ \"~DEFAULT_BRANCH\" ]"
-        | ReleaseTagTarget -> sourceMutationRejected "Include = [ \"refs/tags/v*\" ]" "Include = []" "Include = [ \"refs/tags/v*\" ]"
+        | DefaultBranchTarget -> killedMutants.Contains "default-branch-target"
+        | ReleaseTagTarget -> killedMutants.Contains "release-tag-target"
         | RequiredChecks -> refused { snapshot with CensusSnapshot = Some { censusSnapshot with Producers = censusSnapshot.Producers.Tail } }
         | ReviewPolicy -> branch.DismissStaleReviews && branch.RequiredApprovals = 0 && (compile { snapshot with Exceptions = [ active (RequiredReviewCount 2) ] } |> Result.exists (fun value -> value.DefaultBranch.Value.RequiredApprovals = 2))
         | ConversationResolution -> branch.RequireConversationResolution && (compile { snapshot with Exceptions = [ active (RulesetExceptionScope.ConversationResolution false) ] } |> Result.exists (fun value -> not value.DefaultBranch.Value.RequireConversationResolution))
-        | MergeMethods -> sourceMutationRejected "AllowedMergeMethods = [ Squash ]" "AllowedMergeMethods = [ MergeCommit ]" "AllowedMergeMethods = [ Squash ]"
-        | AutoMerge -> sourceMutationRejected "AllowAutoMerge = true" "AllowAutoMerge = false" "AllowAutoMerge = true"
+        | MergeMethods -> killedMutants.Contains "merge-methods"
+        | AutoMerge -> killedMutants.Contains "auto-merge"
         | GitHubRulesetPlanControl.MergeQueue ->
             refused { snapshot with Exceptions = [ active (RulesetExceptionScope.MergeQueue true) ] }
             && not branch.MergeQueueEnabled
-        | BranchDeletion -> sourceMutationRejected "DeleteBranchOnMerge = true" "DeleteBranchOnMerge = false" "DeleteBranchOnMerge = true"
+        | BranchDeletion -> killedMutants.Contains "branch-deletion"
         | BypassAuthorization ->
             let request = { ActorId = 7L; Kind = IntegrationActor }
             let approved = { ActorId = 7L; Kind = IntegrationActor; AllowedProfiles = [ HostedNonParticipantPlan ] }
@@ -203,7 +243,7 @@ else
         | QuintUnchanged -> generatedMutation QuintUnchanged
         | NoApplySurface -> generatedMutation NoApplySurface
 
-    let result control red = { GitHubRulesetPlanControlResult.Control = control; MutationRed = red; BaselineGreen = true }
+    let result control passed = { GitHubRulesetPlanControlResult.Control = control; ControlPassed = passed; BaselineGreen = true }
     let generated = GitHubRulesetPlanQualification.requiredControls |> List.map (fun control -> result control (generatedMutation control))
     let independent = GitHubRulesetPlanQualification.requiredControls |> List.map (fun control -> result control (independentMutation control))
     match GitHubRulesetPlanQualification.validate generated independent with

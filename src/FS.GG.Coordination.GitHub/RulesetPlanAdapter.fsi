@@ -87,8 +87,11 @@ type RulesetPlanReport =
       PrerequisiteReceiptDigest: string
       ProfileReportSeal: string
       CensusSeal: string option
+      CurrentPolicyRepository: string
       CurrentPolicyRevision: string
       CurrentPolicyEvidenceSha256: string
+      CurrentPolicyObservedAt: DateTimeOffset
+      CurrentPolicyComplete: bool
       DefaultBranch: DefaultBranchRulesetTarget option
       ReleaseTags: ReleaseTagRulesetTarget option
       RepositoryPolicy: RepositoryMergePolicyTarget option

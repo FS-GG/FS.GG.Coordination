@@ -11,7 +11,7 @@ sourceAnalysis: readiness/232-ruleset-plans/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/232-ruleset-plans/analysis.json
-    digest: 51c5bef596ab10721526f6df67e097ce9ca0157004daa8237daa3186ca5d820f
+    digest: b0cd4a53da43bf0ad8ce2d299c384097c0aaf354ecf8bfdb576217a5886a76a7
     schemaVersion: 1
   - label: checklist
     path: work/232-ruleset-plans/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/232-ruleset-plans/plan.md
-    digest: 279220df4831c86b18d32a8524e4a62d77464cb8131b0336c8f0459f1588bd5c
+    digest: 565aae70c485558e36c45f15df4a90e188135248efa8daaad7bc39a148c7c36d
     schemaVersion: 1
   - label: spec
     path: work/232-ruleset-plans/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/232-ruleset-plans/tasks.yml
-    digest: d07c5e48ed006aa6edd7c7a0faa9a49ae9304bd398520504a676596173c8faab
+    digest: b3c1bae05add076a2d7171c481b4a3d5ccc252a0e3dc7fe18d55e7dbc69fc7cf
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
+      digest: "sha256:fbc5855af801c6352f84b4095b2ea1098b31c0fd66d72bf3ce71748a3d4cc409"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 20

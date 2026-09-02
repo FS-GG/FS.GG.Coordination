@@ -9,7 +9,7 @@ type GitHubRulesetPlanControl =
 
 type GitHubRulesetPlanControlResult =
     { Control: GitHubRulesetPlanControl
-      MutationRed: bool
+      ControlPassed: bool
       BaselineGreen: bool }
 
 type GitHubRulesetPlanFinding = { Code: string; ControlId: string; Message: string }
