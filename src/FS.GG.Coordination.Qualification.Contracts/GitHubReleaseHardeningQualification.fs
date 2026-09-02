@@ -113,8 +113,10 @@ module GitHubReleaseHardeningQualification =
                              "publicDownloadSha256", snapshot.PublicDownloadSha256 ] do
             if not (isSha value) then findings.Add(InvalidReleaseField name)
         if snapshot.SourceRevision <> "84e488f046c624b2789d520cd062bf99d964b3b5" then findings.Add(InvalidReleaseField "sourceRevisionBinding")
+        if snapshot.Repository <> "FS-GG/FS.GG.Coordination" then findings.Add(InvalidReleaseField "repositoryBinding")
         if snapshot.RoadmapRevision <> "185494fa8ba3986834141c2ddc4e8325410df260" || snapshot.RoadmapSha256 <> "4a7229b7e1fc5b9417d7d6cf14a4f22ba60e6d8a69cac4ce369d908d9e37ed39" then findings.Add(InvalidReleaseField "roadmapBinding")
         if snapshot.PrerequisiteReceiptDigest <> "9227977242b530755cbc28ff9093fa810aab9647037d3ae4b60cd7311c86cd0f" then findings.Add(InvalidReleaseField "prerequisiteBinding")
+        if snapshot.PackageId <> "FS.GG.Coordination.Protocol" || snapshot.PackageVersion <> "2.0.0-candidate" then findings.Add(InvalidReleaseField "packageIdentityBinding")
         if not snapshot.Complete then findings.Add(IncompleteReleaseInventory)
         if snapshot.Environment <> "release" || not snapshot.EnvironmentProtected || snapshot.RequiredReviewers < 1 then findings.Add(UnprotectedReleaseEnvironment)
         if snapshot.OidcProvider <> "github-actions-oidc" || snapshot.OidcAudience <> "nuget.org" then findings.Add(InvalidOidcIdentity)

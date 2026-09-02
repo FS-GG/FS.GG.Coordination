@@ -65,13 +65,13 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
     let generatedMutation = function
         | ReleasePrerequisite -> refused { snapshot with PrerequisiteReceiptDigest = zero }
         | ReleaseCompleteness -> refused { snapshot with Complete = false }
-        | ReleaseSourceBinding -> refused { snapshot with SourceRevision = "main" }
+        | ReleaseSourceBinding -> refused { snapshot with SourceRevision = "main" } && refused { snapshot with Repository = "FS-GG/other" }
         | ReleaseRoadmapBinding -> refused { snapshot with RoadmapSha256 = zero }
         | ProtectedReleaseEnvironment -> refused { snapshot with EnvironmentProtected = false }
         | OidcOnlyIdentity -> refused { snapshot with LongLivedCredential = true }
         | ImmutableReleaseAndTag -> refused { snapshot with TagImmutable = false }
         | ReleaseStageOrdering -> refused { snapshot with Stages = List.rev snapshot.Stages }
-        | OnePackIdentity -> refused { snapshot with PackCount = 2 }
+        | OnePackIdentity -> refused { snapshot with PackCount = 2 } && refused { snapshot with PackageId = "Attacker.Package" } && refused { snapshot with PackageVersion = "9.9.9" }
         | DualFeedPublication -> refused { snapshot with FeedPublications = snapshot.FeedPublications.Tail }
         | NoRepackRecovery -> refused { snapshot with Recovery = { snapshot.Recovery with Repack = true } }
         | SbomBinding -> refused { snapshot with SbomSubjectSha256 = zero }
@@ -90,12 +90,12 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
         match control with
         | ReleasePrerequisite -> snapshot.PrerequisiteReceiptDigest = text receipt "digest"
         | ReleaseCompleteness -> snapshot.Complete && report.StageCount = 11
-        | ReleaseSourceBinding -> snapshot.SourceRevision.Length = 40
+        | ReleaseSourceBinding -> snapshot.Repository = "FS-GG/FS.GG.Coordination" && snapshot.SourceRevision.Length = 40
         | ReleaseRoadmapBinding -> snapshot.RoadmapRevision.Length = 40
         | ProtectedReleaseEnvironment -> snapshot.Environment = "release" && snapshot.RequiredReviewers > 0
         | OidcOnlyIdentity -> snapshot.OidcProvider = "github-actions-oidc" && not snapshot.LongLivedCredential
         | ImmutableReleaseAndTag -> snapshot.ReleaseImmutable && snapshot.TagImmutable
-        | OnePackIdentity -> report.PackCount = 1
+        | OnePackIdentity -> report.PackCount = 1 && snapshot.PackageId = "FS.GG.Coordination.Protocol" && snapshot.PackageVersion = "2.0.0-candidate"
         | DualFeedPublication -> report.FeedCount = 2
         | NoRepackRecovery -> not snapshot.Recovery.Repack && snapshot.Recovery.SourcePackageSha256 = report.PackageSha256
         | SbomBinding -> snapshot.SbomFormat = "spdx-2.3" && snapshot.SbomSubjectSha256 = report.PackageSha256

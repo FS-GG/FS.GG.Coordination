@@ -38,9 +38,16 @@ let ``environment identity and immutable surfaces fail closed`` () =
 [<Fact>]
 let ``one pack and ordered dual feed identity fail closed`` () =
     Assert.True(GitHubReleaseHardeningQualification.compile { baseline with PackCount = 2 } |> Result.isError)
+    Assert.True(GitHubReleaseHardeningQualification.compile { baseline with PackageId = "Attacker.Package" } |> Result.isError)
+    Assert.True(GitHubReleaseHardeningQualification.compile { baseline with PackageVersion = "9.9.9" } |> Result.isError)
     Assert.True(GitHubReleaseHardeningQualification.compile { baseline with FeedPublications = List.rev baseline.FeedPublications } |> Result.isError)
     let divergent = baseline.FeedPublications |> List.map (fun value -> if value.Feed = "nuget-org" then { value with PackageSha256 = String.replicate 64 "0" } else value)
     Assert.True(GitHubReleaseHardeningQualification.compile { baseline with FeedPublications = divergent } |> Result.isError)
+
+[<Fact>]
+let ``repository and source identity are exact`` () =
+    Assert.True(GitHubReleaseHardeningQualification.compile { baseline with Repository = "FS-GG/other" } |> Result.isError)
+    Assert.True(GitHubReleaseHardeningQualification.compile { baseline with SourceRevision = String.replicate 40 "0" } |> Result.isError)
 
 [<Fact>]
 let ``SBOM attestation dependency and public verification fail closed`` () =
