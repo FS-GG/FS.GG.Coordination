@@ -1,0 +1,47 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-06.2",
+  "state": "accepted",
+  "unitContractSha256": "2c27bbe68be5ce3767bb87bfaa1c42c01290a3d79b041f518335fef84daed030",
+  "sourceRevision": "35f9398f528c033eaebed2ac2499ee2e865963f8",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-06.1-receipt",
+      "sha256": "299e02a6ecd6aaafbe667bd2a81f1baf8952a3b7f01d21118d8bab0d0317f173"
+    },
+    {
+      "name": "github-required-check-authority-evidence",
+      "sha256": "a646c56ad8d05ee4a49b9e3164554ac03f98484a196e37c1ec1ef04dc4972130"
+    },
+    {
+      "name": "github-required-check-census-corpus",
+      "sha256": "cc80df8ed11e1e98fa6a83520e69aac68e0c4b5c8204cad73be7d2192471b6d1"
+    },
+    {
+      "name": "github-required-check-census-independent-expectations",
+      "sha256": "a7e681ca9e5208181f32aeb8a65d2d64d8a01ef27b6f2e71c45f413805645abb"
+    },
+    {
+      "name": "github-required-check-census-q3-validator",
+      "sha256": "727c4323b07cd2033391cae7caff49232906a6e48afe9abbaaa4424368c2f402"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "a88822f4a9f41f887003b119a6686f735bb90f8fd917c60482943b23643c6068"
+    },
+    {
+      "name": "structured-review-acceptance",
+      "sha256": "92107904ed53b0b69261246db8cde751ff15b30f5c7a47bd750c0bd199f4c696"
+    },
+    {
+      "name": "delivery-completion",
+      "sha256": "2f6ea24e3195bbb383b9d8d0c637cfb1d4ab35da488c6f3b0339eda430905df2"
+    },
+    {
+      "name": "protected-main-bootstrap-evidence-run-33588758947",
+      "sha256": "bf94bda61112ba7bf9817b9191dc46c797841c6cc60a8a292f439c28edc5369d"
+    }
+  ],
+  "acceptedAt": "2026-09-02T03:55:30Z",
+  "digest": "7157ad56a4879e48642dbb055b0b35158353cbc020fca9a008ed901446d74d0c"
+}
