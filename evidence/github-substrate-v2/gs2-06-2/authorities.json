@@ -1,0 +1,28 @@
+{
+  "schema": "fsgg.coordination.github-required-check-authorities/1",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "observedAt": "2026-09-02T03:29:00Z",
+  "classicProtection": {
+    "endpoint": "repos/FS-GG/FS.GG.Coordination/branches/main/protection",
+    "httpStatus": 404,
+    "requirements": []
+  },
+  "rulesets": [
+    {
+      "endpoint": "repos/FS-GG/FS.GG.Coordination/rulesets/21633423",
+      "id": 21633423,
+      "name": "main-protected",
+      "target": "branch",
+      "enforcement": "active",
+      "includes": ["~DEFAULT_BRANCH"],
+      "requiredStatusChecks": [
+        { "context": "bootstrap-recovery", "integrationId": 15368 },
+        { "context": "compiler-and-tests", "integrationId": 15368 },
+        { "context": "dependency-and-security", "integrationId": 15368 },
+        { "context": "deterministic-build", "integrationId": 15368 },
+        { "context": "evidence-manifest", "integrationId": 15368 },
+        { "context": "package-install-smoke", "integrationId": 15368 }
+      ]
+    }
+  ]
+}

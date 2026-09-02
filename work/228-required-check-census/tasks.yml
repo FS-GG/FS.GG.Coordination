@@ -1,0 +1,146 @@
+schemaVersion: 1
+work:
+  id: 228-required-check-census
+  title: "Required Check Census"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/228-required-check-census/spec.md
+  sourceClarifications: work/228-required-check-census/clarifications.md
+  sourceChecklist: work/228-required-check-census/checklist.md
+  sourcePlan: work/228-required-check-census/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/228-required-check-census/spec.md
+    digest: b986880a2568567edff5c2606d5b887de3f7e99f289abe2ea6ef6302b1315d5b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/228-required-check-census/clarifications.md
+    digest: 5b5a3467467c0a0cec5013eb623e3863df212abb1b8bb19350c5e6f10466f15d
+    schemaVersion: 1
+  - label: checklist
+    path: work/228-required-check-census/checklist.md
+    digest: 23ce856dff00138ee1386ab71742fa0fa72983f1e75cdc1a779fe5e73f25de38
+    schemaVersion: 1
+  - label: plan
+    path: work/228-required-check-census/plan.md
+    digest: 5dca58040c39f9a4ebdccf38e5d21b394779d7bef3a4775bcd03c035a800082a
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001, PD-002, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement clarification decision DEC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement clarification decision DEC-002
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement clarification decision DEC-003
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-003]
+    sourceIds: [DEC-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement clarification decision DEC-004
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-004]
+    sourceIds: [DEC-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Implement clarification decision DEC-005
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-005]
+    sourceIds: [DEC-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Implement plan decision PD-002
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-002, DEC-005, FR-001, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV011]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 228-required-check-census."
