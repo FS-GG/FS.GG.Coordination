@@ -50,6 +50,9 @@ let ``fleet shadow evidence covers the complete roster and closed control invent
     Assert.Equal(180, report.GetProperty("itemCount").GetInt32())
     Assert.Equal(0, report.GetProperty("unexplainedDivergenceCount").GetInt32())
     Assert.False(observation.GetProperty("source").GetProperty("credentialsRetained").GetBoolean())
+    Assert.Equal("value-independent", observation.GetProperty("source").GetProperty("independence").GetProperty("highestReached").GetString())
+    Assert.Equal("fsgg-coord ready --all --json", observation.GetProperty("source").GetProperty("v1").GetProperty("command").GetString())
+    Assert.Equal("gh api graphql --paginate --slurp", observation.GetProperty("source").GetProperty("v2").GetProperty("command").GetString())
     Assert.Equal(0, observation.GetProperty("mutationAttempts").GetArrayLength())
     let generatedIds = corpus.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
     let independentIds = independent.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList

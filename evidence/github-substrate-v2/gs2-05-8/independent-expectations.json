@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.github-fleet-shadow-expectations/1",
   "unitId": "GS2-05.8",
-  "authorship": "independent black-box expectations over the public adapter and retained live evidence",
+  "authorship": "independent black-box expectations over the public adapter and separately retained v1 CLI and v2 direct-GraphQL live readings",
   "controls": [
     "roster-completeness",
     "pagination-completeness",
@@ -29,5 +29,12 @@
     "an unequal decision without exactly one accountable supported classification is unexplained",
     "read-only permission is positively enumerated and mutation attempts are an independent refusal",
     "a retained observation is immutable; later churn creates a successor rather than rewriting it"
-  ]
+  ],
+  "independence": {
+    "highestReached": "value-independent",
+    "residual": [
+      "both readers identify subjects by repository and issue number",
+      "both readers observe the same GitHub Project runtime"
+    ]
+  }
 }

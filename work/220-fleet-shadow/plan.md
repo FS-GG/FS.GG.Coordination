@@ -37,8 +37,9 @@ Prose status: planned
 - PD-003 [AC-001] [FR-003] complete: Register GS2-05.8 and a Q4 `github-fleet-shadow-contract` whose corpus,
   independent expectations, offline validator, unit tests, and architecture tests bind the accepted
   GS2-05.7 receipt and roadmap revision while proving the canonical Quint tree is unchanged.
-- PD-004 [AC-001] [FR-004] complete: Capture a fresh read-only live-fleet evidence document through the
-  declared six read capability classes, retain only public identities and fingerprints, and validate it
+- PD-004 [AC-001] [FR-004] complete: Capture fresh value-independent v1 CLI and direct-GraphQL live-fleet
+  reads through the declared six read capability classes, retain only public identities, status decisions,
+  pagination facts, and fingerprints, disclose their shared subject-key and GitHub-runtime residual, and validate them
   offline. No adapter or qualification surface exposes an apply or production-write operation.
 
 ## Contract Impact

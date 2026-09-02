@@ -1,13 +1,13 @@
 {
   "schema": "fsgg.coordination.github-fleet-shadow-corpus/1",
   "unitId": "GS2-05.8",
-  "registeredContractSha256": "da7733bdd597a976a5132d14f9c7c0136fb7e4e90cbb05864d465a7200730ce2",
+  "registeredContractSha256": "b738d44b1bfafd6a5bbd2e00e4e4817c3dd607cefff5e0833c23112e82440c59",
   "acceptedPredecessorReceiptSha256": "f4d7dd20ff1554aef20ad1bbcea15b2f715a673a5b4b4d8c964b13f19dcb13d7",
   "acceptedPredecessorReceiptDigest": "77ba4ae9ddf350ec93afe7021b320474c5f04ed5f7a255fa2136a3f15af5af12",
   "roadmapRevision": "2d2caf0087d2c3ec47e95f4931ff88a3243953e8",
   "roadmapSha256": "52087f0b26db0fd558d84a38e4e4334a293d5d6f64a22a887fa5d4d783b6938c",
   "quintSourceSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
-  "liveEvidenceSha256": "d08cc70722af53ec29c4913e372cb539f821ca616bf805ef8e3e369a5d477ee8",
+  "liveEvidenceSha256": "65f6792757ef2375b6e5506e1d11a7e202272d873e35f75faf5121143721750e",
   "controls": [
     "roster-completeness",
     "pagination-completeness",

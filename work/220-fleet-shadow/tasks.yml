@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/220-fleet-shadow/plan.md
-    digest: 9cb1687f942b79280114a8a52b5846e0ed371d5ed7d3ddbaabfc78fab855ea0c
+    digest: b76a4a5c4a309521f55f32e1c616961cd0db5a266af75b3f246cb5117847f935
     schemaVersion: 1
 tasks:
   - id: T001

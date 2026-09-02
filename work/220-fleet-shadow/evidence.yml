@@ -11,7 +11,7 @@ sourceAnalysis: readiness/220-fleet-shadow/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/220-fleet-shadow/analysis.json
-    digest: d74a5e77bf3322ddb7e567e0e826f5288a74eca60eb638fe0e7941a0e2152d8e
+    digest: 524d7a24bd16a24c4b725c5926b01a10ced6d38776cd554f9b5c0dba6da7b655
     schemaVersion: 1
   - label: checklist
     path: work/220-fleet-shadow/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/220-fleet-shadow/plan.md
-    digest: 9cb1687f942b79280114a8a52b5846e0ed371d5ed7d3ddbaabfc78fab855ea0c
+    digest: b76a4a5c4a309521f55f32e1c616961cd0db5a266af75b3f246cb5117847f935
     schemaVersion: 1
   - label: spec
     path: work/220-fleet-shadow/spec.md
@@ -31,7 +31,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/220-fleet-shadow/tasks.yml
-    digest: 2ec4aee58721263106c2c57fd3027ad15c410be68d2559f2611d7da603cea79d
+    digest: 03e214cc1010b0ad30f441c90ae331dd80f2953fe684c10e082f0e97933002b7
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/220-fleet-shadow/qualification.trx
-      digest: "sha256:2e3943825d333c55a4f66f194e56e6acc2ac9aec236f62f980060c152ad43df7"
+      digest: "sha256:c8ddc97150c5c3e5b6902525aba896a5010a9891c3276aed8840fcae068f6911"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 128
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/220-fleet-shadow/qualification.trx
-      digest: "sha256:2e3943825d333c55a4f66f194e56e6acc2ac9aec236f62f980060c152ad43df7"
+      digest: "sha256:c8ddc97150c5c3e5b6902525aba896a5010a9891c3276aed8840fcae068f6911"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 128
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/220-fleet-shadow/qualification.trx
-      digest: "sha256:2e3943825d333c55a4f66f194e56e6acc2ac9aec236f62f980060c152ad43df7"
+      digest: "sha256:c8ddc97150c5c3e5b6902525aba896a5010a9891c3276aed8840fcae068f6911"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 128
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/220-fleet-shadow/qualification.trx
-      digest: "sha256:2e3943825d333c55a4f66f194e56e6acc2ac9aec236f62f980060c152ad43df7"
+      digest: "sha256:c8ddc97150c5c3e5b6902525aba896a5010a9891c3276aed8840fcae068f6911"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 128
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/220-fleet-shadow/qualification.trx
-      digest: "sha256:2e3943825d333c55a4f66f194e56e6acc2ac9aec236f62f980060c152ad43df7"
+      digest: "sha256:c8ddc97150c5c3e5b6902525aba896a5010a9891c3276aed8840fcae068f6911"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 128
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/220-fleet-shadow/qualification.trx
-      digest: "sha256:2e3943825d333c55a4f66f194e56e6acc2ac9aec236f62f980060c152ad43df7"
+      digest: "sha256:c8ddc97150c5c3e5b6902525aba896a5010a9891c3276aed8840fcae068f6911"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 128
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/220-fleet-shadow/qualification.trx
-      digest: "sha256:2e3943825d333c55a4f66f194e56e6acc2ac9aec236f62f980060c152ad43df7"
+      digest: "sha256:c8ddc97150c5c3e5b6902525aba896a5010a9891c3276aed8840fcae068f6911"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 128
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/220-fleet-shadow/qualification.trx
-      digest: "sha256:2e3943825d333c55a4f66f194e56e6acc2ac9aec236f62f980060c152ad43df7"
+      digest: "sha256:c8ddc97150c5c3e5b6902525aba896a5010a9891c3276aed8840fcae068f6911"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 128
