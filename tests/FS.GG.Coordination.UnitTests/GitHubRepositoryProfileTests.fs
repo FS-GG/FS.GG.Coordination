@@ -49,7 +49,10 @@ let ``repository profile compiler fails closed on identity source freshness and 
     Assert.Contains(UnsupportedRepositoryCapability("FS-GG/FS.GG.SDD", "unknown"), RepositoryProfileAdapter.compile reviewedAt (TimeSpan.FromHours 1) (snapshot unsupported) |> findings)
     let stale = snapshot rows
     Assert.Equal(Error [ StaleRoster ], RepositoryProfileAdapter.compile (reviewedAt.AddHours 2) (TimeSpan.FromHours 1) stale)
+    Assert.Contains(InvalidSourceBinding "sourceRevision", RepositoryProfileAdapter.compile reviewedAt (TimeSpan.FromHours 1) { stale with SourceRevision = "main" } |> findings)
     Assert.Contains(InvalidSourceBinding "canonicalRosterSha256", RepositoryProfileAdapter.compile reviewedAt (TimeSpan.FromHours 1) { stale with CanonicalRosterSha256 = String.replicate 64 "0" } |> findings)
+    let baseline = RepositoryProfileAdapter.compile reviewedAt (TimeSpan.FromHours 1) stale |> Result.defaultWith (failwithf "%A")
+    Assert.Equal(Error [ AlteredRepositoryProfileSeal ], RepositoryProfileAdapter.verify baseline.Seal reviewedAt (TimeSpan.FromHours 1) { stale with SourceArtifactSha256 = String.replicate 64 "f" })
     let crossed = rows |> List.map (fun row -> if row.Id = "sdd" then { row with FullName = "someone/FS.GG.SDD" } else row)
     Assert.Contains(UnsupportedRepositoryRole "someone/FS.GG.SDD", RepositoryProfileAdapter.compile reviewedAt (TimeSpan.FromHours 1) (snapshot crossed) |> findings)
 

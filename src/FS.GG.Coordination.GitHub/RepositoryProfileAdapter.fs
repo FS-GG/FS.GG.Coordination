@@ -98,6 +98,9 @@ module RepositoryProfileAdapter =
     let private digestLike (value: string) =
         value.Length = 64 && value |> Seq.forall Uri.IsHexDigit
 
+    let private revisionLike (value: string) =
+        value.Length = 40 && value |> Seq.forall Uri.IsHexDigit
+
     let private repositoryOwner (fullName: string) =
         match fullName.Split('/') with
         | [| owner; repository |] when owner <> "" && repository <> "" && owner.Trim() = owner && repository.Trim() = repository -> Some owner
@@ -177,7 +180,7 @@ module RepositoryProfileAdapter =
             [ if snapshot.SchemaVersion <> 1 then UnsupportedRosterSchema snapshot.SchemaVersion
               if not snapshot.Complete || rows.IsEmpty then IncompleteRoster
               if snapshot.ReviewedAt > asOf || asOf - snapshot.ReviewedAt > maxAge then StaleRoster
-              if String.IsNullOrWhiteSpace snapshot.SourceRevision then InvalidSourceBinding "sourceRevision"
+              if not (revisionLike snapshot.SourceRevision) then InvalidSourceBinding "sourceRevision"
               if not (digestLike snapshot.SourceArtifactSha256) then InvalidSourceBinding "sourceArtifactSha256"
               if not (digestLike snapshot.CanonicalRosterSha256) || snapshot.CanonicalRosterSha256 <> computedRosterDigest then InvalidSourceBinding "canonicalRosterSha256"
               yield! duplicates (fun (row: RepositoryRosterRow) -> row.Id.ToLowerInvariant()) rows DuplicateRepositoryId

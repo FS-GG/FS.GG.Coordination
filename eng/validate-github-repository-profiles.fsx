@@ -79,7 +79,13 @@ else
 
     let refused changed = RepositoryProfileAdapter.compile asOf (TimeSpan.FromHours 1) changed |> Result.isError
     let generatedMutation = function
-        | RosterSourceBinding -> refused { snapshot with CanonicalRosterSha256 = String.replicate 64 "0" }
+        | RosterSourceBinding ->
+            let malformedRevision = { snapshot with SourceRevision = "main" }
+            let alteredRevision = { snapshot with SourceRevision = String.replicate 40 "0" }
+            let alteredArtifact = { snapshot with SourceArtifactSha256 = String.replicate 64 "f" }
+            refused malformedRevision
+            && RepositoryProfileAdapter.verify report.Seal asOf (TimeSpan.FromHours 1) alteredRevision = Error [ AlteredRepositoryProfileSeal ]
+            && RepositoryProfileAdapter.verify report.Seal asOf (TimeSpan.FromHours 1) alteredArtifact = Error [ AlteredRepositoryProfileSeal ]
         | CompleteRoster -> refused { snapshot with Complete = false }
         | StableOrdering -> (RepositoryProfileAdapter.compile asOf (TimeSpan.FromHours 1) { snapshot with Rows = List.rev rows } = Ok report)
         | IdentityUniqueness -> let changed = rows @ [ rows.Head ] in refused { snapshot with Rows = changed; CanonicalRosterSha256 = RepositoryProfileAdapter.canonicalRosterDigest changed }
@@ -110,7 +116,15 @@ else
         | NoApplySurface -> not (File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/RepositoryProfileAdapter.fsi")).Contains("val apply"))
 
     let independentMutation = function
-        | RosterSourceBinding -> snapshot.SourceRevision = text expectations "sourceRevision" && snapshot.SourceArtifactSha256 = "838f80598dcebea1019ae1b0b38f55180502fb2de155d274c891bc245dd8c29d"
+        | RosterSourceBinding ->
+            let expectedRevision = text expectations "sourceRevision"
+            let expectedArtifact = "838f80598dcebea1019ae1b0b38f55180502fb2de155d274c891bc245dd8c29d"
+            let revisionSubstitution = { snapshot with SourceRevision = String.replicate 40 "a" }
+            let artifactSubstitution = { snapshot with SourceArtifactSha256 = String.replicate 64 "b" }
+            snapshot.SourceRevision = expectedRevision
+            && snapshot.SourceArtifactSha256 = expectedArtifact
+            && RepositoryProfileAdapter.verify (text expectations "expectedSeal") asOf (TimeSpan.FromHours 1) revisionSubstitution = Error [ AlteredRepositoryProfileSeal ]
+            && RepositoryProfileAdapter.verify (text expectations "expectedSeal") asOf (TimeSpan.FromHours 1) artifactSubstitution = Error [ AlteredRepositoryProfileSeal ]
         | CompleteRoster -> rows.Length = 10 && rosterNode["complete"].GetValue<bool>()
         | StableOrdering -> actualOrder = expectedOrder && actualOrder <> List.rev expectedOrder
         | IdentityUniqueness -> rows |> List.map (_.FullName >> _.ToLowerInvariant()) |> Set.ofList |> Set.count = rows.Length
