@@ -1,0 +1,55 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-06.6",
+  "state": "accepted",
+  "unitContractSha256": "87ddf9814990e2d46a21b96b47336b4078c78ab1564f208187c9ac9429495c13",
+  "sourceRevision": "cc4cb1b738b6be18044a8a6c24d34439efe469ec",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-06.5-receipt",
+      "sha256": "9227977242b530755cbc28ff9093fa810aab9647037d3ae4b60cd7311c86cd0f"
+    },
+    {
+      "name": "github-release-hardening-corpus",
+      "sha256": "9b2374f3401f142e927d3a0770b9a96893129f8291d390e0a2ec68ac5811754e"
+    },
+    {
+      "name": "github-release-hardening-independent-expectations",
+      "sha256": "5d46398144d998111d2c7f19f6448746946c630160073f6601ab7813ee998319"
+    },
+    {
+      "name": "github-release-hardening-q3-validator",
+      "sha256": "b8cfba35bc2470cabf3877c6d622b14120547e28b3b70cacc4009ddbd73f05f5"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "2fedd1a888738b704f0b8247a7f9ca0f51cb1b47542a8c97964d304232f73103"
+    },
+    {
+      "name": "implementation-candidate-5e876400371947033fdf99ab0e6d2a93782bbda0",
+      "sha256": "b2ac24441f1cb099ee518438aa8e858309b1f4e8ea8feec36f7435377f59f735"
+    },
+    {
+      "name": "structured-review-final-pass-5517224429",
+      "sha256": "baa765206ce327a5d023786c41a98de9700796562f8d2272c7e8ca0756cfa17a"
+    },
+    {
+      "name": "structured-review-acceptance-5517287718",
+      "sha256": "e90b39c70f8f741bf5b879a146eb9b9f12aed83bad97539942acc36206054ba7"
+    },
+    {
+      "name": "delivery-completion-5517354391",
+      "sha256": "3b7093b7a103c978884269276307f6230316698c27a2d5981d82c2461aac2798"
+    },
+    {
+      "name": "protected-main-codeql-run-33690674525",
+      "sha256": "2a4ce964ca2871bb39e9ffce5d3c60bc11fccdf2d69c8092c7ef6748d355b63f"
+    },
+    {
+      "name": "protected-main-bootstrap-evidence-manifest-run-33690674962",
+      "sha256": "9d67e7ba0a1d01aec50fb40fe71e9c1b4fa3c7a147a4e3ddd948582bffefe210"
+    }
+  ],
+  "acceptedAt": "2026-09-02T22:39:05Z",
+  "digest": "517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f"
+}
