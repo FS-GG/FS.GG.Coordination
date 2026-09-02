@@ -11,7 +11,7 @@ sourceAnalysis: readiness/239-immutable-execution-pins/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/239-immutable-execution-pins/analysis.json
-    digest: f7e506fe526152b08f21a0131999ee00e9c3694ed3d19541bc8efc7f3d440f83
+    digest: cee510136471c63027ca1adb69f81aaceee7195c40d2e91c434496e5a1bbfcbf
     schemaVersion: 1
   - label: checklist
     path: work/239-immutable-execution-pins/checklist.md
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
-      digest: "sha256:a77bc89f6a55850a81ff04a06c4414f3c24089e2be035f5788493c6d91cb353c"
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 7
