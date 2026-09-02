@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/254-release-hardening/qualification.trx
-      digest: "sha256:edde511e8597746568dcf145a9fbe0c92083448fdf9f7ee1223894aec7c91183"
+      digest: "sha256:892127d103cd4cad4e6f253ba8363bbdf6be29df57a0b5975583d798bc20ce7d"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 182
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
