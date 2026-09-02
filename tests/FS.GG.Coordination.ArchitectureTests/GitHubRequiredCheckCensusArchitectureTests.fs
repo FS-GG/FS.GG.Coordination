@@ -11,6 +11,20 @@ open Xunit
 let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 let private read path = File.ReadAllText(Path.Combine(root, path))
 let private sha256Text (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+let private readRevision revision path =
+    let startInfo = ProcessStartInfo("git")
+    startInfo.WorkingDirectory <- root
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    startInfo.ArgumentList.Add "show"
+    startInfo.ArgumentList.Add $"{revision}:{path}"
+    use child = Process.Start startInfo
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.True(child.ExitCode = 0, error)
+    output
 
 [<Fact>]
 let ``required check census is pure and exposes no plan or apply path`` () =
@@ -54,9 +68,13 @@ let ``required check census evidence separates complete provenance from stable a
     Assert.Equal(21633423L, ruleset.GetProperty("id").GetInt64())
     Assert.Equal(6, ruleset.GetProperty("requiredStatusChecks").GetArrayLength())
     Assert.Equal(sha256Text (read "evidence/github-substrate-v2/gs2-06-2/authorities.json"), corpus.RootElement.GetProperty("authorityEvidenceSha256").GetString())
-    let workflow = read ".github/workflows/bootstrap-qualification.yml"
+    let revision = corpus.RootElement.GetProperty("sourceRevision").GetString()
+    let workflowPath = ".github/workflows/bootstrap-qualification.yml"
+    let workflow = readRevision revision workflowPath
     Assert.Contains("\n  pull_request:\n", workflow)
     Assert.DoesNotContain("\n  merge_group:\n", workflow)
+    Assert.Equal("0b913aab5149d035addd280adbe7ed069dc2df9a25a062add4b46a0aba44bd4a", sha256Text workflow)
+    Assert.NotEqual(sha256Text workflow, sha256Text (read workflowPath))
     let controls = expected.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
     Assert.Equal(22, controls.Length)
     Assert.Equal(controls.Length, controls |> List.distinct |> List.length)

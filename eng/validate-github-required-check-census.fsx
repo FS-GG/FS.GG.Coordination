@@ -2,6 +2,7 @@
 #load "../src/FS.GG.Coordination.Qualification.Contracts/GitHubRequiredCheckCensusQualification.fs"
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text
@@ -69,16 +70,32 @@ let report = compile snapshot |> Result.defaultWith (failwithf "required-check c
 let altered candidate = RequiredCheckCensusAdapter.verify report.Seal asOf (TimeSpan.FromHours 1) candidate |> Result.isError
 
 let workflowPath = report.Entries |> List.map _.ProducerWorkflow |> List.distinct |> List.exactlyOne
-let workflowBytes = File.ReadAllBytes(Path.Combine(root, workflowPath))
+let gitShow = ProcessStartInfo("git")
+gitShow.WorkingDirectory <- root
+gitShow.UseShellExecute <- false
+gitShow.RedirectStandardOutput <- true
+gitShow.RedirectStandardError <- true
+gitShow.ArgumentList.Add "show"
+gitShow.ArgumentList.Add $"{snapshot.SourceRevision}:{workflowPath}"
+let gitChild = Process.Start gitShow
+let workflowStream = new MemoryStream()
+gitChild.StandardOutput.BaseStream.CopyTo workflowStream
+let gitError = gitChild.StandardError.ReadToEnd()
+gitChild.WaitForExit()
+if gitChild.ExitCode <> 0 then
+    failwith $"retained producer workflow revision is unavailable: {gitError}"
+let workflowBytes = workflowStream.ToArray()
+gitChild.Dispose()
+workflowStream.Dispose()
 let workflowSha256 = workflowBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 if report.Entries |> List.exists (fun entry -> entry.ProducerWorkflowSha256 <> workflowSha256) then
-    failwith "retained producer workflow digest differs from the exact checked-in workflow"
+    failwith "retained producer workflow digest differs from the exact revision-addressed workflow"
 let workflowText = Encoding.UTF8.GetString workflowBytes
 if not (workflowText.Contains("\n  pull_request:\n")) || workflowText.Contains("\n  merge_group:\n") then
-    failwith "retained workflow trigger observation differs from the exact checked-in workflow"
+    failwith "retained workflow trigger observation differs from the exact revision-addressed workflow"
 for entry in report.Entries do
     if not (workflowText.Contains($"\n  {entry.ProducerJob}:\n")) then
-        failwith $"retained producer job is absent from the exact checked-in workflow: {entry.ProducerJob}"
+        failwith $"retained producer job is absent from the exact revision-addressed workflow: {entry.ProducerJob}"
 
 let authoritiesPath = Path.Combine(evidenceRoot, "authorities.json")
 let authorityBytes = File.ReadAllBytes authoritiesPath
