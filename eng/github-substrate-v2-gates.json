@@ -168,6 +168,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-ruleset-plans.fsx", "--", "."]
+    },
+    {
+      "id": "github-immutable-execution-pins-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-immutable-execution-pins.fsx", "--", "."]
     }
   ]
 }

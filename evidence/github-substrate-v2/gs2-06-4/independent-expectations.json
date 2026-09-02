@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "repository": "FS-GG/FS.GG.Coordination",
+  "workflowCount": 2,
+  "referenceCount": 7,
+  "distinctActionCount": 4,
+  "publicationCount": 0,
+  "automatedUpdater": "renovate",
+  "managers": ["github-actions"],
+  "expectedSeal": "18cc53482be7c6bc97b9e439e5e52964f7c8716b771caab321fe4f7540702d56",
+  "controls": [
+    "prerequisite-receipt",
+    "corpus-completeness",
+    "source-binding",
+    "third-party-action-pins",
+    "reusable-workflow-pins",
+    "workflow-digest-binding",
+    "publication-identity",
+    "publication-content",
+    "publication-workflow-call",
+    "stable-ordering",
+    "renovate-sole-updater",
+    "renovate-pull-request-only",
+    "renovate-ownership",
+    "exact-seal",
+    "exact-replay",
+    "quint-unchanged",
+    "no-mutation-surface",
+    "no-publication-surface"
+  ]
+}
