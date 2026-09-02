@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="b0e9fa06-d557-46c8-95d2-2e2147ba044b" name="@aab16b898f83 2026-09-02 21:43:31" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-02T21:43:31.4069934+02:00" queuing="2026-09-02T21:43:31.4069934+02:00" start="2026-09-02T21:43:31.0137137+02:00" finish="2026-09-02T21:43:31.4103845+02:00" />
+  <TestSettings name="default" id="8f69ef28-5483-4dc9-bbcf-ca3de3962e1e">
+    <Deployment runDeploymentRoot="_aab16b898f83_2026-09-02_21_43_31" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="6a1c8939-3ff8-450a-9b30-9289152a3844" testId="544de378-b073-0b2f-857c-4659ebec6a9b" testName="FS.GG.Coordination.GitHubPermissionCompilationTests.normal admin and release principal or environment crossover fails closed" computerName="aab16b898f83" duration="00:00:00.0096176" startTime="2026-09-02T21:43:31.3377395+02:00" endTime="2026-09-02T21:43:31.3419596+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6a1c8939-3ff8-450a-9b30-9289152a3844" />
+    <UnitTestResult executionId="b1b937be-02d2-4e89-9885-76e27150f2c3" testId="beb85877-ddb1-c010-cdcf-59218f3aa032" testName="FS.GG.Coordination.GitHubPermissionCompilationTests.qualification requires independent and generated controls" computerName="aab16b898f83" duration="00:00:00.0170286" startTime="2026-09-02T21:43:31.3121578+02:00" endTime="2026-09-02T21:43:31.3323032+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b1b937be-02d2-4e89-9885-76e27150f2c3" />
+    <UnitTestResult executionId="11283a73-f454-4bb9-abb8-8d089321a7ef" testId="ea43b928-d532-4e72-f520-c42c99e995e4" testName="FS.GG.Coordination.GitHubPermissionCompilationTests.wildcard undeclared elevated and missing permissions fail closed" computerName="aab16b898f83" duration="00:00:00.0008264" startTime="2026-09-02T21:43:31.3529316+02:00" endTime="2026-09-02T21:43:31.3536984+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="11283a73-f454-4bb9-abb8-8d089321a7ef" />
+    <UnitTestResult executionId="0cb9a563-8a28-4a52-8b43-6ef8db2cd07b" testId="b2d13c63-fedf-9809-8b55-53db88968d7c" testName="FS.GG.Coordination.GitHubPermissionCompilationTests.complete interpreter inventory compiles least privilege into isolated classes" computerName="aab16b898f83" duration="00:00:00.0087720" startTime="2026-09-02T21:43:31.3423645+02:00" endTime="2026-09-02T21:43:31.3507462+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0cb9a563-8a28-4a52-8b43-6ef8db2cd07b" />
+    <UnitTestResult executionId="ef7fa995-45b8-4f6f-905b-7574a0acafd7" testId="5adc760c-5700-fdc1-583c-5f486d5723ed" testName="FS.GG.Coordination.GitHubPermissionCompilationTests.ordering is stable and exact replay is seal bound" computerName="aab16b898f83" duration="00:00:00.0020939" startTime="2026-09-02T21:43:31.3508859+02:00" endTime="2026-09-02T21:43:31.3528512+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ef7fa995-45b8-4f6f-905b-7574a0acafd7" />
+    <UnitTestResult executionId="edad93b2-bca7-4f12-b002-89675975d292" testId="b973a635-e486-0b7d-2cfc-9d7d7dbf31ac" testName="FS.GG.Coordination.GitHubPermissionCompilationTests.missing duplicate and incomplete interpreter inventories fail closed" computerName="aab16b898f83" duration="00:00:00.0005911" startTime="2026-09-02T21:43:31.3537810+02:00" endTime="2026-09-02T21:43:31.3543207+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="edad93b2-bca7-4f12-b002-89675975d292" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubPermissionCompilationTests.missing duplicate and incomplete interpreter inventories fail closed" storage="/home/developer/projects/fs.gg.coordination/.worktrees/item-250-provider-evidence/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="b973a635-e486-0b7d-2cfc-9d7d7dbf31ac">
+      <Execution id="edad93b2-bca7-4f12-b002-89675975d292" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/.worktrees/item-250-provider-evidence/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubPermissionCompilationTests" name="missing duplicate and incomplete interpreter inventories fail closed" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubPermissionCompilationTests.normal admin and release principal or environment crossover fails closed" storage="/home/developer/projects/fs.gg.coordination/.worktrees/item-250-provider-evidence/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="544de378-b073-0b2f-857c-4659ebec6a9b">
+      <Execution id="6a1c8939-3ff8-450a-9b30-9289152a3844" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/.worktrees/item-250-provider-evidence/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubPermissionCompilationTests" name="normal admin and release principal or environment crossover fails closed" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubPermissionCompilationTests.wildcard undeclared elevated and missing permissions fail closed" storage="/home/developer/projects/fs.gg.coordination/.worktrees/item-250-provider-evidence/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="ea43b928-d532-4e72-f520-c42c99e995e4">
+      <Execution id="11283a73-f454-4bb9-abb8-8d089321a7ef" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/.worktrees/item-250-provider-evidence/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubPermissionCompilationTests" name="wildcard undeclared elevated and missing permissions fail closed" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubPermissionCompilationTests.complete interpreter inventory compiles least privilege into isolated classes" storage="/home/developer/projects/fs.gg.coordination/.worktrees/item-250-provider-evidence/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="b2d13c63-fedf-9809-8b55-53db88968d7c">
+      <Execution id="0cb9a563-8a28-4a52-8b43-6ef8db2cd07b" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/.worktrees/item-250-provider-evidence/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubPermissionCompilationTests" name="complete interpreter inventory compiles least privilege into isolated classes" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubPermissionCompilationTests.qualification requires independent and generated controls" storage="/home/developer/projects/fs.gg.coordination/.worktrees/item-250-provider-evidence/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="beb85877-ddb1-c010-cdcf-59218f3aa032">
+      <Execution id="b1b937be-02d2-4e89-9885-76e27150f2c3" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/.worktrees/item-250-provider-evidence/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubPermissionCompilationTests" name="qualification requires independent and generated controls" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubPermissionCompilationTests.ordering is stable and exact replay is seal bound" storage="/home/developer/projects/fs.gg.coordination/.worktrees/item-250-provider-evidence/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="5adc760c-5700-fdc1-583c-5f486d5723ed">
+      <Execution id="ef7fa995-45b8-4f6f-905b-7574a0acafd7" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination/.worktrees/item-250-provider-evidence/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubPermissionCompilationTests" name="ordering is stable and exact replay is seal bound" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="544de378-b073-0b2f-857c-4659ebec6a9b" executionId="6a1c8939-3ff8-450a-9b30-9289152a3844" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="beb85877-ddb1-c010-cdcf-59218f3aa032" executionId="b1b937be-02d2-4e89-9885-76e27150f2c3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ea43b928-d532-4e72-f520-c42c99e995e4" executionId="11283a73-f454-4bb9-abb8-8d089321a7ef" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b2d13c63-fedf-9809-8b55-53db88968d7c" executionId="0cb9a563-8a28-4a52-8b43-6ef8db2cd07b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5adc760c-5700-fdc1-583c-5f486d5723ed" executionId="ef7fa995-45b8-4f6f-905b-7574a0acafd7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b973a635-e486-0b7d-2cfc-9d7d7dbf31ac" executionId="edad93b2-bca7-4f12-b002-89675975d292" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="6" executed="6" passed="6" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.08]   Discovered:  FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.10]   Starting:    FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.15]   Finished:    FS.GG.Coordination.UnitTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
