@@ -16,8 +16,8 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/232-ruleset-plans/spec.md sha256:09112f7b7fb47fe77bc6d0539bd60d39c25c9e70b30d6a2a85de0e8cc4a5562a schemaVersion:1
-- clarifications: work/232-ruleset-plans/clarifications.md sha256:dde826df2ad445f12401bca57cbcae6be52c5d207febaeada440dc0108df7300 schemaVersion:1
+- spec: work/232-ruleset-plans/spec.md sha256:71fc072a3e1249fc10b5a0bd43b9127e951a002a007994d0ba9a2005f4c9e38f schemaVersion:1
+- clarifications: work/232-ruleset-plans/clarifications.md sha256:6ab1773633f4f8e001846dc94f49784a36c2d3114c787d33c990ff185a306e14 schemaVersion:1
 - checklist: work/232-ruleset-plans/checklist.md sha256:ff64e5e5d2bff8bda994410e79b8c665cfc727a0392dc748a1f88deeed6154c5 schemaVersion:1
 
 ## Plan Scope

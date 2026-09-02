@@ -41,7 +41,8 @@ let private snapshot mergeGroup =
     { SchemaVersion = 1; Repository = repository.FullName; PrerequisiteReceiptDigest = digest
       ProfileSnapshot = profileSnapshot; ExpectedProfileSeal = profileReport.Seal
       CensusSnapshot = Some(censusSnapshot mergeGroup); ExpectedCensusSeal = Some((censusReport mergeGroup).Seal)
-      CurrentPolicyRevision = revision; CurrentPolicyEvidenceSha256 = digest; ObservedAt = observedAt; Complete = true
+      CurrentPolicyRepository = repository.FullName; CurrentPolicyRevision = revision; CurrentPolicyEvidenceSha256 = digest
+      CurrentPolicyObservedAt = observedAt; CurrentPolicyComplete = true; ObservedAt = observedAt; Complete = true
       ApprovedBypass = []; RequestedBypass = []; Exceptions = [] }
 let private compile value = RulesetPlanAdapter.compile observedAt maxAge value
 let private findings = function Error values -> values | Ok _ -> []
@@ -151,6 +152,26 @@ let ``bounded exceptions project into the target and authorization is seal-bound
     Assert.True(compile { snapshot false with Exceptions = [ review; duplicate ] } |> Result.isError)
 
 [<Fact>]
+let ``exceptions cannot enable queue before census readiness and authorized bypass scope projects`` () =
+    let queue: RulesetPlanException =
+        { Id = "E-Q"; Owner = "security"; Rationale = "unsafe request"; Scope = RulesetExceptionScope.MergeQueue true
+          ApprovedAt = observedAt.AddDays(-1); StartsAt = observedAt.AddHours(-1); ExpiresAt = observedAt.AddDays(1) }
+    Assert.True(compile { snapshot false with Exceptions = [ queue ] } |> Result.isError)
+    let principal = { ActorId = 7L; Kind = IntegrationActor }
+    let approved = { ActorId = 7L; Kind = IntegrationActor; AllowedProfiles = [ FrameworkPlan ] }
+    let bypass = { queue with Id = "E-B"; Rationale = "bounded integration migration"; Scope = BypassPrincipal principal }
+    let report = compile { snapshot false with ApprovedBypass = [ approved ]; Exceptions = [ bypass ] } |> Result.defaultWith (failwithf "%A")
+    Assert.Equal<RequestedRulesetBypassPrincipal list>([ principal ], report.DefaultBranch.Value.Bypass)
+    Assert.Equal<RequestedRulesetBypassPrincipal list>([ principal ], report.ReleaseTags.Value.Bypass)
+
+[<Fact>]
+let ``current policy binding is complete repository exact and fresh`` () =
+    let baseline = snapshot false
+    Assert.True(compile { baseline with CurrentPolicyComplete = false } |> Result.isError)
+    Assert.True(compile { baseline with CurrentPolicyRepository = "FS-GG/other" } |> Result.isError)
+    Assert.True(compile { baseline with CurrentPolicyObservedAt = observedAt.AddHours(-2) } |> Result.isError)
+
+[<Fact>]
 let ``external profile compiles only an observe-only disposition`` () =
     let external =
         { Id = "external"; FullName = "someone/example"; Role = NonParticipant; Capabilities = []
@@ -159,7 +180,7 @@ let ``external profile compiles only an observe-only disposition`` () =
     let externalReport = RepositoryProfileAdapter.compile observedAt maxAge externalRoster |> Result.defaultWith (failwithf "%A")
     let externalSnapshot =
         { snapshot true with Repository = external.FullName; ProfileSnapshot = externalRoster; ExpectedProfileSeal = externalReport.Seal
-                             CensusSnapshot = None; ExpectedCensusSeal = None }
+                             CensusSnapshot = None; ExpectedCensusSeal = None; CurrentPolicyRepository = external.FullName }
     let report = compile externalSnapshot |> Result.defaultWith (failwithf "%A")
     Assert.Equal(ObserveOnlyPlan, report.ProfileClass)
     Assert.False(report.MutationPermitted)

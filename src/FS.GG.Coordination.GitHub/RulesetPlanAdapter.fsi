@@ -69,8 +69,11 @@ type RulesetPlanSnapshot =
       ExpectedProfileSeal: string
       CensusSnapshot: RequiredCheckCensusSnapshot option
       ExpectedCensusSeal: string option
+      CurrentPolicyRepository: string
       CurrentPolicyRevision: string
       CurrentPolicyEvidenceSha256: string
+      CurrentPolicyObservedAt: DateTimeOffset
+      CurrentPolicyComplete: bool
       ObservedAt: DateTimeOffset
       Complete: bool
       ApprovedBypass: ApprovedRulesetBypassPrincipal list

@@ -25,7 +25,7 @@ let ``GS2-06-3 registration binds accepted predecessor and exact Q3 gate`` () =
     use gates = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
     let unitValue = units.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-06.3")
     Assert.Equal<string list>([ "GS2-06.2" ], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
-    Assert.Equal("694cb05954c0683be424dbafcd1c4b79b215737ad95cdd34f3d730147f6dfa96", unitValue.GetProperty("contractSha256").GetString())
+    Assert.Equal("c469645aeabd48bf3ca4fc9fc7ab4d054fd61869696d9416ca669c88c184a84d", unitValue.GetProperty("contractSha256").GetString())
     let command = gates.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "github-ruleset-plan-contract")
     Assert.Equal("Q3", command.GetProperty("qGate").GetString())
     Assert.Equal<string list>([ "fsi"; "eng/validate-github-ruleset-plans.fsx"; "--"; "." ], command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
@@ -39,6 +39,10 @@ let ``retained ruleset target is exact secure and census gated`` () =
     use corpus = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-06-3/corpus.json")
     use expected = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-06-3/independent-expectations.json")
     Assert.True(corpus.RootElement.GetProperty("complete").GetBoolean())
+    Assert.True(corpus.RootElement.GetProperty("currentPolicyComplete").GetBoolean())
+    Assert.Equal("FS-GG/FS.GG.Coordination", corpus.RootElement.GetProperty("currentPolicyRepository").GetString())
+    Assert.Equal(168, expected.RootElement.GetProperty("freshnessBudgetHours").GetInt32())
+    Assert.Equal("hosted-non-participant", expected.RootElement.GetProperty("profileClass").GetString())
     Assert.Equal(0, corpus.RootElement.GetProperty("approvedBypass").GetArrayLength())
     Assert.Equal(0, corpus.RootElement.GetProperty("requestedBypass").GetArrayLength())
     Assert.Equal(0, corpus.RootElement.GetProperty("exceptions").GetArrayLength())
@@ -63,7 +67,7 @@ let ``ruleset plan Q3 validator rejects its closed mutation inventory`` () =
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.Equal(0, child.ExitCode)
-    Assert.Contains("GITHUB_RULESET_PLANS_OK repository=FS-GG/FS.GG.Coordination checks=6 mergeQueue=false bypass=0 exceptions=0 controls=26 seal=6c9e6bb05e1f3a217dca56ddcaf0a0ea4df0517ee492a34c633bd5f5183356ed", output)
+    Assert.Contains("GITHUB_RULESET_PLANS_OK repository=FS-GG/FS.GG.Coordination checks=6 mergeQueue=false bypass=0 exceptions=0 controls=26 seal=13ced8bf7eb4e257c386499f623f26fb8796256efa75d549f414176079c3ea35", output)
     Assert.Equal("", error)
 
 [<Fact>]

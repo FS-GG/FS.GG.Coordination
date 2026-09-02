@@ -71,8 +71,11 @@ type RulesetPlanSnapshot =
       ExpectedProfileSeal: string
       CensusSnapshot: RequiredCheckCensusSnapshot option
       ExpectedCensusSeal: string option
+      CurrentPolicyRepository: string
       CurrentPolicyRevision: string
       CurrentPolicyEvidenceSha256: string
+      CurrentPolicyObservedAt: DateTimeOffset
+      CurrentPolicyComplete: bool
       ObservedAt: DateTimeOffset
       Complete: bool
       ApprovedBypass: ApprovedRulesetBypassPrincipal list
@@ -215,8 +218,11 @@ module RulesetPlanAdapter =
           snapshot.PrerequisiteReceiptDigest.ToLowerInvariant()
           snapshot.ExpectedProfileSeal.ToLowerInvariant()
           census |> Option.map _.Seal |> Option.defaultValue "" |> _.ToLowerInvariant()
+          snapshot.CurrentPolicyRepository
           snapshot.CurrentPolicyRevision.ToLowerInvariant()
           snapshot.CurrentPolicyEvidenceSha256.ToLowerInvariant()
+          snapshot.CurrentPolicyObservedAt.ToUniversalTime().ToString("O")
+          string snapshot.CurrentPolicyComplete
           snapshot.ApprovedBypass |> List.sortBy (fun value -> value.Kind, value.ActorId) |> List.map approvedActorText |> String.concat ","
           defaultBranch |> Option.map branchText |> Option.defaultValue ""
           releaseTags |> Option.map tagText |> Option.defaultValue ""
@@ -259,6 +265,9 @@ module RulesetPlanAdapter =
               if profileReport.IsNone then yield InvalidRulesetPlanBinding "profileReport"
               if not (revisionLike snapshot.CurrentPolicyRevision) then yield InvalidRulesetPlanBinding "currentPolicyRevision"
               if not (digestLike snapshot.CurrentPolicyEvidenceSha256) then yield InvalidRulesetPlanBinding "currentPolicyEvidenceSha256"
+              if snapshot.CurrentPolicyRepository <> snapshot.Repository then yield InvalidRulesetPlanBinding "currentPolicyRepository"
+              if not snapshot.CurrentPolicyComplete then yield InvalidRulesetPlanBinding "currentPolicyComplete"
+              if snapshot.CurrentPolicyObservedAt > asOf || asOf - snapshot.CurrentPolicyObservedAt > maxAge then yield InvalidRulesetPlanBinding "currentPolicyObservedAt"
               match selectedProfile with
               | None -> yield CrossRepositoryRulesetProfile snapshot.Repository
               | Some profile when profile.PropertyMutationPermitted <> mutationPermitted -> yield InconsistentRulesetProfileAdministration profile.FullName
@@ -290,6 +299,7 @@ module RulesetPlanAdapter =
                   if not (validText value.Id) || not (validText value.Owner) || not (validText value.Rationale) then yield InvalidRulesetException value.Id
                   match value.Scope with
                   | RequiredReviewCount count when count < 0 || count > 6 -> yield InvalidRulesetException value.Id
+                  | MergeQueue true -> yield InvalidRulesetException value.Id
                   | BypassPrincipal principal when principal.ActorId <= 0L -> yield InvalidRulesetException value.Id
                   | _ -> ()
                   if value.ApprovedAt > value.StartsAt || value.StartsAt > asOf || value.ExpiresAt <= asOf then yield InactiveRulesetException value.Id
@@ -304,8 +314,12 @@ module RulesetPlanAdapter =
                   yield InconsistentRulesetProfileAdministration snapshot.Repository ]
         if not findings.IsEmpty then Error findings
         else
-            let bypass = snapshot.RequestedBypass |> List.sortBy (fun value -> value.Kind, value.ActorId)
             let exceptions = snapshot.Exceptions |> List.sortBy _.Id
+            let bypass =
+                snapshot.RequestedBypass
+                @ (exceptions |> List.choose (fun value -> match value.Scope with BypassPrincipal principal -> Some principal | _ -> None))
+                |> List.distinctBy (fun value -> value.Kind, value.ActorId)
+                |> List.sortBy (fun value -> value.Kind, value.ActorId)
             let defaultBranch, releaseTags, repositoryPolicy =
                 match selectedClass, censusReport with
                 | ObserveOnlyPlan, None -> None, None, None
@@ -321,7 +335,7 @@ module RulesetPlanAdapter =
                     let conversationResolution =
                         exceptions |> List.tryPick (fun value -> match value.Scope with ConversationResolution required -> Some required | _ -> None) |> Option.defaultValue true
                     let mergeQueueEnabled =
-                        exceptions |> List.tryPick (fun value -> match value.Scope with MergeQueue enabled -> Some enabled | _ -> None) |> Option.defaultValue mergeQueueEnabled
+                        if exceptions |> List.exists (fun value -> value.Scope = MergeQueue false) then false else mergeQueueEnabled
                     let disabledReason = if mergeQueueEnabled then None elif disabledReason.IsSome then disabledReason else Some "bounded-exception-disabled"
                     Some
                         { Include = [ "~DEFAULT_BRANCH" ]

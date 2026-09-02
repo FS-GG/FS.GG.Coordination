@@ -1,8 +1,9 @@
 {
   "schema": "fsgg.coordination.github-ruleset-plan-expectations/1",
   "repository": "FS-GG/FS.GG.Coordination",
-  "profileClass": "framework",
+  "profileClass": "hosted-non-participant",
   "mutationPermitted": true,
+  "freshnessBudgetHours": 168,
   "defaultBranchInclude": ["~DEFAULT_BRANCH"],
   "releaseTagInclude": ["refs/tags/v*"],
   "requiredChecks": ["bootstrap-recovery", "compiler-and-tests", "dependency-and-security", "deterministic-build", "evidence-manifest", "package-install-smoke"],
@@ -14,6 +15,6 @@
   "deleteBranchOnMerge": true,
   "bypassCount": 0,
   "exceptionCount": 0,
-  "expectedSeal": "6c9e6bb05e1f3a217dca56ddcaf0a0ea4df0517ee492a34c633bd5f5183356ed",
+  "expectedSeal": "13ced8bf7eb4e257c386499f623f26fb8796256efa75d549f414176079c3ea35",
   "controls": ["prerequisite-receipt", "profile-binding", "census-binding", "current-policy-binding", "complete-observation", "repository-boundary", "stable-ordering", "default-branch-target", "release-tag-target", "required-checks", "review-policy", "conversation-resolution", "merge-methods", "auto-merge", "merge-queue", "branch-deletion", "bypass-authorization", "exception-identity", "exception-window", "exception-scope", "observe-only", "freshness", "exact-seal", "exact-replay", "quint-unchanged", "no-apply-surface"]
 }

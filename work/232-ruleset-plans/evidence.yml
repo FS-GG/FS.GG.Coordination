@@ -11,7 +11,7 @@ sourceAnalysis: readiness/232-ruleset-plans/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/232-ruleset-plans/analysis.json
-    digest: e33e090d56cfe9848299838d0db26ae826ccf14f0ae6b41d52c722444316231a
+    digest: 51c5bef596ab10721526f6df67e097ce9ca0157004daa8237daa3186ca5d820f
     schemaVersion: 1
   - label: checklist
     path: work/232-ruleset-plans/checklist.md
@@ -19,15 +19,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: clarifications
     path: work/232-ruleset-plans/clarifications.md
-    digest: dde826df2ad445f12401bca57cbcae6be52c5d207febaeada440dc0108df7300
+    digest: 6ab1773633f4f8e001846dc94f49784a36c2d3114c787d33c990ff185a306e14
     schemaVersion: 1
   - label: plan
     path: work/232-ruleset-plans/plan.md
-    digest: ce7e167d26f85e9e266401f8959f13d0017e9721d1a100b3ff6eba0277f845ad
+    digest: 279220df4831c86b18d32a8524e4a62d77464cb8131b0336c8f0459f1588bd5c
     schemaVersion: 1
   - label: spec
     path: work/232-ruleset-plans/spec.md
-    digest: 09112f7b7fb47fe77bc6d0539bd60d39c25c9e70b30d6a2a85de0e8cc4a5562a
+    digest: 71fc072a3e1249fc10b5a0bd43b9127e951a002a007994d0ba9a2005f4c9e38f
     schemaVersion: 1
   - label: tasks
     path: work/232-ruleset-plans/tasks.yml
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/232-ruleset-plans/qualification.trx
-      digest: "sha256:ac304f593c5ff6613353c7be40edc817ba3aecd7a43ad6330f71e0347b602ddc"
+      digest: "sha256:7c7d3e3a173bf3e117eace5135f2ecac464eb5ed5903ddcf02afe2bfc9e33766"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 18
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
