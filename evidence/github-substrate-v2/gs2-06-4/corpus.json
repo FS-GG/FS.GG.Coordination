@@ -29,6 +29,7 @@
     }
   ],
   "publications": [],
+  "updaterConfigurations": [],
   "updaters": [
     {
       "name": "renovate",
