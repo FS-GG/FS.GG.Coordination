@@ -64,6 +64,7 @@ type ImmutableExecutionPinsError =
     | DuplicateImmutableWorkflow
     | InvalidImmutableWorkflowDigest
     | CrossWorkflowReference
+    | LocalExecutionReferenceNotImmutable
     | MutableExecutionReference
     | InvalidExecutionReference
     | DuplicateImmutablePublication
@@ -79,7 +80,7 @@ type ImmutableExecutionPinsError =
 
 type GitHubImmutableExecutionPinsControl =
     | ImmutablePinsPrerequisite | ImmutablePinsCompleteness | ImmutablePinsSourceBinding
-    | ThirdPartyActionPins | ReusableWorkflowPins | WorkflowDigestBinding
+    | ThirdPartyActionPins | ReusableWorkflowPins | LocalExecutionReferenceRejection | WorkflowDigestBinding
     | PublicationIdentity | PublicationContent | PublicationWorkflowCall
     | StablePinOrdering | RenovateSoleUpdater | RenovatePullRequestOnly
     | RenovateOwnership | ExactPinsSeal | ExactPinsReplay | QuintPinsUnchanged
@@ -93,6 +94,7 @@ type GitHubImmutableExecutionPinsControlResult =
 type GitHubImmutableExecutionPinsFinding = { Code: string; ControlId: string; Message: string }
 
 module GitHubImmutableExecutionPinsQualification =
+    val classifyReferenceLiteral: literal: string -> Result<ImmutableExecutionReferenceKind * string * string option * string, ImmutableExecutionPinsError list>
     val compile: ImmutableExecutionPinsSnapshot -> Result<ImmutableExecutionPinsReport, ImmutableExecutionPinsError list>
     val verify: expectedSeal: string -> ImmutableExecutionPinsSnapshot -> Result<ImmutableExecutionPinsReport, ImmutableExecutionPinsError list>
     val requiredControls: GitHubImmutableExecutionPinsControl list

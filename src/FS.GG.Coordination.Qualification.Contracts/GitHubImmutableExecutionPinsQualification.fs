@@ -66,6 +66,7 @@ type ImmutableExecutionPinsError =
     | DuplicateImmutableWorkflow
     | InvalidImmutableWorkflowDigest
     | CrossWorkflowReference
+    | LocalExecutionReferenceNotImmutable
     | MutableExecutionReference
     | InvalidExecutionReference
     | DuplicateImmutablePublication
@@ -81,7 +82,7 @@ type ImmutableExecutionPinsError =
 
 type GitHubImmutableExecutionPinsControl =
     | ImmutablePinsPrerequisite | ImmutablePinsCompleteness | ImmutablePinsSourceBinding
-    | ThirdPartyActionPins | ReusableWorkflowPins | WorkflowDigestBinding
+    | ThirdPartyActionPins | ReusableWorkflowPins | LocalExecutionReferenceRejection | WorkflowDigestBinding
     | PublicationIdentity | PublicationContent | PublicationWorkflowCall
     | StablePinOrdering | RenovateSoleUpdater | RenovatePullRequestOnly
     | RenovateOwnership | ExactPinsSeal | ExactPinsReplay | QuintPinsUnchanged
@@ -108,6 +109,25 @@ module GitHubImmutableExecutionPinsQualification =
     let private scalar = function Some value -> frame value | None -> frame ""
     let private strings values = values |> Seq.map frame |> String.concat ""
     let private kind = function ThirdPartyAction -> "action" | ReusableWorkflow -> "workflow"
+
+    let classifyReferenceLiteral (literal: string) =
+        if String.IsNullOrWhiteSpace literal then
+            Error [ InvalidExecutionReference ]
+        elif literal.StartsWith("./", StringComparison.Ordinal) then
+            Error [ LocalExecutionReferenceNotImmutable ]
+        else
+            let split = literal.Split('@')
+            if split.Length <> 2 || not (hexLength 40 split[1]) then
+                Error [ MutableExecutionReference ]
+            else
+                let identity = split[0].Split('/')
+                if identity.Length < 2 then
+                    Error [ InvalidExecutionReference ]
+                else
+                    let repository = String.concat "/" identity[0..1]
+                    let isWorkflow = identity.Length >= 5 && identity[2] = ".github" && identity[3] = "workflows"
+                    let targetPath = if isWorkflow then Some(String.concat "/" identity[2..]) else None
+                    Ok((if isWorkflow then ReusableWorkflow else ThirdPartyAction), repository, targetPath, split[1])
 
     let private canonical snapshot =
         let workflows = snapshot.Workflows |> List.sortBy _.Path
@@ -186,7 +206,7 @@ module GitHubImmutableExecutionPinsQualification =
 
     let requiredControls =
         [ ImmutablePinsPrerequisite; ImmutablePinsCompleteness; ImmutablePinsSourceBinding
-          ThirdPartyActionPins; ReusableWorkflowPins; WorkflowDigestBinding
+          ThirdPartyActionPins; ReusableWorkflowPins; LocalExecutionReferenceRejection; WorkflowDigestBinding
           PublicationIdentity; PublicationContent; PublicationWorkflowCall
           StablePinOrdering; RenovateSoleUpdater; RenovatePullRequestOnly
           RenovateOwnership; ExactPinsSeal; ExactPinsReplay; QuintPinsUnchanged
@@ -198,6 +218,7 @@ module GitHubImmutableExecutionPinsQualification =
         | ImmutablePinsSourceBinding -> "source-binding"
         | ThirdPartyActionPins -> "third-party-action-pins"
         | ReusableWorkflowPins -> "reusable-workflow-pins"
+        | LocalExecutionReferenceRejection -> "local-execution-reference-rejection"
         | WorkflowDigestBinding -> "workflow-digest-binding"
         | PublicationIdentity -> "publication-identity"
         | PublicationContent -> "publication-content"

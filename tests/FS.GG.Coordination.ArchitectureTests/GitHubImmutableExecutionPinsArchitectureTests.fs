@@ -7,6 +7,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open Xunit
+open FS.GG.Coordination.Qualification.Contracts
 
 let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 let private read path = File.ReadAllText(Path.Combine(root, path))
@@ -38,7 +39,20 @@ let ``retained workflow corpus is complete full SHA pinned and Renovate only`` (
             let revision = reference.GetProperty("revision").GetString()
             Assert.Equal(40, revision.Length)
             Assert.True(revision |> Seq.forall Uri.IsHexDigit)
-    Assert.Equal(18, expected.RootElement.GetProperty("controls").GetArrayLength())
+    Assert.Equal(19, expected.RootElement.GetProperty("controls").GetArrayLength())
+    Assert.Contains(
+        "local-execution-reference-rejection",
+        expected.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString())
+
+[<Fact>]
+let ``validator classifies and refuses repository-local execution literals`` () =
+    let validator = read "eng/validate-github-immutable-execution-pins.fsx"
+    Assert.Contains("classifyReferenceLiteral target", validator)
+    Assert.DoesNotContain("if not (target.StartsWith(\"./\"))", validator)
+    for literal in [ "./.github/workflows/reusable.yml"; "./local-action"; "./local-action@0000000000000000000000000000000000000000" ] do
+        Assert.Equal(
+            Error [ LocalExecutionReferenceNotImmutable ],
+            GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral literal)
 
 [<Fact>]
 let ``GS2-06-4 registration binds accepted predecessor and exact Q3 gate`` () =
@@ -68,7 +82,7 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, $"immutable execution pin validator failed with exit code {child.ExitCode}: {error}{output}")
-    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updater=renovate controls=18 seal=18cc53482be7c6bc97b9e439e5e52964f7c8716b771caab321fe4f7540702d56", output)
+    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updater=renovate controls=19 seal=18cc53482be7c6bc97b9e439e5e52964f7c8716b771caab321fe4f7540702d56", output)
     Assert.Equal("", error)
 
 [<Fact>]

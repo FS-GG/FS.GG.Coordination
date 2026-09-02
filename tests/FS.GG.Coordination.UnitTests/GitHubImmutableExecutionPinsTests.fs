@@ -50,6 +50,19 @@ let ``reusable workflow reference requires matching callable immutable publicati
     Assert.Contains(PublicationIsNotReusableWorkflow, compile { changed with Publications = [ { publication with WorkflowCall = false } ] } |> errors)
 
 [<Fact>]
+let ``local execution references cannot evade the literal full SHA contract`` () =
+    Assert.Equal(
+        Error [ LocalExecutionReferenceNotImmutable ],
+        GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral "./.github/workflows/reusable.yml")
+    Assert.Equal(
+        Error [ LocalExecutionReferenceNotImmutable ],
+        GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral "./local-action")
+    Assert.True(
+        GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral
+            $"FS-GG/.github/.github/workflows/reusable.yml@{revision}"
+        |> Result.isOk)
+
+[<Fact>]
 let ``Renovate is sole PR-only automated authority with complete manager ownership`` () =
     Assert.True(compile { snapshot with Updaters = [ { renovate with Name = "dependabot" } ] } |> Result.isError)
     Assert.True(compile { snapshot with Updaters = [ renovate; { renovate with Name = "custom" } ] } |> Result.isError)
