@@ -129,7 +129,11 @@ else
        || invocationSelectors <> texts expectations "invocationSelectors" then
         failwith "independent updater discovery contract differs"
     let branchAutomerge =
-        Regex("(?i)(automergeType[\\\"']?\\s*[:=]\\s*[\\\"']?branch|RENOVATE_AUTOMERGE_TYPE\\s*[:=]\\s*branch|--automerge-type(?:=|\\s+)branch)", RegexOptions.CultureInvariant)
+        Regex("(?i)(automergeType[\\\"']?\\s*[:=]\\s*[\\\"']?(?:branch|direct)|RENOVATE_AUTOMERGE_TYPE\\s*[:=]\\s*[\\\"']?(?:branch|direct)|--automerge-type(?:=|\\s+)(?:branch|direct))", RegexOptions.CultureInvariant)
+    let renovateEnvironment =
+        Regex("(?i)\\bRENOVATE_[A-Z0-9_]+\\b", RegexOptions.CultureInvariant)
+    let renovateCommand =
+        Regex("(?im)(?:^|[;&|`(\\s])(?:npx\\s+)?renovate(?:\\s|$)|renovate/renovate", RegexOptions.CultureInvariant)
     let invocationSurface (path: string) =
         path.StartsWith(".github/workflows/", StringComparison.Ordinal)
         || path.StartsWith("scripts/", StringComparison.Ordinal)
@@ -140,6 +144,14 @@ else
         let content = File.ReadAllText fullPath
         let directPush = branchAutomerge.IsMatch content
         path, sha256File fullPath, authority, not directPush, directPush
+    let hasRenovateInvocation (content: string) =
+        renovateEnvironment.IsMatch content
+        || renovateCommand.IsMatch content
+        || invocationSelectors |> List.exists (fun selector ->
+            selector <> "RENOVATE_*"
+            && selector <> "renovate-command"
+            && selector <> "renovate-container"
+            && content.Contains(selector, StringComparison.OrdinalIgnoreCase))
     let observedUpdaterConfigurations =
         trackedPaths
         |> Seq.choose (fun path ->
@@ -147,7 +159,8 @@ else
             if configuredPaths.Contains path && dependabotPaths.Contains path then Some(configurationTuple path "dependabot")
             elif configuredPaths.Contains path then Some(configurationTuple path "renovate")
             elif path = "package.json" && packageRenovate.IsMatch(File.ReadAllText fullPath) then Some(configurationTuple path "renovate")
-            elif invocationSurface path && (let content = File.ReadAllText fullPath in invocationSelectors |> List.exists content.Contains) then Some(configurationTuple path "renovate-selector")
+            elif invocationSurface path && (File.ReadAllText fullPath |> hasRenovateInvocation) then
+                Some(configurationTuple path "renovate-local-invocation")
             else None)
         |> Set.ofSeq
     let declaredUpdaterConfigurations =

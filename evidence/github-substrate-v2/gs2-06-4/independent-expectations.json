@@ -22,17 +22,21 @@
     ".renovaterc.json5"
   ],
   "invocationSelectors": [
+    "RENOVATE_CONFIG",
+    "RENOVATE_*",
     "RENOVATE_CONFIG_FILE",
     "RENOVATE_ADDITIONAL_CONFIG_FILE",
     "RENOVATE_CONFIG_FILE_NAMES",
     "--config-file",
     "--additional-config-file",
     "--config-file-names",
-    "configFileNames"
+    "configFileNames",
+    "renovate-command",
+    "renovate-container"
   ],
   "automatedUpdater": "renovate",
   "managers": ["github-actions"],
-  "expectedSeal": "1a6e0ff8bf2ca3f840fcb5077a51cb8a40c6ee50b67bea815150a8bff9d704e9",
+  "expectedSeal": "a3aa9af6c20c035ceda40d638757c82adf98a712dc28b7d713aebc13c5f1e936",
   "controls": [
     "prerequisite-receipt",
     "corpus-completeness",

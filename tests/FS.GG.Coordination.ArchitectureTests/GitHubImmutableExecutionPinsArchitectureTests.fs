@@ -43,7 +43,7 @@ let ``retained workflow corpus is complete full SHA pinned and Renovate only`` (
     Assert.Equal(2, corpus.RootElement.GetProperty("workflows").GetArrayLength())
     Assert.Equal(0, corpus.RootElement.GetProperty("publications").GetArrayLength())
     Assert.Equal(15, corpus.RootElement.GetProperty("updaterConfigurationPaths").GetArrayLength())
-    Assert.Equal(7, corpus.RootElement.GetProperty("updaterInvocationSelectors").GetArrayLength())
+    Assert.Equal(11, corpus.RootElement.GetProperty("updaterInvocationSelectors").GetArrayLength())
     Assert.Equal(0, corpus.RootElement.GetProperty("updaterConfigurations").GetArrayLength())
     let updaters = corpus.RootElement.GetProperty("updaters")
     Assert.Equal(1, updaters.GetArrayLength())
@@ -60,7 +60,7 @@ let ``retained workflow corpus is complete full SHA pinned and Renovate only`` (
         "local-execution-reference-rejection",
         expected.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString())
     Assert.Equal(13, expected.RootElement.GetProperty("officialRenovatePaths").GetArrayLength())
-    Assert.Equal(7, expected.RootElement.GetProperty("invocationSelectors").GetArrayLength())
+    Assert.Equal(11, expected.RootElement.GetProperty("invocationSelectors").GetArrayLength())
 
 [<Fact>]
 let ``validator classifies and refuses repository-local execution literals`` () =
@@ -85,7 +85,15 @@ let ``production Q3 rejects every competing or alternate updater configuration r
                 "custom-renovate.json", "{ \"enabledManagers\": [\"github-actions\"] }\n" ]
           "custom-filenames",
               [ "scripts/run-custom-filenames.sh", "#!/usr/bin/env bash\nRENOVATE_CONFIG_FILE_NAMES=custom-renovate.json renovate\n"
-                "custom-renovate.json", "{ \"enabledManagers\": [\"github-actions\"] }\n" ] ]
+                "custom-renovate.json", "{ \"enabledManagers\": [\"github-actions\"] }\n" ]
+          "inline-config",
+              [ "scripts/run-inline-renovate.sh", "#!/usr/bin/env bash\nRENOVATE_CONFIG='{\"enabledManagers\":[\"github-actions\"],\"automerge\":true,\"automergeType\":\"branch\"}' renovate\n" ]
+          "per-option-env",
+              [ "run-renovate.sh", "#!/usr/bin/env bash\nRENOVATE_AUTOMERGE=true RENOVATE_AUTOMERGE_TYPE=branch RENOVATE_ENABLED_MANAGERS=github-actions renovate\n" ]
+          "cli-options",
+              [ "scripts/run-renovate-cli.sh", "#!/usr/bin/env bash\nrenovate --enabled-managers=github-actions --automerge=true --automerge-type=branch\n" ]
+          "container-cli",
+              [ "scripts/run-renovate-container.sh", "#!/usr/bin/env bash\ndocker run --rm renovate/renovate --automerge=true --automerge-type=branch\n" ] ]
     for label, files in cases do
         let tempRoot = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-06-4-{label}-{Guid.NewGuid():N}")
         try
@@ -100,7 +108,7 @@ let ``production Q3 rejects every competing or alternate updater configuration r
             Assert.True((addExit = 0), addError)
             let exitCode, output, error =
                 runAt tempRoot "dotnet" [ "fsi"; "eng/validate-github-immutable-execution-pins.fsx"; "--"; tempRoot ]
-            Assert.NotEqual(0, exitCode)
+            Assert.True(exitCode <> 0, $"{label}: production Q3 unexpectedly passed: {output}{error}")
             Assert.Contains("updater configuration inventory differs", output + error)
         finally
             if Directory.Exists tempRoot then Directory.Delete(tempRoot, true)
@@ -133,7 +141,7 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, $"immutable execution pin validator failed with exit code {child.ExitCode}: {error}{output}")
-    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=1a6e0ff8bf2ca3f840fcb5077a51cb8a40c6ee50b67bea815150a8bff9d704e9", output)
+    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=a3aa9af6c20c035ceda40d638757c82adf98a712dc28b7d713aebc13c5f1e936", output)
     Assert.Equal("", error)
 
 [<Fact>]

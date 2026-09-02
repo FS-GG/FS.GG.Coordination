@@ -47,13 +47,17 @@
     ".github/dependabot.yaml"
   ],
   "updaterInvocationSelectors": [
+    "RENOVATE_CONFIG",
+    "RENOVATE_*",
     "RENOVATE_CONFIG_FILE",
     "RENOVATE_ADDITIONAL_CONFIG_FILE",
     "RENOVATE_CONFIG_FILE_NAMES",
     "--config-file",
     "--additional-config-file",
     "--config-file-names",
-    "configFileNames"
+    "configFileNames",
+    "renovate-command",
+    "renovate-container"
   ],
   "updaterConfigurations": [],
   "updaters": [
