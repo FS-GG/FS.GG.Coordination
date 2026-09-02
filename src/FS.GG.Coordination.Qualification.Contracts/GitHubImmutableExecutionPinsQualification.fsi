@@ -34,6 +34,11 @@ type ImmutablePinUpdaterAuthority =
       PolicySha256: string
       OwnedManagers: string list }
 
+type ImmutableUpdaterConfiguration =
+    { Path: string
+      Sha256: string
+      Authority: string }
+
 type ImmutableExecutionPinsSnapshot =
     { SchemaVersion: int
       Repository: string
@@ -42,6 +47,7 @@ type ImmutableExecutionPinsSnapshot =
       Complete: bool
       Workflows: ImmutableWorkflowDocument list
       Publications: ImmutableWorkflowPublication list
+      UpdaterConfigurations: ImmutableUpdaterConfiguration list
       Updaters: ImmutablePinUpdaterAuthority list
       RequiredManagers: string list }
 
@@ -51,6 +57,7 @@ type ImmutableExecutionPinsReport =
       WorkflowCount: int
       ReferenceCount: int
       PublicationCount: int
+      UpdaterConfigurationCount: int
       AutomatedUpdater: string
       Managers: string list
       Seal: string }
@@ -72,6 +79,9 @@ type ImmutableExecutionPinsError =
     | PublicationIsNotReusableWorkflow
     | MissingImmutablePublication
     | ConflictingImmutablePublication
+    | DuplicateUpdaterConfiguration
+    | InvalidUpdaterConfiguration
+    | CompetingUpdaterAuthority
     | InvalidUpdaterAuthority
     | MultipleAutomatedUpdaters
     | RenovateAuthorityMissing
@@ -82,7 +92,7 @@ type GitHubImmutableExecutionPinsControl =
     | ImmutablePinsPrerequisite | ImmutablePinsCompleteness | ImmutablePinsSourceBinding
     | ThirdPartyActionPins | ReusableWorkflowPins | LocalExecutionReferenceRejection | WorkflowDigestBinding
     | PublicationIdentity | PublicationContent | PublicationWorkflowCall
-    | StablePinOrdering | RenovateSoleUpdater | RenovatePullRequestOnly
+    | StablePinOrdering | UpdaterConfigurationInventory | RenovateSoleUpdater | RenovatePullRequestOnly
     | RenovateOwnership | ExactPinsSeal | ExactPinsReplay | QuintPinsUnchanged
     | NoPinsMutationSurface | NoWorkflowPublicationSurface
 

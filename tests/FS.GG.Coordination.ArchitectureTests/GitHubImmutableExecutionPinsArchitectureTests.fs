@@ -13,6 +13,19 @@ let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../.
 let private read path = File.ReadAllText(Path.Combine(root, path))
 let private sha256Text (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
+let private runAt workingDirectory executable arguments =
+    let startInfo = ProcessStartInfo(executable)
+    for argument in arguments do startInfo.ArgumentList.Add argument
+    startInfo.WorkingDirectory <- workingDirectory
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use child = Process.Start startInfo
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    child.ExitCode, output, error
+
 [<Fact>]
 let ``immutable execution pin contract is offline and has no apply or publication path`` () =
     let signature = read "src/FS.GG.Coordination.Qualification.Contracts/GitHubImmutableExecutionPinsQualification.fsi"
@@ -29,6 +42,7 @@ let ``retained workflow corpus is complete full SHA pinned and Renovate only`` (
     Assert.True(corpus.RootElement.GetProperty("complete").GetBoolean())
     Assert.Equal(2, corpus.RootElement.GetProperty("workflows").GetArrayLength())
     Assert.Equal(0, corpus.RootElement.GetProperty("publications").GetArrayLength())
+    Assert.Equal(0, corpus.RootElement.GetProperty("updaterConfigurations").GetArrayLength())
     let updaters = corpus.RootElement.GetProperty("updaters")
     Assert.Equal(1, updaters.GetArrayLength())
     Assert.Equal("renovate", updaters[0].GetProperty("name").GetString())
@@ -39,7 +53,7 @@ let ``retained workflow corpus is complete full SHA pinned and Renovate only`` (
             let revision = reference.GetProperty("revision").GetString()
             Assert.Equal(40, revision.Length)
             Assert.True(revision |> Seq.forall Uri.IsHexDigit)
-    Assert.Equal(19, expected.RootElement.GetProperty("controls").GetArrayLength())
+    Assert.Equal(20, expected.RootElement.GetProperty("controls").GetArrayLength())
     Assert.Contains(
         "local-execution-reference-rejection",
         expected.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString())
@@ -53,6 +67,25 @@ let ``validator classifies and refuses repository-local execution literals`` () 
         Assert.Equal(
             Error [ LocalExecutionReferenceNotImmutable ],
             GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral literal)
+
+[<Fact>]
+let ``production Q3 rejects a tracked competing Dependabot updater configuration`` () =
+    let tempRoot = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-06-4-dependabot-{Guid.NewGuid():N}")
+    try
+        let cloneExit, _, cloneError = runAt root "git" [ "clone"; "--quiet"; "--no-hardlinks"; root; tempRoot ]
+        Assert.True((cloneExit = 0), cloneError)
+        let dependabotPath = Path.Combine(tempRoot, ".github/dependabot.yml")
+        File.WriteAllText(
+            dependabotPath,
+            "version: 2\nupdates:\n  - package-ecosystem: github-actions\n    directory: /\n    schedule:\n      interval: weekly\n")
+        let addExit, _, addError = runAt tempRoot "git" [ "add"; ".github/dependabot.yml" ]
+        Assert.True((addExit = 0), addError)
+        let exitCode, output, error =
+            runAt tempRoot "dotnet" [ "fsi"; "eng/validate-github-immutable-execution-pins.fsx"; "--"; tempRoot ]
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("updater configuration inventory differs", output + error)
+    finally
+        if Directory.Exists tempRoot then Directory.Delete(tempRoot, true)
 
 [<Fact>]
 let ``GS2-06-4 registration binds accepted predecessor and exact Q3 gate`` () =
@@ -82,7 +115,7 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, $"immutable execution pin validator failed with exit code {child.ExitCode}: {error}{output}")
-    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updater=renovate controls=19 seal=18cc53482be7c6bc97b9e439e5e52964f7c8716b771caab321fe4f7540702d56", output)
+    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=788cf1aa3a9a9aaecf09fdc878b7877d7c6ef0f1488f30666c4058c3dae5d206", output)
     Assert.Equal("", error)
 
 [<Fact>]

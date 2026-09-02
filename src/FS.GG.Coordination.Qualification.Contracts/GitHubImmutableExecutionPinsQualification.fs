@@ -36,6 +36,11 @@ type ImmutablePinUpdaterAuthority =
       PolicySha256: string
       OwnedManagers: string list }
 
+type ImmutableUpdaterConfiguration =
+    { Path: string
+      Sha256: string
+      Authority: string }
+
 type ImmutableExecutionPinsSnapshot =
     { SchemaVersion: int
       Repository: string
@@ -44,6 +49,7 @@ type ImmutableExecutionPinsSnapshot =
       Complete: bool
       Workflows: ImmutableWorkflowDocument list
       Publications: ImmutableWorkflowPublication list
+      UpdaterConfigurations: ImmutableUpdaterConfiguration list
       Updaters: ImmutablePinUpdaterAuthority list
       RequiredManagers: string list }
 
@@ -53,6 +59,7 @@ type ImmutableExecutionPinsReport =
       WorkflowCount: int
       ReferenceCount: int
       PublicationCount: int
+      UpdaterConfigurationCount: int
       AutomatedUpdater: string
       Managers: string list
       Seal: string }
@@ -74,6 +81,9 @@ type ImmutableExecutionPinsError =
     | PublicationIsNotReusableWorkflow
     | MissingImmutablePublication
     | ConflictingImmutablePublication
+    | DuplicateUpdaterConfiguration
+    | InvalidUpdaterConfiguration
+    | CompetingUpdaterAuthority
     | InvalidUpdaterAuthority
     | MultipleAutomatedUpdaters
     | RenovateAuthorityMissing
@@ -84,7 +94,7 @@ type GitHubImmutableExecutionPinsControl =
     | ImmutablePinsPrerequisite | ImmutablePinsCompleteness | ImmutablePinsSourceBinding
     | ThirdPartyActionPins | ReusableWorkflowPins | LocalExecutionReferenceRejection | WorkflowDigestBinding
     | PublicationIdentity | PublicationContent | PublicationWorkflowCall
-    | StablePinOrdering | RenovateSoleUpdater | RenovatePullRequestOnly
+    | StablePinOrdering | UpdaterConfigurationInventory | RenovateSoleUpdater | RenovatePullRequestOnly
     | RenovateOwnership | ExactPinsSeal | ExactPinsReplay | QuintPinsUnchanged
     | NoPinsMutationSurface | NoWorkflowPublicationSurface
 
@@ -132,6 +142,7 @@ module GitHubImmutableExecutionPinsQualification =
     let private canonical snapshot =
         let workflows = snapshot.Workflows |> List.sortBy _.Path
         let publications = snapshot.Publications |> List.sortBy (fun value -> value.Repository, value.Path, value.Revision)
+        let updaterConfigurations = snapshot.UpdaterConfigurations |> List.sortBy _.Path
         let updaters = snapshot.Updaters |> List.sortBy _.Name
         [ frame (string snapshot.SchemaVersion); frame snapshot.Repository; frame snapshot.SourceRevision
           frame snapshot.PrerequisiteReceiptDigest; frame (string snapshot.Complete)
@@ -141,6 +152,8 @@ module GitHubImmutableExecutionPinsQualification =
                             yield frame (kind reference.Kind) + frame reference.WorkflowPath + frame reference.TargetRepository + scalar reference.TargetPath + frame reference.Revision ]
           strings [ for publication in publications do
                         yield frame publication.Repository + frame publication.Path + frame publication.Revision + frame publication.ContentSha256 + frame (string publication.WorkflowCall) ]
+          strings [ for configuration in updaterConfigurations do
+                        yield frame configuration.Path + frame configuration.Sha256 + frame configuration.Authority ]
           strings [ for updater in updaters do
                         yield frame updater.Name + frame (string updater.Automated) + frame (string updater.PullRequestOnly) + frame (string updater.DirectPush)
                               + frame updater.PolicyRepository + frame updater.PolicyRevision + frame updater.PolicyPath + frame updater.PolicySha256
@@ -177,6 +190,13 @@ module GitHubImmutableExecutionPinsQualification =
             let matches = snapshot.Publications |> List.filter (fun value -> value.Repository = reference.TargetRepository && Some value.Path = reference.TargetPath && value.Revision = reference.Revision)
             if matches.IsEmpty then errors.Add MissingImmutablePublication
             elif matches.Length <> 1 then errors.Add ConflictingImmutablePublication
+        if snapshot.UpdaterConfigurations |> List.countBy _.Path |> List.exists (fun (_, count) -> count <> 1) then
+            errors.Add DuplicateUpdaterConfiguration
+        for configuration in snapshot.UpdaterConfigurations do
+            if not (validPath configuration.Path) || not (hexLength 64 configuration.Sha256) || String.IsNullOrWhiteSpace configuration.Authority then
+                errors.Add InvalidUpdaterConfiguration
+            if not (String.Equals(configuration.Authority, "renovate", StringComparison.Ordinal)) then
+                errors.Add CompetingUpdaterAuthority
         let automated = snapshot.Updaters |> List.filter _.Automated
         if automated.Length > 1 then errors.Add MultipleAutomatedUpdaters
         if automated.Length <> 1 || automated.Head.Name <> "renovate" then errors.Add RenovateAuthorityMissing
@@ -195,7 +215,8 @@ module GitHubImmutableExecutionPinsQualification =
             let references = snapshot.Workflows |> List.sumBy (fun value -> value.References.Length)
             Ok { Repository = snapshot.Repository; SourceRevision = snapshot.SourceRevision
                  WorkflowCount = snapshot.Workflows.Length; ReferenceCount = references
-                 PublicationCount = snapshot.Publications.Length; AutomatedUpdater = automated.Head.Name
+                 PublicationCount = snapshot.Publications.Length; UpdaterConfigurationCount = snapshot.UpdaterConfigurations.Length
+                 AutomatedUpdater = automated.Head.Name
                  Managers = snapshot.RequiredManagers |> List.sort; Seal = seal snapshot }
 
     let verify expectedSeal snapshot =
@@ -208,7 +229,7 @@ module GitHubImmutableExecutionPinsQualification =
         [ ImmutablePinsPrerequisite; ImmutablePinsCompleteness; ImmutablePinsSourceBinding
           ThirdPartyActionPins; ReusableWorkflowPins; LocalExecutionReferenceRejection; WorkflowDigestBinding
           PublicationIdentity; PublicationContent; PublicationWorkflowCall
-          StablePinOrdering; RenovateSoleUpdater; RenovatePullRequestOnly
+          StablePinOrdering; UpdaterConfigurationInventory; RenovateSoleUpdater; RenovatePullRequestOnly
           RenovateOwnership; ExactPinsSeal; ExactPinsReplay; QuintPinsUnchanged
           NoPinsMutationSurface; NoWorkflowPublicationSurface ]
 
@@ -224,6 +245,7 @@ module GitHubImmutableExecutionPinsQualification =
         | PublicationContent -> "publication-content"
         | PublicationWorkflowCall -> "publication-workflow-call"
         | StablePinOrdering -> "stable-ordering"
+        | UpdaterConfigurationInventory -> "updater-configuration-inventory"
         | RenovateSoleUpdater -> "renovate-sole-updater"
         | RenovatePullRequestOnly -> "renovate-pull-request-only"
         | RenovateOwnership -> "renovate-ownership"

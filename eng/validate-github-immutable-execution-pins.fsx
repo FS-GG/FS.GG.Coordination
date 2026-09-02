@@ -8,7 +8,14 @@ open System.Text.Json.Nodes
 open System.Text.RegularExpressions
 open FS.GG.Coordination.Qualification.Contracts
 
-let root = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, ".."))
+let defaultRoot = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, ".."))
+let root =
+    fsi.CommandLineArgs
+    |> Array.skip 1
+    |> Array.filter (fun value -> value <> "--")
+    |> Array.tryFind Directory.Exists
+    |> Option.map Path.GetFullPath
+    |> Option.defaultValue defaultRoot
 let evidenceRoot = Path.Combine(root, "evidence/github-substrate-v2/gs2-06-4")
 let corpus = JsonNode.Parse(File.ReadAllText(Path.Combine(evidenceRoot, "corpus.json"))).AsObject()
 let expectations = JsonNode.Parse(File.ReadAllText(Path.Combine(evidenceRoot, "independent-expectations.json"))).AsObject()
@@ -42,12 +49,17 @@ let updater (node: JsonNode) =
       PolicyPath = text value "policyPath"; PolicySha256 = text value "policySha256"
       OwnedManagers = texts value "ownedManagers" }
 
+let updaterConfiguration (node: JsonNode) =
+    let value = node.AsObject()
+    { Path = text value "path"; Sha256 = text value "sha256"; Authority = text value "authority" }
+
 let snapshot =
     { SchemaVersion = corpus["schemaVersion"].GetValue<int>(); Repository = text corpus "repository"
       SourceRevision = text corpus "sourceRevision"; PrerequisiteReceiptDigest = text corpus "prerequisiteReceiptDigest"
       Complete = corpus["complete"].GetValue<bool>()
       Workflows = corpus["workflows"].AsArray() |> Seq.map workflow |> List.ofSeq
       Publications = corpus["publications"].AsArray() |> Seq.map publication |> List.ofSeq
+      UpdaterConfigurations = corpus["updaterConfigurations"].AsArray() |> Seq.map updaterConfiguration |> List.ofSeq
       Updaters = corpus["updaters"].AsArray() |> Seq.map updater |> List.ofSeq
       RequiredManagers = texts corpus "requiredManagers" }
 
@@ -86,12 +98,33 @@ else
         |> Set.ofList
     if observedReferences <> declaredReferences then failwith $"execution reference inventory differs: observed={observedReferences.Count} declared={declaredReferences.Count}"
 
+    let updaterConfigurationPaths =
+        [ ".github/dependabot.yml"; ".github/dependabot.yaml"
+          "renovate.json"; "renovate.json5"; "renovate-config.js"; "renovate-config.cjs"; "renovate-config.mjs"
+          ".renovaterc"; ".renovaterc.json"; ".renovaterc.json5"; ".renovaterc.js"; ".renovaterc.cjs"; ".renovaterc.mjs"
+          ".github/renovate.json"; ".github/renovate.json5" ]
+    let observedUpdaterConfigurations =
+        updaterConfigurationPaths
+        |> List.choose (fun path ->
+            let fullPath = Path.Combine(root, path)
+            if File.Exists fullPath then
+                let authority = if path.Contains("dependabot", StringComparison.Ordinal) then "dependabot" else "renovate"
+                Some(path, sha256File fullPath, authority)
+            else None)
+        |> Set.ofList
+    let declaredUpdaterConfigurations =
+        snapshot.UpdaterConfigurations
+        |> List.map (fun configuration -> configuration.Path, configuration.Sha256, configuration.Authority)
+        |> Set.ofList
+    if observedUpdaterConfigurations <> declaredUpdaterConfigurations then
+        failwith $"updater configuration inventory differs: observed={observedUpdaterConfigurations.Count} declared={declaredUpdaterConfigurations.Count}"
+
     let receipt = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-06.3.json"))).AsObject()
     if text receipt "digest" <> snapshot.PrerequisiteReceiptDigest then failwith "accepted GS2-06.3 receipt differs"
     if text corpus "roadmapRevision" <> "7ab43852609563265291eec2b4010a829582d447" || text corpus "roadmapSha256" <> "9c8c87581bc0e7d1e9aac6d2691fdbf5f4e3db531c45879b1acc5b37669f0112" then failwith "accepted roadmap binding differs"
     if report.Repository <> text expectations "repository" || report.WorkflowCount <> expectations["workflowCount"].GetValue<int>() || report.ReferenceCount <> expectations["referenceCount"].GetValue<int>() then failwith "baseline inventory differs"
     if observedReferences |> Seq.map (fun (_, kind, repository, _, revision) -> kind, repository, revision) |> Set.ofSeq |> Set.count <> expectations["distinctActionCount"].GetValue<int>() then failwith "distinct action inventory differs"
-    if report.PublicationCount <> expectations["publicationCount"].GetValue<int>() || report.AutomatedUpdater <> text expectations "automatedUpdater" || report.Managers <> texts expectations "managers" then failwith "publication or updater result differs"
+    if report.PublicationCount <> expectations["publicationCount"].GetValue<int>() || report.UpdaterConfigurationCount <> expectations["updaterConfigurationCount"].GetValue<int>() || report.AutomatedUpdater <> text expectations "automatedUpdater" || report.Managers <> texts expectations "managers" then failwith "publication or updater result differs"
     if report.Seal <> text expectations "expectedSeal" then failwith "baseline seal differs"
     if GitHubImmutableExecutionPinsQualification.verify report.Seal snapshot <> Ok report then failwith "exact replay failed"
     let expectedControls = GitHubImmutableExecutionPinsQualification.requiredControls |> List.map GitHubImmutableExecutionPinsQualification.controlId
@@ -105,6 +138,8 @@ else
     let published =
         { Repository = "FS-GG/.github"; Path = ".github/workflows/reusable.yml"; Revision = sha
           ContentSha256 = digest; WorkflowCall = true }
+    let dependabotConfiguration =
+        { Path = ".github/dependabot.yml"; Sha256 = digest; Authority = "dependabot" }
     let generatedMutation = function
         | ImmutablePinsPrerequisite -> refused { snapshot with PrerequisiteReceiptDigest = "invalid" }
         | ImmutablePinsCompleteness -> refused { snapshot with Complete = false }
@@ -126,6 +161,8 @@ else
         | PublicationContent -> refused { snapshot with Publications = [ { published with ContentSha256 = "changed" } ] }
         | PublicationWorkflowCall -> refused { snapshot with Publications = [ { published with WorkflowCall = false } ] }
         | StablePinOrdering -> compile { snapshot with Workflows = List.rev snapshot.Workflows } = Ok report
+        | UpdaterConfigurationInventory ->
+            refused { snapshot with UpdaterConfigurations = [ dependabotConfiguration ] }
         | RenovateSoleUpdater -> refused { snapshot with Updaters = { snapshot.Updaters.Head with Name = "dependabot" } :: snapshot.Updaters }
         | RenovatePullRequestOnly -> refused { snapshot with Updaters = [ { snapshot.Updaters.Head with PullRequestOnly = false; DirectPush = true } ] }
         | RenovateOwnership -> refused { snapshot with RequiredManagers = [ "github-actions"; "regex" ] }
@@ -155,6 +192,9 @@ else
         | WorkflowDigestBinding -> snapshot.Workflows |> List.forall (fun workflow -> sha256File (Path.Combine(root, workflow.Path)) = workflow.Sha256)
         | PublicationIdentity | PublicationContent | PublicationWorkflowCall -> snapshot.Publications.IsEmpty && observedReferences |> Seq.exists (fun (_, kind, _, _, _) -> kind = ReusableWorkflow) |> not
         | StablePinOrdering -> compile { snapshot with Workflows = List.rev snapshot.Workflows } = Ok report
+        | UpdaterConfigurationInventory ->
+            observedUpdaterConfigurations = declaredUpdaterConfigurations
+            && observedUpdaterConfigurations |> Seq.forall (fun (_, _, authority) -> authority = "renovate")
         | RenovateSoleUpdater -> snapshot.Updaters |> List.filter _.Automated |> List.map _.Name = [ "renovate" ]
         | RenovatePullRequestOnly -> snapshot.Updaters.Head.PullRequestOnly && not snapshot.Updaters.Head.DirectPush
         | RenovateOwnership -> snapshot.Updaters.Head.OwnedManagers = [ "github-actions" ] && snapshot.RequiredManagers = [ "github-actions" ]
@@ -167,5 +207,5 @@ else
     let generated = GitHubImmutableExecutionPinsQualification.requiredControls |> List.map (fun control -> result control (generatedMutation control))
     let independent = GitHubImmutableExecutionPinsQualification.requiredControls |> List.map (fun control -> result control (independentMutation control))
     match GitHubImmutableExecutionPinsQualification.validate generated independent with
-    | Ok () -> printfn "GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=%d references=%d publications=%d updater=%s controls=%d seal=%s" report.WorkflowCount report.ReferenceCount report.PublicationCount report.AutomatedUpdater expectedControls.Length report.Seal
+    | Ok () -> printfn "GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=%d references=%d publications=%d updaterConfigurations=%d updater=%s controls=%d seal=%s" report.WorkflowCount report.ReferenceCount report.PublicationCount report.UpdaterConfigurationCount report.AutomatedUpdater expectedControls.Length report.Seal
     | Error findings -> failwithf "immutable execution pins qualification failed: %A" findings

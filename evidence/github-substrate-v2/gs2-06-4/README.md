@@ -12,4 +12,7 @@ The corpus contains no reusable-workflow caller or `workflow_call` publication y
 the contract therefore retains exact zero counts while defining the immutable
 repository/path/commit/content tuple required as soon as either appears. Renovate is
 the only automated updater authority and may propose `github-actions` changes only
-through pull requests. This evidence grants no workflow publication or GitHub write.
+through pull requests. The sealed candidate-local updater-configuration inventory is
+empty; recognized Dependabot and repository Renovate configuration paths are derived
+from the candidate tree, digest-bound when present, and any non-Renovate authority is
+rejected. This evidence grants no workflow publication or GitHub write.
