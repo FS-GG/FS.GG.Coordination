@@ -11,7 +11,7 @@ sourceAnalysis: readiness/246-permission-compilation/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/246-permission-compilation/analysis.json
-    digest: 1824701dd8c9fbcaae164866fa24af940df989a1480c894267340583b69c4c82
+    digest: cf59f15eb5a04511ab06477b1455f08b869f5ed00472571862577261030afc77
     schemaVersion: 1
   - label: checklist
     path: work/246-permission-compilation/checklist.md
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/246-permission-compilation/qualification.trx
-      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digest: "sha256:766aba973103662273625dca96ba9d0639d4a40c16840a5e51fe6a2dc31d1493"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 6
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/246-permission-compilation/qualification.trx
-      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digest: "sha256:766aba973103662273625dca96ba9d0639d4a40c16840a5e51fe6a2dc31d1493"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 6
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/246-permission-compilation/qualification.trx
-      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digest: "sha256:766aba973103662273625dca96ba9d0639d4a40c16840a5e51fe6a2dc31d1493"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 6
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/246-permission-compilation/qualification.trx
-      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digest: "sha256:766aba973103662273625dca96ba9d0639d4a40c16840a5e51fe6a2dc31d1493"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 6
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/246-permission-compilation/qualification.trx
-      digest: "sha256:bb246e8b05161d6a854c083bfbd5726220417a1aa264099368819984ed517559"
+      digest: "sha256:766aba973103662273625dca96ba9d0639d4a40c16840a5e51fe6a2dc31d1493"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 6
