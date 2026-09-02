@@ -75,15 +75,10 @@ else
         [ for workflow in snapshot.Workflows do
               for matched in uses.Matches(File.ReadAllText(Path.Combine(root, workflow.Path))) do
                   let target = matched.Groups[1].Value
-                  if not (target.StartsWith("./")) then
-                      let split = target.Split('@')
-                      if split.Length <> 2 then failwith $"unparseable execution reference: {target}"
-                      let identity = split[0].Split('/')
-                      if identity.Length < 2 then failwith $"unparseable execution identity: {target}"
-                      let repository = String.concat "/" identity[0..1]
-                      let isWorkflow = identity.Length >= 5 && identity[2] = ".github" && identity[3] = "workflows"
-                      let path = if isWorkflow then Some(String.concat "/" identity[2..]) else None
-                      yield workflow.Path, (if isWorkflow then ReusableWorkflow else ThirdPartyAction), repository, path, split[1] ]
+                  match GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral target with
+                  | Ok(kind, repository, path, revision) ->
+                      yield workflow.Path, kind, repository, path, revision
+                  | Error errors -> failwith $"execution reference is not immutable: {target}: {errors}" ]
         |> Set.ofList
     let declaredReferences =
         snapshot.Workflows
@@ -122,6 +117,10 @@ else
             let head = snapshot.Workflows.Head
             let changed = { reusable with Revision = "main" }
             refused { snapshot with Workflows = { head with References = changed :: head.References } :: snapshot.Workflows.Tail; Publications = [ published ] }
+        | LocalExecutionReferenceRejection ->
+            match GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral "./.github/workflows/reusable.yml" with
+            | Error [ LocalExecutionReferenceNotImmutable ] -> true
+            | _ -> false
         | WorkflowDigestBinding -> refused { snapshot with Workflows = { snapshot.Workflows.Head with Sha256 = "changed" } :: snapshot.Workflows.Tail }
         | PublicationIdentity -> refused { snapshot with Publications = [ { published with Repository = "invalid" } ] }
         | PublicationContent -> refused { snapshot with Publications = [ { published with ContentSha256 = "changed" } ] }
@@ -144,6 +143,15 @@ else
         | ImmutablePinsSourceBinding -> snapshot.SourceRevision = "e25727a89ad0101188da74414669a556059d251e"
         | ThirdPartyActionPins -> observedReferences |> Seq.filter (fun (_, kind, _, _, _) -> kind = ThirdPartyAction) |> Seq.forall (fun (_, _, _, _, revision) -> revision.Length = 40 && revision |> Seq.forall Uri.IsHexDigit)
         | ReusableWorkflowPins -> observedReferences |> Seq.filter (fun (_, kind, _, _, _) -> kind = ReusableWorkflow) |> Seq.forall (fun (_, _, _, path, revision) -> path.IsSome && revision.Length = 40)
+        | LocalExecutionReferenceRejection ->
+            snapshot.Workflows
+            |> List.collect (fun workflow ->
+                uses.Matches(File.ReadAllText(Path.Combine(root, workflow.Path)))
+                |> Seq.map (fun matched -> matched.Groups[1].Value)
+                |> List.ofSeq)
+            |> List.forall (fun literal ->
+                not (literal.StartsWith("./", StringComparison.Ordinal))
+                && GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral literal |> Result.isOk)
         | WorkflowDigestBinding -> snapshot.Workflows |> List.forall (fun workflow -> sha256File (Path.Combine(root, workflow.Path)) = workflow.Sha256)
         | PublicationIdentity | PublicationContent | PublicationWorkflowCall -> snapshot.Publications.IsEmpty && observedReferences |> Seq.exists (fun (_, kind, _, _, _) -> kind = ReusableWorkflow) |> not
         | StablePinOrdering -> compile { snapshot with Workflows = List.rev snapshot.Workflows } = Ok report

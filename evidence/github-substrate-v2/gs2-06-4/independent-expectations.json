@@ -14,6 +14,7 @@
     "source-binding",
     "third-party-action-pins",
     "reusable-workflow-pins",
+    "local-execution-reference-rejection",
     "workflow-digest-binding",
     "publication-identity",
     "publication-content",
