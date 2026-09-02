@@ -133,7 +133,7 @@ else
     let renovateEnvironment =
         Regex("(?i)\\bRENOVATE_[A-Z0-9_]+\\b", RegexOptions.CultureInvariant)
     let renovateCommand =
-        Regex("(?im)(?:^|[;&|`(\\\"'\\s])(?:(?:npx|bunx|yarn|pnpm\\s+exec|npm\\s+exec(?:\\s+--)?)\\s+)?(?:[^\\\"'\\s,;]+[\\\\/])?renovate(?:\\.(?:cmd|exe))?(?:[\\\"']|\\s|$)|renovate/renovate", RegexOptions.CultureInvariant)
+        Regex("(?im)(?:^|[;&|`(\\\"'\\s,])(?:[^\\\"'\\s,;()]+@npm:)?(?:npm:)?(?:(?:file:)?[^\\\"'\\s,;()]*[\\\\/])?renovate(?:\\.(?:cmd|exe))?(?:[@#:][^\\\"'\\s,;()]+)?(?:[\\\"'\\s,;)]|$)", RegexOptions.CultureInvariant)
     let invocationSurface (path: string) =
         path.StartsWith(".github/workflows/", StringComparison.Ordinal)
         || path.StartsWith("scripts/", StringComparison.Ordinal)

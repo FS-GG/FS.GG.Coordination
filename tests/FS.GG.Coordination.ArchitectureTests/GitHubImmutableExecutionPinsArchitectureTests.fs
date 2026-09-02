@@ -101,7 +101,17 @@ let ``production Q3 rejects every competing or alternate updater configuration r
           "local-node-bin",
               [ "scripts/run-local-renovate.js", "const { spawnSync } = require('node:child_process');\nspawnSync(\"./node_modules/.bin/renovate\", [\"--enabled-managers=github-actions\", \"--automerge=true\", \"--automerge-type=branch\"]);\n" ]
           "windows-local-bin",
-              [ "scripts/run-local-renovate.ps1", "$process = Start-Process -Wait -PassThru \".\\node_modules\\.bin\\renovate.cmd\" -ArgumentList \"--automerge=true --automerge-type=branch\"\nexit $process.ExitCode\n" ] ]
+              [ "scripts/run-local-renovate.ps1", "$process = Start-Process -Wait -PassThru \".\\node_modules\\.bin\\renovate.cmd\" -ArgumentList \"--automerge=true --automerge-type=branch\"\nexit $process.ExitCode\n" ]
+          "npx-dist-tag",
+              [ "scripts/adversarial-npx-version.sh", "#!/usr/bin/env bash\nnpx renovate@latest --enabled-managers=github-actions --automerge=true --automerge-type=branch\n" ]
+          "quoted-semver-range",
+              [ "scripts/run-versioned-renovate.sh", "#!/usr/bin/env bash\npnpm dlx \"renovate@^38.0.0\" --automerge=true --automerge-type=branch\n" ]
+          "npm-alias-spec",
+              [ "scripts/run-aliased-renovate.sh", "#!/usr/bin/env bash\nnpx updater@npm:renovate@latest --automerge=true --automerge-type=branch\n" ]
+          "github-package-spec",
+              [ "scripts/run-github-renovate.sh", "#!/usr/bin/env bash\nnpx github:renovatebot/renovate#main --automerge=true --automerge-type=branch\n" ]
+          "file-package-spec",
+              [ "scripts/run-file-renovate.sh", "#!/usr/bin/env bash\nnpx file:./vendor/renovate --automerge=true --automerge-type=branch\n" ] ]
     for label, files in cases do
         let tempRoot = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-06-4-{label}-{Guid.NewGuid():N}")
         try
