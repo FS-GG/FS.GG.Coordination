@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "1da112a0d80fd38e5b2a9780db77a4fb98c873ca",
+    "revision": "a13e7c16af028979e93c836efe1bd786f0f2d7f8",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "d56501e23db681f49c772d238f013a78d311db55b08ea194ca78648c47e5596f"
+    "sha256": "3fe2f665ab75d88d253e74ac6647bbb27b0ead930d47ee6d2430905dfa22f8c9"
   },
   "units": [
     {
@@ -686,6 +686,20 @@
         { "id": "github-repository-profile-contract", "qGate": "Q3", "commandSha256": "e90aa38109dbdee42f9af157b846192e44286dca059ec549fcf1b3609e4db3e5" }
       ],
       "contractSha256": "6de48b57654910625bf65f0bc4d30a8b399dbf0aa9e6d9e6c79b7a209f53a89e"
+    },
+    {
+      "id": "GS2-06.2",
+      "title": "Required-check census",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-06.1"],
+      "permissionCeiling": ["repository-local additive required-check census contracts, pure deterministic reconciliation over sealed complete classic-protection, ruleset, workflow-trigger, job, and producer observations, stable aggregate projection, validation, and retained evidence", "read-only consumption of accepted repository-profile and required-check observations is allowed; no production GitHub write, branch or tag ruleset plan, workflow rewrite, merge-queue cutover, repository administration, deployment, publication, stable release, GS2-06.3 implementation, or successor-unit implementation authority"],
+      "exitGate": "the Q3 required-check census begins from the accepted GS2-06.1 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds the exact repository profile, prerequisite receipt, source revision, complete classic-protection requirements, complete ruleset requirements, and complete producer workflow and job observations; exact context plus optional positive integration identity defines an internal check identity, equivalent identities union with complete authority provenance, and mixed or conflicting identities refuse rather than guessing precedence; every effective requirement has exactly one producer whose workflow explicitly admits pull_request and merge_group without branch, path, or activity restrictions and whose complete job dependency chain has no conditional or continue-on-error escape; missing, duplicate, ambiguous, stale, partial, filtered, conditional, renamed, unsupported, cross-repository, contradictory, orphaned, altered-source, and altered-seal inputs fail closed; the complete internal census retains contexts, authorities, ruleset ids, integration ids, workflow and job provenance, and event proofs while the external contract exposes only stable counts, readiness booleans, and the deterministic seal; exact replay is byte-identical and no plan or apply path exists; generated and independently authored prerequisite, profile, source, completeness, ordering, identity, union, provenance, producer, pull-request, merge-group, filter, condition, dependency, repository, freshness, aggregate, seal, replay, Quint, no-plan, and no-apply inversions all fail closed without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-required-check-census-contract"],
+      "gateContracts": [
+        { "id": "github-required-check-census-contract", "qGate": "Q3", "commandSha256": "e2b62777509106fc8aec437679bb242c79c326333aca9e8db400ca85e588534b" }
+      ],
+      "contractSha256": "342e20e1184ee7d5217d92e952db226f381e7b878aec43aa48b3acc1c8645425"
     }
   ]
 }

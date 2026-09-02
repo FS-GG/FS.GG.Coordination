@@ -1,0 +1,43 @@
+{
+  "schema": "fsgg.coordination.github-required-check-census-corpus/1",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "profileSeal": "f3524e8edbd6b88b0783551c14377881dee5dd958ebd4835d77a57913d30d74b",
+  "prerequisiteReceiptDigest": "0f6a142023f21a266242997ae896e494dfa668e895e308ad73d2d5e01404c042",
+  "sourceRevision": "f3a92488d6c15e1a4592686c6f00c375c62b167d",
+  "observedAt": "2026-09-02T02:21:41Z",
+  "complete": true,
+  "classicComplete": true,
+  "rulesetsComplete": true,
+  "producersComplete": true,
+  "requirements": [
+    { "context": "compiler-and-tests", "integrationId": 15368, "source": "classic" },
+    { "context": "compiler-and-tests", "integrationId": 15368, "source": "ruleset:81" },
+    { "context": "policy", "integrationId": 15368, "source": "ruleset:81" }
+  ],
+  "producers": [
+    {
+      "context": "compiler-and-tests",
+      "integrationId": 15368,
+      "workflow": ".github/workflows/qualification.yml",
+      "job": "compiler-and-tests",
+      "workflowRevision": "f3a92488d6c15e1a4592686c6f00c375c62b167d",
+      "pullRequest": { "declared": true, "branchFilters": [], "pathFilters": [], "activityTypes": [] },
+      "mergeGroup": { "declared": true, "branchFilters": [], "pathFilters": [], "activityTypes": [] },
+      "dependenciesComplete": true,
+      "conditional": false,
+      "continueOnError": false
+    },
+    {
+      "context": "policy",
+      "integrationId": 15368,
+      "workflow": ".github/workflows/qualification.yml",
+      "job": "policy",
+      "workflowRevision": "f3a92488d6c15e1a4592686c6f00c375c62b167d",
+      "pullRequest": { "declared": true, "branchFilters": [], "pathFilters": [], "activityTypes": [] },
+      "mergeGroup": { "declared": true, "branchFilters": [], "pathFilters": [], "activityTypes": [] },
+      "dependenciesComplete": true,
+      "conditional": false,
+      "continueOnError": false
+    }
+  ]
+}

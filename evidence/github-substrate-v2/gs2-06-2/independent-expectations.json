@@ -1,0 +1,21 @@
+{
+  "schema": "fsgg.coordination.github-required-check-census-expectations/1",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "expectedOrder": ["compiler-and-tests", "policy"],
+  "requiredCount": 2,
+  "classicOnlyCount": 0,
+  "rulesetOnlyCount": 1,
+  "dualSourceCount": 1,
+  "integrationBoundCount": 2,
+  "pullRequestUnconditionalCount": 2,
+  "mergeGroupUnconditionalCount": 2,
+  "expectedSeal": "d346982bcf6baed74257ef4f489f38da334f605b6bbc6339527390f50b106d7c",
+  "controls": [
+    "prerequisite-receipt", "profile-binding", "source-binding", "complete-authorities",
+    "stable-ordering", "exact-identity", "authority-union", "provenance-retention",
+    "producer-completeness", "pull-request-production", "merge-group-production", "event-filters",
+    "job-conditions", "dependency-closure", "repository-boundary", "freshness",
+    "stable-aggregates", "exact-seal", "exact-replay", "quint-unchanged",
+    "no-plan-surface", "no-apply-surface"
+  ]
+}

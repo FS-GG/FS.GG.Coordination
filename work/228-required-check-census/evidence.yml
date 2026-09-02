@@ -1,0 +1,281 @@
+schemaVersion: 1
+workId: 228-required-check-census
+stage: evidence
+status: evidenceReady
+sourceSpec: work/228-required-check-census/spec.md
+sourceClarifications: work/228-required-check-census/clarifications.md
+sourceChecklist: work/228-required-check-census/checklist.md
+sourcePlan: work/228-required-check-census/plan.md
+sourceTasks: work/228-required-check-census/tasks.yml
+sourceAnalysis: readiness/228-required-check-census/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/228-required-check-census/analysis.json
+    digest: 98a4c75dd02d97e991bef8a41a954bede6719cccafdbe6d40d1172f2aa2f9939
+    schemaVersion: 1
+  - label: checklist
+    path: work/228-required-check-census/checklist.md
+    digest: 23ce856dff00138ee1386ab71742fa0fa72983f1e75cdc1a779fe5e73f25de38
+    schemaVersion: 1
+  - label: clarifications
+    path: work/228-required-check-census/clarifications.md
+    digest: 898be04011c968024edb83eabed69ca306d9c28e39df370f9334bb341dfb612a
+    schemaVersion: 1
+  - label: plan
+    path: work/228-required-check-census/plan.md
+    digest: b48e7e6132adff8157359657f95f3631588547899b5dd355995d111c0c3a4fe0
+    schemaVersion: 1
+  - label: spec
+    path: work/228-required-check-census/spec.md
+    digest: d746c08789fb3411fa9e8e7d4d2c9d062a029bef691ad47968c0d3b9c5955e8a
+    schemaVersion: 1
+  - label: tasks
+    path: work/228-required-check-census/tasks.yml
+    digest: cd68f358cb8b300c3c486aa8c16899e52c10b58b52aa6b7855c733c0ffaa10f6
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubRequiredCheckCensusTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/228-required-check-census/qualification.trx
+      digest: "sha256:afcf2592eb6247e7b29e3ce8f77b0b2df21874fc2260923fb61f3d661b618a20"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
