@@ -12,6 +12,7 @@ let root = if fsi.CommandLineArgs.Length > 1 then Path.GetFullPath fsi.CommandLi
 let readDocument relative = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, relative)))
 let text (node: JsonElement) (name: string) = node.GetProperty(name).GetString()
 let sha256 path = File.ReadAllBytes(path) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+let sha256Text (value: string) = value |> System.Text.Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 let capability = function
     | "roster-read" -> RosterRead | "metadata-read" -> MetadataRead | "issue-read" -> IssueRead
     | "project-read" -> ProjectRead | "journal-read" -> JournalRead | "check-read" -> CheckRead
@@ -69,7 +70,11 @@ let v1Source = source.GetProperty "v1"
 let v2Source = source.GetProperty "v2"
 let v1SourcePath = Path.Combine(root, "evidence/github-substrate-v2/gs2-05-8/live-ready.json")
 let v2SourcePath = Path.Combine(root, "evidence/github-substrate-v2/gs2-05-8/live-project-pages.json")
+let v2QueryPath = Path.Combine(root, "evidence/github-substrate-v2/gs2-05-8/live-project-query.graphql")
 if text v1Source "sha256" <> sha256 v1SourcePath || text v2Source "sha256" <> sha256 v2SourcePath then failwith "retained live source changed"
+let v2QuerySha = sha256 v2QueryPath
+let v2Revision = sha256Text $"{v2QuerySha}\u0000{sha256 v2SourcePath}"
+if text v2Source "querySha256" <> v2QuerySha || text v2Source "revisionSha256" <> v2Revision then failwith "v2 query/response revision is not exact"
 let v1Document = JsonDocument.Parse(File.ReadAllText v1SourcePath)
 let v2Document = JsonDocument.Parse(File.ReadAllText v2SourcePath)
 let v1Rows =
@@ -82,7 +87,8 @@ let v1Rows =
     |> Seq.toList
 let v2Pages = v2Document.RootElement.EnumerateArray() |> Seq.toList
 let v2PageCounts = v2Pages |> List.map (fun page -> page.GetProperty("data").GetProperty("organization").GetProperty("projectV2").GetProperty("items").GetProperty("nodes").GetArrayLength())
-if v2PageCounts <> [ 100; 80 ]
+let v2ProjectIds = v2Pages |> List.map (fun page -> page.GetProperty("data").GetProperty("organization").GetProperty("projectV2").GetProperty("id").GetString())
+if v2PageCounts <> [ 100; 80 ] || v2ProjectIds <> [ text v2Source "projectId"; text v2Source "projectId" ]
    || v2Pages.Head.GetProperty("data").GetProperty("organization").GetProperty("projectV2").GetProperty("items").GetProperty("pageInfo").GetProperty("hasNextPage").GetBoolean() <> true
    || v2Pages[1].GetProperty("data").GetProperty("organization").GetProperty("projectV2").GetProperty("items").GetProperty("pageInfo").GetProperty("hasNextPage").GetBoolean() <> false then
     failwith "retained v2 pagination proof is incomplete"
@@ -113,6 +119,8 @@ let evidenceV2Rows =
     |> List.sort
 if v1Rows.Length <> report.ItemCount || v2Rows.Length <> report.ItemCount || v1Rows <> evidenceV1Rows || v2Rows <> evidenceV2Rows || v1Rows <> v2Rows then
     failwith "independent retained sources do not exactly match the sealed decisions"
+if observation.Repositories |> List.collect _.Items |> List.exists (fun item -> item.V1.SourceRevision <> text v1Source "sha256" || item.V2.SourceRevision <> v2Revision) then
+    failwith "sealed decision source revision is not exact"
 let independence = source.GetProperty "independence"
 if text independence "highestReached" <> "value-independent" || independence.GetProperty("residual").GetArrayLength() <> 2 then failwith "independence residual is not disclosed"
 if text v1Source "command" <> "fsgg-coord ready --all --json" || text v2Source "command" <> "gh api graphql --paginate --slurp" then failwith "live commands are not independently bound"
