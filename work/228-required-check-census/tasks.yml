@@ -13,11 +13,11 @@ work:
 sources:
   - label: spec
     path: work/228-required-check-census/spec.md
-    digest: d746c08789fb3411fa9e8e7d4d2c9d062a029bef691ad47968c0d3b9c5955e8a
+    digest: b986880a2568567edff5c2606d5b887de3f7e99f289abe2ea6ef6302b1315d5b
     schemaVersion: 1
   - label: clarifications
     path: work/228-required-check-census/clarifications.md
-    digest: 898be04011c968024edb83eabed69ca306d9c28e39df370f9334bb341dfb612a
+    digest: 5b5a3467467c0a0cec5013eb623e3863df212abb1b8bb19350c5e6f10466f15d
     schemaVersion: 1
   - label: checklist
     path: work/228-required-check-census/checklist.md
@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/228-required-check-census/plan.md
-    digest: b48e7e6132adff8157359657f95f3631588547899b5dd355995d111c0c3a4fe0
+    digest: 5dca58040c39f9a4ebdccf38e5d21b394779d7bef3a4775bcd03c035a800082a
     schemaVersion: 1
 tasks:
   - id: T001
@@ -118,6 +118,26 @@ tasks:
     sourceIds: [GV-001, PD-001]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV009]
+  - id: T010
+    title: Implement clarification decision DEC-005
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-005]
+    sourceIds: [DEC-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Implement plan decision PD-002
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-002, DEC-005, FR-001, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV011]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

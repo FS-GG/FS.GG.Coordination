@@ -40,6 +40,7 @@ let producer repository (node: JsonNode) =
       Workflow = text value "workflow"
       Job = text value "job"
       WorkflowRevision = text value "workflowRevision"
+      WorkflowSha256 = text value "workflowSha256"
       PullRequest = event value["pullRequest"]
       MergeGroup = event value["mergeGroup"]
       DependenciesComplete = value["dependenciesComplete"].GetValue<bool>()
@@ -52,6 +53,7 @@ let snapshot =
       Repository = repository
       ProfileSeal = text corpus "profileSeal"
       PrerequisiteReceiptDigest = text corpus "prerequisiteReceiptDigest"
+      AuthorityEvidenceSha256 = text corpus "authorityEvidenceSha256"
       SourceRevision = text corpus "sourceRevision"
       ObservedAt = DateTimeOffset.Parse(text corpus "observedAt")
       Complete = corpus["complete"].GetValue<bool>()
@@ -64,6 +66,38 @@ let asOf = snapshot.ObservedAt
 let compile candidate = RequiredCheckCensusAdapter.compile asOf (TimeSpan.FromHours 1) candidate
 let refused candidate = compile candidate |> Result.isError
 let report = compile snapshot |> Result.defaultWith (failwithf "required-check census baseline refused: %A")
+let altered candidate = RequiredCheckCensusAdapter.verify report.Seal asOf (TimeSpan.FromHours 1) candidate |> Result.isError
+
+let workflowPath = report.Entries |> List.map _.ProducerWorkflow |> List.distinct |> List.exactlyOne
+let workflowBytes = File.ReadAllBytes(Path.Combine(root, workflowPath))
+let workflowSha256 = workflowBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+if report.Entries |> List.exists (fun entry -> entry.ProducerWorkflowSha256 <> workflowSha256) then
+    failwith "retained producer workflow digest differs from the exact checked-in workflow"
+let workflowText = Encoding.UTF8.GetString workflowBytes
+if not (workflowText.Contains("\n  pull_request:\n")) || workflowText.Contains("\n  merge_group:\n") then
+    failwith "retained workflow trigger observation differs from the exact checked-in workflow"
+for entry in report.Entries do
+    if not (workflowText.Contains($"\n  {entry.ProducerJob}:\n")) then
+        failwith $"retained producer job is absent from the exact checked-in workflow: {entry.ProducerJob}"
+
+let authoritiesPath = Path.Combine(evidenceRoot, "authorities.json")
+let authorityBytes = File.ReadAllBytes authoritiesPath
+let authoritySha256 = authorityBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+if snapshot.AuthorityEvidenceSha256 <> authoritySha256 then failwith "authority evidence digest differs"
+let authorities = JsonNode.Parse(authorityBytes).AsObject()
+let classic = authorities["classicProtection"].AsObject()
+if classic["httpStatus"].GetValue<int>() <> 404 || classic["requirements"].AsArray().Count <> 0 then
+    failwith "classic protection absence evidence differs"
+let rulesets = authorities["rulesets"].AsArray()
+if rulesets.Count <> 1 then failwith "ruleset authority count differs"
+let ruleset = rulesets[0].AsObject()
+if ruleset["id"].GetValue<int64>() <> 21633423L then failwith "ruleset authority differs"
+let authoritativeChecks =
+    ruleset["requiredStatusChecks"].AsArray()
+    |> Seq.map (fun value -> value["context"].GetValue<string>(), value["integrationId"].GetValue<int64>())
+    |> List.ofSeq
+let retainedChecks = report.Entries |> List.map (fun entry -> entry.Context, entry.IntegrationId.Value)
+if authoritativeChecks <> retainedChecks then failwith "retained census differs from authority evidence"
 
 if fsi.CommandLineArgs |> Array.contains "--mint" then
     printfn "%s" report.Seal
@@ -99,21 +133,28 @@ else
             let mixed = { snapshot.Requirements.Head with IntegrationId = None }
             refused { snapshot with Requirements = mixed :: snapshot.Requirements }
         | AuthorityUnion ->
-            let dropped = { snapshot with Requirements = snapshot.Requirements |> List.filter (fun value -> value.Source <> ClassicProtection) }
-            report.Entries.Head.Sources = [ ClassicProtection; Ruleset 81L ]
-            && RequiredCheckCensusAdapter.verify report.Seal asOf (TimeSpan.FromHours 1) dropped = Error [ AlteredRequiredCheckCensusSeal ]
-        | ProvenanceRetention -> report.Entries.Head.Sources.Length = 2 && report.Entries[1].Sources = [ Ruleset 81L ]
+            let changed = { snapshot with Requirements = snapshot.Requirements |> List.map (fun value -> { value with Source = Ruleset 99L }) }
+            (report.Entries |> List.forall (fun entry -> entry.Sources = [ Ruleset 21633423L ])) && altered changed
+        | ProvenanceRetention ->
+            report.Entries |> List.forall (fun entry -> entry.Sources = [ Ruleset 21633423L ] && entry.ProducerWorkflow = ".github/workflows/bootstrap-qualification.yml")
         | ProducerCompleteness -> refused { snapshot with Producers = snapshot.Producers.Tail }
-        | PullRequestProduction -> refused (replaceProducer "compiler-and-tests" (fun value -> { value with PullRequest = { value.PullRequest with Declared = false } }))
-        | MergeGroupProduction -> refused (replaceProducer "compiler-and-tests" (fun value -> { value with MergeGroup = { value.MergeGroup with Declared = false } }))
+        | PullRequestProduction ->
+            not report.Aggregate.PullRequestReady
+            && (report.Entries |> List.forall (fun entry -> entry.PullRequest.Declared))
+            && altered (replaceProducer "compiler-and-tests" (fun value -> { value with PullRequest = { value.PullRequest with Declared = false } }))
+        | MergeGroupProduction ->
+            not report.Aggregate.MergeGroupReady
+            && (report.Entries |> List.forall (fun entry -> not entry.MergeGroup.Declared))
+            && altered (replaceProducer "compiler-and-tests" (fun value -> { value with MergeGroup = { value.MergeGroup with Declared = true } }))
         | EventFilters ->
-            refused (replaceProducer "compiler-and-tests" (fun value -> { value with PullRequest = { value.PullRequest with PathFilters = [ "src/**" ] } }))
-            && refused (replaceProducer "compiler-and-tests" (fun value -> { value with PullRequest = { value.PullRequest with BranchFilters = [ "main" ] } }))
-            && refused (replaceProducer "compiler-and-tests" (fun value -> { value with PullRequest = { value.PullRequest with ActivityTypes = [ "synchronize" ] } }))
+            altered (replaceProducer "compiler-and-tests" (fun value -> { value with PullRequest = { value.PullRequest with PathFilters = [ "src/**" ] } }))
+            && altered (replaceProducer "compiler-and-tests" (fun value -> { value with PullRequest = { value.PullRequest with BranchFilters = [ "main" ] } }))
+            && altered (replaceProducer "compiler-and-tests" (fun value -> { value with PullRequest = { value.PullRequest with ActivityTypes = [ "synchronize" ] } }))
         | JobConditions ->
-            refused (replaceProducer "compiler-and-tests" (fun value -> { value with Conditional = true }))
-            && refused (replaceProducer "compiler-and-tests" (fun value -> { value with ContinueOnError = true }))
-        | DependencyClosure -> refused (replaceProducer "compiler-and-tests" (fun value -> { value with DependenciesComplete = false }))
+            (report.Entries |> List.forall _.Conditional)
+            && altered (replaceProducer "compiler-and-tests" (fun value -> { value with Conditional = false }))
+            && altered (replaceProducer "compiler-and-tests" (fun value -> { value with ContinueOnError = true }))
+        | DependencyClosure -> altered (replaceProducer "compiler-and-tests" (fun value -> { value with DependenciesComplete = false }))
         | RepositoryBoundary -> refused { snapshot with Requirements = { snapshot.Requirements.Head with Repository = "FS-GG/other" } :: snapshot.Requirements.Tail }
         | Freshness -> RequiredCheckCensusAdapter.compile (asOf.AddHours 2) (TimeSpan.FromHours 1) snapshot |> Result.isError
         | StableAggregates -> not ((string aggregate).Contains("compiler-and-tests")) && aggregate.RequiredCount = report.Entries.Length
@@ -128,21 +169,21 @@ else
             let receipt = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-06.1.json")))
             receipt["digest"].GetValue<string>() = snapshot.PrerequisiteReceiptDigest
         | ProfileBinding -> snapshot.ProfileSeal = "f3524e8edbd6b88b0783551c14377881dee5dd958ebd4835d77a57913d30d74b"
-        | SourceBinding -> snapshot.SourceRevision = "f3a92488d6c15e1a4592686c6f00c375c62b167d"
+        | SourceBinding -> snapshot.SourceRevision = "f3a92488d6c15e1a4592686c6f00c375c62b167d" && workflowSha256 = "0b913aab5149d035addd280adbe7ed069dc2df9a25a062add4b46a0aba44bd4a"
         | CompleteAuthorities -> snapshot.Complete && snapshot.ClassicComplete && snapshot.RulesetsComplete && snapshot.ProducersComplete
-        | StableOrdering -> report.Entries |> List.map _.Context = [ "compiler-and-tests"; "policy" ]
+        | StableOrdering -> report.Entries |> List.map _.Context = [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"; "deterministic-build"; "evidence-manifest"; "package-install-smoke" ]
         | ExactIdentity -> report.Entries |> List.forall (_.IntegrationId >> (=) (Some 15368L))
-        | AuthorityUnion -> aggregate.DualSourceCount = 1 && aggregate.RulesetOnlyCount = 1
+        | AuthorityUnion -> aggregate.DualSourceCount = 0 && aggregate.RulesetOnlyCount = 6
         | ProvenanceRetention -> report.Entries |> List.sumBy (_.Sources >> List.length) = snapshot.Requirements.Length
         | ProducerCompleteness -> report.Entries.Length = snapshot.Producers.Length
-        | PullRequestProduction -> aggregate.PullRequestReady && aggregate.PullRequestUnconditionalCount = aggregate.RequiredCount
-        | MergeGroupProduction -> aggregate.MergeGroupReady && aggregate.MergeGroupUnconditionalCount = aggregate.RequiredCount
-        | EventFilters -> snapshot.Producers |> List.forall (fun value -> value.PullRequest.PathFilters.IsEmpty && value.MergeGroup.PathFilters.IsEmpty)
-        | JobConditions -> snapshot.Producers |> List.forall (fun value -> not value.Conditional && not value.ContinueOnError)
+        | PullRequestProduction -> not aggregate.PullRequestReady && aggregate.PullRequestUnconditionalCount = 0
+        | MergeGroupProduction -> not aggregate.MergeGroupReady && aggregate.MergeGroupUnconditionalCount = 0
+        | EventFilters -> snapshot.Producers |> List.forall (fun value -> value.PullRequest.BranchFilters.IsEmpty && value.PullRequest.PathFilters.IsEmpty && value.PullRequest.ActivityTypes.IsEmpty && value.MergeGroup.BranchFilters.IsEmpty && value.MergeGroup.PathFilters.IsEmpty && value.MergeGroup.ActivityTypes.IsEmpty)
+        | JobConditions -> snapshot.Producers |> List.forall (fun value -> value.Conditional && not value.ContinueOnError)
         | DependencyClosure -> snapshot.Producers |> List.forall _.DependenciesComplete
         | RepositoryBoundary -> snapshot.Requirements |> List.forall (_.Repository >> (=) snapshot.Repository) && snapshot.Producers |> List.forall (_.Repository >> (=) snapshot.Repository)
         | Freshness -> asOf - snapshot.ObservedAt <= TimeSpan.FromHours 1
-        | StableAggregates -> aggregate.RequiredCount = 2 && aggregate.DualSourceCount + aggregate.RulesetOnlyCount + aggregate.ClassicOnlyCount = aggregate.RequiredCount
+        | StableAggregates -> aggregate.RequiredCount = 6 && aggregate.DualSourceCount + aggregate.RulesetOnlyCount + aggregate.ClassicOnlyCount = aggregate.RequiredCount
         | ExactSeal -> report.Seal.Length = 64 && report.Seal = text expectations "expectedSeal"
         | ExactReplay -> generatedMutation ExactReplay
         | QuintUnchanged -> generatedMutation QuintUnchanged

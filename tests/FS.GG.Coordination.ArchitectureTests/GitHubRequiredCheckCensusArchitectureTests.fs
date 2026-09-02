@@ -26,7 +26,7 @@ let ``GS2-06-2 registration binds accepted predecessor and exact Q3 gate`` () =
     use gates = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
     let unitValue = units.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-06.2")
     Assert.Equal<string list>([ "GS2-06.1" ], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
-    Assert.Equal("342e20e1184ee7d5217d92e952db226f381e7b878aec43aa48b3acc1c8645425", unitValue.GetProperty("contractSha256").GetString())
+    Assert.Equal("2c27bbe68be5ce3767bb87bfaa1c42c01290a3d79b041f518335fef84daed030", unitValue.GetProperty("contractSha256").GetString())
     let command = gates.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "github-required-check-census-contract")
     Assert.Equal("Q3", command.GetProperty("qGate").GetString())
     Assert.Equal<string list>([ "fsi"; "eng/validate-github-required-check-census.fsx"; "--"; "." ], command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
@@ -39,14 +39,24 @@ let ``GS2-06-2 registration binds accepted predecessor and exact Q3 gate`` () =
 let ``required check census evidence separates complete provenance from stable aggregates`` () =
     use corpus = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-06-2/corpus.json")
     use expected = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-06-2/independent-expectations.json")
+    use authorities = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-06-2/authorities.json")
     Assert.True(corpus.RootElement.GetProperty("complete").GetBoolean())
     Assert.True(corpus.RootElement.GetProperty("classicComplete").GetBoolean())
     Assert.True(corpus.RootElement.GetProperty("rulesetsComplete").GetBoolean())
     Assert.True(corpus.RootElement.GetProperty("producersComplete").GetBoolean())
-    Assert.Equal(3, corpus.RootElement.GetProperty("requirements").GetArrayLength())
-    Assert.Equal(2, corpus.RootElement.GetProperty("producers").GetArrayLength())
-    Assert.Equal(2, expected.RootElement.GetProperty("requiredCount").GetInt32())
-    Assert.Equal(1, expected.RootElement.GetProperty("dualSourceCount").GetInt32())
+    Assert.Equal(6, corpus.RootElement.GetProperty("requirements").GetArrayLength())
+    Assert.Equal(6, corpus.RootElement.GetProperty("producers").GetArrayLength())
+    Assert.Equal(6, expected.RootElement.GetProperty("requiredCount").GetInt32())
+    Assert.Equal(0, expected.RootElement.GetProperty("dualSourceCount").GetInt32())
+    Assert.Equal(6, expected.RootElement.GetProperty("rulesetOnlyCount").GetInt32())
+    Assert.Equal(404, authorities.RootElement.GetProperty("classicProtection").GetProperty("httpStatus").GetInt32())
+    let ruleset = (authorities.RootElement.GetProperty("rulesets"))[0]
+    Assert.Equal(21633423L, ruleset.GetProperty("id").GetInt64())
+    Assert.Equal(6, ruleset.GetProperty("requiredStatusChecks").GetArrayLength())
+    Assert.Equal(sha256Text (read "evidence/github-substrate-v2/gs2-06-2/authorities.json"), corpus.RootElement.GetProperty("authorityEvidenceSha256").GetString())
+    let workflow = read ".github/workflows/bootstrap-qualification.yml"
+    Assert.Contains("\n  pull_request:\n", workflow)
+    Assert.DoesNotContain("\n  merge_group:\n", workflow)
     let controls = expected.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
     Assert.Equal(22, controls.Length)
     Assert.Equal(controls.Length, controls |> List.distinct |> List.length)
@@ -64,7 +74,7 @@ let ``required check census Q3 validator rejects its closed mutation inventory``
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.Equal(0, child.ExitCode)
-    Assert.Contains("GITHUB_REQUIRED_CHECK_CENSUS_OK repository=FS-GG/FS.GG.Coordination required=2 classicOnly=0 rulesetOnly=1 dual=1 controls=22 seal=d346982bcf6baed74257ef4f489f38da334f605b6bbc6339527390f50b106d7c", output)
+    Assert.Contains("GITHUB_REQUIRED_CHECK_CENSUS_OK repository=FS-GG/FS.GG.Coordination required=6 classicOnly=0 rulesetOnly=6 dual=0 controls=22 seal=db294ff75dbfb97a81433331ac7d696a0321a3433a8dd6b29694cbebf37396a3", output)
     Assert.Equal("", error)
 
 [<Fact>]

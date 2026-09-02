@@ -23,6 +23,7 @@ type RequiredCheckProducer =
       Workflow: string
       Job: string
       WorkflowRevision: string
+      WorkflowSha256: string
       PullRequest: RequiredCheckEventProduction
       MergeGroup: RequiredCheckEventProduction
       DependenciesComplete: bool
@@ -34,6 +35,7 @@ type RequiredCheckCensusSnapshot =
       Repository: string
       ProfileSeal: string
       PrerequisiteReceiptDigest: string
+      AuthorityEvidenceSha256: string
       SourceRevision: string
       ObservedAt: DateTimeOffset
       Complete: bool
@@ -50,6 +52,12 @@ type RequiredCheckCensusEntry =
       ProducerWorkflow: string
       ProducerJob: string
       ProducerRevision: string
+      ProducerWorkflowSha256: string
+      PullRequest: RequiredCheckEventProduction
+      MergeGroup: RequiredCheckEventProduction
+      DependenciesComplete: bool
+      Conditional: bool
+      ContinueOnError: bool
       PullRequestUnconditional: bool
       MergeGroupUnconditional: bool }
 
@@ -68,6 +76,7 @@ type RequiredCheckCensusReport =
     { Repository: string
       ProfileSeal: string
       PrerequisiteReceiptDigest: string
+      AuthorityEvidenceSha256: string
       SourceRevision: string
       Entries: RequiredCheckCensusEntry list
       Aggregate: RequiredCheckCensusAggregate

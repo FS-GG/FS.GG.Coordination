@@ -25,6 +25,7 @@ type RequiredCheckProducer =
       Workflow: string
       Job: string
       WorkflowRevision: string
+      WorkflowSha256: string
       PullRequest: RequiredCheckEventProduction
       MergeGroup: RequiredCheckEventProduction
       DependenciesComplete: bool
@@ -36,6 +37,7 @@ type RequiredCheckCensusSnapshot =
       Repository: string
       ProfileSeal: string
       PrerequisiteReceiptDigest: string
+      AuthorityEvidenceSha256: string
       SourceRevision: string
       ObservedAt: DateTimeOffset
       Complete: bool
@@ -52,6 +54,12 @@ type RequiredCheckCensusEntry =
       ProducerWorkflow: string
       ProducerJob: string
       ProducerRevision: string
+      ProducerWorkflowSha256: string
+      PullRequest: RequiredCheckEventProduction
+      MergeGroup: RequiredCheckEventProduction
+      DependenciesComplete: bool
+      Conditional: bool
+      ContinueOnError: bool
       PullRequestUnconditional: bool
       MergeGroupUnconditional: bool }
 
@@ -70,6 +78,7 @@ type RequiredCheckCensusReport =
     { Repository: string
       ProfileSeal: string
       PrerequisiteReceiptDigest: string
+      AuthorityEvidenceSha256: string
       SourceRevision: string
       Entries: RequiredCheckCensusEntry list
       Aggregate: RequiredCheckCensusAggregate
@@ -121,12 +130,25 @@ module RequiredCheckCensusAdapter =
         values |> List.groupBy projection |> List.choose (fun (key, rows) -> if rows.Length > 1 then Some key else None)
 
     let private entryText (entry: RequiredCheckCensusEntry) =
+        let eventText event =
+            [ string event.Declared
+              String.concat "," event.BranchFilters
+              String.concat "," event.PathFilters
+              String.concat "," event.ActivityTypes ]
+            |> List.map frame
+            |> String.concat ""
         [ entry.Context
           entry.IntegrationId |> Option.map string |> Option.defaultValue ""
           entry.Sources |> List.map sourceText |> String.concat ","
           entry.ProducerWorkflow
           entry.ProducerJob
           entry.ProducerRevision
+          entry.ProducerWorkflowSha256
+          eventText entry.PullRequest
+          eventText entry.MergeGroup
+          string entry.DependenciesComplete
+          string entry.Conditional
+          string entry.ContinueOnError
           string entry.PullRequestUnconditional
           string entry.MergeGroupUnconditional ]
         |> List.map frame
@@ -136,6 +158,7 @@ module RequiredCheckCensusAdapter =
         [ snapshot.Repository
           snapshot.ProfileSeal.ToLowerInvariant()
           snapshot.PrerequisiteReceiptDigest.ToLowerInvariant()
+          snapshot.AuthorityEvidenceSha256.ToLowerInvariant()
           snapshot.SourceRevision.ToLowerInvariant()
           entries |> List.map entryText |> String.concat ""
           string aggregate.RequiredCount
@@ -164,6 +187,7 @@ module RequiredCheckCensusAdapter =
               if snapshot.ObservedAt > asOf || asOf - snapshot.ObservedAt > maxAge then yield StaleCensusObservation
               if not (digestLike snapshot.ProfileSeal) then yield InvalidCensusBinding "profileSeal"
               if not (digestLike snapshot.PrerequisiteReceiptDigest) then yield InvalidCensusBinding "prerequisiteReceiptDigest"
+              if not (digestLike snapshot.AuthorityEvidenceSha256) then yield InvalidCensusBinding "authorityEvidenceSha256"
               if not (revisionLike snapshot.SourceRevision) then yield InvalidCensusBinding "sourceRevision"
               for requirement in requirements do
                   if requirement.Repository <> snapshot.Repository then yield CrossRepositoryRequirement requirement.Repository
@@ -176,7 +200,7 @@ module RequiredCheckCensusAdapter =
                   if rows |> List.map _.IntegrationId |> Set.ofList |> Set.count > 1 then yield AmbiguousRequiredCheckContext context
               for producer in producers do
                   if producer.Repository <> snapshot.Repository then yield CrossRepositoryProducer producer.Repository
-                  if not (validText producer.Context) || not (validText producer.Workflow) || not (validText producer.Job) || not (revisionLike producer.WorkflowRevision) then
+                  if not (validText producer.Context) || not (validText producer.Workflow) || not (validText producer.Job) || not (revisionLike producer.WorkflowRevision) || not (digestLike producer.WorkflowSha256) then
                       yield InvalidRequiredCheckProducer (identity producer.Context producer.IntegrationId)
                   if producer.IntegrationId |> Option.exists ((>=) 0L) then yield InvalidRequiredCheckIntegration producer.Context
               for context, _ in producers |> duplicates producerKey do yield DuplicateRequiredCheckProducer context
@@ -200,20 +224,17 @@ module RequiredCheckCensusAdapter =
                       ProducerWorkflow = producer.Workflow
                       ProducerJob = producer.Job
                       ProducerRevision = producer.WorkflowRevision.ToLowerInvariant()
+                      ProducerWorkflowSha256 = producer.WorkflowSha256.ToLowerInvariant()
+                      PullRequest = producer.PullRequest
+                      MergeGroup = producer.MergeGroup
+                      DependenciesComplete = producer.DependenciesComplete
+                      Conditional = producer.Conditional
+                      ContinueOnError = producer.ContinueOnError
                       PullRequestUnconditional = pullRequest && producer.DependenciesComplete && not producer.Conditional && not producer.ContinueOnError
                       MergeGroupUnconditional = mergeGroup && producer.DependenciesComplete && not producer.Conditional && not producer.ContinueOnError })
                 |> List.sortBy (fun entry -> entry.Context, entry.IntegrationId)
-            let productionFindings =
-                List.zip entries (entries |> List.map (fun entry -> producerByKey[entry.Context, entry.IntegrationId]))
-                |> List.collect (fun (entry, producer) ->
-                    [ if not producer.DependenciesComplete || producer.Conditional || producer.ContinueOnError then
-                          yield ConditionalRequiredCheckProducer (identity entry.Context entry.IntegrationId)
-                      if not entry.PullRequestUnconditional then yield PullRequestProductionMissing (identity entry.Context entry.IntegrationId)
-                      if not entry.MergeGroupUnconditional then yield MergeGroupProductionMissing (identity entry.Context entry.IntegrationId) ])
-            if not productionFindings.IsEmpty then Error productionFindings
-            else
-                let sourceShape entry = entry.Sources |> List.map (function ClassicProtection -> 1 | Ruleset _ -> 2) |> Set.ofList
-                let aggregate =
+            let sourceShape entry = entry.Sources |> List.map (function ClassicProtection -> 1 | Ruleset _ -> 2) |> Set.ofList
+            let aggregate =
                     { RequiredCount = entries.Length
                       ClassicOnlyCount = entries |> List.filter (fun entry -> sourceShape entry = Set.singleton 1) |> List.length
                       RulesetOnlyCount = entries |> List.filter (fun entry -> sourceShape entry = Set.singleton 2) |> List.length
@@ -223,15 +244,16 @@ module RequiredCheckCensusAdapter =
                       MergeGroupUnconditionalCount = entries |> List.filter _.MergeGroupUnconditional |> List.length
                       PullRequestReady = entries |> List.forall _.PullRequestUnconditional
                       MergeGroupReady = entries |> List.forall _.MergeGroupUnconditional }
-                let report =
+            let report =
                     { Repository = snapshot.Repository
                       ProfileSeal = snapshot.ProfileSeal.ToLowerInvariant()
                       PrerequisiteReceiptDigest = snapshot.PrerequisiteReceiptDigest.ToLowerInvariant()
+                      AuthorityEvidenceSha256 = snapshot.AuthorityEvidenceSha256.ToLowerInvariant()
                       SourceRevision = snapshot.SourceRevision.ToLowerInvariant()
                       Entries = entries
                       Aggregate = aggregate
                       Seal = seal snapshot entries aggregate }
-                Ok report
+            Ok report
 
     let verify expectedSeal asOf maxAge snapshot =
         match compile asOf maxAge snapshot with

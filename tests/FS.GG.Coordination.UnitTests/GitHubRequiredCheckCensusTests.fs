@@ -18,6 +18,7 @@ let private producer context integrationId =
       Workflow = ".github/workflows/ci.yml"
       Job = "aggregate"
       WorkflowRevision = revision
+      WorkflowSha256 = digest
       PullRequest = event
       MergeGroup = event
       DependenciesComplete = true
@@ -28,6 +29,7 @@ let private snapshot =
       Repository = "FS-GG/example"
       ProfileSeal = digest
       PrerequisiteReceiptDigest = digest
+      AuthorityEvidenceSha256 = digest
       SourceRevision = revision
       ObservedAt = observedAt
       Complete = true
@@ -82,7 +84,7 @@ let ``mixed integration identities for one context refuse`` () =
 [<InlineData("condition")>]
 [<InlineData("continue-on-error")>]
 [<InlineData("dependency")>]
-let ``conditional producer routes refuse`` mutation =
+let ``complete noncompliant producer routes are classified not refused`` mutation =
     let first = snapshot.Producers.Head
     let changedProducer =
         match mutation with
@@ -96,7 +98,26 @@ let ``conditional producer routes refuse`` mutation =
         | "dependency" -> { first with DependenciesComplete = false }
         | value -> failwith value
     let changed = { snapshot with Producers = changedProducer :: snapshot.Producers.Tail }
-    Assert.True(compile changed |> Result.isError)
+    let report = compile changed |> Result.defaultWith (failwithf "complete observation refused: %A")
+    if mutation = "merge-group" then Assert.False(report.Aggregate.MergeGroupReady)
+    else Assert.False(report.Aggregate.PullRequestReady)
+
+[<Fact>]
+let ``complete conditional census retains exact production evidence`` () =
+    let first = snapshot.Producers.Head
+    let changedProducer =
+        { first with
+            MergeGroup = { event with Declared = false }
+            Conditional = true }
+    let changed = { snapshot with Producers = changedProducer :: snapshot.Producers.Tail }
+    let report = compile changed |> Result.defaultWith (failwithf "complete observation refused: %A")
+    let entry = report.Entries |> List.find (fun value -> value.Context = "build")
+    Assert.False(report.Aggregate.PullRequestReady)
+    Assert.False(report.Aggregate.MergeGroupReady)
+    Assert.True(entry.PullRequest.Declared)
+    Assert.False(entry.MergeGroup.Declared)
+    Assert.True(entry.Conditional)
+    Assert.Equal(digest, entry.ProducerWorkflowSha256)
 
 [<Fact>]
 let ``missing duplicate orphan and cross-repository producers refuse`` () =
@@ -111,6 +132,9 @@ let ``partial stale and invalid binding observations refuse`` () =
     Assert.True(compile { snapshot with RulesetsComplete = false } |> Result.isError)
     Assert.True(RequiredCheckCensusAdapter.compile (observedAt.AddHours 2) (TimeSpan.FromHours 1) snapshot |> Result.isError)
     Assert.True(compile { snapshot with ProfileSeal = "not-a-digest" } |> Result.isError)
+    Assert.True(compile { snapshot with AuthorityEvidenceSha256 = "not-a-digest" } |> Result.isError)
+    let invalidWorkflowDigest = { snapshot.Producers.Head with WorkflowSha256 = "not-a-digest" }
+    Assert.True(compile { snapshot with Producers = invalidWorkflowDigest :: snapshot.Producers.Tail } |> Result.isError)
 
 [<Fact>]
 let ``exact verification rejects a producer rename at the same source revision`` () =
