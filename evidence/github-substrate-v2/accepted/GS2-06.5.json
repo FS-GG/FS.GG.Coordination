@@ -43,7 +43,7 @@
     },
     {
       "name": "protected-main-codeql-run-33656169897",
-      "sha256": "e6d2a53d11eaee6970b160b484bb15efb46e98c4bb0f375f19dd9d3613d7f14b"
+      "sha256": "c864b0b7ded1fb7cefea463e853e69f706d247ab07fdf09122f0c5ebd4ec7978"
     },
     {
       "name": "protected-main-bootstrap-evidence-manifest-run-33656170405",
@@ -51,5 +51,5 @@
     }
   ],
   "acceptedAt": "2026-09-02T18:24:28Z",
-  "digest": "aecc82815639f96a22a7773b8c04dfed1f1070410603280608705501c4acd313"
+  "digest": "9227977242b530755cbc28ff9093fa810aab9647037d3ae4b60cd7311c86cd0f"
 }
