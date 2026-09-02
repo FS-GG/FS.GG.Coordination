@@ -19,6 +19,9 @@ type GitHubPermissionCompilationSnapshot =
       RoadmapRevision: string
       RoadmapSha256: string
       PrerequisiteReceiptDigest: string
+      PermissionCensusPath: string
+      PermissionCensusSha256: string
+      RequiredPermissionFamilies: string list
       Complete: bool
       Registrations: GitHubInterpreterRegistration list }
 type GitHubCompiledInterpreterPermission =
@@ -50,10 +53,11 @@ type GitHubPermissionCompilationFinding =
     | DuplicatePermission of string * string
     | UndeclaredOrOverprivilegedPermission of string * string
     | MissingLeastPrivilegePermission of string * string
+    | CanonicalPermissionCensusMismatch
     | AlteredPermissionCompilationSeal
 
 type GitHubPermissionCompilationControl =
-    | PermissionPrerequisite | PermissionCompleteness | PermissionSourceBinding | InterpreterInventory
+    | PermissionPrerequisite | PermissionCompleteness | PermissionSourceBinding | PermissionProducerAgreement | InterpreterInventory
     | InterpreterUniqueness | LeastPrivilegeApp | LeastPrivilegeWorkflow | NoWildcardPermission
     | NoPermissionEscalation | NormalPrincipalSeparation | AdminPrincipalSeparation | ReleasePrincipalSeparation
     | EnvironmentSeparation | StablePermissionOrdering | ExactPermissionSeal | ExactPermissionReplay

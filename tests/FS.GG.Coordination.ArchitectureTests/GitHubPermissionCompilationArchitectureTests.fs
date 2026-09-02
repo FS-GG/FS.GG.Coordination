@@ -48,6 +48,29 @@ let ``production Q3 rejects an independently isolated release crossover`` () =
         if Directory.Exists temporary then Directory.Delete(temporary, true)
 
 [<Fact>]
+let ``production Q3 rejects divergence from the canonical permission producer`` () =
+    let temporary = Path.Combine(Path.GetTempPath(), "fsgg-permission-producer-" + Guid.NewGuid().ToString("n"))
+    try
+        Directory.CreateDirectory(temporary) |> ignore
+        for path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories) do
+            let relative = Path.GetRelativePath(root, path)
+            let segments = relative.Split(Path.DirectorySeparatorChar)
+            if not (segments |> Array.exists (fun value -> value = ".git" || value = "bin" || value = "obj" || value = "artifacts")) then
+                let target = Path.Combine(temporary, relative)
+                Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
+                File.Copy(path, target)
+        let census = Path.Combine(temporary, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/permission-census.json")
+        let changed = File.ReadAllText(census).Replace(
+            "[\"actions-administration\",\"organization-administration\",\"project-administration\",\"release-administration\",\"repository-administration\",\"security-administration\"]",
+            "[\"attacker-invented-permission\"]")
+        File.WriteAllText(census, changed)
+        let code, output = runValidator temporary
+        Assert.NotEqual(0, code)
+        Assert.Contains("permission compilation baseline refused", output)
+    finally
+        if Directory.Exists temporary then Directory.Delete(temporary, true)
+
+[<Fact>]
 let ``public contract surface has no production mutation capability`` () =
     let surface = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/GitHubPermissionCompilationQualification.fsi"))
     for forbidden in [ "HttpClient"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "api.github.com"; "val apply"; "PATCH"; "POST"; "DELETE" ] do

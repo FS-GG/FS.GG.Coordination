@@ -14,7 +14,8 @@ type GitHubInterpreterRegistration =
       DeclaredAppPermissions: GitHubPermission list; DeclaredWorkflowPermissions: GitHubPermission list }
 type GitHubPermissionCompilationSnapshot =
     { SchemaVersion: int; Repository: string; SourceRevision: string; RoadmapRevision: string
-      RoadmapSha256: string; PrerequisiteReceiptDigest: string; Complete: bool
+      RoadmapSha256: string; PrerequisiteReceiptDigest: string
+      PermissionCensusPath: string; PermissionCensusSha256: string; RequiredPermissionFamilies: string list; Complete: bool
       Registrations: GitHubInterpreterRegistration list }
 type GitHubCompiledInterpreterPermission =
     { Id: string; Operation: GitHubInterpreterOperation; PrincipalClass: GitHubPrincipalClass
@@ -35,9 +36,10 @@ type GitHubPermissionCompilationFinding =
     | DuplicatePermission of string * string
     | UndeclaredOrOverprivilegedPermission of string * string
     | MissingLeastPrivilegePermission of string * string
+    | CanonicalPermissionCensusMismatch
     | AlteredPermissionCompilationSeal
 type GitHubPermissionCompilationControl =
-    | PermissionPrerequisite | PermissionCompleteness | PermissionSourceBinding | InterpreterInventory
+    | PermissionPrerequisite | PermissionCompleteness | PermissionSourceBinding | PermissionProducerAgreement | InterpreterInventory
     | InterpreterUniqueness | LeastPrivilegeApp | LeastPrivilegeWorkflow | NoWildcardPermission
     | NoPermissionEscalation | NormalPrincipalSeparation | AdminPrincipalSeparation | ReleasePrincipalSeparation
     | EnvironmentSeparation | StablePermissionOrdering | ExactPermissionSeal | ExactPermissionReplay
@@ -48,7 +50,7 @@ type GitHubPermissionCompilationQualificationFinding = { Code: string; ControlId
 
 module GitHubPermissionCompilationQualification =
     let requiredControls =
-        [ PermissionPrerequisite; PermissionCompleteness; PermissionSourceBinding; InterpreterInventory
+        [ PermissionPrerequisite; PermissionCompleteness; PermissionSourceBinding; PermissionProducerAgreement; InterpreterInventory
           InterpreterUniqueness; LeastPrivilegeApp; LeastPrivilegeWorkflow; NoWildcardPermission
           NoPermissionEscalation; NormalPrincipalSeparation; AdminPrincipalSeparation; ReleasePrincipalSeparation
           EnvironmentSeparation; StablePermissionOrdering; ExactPermissionSeal; ExactPermissionReplay
@@ -58,6 +60,7 @@ module GitHubPermissionCompilationQualification =
         | PermissionPrerequisite -> "prerequisite-receipt"
         | PermissionCompleteness -> "corpus-completeness"
         | PermissionSourceBinding -> "source-binding"
+        | PermissionProducerAgreement -> "permission-producer-agreement"
         | InterpreterInventory -> "interpreter-inventory"
         | InterpreterUniqueness -> "interpreter-uniqueness"
         | LeastPrivilegeApp -> "least-privilege-app"
@@ -75,6 +78,9 @@ module GitHubPermissionCompilationQualification =
         | NoPermissionMutationSurface -> "no-mutation-surface"
 
     let requiredOperations = [ InspectCoordination; CoordinateIssue; ApplyRepositoryCutover; PublishRelease ]
+    let private requiredPermissionFamilies =
+        [ "actions-administration"; "organization-administration"; "project-administration"
+          "release-administration"; "repository-administration"; "security-administration" ]
     let private permission name level = { Name = name; Level = level }
     let private read name = permission name PermissionRead
     let private write name = permission name PermissionWrite
@@ -113,6 +119,8 @@ module GitHubPermissionCompilationQualification =
     let private compileSeal snapshot registrations =
         [ frame (string snapshot.SchemaVersion); frame snapshot.Repository; frame snapshot.SourceRevision
           frame snapshot.RoadmapRevision; frame snapshot.RoadmapSha256; frame snapshot.PrerequisiteReceiptDigest
+          frame snapshot.PermissionCensusPath; frame snapshot.PermissionCensusSha256
+          for value in snapshot.RequiredPermissionFamilies |> List.sort do frame value
           frame (string snapshot.Complete)
           for value in registrations |> List.sortBy _.Id do
               frame value.Id; frame (operationName value.Operation); frame (className value.PrincipalClass)
@@ -128,6 +136,10 @@ module GitHubPermissionCompilationQualification =
         if not (validHex 40 snapshot.RoadmapRevision) then findings.Add(InvalidPermissionCompilationField "roadmapRevision")
         if not (validHex 64 snapshot.RoadmapSha256) then findings.Add(InvalidPermissionCompilationField "roadmapSha256")
         if not (validHex 64 snapshot.PrerequisiteReceiptDigest) then findings.Add(InvalidPermissionCompilationField "prerequisiteReceiptDigest")
+        if snapshot.PermissionCensusPath <> "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/permission-census.json"
+           || not (validHex 64 snapshot.PermissionCensusSha256)
+           || snapshot.RequiredPermissionFamilies <> requiredPermissionFamilies then
+            findings.Add CanonicalPermissionCensusMismatch
         if not snapshot.Complete then findings.Add IncompleteInterpreterInventory
         snapshot.Registrations |> List.groupBy _.Id |> List.iter (fun (id, values) ->
             if String.IsNullOrWhiteSpace id then findings.Add(InvalidPermissionCompilationField "interpreter.id")

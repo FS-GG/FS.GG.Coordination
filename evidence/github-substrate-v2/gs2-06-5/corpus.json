@@ -6,6 +6,9 @@
   "roadmapRevision": "96ed5fc67fa6f4a7d7251ea9c6540fa9fb60f412",
   "roadmapSha256": "889b5cde4bcd8f184d1982bfe75294eb511a72246dcba7ad6d6eab97cebd4df3",
   "prerequisiteReceiptDigest": "9f2476ebea520372f836b69fc8b1d11300d5299ed1796fc34cc70afead9e2a76",
+  "permissionCensusPath": "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/permission-census.json",
+  "permissionCensusSha256": "744455ecc2b4bb8dac96819eb93c1082696c92fabadab9bf58c25da3fdfc99ec",
+  "requiredPermissionFamilies": ["actions-administration", "organization-administration", "project-administration", "release-administration", "repository-administration", "security-administration"],
   "complete": true,
   "registrations": [
     {

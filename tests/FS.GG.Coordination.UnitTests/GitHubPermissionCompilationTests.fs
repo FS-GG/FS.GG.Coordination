@@ -11,7 +11,13 @@ let private registration id operation principal app environment appPermissions w
 let private baseline =
     { SchemaVersion = 1; Repository = "FS-GG/FS.GG.Coordination"; SourceRevision = String.replicate 40 "a"
       RoadmapRevision = String.replicate 40 "b"; RoadmapSha256 = String.replicate 64 "c"
-      PrerequisiteReceiptDigest = String.replicate 64 "d"; Complete = true
+      PrerequisiteReceiptDigest = String.replicate 64 "d"
+      PermissionCensusPath = "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/permission-census.json"
+      PermissionCensusSha256 = String.replicate 64 "e"
+      RequiredPermissionFamilies =
+        [ "actions-administration"; "organization-administration"; "project-administration"
+          "release-administration"; "repository-administration"; "security-administration" ]
+      Complete = true
       Registrations =
         [ registration "admin-cutover" ApplyRepositoryCutover AdminCutover "coordination-admin-app" "coordination-admin"
             [ write "administration"; write "actions"; read "contents" ] [ write "actions"; read "contents" ]

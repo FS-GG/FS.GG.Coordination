@@ -33,10 +33,18 @@ let registration (node: JsonNode) =
       AppPrincipal = text value "appPrincipal"; Environment = text value "environment"
       DeclaredAppPermissions = texts value "appPermissions" |> List.map permission
       DeclaredWorkflowPermissions = texts value "workflowPermissions" |> List.map permission }
+let permissionCensusPath = text corpus "permissionCensusPath"
+let permissionCensusFullPath = Path.Combine(root, permissionCensusPath)
+let permissionCensus = JsonNode.Parse(File.ReadAllText(permissionCensusFullPath)).AsObject()
+let permissionCensusContent = permissionCensus["content"].AsObject()
+let permissionFamilies = texts permissionCensusContent "requiredPermissions"
 let snapshot =
     { SchemaVersion = corpus["schemaVersion"].GetValue<int>(); Repository = text corpus "repository"
       SourceRevision = text corpus "sourceRevision"; RoadmapRevision = text corpus "roadmapRevision"
       RoadmapSha256 = text corpus "roadmapSha256"; PrerequisiteReceiptDigest = text corpus "prerequisiteReceiptDigest"
+      PermissionCensusPath = permissionCensusPath
+      PermissionCensusSha256 = text corpus "permissionCensusSha256"
+      RequiredPermissionFamilies = permissionFamilies
       Complete = corpus["complete"].GetValue<bool>()
       Registrations = corpus["registrations"].AsArray() |> Seq.map registration |> List.ofSeq }
 let compile value = GitHubPermissionCompilationQualification.compile value
@@ -47,6 +55,8 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
     let receipt = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-06.4.json"))).AsObject()
     if text receipt "digest" <> snapshot.PrerequisiteReceiptDigest then failwith "accepted GS2-06.4 receipt differs"
     if snapshot.SourceRevision <> "34fdebc438c04c81039c767a0d2bbbc13f060c47" then failwith "candidate source binding differs"
+    if sha256File permissionCensusFullPath <> snapshot.PermissionCensusSha256 then failwith "canonical permission census bytes differ"
+    if text permissionCensus "schema" <> "fsgg.quint.compiled-output/1" || text permissionCensus "family" <> "COUT-PermissionCensus" then failwith "canonical permission census identity differs"
     if snapshot.RoadmapRevision <> "96ed5fc67fa6f4a7d7251ea9c6540fa9fb60f412" || snapshot.RoadmapSha256 <> "889b5cde4bcd8f184d1982bfe75294eb511a72246dcba7ad6d6eab97cebd4df3" then failwith "accepted roadmap binding differs"
     let expectedIds = texts expectations "interpreterIds"
     let observedIds = report.Interpreters |> List.map _.Id
@@ -68,6 +78,7 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
         | PermissionPrerequisite -> refused { snapshot with PrerequisiteReceiptDigest = "invalid" }
         | PermissionCompleteness -> refused { snapshot with Complete = false }
         | PermissionSourceBinding -> refused { snapshot with SourceRevision = "main" }
+        | PermissionProducerAgreement -> refused { snapshot with RequiredPermissionFamilies = [ "attacker-invented-permission" ] }
         | InterpreterInventory -> refused { snapshot with Registrations = snapshot.Registrations.Tail }
         | InterpreterUniqueness -> refused { snapshot with Registrations = snapshot.Registrations.Head :: snapshot.Registrations }
         | LeastPrivilegeApp -> refused (replaceRegistration "coordination-inspect" (fun value -> { value with DeclaredAppPermissions = value.DeclaredAppPermissions.Tail }))
@@ -89,6 +100,10 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
         | PermissionPrerequisite -> snapshot.PrerequisiteReceiptDigest = "9f2476ebea520372f836b69fc8b1d11300d5299ed1796fc34cc70afead9e2a76"
         | PermissionCompleteness -> snapshot.Complete && report.InterpreterCount = expectedIds.Length
         | PermissionSourceBinding -> snapshot.SourceRevision = "34fdebc438c04c81039c767a0d2bbbc13f060c47"
+        | PermissionProducerAgreement ->
+            sha256File permissionCensusFullPath = snapshot.PermissionCensusSha256
+            && text permissionCensus "family" = "COUT-PermissionCensus"
+            && snapshot.RequiredPermissionFamilies = texts corpus "requiredPermissionFamilies"
         | InterpreterInventory -> observedIds = expectedIds
         | InterpreterUniqueness -> observedIds.Length = (observedIds |> Set.ofList |> Set.count)
         | LeastPrivilegeApp -> report.Interpreters |> List.forall (fun value -> not value.AppPermissions.IsEmpty)
