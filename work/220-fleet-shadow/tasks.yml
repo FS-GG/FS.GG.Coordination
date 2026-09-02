@@ -1,0 +1,116 @@
+schemaVersion: 1
+work:
+  id: 220-fleet-shadow
+  title: "Fleet Shadow"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/220-fleet-shadow/spec.md
+  sourceClarifications: work/220-fleet-shadow/clarifications.md
+  sourceChecklist: work/220-fleet-shadow/checklist.md
+  sourcePlan: work/220-fleet-shadow/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/220-fleet-shadow/spec.md
+    digest: 7a21dd937ead3da34dc2226899fa7a7f1417fbf3fd9738fb3075c2085cf30535
+    schemaVersion: 1
+  - label: clarifications
+    path: work/220-fleet-shadow/clarifications.md
+    digest: 1191a794c2251cfbe923880ff064cb954cf56621f75423ad39202bc60ef7c5f8
+    schemaVersion: 1
+  - label: checklist
+    path: work/220-fleet-shadow/checklist.md
+    digest: 673e6c02d259fb6812222abd9e1f6f1cbddf3492c36be54ed6ac7cdf7dc66feb
+    schemaVersion: 1
+  - label: plan
+    path: work/220-fleet-shadow/plan.md
+    digest: b76a4a5c4a309521f55f32e1c616961cd0db5a266af75b3f246cb5117847f935
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: completed
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Handle migration posture PM-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Refresh generated view impact GV-001
+    status: completed
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV008]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 220-fleet-shadow."

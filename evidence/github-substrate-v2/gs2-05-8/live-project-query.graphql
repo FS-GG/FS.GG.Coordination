@@ -1,0 +1,30 @@
+query($endCursor: String) {
+  organization(login: "FS-GG") {
+    projectV2(number: 1) {
+      id
+      items(first: 100, after: $endCursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          content {
+            ... on Issue {
+              number
+              repository { nameWithOwner }
+            }
+          }
+          fieldValues(first: 30) {
+            nodes {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                optionId
+                field {
+                  ... on ProjectV2SingleSelectField { name }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

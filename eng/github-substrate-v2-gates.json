@@ -144,6 +144,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-lifecycle-projection.fsx", "--", "."]
+    },
+    {
+      "id": "github-fleet-shadow-contract",
+      "qGate": "Q4",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-fleet-shadow.fsx", "--", "."]
     }
   ]
 }

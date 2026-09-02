@@ -658,6 +658,20 @@
         { "id": "github-lifecycle-projection-contract", "qGate": "Q3", "commandSha256": "045930084b784baf6df371182b3227f7cce6df44f70f6f37a4825cadc9ef55e3" }
       ],
       "contractSha256": "3da7bf73fdfa4729b8950c23be908927c4ced57c4680d4f0e3f3218cc93c392d"
+    },
+    {
+      "id": "GS2-05.8",
+      "title": "Shadow the complete live fleet",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-05.7"],
+      "permissionCeiling": ["repository-local additive fleet-shadow contracts, pure deterministic comparison over sealed complete roster and item observations, read-only live-fleet evidence capture, divergence classification, validation, and retained evidence", "read-only roster, metadata, issue, Project, journal, and check observation is allowed; no production GitHub or journal write, mutation capability, mutation attempt, second decision authority, cutover, deployment, publication, stable release, GS2-06 implementation, or successor-unit implementation authority"],
+      "exitGate": "the Q4 fleet-shadow contract begins from the accepted GS2-05.7 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal preserves the immutable ordered roster, bounded observation window, exact source revisions, positively enumerated read-only capability manifest, terminal pagination and per-repository item counts, every raw and normalized v1 and v2 decision, and accountable divergence evidence; every roster repository appears exactly once including zero-item repositories, every observed coordination item appears exactly once, equal normalized decisions carry no divergence record, and unequal decisions require exactly one evidence-backed v1-defect, v2-defect, or intentional-versioned-change classification; acceptance requires zero unexplained divergence, no mutation capability, no mutation attempt, complete readable authorized current observations, stable ordering, and byte-identical exact replay; missing, duplicate, stale, cross-roster, cross-item, partial, unreadable, unauthorized, unsupported, unclassified, evidence-free, altered-seal, permission-bearing, mutation-attempted, and indeterminate inputs fail closed; two separately captured value-independent read-only sources cover the complete ten-repository roster and 180-item Project population with zero unexplained divergence, disclose their shared subject-key and GitHub-runtime residual, preserve credentials out of evidence, and expose no apply path or production write authority",
+      "qGates": ["Q4"],
+      "gateCommands": ["github-fleet-shadow-contract"],
+      "gateContracts": [
+        { "id": "github-fleet-shadow-contract", "qGate": "Q4", "commandSha256": "ac17d8cb59be06a6faf0e1d2f07907d28e2ca678a72ead74cb2a0c9c1eaaa0cb" }
+      ],
+      "contractSha256": "b738d44b1bfafd6a5bbd2e00e4e4817c3dd607cefff5e0833c23112e82440c59"
     }
   ]
 }

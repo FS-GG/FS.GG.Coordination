@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "220-fleet-shadow",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "18339990e9006fb9aa4ac88ddfda76bab788b22d342c327d770a1764eafa29f1"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 8,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 8
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

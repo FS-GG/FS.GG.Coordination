@@ -1,0 +1,31 @@
+{
+  "schema": "fsgg.coordination.github-fleet-shadow-corpus/1",
+  "unitId": "GS2-05.8",
+  "registeredContractSha256": "b738d44b1bfafd6a5bbd2e00e4e4817c3dd607cefff5e0833c23112e82440c59",
+  "acceptedPredecessorReceiptSha256": "f4d7dd20ff1554aef20ad1bbcea15b2f715a673a5b4b4d8c964b13f19dcb13d7",
+  "acceptedPredecessorReceiptDigest": "77ba4ae9ddf350ec93afe7021b320474c5f04ed5f7a255fa2136a3f15af5af12",
+  "roadmapRevision": "2d2caf0087d2c3ec47e95f4931ff88a3243953e8",
+  "roadmapSha256": "52087f0b26db0fd558d84a38e4e4334a293d5d6f64a22a887fa5d4d783b6938c",
+  "quintSourceSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "liveEvidenceSha256": "cd6bc4189fe4d9c9ee9b2cdbd61f698429346ca40017a0a404fa799788df210c",
+  "controls": [
+    "roster-completeness",
+    "pagination-completeness",
+    "stable-ordering",
+    "decision-preservation",
+    "equal-decision",
+    "v1-defect-classification",
+    "v2-defect-classification",
+    "version-change-classification",
+    "zero-unexplained",
+    "read-only-manifest",
+    "no-mutation-attempt",
+    "fresh-observation",
+    "exact-seal",
+    "exact-replay",
+    "cross-subject",
+    "partial-unreadable",
+    "quint-and-prerequisite",
+    "live-evidence"
+  ]
+}

@@ -43,6 +43,8 @@
     <Compile Include="GitHubReviewDeliveryQualification.fs" />
     <Compile Include="GitHubLifecycleProjectionQualification.fsi" />
     <Compile Include="GitHubLifecycleProjectionQualification.fs" />
+    <Compile Include="GitHubFleetShadowQualification.fsi" />
+    <Compile Include="GitHubFleetShadowQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />
