@@ -97,7 +97,11 @@ let ``production Q3 rejects every competing or alternate updater configuration r
           "node-process-api",
               [ "scripts/critic-run-renovate.js", "const { spawnSync } = require('node:child_process');\nspawnSync(\"renovate\", [\"--enabled-managers=github-actions\", \"--automerge=true\", \"--automerge-type=branch\"]);\n" ]
           "python-process-api",
-              [ "scripts/run-renovate.py", "import subprocess\nsubprocess.run(['renovate', '--enabled-managers=github-actions', '--automerge=true', '--automerge-type=branch'], check=True)\n" ] ]
+              [ "scripts/run-renovate.py", "import subprocess\nsubprocess.run(['renovate', '--enabled-managers=github-actions', '--automerge=true', '--automerge-type=branch'], check=True)\n" ]
+          "local-node-bin",
+              [ "scripts/run-local-renovate.js", "const { spawnSync } = require('node:child_process');\nspawnSync(\"./node_modules/.bin/renovate\", [\"--enabled-managers=github-actions\", \"--automerge=true\", \"--automerge-type=branch\"]);\n" ]
+          "windows-local-bin",
+              [ "scripts/run-local-renovate.ps1", "$process = Start-Process -Wait -PassThru \".\\node_modules\\.bin\\renovate.cmd\" -ArgumentList \"--automerge=true --automerge-type=branch\"\nexit $process.ExitCode\n" ] ]
     for label, files in cases do
         let tempRoot = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-06-4-{label}-{Guid.NewGuid():N}")
         try
