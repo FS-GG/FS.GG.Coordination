@@ -162,6 +162,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-required-check-census.fsx", "--", "."]
+    },
+    {
+      "id": "github-ruleset-plan-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-ruleset-plans.fsx", "--", "."]
     }
   ]
 }

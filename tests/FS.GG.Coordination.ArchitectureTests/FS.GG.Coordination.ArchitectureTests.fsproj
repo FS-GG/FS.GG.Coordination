@@ -25,6 +25,8 @@
     <Compile Include="GitHubFleetShadowArchitectureTests.fs" />
     <Compile Include="GitHubRepositoryProfileArchitectureTests.fs" />
     <Compile Include="GitHubRequiredCheckCensusArchitectureTests.fs" />
+    <Compile Include="../FS.GG.Coordination.UnitTests/GitHubRulesetPlanTests.fs" Link="GitHubRulesetPlanUnitTests.fs" />
+    <Compile Include="GitHubRulesetPlanArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs" Link="GitHubCommentProjectionUnitTests.fs" />
     <Compile Include="GitHubCommentProjectionArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs" Link="GitHubShardedJournalUnitTests.fs" />

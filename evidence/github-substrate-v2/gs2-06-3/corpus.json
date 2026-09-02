@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coordination.github-ruleset-plan-corpus/1",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "prerequisiteReceiptDigest": "7157ad56a4879e48642dbb055b0b35158353cbc020fca9a008ed901446d74d0c",
+  "profileSnapshot": "../gs2-06-1/roster.json",
+  "profileSnapshotSha256": "9b2c01444824e0e58251364e3c1104ba8e97b3683f775740f78ef977c86a88f3",
+  "profileSeal": "f3524e8edbd6b88b0783551c14377881dee5dd958ebd4835d77a57913d30d74b",
+  "censusSnapshot": "../gs2-06-2/corpus.json",
+  "censusSnapshotSha256": "cc80df8ed11e1e98fa6a83520e69aac68e0c4b5c8204cad73be7d2192471b6d1",
+  "censusSeal": "db294ff75dbfb97a81433331ac7d696a0321a3433a8dd6b29694cbebf37396a3",
+  "currentPolicyEvidence": "../../../eng/repository-settings/prestate.json",
+  "currentPolicyEvidenceSha256": "c8b6951e42965763acd628c02730cb34a36c4fd028420c7b8842b50e46a60591",
+  "currentPolicyRevision": "3e02166ba6f1ab5ba9e89b72cedeaf56e3286032",
+  "observedAt": "2026-09-02T03:29:00Z",
+  "complete": true,
+  "approvedBypass": [],
+  "requestedBypass": [],
+  "exceptions": []
+}

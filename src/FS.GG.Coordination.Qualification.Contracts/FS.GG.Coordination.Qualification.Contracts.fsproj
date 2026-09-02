@@ -49,6 +49,8 @@
     <Compile Include="GitHubRepositoryProfileQualification.fs" />
     <Compile Include="GitHubRequiredCheckCensusQualification.fsi" />
     <Compile Include="GitHubRequiredCheckCensusQualification.fs" />
+    <Compile Include="GitHubRulesetPlanQualification.fsi" />
+    <Compile Include="GitHubRulesetPlanQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />
