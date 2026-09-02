@@ -29,6 +29,9 @@ let ``retained release corpus carries exact hardening inventory`` () =
     Assert.Equal(11, value.GetProperty("stages").GetArrayLength())
     Assert.Equal(2, value.GetProperty("feedPublications").GetArrayLength())
     Assert.Equal(value.GetProperty("packageSha256").GetString(), value.GetProperty("publicDownloadSha256").GetString())
+    use expectations = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-06-6/independent-expectations.json")
+    Assert.Equal(21, expectations.RootElement.GetProperty("independentCases").GetArrayLength())
+    Assert.Equal(5, expectations.RootElement.GetProperty("shapeCases").GetArrayLength())
 
 [<Fact>]
 let ``roadmap and gate catalog register exact GS2-06.6 command`` () =
@@ -56,3 +59,10 @@ let ``exact release hardening Q3 validator passes`` () =
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, error)
     Assert.Contains("GITHUB_RELEASE_HARDENING_OK", output)
+
+[<Fact>]
+let ``release hardening corpus rejects unknown properties at every object boundary`` () =
+    let validator = read "eng/validate-github-release-hardening.fsx"
+    for required in [ "corpus-top-level-extra"; "feed-publication-extra"; "recovery-extra"; "expectations-top-level-extra"; "independent-case-extra" ] do
+        Assert.Contains(required, validator)
+    Assert.Contains("unknown-property fail-closed self-test failed", validator)
