@@ -1,0 +1,13 @@
+{
+  "stageCount": 11,
+  "feedCount": 2,
+  "packCount": 1,
+  "expectedSeal": "430ba76d264ccd7a43236e051b8414f231a2b466664428a2f6cb055c8ddd9483",
+  "controls": [
+    "release-prerequisite", "release-completeness", "release-source-binding", "release-roadmap-binding",
+    "protected-release-environment", "oidc-only-identity", "immutable-release-tag", "release-stage-ordering",
+    "one-pack-identity", "dual-feed-publication", "no-repack-recovery", "sbom-binding", "attestation-binding",
+    "dependency-submission", "dependency-review", "public-download", "release-digest-agreement",
+    "exact-release-seal", "exact-release-replay", "quint-release-unchanged", "no-release-mutation-surface"
+  ]
+}

@@ -55,6 +55,8 @@
     <Compile Include="GitHubImmutableExecutionPinsQualification.fs" />
     <Compile Include="GitHubPermissionCompilationQualification.fsi" />
     <Compile Include="GitHubPermissionCompilationQualification.fs" />
+    <Compile Include="GitHubReleaseHardeningQualification.fsi" />
+    <Compile Include="GitHubReleaseHardeningQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />

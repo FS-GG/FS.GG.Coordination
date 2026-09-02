@@ -1,0 +1,308 @@
+schemaVersion: 1
+workId: 254-release-hardening
+stage: evidence
+status: evidenceReady
+sourceSpec: work/254-release-hardening/spec.md
+sourceClarifications: work/254-release-hardening/clarifications.md
+sourceChecklist: work/254-release-hardening/checklist.md
+sourcePlan: work/254-release-hardening/plan.md
+sourceTasks: work/254-release-hardening/tasks.yml
+sourceAnalysis: readiness/254-release-hardening/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/254-release-hardening/analysis.json
+    digest: 7cc01dce90044e0b765a77d86feb8fa869441ceeba81b94ed15aa1843307dd80
+    schemaVersion: 1
+  - label: checklist
+    path: work/254-release-hardening/checklist.md
+    digest: cead50f8e5aa79a13c0aa363840e483e398c0824c05b07339085402e4e63dbb6
+    schemaVersion: 1
+  - label: clarifications
+    path: work/254-release-hardening/clarifications.md
+    digest: 49d82bb957021d036f9802926abe73748c0803043e48e37c8c81c028e8051a39
+    schemaVersion: 1
+  - label: plan
+    path: work/254-release-hardening/plan.md
+    digest: 0f2f2888c08bee92079905dfe632904945b81f8db78d7ac4c90c0a7d4c4f1276
+    schemaVersion: 1
+  - label: spec
+    path: work/254-release-hardening/spec.md
+    digest: 91a5452ac2ba5976f6194c365ef37689539dc7413ce6f10eea916f840992898a
+    schemaVersion: 1
+  - label: tasks
+    path: work/254-release-hardening/tasks.yml
+    digest: dfb162070828ebf4ccbb5e1a455905781950d30a5c8778e47e8b08d2d1460784
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubReleaseHardeningTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/254-release-hardening/qualification.trx
+      digest: "sha256:2fe5d7a95b0476d0ef0dbd8c84550eb3ddb2728c1fa627b3d23ffcd76aba5c9f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
