@@ -1,0 +1,43 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-06.3",
+  "state": "accepted",
+  "unitContractSha256": "c469645aeabd48bf3ca4fc9fc7ab4d054fd61869696d9416ca669c88c184a84d",
+  "sourceRevision": "d8a284c7f238ed77d5b0824d866a21b0a3148915",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-06.2-receipt",
+      "sha256": "0e057b8df4045826ed0b3d2b333251cec246ac9a8fe52c9454b67c52da2bea6e"
+    },
+    {
+      "name": "github-ruleset-plan-corpus",
+      "sha256": "cc2893bf6fe76e7cf030a4bc22e4ef1bc67af01b3cd21bcca2c77712118f1269"
+    },
+    {
+      "name": "github-ruleset-plan-independent-expectations",
+      "sha256": "d5989b67442a10cd72d9ad66322d19bee93c673b3d00b2284074aeb2d5594120"
+    },
+    {
+      "name": "github-ruleset-plan-q3-validator",
+      "sha256": "4b08cf9463f4baa82dd939e750a061c5981543b996b19f8f25bc87cc5dfc3704"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "72c51a7745419d1e2f73f4daf628a943b3cc24676810aeee50780b543cc95dae"
+    },
+    {
+      "name": "structured-review-acceptance",
+      "sha256": "fed2c86b3ef9e9f4083a73dc6a8e3edee4b83207f3666bdccb6eab602ce3b2af"
+    },
+    {
+      "name": "delivery-completion",
+      "sha256": "b3ab48017faee97f07b4618ba277002526051e2a354f0e72132fbfdf1a6e04da"
+    },
+    {
+      "name": "protected-main-bootstrap-evidence-manifest-run-33606414140",
+      "sha256": "abfe1cea214e501c5d900644aa4889df8a794c9001dcfcc995ea03794c8c5390"
+    }
+  ],
+  "acceptedAt": "2026-09-02T08:37:21Z",
+  "digest": "eec15747e2e5c1cf0ae91fbf370eb82a3e6ea88d6fe3c0f2f738a556e63e5063"
+}
