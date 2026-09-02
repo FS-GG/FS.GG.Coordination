@@ -42,6 +42,8 @@ let ``retained workflow corpus is complete full SHA pinned and Renovate only`` (
     Assert.True(corpus.RootElement.GetProperty("complete").GetBoolean())
     Assert.Equal(2, corpus.RootElement.GetProperty("workflows").GetArrayLength())
     Assert.Equal(0, corpus.RootElement.GetProperty("publications").GetArrayLength())
+    Assert.Equal(15, corpus.RootElement.GetProperty("updaterConfigurationPaths").GetArrayLength())
+    Assert.Equal(7, corpus.RootElement.GetProperty("updaterInvocationSelectors").GetArrayLength())
     Assert.Equal(0, corpus.RootElement.GetProperty("updaterConfigurations").GetArrayLength())
     let updaters = corpus.RootElement.GetProperty("updaters")
     Assert.Equal(1, updaters.GetArrayLength())
@@ -57,6 +59,8 @@ let ``retained workflow corpus is complete full SHA pinned and Renovate only`` (
     Assert.Contains(
         "local-execution-reference-rejection",
         expected.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString())
+    Assert.Equal(13, expected.RootElement.GetProperty("officialRenovatePaths").GetArrayLength())
+    Assert.Equal(7, expected.RootElement.GetProperty("invocationSelectors").GetArrayLength())
 
 [<Fact>]
 let ``validator classifies and refuses repository-local execution literals`` () =
@@ -69,23 +73,37 @@ let ``validator classifies and refuses repository-local execution literals`` () 
             GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral literal)
 
 [<Fact>]
-let ``production Q3 rejects a tracked competing Dependabot updater configuration`` () =
-    let tempRoot = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-06-4-dependabot-{Guid.NewGuid():N}")
-    try
-        let cloneExit, _, cloneError = runAt root "git" [ "clone"; "--quiet"; "--no-hardlinks"; root; tempRoot ]
-        Assert.True((cloneExit = 0), cloneError)
-        let dependabotPath = Path.Combine(tempRoot, ".github/dependabot.yml")
-        File.WriteAllText(
-            dependabotPath,
-            "version: 2\nupdates:\n  - package-ecosystem: github-actions\n    directory: /\n    schedule:\n      interval: weekly\n")
-        let addExit, _, addError = runAt tempRoot "git" [ "add"; ".github/dependabot.yml" ]
-        Assert.True((addExit = 0), addError)
-        let exitCode, output, error =
-            runAt tempRoot "dotnet" [ "fsi"; "eng/validate-github-immutable-execution-pins.fsx"; "--"; tempRoot ]
-        Assert.NotEqual(0, exitCode)
-        Assert.Contains("updater configuration inventory differs", output + error)
-    finally
-        if Directory.Exists tempRoot then Directory.Delete(tempRoot, true)
+let ``production Q3 rejects every competing or alternate updater configuration route`` () =
+    let cases =
+        [ "dependabot", [ ".github/dependabot.yml", "version: 2\nupdates:\n  - package-ecosystem: github-actions\n    directory: /\n    schedule:\n      interval: weekly\n" ]
+          "root-jsonc", [ "renovate.jsonc", "{ \"enabledManagers\": [\"github-actions\"], \"automerge\": true, \"automergeType\": \"branch\" }\n" ]
+          "github-jsonc", [ ".github/renovate.jsonc", "{ \"enabledManagers\": [\"github-actions\"] }\n" ]
+          "rc-jsonc", [ ".renovaterc.jsonc", "{ \"enabledManagers\": [\"github-actions\"] }\n" ]
+          "package-json", [ "package.json", "{ \"name\": \"mutation\", \"renovate\": { \"enabledManagers\": [\"github-actions\"] } }\n" ]
+          "custom-selector",
+              [ "scripts/run-custom-renovate.sh", "#!/usr/bin/env bash\nrenovate --config-file custom-renovate.json\n"
+                "custom-renovate.json", "{ \"enabledManagers\": [\"github-actions\"] }\n" ]
+          "custom-filenames",
+              [ "scripts/run-custom-filenames.sh", "#!/usr/bin/env bash\nRENOVATE_CONFIG_FILE_NAMES=custom-renovate.json renovate\n"
+                "custom-renovate.json", "{ \"enabledManagers\": [\"github-actions\"] }\n" ] ]
+    for label, files in cases do
+        let tempRoot = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-06-4-{label}-{Guid.NewGuid():N}")
+        try
+            let cloneExit, _, cloneError = runAt root "git" [ "clone"; "--quiet"; "--no-hardlinks"; root; tempRoot ]
+            Assert.True((cloneExit = 0), cloneError)
+            for path, content in files do
+                let fullPath = Path.Combine(tempRoot, path)
+                Directory.CreateDirectory(Path.GetDirectoryName fullPath) |> ignore
+                File.WriteAllText(fullPath, content)
+            let paths = files |> List.map fst
+            let addExit, _, addError = runAt tempRoot "git" ([ "add"; "--" ] @ paths)
+            Assert.True((addExit = 0), addError)
+            let exitCode, output, error =
+                runAt tempRoot "dotnet" [ "fsi"; "eng/validate-github-immutable-execution-pins.fsx"; "--"; tempRoot ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("updater configuration inventory differs", output + error)
+        finally
+            if Directory.Exists tempRoot then Directory.Delete(tempRoot, true)
 
 [<Fact>]
 let ``GS2-06-4 registration binds accepted predecessor and exact Q3 gate`` () =
@@ -115,7 +133,7 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, $"immutable execution pin validator failed with exit code {child.ExitCode}: {error}{output}")
-    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=788cf1aa3a9a9aaecf09fdc878b7877d7c6ef0f1488f30666c4058c3dae5d206", output)
+    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=1a6e0ff8bf2ca3f840fcb5077a51cb8a40c6ee50b67bea815150a8bff9d704e9", output)
     Assert.Equal("", error)
 
 [<Fact>]

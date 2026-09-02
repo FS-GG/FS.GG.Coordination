@@ -39,7 +39,9 @@ type ImmutablePinUpdaterAuthority =
 type ImmutableUpdaterConfiguration =
     { Path: string
       Sha256: string
-      Authority: string }
+      Authority: string
+      PullRequestOnly: bool
+      DirectPush: bool }
 
 type ImmutableExecutionPinsSnapshot =
     { SchemaVersion: int
@@ -49,6 +51,8 @@ type ImmutableExecutionPinsSnapshot =
       Complete: bool
       Workflows: ImmutableWorkflowDocument list
       Publications: ImmutableWorkflowPublication list
+      RequiredUpdaterConfigurationPaths: string list
+      RequiredUpdaterInvocationSelectors: string list
       UpdaterConfigurations: ImmutableUpdaterConfiguration list
       Updaters: ImmutablePinUpdaterAuthority list
       RequiredManagers: string list }
@@ -82,6 +86,7 @@ type ImmutableExecutionPinsError =
     | MissingImmutablePublication
     | ConflictingImmutablePublication
     | DuplicateUpdaterConfiguration
+    | IncompleteUpdaterConfigurationDiscovery
     | InvalidUpdaterConfiguration
     | CompetingUpdaterAuthority
     | InvalidUpdaterAuthority
@@ -152,8 +157,11 @@ module GitHubImmutableExecutionPinsQualification =
                             yield frame (kind reference.Kind) + frame reference.WorkflowPath + frame reference.TargetRepository + scalar reference.TargetPath + frame reference.Revision ]
           strings [ for publication in publications do
                         yield frame publication.Repository + frame publication.Path + frame publication.Revision + frame publication.ContentSha256 + frame (string publication.WorkflowCall) ]
+          strings (snapshot.RequiredUpdaterConfigurationPaths |> List.sort)
+          strings (snapshot.RequiredUpdaterInvocationSelectors |> List.sort)
           strings [ for configuration in updaterConfigurations do
-                        yield frame configuration.Path + frame configuration.Sha256 + frame configuration.Authority ]
+                        yield frame configuration.Path + frame configuration.Sha256 + frame configuration.Authority
+                              + frame (string configuration.PullRequestOnly) + frame (string configuration.DirectPush) ]
           strings [ for updater in updaters do
                         yield frame updater.Name + frame (string updater.Automated) + frame (string updater.PullRequestOnly) + frame (string updater.DirectPush)
                               + frame updater.PolicyRepository + frame updater.PolicyRevision + frame updater.PolicyPath + frame updater.PolicySha256
@@ -192,8 +200,16 @@ module GitHubImmutableExecutionPinsQualification =
             elif matches.Length <> 1 then errors.Add ConflictingImmutablePublication
         if snapshot.UpdaterConfigurations |> List.countBy _.Path |> List.exists (fun (_, count) -> count <> 1) then
             errors.Add DuplicateUpdaterConfiguration
+        let requiredUpdaterPaths = snapshot.RequiredUpdaterConfigurationPaths |> Set.ofList
+        let requiredUpdaterSelectors = snapshot.RequiredUpdaterInvocationSelectors |> Set.ofList
+        if requiredUpdaterPaths.IsEmpty || requiredUpdaterPaths.Count <> snapshot.RequiredUpdaterConfigurationPaths.Length
+           || snapshot.RequiredUpdaterConfigurationPaths |> List.exists (validPath >> not)
+           || requiredUpdaterSelectors.IsEmpty || requiredUpdaterSelectors.Count <> snapshot.RequiredUpdaterInvocationSelectors.Length
+           || snapshot.RequiredUpdaterInvocationSelectors |> List.exists String.IsNullOrWhiteSpace then
+            errors.Add IncompleteUpdaterConfigurationDiscovery
         for configuration in snapshot.UpdaterConfigurations do
-            if not (validPath configuration.Path) || not (hexLength 64 configuration.Sha256) || String.IsNullOrWhiteSpace configuration.Authority then
+            if not (validPath configuration.Path) || not (hexLength 64 configuration.Sha256) || String.IsNullOrWhiteSpace configuration.Authority
+               || not configuration.PullRequestOnly || configuration.DirectPush then
                 errors.Add InvalidUpdaterConfiguration
             if not (String.Equals(configuration.Authority, "renovate", StringComparison.Ordinal)) then
                 errors.Add CompetingUpdaterAuthority

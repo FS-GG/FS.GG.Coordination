@@ -17,7 +17,10 @@ let private renovate =
 let private snapshot =
     { SchemaVersion = 1; Repository = "FS-GG/example"; SourceRevision = revision
       PrerequisiteReceiptDigest = digest; Complete = true; Workflows = [ workflow ".github/workflows/ci.yml" ]
-      Publications = []; UpdaterConfigurations = []; Updaters = [ renovate ]; RequiredManagers = [ "github-actions" ] }
+      Publications = []
+      RequiredUpdaterConfigurationPaths = [ ".github/dependabot.yml"; "renovate.json" ]
+      RequiredUpdaterInvocationSelectors = [ "RENOVATE_CONFIG_FILE" ]
+      UpdaterConfigurations = []; Updaters = [ renovate ]; RequiredManagers = [ "github-actions" ] }
 let private compile value = GitHubImmutableExecutionPinsQualification.compile value
 let private errors = function Error values -> values | Ok _ -> []
 
@@ -68,8 +71,14 @@ let ``Renovate is sole PR-only automated authority with complete manager ownersh
     Assert.True(compile { snapshot with Updaters = [ renovate; { renovate with Name = "custom" } ] } |> Result.isError)
     Assert.True(compile { snapshot with Updaters = [ { renovate with DirectPush = true; PullRequestOnly = false } ] } |> Result.isError)
     Assert.True(compile { snapshot with RequiredManagers = [ "github-actions"; "regex" ] } |> Result.isError)
-    let dependabot = { Path = ".github/dependabot.yml"; Sha256 = digest; Authority = "dependabot" }
+    let dependabot =
+        { Path = ".github/dependabot.yml"; Sha256 = digest; Authority = "dependabot"
+          PullRequestOnly = true; DirectPush = false }
     Assert.Contains(CompetingUpdaterAuthority, compile { snapshot with UpdaterConfigurations = [ dependabot ] } |> errors)
+    let branchAutomerge =
+        { dependabot with Path = "renovate.jsonc"; Authority = "renovate"
+                          PullRequestOnly = false; DirectPush = true }
+    Assert.Contains(InvalidUpdaterConfiguration, compile { snapshot with UpdaterConfigurations = [ branchAutomerge ] } |> errors)
 
 [<Fact>]
 let ``qualification requires every generated and independent control`` () =

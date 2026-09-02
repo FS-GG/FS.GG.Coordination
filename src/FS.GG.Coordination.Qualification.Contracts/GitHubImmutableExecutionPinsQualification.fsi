@@ -37,7 +37,9 @@ type ImmutablePinUpdaterAuthority =
 type ImmutableUpdaterConfiguration =
     { Path: string
       Sha256: string
-      Authority: string }
+      Authority: string
+      PullRequestOnly: bool
+      DirectPush: bool }
 
 type ImmutableExecutionPinsSnapshot =
     { SchemaVersion: int
@@ -47,6 +49,8 @@ type ImmutableExecutionPinsSnapshot =
       Complete: bool
       Workflows: ImmutableWorkflowDocument list
       Publications: ImmutableWorkflowPublication list
+      RequiredUpdaterConfigurationPaths: string list
+      RequiredUpdaterInvocationSelectors: string list
       UpdaterConfigurations: ImmutableUpdaterConfiguration list
       Updaters: ImmutablePinUpdaterAuthority list
       RequiredManagers: string list }
@@ -80,6 +84,7 @@ type ImmutableExecutionPinsError =
     | MissingImmutablePublication
     | ConflictingImmutablePublication
     | DuplicateUpdaterConfiguration
+    | IncompleteUpdaterConfigurationDiscovery
     | InvalidUpdaterConfiguration
     | CompetingUpdaterAuthority
     | InvalidUpdaterAuthority
