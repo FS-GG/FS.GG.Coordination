@@ -1,0 +1,55 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-06.4",
+  "state": "accepted",
+  "unitContractSha256": "efcb0f9fcc9bee8572f1768857b079ce714caa64fbd3aab06e4e31d74f9d6036",
+  "sourceRevision": "b5d00bb18070bbd1b57dfe2032b647f7699276c9",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-06.3-receipt",
+      "sha256": "0ffc10e9dde7dc08f7d7f7c0c034ecd958e0afe418be53ee89544086fb2133c6"
+    },
+    {
+      "name": "github-immutable-execution-pins-corpus",
+      "sha256": "7f5ffcaaff5a95025a5aa16048de1b3d33900772ff2c481abdf1f6d68d09f07b"
+    },
+    {
+      "name": "github-immutable-execution-pins-independent-expectations",
+      "sha256": "c0d8907037fc21189437a74e28a01635c69a94373a8517098675bfbf6874fe18"
+    },
+    {
+      "name": "github-immutable-execution-pins-q3-validator",
+      "sha256": "9cb43875430cc7599bba1179cec729d7f8e66b5b3843054b617164b29081f1e2"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "804771530c02219b7a29d8f39db8fa9fb6d35bd8766ae597f4dc748d4d5017ba"
+    },
+    {
+      "name": "implementation-candidate-d58fe80494c14bdf13f82dd0c531159a2f6ccc6c",
+      "sha256": "f60f0a9a6096dc6517ac608e3ca3a69a4d6d7cf21d0c6d200bcd79539bd33cfe"
+    },
+    {
+      "name": "structured-review-final-pass-5510133060",
+      "sha256": "db2f9bf8a9cd2d62aaf3d6041a4f09a64175c3163f242245ede6cd5bda4929c0"
+    },
+    {
+      "name": "structured-review-acceptance-5510155388",
+      "sha256": "77772700b3d8d74cb19872c4928052b83a3152b092c6cbc8553aae8b863732f0"
+    },
+    {
+      "name": "delivery-completion-5510227584",
+      "sha256": "c2558261ddd81040508f1d57e8d1d6bc00c1f3fcf3a523a3d2531b5eee77fdea"
+    },
+    {
+      "name": "protected-main-codeql-run-33635149013",
+      "sha256": "3cb6e304085e06572dea08412b72ebf43a38c5684189d8d9e99ae3bb025fbbb8"
+    },
+    {
+      "name": "protected-main-bootstrap-evidence-manifest-run-33635149035",
+      "sha256": "b2d086e8fb95eeee0b2e1d679efe5ccc706ee61ac4b3f02251712b8dabf77578"
+    }
+  ],
+  "acceptedAt": "2026-09-02T13:33:46Z",
+  "digest": "9f2476ebea520372f836b69fc8b1d11300d5299ed1796fc34cc70afead9e2a76"
+}

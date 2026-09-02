@@ -32,7 +32,7 @@ let ``evidence storage contract and all independent negative cases pass`` () =
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.Equal(0, child.ExitCode)
-    Assert.Contains("EVIDENCE_STORAGE_OK categories=11 entries=83 maxTrackedBytes=65536 frozenCorpusCases=21 observed=2 unobserved=19 aggregate=bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753", output)
+    Assert.Contains("EVIDENCE_STORAGE_OK categories=11 entries=84 maxTrackedBytes=65536 frozenCorpusCases=21 observed=2 unobserved=19 aggregate=bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753", output)
     Assert.Contains("EVIDENCE_STORAGE_SELF_TEST_OK negativeCases=56 positiveArtifactManifests=1 positiveCritiqueBundles=1 positiveMutationProofs=1", output)
     Assert.Equal("", error)
 
@@ -539,6 +539,56 @@ let ``GS2-06.3 acceptance is indexed and accepted by the roadmap prerequisite re
             "GS2-06.3"
     with
     | Ok _ -> Assert.Fail("tampered GS2-06.3 acceptance receipt was accepted")
+    | Error findings -> Assert.Contains("RW-RECEIPT-TAMPERED", findings |> List.map _.Code)
+
+[<Fact>]
+let ``GS2-06.4 acceptance is indexed and accepted by the roadmap prerequisite reader`` () =
+    let indexPath = Path.Combine(root, "eng/github-substrate-v2-units.json")
+    let index = JsonNode.Parse(File.ReadAllText(indexPath)).AsObject()
+    let units = index["units"].AsArray()
+
+    let roadmap =
+        units
+        |> Seq.map (fun unitValue ->
+            let unitObject = unitValue.AsObject()
+            let unitId = unitObject["id"].GetValue<string>()
+            let title = unitObject["title"].GetValue<string>()
+            $"- [ ] **{unitId} — {title}.**")
+        |> String.concat "\n"
+
+    let roadmapBytes = Encoding.UTF8.GetBytes(roadmap + "\n")
+    index["roadmap"].AsObject()["sha256"] <- sha256 roadmapBytes
+    let indexBytes = Encoding.UTF8.GetBytes(index.ToJsonString())
+    let receiptPath unitId = Path.Combine(root, $"evidence/github-substrate-v2/accepted/{unitId}.json")
+    let receipt unitId = File.ReadAllBytes(receiptPath unitId) |> ReadOnlyMemory<byte>
+
+    match
+        RoadmapWork.checkPrerequisites
+            (ReadOnlyMemory<byte>(indexBytes))
+            (ReadOnlyMemory<byte>(roadmapBytes))
+            [ receipt "GS2-06.3"; receipt "GS2-06.4" ]
+            "GS2-06.4"
+    with
+    | Ok status ->
+        Assert.True(status.Ready)
+        Assert.Equal<string list>(
+            [ "eec15747e2e5c1cf0ae91fbf370eb82a3e6ea88d6fe3c0f2f738a556e63e5063" ],
+            status.AcceptedReceiptDigests
+        )
+    | Error findings -> Assert.Fail(String.concat "," (findings |> List.map _.Code))
+
+    let tampered = JsonNode.Parse(File.ReadAllBytes(receiptPath "GS2-06.4")).AsObject()
+    tampered["digest"] <- String.replicate 64 "0"
+
+    match
+        RoadmapWork.checkPrerequisites
+            (ReadOnlyMemory<byte>(indexBytes))
+            (ReadOnlyMemory<byte>(roadmapBytes))
+            [ receipt "GS2-06.3"
+              ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(tampered.ToJsonString())) ]
+            "GS2-06.4"
+    with
+    | Ok _ -> Assert.Fail("tampered GS2-06.4 acceptance receipt was accepted")
     | Error findings -> Assert.Contains("RW-RECEIPT-TAMPERED", findings |> List.map _.Code)
 
 [<Fact>]
