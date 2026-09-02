@@ -1,0 +1,55 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-06.5",
+  "state": "accepted",
+  "unitContractSha256": "f4100c6e3c8fd3f3a6aaf0a9c8e5f4ec6a693886e9e12e7f68715754562fd423",
+  "sourceRevision": "b6845fbdd80344de8346d33f61c968f87ed80e3b",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-06.4-receipt",
+      "sha256": "3f9c8603b069c8fa11c13147afbcc97ec79e4f983b69e9d5dcabc58ec153a944"
+    },
+    {
+      "name": "github-permission-compilation-corpus",
+      "sha256": "558a3f7317d12a188d1696a0ed309129616dc9f1520287bdb032fc01f93ad0d1"
+    },
+    {
+      "name": "github-permission-compilation-independent-expectations",
+      "sha256": "19dd36088c05a7f7866c943125ef2f0c4db4aac4605543a8d8f24450d233c559"
+    },
+    {
+      "name": "github-permission-compilation-q3-validator",
+      "sha256": "21fffe1bc718b35d72ef982e93788d4acdf2bd64cfa39a887b7ea8fcccf02e45"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "8e5d662e85f8476ba6cd612a71178c51c9bfb806babfdd6455e76e61b0081fc3"
+    },
+    {
+      "name": "implementation-candidate-88f515d083e8bf6de8f8a7da3de8dc7731e8af24",
+      "sha256": "3ae17a236d1827c001ef0ee4ed7c22d8f2212498e09effe07747d127baab10f6"
+    },
+    {
+      "name": "structured-review-final-pass-5512891863",
+      "sha256": "d2c0c25b2702f0fbfa5525dc8d27fdf4aeb19813729653ea8bad6a70b653158c"
+    },
+    {
+      "name": "structured-review-acceptance-5512971887",
+      "sha256": "0ea50c854f3cc2f03368d1182edf32a86e51f49a1afbf3e8d19914b1b686d26b"
+    },
+    {
+      "name": "delivery-completion-5513004927",
+      "sha256": "c3c942b69dc8c680c68916e6b2f57777666a7f0e1927f75ada416c277170a9ce"
+    },
+    {
+      "name": "protected-main-codeql-run-33656169897",
+      "sha256": "c864b0b7ded1fb7cefea463e853e69f706d247ab07fdf09122f0c5ebd4ec7978"
+    },
+    {
+      "name": "protected-main-bootstrap-evidence-manifest-run-33656170405",
+      "sha256": "b7d669c605fae43c96e31c4f52c6035028935d65199277ca89ddca0093a5a76e"
+    }
+  ],
+  "acceptedAt": "2026-09-02T18:24:28Z",
+  "digest": "9227977242b530755cbc28ff9093fa810aab9647037d3ae4b60cd7311c86cd0f"
+}
