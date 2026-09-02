@@ -1,0 +1,47 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-05.8",
+  "state": "accepted",
+  "unitContractSha256": "b738d44b1bfafd6a5bbd2e00e4e4817c3dd607cefff5e0833c23112e82440c59",
+  "sourceRevision": "fb114d17d3eb180eb9dfc5aa39bbbbaa975eb917",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-05.7-receipt",
+      "sha256": "f4d7dd20ff1554aef20ad1bbcea15b2f715a673a5b4b4d8c964b13f19dcb13d7"
+    },
+    {
+      "name": "github-fleet-shadow-generated-corpus",
+      "sha256": "4ba7f32b621a2ba09275c3fa6787873a8c88a1c599cddc7435aeb46d0ca7c9ef"
+    },
+    {
+      "name": "github-fleet-shadow-independent-expectations",
+      "sha256": "2b8ccacf6b4851c9d65ca6de106ea89cdaf0daf63840b5091f3523f681c27c0d"
+    },
+    {
+      "name": "github-fleet-shadow-live-evidence",
+      "sha256": "cd6bc4189fe4d9c9ee9b2cdbd61f698429346ca40017a0a404fa799788df210c"
+    },
+    {
+      "name": "github-fleet-shadow-q4-validator",
+      "sha256": "a1309503e655f916fc785a8a3fd20f57d581654a5699b7c659771326d2328aa2"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "b74bcf7cf876313364189a6856329dac9ee587e935414f82ad3be845944a4fcd"
+    },
+    {
+      "name": "structured-review-acceptance",
+      "sha256": "99a7ed53036ac3bc9721839921ade25c3541cf53a5aac8ee4f9d7404023a3400"
+    },
+    {
+      "name": "delivery-completion",
+      "sha256": "79fc32e71289d89cbd15949d1e2159aacd5abd561e08816f6337387673881c3a"
+    },
+    {
+      "name": "protected-main-bootstrap-evidence-run-33577749862",
+      "sha256": "76dd65e54b16cc8688634736b4e5c2cebc794541cfaf81dbe5ed7ed53be74247"
+    }
+  ],
+  "acceptedAt": "2026-09-02T01:09:47Z",
+  "digest": "a267b70003b955e4cd171e30d6f22f52eca6655002e17a52df22a19383fdfd53"
+}
