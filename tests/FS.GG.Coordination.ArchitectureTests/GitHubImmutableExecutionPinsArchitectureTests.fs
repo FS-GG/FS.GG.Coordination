@@ -93,7 +93,11 @@ let ``production Q3 rejects every competing or alternate updater configuration r
           "cli-options",
               [ "scripts/run-renovate-cli.sh", "#!/usr/bin/env bash\nrenovate --enabled-managers=github-actions --automerge=true --automerge-type=branch\n" ]
           "container-cli",
-              [ "scripts/run-renovate-container.sh", "#!/usr/bin/env bash\ndocker run --rm renovate/renovate --automerge=true --automerge-type=branch\n" ] ]
+              [ "scripts/run-renovate-container.sh", "#!/usr/bin/env bash\ndocker run --rm renovate/renovate --automerge=true --automerge-type=branch\n" ]
+          "node-process-api",
+              [ "scripts/critic-run-renovate.js", "const { spawnSync } = require('node:child_process');\nspawnSync(\"renovate\", [\"--enabled-managers=github-actions\", \"--automerge=true\", \"--automerge-type=branch\"]);\n" ]
+          "python-process-api",
+              [ "scripts/run-renovate.py", "import subprocess\nsubprocess.run(['renovate', '--enabled-managers=github-actions', '--automerge=true', '--automerge-type=branch'], check=True)\n" ] ]
     for label, files in cases do
         let tempRoot = Path.Combine(Path.GetTempPath(), $"fsgg-gs2-06-4-{label}-{Guid.NewGuid():N}")
         try
