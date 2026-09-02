@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "repository": "FS-GG/FS.GG.Coordination",
+  "sourceRevision": "e25727a89ad0101188da74414669a556059d251e",
+  "roadmapRepository": "FS-GG/.github",
+  "roadmapRevision": "7ab43852609563265291eec2b4010a829582d447",
+  "roadmapSha256": "9c8c87581bc0e7d1e9aac6d2691fdbf5f4e3db531c45879b1acc5b37669f0112",
+  "prerequisiteReceiptDigest": "eec15747e2e5c1cf0ae91fbf370eb82a3e6ea88d6fe3c0f2f738a556e63e5063",
+  "complete": true,
+  "workflows": [
+    {
+      "path": ".github/workflows/bootstrap-qualification.yml",
+      "sha256": "5bd0994d2e00aad3ea85b79025197b2c483af0ebd0290a5c5b52fe3228e16828",
+      "references": [
+        { "kind": "action", "repository": "actions/checkout", "path": null, "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1" },
+        { "kind": "action", "repository": "actions/download-artifact", "path": null, "revision": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" },
+        { "kind": "action", "repository": "actions/setup-dotnet", "path": null, "revision": "a98b56852c35b8e3190ac28c8c2271da59106c68" },
+        { "kind": "action", "repository": "actions/upload-artifact", "path": null, "revision": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" }
+      ]
+    },
+    {
+      "path": ".github/workflows/candidate-supply-chain.yml",
+      "sha256": "a32cb1d6041cfebef219f4ea85c58ebfbe977830b75d4373a463a585e400376c",
+      "references": [
+        { "kind": "action", "repository": "actions/checkout", "path": null, "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1" },
+        { "kind": "action", "repository": "actions/setup-dotnet", "path": null, "revision": "a98b56852c35b8e3190ac28c8c2271da59106c68" },
+        { "kind": "action", "repository": "actions/upload-artifact", "path": null, "revision": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" }
+      ]
+    }
+  ],
+  "publications": [],
+  "updaterConfigurationPaths": [
+    "renovate.json",
+    "renovate.jsonc",
+    "renovate.json5",
+    ".github/renovate.json",
+    ".github/renovate.jsonc",
+    ".github/renovate.json5",
+    ".gitlab/renovate.json",
+    ".gitlab/renovate.jsonc",
+    ".gitlab/renovate.json5",
+    ".renovaterc",
+    ".renovaterc.json",
+    ".renovaterc.jsonc",
+    ".renovaterc.json5",
+    ".github/dependabot.yml",
+    ".github/dependabot.yaml"
+  ],
+  "updaterInvocationSelectors": [
+    "RENOVATE_CONFIG",
+    "RENOVATE_*",
+    "RENOVATE_CONFIG_FILE",
+    "RENOVATE_ADDITIONAL_CONFIG_FILE",
+    "RENOVATE_CONFIG_FILE_NAMES",
+    "--config-file",
+    "--additional-config-file",
+    "--config-file-names",
+    "configFileNames",
+    "renovate-command",
+    "renovate-container"
+  ],
+  "updaterConfigurations": [],
+  "updaters": [
+    {
+      "name": "renovate",
+      "automated": true,
+      "pullRequestOnly": true,
+      "directPush": false,
+      "policyRepository": "FS-GG/.github",
+      "policyRevision": "7ab43852609563265291eec2b4010a829582d447",
+      "policyPath": "renovate.json",
+      "policySha256": "fb9c4ec557a849a553881dbc9ac75ef6f1e98d7f6a43efeefeca67d4f9ec36fb",
+      "ownedManagers": ["github-actions"]
+    }
+  ],
+  "requiredManagers": ["github-actions"]
+}

@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "a13e7c16af028979e93c836efe1bd786f0f2d7f8",
+    "revision": "7ab43852609563265291eec2b4010a829582d447",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "3fe2f665ab75d88d253e74ac6647bbb27b0ead930d47ee6d2430905dfa22f8c9"
+    "sha256": "9c8c87581bc0e7d1e9aac6d2691fdbf5f4e3db531c45879b1acc5b37669f0112"
   },
   "units": [
     {
@@ -714,6 +714,20 @@
         { "id": "github-ruleset-plan-contract", "qGate": "Q3", "commandSha256": "fce63cb308cfc8e2c194128df9b720fa720e17863b2e44ab77fcbf1c0c39b28d" }
       ],
       "contractSha256": "c469645aeabd48bf3ca4fc9fc7ab4d054fd61869696d9416ca669c88c184a84d"
+    },
+    {
+      "id": "GS2-06.4",
+      "title": "Immutable execution pins",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-06.3"],
+      "permissionCeiling": ["repository-local additive immutable-execution-pin contracts, pure deterministic compilation over a sealed complete workflow corpus and exact updater-policy evidence, validation, and retained evidence", "read-only consumption of accepted GS2-06.3 and organization Renovate policy evidence is allowed; no production GitHub write, ruleset apply, workflow publication, updater execution, merge-queue cutover, repository administration, deployment, package publication, stable release, GS2-06.5 implementation, or successor-unit implementation authority"],
+      "exitGate": "the Q3 immutable-execution-pin contract begins from the accepted GS2-06.3 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds the exact repository and source revision, complete tracked workflow path and byte-digest inventory, every distinct executable reference, immutable reusable-workflow publication tuple, updater-policy repository, revision, path and digest, and complete manager ownership; every third-party Action and reusable-workflow caller uses an exact 40-hex commit, and every reusable caller resolves to exactly one callable publication with the same owner-qualified repository, repository-relative path, commit and content SHA-256; absence remains an exact zero-count fact rather than invented publication authority; exactly one automated updater exists and it is Renovate, pull-request-only, denied direct-push authority, and owner of every declared workflow dependency manager; incomplete, missing, duplicate, mutable, malformed, cross-workflow, unbound-publication, non-callable, conflicting, altered-source, altered-policy, duplicate-updater, non-Renovate, direct-push, incomplete-ownership, altered-seal, and indeterminate inputs fail closed; the retained FS.GG.Coordination corpus exactly binds both tracked workflows, seven distinct per-workflow references, four distinct Actions, zero reusable callers and publications, and the accepted organization Renovate policy; exact replay is byte-identical and no mutation, apply, updater-execution, or workflow-publication path exists; generated adversarial mutations and independently authored exact prerequisite, completeness, source, action-pin, reusable-pin, workflow-digest, publication-identity, publication-content, callability, ordering, sole-updater, pull-request-only, ownership, seal, replay, Quint, no-mutation, and no-publication oracles all pass without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-immutable-execution-pins-contract"],
+      "gateContracts": [
+        { "id": "github-immutable-execution-pins-contract", "qGate": "Q3", "commandSha256": "b0375df243915c9dd81a345adc63f85c04258da79c905a7d28cb151ed45f73e0" }
+      ],
+      "contractSha256": "efcb0f9fcc9bee8572f1768857b079ce714caa64fbd3aab06e4e31d74f9d6036"
     }
   ]
 }

@@ -1,0 +1,281 @@
+schemaVersion: 1
+workId: 239-immutable-execution-pins
+stage: evidence
+status: evidenceReady
+sourceSpec: work/239-immutable-execution-pins/spec.md
+sourceClarifications: work/239-immutable-execution-pins/clarifications.md
+sourceChecklist: work/239-immutable-execution-pins/checklist.md
+sourcePlan: work/239-immutable-execution-pins/plan.md
+sourceTasks: work/239-immutable-execution-pins/tasks.yml
+sourceAnalysis: readiness/239-immutable-execution-pins/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/239-immutable-execution-pins/analysis.json
+    digest: cee510136471c63027ca1adb69f81aaceee7195c40d2e91c434496e5a1bbfcbf
+    schemaVersion: 1
+  - label: checklist
+    path: work/239-immutable-execution-pins/checklist.md
+    digest: 03c1e75ce8e47b2895176101a084cf65e389c8f9bd242fed7db6eb700a1e3556
+    schemaVersion: 1
+  - label: clarifications
+    path: work/239-immutable-execution-pins/clarifications.md
+    digest: dfb7bcc24628ba31fd771304f3bacc1f9e0228c0e45a7a97d19527a7ea736295
+    schemaVersion: 1
+  - label: plan
+    path: work/239-immutable-execution-pins/plan.md
+    digest: 3629754866fb3a72df120627ad7cf1e1183dc2d1342813c5806df159d0d2686e
+    schemaVersion: 1
+  - label: spec
+    path: work/239-immutable-execution-pins/spec.md
+    digest: 0ba34a60d98d6975490008be0911784631e9960d5dbf5acacc1fa6dd14d2b778
+    schemaVersion: 1
+  - label: tasks
+    path: work/239-immutable-execution-pins/tasks.yml
+    digest: 1f3c59810a7edd8cfa2f49ad99be8e3ef80542bc70c146332bfc5cc44a253304
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubImmutableExecutionPinsArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/test-results/239-immutable-execution-pins/qualification.trx
+      digest: "sha256:8939adce7b30031049e2b802c5fbd06c9482a055995ba8bc1951d994e87dc526"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
