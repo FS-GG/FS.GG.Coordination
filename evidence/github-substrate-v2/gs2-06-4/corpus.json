@@ -29,6 +29,32 @@
     }
   ],
   "publications": [],
+  "updaterConfigurationPaths": [
+    "renovate.json",
+    "renovate.jsonc",
+    "renovate.json5",
+    ".github/renovate.json",
+    ".github/renovate.jsonc",
+    ".github/renovate.json5",
+    ".gitlab/renovate.json",
+    ".gitlab/renovate.jsonc",
+    ".gitlab/renovate.json5",
+    ".renovaterc",
+    ".renovaterc.json",
+    ".renovaterc.jsonc",
+    ".renovaterc.json5",
+    ".github/dependabot.yml",
+    ".github/dependabot.yaml"
+  ],
+  "updaterInvocationSelectors": [
+    "RENOVATE_CONFIG_FILE",
+    "RENOVATE_ADDITIONAL_CONFIG_FILE",
+    "RENOVATE_CONFIG_FILE_NAMES",
+    "--config-file",
+    "--additional-config-file",
+    "--config-file-names",
+    "configFileNames"
+  ],
   "updaterConfigurations": [],
   "updaters": [
     {
