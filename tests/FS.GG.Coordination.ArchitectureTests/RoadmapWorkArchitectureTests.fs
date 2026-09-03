@@ -208,6 +208,33 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
+let ``roadmap work skill safety clauses are independently deletion sensitive`` () =
+    let skillPath = Path.Combine(root, ".agents/skills/github-substrate-v2-work/SKILL.md")
+    let validator = Path.Combine(root, "eng/validate-roadmap-work-skill.fsx")
+    let original = File.ReadAllText skillPath
+    let requiredClauses =
+        [ "fresh-exact-candidate-checkout"
+          "provider-artifacts-tracked-and-hash-bound"
+          "provider-contract-canonical-version"
+          "two-consecutive-coherent-no-change"
+          "exact-head-hosted-run-artifact"
+          "descendant-authority-matrix"
+          "single-owning-item-two-phase-receipt"
+          "verified-markerless-in-progress-handoff"
+          "Never create a receipt-only board issue" ]
+    let temporary = Path.Combine(Path.GetTempPath(), $"fsgg-roadmap-skill-{Guid.NewGuid():N}.md")
+    try
+        for clause in requiredClauses do
+            File.WriteAllText(temporary, original.Replace(clause, $"removed-{Guid.NewGuid():N}", StringComparison.Ordinal))
+            let exitCode, output, error = run "dotnet" [ "fsi"; validator; "--"; temporary ]
+            Assert.NotEqual(0, exitCode)
+            Assert.Equal("", output)
+            Assert.Contains("ROADMAP_WORK_SKILL_INVALID code=required-token", error)
+            Assert.Contains(clause, error)
+    finally
+        if File.Exists temporary then File.Delete temporary
+
+[<Fact>]
 let ``GS2-06-7 inspection refuses stale roadmap bytes`` () =
     let index =
         File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json"))

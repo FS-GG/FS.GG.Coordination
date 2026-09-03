@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "282-roadmap-evidence-lifecycle",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "26dd2aa67272c37665489814e64ee86ecb8d8f757ab6c0d249edf226426a96ac"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 18,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 18
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}
