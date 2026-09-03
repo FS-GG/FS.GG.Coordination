@@ -5,6 +5,8 @@
     <Compile Include="OrganizationIssueFields.fs" />
     <Compile Include="WorkTaxonomy.fsi" />
     <Compile Include="WorkTaxonomy.fs" />
+    <Compile Include="WorkflowSelection.fsi" />
+    <Compile Include="WorkflowSelection.fs" />
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
   </ItemGroup>

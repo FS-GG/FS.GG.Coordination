@@ -12,6 +12,7 @@ let arr (node: JsonNode) = node.AsArray() |> Seq.toList
 let text (name: string) (value: JsonObject) = value[name].GetValue<string>()
 let boolean (name: string) (value: JsonObject) = value[name].GetValue<bool>()
 let integer (name: string) (value: JsonObject) = value[name].GetValue<int>()
+let integer64 (node: JsonNode) = node.GetValue<int64>()
 let texts (name: string) (value: JsonObject) = value[name] |> arr |> List.map _.GetValue<string>()
 
 let exactProperties context expected (value: JsonObject) =
@@ -45,8 +46,8 @@ let parseSnapshot (path: string) =
         [ "schemaVersion"; "repository"; "sourceRevision"; "roadmapRevision"; "roadmapSha256"
           "prerequisiteReceiptDigest"; "complete"; "inventoryComplete"; "nonFileInputInventoryComplete"
           "graphVersion"; "workflows"; "obligations"; "dependencyEdges"; "unconditionalObligations"
-          "impactCases"; "childOutcomes"; "requiredAggregates"; "unconditionalCore"; "performance"
-          "sentinel"; "fleetSelectionEnabled"; "removalLedgerComplete"; "removals" ] root
+          "impactCases"; "childOutcomes"; "requiredAggregates"; "unconditionalCore"; "observationSha256"; "performance"
+          "sentinel"; "fleetSelectionEnabled"; "removalLedgerComplete"; "removalLedgerSha256"; "removals" ] root
     let workflows =
         root["workflows"] |> arr |> List.map (fun node ->
             let value = obj node
@@ -91,9 +92,27 @@ let parseSnapshot (path: string) =
     let performance =
         root["performance"] |> arr |> List.map (fun node ->
             let value = obj node
-            exactProperties "performance" [ "repository"; "baseline"; "target"; "selected" ] value
+            exactProperties "performance" [ "repository"; "baseline"; "target"; "selected"; "selectedKind"; "provenance" ] value
+            let provenance = obj value["provenance"]
+            exactProperties "performance-provenance"
+                [ "observationId"; "query"; "runIds"; "revisions"; "observedAt"; "windowStart"; "windowEnd"
+                  "runSampleCount"; "jobSampleCount"; "aggregation"; "complete"; "independentRecomputed"
+                  "reviewedBy"; "reviewedAt"; "targetRationale" ] provenance
             { Repository = text "repository" value; Baseline = metrics value["baseline"]
-              Target = metrics value["target"]; Selected = metrics value["selected"] })
+              Target = metrics value["target"]; Selected = metrics value["selected"]
+              SelectedKind = text "selectedKind" value
+              Provenance =
+                { ObservationId = text "observationId" provenance; Query = text "query" provenance
+                  RunIds = provenance["runIds"] |> arr |> List.map integer64
+                  Revisions = texts "revisions" provenance
+                  ObservedAt = DateTimeOffset.Parse(text "observedAt" provenance)
+                  WindowStart = DateTimeOffset.Parse(text "windowStart" provenance)
+                  WindowEnd = DateTimeOffset.Parse(text "windowEnd" provenance)
+                  RunSampleCount = integer "runSampleCount" provenance; JobSampleCount = integer "jobSampleCount" provenance
+                  Aggregation = text "aggregation" provenance; Complete = boolean "complete" provenance
+                  IndependentRecomputed = boolean "independentRecomputed" provenance
+                  ReviewedBy = text "reviewedBy" provenance; ReviewedAt = DateTimeOffset.Parse(text "reviewedAt" provenance)
+                  TargetRationale = text "targetRationale" provenance } })
     let sentinelNode = obj root["sentinel"]
     exactProperties "sentinel" [ "scheduled"; "selectedClosure"; "actualFailures" ] sentinelNode
     let removals =
@@ -109,10 +128,11 @@ let parseSnapshot (path: string) =
       GraphVersion = text "graphVersion" root; Workflows = workflows; Obligations = obligations "obligations" root
       DependencyEdges = edges; UnconditionalObligations = obligations "unconditionalObligations" root
       ImpactCases = impactCases; ChildOutcomes = childOutcomes; RequiredAggregates = texts "requiredAggregates" root
-      UnconditionalCore = obligations "unconditionalCore" root; Performance = performance
+      UnconditionalCore = obligations "unconditionalCore" root; ObservationSha256 = text "observationSha256" root; Performance = performance
       Sentinel = { Scheduled = boolean "scheduled" sentinelNode; SelectedClosure = obligations "selectedClosure" sentinelNode; ActualFailures = obligations "actualFailures" sentinelNode }
       FleetSelectionEnabled = boolean "fleetSelectionEnabled" root
-      RemovalLedgerComplete = boolean "removalLedgerComplete" root; Removals = removals }
+      RemovalLedgerComplete = boolean "removalLedgerComplete" root
+      RemovalLedgerSha256 = text "removalLedgerSha256" root; Removals = removals }
 
 let parseExpectations path = JsonNode.Parse(File.ReadAllText path) |> obj
 let expectCompileError snapshot = GitHubWorkflowSelectionQualification.compile snapshot |> Result.isError

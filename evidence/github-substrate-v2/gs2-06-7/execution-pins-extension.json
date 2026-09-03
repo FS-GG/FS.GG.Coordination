@@ -1,0 +1,38 @@
+{
+  "schema": "fsgg.coordination.execution-pins-extension/1",
+  "complete": true,
+  "documents": [
+    {
+      "kind": "action",
+      "path": ".github/actions/coordination-setup/action.yml",
+      "sha256": "745cd757cb4654ca393c72b6d1a1a8c7c6012046bea13c0270eeb4b92bd83ead",
+      "externalReferences": [
+        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/reusable-obligation-selection.yml",
+      "sha256": "af754fb944b0c0131711ae1182b344ebe8ebd4792fb04231f70ee2f89d04b3da",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      ],
+      "localReferences": [
+        "./.github/actions/coordination-setup"
+      ]
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/workflow-selection-sentinel.yml",
+      "sha256": "d15e03009427b7daa4ddbff4282e38937f03844cd5fd680d848a1e35a97211cf",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": [
+        "./.github/actions/coordination-setup"
+      ]
+    }
+  ]
+}

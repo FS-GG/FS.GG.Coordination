@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "94088f1ba035d0cb50503d29a1918bda136cd0dbe92761670dbd4d9998b06fd6"
+        "value": "8b791ff54faefbaa294acbba1a7eec95668ca48a3a06a4e10867f25f73241425"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "24fe399bd0532b1c516b422bc26da43a23f188f966328f398588758537d1ea70"
+        "value": "911b939ded6b360d0b29f7a38c4ca215d60fdd176eaa6966ebd0566b1b04838b"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "6e02f9b954c4458362f5cc3fdd6ae67dbd3ba3d7d4caebc664e752ad5d2fbc81"
+        "value": "2004194a9623f0c5a851bbc11ce7cc1dbb3d340fda409c68a6b5ede88a17dd4a"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "55ae3371e9fd2c3f10a2ba347b9e7bcb549467714bcc4a90ef3b1b3013ad4373"
+        "value": "67c4f3bcf96a046621c3031e0b53bc4c2ef58f0159d1250bd6ac2c11ecdcd1d8"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "83bfc6a2527df233367a2fffd91909372781d84137d53fdcf89318ea825c407d"
+        "value": "78fe582ec4f8dbd965b67220c6eead07958ae82f6f74a582646586c5ceb0cfdf"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "185b3e55df3ae035d8e94d0277e64c5f41d2096de005fa0060d12f94d12293ed"
+        "value": "2db89fe8cbba1ea53bf135aafbdd04bc1eb6c808769ab4d715dd702f0c6cad67"
       }
     }
   ],
@@ -128,8 +128,8 @@
   "requirements": [
     {
       "id": "FR-001",
-      "title": "The Q3 contract MUST bind a complete typed inventory of workflows, policy jobs, composite steps, reusable job contracts, and stable aggregate outputs to the exact repository, source, roadmap, and prerequisite. (Stories: US-001; Acceptance: AC-001)",
-      "text": "The Q3 contract MUST bind a complete typed inventory of workflows, policy jobs, composite steps, reusable job contracts, and stable aggregate outputs to the exact repository, source, roadmap, and prerequisite. (Stories: US-001; Acceptance: AC-001)",
+      "title": "The Q3 contract MUST bind a complete typed inventory to actual repository-owned callable workflows, policy jobs, composite steps, reusable job contracts, stable aggregate outputs, exact source, roadmap, and prerequisite. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The Q3 contract MUST bind a complete typed inventory to actual repository-owned callable workflows, policy jobs, composite steps, reusable job contracts, stable aggregate outputs, exact source, roadmap, and prerequisite. (Stories: US-001; Acceptance: AC-001)",
       "acceptanceCriteria": [
         "AC-001"
       ],
@@ -149,8 +149,8 @@
     },
     {
       "id": "FR-002",
-      "title": "The selector MUST compile a versioned dependency graph over changed subjects and non-file inputs into the smallest sound transitive closure across build, test, policy, coordination, packaging, and release obligations while retaining unconditional policy and core obligations. (Stories: US-001; Acceptance: AC-002)",
-      "text": "The selector MUST compile a versioned dependency graph over changed subjects and non-file inputs into the smallest sound transitive closure across build, test, policy, coordination, packaging, and release obligations while retaining unconditional policy and core obligations. (Stories: US-001; Acceptance: AC-002)",
+      "title": "A public pure Core API and CLI MUST validate sealed inventory/version/base/settings, derive roots from arbitrary changed paths and non-file inputs, and compute the smallest sound transitive closure across build, test, policy, coordination, packaging, and release while retaining unconditional policy and core. (Stories: US-001; Acceptance: AC-002)",
+      "text": "A public pure Core API and CLI MUST validate sealed inventory/version/base/settings, derive roots from arbitrary changed paths and non-file inputs, and compute the smallest sound transitive closure across build, test, policy, coordination, packaging, and release while retaining unconditional policy and core. (Stories: US-001; Acceptance: AC-002)",
       "acceptanceCriteria": [
         "AC-002"
       ],
@@ -191,8 +191,8 @@
     },
     {
       "id": "FR-004",
-      "title": "The Q7 contract MUST compare per-repository workflow/job fan-out, billed minutes, queue time, and p50/p95 completion baselines to accepted targets and reject any target breach or missed obligation. (Stories: US-002; Acceptance: AC-004)",
-      "text": "The Q7 contract MUST compare per-repository workflow/job fan-out, billed minutes, queue time, and p50/p95 completion baselines to accepted targets and reject any target breach or missed obligation. (Stories: US-002; Acceptance: AC-004)",
+      "title": "The Q7 contract MUST independently reproduce each registered repository\u0027s workflow/job fan-out, billed minutes, queue time, and p50/p95 completion baselines from read-only source run/job IDs, observation window, revision, query, sample, aggregation, completeness, and review provenance; it MUST reject stale, missing, duplicate, substituted, uniform, or forged evidence and any target breach. (Stories: US-002; Acceptance: AC-004)",
+      "text": "The Q7 contract MUST independently reproduce each registered repository\u0027s workflow/job fan-out, billed minutes, queue time, and p50/p95 completion baselines from read-only source run/job IDs, observation window, revision, query, sample, aggregation, completeness, and review provenance; it MUST reject stale, missing, duplicate, substituted, uniform, or forged evidence and any target breach. (Stories: US-002; Acceptance: AC-004)",
       "acceptanceCriteria": [
         "AC-004"
       ],
@@ -276,8 +276,8 @@
     },
     {
       "id": "DEC-002",
-      "title": "Keep GS2-06.7 qualification-only; baseline, target, sentinel, and fleet-disable facts are pure sealed inputs and outputs.",
-      "decision": "Keep GS2-06.7 qualification-only; baseline, target, sentinel, and fleet-disable facts are pure sealed inputs and outputs.",
+      "title": "Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; observations are read-only and the fleet-disable decision is a pure retained output with no mutation authority.",
+      "decision": "Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; observations are read-only and the fleet-disable decision is a pure retained output with no mutation authority.",
       "requirementRefs": [
         "FR-004",
         "FR-005"
@@ -1315,7 +1315,7 @@
           "path": "work/262-workflow-selection/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "94088f1ba035d0cb50503d29a1918bda136cd0dbe92761670dbd4d9998b06fd6"
+            "value": "8b791ff54faefbaa294acbba1a7eec95668ca48a3a06a4e10867f25f73241425"
           },
           "schemaVersion": 1
         },
@@ -1323,7 +1323,7 @@
           "path": "work/262-workflow-selection/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "24fe399bd0532b1c516b422bc26da43a23f188f966328f398588758537d1ea70"
+            "value": "911b939ded6b360d0b29f7a38c4ca215d60fdd176eaa6966ebd0566b1b04838b"
           },
           "schemaVersion": 1
         },
@@ -1331,7 +1331,7 @@
           "path": "work/262-workflow-selection/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "6e02f9b954c4458362f5cc3fdd6ae67dbd3ba3d7d4caebc664e752ad5d2fbc81"
+            "value": "2004194a9623f0c5a851bbc11ce7cc1dbb3d340fda409c68a6b5ede88a17dd4a"
           },
           "schemaVersion": 1
         },
@@ -1339,7 +1339,7 @@
           "path": "work/262-workflow-selection/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "55ae3371e9fd2c3f10a2ba347b9e7bcb549467714bcc4a90ef3b1b3013ad4373"
+            "value": "67c4f3bcf96a046621c3031e0b53bc4c2ef58f0159d1250bd6ac2c11ecdcd1d8"
           },
           "schemaVersion": 1
         },
@@ -1347,7 +1347,7 @@
           "path": "work/262-workflow-selection/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "83bfc6a2527df233367a2fffd91909372781d84137d53fdcf89318ea825c407d"
+            "value": "78fe582ec4f8dbd965b67220c6eead07958ae82f6f74a582646586c5ceb0cfdf"
           },
           "schemaVersion": 1
         },
@@ -1355,14 +1355,14 @@
           "path": "work/262-workflow-selection/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "185b3e55df3ae035d8e94d0277e64c5f41d2096de005fa0060d12f94d12293ed"
+            "value": "2db89fe8cbba1ea53bf135aafbdd04bc1eb6c808769ab4d715dd702f0c6cad67"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "eebea9048c7e0a677575ef2f891ba590c99827b1526dae6017646572bc9260d2"
+        "value": "c329c61a8d54ba2891be9efdb5995d5f9003328bd37c08c00d8ed704c1f9c644"
       },
       "currency": "current"
     }

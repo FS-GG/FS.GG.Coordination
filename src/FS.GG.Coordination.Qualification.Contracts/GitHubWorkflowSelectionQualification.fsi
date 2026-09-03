@@ -46,11 +46,30 @@ type GitHubWorkflowMetrics =
       P50Seconds: int
       P95Seconds: int }
 
+type GitHubWorkflowObservationProvenance =
+    { ObservationId: string
+      Query: string
+      RunIds: int64 list
+      Revisions: string list
+      ObservedAt: System.DateTimeOffset
+      WindowStart: System.DateTimeOffset
+      WindowEnd: System.DateTimeOffset
+      RunSampleCount: int
+      JobSampleCount: int
+      Aggregation: string
+      Complete: bool
+      IndependentRecomputed: bool
+      ReviewedBy: string
+      ReviewedAt: System.DateTimeOffset
+      TargetRationale: string }
+
 type GitHubWorkflowRepositoryPerformance =
     { Repository: string
       Baseline: GitHubWorkflowMetrics
       Target: GitHubWorkflowMetrics
-      Selected: GitHubWorkflowMetrics }
+      Selected: GitHubWorkflowMetrics
+      SelectedKind: string
+      Provenance: GitHubWorkflowObservationProvenance }
 
 type GitHubWorkflowSentinel =
     { Scheduled: bool
@@ -78,10 +97,12 @@ type GitHubWorkflowSelectionSnapshot =
       ChildOutcomes: GitHubWorkflowChildOutcome list
       RequiredAggregates: string list
       UnconditionalCore: GitHubWorkflowObligation list
+      ObservationSha256: string
       Performance: GitHubWorkflowRepositoryPerformance list
       Sentinel: GitHubWorkflowSentinel
       FleetSelectionEnabled: bool
       RemovalLedgerComplete: bool
+      RemovalLedgerSha256: string
       Removals: GitHubWorkflowRemoval list }
 
 type GitHubWorkflowSelectionReport =

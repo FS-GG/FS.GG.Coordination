@@ -74,19 +74,44 @@ let report = compile snapshot |> Result.defaultWith (failwithf "immutable execut
 if fsi.CommandLineArgs |> Array.contains "--mint" then
     printfn "%s" report.Seal
 else
+    let extensionPath = Path.Combine(root, "evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json")
+    if not (File.Exists extensionPath) then failwith "current execution-pin extension is absent"
+    let extension = JsonNode.Parse(File.ReadAllText extensionPath).AsObject()
+    let exactProperties context expected (value: JsonObject) =
+        let actual = value |> Seq.map _.Key |> Set.ofSeq
+        if actual <> Set.ofList expected then failwith $"{context} property inventory differs"
+    exactProperties "execution-pin extension" [ "schema"; "complete"; "documents" ] extension
+    if text extension "schema" <> "fsgg.coordination.execution-pins-extension/1" || not (extension["complete"].GetValue<bool>()) then
+        failwith "current execution-pin extension is incomplete"
+    let extensionDocuments =
+        extension["documents"].AsArray() |> Seq.map _.AsObject() |> List.ofSeq
+    for document in extensionDocuments do
+        exactProperties "execution-pin document" [ "kind"; "path"; "sha256"; "externalReferences"; "localReferences" ] document
+        if text document "kind" <> "workflow" && text document "kind" <> "action" then failwith "execution-pin document kind differs"
+    let extensionPaths = extensionDocuments |> List.map (fun document -> text document "path")
+    if extensionPaths.Length <> (extensionPaths |> Set.ofList |> Set.count) then failwith "duplicate execution-pin extension document"
     let workflowDirectory = Path.Combine(root, ".github/workflows")
     let trackedWorkflows =
         Directory.EnumerateFiles(workflowDirectory)
         |> Seq.filter (fun path -> let extension = Path.GetExtension(path) in extension = ".yml" || extension = ".yaml")
         |> Seq.map (fun path -> Path.GetRelativePath(root, path).Replace('\\', '/'))
         |> Set.ofSeq
-    let declaredWorkflows = snapshot.Workflows |> List.map _.Path |> Set.ofList
+    let declaredWorkflows =
+        (snapshot.Workflows |> List.map _.Path)
+        @ (extensionDocuments |> List.filter (fun document -> text document "kind" = "workflow") |> List.map (fun document -> text document "path"))
+        |> Set.ofList
     if trackedWorkflows <> declaredWorkflows then failwith $"workflow inventory is incomplete: tracked={trackedWorkflows.Count} declared={declaredWorkflows.Count}"
     for workflow in snapshot.Workflows do
         let path = Path.Combine(root, workflow.Path)
         if sha256File path <> workflow.Sha256 then failwith $"workflow digest differs: {workflow.Path}"
 
-    let uses = Regex("(?m)^\\s*uses:\\s*([^\\s#]+)", RegexOptions.CultureInvariant)
+    for document in extensionDocuments do
+        let path = text document "path"
+        if sha256File (Path.Combine(root, path)) <> text document "sha256" then failwith $"execution-pin extension digest differs: {path}"
+
+    // Match both expanded `uses:` steps and terse `- uses:` steps. The latter
+    // must not be an escape hatch around immutable execution-pin validation.
+    let uses = Regex("(?m)^\\s*(?:-\\s*)?uses:\\s*([^\\s#]+)", RegexOptions.CultureInvariant)
     let observedReferences =
         [ for workflow in snapshot.Workflows do
               for matched in uses.Matches(File.ReadAllText(Path.Combine(root, workflow.Path))) do
@@ -101,6 +126,33 @@ else
         |> List.collect (fun workflow -> workflow.References |> List.map (fun reference -> workflow.Path, reference.Kind, reference.TargetRepository, reference.TargetPath, reference.Revision))
         |> Set.ofList
     if observedReferences <> declaredReferences then failwith $"execution reference inventory differs: observed={observedReferences.Count} declared={declaredReferences.Count}"
+
+    let extensionActionPaths =
+        extensionDocuments
+        |> List.filter (fun document -> text document "kind" = "action")
+        |> List.map (fun document -> text document "path")
+        |> Set.ofList
+    for document in extensionDocuments do
+        let path = text document "path"
+        let observed =
+            uses.Matches(File.ReadAllText(Path.Combine(root, path)))
+            |> Seq.cast<Match>
+            |> Seq.map (fun matched -> matched.Groups[1].Value)
+            |> Set.ofSeq
+        let declaredExternal = texts document "externalReferences" |> Set.ofList
+        let declaredLocal = texts document "localReferences" |> Set.ofList
+        let observedExternal = observed |> Set.filter (fun target -> not (target.StartsWith("./", StringComparison.Ordinal)))
+        let observedLocal = observed |> Set.filter (fun target -> target.StartsWith("./", StringComparison.Ordinal))
+        if observedExternal <> declaredExternal || observedLocal <> declaredLocal then
+            failwith $"execution-pin extension reference inventory differs: {path}"
+        for target in observedExternal do
+            match GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral target with
+            | Ok _ -> ()
+            | Error errors -> failwith $"execution reference is not immutable: {target}: {errors}"
+        for target in observedLocal do
+            let actionPath = target.Substring(2).TrimEnd('/') + "/action.yml"
+            if not (Set.contains actionPath extensionActionPaths) then
+                failwith $"local execution reference is not digest-bound: {target}"
 
     let trackedPaths =
         let startInfo = ProcessStartInfo("git")

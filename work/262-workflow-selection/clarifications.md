@@ -21,12 +21,12 @@ publicOrToolFacingImpact: true
 
 ## Answers
 - CQ-001 → It remains as a typed NotApplicable outcome consumed by stable aggregates, while its expensive job is never provisioned.
-- CQ-002 → No. Q7 qualifies retained measurements, accepted targets, sentinel comparisons, and deterministic fleet-disable decisions without applying fleet mutations.
+- CQ-002 → The repair ships callable Coordination-owned contracts and a scheduled sentinel, but Q7 only reads and qualifies retained observations, reviewed targets, and deterministic fleet-disable decisions; it never applies selection or mutates fleet settings/receivers.
 - CQ-003 → No. Mixed changes are classified together and the full transitive plus unconditional closure is recomputed from the combined roots.
 
 ## Decisions
 - **DEC-001** [CQ-001] [AMB:AMB-001] [FR-003] [AC-003]: Separate child outcome materialization from expensive job provisioning; every required aggregate consumes either Selected or NotApplicable.
-- **DEC-002** [CQ-002] [AMB:AMB-002] [FR-004] [FR-005] [AC-004] [AC-005]: Keep GS2-06.7 qualification-only; baseline, target, sentinel, and fleet-disable facts are pure sealed inputs and outputs.
+- **DEC-002** [CQ-002] [AMB:AMB-002] [FR-004] [FR-005] [AC-004] [AC-005]: Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; observations are read-only and the fleet-disable decision is a pure retained output with no mutation authority.
 - **DEC-003** [CQ-003] [AMB:AMB-003] [FR-002] [AC-002]: Recompute one closure from the complete combined root set so mixed changes cannot omit shared or newly reachable obligations.
 
 ## Accepted Deferrals

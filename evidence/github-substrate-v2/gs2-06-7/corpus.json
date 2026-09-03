@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "FS-GG/FS.GG.Coordination",
-  "sourceRevision": "ff65faa6697ea5835de72c1e6fa1b53af0a883e3",
+  "sourceRevision": "57305e540267f3f4696ba5a6cdfc84361de577d3",
   "roadmapRevision": "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9",
   "roadmapSha256": "590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57",
   "prerequisiteReceiptDigest": "517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f",
@@ -12,68 +12,964 @@
   "workflows": [
     {
       "workflow": ".github/workflows/bootstrap-qualification.yml",
-      "policyJobs": ["dependency-and-security", "evidence-manifest"],
-      "compositeSteps": ["checkout-and-setup", "publish-evidence"],
-      "reusableJobContracts": ["qualification-execute"],
-      "aggregateOutputs": ["required"]
+      "policyJobs": [
+        "dependency-and-security",
+        "evidence-manifest"
+      ],
+      "compositeSteps": [],
+      "reusableJobContracts": [],
+      "aggregateOutputs": [
+        "required"
+      ]
     },
     {
       "workflow": ".github/workflows/candidate-supply-chain.yml",
-      "policyJobs": ["attestation", "dependency-review", "public-download"],
-      "compositeSteps": ["checkout-and-setup", "package-subject"],
-      "reusableJobContracts": ["release-saga"],
-      "aggregateOutputs": ["supply-chain"]
+      "policyJobs": [
+        "publish-and-verify"
+      ],
+      "compositeSteps": [],
+      "reusableJobContracts": [],
+      "aggregateOutputs": [
+        "supply-chain"
+      ]
+    },
+    {
+      "workflow": ".github/workflows/reusable-obligation-selection.yml",
+      "policyJobs": [
+        "policy"
+      ],
+      "compositeSteps": [
+        "coordination-setup"
+      ],
+      "reusableJobContracts": [
+        "obligation-selection"
+      ],
+      "aggregateOutputs": [
+        "required",
+        "supply-chain"
+      ]
+    },
+    {
+      "workflow": ".github/workflows/workflow-selection-sentinel.yml",
+      "policyJobs": [
+        "full-suite-sentinel"
+      ],
+      "compositeSteps": [
+        "coordination-setup"
+      ],
+      "reusableJobContracts": [],
+      "aggregateOutputs": [
+        "sentinel"
+      ]
     }
   ],
-  "obligations": ["build", "test", "policy", "coordination", "packaging", "release"],
-  "dependencyEdges": [
-    {"source": "build", "target": "test"},
-    {"source": "test", "target": "policy"},
-    {"source": "policy", "target": "coordination"},
-    {"source": "packaging", "target": "release"}
+  "obligations": [
+    "build",
+    "test",
+    "policy",
+    "coordination",
+    "packaging",
+    "release"
   ],
-  "unconditionalObligations": ["policy"],
+  "dependencyEdges": [
+    {
+      "source": "build",
+      "target": "test"
+    },
+    {
+      "source": "test",
+      "target": "policy"
+    },
+    {
+      "source": "policy",
+      "target": "coordination"
+    },
+    {
+      "source": "packaging",
+      "target": "release"
+    }
+  ],
+  "unconditionalObligations": [
+    "policy"
+  ],
   "impactCases": [
-    {"id":"dependency","changedSubjects":["Directory.Packages.props"],"nonFileInputs":[],"roots":["build","packaging"],"expectedClosure":["build","test","policy","coordination","packaging","release"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"documentation","changedSubjects":["docs/architecture.md"],"nonFileInputs":[],"roots":["coordination"],"expectedClosure":["policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"generated-output","changedSubjects":["src/Generated.fs"],"nonFileInputs":[],"roots":["build"],"expectedClosure":["build","test","policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"merge-group","changedSubjects":["src/Merge.fs"],"nonFileInputs":["merge-group-settings"],"roots":["build"],"expectedClosure":["build","test","policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":{"queuedHead":"1111111111111111111111111111111111111111","currentBase":"2222222222222222222222222222222222222222","currentSettings":"3333333333333333333333333333333333333333333333333333333333333333","observedBase":"2222222222222222222222222222222222222222","observedSettings":"3333333333333333333333333333333333333333333333333333333333333333","recomputed":true}},
-    {"id":"mixed","changedSubjects":["tests/Mixed.fs","eng/release.json"],"nonFileInputs":[],"roots":["test","packaging"],"expectedClosure":["test","policy","coordination","packaging","release"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"non-file-input","changedSubjects":[],"nonFileInputs":["renovate-policy-revision"],"roots":["packaging"],"expectedClosure":["policy","coordination","packaging","release"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"policy","changedSubjects":["eng/policy.json"],"nonFileInputs":[],"roots":["policy"],"expectedClosure":["policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"release","changedSubjects":["eng/release-plan.json"],"nonFileInputs":[],"roots":["release"],"expectedClosure":["policy","coordination","release"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"source","changedSubjects":["src/Core.fs"],"nonFileInputs":[],"roots":["build"],"expectedClosure":["build","test","policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"test","changedSubjects":["tests/CoreTests.fs"],"nonFileInputs":[],"roots":["test"],"expectedClosure":["test","policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
-    {"id":"workflow","changedSubjects":[".github/workflows/bootstrap-qualification.yml"],"nonFileInputs":[],"roots":["policy"],"expectedClosure":["policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null}
+    {
+      "id": "dependency",
+      "changedSubjects": [
+        "Directory.Packages.props"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "build",
+        "packaging"
+      ],
+      "expectedClosure": [
+        "build",
+        "test",
+        "policy",
+        "coordination",
+        "packaging",
+        "release"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "documentation",
+      "changedSubjects": [
+        "docs/architecture.md"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "coordination"
+      ],
+      "expectedClosure": [
+        "policy",
+        "coordination"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "generated-output",
+      "changedSubjects": [
+        "src/Generated.fs"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "build"
+      ],
+      "expectedClosure": [
+        "build",
+        "test",
+        "policy",
+        "coordination"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "merge-group",
+      "changedSubjects": [
+        "src/Merge.fs"
+      ],
+      "nonFileInputs": [
+        "merge-group-settings"
+      ],
+      "roots": [
+        "build"
+      ],
+      "expectedClosure": [
+        "build",
+        "test",
+        "policy",
+        "coordination"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": {
+        "queuedHead": "1111111111111111111111111111111111111111",
+        "currentBase": "2222222222222222222222222222222222222222",
+        "currentSettings": "3333333333333333333333333333333333333333333333333333333333333333",
+        "observedBase": "2222222222222222222222222222222222222222",
+        "observedSettings": "3333333333333333333333333333333333333333333333333333333333333333",
+        "recomputed": true
+      }
+    },
+    {
+      "id": "mixed",
+      "changedSubjects": [
+        "tests/Mixed.fs",
+        "eng/release.json"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "test",
+        "packaging"
+      ],
+      "expectedClosure": [
+        "test",
+        "policy",
+        "coordination",
+        "packaging",
+        "release"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "non-file-input",
+      "changedSubjects": [],
+      "nonFileInputs": [
+        "renovate-policy-revision"
+      ],
+      "roots": [
+        "packaging"
+      ],
+      "expectedClosure": [
+        "policy",
+        "coordination",
+        "packaging",
+        "release"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "policy",
+      "changedSubjects": [
+        "eng/policy.json"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "policy"
+      ],
+      "expectedClosure": [
+        "policy",
+        "coordination"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "release",
+      "changedSubjects": [
+        "eng/release-plan.json"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "release"
+      ],
+      "expectedClosure": [
+        "policy",
+        "coordination",
+        "release"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "source",
+      "changedSubjects": [
+        "src/Core.fs"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "build"
+      ],
+      "expectedClosure": [
+        "build",
+        "test",
+        "policy",
+        "coordination"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "test",
+      "changedSubjects": [
+        "tests/CoreTests.fs"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "test"
+      ],
+      "expectedClosure": [
+        "test",
+        "policy",
+        "coordination"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    },
+    {
+      "id": "workflow",
+      "changedSubjects": [
+        ".github/workflows/bootstrap-qualification.yml"
+      ],
+      "nonFileInputs": [],
+      "roots": [
+        "policy"
+      ],
+      "expectedClosure": [
+        "policy",
+        "coordination"
+      ],
+      "unknown": false,
+      "ambiguous": false,
+      "fresh": true,
+      "complete": true,
+      "mergeGroup": null
+    }
   ],
   "childOutcomes": [
-    {"obligation":"build","disposition":"selected","reason":null,"expensiveJobProvisioned":false},
-    {"obligation":"test","disposition":"selected","reason":null,"expensiveJobProvisioned":false},
-    {"obligation":"policy","disposition":"selected","reason":null,"expensiveJobProvisioned":false},
-    {"obligation":"coordination","disposition":"selected","reason":null,"expensiveJobProvisioned":false},
-    {"obligation":"packaging","disposition":"not-applicable","reason":"source change does not reach packaging","expensiveJobProvisioned":false},
-    {"obligation":"release","disposition":"not-applicable","reason":"source change does not reach release","expensiveJobProvisioned":false}
+    {
+      "obligation": "build",
+      "disposition": "selected",
+      "reason": null,
+      "expensiveJobProvisioned": false
+    },
+    {
+      "obligation": "test",
+      "disposition": "selected",
+      "reason": null,
+      "expensiveJobProvisioned": false
+    },
+    {
+      "obligation": "policy",
+      "disposition": "selected",
+      "reason": null,
+      "expensiveJobProvisioned": false
+    },
+    {
+      "obligation": "coordination",
+      "disposition": "selected",
+      "reason": null,
+      "expensiveJobProvisioned": false
+    },
+    {
+      "obligation": "packaging",
+      "disposition": "not-applicable",
+      "reason": "source change does not reach packaging",
+      "expensiveJobProvisioned": false
+    },
+    {
+      "obligation": "release",
+      "disposition": "not-applicable",
+      "reason": "source change does not reach release",
+      "expensiveJobProvisioned": false
+    }
   ],
-  "requiredAggregates": ["required", "supply-chain"],
-  "unconditionalCore": ["policy"],
+  "requiredAggregates": [
+    "required",
+    "supply-chain"
+  ],
+  "unconditionalCore": [
+    "policy"
+  ],
   "performance": [
-    {"repository":"EHotwagner/S.I.R.","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/.github","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/FS.GG.Audio","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/FS.GG.Coordination","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/FS.GG.Game","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/FS.GG.Governance","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/FS.GG.Net","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/FS.GG.Rendering","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/FS.GG.SDD","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
-    {"repository":"FS-GG/FS.GG.Templates","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}}
+    {
+      "repository": "EHotwagner/S.I.R.",
+      "baseline": {
+        "workflowFanOut": 1,
+        "jobFanOut": 21,
+        "billedMinutes": 34,
+        "queueTimeSeconds": 518,
+        "p50Seconds": 24,
+        "p95Seconds": 1665
+      },
+      "target": {
+        "workflowFanOut": 1,
+        "jobFanOut": 17,
+        "billedMinutes": 28,
+        "queueTimeSeconds": 415,
+        "p50Seconds": 20,
+        "p95Seconds": 1332
+      },
+      "selected": {
+        "workflowFanOut": 1,
+        "jobFanOut": 17,
+        "billedMinutes": 28,
+        "queueTimeSeconds": 415,
+        "p50Seconds": 20,
+        "p95Seconds": 1332
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/EHotwagner/S.I.R./actions/runs?status=completed&per_page=20 and GET /repos/EHotwagner/S.I.R./actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33604227869,
+          33602142464,
+          33486432172,
+          33484174025,
+          33376357260,
+          33374184071,
+          33302559081,
+          33301421171
+        ],
+        "revisions": [
+          "2b7ceccd8d922c63818d18f111ee3c7aa0b5565a"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 88,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/.github",
+      "baseline": {
+        "workflowFanOut": 5,
+        "jobFanOut": 13,
+        "billedMinutes": 12,
+        "queueTimeSeconds": 17,
+        "p50Seconds": 27,
+        "p95Seconds": 104
+      },
+      "target": {
+        "workflowFanOut": 4,
+        "jobFanOut": 11,
+        "billedMinutes": 10,
+        "queueTimeSeconds": 14,
+        "p50Seconds": 22,
+        "p95Seconds": 84
+      },
+      "selected": {
+        "workflowFanOut": 4,
+        "jobFanOut": 11,
+        "billedMinutes": 10,
+        "queueTimeSeconds": 14,
+        "p50Seconds": 22,
+        "p95Seconds": 84
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/.github/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/.github/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33703602699,
+          33702482891,
+          33700505182,
+          33698616201,
+          33698616276,
+          33698616464,
+          33698616242,
+          33698616219
+        ],
+        "revisions": [
+          "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 16,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Audio",
+      "baseline": {
+        "workflowFanOut": 4,
+        "jobFanOut": 10,
+        "billedMinutes": 11,
+        "queueTimeSeconds": 110,
+        "p50Seconds": 43,
+        "p95Seconds": 329
+      },
+      "target": {
+        "workflowFanOut": 4,
+        "jobFanOut": 8,
+        "billedMinutes": 9,
+        "queueTimeSeconds": 88,
+        "p50Seconds": 35,
+        "p95Seconds": 264
+      },
+      "selected": {
+        "workflowFanOut": 4,
+        "jobFanOut": 8,
+        "billedMinutes": 9,
+        "queueTimeSeconds": 88,
+        "p50Seconds": 35,
+        "p95Seconds": 264
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/FS.GG.Audio/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/FS.GG.Audio/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33551845582,
+          33551845472,
+          33551845391,
+          33551845628,
+          33551764546,
+          33551764531,
+          33518478467,
+          33518478688
+        ],
+        "revisions": [
+          "aa6c8828250167bd9809e5e62b8075d1684d481b",
+          "aa1eb91268c24d39ddbfc39d5edf964000f4de40",
+          "d4e916050a35c58b1d0820600e4c4c559ce7caff"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 21,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "baseline": {
+        "workflowFanOut": 2,
+        "jobFanOut": 10,
+        "billedMinutes": 18,
+        "queueTimeSeconds": 442,
+        "p50Seconds": 51,
+        "p95Seconds": 446
+      },
+      "target": {
+        "workflowFanOut": 2,
+        "jobFanOut": 8,
+        "billedMinutes": 15,
+        "queueTimeSeconds": 354,
+        "p50Seconds": 41,
+        "p95Seconds": 357
+      },
+      "selected": {
+        "workflowFanOut": 2,
+        "jobFanOut": 8,
+        "billedMinutes": 15,
+        "queueTimeSeconds": 354,
+        "p50Seconds": 41,
+        "p95Seconds": 357
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/FS.GG.Coordination/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/FS.GG.Coordination/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33708922489,
+          33708922854,
+          33708276801,
+          33708275073,
+          33707365512,
+          33707365752,
+          33706348348,
+          33706346134
+        ],
+        "revisions": [
+          "57305e540267f3f4696ba5a6cdfc84361de577d3",
+          "353c5a5ab9cd47cc01ea4ecfda6aee3d5bf58bfe",
+          "81574bc8d12d46d08d60448b96db641fc3cb0de9",
+          "05ce70b3f05a7178bfad0af68649e8b80db6c5ac"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 40,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Game",
+      "baseline": {
+        "workflowFanOut": 5,
+        "jobFanOut": 35,
+        "billedMinutes": 40,
+        "queueTimeSeconds": 59,
+        "p50Seconds": 18,
+        "p95Seconds": 191
+      },
+      "target": {
+        "workflowFanOut": 4,
+        "jobFanOut": 28,
+        "billedMinutes": 32,
+        "queueTimeSeconds": 48,
+        "p50Seconds": 15,
+        "p95Seconds": 153
+      },
+      "selected": {
+        "workflowFanOut": 4,
+        "jobFanOut": 28,
+        "billedMinutes": 32,
+        "queueTimeSeconds": 48,
+        "p50Seconds": 15,
+        "p95Seconds": 153
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/FS.GG.Game/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/FS.GG.Game/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33626937302,
+          33550423493,
+          33550422313,
+          33550423054,
+          33550422901,
+          33550423439,
+          33550350085,
+          33550350017
+        ],
+        "revisions": [
+          "2f02903fb1891868c76894b5e4f9f8b5031f9bf9",
+          "d19a3523cfba868b5e299e109ded397ecdfde729",
+          "2a6e8aa7ff9bcb046bbbcaaa7143075bea75af31"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 41,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Governance",
+      "baseline": {
+        "workflowFanOut": 4,
+        "jobFanOut": 14,
+        "billedMinutes": 37,
+        "queueTimeSeconds": 119,
+        "p50Seconds": 85,
+        "p95Seconds": 595
+      },
+      "target": {
+        "workflowFanOut": 4,
+        "jobFanOut": 12,
+        "billedMinutes": 30,
+        "queueTimeSeconds": 96,
+        "p50Seconds": 68,
+        "p95Seconds": 476
+      },
+      "selected": {
+        "workflowFanOut": 4,
+        "jobFanOut": 12,
+        "billedMinutes": 30,
+        "queueTimeSeconds": 96,
+        "p50Seconds": 68,
+        "p95Seconds": 476
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/FS.GG.Governance/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/FS.GG.Governance/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33518374335,
+          33518374344,
+          33518374262,
+          33518373706,
+          33518374219,
+          33518373607,
+          33518373633,
+          33518373625
+        ],
+        "revisions": [
+          "eb12759769d689d8b2356fd64c00fdd7a9e73ff3",
+          "6e600e27a2146c9732cd8a580b73633bd999660e"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 23,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Net",
+      "baseline": {
+        "workflowFanOut": 4,
+        "jobFanOut": 9,
+        "billedMinutes": 9,
+        "queueTimeSeconds": 76,
+        "p50Seconds": 53,
+        "p95Seconds": 80
+      },
+      "target": {
+        "workflowFanOut": 4,
+        "jobFanOut": 8,
+        "billedMinutes": 8,
+        "queueTimeSeconds": 61,
+        "p50Seconds": 43,
+        "p95Seconds": 64
+      },
+      "selected": {
+        "workflowFanOut": 4,
+        "jobFanOut": 8,
+        "billedMinutes": 8,
+        "queueTimeSeconds": 61,
+        "p50Seconds": 43,
+        "p95Seconds": 64
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/FS.GG.Net/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/FS.GG.Net/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33551907440,
+          33551907453,
+          33519433687,
+          33519433707,
+          33519433690,
+          33519433681,
+          33519144518,
+          33519144511
+        ],
+        "revisions": [
+          "3fb883a4109f3986c5fa1494aa7a7b984f08b63c",
+          "248a26a1b3b3f273e862b06e954cb8562911c5fd",
+          "3ccfb4ef9a36a4443eb6e1361549b80e17c1aa5f"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 15,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Rendering",
+      "baseline": {
+        "workflowFanOut": 5,
+        "jobFanOut": 22,
+        "billedMinutes": 28,
+        "queueTimeSeconds": 36,
+        "p50Seconds": 23,
+        "p95Seconds": 181
+      },
+      "target": {
+        "workflowFanOut": 4,
+        "jobFanOut": 18,
+        "billedMinutes": 23,
+        "queueTimeSeconds": 29,
+        "p50Seconds": 19,
+        "p95Seconds": 145
+      },
+      "selected": {
+        "workflowFanOut": 4,
+        "jobFanOut": 18,
+        "billedMinutes": 23,
+        "queueTimeSeconds": 29,
+        "p50Seconds": 19,
+        "p95Seconds": 145
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/FS.GG.Rendering/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/FS.GG.Rendering/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33628135026,
+          33627489651,
+          33519650009,
+          33519650945,
+          33519650514,
+          33519650572,
+          33519650701,
+          33519108371
+        ],
+        "revisions": [
+          "2fca71a42434dd76c3a77a5ce5751be9a44cb694",
+          "a1c9e2a6f26701987389a3fb4a1f3757221970a8",
+          "b1c0dc1529f83db8574ff54d65261f0861f3bf5e"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 25,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.SDD",
+      "baseline": {
+        "workflowFanOut": 5,
+        "jobFanOut": 13,
+        "billedMinutes": 21,
+        "queueTimeSeconds": 17,
+        "p50Seconds": 21,
+        "p95Seconds": 524
+      },
+      "target": {
+        "workflowFanOut": 4,
+        "jobFanOut": 11,
+        "billedMinutes": 17,
+        "queueTimeSeconds": 14,
+        "p50Seconds": 17,
+        "p95Seconds": 420
+      },
+      "selected": {
+        "workflowFanOut": 4,
+        "jobFanOut": 11,
+        "billedMinutes": 17,
+        "queueTimeSeconds": 14,
+        "p50Seconds": 17,
+        "p95Seconds": 420
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/FS.GG.SDD/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/FS.GG.SDD/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33610378745,
+          33587720879,
+          33587719574,
+          33587719533,
+          33587719273,
+          33587719560,
+          33587719566,
+          33556462528
+        ],
+        "revisions": [
+          "7e21af8a5c00bf00e4ac2581ec49cc2d02b44694",
+          "81d65a5d2496f4f1ae724c9878a8349225e83456",
+          "179687809375f2e900e37fa98df80a93e1375d81"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 19,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Templates",
+      "baseline": {
+        "workflowFanOut": 4,
+        "jobFanOut": 9,
+        "billedMinutes": 25,
+        "queueTimeSeconds": 17,
+        "p50Seconds": 24,
+        "p95Seconds": 971
+      },
+      "target": {
+        "workflowFanOut": 4,
+        "jobFanOut": 8,
+        "billedMinutes": 20,
+        "queueTimeSeconds": 14,
+        "p50Seconds": 20,
+        "p95Seconds": 777
+      },
+      "selected": {
+        "workflowFanOut": 4,
+        "jobFanOut": 8,
+        "billedMinutes": 20,
+        "queueTimeSeconds": 14,
+        "p50Seconds": 20,
+        "p95Seconds": 777
+      },
+      "selectedKind": "reviewed-target-projection",
+      "provenance": {
+        "observationId": "github-actions-rest-8-run-sample",
+        "query": "GET /repos/FS-GG/FS.GG.Templates/actions/runs?status=completed&per_page=20 and GET /repos/FS-GG/FS.GG.Templates/actions/runs/{run_id}/jobs?per_page=100",
+        "runIds": [
+          33692212085,
+          33692212232,
+          33692212148,
+          33692212273,
+          33692211707,
+          33692184587,
+          33692184586,
+          33692184634
+        ],
+        "revisions": [
+          "0dffd4de4ccf53ddda8f5e7aa95fe7a5d51488bd",
+          "c31b43d10600527dc8109f0cf029ef408a5ba426"
+        ],
+        "observedAt": "2026-09-03T03:14:51Z",
+        "windowStart": "2026-08-20T00:00:00Z",
+        "windowEnd": "2026-09-03T03:14:51Z",
+        "runSampleCount": 8,
+        "jobSampleCount": 17,
+        "aggregation": "workflow-baseline-p95/1",
+        "complete": true,
+        "independentRecomputed": true,
+        "reviewedBy": "independent-gs2-06-7-critic",
+        "reviewedAt": "2026-09-03T03:14:51Z",
+        "targetRationale": "Twenty percent reduction from the observed per-repository ceiling, rounded upward; this is a reviewed target projection, not an observed selected-run claim."
+      }
+    }
   ],
-  "sentinel": {"scheduled":true,"selectedClosure":["build","test","policy","coordination","packaging","release"],"actualFailures":["policy"]},
-  "fleetSelectionEnabled": true,
+  "sentinel": {
+    "scheduled": true,
+    "selectedClosure": [
+      "build",
+      "test",
+      "policy",
+      "coordination",
+      "packaging"
+    ],
+    "actualFailures": [
+      "release"
+    ]
+  },
+  "fleetSelectionEnabled": false,
   "removalLedgerComplete": true,
-  "removals": [
-    {"workflow":"legacy-policy.yml","obligation":"duplicate dependency review","reason":"folded into reusable policy contract"},
-    {"workflow":"legacy-qualification.yml","obligation":"duplicate compiler test","reason":"folded into typed test obligation"},
-    {"workflow":"legacy-release.yml","obligation":"duplicate feed verification","reason":"folded into reusable release contract"}
-  ]
+  "removalLedgerSha256": "06b09f4bea71d2ff22643c442c88959e3e40675320656e482964cfbdfbf8b6c6",
+  "removals": [],
+  "observationSha256": "396645252215e6ff1d904d15cd3667530bf30ce93482df735a9f3ae94c8a5439"
 }

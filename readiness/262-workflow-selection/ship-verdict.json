@@ -4,10 +4,10 @@
   "workId": "262-workflow-selection",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sourcesDigest": {
     "algorithm": "sha256",
-    "value": "8bc173a6e08554f965c7978c60bd1fb615842fa7cd14cc2d492654e784eabcca"
+    "value": "767352ae8e4c45c7ab6b8b7bb95491993e07f7cc5dbab11d68793b9ae8a86448"
   },
   "verificationReadiness": {
     "status": "verificationReady",

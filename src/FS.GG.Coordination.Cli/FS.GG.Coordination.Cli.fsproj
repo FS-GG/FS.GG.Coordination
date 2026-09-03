@@ -7,6 +7,7 @@
   <ItemGroup>
     <Compile Include="RoadmapCommand.fs" />
     <Compile Include="QualificationManifestCommand.fs" />
+    <Compile Include="WorkflowSelectionCommand.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

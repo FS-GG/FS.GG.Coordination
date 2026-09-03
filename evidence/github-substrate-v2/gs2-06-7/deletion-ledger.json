@@ -1,0 +1,20 @@
+{
+  "schema": "fsgg.coordination.workflow-deletion-ledger/1",
+  "complete": true,
+  "scope": "FS-GG/FS.GG.Coordination",
+  "removedWorkflows": [],
+  "removedObligations": [],
+  "consolidations": [
+    {
+      "contract": ".github/workflows/reusable-obligation-selection.yml",
+      "replaces": "future duplicated build, test, policy, coordination, packaging, and release job definitions at Coordination-owned callers",
+      "fleetEnabled": false
+    },
+    {
+      "contract": ".github/actions/coordination-setup/action.yml",
+      "replaces": "future duplicated exact-candidate verification and pinned SDK setup steps at Coordination-owned callers",
+      "fleetEnabled": false
+    }
+  ],
+  "note": "This repair adds callable consolidation contracts without deleting an existing workflow or obligation. Empty removal arrays are the complete deletion record for this bounded change."
+}
