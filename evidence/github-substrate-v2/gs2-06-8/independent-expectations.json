@@ -1,0 +1,240 @@
+{
+  "schema": "fsgg.github-fleet-dry-plan-independent-expectations/1",
+  "author": "independent-plan-reviewer/gs2-06.8",
+  "method": "separately authored executor and parameterization; runtime booleans are matched by the validator",
+  "controls": [
+    "fleet-prerequisites",
+    "fleet-roadmap",
+    "fleet-roster",
+    "fleet-completeness",
+    "fleet-pagination",
+    "fleet-repository-identity",
+    "fleet-default-branch",
+    "fleet-observation-time",
+    "fleet-pre-state",
+    "fleet-desired-state",
+    "fleet-operation-identity",
+    "fleet-ordering",
+    "fleet-least-permission",
+    "fleet-supported",
+    "fleet-unsupported",
+    "fleet-unauthorized",
+    "fleet-unavailable",
+    "fleet-incomplete",
+    "fleet-unreadable",
+    "fleet-stale",
+    "fleet-indeterminate",
+    "fleet-external-owner",
+    "fleet-no-op",
+    "fleet-unrelated-setting",
+    "fleet-review",
+    "fleet-reinspection",
+    "fleet-serialization",
+    "fleet-replay",
+    "fleet-comprehensive-gate",
+    "fleet-omission",
+    "fleet-quint-preservation",
+    "fleet-no-apply",
+    "fleet-no-mutation"
+  ],
+  "cases": [
+    {
+      "id": "fleet-prerequisites",
+      "mutation": "independent branch separately mutates or inverts fleet-prerequisites",
+      "expected": "fleet-prerequisites independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-roadmap",
+      "mutation": "independent branch separately mutates or inverts fleet-roadmap",
+      "expected": "fleet-roadmap independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-roster",
+      "mutation": "independent branch separately mutates or inverts fleet-roster",
+      "expected": "fleet-roster independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-completeness",
+      "mutation": "independent branch separately mutates or inverts fleet-completeness",
+      "expected": "fleet-completeness independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-pagination",
+      "mutation": "independent branch separately mutates or inverts fleet-pagination",
+      "expected": "fleet-pagination independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-repository-identity",
+      "mutation": "independent branch separately mutates or inverts fleet-repository-identity",
+      "expected": "fleet-repository-identity independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-default-branch",
+      "mutation": "independent branch separately mutates or inverts fleet-default-branch",
+      "expected": "fleet-default-branch independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-observation-time",
+      "mutation": "independent branch separately mutates or inverts fleet-observation-time",
+      "expected": "fleet-observation-time independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-pre-state",
+      "mutation": "independent branch separately mutates or inverts fleet-pre-state",
+      "expected": "fleet-pre-state independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-desired-state",
+      "mutation": "independent branch separately mutates or inverts fleet-desired-state",
+      "expected": "fleet-desired-state independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-operation-identity",
+      "mutation": "independent branch separately mutates or inverts fleet-operation-identity",
+      "expected": "fleet-operation-identity independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-ordering",
+      "mutation": "independent branch separately mutates or inverts fleet-ordering",
+      "expected": "fleet-ordering independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-least-permission",
+      "mutation": "independent branch separately mutates or inverts fleet-least-permission",
+      "expected": "fleet-least-permission independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-supported",
+      "mutation": "independent branch separately mutates or inverts fleet-supported",
+      "expected": "fleet-supported independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-unsupported",
+      "mutation": "independent branch separately mutates or inverts fleet-unsupported",
+      "expected": "fleet-unsupported independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-unauthorized",
+      "mutation": "independent branch separately mutates or inverts fleet-unauthorized",
+      "expected": "fleet-unauthorized independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-unavailable",
+      "mutation": "independent branch separately mutates or inverts fleet-unavailable",
+      "expected": "fleet-unavailable independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-incomplete",
+      "mutation": "independent branch separately mutates or inverts fleet-incomplete",
+      "expected": "fleet-incomplete independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-unreadable",
+      "mutation": "independent branch separately mutates or inverts fleet-unreadable",
+      "expected": "fleet-unreadable independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-stale",
+      "mutation": "independent branch separately mutates or inverts fleet-stale",
+      "expected": "fleet-stale independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-indeterminate",
+      "mutation": "independent branch separately mutates or inverts fleet-indeterminate",
+      "expected": "fleet-indeterminate independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-external-owner",
+      "mutation": "independent branch separately mutates or inverts fleet-external-owner",
+      "expected": "fleet-external-owner independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-no-op",
+      "mutation": "independent branch separately mutates or inverts fleet-no-op",
+      "expected": "fleet-no-op independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-unrelated-setting",
+      "mutation": "independent branch separately mutates or inverts fleet-unrelated-setting",
+      "expected": "fleet-unrelated-setting independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-review",
+      "mutation": "independent branch separately mutates or inverts fleet-review",
+      "expected": "fleet-review independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-reinspection",
+      "mutation": "independent branch separately mutates or inverts fleet-reinspection",
+      "expected": "fleet-reinspection independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-serialization",
+      "mutation": "independent branch separately mutates or inverts fleet-serialization",
+      "expected": "fleet-serialization independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-replay",
+      "mutation": "independent branch separately mutates or inverts fleet-replay",
+      "expected": "fleet-replay independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-comprehensive-gate",
+      "mutation": "independent branch separately mutates or inverts fleet-comprehensive-gate",
+      "expected": "fleet-comprehensive-gate independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-omission",
+      "mutation": "independent branch separately mutates or inverts fleet-omission",
+      "expected": "fleet-omission independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-quint-preservation",
+      "mutation": "independent branch separately mutates or inverts fleet-quint-preservation",
+      "expected": "fleet-quint-preservation independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-no-apply",
+      "mutation": "independent branch separately mutates or inverts fleet-no-apply",
+      "expected": "fleet-no-apply independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    },
+    {
+      "id": "fleet-no-mutation",
+      "mutation": "independent branch separately mutates or inverts fleet-no-mutation",
+      "expected": "fleet-no-mutation independently returns its typed refusal, stale result, seal rejection, or positive structural proof",
+      "observed": true
+    }
+  ]
+}

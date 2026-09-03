@@ -1,0 +1,11 @@
+{
+  "schema": "fsgg.github-fleet-plan-review/1",
+  "author": "fleet-plan-author/gs2-06.8",
+  "reviewer": "independent-plan-reviewer/gs2-06.8",
+  "reviewedAt": "2026-09-03T18:04:51.0000000+00:00",
+  "planSha256": "96bdf06f7821248842a35637216de54699e31a6c8f9af419ec943c8e079ba4a5",
+  "independent": true,
+  "accepted": true,
+  "evidenceSha256": "e0cd032ba0c39c356718ea1e3d17f8170bde61ac413450c14e1d1a1bad0ee3e0",
+  "reviewedSeal": "60c4a566a06058ec95ff7e3da575b5f0eb373d3ffc17a9da5dd0d370d5e9bf20"
+}

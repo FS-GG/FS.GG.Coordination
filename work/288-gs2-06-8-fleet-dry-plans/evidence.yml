@@ -1,0 +1,686 @@
+schemaVersion: 1
+workId: 288-gs2-06-8-fleet-dry-plans
+stage: evidence
+status: evidenceReady
+sourceSpec: work/288-gs2-06-8-fleet-dry-plans/spec.md
+sourceClarifications: work/288-gs2-06-8-fleet-dry-plans/clarifications.md
+sourceChecklist: work/288-gs2-06-8-fleet-dry-plans/checklist.md
+sourcePlan: work/288-gs2-06-8-fleet-dry-plans/plan.md
+sourceTasks: work/288-gs2-06-8-fleet-dry-plans/tasks.yml
+sourceAnalysis: readiness/288-gs2-06-8-fleet-dry-plans/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/288-gs2-06-8-fleet-dry-plans/analysis.json
+    digest: 98b7f492d1ace4855a75c8a0ed938f731f98cf8fec8a5850219502ae039062b5
+    schemaVersion: 1
+  - label: checklist
+    path: work/288-gs2-06-8-fleet-dry-plans/checklist.md
+    digest: b48716fce81d91acc6df0f38c33c96bcffde6140bcfd985ca1fbd856f41c47cb
+    schemaVersion: 1
+  - label: clarifications
+    path: work/288-gs2-06-8-fleet-dry-plans/clarifications.md
+    digest: 71c57d1b7b5e5bc01e3a3524d23b0ef4c64a100648acae72be09aad106652fbc
+    schemaVersion: 1
+  - label: plan
+    path: work/288-gs2-06-8-fleet-dry-plans/plan.md
+    digest: fdbb697b05b99a8d4948dcf6ed1c94c96cf987b5f563f1b9be05727b48218139
+    schemaVersion: 1
+  - label: spec
+    path: work/288-gs2-06-8-fleet-dry-plans/spec.md
+    digest: b01799dd66b55645fdbb4535119370dc3b254f025eb6c014e4b668e431f9f80b
+    schemaVersion: 1
+  - label: tasks
+    path: work/288-gs2-06-8-fleet-dry-plans/tasks.yml
+    digest: bee050f1d8168c704bf2156916399789191a7a4a76395fa087b3ffd86c181c20
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV016]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV017]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV018]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV019]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV020]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV021]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV022]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV023]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV024]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
+      digest: "sha256:7d774ce5eef95365429ab2201dffc729ed81645c4001934e895997e5df9b29e3"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Observed focused GS2-06.8 qualification tests.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
