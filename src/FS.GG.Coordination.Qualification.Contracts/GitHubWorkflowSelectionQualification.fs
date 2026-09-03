@@ -118,6 +118,25 @@ module GitHubWorkflowSelectionQualification =
     let private expectedGraph =
         [ { Source = Build; Target = Test }; { Source = Test; Target = Policy }
           { Source = Policy; Target = Coordination }; { Source = Packaging; Target = Release } ]
+    let private expectedImpactBindings =
+        [ "dependency", [ "Directory.Packages.props" ], [], [ Build; Packaging ]
+          "documentation", [ "docs/architecture.md" ], [], [ Coordination ]
+          "generated-output", [ "src/Generated.fs" ], [], [ Build ]
+          "merge-group", [ "src/Merge.fs" ], [ "merge-group-settings" ], [ Build ]
+          "mixed", [ "tests/Mixed.fs"; "eng/release.json" ], [], [ Test; Packaging ]
+          "non-file-input", [], [ "renovate-policy-revision" ], [ Packaging ]
+          "policy", [ "eng/policy.json" ], [], [ Policy ]
+          "release", [ "eng/release-plan.json" ], [], [ Release ]
+          "source", [ "src/Core.fs" ], [], [ Build ]
+          "test", [ "tests/CoreTests.fs" ], [], [ Test ]
+          "workflow", [ ".github/workflows/bootstrap-qualification.yml" ], [], [ Policy ] ]
+    let private expectedChildOutcomes =
+        [ { Obligation = Build; Disposition = Selected; ExpensiveJobProvisioned = false }
+          { Obligation = Test; Disposition = Selected; ExpensiveJobProvisioned = false }
+          { Obligation = Policy; Disposition = Selected; ExpensiveJobProvisioned = false }
+          { Obligation = Coordination; Disposition = Selected; ExpensiveJobProvisioned = false }
+          { Obligation = Packaging; Disposition = NotApplicable "source change does not reach packaging"; ExpensiveJobProvisioned = false }
+          { Obligation = Release; Disposition = NotApplicable "source change does not reach release"; ExpensiveJobProvisioned = false } ]
     let private expectedRemovals =
         [ { Workflow = "legacy-policy.yml"; Obligation = "duplicate dependency review"; Reason = "folded into reusable policy contract" }
           { Workflow = "legacy-qualification.yml"; Obligation = "duplicate compiler test"; Reason = "folded into typed test obligation" }
@@ -222,6 +241,10 @@ module GitHubWorkflowSelectionQualification =
             if not (validText item.Id) || (List.isEmpty item.ChangedSubjects && List.isEmpty item.NonFileInputs)
                || not (item.ChangedSubjects |> List.forall validText) || not (item.NonFileInputs |> List.forall validText)
                || item.Unknown || item.Ambiguous || not item.Fresh || not item.Complete then findings.Add(InvalidImpactCase item.Id)
+            match expectedImpactBindings |> List.tryFind (fun (id, _, _, _) -> id = item.Id) with
+            | Some(_, changedSubjects, nonFileInputs, roots)
+                when item.ChangedSubjects = changedSubjects && item.NonFileInputs = nonFileInputs && item.Roots = roots -> ()
+            | _ -> findings.Add(InvalidImpactCase item.Id)
             let actual = closure snapshot.DependencyEdges (snapshot.UnconditionalObligations @ snapshot.UnconditionalCore) item.Roots
             if item.ExpectedClosure <> actual then findings.Add(InvalidTransitiveClosure item.Id)
             match item.Id, item.MergeGroup with
@@ -232,7 +255,8 @@ module GitHubWorkflowSelectionQualification =
             | _, Some _ -> findings.Add(InvalidImpactCase item.Id)
             | _ -> ()
         let outcomes = snapshot.ChildOutcomes |> List.map _.Obligation
-        if outcomes <> requiredObligations || snapshot.RequiredAggregates <> [ "required"; "supply-chain" ] then
+        if outcomes <> requiredObligations || snapshot.ChildOutcomes <> expectedChildOutcomes
+           || snapshot.RequiredAggregates <> [ "required"; "supply-chain" ] then
             findings.Add(InvalidAggregateOutcome)
         for item in snapshot.ChildOutcomes do
             match item.Disposition with

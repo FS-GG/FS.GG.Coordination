@@ -94,7 +94,10 @@ let independentMutation (control: GitHubWorkflowSelectionControl) fixture =
         let second = snapshot.Workflows[1]
         expectCompileError { snapshot with Workflows = [ snapshot.Workflows[0]; { second with ReusableJobContracts = [] } ] }
     | WorkflowGraphVersion, "unsupported-graph-major" -> expectCompileError { snapshot with GraphVersion = "workflow-impact/99" }
-    | ChangedSubjectSelection, "blank-changed-subject" -> expectCompileError (replaceCase "test" (fun value -> { value with ChangedSubjects = [ " " ] }) snapshot)
+    | ChangedSubjectSelection, "source-well-formed-misclassification" ->
+        expectCompileError (replaceCase "source" (fun value ->
+            { value with Roots = [ GitHubWorkflowObligation.Release ]
+                         ExpectedClosure = [ GitHubWorkflowObligation.Policy; GitHubWorkflowObligation.Coordination; GitHubWorkflowObligation.Release ] }) snapshot)
     | NonFileInputSelection, "blank-non-file-input" -> expectCompileError (replaceCase "non-file-input" (fun value -> { value with NonFileInputs = [ "" ] }) snapshot)
     | TransitiveClosure, "dependency-closure-omits-release" -> expectCompileError (replaceCase "dependency" (fun value -> { value with ExpectedClosure = [ GitHubWorkflowObligation.Build; GitHubWorkflowObligation.Test; GitHubWorkflowObligation.Policy; GitHubWorkflowObligation.Coordination; GitHubWorkflowObligation.Packaging ] }) snapshot)
     | UnconditionalObligations, "policy-no-longer-unconditional" -> expectCompileError { snapshot with UnconditionalObligations = [ GitHubWorkflowObligation.Build ] }

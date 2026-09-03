@@ -15,7 +15,7 @@
     {"control":"workflow-completeness","fixture":"non-file-inventory-incomplete"},
     {"control":"typed-workflow-inventory","fixture":"missing-reusable-contract"},
     {"control":"workflow-graph-version","fixture":"unsupported-graph-major"},
-    {"control":"changed-subject-selection","fixture":"blank-changed-subject"},
+    {"control":"changed-subject-selection","fixture":"source-well-formed-misclassification"},
     {"control":"non-file-input-selection","fixture":"blank-non-file-input"},
     {"control":"transitive-closure","fixture":"dependency-closure-omits-release"},
     {"control":"unconditional-obligations","fixture":"policy-no-longer-unconditional"},
