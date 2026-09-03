@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.github-fleet-dry-plan-corpus/1",
   "registeredContractSha256": "316343c921c7444cb95bee292bec8d6da3c6546ffe8805bf93a0490249c76717",
-  "method": "generated adversarial controls executed by the Q5 validator and focused tests",
+  "method": "generated executor with one concrete control branch per id; runtime booleans are matched by the validator",
   "controls": [
     "fleet-prerequisites",
     "fleet-roadmap",
@@ -40,200 +40,200 @@
   "cases": [
     {
       "id": "fleet-prerequisites",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-prerequisites",
+      "expected": "fleet-prerequisites returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-roadmap",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-roadmap",
+      "expected": "fleet-roadmap returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-roster",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-roster",
+      "expected": "fleet-roster returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-completeness",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-completeness",
+      "expected": "fleet-completeness returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-pagination",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-pagination",
+      "expected": "fleet-pagination returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-repository-identity",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-repository-identity",
+      "expected": "fleet-repository-identity returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-default-branch",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-default-branch",
+      "expected": "fleet-default-branch returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-observation-time",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-observation-time",
+      "expected": "fleet-observation-time returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-pre-state",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-pre-state",
+      "expected": "fleet-pre-state returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-desired-state",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-desired-state",
+      "expected": "fleet-desired-state returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-operation-identity",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-operation-identity",
+      "expected": "fleet-operation-identity returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-ordering",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-ordering",
+      "expected": "fleet-ordering returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-least-permission",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-least-permission",
+      "expected": "fleet-least-permission returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-supported",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-supported",
+      "expected": "fleet-supported returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-unsupported",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-unsupported",
+      "expected": "fleet-unsupported returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-unauthorized",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-unauthorized",
+      "expected": "fleet-unauthorized returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-unavailable",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-unavailable",
+      "expected": "fleet-unavailable returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-incomplete",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-incomplete",
+      "expected": "fleet-incomplete returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-unreadable",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-unreadable",
+      "expected": "fleet-unreadable returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-stale",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-stale",
+      "expected": "fleet-stale returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-indeterminate",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-indeterminate",
+      "expected": "fleet-indeterminate returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-external-owner",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-external-owner",
+      "expected": "fleet-external-owner returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-no-op",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-no-op",
+      "expected": "fleet-no-op returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-unrelated-setting",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-unrelated-setting",
+      "expected": "fleet-unrelated-setting returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-review",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-review",
+      "expected": "fleet-review returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-reinspection",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-reinspection",
+      "expected": "fleet-reinspection returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-serialization",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-serialization",
+      "expected": "fleet-serialization returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-replay",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-replay",
+      "expected": "fleet-replay returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-comprehensive-gate",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-comprehensive-gate",
+      "expected": "fleet-comprehensive-gate returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-omission",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-omission",
+      "expected": "fleet-omission returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-quint-preservation",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-quint-preservation",
+      "expected": "fleet-quint-preservation returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-no-apply",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-no-apply",
+      "expected": "fleet-no-apply returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     },
     {
       "id": "fleet-no-mutation",
-      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
-      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "mutation": "generated branch mutates or inverts fleet-no-mutation",
+      "expected": "fleet-no-mutation returns its typed refusal, stale result, seal rejection, or positive structural proof",
       "observed": true
     }
   ]

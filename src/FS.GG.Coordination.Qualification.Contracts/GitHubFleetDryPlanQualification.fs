@@ -174,11 +174,11 @@ module GitHubFleetDryPlanQualification =
 
     let private expectedReadPermission = function
         | "repository" -> "metadata:read" | "workflows" -> "actions:read"
-        | "environments" -> "deployments:read" | "releases-and-tags" -> "contents:read"
+        | "environments" -> "environments:read" | "releases-and-tags" -> "contents:read"
         | "automated-security-fixes" | "code-security-configuration" | "vulnerability-alerts" -> "security_events:read"
         | _ -> "administration:read"
     let private expectedWritePermission = function
-        | "workflows" -> "actions:write" | "releases-and-tags" -> "contents:write"
+        | "workflows" -> "actions:write" | "environments" -> "environments:write" | "releases-and-tags" -> "contents:write"
         | "automated-security-fixes" | "code-security-configuration" | "vulnerability-alerts" -> "security_events:write"
         | _ -> "administration:write"
 

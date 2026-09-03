@@ -45,7 +45,7 @@
         {
           "setting": "environments",
           "desiredSha256": "cad95a842d6c1e9c3bb637b65c44c535078d53d6a663674e76accbec6df54943",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -123,7 +123,7 @@
         {
           "setting": "environments",
           "desiredSha256": "522e4d97d2eaab9f4feadb461ed70508e1ab99ebc94510306d0523e8aec48bd6",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -201,7 +201,7 @@
         {
           "setting": "environments",
           "desiredSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -279,7 +279,7 @@
         {
           "setting": "environments",
           "desiredSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -357,7 +357,7 @@
         {
           "setting": "environments",
           "desiredSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -435,7 +435,7 @@
         {
           "setting": "environments",
           "desiredSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -513,7 +513,7 @@
         {
           "setting": "environments",
           "desiredSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -591,7 +591,7 @@
         {
           "setting": "environments",
           "desiredSha256": "bc39562aa4d721828de1480b4979f119548affec6336efd2a2757a577d677e09",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -669,7 +669,7 @@
         {
           "setting": "environments",
           "desiredSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {
@@ -747,7 +747,7 @@
         {
           "setting": "environments",
           "desiredSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
-          "requiredPermission": "administration:write",
+          "requiredPermission": "environments:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },
         {

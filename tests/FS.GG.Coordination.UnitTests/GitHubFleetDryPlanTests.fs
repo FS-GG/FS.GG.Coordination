@@ -15,7 +15,7 @@ let private instant = DateTimeOffset.Parse("2026-09-03T17:20:00Z")
 let private page = { Kind = "terminal-page"; Pages = 1; ItemCount = 1; Terminal = true; Next = None }
 
 let private endpoint repository name disposition status =
-    let permission = if name = "repository" then "metadata:read" elif name = "workflows" then "actions:read" elif name = "environments" then "deployments:read" elif name = "releases-and-tags" then "contents:read" elif List.contains name [ "automated-security-fixes"; "code-security-configuration"; "vulnerability-alerts" ] then "security_events:read" else "administration:read"
+    let permission = if name = "repository" then "metadata:read" elif name = "workflows" then "actions:read" elif name = "environments" then "environments:read" elif name = "releases-and-tags" then "contents:read" elif List.contains name [ "automated-security-fixes"; "code-security-configuration"; "vulnerability-alerts" ] then "security_events:read" else "administration:read"
     { Endpoint = name; StatusCode = status; Permission = permission
       Pagination = page; PayloadSha256 = sha $"{repository}:{name}:payload"
       RelevantFingerprint = sha $"{repository}:{name}:state"; Disposition = disposition }
@@ -33,7 +33,7 @@ let private targets () =
           Settings =
             expectedEndpoints |> List.map (fun setting ->
                 { Setting = setting; DesiredSha256 = sha (if setting = "repository" then $"{repository}:desired" else $"{repository}:{setting}:state")
-                  RequiredPermission = if setting = "workflows" then "actions:write" elif setting = "releases-and-tags" then "contents:write" elif List.contains setting [ "automated-security-fixes"; "code-security-configuration"; "vulnerability-alerts" ] then "security_events:write" else "administration:write"
+                  RequiredPermission = if setting = "workflows" then "actions:write" elif setting = "environments" then "environments:write" elif setting = "releases-and-tags" then "contents:write" elif List.contains setting [ "automated-security-fixes"; "code-security-configuration"; "vulnerability-alerts" ] then "security_events:write" else "administration:write"
                   RollbackOrForwardRepair = "restore captured pre-state or recompile from authoritative state" }) })
 
 let private compileFixture observations targets =
@@ -159,6 +159,10 @@ let ``freshness complete desired inventory and least permission fail closed`` ()
     Assert.True(Result.isError (compileFixture observed ({ desired.Head with Settings = desired.Head.Settings.Tail } :: desired.Tail)))
     let excessive = { desired.Head.Settings.Head with RequiredPermission = "contents:write" }
     Assert.True(Result.isError (compileFixture observed ({ desired.Head with Settings = excessive :: desired.Head.Settings.Tail } :: desired.Tail)))
+    let environment = desired.Head.Settings |> List.find (fun setting -> setting.Setting = "environments")
+    Assert.Equal("environments:write", environment.RequiredPermission)
+    let wrongEnvironment = desired.Head.Settings |> List.map (fun setting -> if setting.Setting = "environments" then { setting with RequiredPermission = "administration:write" } else setting)
+    Assert.True(Result.isError (compileFixture observed ({ desired.Head with Settings = wrongEnvironment } :: desired.Tail)))
     let expired = { observed.Head with ObservedAt = instant.AddHours(-2.) } :: observed.Tail
     Assert.True(Result.isError (compileFixture expired desired))
 

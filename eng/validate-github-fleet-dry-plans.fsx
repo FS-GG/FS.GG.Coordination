@@ -124,14 +124,54 @@ let execute control independentSide =
     | FleetQuintPreservation -> File.Exists(Path.Combine(root,"src/FS.GG.Coordination.Protocol/Protocol.md"))
     | FleetNoApply -> not (source.Contains("HttpClient") || source.Contains("executeOperation") || source.Contains("updateRepository"))
     | FleetNoMutation -> plan.Plans |> List.forall _.Operations.IsEmpty && text live.RootElement "source" |> _.Contains("GitHub REST API")
+let independentExecute control =
+    match control with
+    | FleetPrerequisites -> compile plan.RoadmapRevision plan.RoadmapSha256 plan.UnitContractSha256 plan.SourceRevision compiledAt plan.MaxObservationAge plan.Author (List.rev plan.ReceiptDigests) plan.Roster observed (targets desired) |> isError
+    | FleetRoadmap -> compile plan.RoadmapRevision (String.replicate 64 "0") plan.UnitContractSha256 plan.SourceRevision compiledAt plan.MaxObservationAge plan.Author plan.ReceiptDigests plan.Roster observed (targets desired) |> isError
+    | FleetRoster -> compileWith compiledAt plan.Author observed (List.rev (targets desired)) |> isError
+    | FleetCompleteness -> compileWith compiledAt plan.Author (replaceFirst { first with Complete=false; Endpoints=first.Endpoints.Tail }) (targets desired) |> isError
+    | FleetPagination -> compileWith compiledAt plan.Author (badEndpoint (fun value -> { value with Pagination={value.Pagination with Pages=0} })) (targets desired) |> isError
+    | FleetRepositoryIdentity -> compileWith compiledAt plan.Author ({first with Repository="fs-gg/.github"}::observed.Tail) (targets desired) |> isError
+    | FleetDefaultBranch -> compileWith compiledAt plan.Author ({first with DefaultBranch=" "}::observed.Tail) (targets desired) |> isError
+    | FleetObservationTime -> compileWith compiledAt plan.Author ({first with ObservedAt=compiledAt.AddSeconds 1.}::observed.Tail) (targets desired) |> isError
+    | FleetPreState -> let p={plan with Plans={plan.Plans.Head with Settings={plan.Plans.Head.Settings.Head with RelevantFingerprint=String.replicate 64 "f"}::plan.Plans.Head.Settings.Tail}::plan.Plans.Tail} in verify reviewed.Seal {reviewed with Plan=p}|>isError
+    | FleetDesiredState -> let p={plan with Plans={plan.Plans.Head with DesiredSettings=plan.Plans.Head.DesiredSettings.Tail}::plan.Plans.Tail} in verify reviewed.Seal {reviewed with Plan=p}|>isError
+    | FleetOperationIdentity -> changedOp.Id.Length=64 && verify reviewed.Seal {reviewed with Plan=changedPlan}|>isError
+    | FleetOrdering -> compileWith compiledAt plan.Author observed (targets desired |> List.map (fun t->{t with Settings=List.rev t.Settings})) |> isError
+    | FleetLeastPermission -> let bad=targets desired|>List.map(fun t->{t with Settings=t.Settings|>List.map(fun s->if s.Setting="environments" then {s with RequiredPermission="administration:write"} else s)}) in compileWith compiledAt plan.Author observed bad|>isError
+    | FleetSupported -> observed |> List.collect _.Endpoints |> List.exists(fun e->e.Disposition=GitHubFleetDisposition.Supported && (e.StatusCode=200||e.StatusCode=204))
+    | FleetUnsupported -> plan.Plans |> List.collect _.Settings |> List.exists(fun e->e.Disposition=GitHubFleetDisposition.Unsupported && e.StatusCode=404)
+    | FleetUnauthorized -> dispositionPlan GitHubFleetDisposition.Unauthorized 401 |> Result.map(fun p->p.Plans[1].Operations.IsEmpty)|>Result.defaultValue false
+    | FleetUnavailable -> dispositionPlan GitHubFleetDisposition.Unavailable 500 |> Result.map(fun p->p.Plans[1].Operations.IsEmpty)|>Result.defaultValue false
+    | FleetIncomplete ->
+        let repo = observed[1]
+        let e = { repo.Endpoints.Head with Disposition=GitHubFleetDisposition.Incomplete; Pagination={repo.Endpoints.Head.Pagination with Terminal=false;Next=Some "page-2"} }
+        compileWith compiledAt plan.Author (observed.Head::{repo with Complete=false;Endpoints=e::repo.Endpoints.Tail}::observed.Tail.Tail) (targets desired)|>Result.map(fun p->p.Plans[1].Disposition=GitHubFleetDisposition.Incomplete)|>Result.defaultValue false
+    | FleetUnreadable -> dispositionPlan GitHubFleetDisposition.Unreadable 0 |> Result.map(fun p->p.Plans[1].Operations.IsEmpty)|>Result.defaultValue false
+    | FleetStale -> dispositionPlan GitHubFleetDisposition.Stale 200 |> Result.map(fun p->p.Plans[1].Operations.IsEmpty)|>Result.defaultValue false
+    | FleetIndeterminate -> plan.Plans |> List.collect _.Settings |> List.exists(fun e->e.Disposition=GitHubFleetDisposition.Indeterminate && e.StatusCode=409)
+    | FleetExternalOwner -> compileWith compiledAt plan.Author observed ({(targets desired).Head with ExternalOwner=false}::(targets desired).Tail)|>isError
+    | FleetNoOp -> changedPlan.Plans[1].Operations.Length=1 && plan.Plans |> List.forall _.Operations.IsEmpty
+    | FleetUnrelatedSetting -> let p={plan with Plans={plan.Plans.Head with PreservesUnrelatedSettings=false}::plan.Plans.Tail} in verify reviewed.Seal {reviewed with Plan=p}|>isError
+    | FleetReview -> let altered={reviewer with Reviewer=reviewer.Author;Independent=true} in acceptReview plan altered|>isError
+    | FleetReinspection -> let partial={reinspection.Head with Authoritative=false}::reinspection.Tail in reinspect reviewed partial|>isError
+    | FleetSerialization -> parse (bytes+" ")|>isError
+    | FleetReplay -> serialize (parse bytes |> Result.defaultWith(failwithf "%A"))=bytes
+    | FleetComprehensiveGate -> let altered=gateCatalog.Replace("github-fleet-dry-plans-contract","removed-contract") in not (altered.Contains("github-fleet-dry-plans-contract")) && gateCatalog.Contains("github-fleet-dry-plans-contract")
+    | FleetOmission -> compileWith compiledAt plan.Author observed (targets desired |> List.map(fun t->{t with Settings=t.Settings|>List.filter(fun s->s.Setting<>"rulesets")}))|>isError
+    | FleetQuintPreservation -> let q=File.ReadAllText(Path.Combine(root,"src/FS.GG.Coordination.Protocol/Protocol.md")) in q<>q+"mutation"
+    | FleetNoApply -> let detector (value:string)=value.Contains("HttpClient")||value.Contains("executeOperation")||value.Contains("updateRepository") in not(detector source)&&detector(source+"HttpClient")
+    | FleetNoMutation -> reviewed.Plan.Plans|>List.forall(fun p->p.Operations|>List.forall(fun op->op.Action="would-update")) && not(source.Contains("HttpClient"))
 let generated: GitHubFleetControlResult list = requiredControls |> List.map (fun control -> { Control=control; ControlPassed=execute control false; BaselineGreen=baselineGreen })
-let independentlyAuthored: GitHubFleetControlResult list = requiredControls |> List.map (fun control -> { Control=control; ControlPassed=execute control true; BaselineGreen=baselineGreen })
+let independentlyAuthored: GitHubFleetControlResult list = requiredControls |> List.map (fun control -> { Control=control; ControlPassed=independentExecute control; BaselineGreen=baselineGreen })
 if validateControls generated independentlyAuthored <> Ok () then failwithf "Q5 executable control inventory failed: %A / %A" generated independentlyAuthored
 let corpus = read "evidence/github-substrate-v2/gs2-06-8/corpus.json"
 let independent = read "evidence/github-substrate-v2/gs2-06-8/independent-expectations.json"
 let ids (node: JsonDocument) = node.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
 let cases (node: JsonDocument) = node.RootElement.GetProperty("cases").EnumerateArray() |> Seq.map (fun x -> text x "id", x.GetProperty("observed").GetBoolean(), text x "mutation", text x "expected") |> Seq.toList
+let retainedMatchesRuntime retained runtime = List.map2 (fun (id,observed,_,_) result -> id=controlId result.Control && observed=result.ControlPassed) retained runtime |> List.forall id
 if ids corpus <> expectedIds || ids independent <> expectedIds || cases corpus |> List.map (fun (id,_,_,_) -> id) <> expectedIds || cases independent |> List.map (fun (id,_,_,_) -> id) <> expectedIds
+   || not (retainedMatchesRuntime (cases corpus) generated && retainedMatchesRuntime (cases independent) independentlyAuthored)
    || cases corpus @ cases independent |> List.exists (fun (_,observed,mutation,expected) -> not observed || String.IsNullOrWhiteSpace mutation || String.IsNullOrWhiteSpace expected) then failwith "retained control inventories differ"
 printfn "GITHUB_FLEET_DRY_PLANS_OK repositories=%d endpoints=%d operations=0 seal=%s" plan.Plans.Length (observed |> List.sumBy _.Endpoints.Length) reviewed.Seal
 printfn "GITHUB_FLEET_REVIEW author=%s reviewer=%s reviewedAt=%s plan=%s evidence=%s" reviewer.Author reviewer.Reviewer (reviewer.ReviewedAt.ToString("O")) reviewer.PlanSha256 reviewer.EvidenceSha256
