@@ -1,0 +1,25 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-06.8",
+  "state": "accepted",
+  "unitContractSha256": "316343c921c7444cb95bee292bec8d6da3c6546ffe8805bf93a0490249c76717",
+  "sourceRevision": "6da61d7006444352670e27fbd850157768dc53b0",
+  "artifacts": [
+    { "name": "accepted-GS2-06.7-receipt", "sha256": "9a98a13213c9a6934b362a6cb75dc3b523800205961e76cd4de984157733dc0b" },
+    { "name": "github-fleet-live-observations", "sha256": "573280186cbf1bdbcac92285f19fb3c4ba7c09c451d5f396626382134e095b31" },
+    { "name": "github-fleet-desired-state", "sha256": "ce9e807dbe1637ca763c82d190a94ecc7a5fbd2c9f0432a2f55944e5fa939371" },
+    { "name": "github-fleet-reinspection", "sha256": "d538c42652131169eaa4028d97b827b3b9efba64b9f1f0a86fe84a668de51384" },
+    { "name": "github-fleet-independent-review", "sha256": "e384cbc3125d5b9c728521db7a553826d03add0a0d3b93623b5ba034ecaaecbb" },
+    { "name": "github-fleet-generated-corpus", "sha256": "313b498c1d62e1ee139de3ee1266f9a670f70957c3205a753491f2d901888c17" },
+    { "name": "github-fleet-independent-expectations", "sha256": "ae569787df38f0a7c50f666c64098978a35a2f624e6194938f28a43c0828b7df" },
+    { "name": "github-fleet-q5-validator", "sha256": "ea2a85bb0896d572c626e14e425f7cd0216ca3fd73d9068ae9dbd84a5426bc43" },
+    { "name": "sdd-ship-verdict", "sha256": "d0f32827a3019f7b5d5b704b275f156fd8762db8c0581821228cc4eee40c9a6f" },
+    { "name": "implementation-candidate-6da61d7006444352670e27fbd850157768dc53b0", "sha256": "1710857034d1eec39eb3ce3652394e74f902a4d1be7a4b1c8c3f7b64c067501b" },
+    { "name": "structured-review-pass-5530150901", "sha256": "a5d2970b7bde3bf573b1a2eb5c0b32fa4d7e891a81940818c96a2e1096fa751a" },
+    { "name": "structured-review-acceptance-5530226571", "sha256": "7f0c950514a391c001d471c9a4c9338df68527558f623b09af213be50e98d868" },
+    { "name": "protected-main-bootstrap-run-33790353751", "sha256": "a8ea5c7dd8dfd4f99cb45fc6a07ea84f6a0542db5590069e5b78c35981e4ca57" },
+    { "name": "protected-main-codeql-run-33790353422", "sha256": "cfb3fd7493f40ff668b64cfbd2ccc142d8675ec9d3b757193614ad5168f396a3" }
+  ],
+  "acceptedAt": "2026-09-03T18:28:23Z",
+  "digest": "c8831d8e3b06f77ae26d23579b738347794a8d08e460c84c5856cbbff50abd0e"
+}
