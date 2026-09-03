@@ -8,7 +8,12 @@ open FS.GG.Coordination.Qualification.Contracts
 open WorkflowSelectionPrelude
 open type FS.GG.Coordination.Qualification.Contracts.GitHubWorkflowSupplyChainControl
 
-let root = if fsi.CommandLineArgs.Length > 1 then Path.GetFullPath fsi.CommandLineArgs[1] else Path.GetFullPath "."
+let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--")
+let root = arguments |> Array.tryFind Directory.Exists |> Option.map Path.GetFullPath |> Option.defaultValue (Path.GetFullPath ".")
+let decisionOutput =
+    arguments
+    |> Array.tryFindIndex ((=) "--decision")
+    |> Option.bind (fun index -> if index + 1 < arguments.Length then Some(Path.GetFullPath arguments[index + 1]) else None)
 let corpusPath = Path.Combine(root, "evidence/github-substrate-v2/gs2-06-7/corpus.json")
 let expectationsPath = Path.Combine(root, "evidence/github-substrate-v2/gs2-06-7/independent-expectations.json")
 let snapshot = parseSnapshot corpusPath
@@ -196,4 +201,19 @@ let independent =
         result control (independentMutation control fixture))
 match GitHubWorkflowSelectionQualification.validateSupplyChain generated independent with
 | Error findings -> failwith $"workflow selection supply-chain qualification failed: {findings}"
-| Ok () -> printfn "GITHUB_WORKFLOW_SELECTION_SUPPLY_CHAIN_OK repositories=%d fleetEnabled=%b controls=%d seal=%s" report.RepositoryMetricCount report.FleetSelectionEnabled expectedControls.Length report.Seal
+| Ok () ->
+    match decisionOutput with
+    | Some path ->
+        let decision = JsonObject()
+        decision.Add("schema", JsonValue.Create("fsgg.coordination.workflow-selection-supply-chain-decision/1"))
+        decision.Add("seal", JsonValue.Create(report.Seal))
+        decision.Add(
+            "missedObligations",
+            JsonArray(report.MissedObligations |> List.map (GitHubWorkflowSelectionQualification.obligationId >> JsonValue.Create >> (fun value -> value :> JsonNode)) |> List.toArray)
+        )
+        decision.Add("fleetSelection", JsonValue.Create(if report.FleetSelectionEnabled then "eligible" else "disabled"))
+        decision.Add("productionMutation", JsonValue.Create(false))
+        Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+        File.WriteAllText(path, decision.ToJsonString())
+    | None -> ()
+    printfn "GITHUB_WORKFLOW_SELECTION_SUPPLY_CHAIN_OK repositories=%d fleetEnabled=%b controls=%d seal=%s" report.RepositoryMetricCount report.FleetSelectionEnabled expectedControls.Length report.Seal

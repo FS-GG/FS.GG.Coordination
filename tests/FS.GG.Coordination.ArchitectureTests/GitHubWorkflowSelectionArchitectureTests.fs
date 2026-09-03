@@ -100,6 +100,42 @@ let ``repository owns callable reusable composite aggregate and sentinel contrac
     Assert.DoesNotContain("fleetSelectionEnabled=true", reusable + sentinel)
 
 [<Fact>]
+let ``sentinel consumes the typed Q7 missed-obligation decision and disables selection`` () =
+    let temporary = Path.Combine(Path.GetTempPath(), $"fsgg-gs267-sentinel-{Guid.NewGuid():N}")
+    Directory.CreateDirectory(temporary) |> ignore
+    let q7Decision = Path.Combine(temporary, "q7.json")
+    let sentinelDecision = Path.Combine(temporary, "sentinel.json")
+    let q7 = ProcessStartInfo("dotnet")
+    for argument in [ "fsi"; "eng/validate-github-workflow-selection-supply-chain.fsx"; "--"; "."; "--decision"; q7Decision ] do
+        q7.ArgumentList.Add(argument)
+    q7.WorkingDirectory <- root
+    q7.RedirectStandardOutput <- true
+    q7.RedirectStandardError <- true
+    q7.UseShellExecute <- false
+    use q7Child = Process.Start(q7)
+    let q7Output = q7Child.StandardOutput.ReadToEnd() + q7Child.StandardError.ReadToEnd()
+    q7Child.WaitForExit()
+    Assert.True(q7Child.ExitCode = 0, q7Output)
+
+    let sentinel = ProcessStartInfo("bash")
+    for argument in [ "eng/workflow-selection-sentinel.sh"; "--decision-only"; q7Decision; sentinelDecision ] do
+        sentinel.ArgumentList.Add(argument)
+    sentinel.WorkingDirectory <- root
+    sentinel.RedirectStandardOutput <- true
+    sentinel.RedirectStandardError <- true
+    sentinel.UseShellExecute <- false
+    use sentinelChild = Process.Start(sentinel)
+    let sentinelOutput = sentinelChild.StandardOutput.ReadToEnd() + sentinelChild.StandardError.ReadToEnd()
+    sentinelChild.WaitForExit()
+    Assert.True(sentinelChild.ExitCode = 1, sentinelOutput)
+    use decision = JsonDocument.Parse(File.ReadAllText sentinelDecision)
+    Assert.True(decision.RootElement.GetProperty("missedObligation").GetBoolean())
+    Assert.Equal("disabled", decision.RootElement.GetProperty("fleetSelection").GetString())
+    Assert.Contains("release", decision.RootElement.GetProperty("missedObligations").EnumerateArray() |> Seq.map _.GetString())
+    Assert.False(decision.RootElement.GetProperty("productionMutation").GetBoolean())
+    Directory.Delete(temporary, true)
+
+[<Fact>]
 let ``original GS2-06-7 receipt remains byte immutable during repair`` () =
     Assert.Equal("9a98a13213c9a6934b362a6cb75dc3b523800205961e76cd4de984157733dc0b", shaFile "evidence/github-substrate-v2/accepted/GS2-06.7.json")
     use receipt = JsonDocument.Parse(read "evidence/github-substrate-v2/accepted/GS2-06.7.json")
