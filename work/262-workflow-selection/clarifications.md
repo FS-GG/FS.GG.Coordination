@@ -26,7 +26,7 @@ publicOrToolFacingImpact: true
 
 ## Decisions
 - **DEC-001** [CQ-001] [AMB:AMB-001] [FR-003] [AC-003]: Separate child outcome materialization from expensive job provisioning; every required aggregate consumes either Selected or NotApplicable.
-- **DEC-002** [CQ-002] [AMB:AMB-002] [FR-002] [FR-004] [FR-005] [FR-006] [AC-002] [AC-004] [AC-005] [AC-006]: Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; the sentinel proves the sealed retained base is the exact direct Git ancestor of the current checkout, derives settings independently from a reviewed repository-settings receipt, keeps observations read-only, refuses stale paired evidence after any later protected advance, and emits a pure fleet-disable decision with no mutation authority.
+- **DEC-002** [CQ-002] [AMB:AMB-002] [FR-002] [FR-004] [FR-005] [FR-006] [AC-002] [AC-004] [AC-005] [AC-006]: Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; the sentinel validates reviewed inventory, graph, request, and settings bytes independently from exact checkout/live-event runtime identity, remains runnable after any unrelated protected advance, regenerates merge-group inputs from the live queued head/base, refuses stale pairs or relevant drift, and always retains a pure fleet-disable decision with no mutation authority on refusal or missed obligation.
 - **DEC-003** [CQ-003] [AMB:AMB-003] [FR-002] [AC-002]: Recompute one closure from the complete combined root set so mixed changes cannot omit shared or newly reachable obligations.
 
 ## Accepted Deferrals

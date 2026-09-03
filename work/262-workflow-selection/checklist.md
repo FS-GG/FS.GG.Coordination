@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/262-workflow-selection/clarifications.md
 
 ## Source Snapshot
-- spec: work/262-workflow-selection/spec.md sha256:afdb3914311c6063287157f22701170123a71e99cdb6b9cb5e84c714697eaa54 schemaVersion:1
-- clarifications: work/262-workflow-selection/clarifications.md sha256:291569128c0dee268b5be0deecb509c313e7665f7dc1184fc3607d58dc0a1877 schemaVersion:1
+- spec: work/262-workflow-selection/spec.md sha256:e983eeb21cf45b26664efdbaba315050b16dfe0accb73e137b9ca354778784c5 schemaVersion:1
+- clarifications: work/262-workflow-selection/clarifications.md sha256:16228bfda41ce11da655a300e1e0a88c4b86f4daca6429e88f5b118df6519a2d schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

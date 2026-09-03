@@ -53,7 +53,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a389fa2f98d438b0ba3e0850c564dd0c6350d0ee7c25b02d6480432607be007b"
+        "value": "38615def91fab8a18a30caf0a9f27e355f7ae7673d24f323ee275a8b6cfd001e"
       }
     },
     {
@@ -65,7 +65,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "291569128c0dee268b5be0deecb509c313e7665f7dc1184fc3607d58dc0a1877"
+        "value": "16228bfda41ce11da655a300e1e0a88c4b86f4daca6429e88f5b118df6519a2d"
       }
     },
     {
@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f6220cca080640214b4d30820ee81e5f47f491f51b0e352ce6f1d23d6439a4ae"
+        "value": "49cfe9ac6654c494ac2246485e7d0c2c6ee743779ce241ed632b1cc2dacd8adb"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "bfa615aea3bcce35e6494a1e6639877dc24c62589ce06fe28b657eb03d02f0cb"
+        "value": "944a5bb2ba47f9f7523c6c3020624774184234844e8fa67ff5629af36beba9e7"
       }
     },
     {
@@ -101,7 +101,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "afdb3914311c6063287157f22701170123a71e99cdb6b9cb5e84c714697eaa54"
+        "value": "e983eeb21cf45b26664efdbaba315050b16dfe0accb73e137b9ca354778784c5"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "f08a215653f58aa1abeaa845aa9f5f318b2cd6cf09afa3f2c9d89226ee689eef"
+        "value": "56b888eb8744aa6b696c7326df44602d968853d111b7c492b0c06faa432e8bdc"
       }
     }
   ],
@@ -149,8 +149,8 @@
     },
     {
       "id": "FR-002",
-      "title": "A public pure Core API and CLI MUST validate sealed inventory/version/base/settings against one strict authority document that records the exact checked-out Actions revision, proves the retained base is its direct Git ancestor, and derives settings from a separately reviewed repository-settings receipt; it then derives roots from arbitrary changed paths and non-file inputs and computes the smallest sound transitive closure across build, test, policy, coordination, packaging, and release while retaining unconditional policy and core. (Stories: US-001; Acceptance: AC-002)",
-      "text": "A public pure Core API and CLI MUST validate sealed inventory/version/base/settings against one strict authority document that records the exact checked-out Actions revision, proves the retained base is its direct Git ancestor, and derives settings from a separately reviewed repository-settings receipt; it then derives roots from arbitrary changed paths and non-file inputs and computes the smallest sound transitive closure across build, test, policy, coordination, packaging, and release while retaining unconditional policy and core. (Stories: US-001; Acceptance: AC-002)",
+      "title": "A public pure Core API and CLI MUST validate sealed inventory/version/base/settings against reviewed immutable content digests, while runtime authority records the exact checked-out Actions revision and live event independently of commit distance; it then derives roots from arbitrary changed paths and non-file inputs and computes the smallest sound transitive closure across build, test, policy, coordination, packaging, and release while retaining unconditional policy and core. For merge-group execution it MUST derive changed paths from the live event base and queued head and bind both plus current reviewed settings. (Stories: US-001; Acceptance: AC-002)",
+      "text": "A public pure Core API and CLI MUST validate sealed inventory/version/base/settings against reviewed immutable content digests, while runtime authority records the exact checked-out Actions revision and live event independently of commit distance; it then derives roots from arbitrary changed paths and non-file inputs and computes the smallest sound transitive closure across build, test, policy, coordination, packaging, and release while retaining unconditional policy and core. For merge-group execution it MUST derive changed paths from the live event base and queued head and bind both plus current reviewed settings. (Stories: US-001; Acceptance: AC-002)",
       "acceptanceCriteria": [
         "AC-002"
       ],
@@ -233,8 +233,8 @@
     },
     {
       "id": "FR-006",
-      "title": "Both gates and the scheduled sentinel MUST fail closed on unknown, ambiguous, stale, incomplete, unsupported, reordered, altered, unsealed, non-replayable, unavailable-authority, protected-head-advanced, stale-paired, or mismatched queued-head evidence and MUST expose no production mutation, acceptance, or successor authority. (Stories: US-001; Acceptance: AC-006)",
-      "text": "Both gates and the scheduled sentinel MUST fail closed on unknown, ambiguous, stale, incomplete, unsupported, reordered, altered, unsealed, non-replayable, unavailable-authority, protected-head-advanced, stale-paired, or mismatched queued-head evidence and MUST expose no production mutation, acceptance, or successor authority. (Stories: US-001; Acceptance: AC-006)",
+      "title": "Both gates and the scheduled sentinel MUST fail closed on unknown, ambiguous, stale, incomplete, unsupported, reordered, altered, unsealed, non-replayable, unavailable-authority, content-authority drift, forged runtime identity, stale-paired inputs, stale settings, or mismatched merge-group evidence and MUST expose no production mutation, acceptance, or successor authority. The scheduled sentinel MUST retain a typed non-mutating disabled decision on refusal and MUST reach the full-suite oracle across arbitrary unrelated protected-main advances. (Stories: US-001; Acceptance: AC-006)",
+      "text": "Both gates and the scheduled sentinel MUST fail closed on unknown, ambiguous, stale, incomplete, unsupported, reordered, altered, unsealed, non-replayable, unavailable-authority, content-authority drift, forged runtime identity, stale-paired inputs, stale settings, or mismatched merge-group evidence and MUST expose no production mutation, acceptance, or successor authority. The scheduled sentinel MUST retain a typed non-mutating disabled decision on refusal and MUST reach the full-suite oracle across arbitrary unrelated protected-main advances. (Stories: US-001; Acceptance: AC-006)",
       "acceptanceCriteria": [
         "AC-006"
       ],
@@ -276,8 +276,8 @@
     },
     {
       "id": "DEC-002",
-      "title": "Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; the sentinel proves the sealed retained base is the exact direct Git ancestor of the current checkout, derives settings independently from a reviewed repository-settings receipt, keeps observations read-only, refuses stale paired evidence after any later protected advance, and emits a pure fleet-disable decision with no mutation authority.",
-      "decision": "Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; the sentinel proves the sealed retained base is the exact direct Git ancestor of the current checkout, derives settings independently from a reviewed repository-settings receipt, keeps observations read-only, refuses stale paired evidence after any later protected advance, and emits a pure fleet-disable decision with no mutation authority.",
+      "title": "Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; the sentinel validates reviewed inventory, graph, request, and settings bytes independently from exact checkout/live-event runtime identity, remains runnable after any unrelated protected advance, regenerates merge-group inputs from the live queued head/base, refuses stale pairs or relevant drift, and always retains a pure fleet-disable decision with no mutation authority on refusal or missed obligation.",
+      "decision": "Ship repository-owned reusable/composite/sentinel execution contracts while keeping fleet selection disabled; the sentinel validates reviewed inventory, graph, request, and settings bytes independently from exact checkout/live-event runtime identity, remains runnable after any unrelated protected advance, regenerates merge-group inputs from the live queued head/base, refuses stale pairs or relevant drift, and always retains a pure fleet-disable decision with no mutation authority on refusal or missed obligation.",
       "requirementRefs": [
         "FR-002",
         "FR-004",
@@ -1320,7 +1320,7 @@
           "path": "work/262-workflow-selection/checklist.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "a389fa2f98d438b0ba3e0850c564dd0c6350d0ee7c25b02d6480432607be007b"
+            "value": "38615def91fab8a18a30caf0a9f27e355f7ae7673d24f323ee275a8b6cfd001e"
           },
           "schemaVersion": 1
         },
@@ -1328,7 +1328,7 @@
           "path": "work/262-workflow-selection/clarifications.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "291569128c0dee268b5be0deecb509c313e7665f7dc1184fc3607d58dc0a1877"
+            "value": "16228bfda41ce11da655a300e1e0a88c4b86f4daca6429e88f5b118df6519a2d"
           },
           "schemaVersion": 1
         },
@@ -1336,7 +1336,7 @@
           "path": "work/262-workflow-selection/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "f6220cca080640214b4d30820ee81e5f47f491f51b0e352ce6f1d23d6439a4ae"
+            "value": "49cfe9ac6654c494ac2246485e7d0c2c6ee743779ce241ed632b1cc2dacd8adb"
           },
           "schemaVersion": 1
         },
@@ -1344,7 +1344,7 @@
           "path": "work/262-workflow-selection/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "bfa615aea3bcce35e6494a1e6639877dc24c62589ce06fe28b657eb03d02f0cb"
+            "value": "944a5bb2ba47f9f7523c6c3020624774184234844e8fa67ff5629af36beba9e7"
           },
           "schemaVersion": 1
         },
@@ -1352,7 +1352,7 @@
           "path": "work/262-workflow-selection/spec.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "afdb3914311c6063287157f22701170123a71e99cdb6b9cb5e84c714697eaa54"
+            "value": "e983eeb21cf45b26664efdbaba315050b16dfe0accb73e137b9ca354778784c5"
           },
           "schemaVersion": 1
         },
@@ -1360,14 +1360,14 @@
           "path": "work/262-workflow-selection/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "f08a215653f58aa1abeaa845aa9f5f318b2cd6cf09afa3f2c9d89226ee689eef"
+            "value": "56b888eb8744aa6b696c7326df44602d968853d111b7c492b0c06faa432e8bdc"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "682d6b6bdd4cb80ef6fac98aebfb1b60d33c363c72d8c6342e04c2bb64a10bdb"
+        "value": "cb5d6772717a5b367adab8706d576f1d1b5196a8664be0da91017edc6f701f25"
       },
       "currency": "current"
     }

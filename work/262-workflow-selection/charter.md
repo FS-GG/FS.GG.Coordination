@@ -27,7 +27,7 @@ policyPointers:
 - Bind generated qualification and independently authored controls to one canonical sealed inventory.
 
 ## Scope Boundaries
-- In scope: a production-consumable pure Core selector and CLI, a strict current-authority document that binds the sealed retained base as the exact direct Git ancestor of the checked-out Actions revision and derives settings from a separately reviewed repository-settings receipt, repository-owned callable reusable/composite/aggregate contracts, Q3/Q7 gates, a scheduled sentinel contract, read-only fleet observations, tests, retained evidence, and amended SDD readiness.
+- In scope: a production-consumable pure Core selector and CLI, a reviewed content authority that binds the immutable inventory, graph, source request, and repository-settings receipt independently from a runtime authority derived from the exact checked-out Actions revision and live event, repository-owned callable reusable/composite/aggregate contracts, Q3/Q7 gates, a scheduled sentinel contract that remains runnable across unrelated protected advances, read-only fleet observations, tests, retained evidence, and amended SDD readiness.
 - Read-only consumption of the accepted GS2-06.6 receipt, immutable original GS2-06.7 receipt, exact roadmap, current base/settings, workflow/non-file inventories, and GitHub Actions observations is allowed.
 - Out of scope: consumer-repository changes, fleet enablement, production settings/ruleset/required-check mutation, package or release publication, rewriting the original receipt, and GS2-06.8.
 
