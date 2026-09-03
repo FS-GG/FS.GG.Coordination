@@ -1,0 +1,96 @@
+schemaVersion: 1
+work:
+  id: 270-gs2-06-7-repair-receipt
+  title: "GS2-06.7 Repair Receipt"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/270-gs2-06-7-repair-receipt/spec.md
+  sourceClarifications: work/270-gs2-06-7-repair-receipt/clarifications.md
+  sourceChecklist: work/270-gs2-06-7-repair-receipt/checklist.md
+  sourcePlan: work/270-gs2-06-7-repair-receipt/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/270-gs2-06-7-repair-receipt/spec.md
+    digest: d63e7427adcc0ddbae53594edb51903b9a99ea7b9fec1dffeef870b85e14f9bd
+    schemaVersion: 1
+  - label: clarifications
+    path: work/270-gs2-06-7-repair-receipt/clarifications.md
+    digest: 6b750beac05ce267ab0da54064ee5c8a16df75bf69bf609f63a34e0b3ac88414
+    schemaVersion: 1
+  - label: checklist
+    path: work/270-gs2-06-7-repair-receipt/checklist.md
+    digest: bca87ba12fe4f3b6548ed32c91b0270140e883c7868012eb5d269875a268b561
+    schemaVersion: 1
+  - label: plan
+    path: work/270-gs2-06-7-repair-receipt/plan.md
+    digest: 3db2f01964c812ee2c96d7fc1a7339efa68aa1d0287872529dd9d4fc9a63318f
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV006]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 270-gs2-06-7-repair-receipt."

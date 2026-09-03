@@ -1,0 +1,382 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "270-gs2-06-7-repair-receipt",
+  "stage": "analyze",
+  "status": "implementationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "70f2a125e819d30332e8178911cfbfaf819dac8fc85fc3d77b309660838da381"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/270-gs2-06-7-repair-receipt/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "79f0e2fd408f8dda176d82260bbf09fe81e0f12879c4db0bc25a71e91796e979"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/270-gs2-06-7-repair-receipt/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "bca87ba12fe4f3b6548ed32c91b0270140e883c7868012eb5d269875a268b561"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/270-gs2-06-7-repair-receipt/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "6b750beac05ce267ab0da54064ee5c8a16df75bf69bf609f63a34e0b3ac88414"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "3db2f01964c812ee2c96d7fc1a7339efa68aa1d0287872529dd9d4fc9a63318f"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/270-gs2-06-7-repair-receipt/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "d63e7427adcc0ddbae53594edb51903b9a99ea7b9fec1dffeef870b85e14f9bd"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "0d2928aa5874c8cc985aaf7c0ec20ad16c80ff4aec7ac34c56611f9193c6b1a8"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "sourceRelationships": [
+    {
+      "id": "AR001",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/checklist.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR002",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/checklist.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR003",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/clarifications.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR004",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/clarifications.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR005",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/clarifications.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR006",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "PC-001",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR007",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "GV-001",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "PM-001",
+      "targetId": null,
+      "relationship": "migrationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "PD-001",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourcePlan",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "VO-001",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/spec.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "AC-001",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/spec.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR015",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/spec.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/spec.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "FR-001",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/spec.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/spec.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/clarifications.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "sourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/spec.md",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "T003",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR021",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "T004",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "T005",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "targetPath": "work/270-gs2-06-7-repair-receipt/tasks.yml",
+      "sourceId": "T006",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "readiness": {
+    "status": "implementationReady",
+    "readyCount": 23,
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0
+  },
+  "findings": [],
+  "generatedViews": [
+    {
+      "path": "readiness/270-gs2-06-7-repair-receipt/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "optionalBoundaryFacts": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "reason": "Lifecycle sources are current and ready for implementation."
+  }
+}

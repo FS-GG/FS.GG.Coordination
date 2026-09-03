@@ -32,9 +32,28 @@ let ``evidence storage contract and all independent negative cases pass`` () =
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.Equal(0, child.ExitCode)
-    Assert.Contains("EVIDENCE_STORAGE_OK categories=11 entries=87 maxTrackedBytes=65536 frozenCorpusCases=21 observed=2 unobserved=19 aggregate=bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753", output)
+    Assert.Contains("EVIDENCE_STORAGE_OK categories=12 entries=88 maxTrackedBytes=65536 frozenCorpusCases=21 observed=2 unobserved=19 aggregate=bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753", output)
     Assert.Contains("EVIDENCE_STORAGE_SELF_TEST_OK negativeCases=56 positiveArtifactManifests=1 positiveCritiqueBundles=1 positiveMutationProofs=1", output)
     Assert.Equal("", error)
+
+[<Fact>]
+let ``GS2-06-7 repair receipt is separately indexed and rejects semantic inversions`` () =
+    let startInfo = ProcessStartInfo("dotnet")
+    for argument in
+        [ "fsi"; "eng/validate-gs2-06-7-repair-receipt.fsx"; "--"; "--self-test"; "." ] do
+        startInfo.ArgumentList.Add argument
+    startInfo.WorkingDirectory <- root
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use child = Process.Start startInfo
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.True(child.ExitCode = 0, output + error)
+    Assert.Contains("GS2_06_7_REPAIR_RECEIPT_OK repairId=GS2-06.7-repair-268", output)
+    Assert.Contains("original=9a98a13213c9a6934b362a6cb75dc3b523800205961e76cd4de984157733dc0b", output)
+    Assert.Contains("merge=286bde7afd607ac8e62a4ca71f6f82d363c052b4 controls=7", output)
 
 [<Fact>]
 let ``GS2-05.3 acceptance is indexed and accepted by the roadmap prerequisite reader`` () =

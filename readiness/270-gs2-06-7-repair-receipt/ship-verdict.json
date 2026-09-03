@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "270-gs2-06-7-repair-receipt",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "b23b13a7b7513cfa6daf8a01d67d702dab6e7bb786cdbd438df885aa1dccfae3"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 6,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 6
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}
