@@ -16,9 +16,9 @@ type WorkflowSelectionInventory =
       Unconditional: WorkflowObligation list; Aggregates: string list
       Expensive: WorkflowObligation list; Seal: string }
 type MergeGroupSelectionInput =
-    { QueuedHead: string; CurrentBaseRevision: string; CurrentSettingsSha256: string; Recomputed: bool }
+    { QueuedHead: string; CurrentQueuedHead: string; CurrentBaseRevision: string; CurrentSettingsSha256: string; Recomputed: bool }
 type WorkflowSelectionRequest =
-    { InventoryVersion: string; GraphVersion: string; BaseRevision: string; SettingsSha256: string
+    { InventoryVersion: string; GraphVersion: string; ExpectedInventorySeal: string; BaseRevision: string; SettingsSha256: string
       Complete: bool; ChangedPaths: string list; NonFileInputs: string list
       MergeGroup: MergeGroupSelectionInput option }
 type WorkflowChildDisposition = Selected | NotApplicable of reason: string
@@ -45,6 +45,8 @@ type WorkflowSelectionRefusal =
     | InvalidMergeGroup of string
 
 module WorkflowSelection =
+    let supportedInventoryVersion = "coordination-workflows/1"
+    let supportedGraphVersion = "fsgg.workflow-impact/1"
     let private obligations = [ Build; Test; Policy; Coordination; Packaging; Release ]
     let obligationId = function
         | Build -> "build" | Test -> "test" | Policy -> "policy" | Coordination -> "coordination"
@@ -117,6 +119,8 @@ module WorkflowSelection =
           if not inventory.Complete then IncompleteInventory
           if not (validText inventory.InventoryVersion) then InvalidInventory "inventoryVersion"
           if not (validText inventory.GraphVersion) then InvalidInventory "graphVersion"
+          if inventory.InventoryVersion <> supportedInventoryVersion then UnsupportedInventoryVersion(supportedInventoryVersion, inventory.InventoryVersion)
+          if inventory.GraphVersion <> supportedGraphVersion then UnsupportedGraphVersion(supportedGraphVersion, inventory.GraphVersion)
           if not (revision inventory.BaseRevision) then InvalidInventory "baseRevision"
           if not (sha256Text inventory.SettingsSha256) then InvalidInventory "settingsSha256"
           if inventory.PathRules.IsEmpty then InvalidInventory "pathRules"
@@ -136,6 +140,7 @@ module WorkflowSelection =
               if not request.Complete then IncompleteRequest
               if request.InventoryVersion <> inventory.InventoryVersion then UnsupportedInventoryVersion(inventory.InventoryVersion, request.InventoryVersion)
               if request.GraphVersion <> inventory.GraphVersion then UnsupportedGraphVersion(inventory.GraphVersion, request.GraphVersion)
+              if request.ExpectedInventorySeal <> inventory.Seal then InventorySealMismatch(request.ExpectedInventorySeal, inventory.Seal)
               if request.BaseRevision <> inventory.BaseRevision then StaleBaseRevision(inventory.BaseRevision, request.BaseRevision)
               if request.SettingsSha256 <> inventory.SettingsSha256 then StaleSettings(inventory.SettingsSha256, request.SettingsSha256)
               if inventory.Seal <> expectedSeal then InventorySealMismatch(expectedSeal, inventory.Seal)
@@ -143,6 +148,8 @@ module WorkflowSelection =
               | None -> ()
               | Some merge ->
                   if not (revision merge.QueuedHead) then InvalidMergeGroup "queuedHead"
+                  if not (revision merge.CurrentQueuedHead) then InvalidMergeGroup "currentQueuedHead"
+                  if merge.QueuedHead <> merge.CurrentQueuedHead then InvalidMergeGroup "queued head differs from current queued head"
                   if not merge.Recomputed then InvalidMergeGroup "selection was not recomputed"
                   if merge.CurrentBaseRevision <> request.BaseRevision then InvalidMergeGroup "current base differs from request base"
                   if merge.CurrentSettingsSha256 <> request.SettingsSha256 then InvalidMergeGroup "current settings differ from request settings" ]

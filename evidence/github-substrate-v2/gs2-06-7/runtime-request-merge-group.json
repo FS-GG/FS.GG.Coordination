@@ -1,6 +1,7 @@
 {
   "inventoryVersion": "coordination-workflows/1",
   "graphVersion": "fsgg.workflow-impact/1",
+  "expectedInventorySeal": "ba78404be6abddc7f4bd2c057b19468b226f9b51fd9012a48b9d630ef5829421",
   "baseRevision": "57305e540267f3f4696ba5a6cdfc84361de577d3",
   "settingsSha256": "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518",
   "complete": true,
@@ -8,6 +9,7 @@
   "nonFileInputs": ["merge-group-settings"],
   "mergeGroup": {
     "queuedHead": "cccccccccccccccccccccccccccccccccccccccc",
+    "currentQueuedHead": "cccccccccccccccccccccccccccccccccccccccc",
     "currentBaseRevision": "57305e540267f3f4696ba5a6cdfc84361de577d3",
     "currentSettingsSha256": "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518",
     "recomputed": true

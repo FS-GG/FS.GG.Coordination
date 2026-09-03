@@ -8,7 +8,7 @@ open FS.GG.Coordination.Core
 
 module WorkflowSelectionCommand =
     let private usage () =
-        eprintfn "workflow-select --inventory FILE --request FILE --current-base SHA --current-settings SHA256 | workflow-select --seal-inventory FILE"
+        eprintfn "workflow-select --inventory FILE --request FILE --expected-inventory-version VERSION --expected-graph-version VERSION --expected-seal SHA256 --current-base SHA --current-settings SHA256 --current-queued-head SHA|none | workflow-select --seal-inventory FILE"
         2
 
     let private exact name expected (value: JsonObject) =
@@ -73,20 +73,22 @@ module WorkflowSelectionCommand =
     let private parseRequest path =
         let value = loadObject path
         exact "request"
-            [ "inventoryVersion"; "graphVersion"; "baseRevision"; "settingsSha256"; "complete"
+            [ "inventoryVersion"; "graphVersion"; "expectedInventorySeal"; "baseRevision"; "settingsSha256"; "complete"
               "changedPaths"; "nonFileInputs"; "mergeGroup" ] value
         let mergeGroup =
             if isNull value["mergeGroup"] then None
             else
                 let item = objectAt "mergeGroup" value["mergeGroup"]
-                exact "mergeGroup" [ "queuedHead"; "currentBaseRevision"; "currentSettingsSha256"; "recomputed" ] item
+                exact "mergeGroup" [ "queuedHead"; "currentQueuedHead"; "currentBaseRevision"; "currentSettingsSha256"; "recomputed" ] item
                 Some
                     { QueuedHead = text "queuedHead" item
+                      CurrentQueuedHead = text "currentQueuedHead" item
                       CurrentBaseRevision = text "currentBaseRevision" item
                       CurrentSettingsSha256 = text "currentSettingsSha256" item
                       Recomputed = boolean "recomputed" item }
         { InventoryVersion = text "inventoryVersion" value
           GraphVersion = text "graphVersion" value
+          ExpectedInventorySeal = text "expectedInventorySeal" value
           BaseRevision = text "baseRevision" value
           SettingsSha256 = text "settingsSha256" value
           Complete = boolean "complete" value
@@ -151,29 +153,42 @@ module WorkflowSelectionCommand =
         writer.WriteEndArray(); writer.WriteEndObject(); writer.Flush(); eprintfn ""
 
     let run arguments =
-        let rec parse inventory request seal currentBase currentSettings = function
-            | [] -> inventory, request, seal, currentBase, currentSettings
-            | "--inventory" :: value :: rest -> parse (Some value) request seal currentBase currentSettings rest
-            | "--request" :: value :: rest -> parse inventory (Some value) seal currentBase currentSettings rest
-            | "--seal-inventory" :: value :: rest -> parse inventory request (Some value) currentBase currentSettings rest
-            | "--current-base" :: value :: rest -> parse inventory request seal (Some value) currentSettings rest
-            | "--current-settings" :: value :: rest -> parse inventory request seal currentBase (Some value) rest
-            | _ -> None, None, None, None, None
-        match parse None None None None None (Array.toList arguments) with
-        | None, None, Some inventoryPath, None, None ->
+        let rec parse inventory request seal expectedInventory expectedGraph expectedSeal currentBase currentSettings currentQueuedHead = function
+            | [] -> inventory, request, seal, expectedInventory, expectedGraph, expectedSeal, currentBase, currentSettings, currentQueuedHead
+            | "--inventory" :: value :: rest -> parse (Some value) request seal expectedInventory expectedGraph expectedSeal currentBase currentSettings currentQueuedHead rest
+            | "--request" :: value :: rest -> parse inventory (Some value) seal expectedInventory expectedGraph expectedSeal currentBase currentSettings currentQueuedHead rest
+            | "--seal-inventory" :: value :: rest -> parse inventory request (Some value) expectedInventory expectedGraph expectedSeal currentBase currentSettings currentQueuedHead rest
+            | "--expected-inventory-version" :: value :: rest -> parse inventory request seal (Some value) expectedGraph expectedSeal currentBase currentSettings currentQueuedHead rest
+            | "--expected-graph-version" :: value :: rest -> parse inventory request seal expectedInventory (Some value) expectedSeal currentBase currentSettings currentQueuedHead rest
+            | "--expected-seal" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph (Some value) currentBase currentSettings currentQueuedHead rest
+            | "--current-base" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal (Some value) currentSettings currentQueuedHead rest
+            | "--current-settings" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal currentBase (Some value) currentQueuedHead rest
+            | "--current-queued-head" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal currentBase currentSettings (Some value) rest
+            | _ -> None, None, None, None, None, None, None, None, None
+        match parse None None None None None None None None None (Array.toList arguments) with
+        | None, None, Some inventoryPath, None, None, None, None, None, None ->
             try printfn "%s" (parseInventory inventoryPath |> WorkflowSelection.computeInventorySeal); 0
             with ex -> eprintfn "workflow-select: malformed input: %s" ex.Message; 2
-        | Some inventoryPath, Some requestPath, None, Some currentBase, Some currentSettings ->
+        | Some inventoryPath, Some requestPath, None, Some expectedInventory, Some expectedGraph, Some expectedSeal, Some currentBase, Some currentSettings, Some currentQueuedHead ->
             try
+                let inventory = parseInventory inventoryPath
                 let request = parseRequest requestPath
                 let authorityRefusals =
-                    [ if request.BaseRevision <> currentBase then StaleBaseRevision(currentBase, request.BaseRevision)
+                    [ if expectedInventory <> WorkflowSelection.supportedInventoryVersion || inventory.InventoryVersion <> expectedInventory || request.InventoryVersion <> expectedInventory then
+                          UnsupportedInventoryVersion(expectedInventory, request.InventoryVersion)
+                      if expectedGraph <> WorkflowSelection.supportedGraphVersion || inventory.GraphVersion <> expectedGraph || request.GraphVersion <> expectedGraph then
+                          UnsupportedGraphVersion(expectedGraph, request.GraphVersion)
+                      if inventory.Seal <> expectedSeal || request.ExpectedInventorySeal <> expectedSeal then InventorySealMismatch(expectedSeal, inventory.Seal)
+                      if request.BaseRevision <> currentBase then StaleBaseRevision(currentBase, request.BaseRevision)
                       if request.SettingsSha256 <> currentSettings then StaleSettings(currentSettings, request.SettingsSha256)
                       match request.MergeGroup with
+                      | None when currentQueuedHead <> "none" -> InvalidMergeGroup "current queued-head authority must be none outside merge group"
+                      | Some merge when merge.QueuedHead <> currentQueuedHead -> InvalidMergeGroup "queued head authority differs"
+                      | Some merge when merge.CurrentQueuedHead <> currentQueuedHead -> InvalidMergeGroup "current queued head authority differs"
                       | Some merge when merge.CurrentBaseRevision <> currentBase -> InvalidMergeGroup "current base authority differs"
                       | Some merge when merge.CurrentSettingsSha256 <> currentSettings -> InvalidMergeGroup "current settings authority differs"
                       | _ -> () ]
-                match authorityRefusals, WorkflowSelection.select (parseInventory inventoryPath) request with
+                match authorityRefusals, WorkflowSelection.select inventory request with
                 | refusal :: rest, _ -> writeRefusals (refusal :: rest); 3
                 | [], Ok decision -> writeDecision decision; 0
                 | [], Error refusals -> writeRefusals refusals; 3

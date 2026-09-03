@@ -11,7 +11,7 @@ sourceAnalysis: readiness/262-workflow-selection/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/262-workflow-selection/analysis.json
-    digest: 2c677d743162cdb9fa2f16064b8b95ca94ff1ba5810aa252086708700b4112a0
+    digest: ccc160b3530b32cfc1b206593dfaabfb333edc796f0d948edea0579fb5eaf071
     schemaVersion: 1
   - label: checklist
     path: work/262-workflow-selection/checklist.md
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -189,7 +189,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -351,7 +351,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -378,7 +378,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -405,7 +405,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -432,7 +432,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -459,7 +459,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -486,7 +486,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -513,7 +513,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189
@@ -540,7 +540,7 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/test-results/262-workflow-selection/unit-tests.trx
-      digest: "sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77"
+      digest: "sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 189

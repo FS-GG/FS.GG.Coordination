@@ -5,7 +5,7 @@
   "baseRevision": "57305e540267f3f4696ba5a6cdfc84361de577d3",
   "settingsSha256": "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518",
   "complete": true,
-  "changedPaths": ["src/ArbitraryInput.fs", "eng/release-candidate.json"],
+  "changedPaths": [],
   "nonFileInputs": ["repository-settings"],
   "mergeGroup": null
 }

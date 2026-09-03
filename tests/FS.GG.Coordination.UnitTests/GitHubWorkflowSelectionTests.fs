@@ -72,6 +72,7 @@ let private inventory () : WorkflowSelectionInventory =
 let private request paths nonFiles : WorkflowSelectionRequest =
     { InventoryVersion = "coordination-workflows/1"
       GraphVersion = "fsgg.workflow-impact/1"
+      ExpectedInventorySeal = (inventory ()).Seal
       BaseRevision = baseRevision
       SettingsSha256 = settings
       Complete = true
@@ -105,7 +106,7 @@ let ``runtime selector handles non-file input and does not provision not-applica
 [<Fact>]
 let ``runtime selector recomputes merge group against queued head current base and settings`` () =
     let merge : MergeGroupSelectionInput =
-        { QueuedHead = String.replicate 40 "c"; CurrentBaseRevision = baseRevision
+        { QueuedHead = String.replicate 40 "c"; CurrentQueuedHead = String.replicate 40 "c"; CurrentBaseRevision = baseRevision
           CurrentSettingsSha256 = settings; Recomputed = true }
     let selected = WorkflowSelection.select (inventory ()) { request [ "src/Queue.fs" ] [] with MergeGroup = Some merge } |> decision
     Assert.Equal(Some merge.QueuedHead, selected.MergeGroupQueuedHead)
@@ -113,6 +114,10 @@ let ``runtime selector recomputes merge group against queued head current base a
     match WorkflowSelection.select (inventory ()) { request [ "src/Queue.fs" ] [] with MergeGroup = Some stale } with
     | Error findings -> Assert.Contains(InvalidMergeGroup "current settings differ from request settings", findings)
     | Ok _ -> failwith "stale merge-group settings must fail closed"
+    let staleHead = { merge with QueuedHead = String.replicate 40 "d" }
+    match WorkflowSelection.select (inventory ()) { request [ "src/Queue.fs" ] [] with MergeGroup = Some staleHead } with
+    | Error findings -> Assert.Contains(InvalidMergeGroup "queued head differs from current queued head", findings)
+    | Ok _ -> failwith "stale merge-group queued head must fail closed"
 
 [<Fact>]
 let ``runtime selector fails closed on unknown ambiguous stale incomplete and forged inventory`` () =
@@ -121,12 +126,15 @@ let ``runtime selector fails closed on unknown ambiguous stale incomplete and fo
     Assert.True(WorkflowSelection.select current { request [ "src/X.fs" ] [] with BaseRevision = String.replicate 40 "e" } |> Result.isError)
     Assert.True(WorkflowSelection.select current { request [ "src/X.fs" ] [] with Complete = false } |> Result.isError)
     Assert.True(WorkflowSelection.select { current with Aggregates = [ "forged" ] } (request [ "src/X.fs" ] []) |> Result.isError)
+    let inventedUnsigned = { current with InventoryVersion = "invented-v999"; Seal = "" }
+    let invented = { inventedUnsigned with Seal = WorkflowSelection.computeInventorySeal inventedUnsigned }
+    Assert.True(WorkflowSelection.select invented { request [ "src/X.fs" ] [] with InventoryVersion = "invented-v999"; ExpectedInventorySeal = invented.Seal } |> Result.isError)
     let ambiguousUnsigned =
         { current with
             PathRules = { Id = "all-fsharp"; Pattern = ".fs"; Match = Suffix; Roots = [ WorkflowObligation.Release ] } :: current.PathRules
             Seal = "" }
     let ambiguous = { ambiguousUnsigned with Seal = WorkflowSelection.computeInventorySeal ambiguousUnsigned }
-    match WorkflowSelection.select ambiguous (request [ "src/X.fs" ] []) with
+    match WorkflowSelection.select ambiguous { request [ "src/X.fs" ] [] with ExpectedInventorySeal = ambiguous.Seal } with
     | Error findings -> Assert.Contains(findings, function AmbiguousChangedPath("src/X.fs", _) -> true | _ -> false)
     | Ok _ -> failwith "ambiguous rules must fail closed"
     let sameRootUnsigned =
@@ -134,6 +142,6 @@ let ``runtime selector fails closed on unknown ambiguous stale incomplete and fo
             PathRules = { Id = "all-fsharp"; Pattern = ".fs"; Match = Suffix; Roots = [ WorkflowObligation.Build ] } :: current.PathRules
             Seal = "" }
     let sameRoot = { sameRootUnsigned with Seal = WorkflowSelection.computeInventorySeal sameRootUnsigned }
-    match WorkflowSelection.select sameRoot (request [ "src/X.fs" ] []) with
+    match WorkflowSelection.select sameRoot { request [ "src/X.fs" ] [] with ExpectedInventorySeal = sameRoot.Seal } with
     | Error findings -> Assert.Contains(findings, function AmbiguousChangedPath("src/X.fs", _) -> true | _ -> false)
     | Ok _ -> failwith "overlapping same-root rules remain ambiguous and must fail closed"

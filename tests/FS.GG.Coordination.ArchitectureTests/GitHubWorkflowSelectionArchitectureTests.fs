@@ -53,6 +53,19 @@ let private runCli arguments =
     child.WaitForExit()
     child.ExitCode, output, error
 
+let private runBash arguments =
+    let startInfo = ProcessStartInfo("bash")
+    for argument in arguments do startInfo.ArgumentList.Add(argument)
+    startInfo.WorkingDirectory <- root
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use child = Process.Start(startInfo)
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    child.ExitCode, output, error
+
 [<Fact>]
 let ``workflow selection public surface is pure and mutation free`` () =
     let surface = read "src/FS.GG.Coordination.Qualification.Contracts/GitHubWorkflowSelectionQualification.fsi"
@@ -63,25 +76,38 @@ let ``workflow selection public surface is pure and mutation free`` () =
 
 [<Fact>]
 let ``production selector CLI handles arbitrary and merge-group inputs and fails stale authority closed`` () =
-    let common request currentSettings =
+    let common request currentSettings currentQueuedHead =
         [ "workflow-select"; "--inventory"; "evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json"
           "--request"; request; "--current-base"; "57305e540267f3f4696ba5a6cdfc84361de577d3"
-          "--current-settings"; currentSettings ]
+          "--current-settings"; currentSettings; "--current-queued-head"; currentQueuedHead
+          "--expected-inventory-version"; "coordination-workflows/1"
+          "--expected-graph-version"; "fsgg.workflow-impact/1"
+          "--expected-seal"; "ba78404be6abddc7f4bd2c057b19468b226f9b51fd9012a48b9d630ef5829421" ]
     let goodCode, goodOutput, goodError =
-        runCli (common "evidence/github-substrate-v2/gs2-06-7/runtime-request-arbitrary.json" "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518")
+        runCli (common "evidence/github-substrate-v2/gs2-06-7/runtime-request-arbitrary.json" "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518" "none")
     Assert.Equal(0, goodCode)
     Assert.Empty(goodError)
     use good = JsonDocument.Parse(goodOutput)
     Assert.Equal("fsgg.coordination.workflow-selection-decision/1", good.RootElement.GetProperty("schema").GetString())
     Assert.Equal(6, good.RootElement.GetProperty("closure").GetArrayLength())
     let mergeCode, mergeOutput, _ =
-        runCli (common "evidence/github-substrate-v2/gs2-06-7/runtime-request-merge-group.json" "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518")
+        runCli (common "evidence/github-substrate-v2/gs2-06-7/runtime-request-merge-group.json" "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518" (String.replicate 40 "c"))
     Assert.Equal(0, mergeCode)
     Assert.Contains(String.replicate 40 "c", mergeOutput)
     let staleCode, _, staleError =
-        runCli (common "evidence/github-substrate-v2/gs2-06-7/runtime-request-merge-group.json" (String.replicate 64 "d"))
+        runCli (common "evidence/github-substrate-v2/gs2-06-7/runtime-request-merge-group.json" (String.replicate 64 "d") (String.replicate 40 "c"))
     Assert.Equal(3, staleCode)
     Assert.Contains("stale-settings", staleError)
+    let staleHeadCode, _, staleHeadError =
+        runCli (common "evidence/github-substrate-v2/gs2-06-7/runtime-request-merge-group.json" "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518" (String.replicate 40 "d"))
+    Assert.Equal(3, staleHeadCode)
+    Assert.Contains("invalid-merge-group", staleHeadError)
+    let inventedVersion =
+        common "evidence/github-substrate-v2/gs2-06-7/runtime-request-arbitrary.json" "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518" "none"
+        |> List.map (fun value -> if value = "coordination-workflows/1" then "invented-v999" else value)
+    let inventedCode, _, inventedError = runCli inventedVersion
+    Assert.Equal(3, inventedCode)
+    Assert.Contains("unsupported-inventory-version", inventedError)
 
 [<Fact>]
 let ``repository owns callable reusable composite aggregate and sentinel contracts`` () =
@@ -90,6 +116,12 @@ let ``repository owns callable reusable composite aggregate and sentinel contrac
     let sentinel = read ".github/workflows/workflow-selection-sentinel.yml"
     Assert.Contains("workflow_call:", reusable)
     Assert.Contains("workflow-select --inventory", reusable)
+    Assert.Contains("git ls-files --error-unmatch", reusable)
+    Assert.Contains("realpath -e", reusable)
+    Assert.Contains("CURRENT_QUEUED_HEAD\" != \"$CANDIDATE_SHA", reusable)
+    Assert.Contains("BUILD_SELECTION", reusable)
+    Assert.Contains("BUILD_RESULT", reusable)
+    Assert.Contains("workflow-selection-aggregate.sh", reusable)
     Assert.Contains("if: ${{ always() }}", reusable)
     Assert.Contains("outcome: ${{ steps.aggregate.outputs.outcome }}", reusable)
     Assert.Contains("using: composite", composite)
@@ -117,23 +149,76 @@ let ``sentinel consumes the typed Q7 missed-obligation decision and disables sel
     q7Child.WaitForExit()
     Assert.True(q7Child.ExitCode = 0, q7Output)
 
-    let sentinel = ProcessStartInfo("bash")
-    for argument in [ "eng/workflow-selection-sentinel.sh"; "--decision-only"; q7Decision; sentinelDecision ] do
-        sentinel.ArgumentList.Add(argument)
-    sentinel.WorkingDirectory <- root
-    sentinel.RedirectStandardOutput <- true
-    sentinel.RedirectStandardError <- true
-    sentinel.UseShellExecute <- false
-    use sentinelChild = Process.Start(sentinel)
-    let sentinelOutput = sentinelChild.StandardOutput.ReadToEnd() + sentinelChild.StandardError.ReadToEnd()
-    sentinelChild.WaitForExit()
-    Assert.True(sentinelChild.ExitCode = 1, sentinelOutput)
+    let sentinelCode, sentinelOutput, sentinelError =
+        runBash [ "eng/workflow-selection-sentinel.sh"; "--decision-only"; q7Decision; sentinelDecision ]
+    Assert.True((sentinelCode = 1), sentinelOutput + sentinelError)
     use decision = JsonDocument.Parse(File.ReadAllText sentinelDecision)
     Assert.True(decision.RootElement.GetProperty("missedObligation").GetBoolean())
     Assert.Equal("disabled", decision.RootElement.GetProperty("fleetSelection").GetString())
     Assert.Contains("release", decision.RootElement.GetProperty("missedObligations").EnumerateArray() |> Seq.map _.GetString())
     Assert.False(decision.RootElement.GetProperty("productionMutation").GetBoolean())
+
+    let invalidCases =
+        [ "non-hex-seal", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz","missedObligations":[],"fleetSelection":"eligible","productionMutation":false}"""
+          "unknown-obligation", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","missedObligations":["invented"],"fleetSelection":"disabled","productionMutation":false}"""
+          "duplicate-obligation", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","missedObligations":["release","release"],"fleetSelection":"disabled","productionMutation":false}"""
+          "extra-property", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","missedObligations":[],"fleetSelection":"eligible","productionMutation":false,"invented":true}""" ]
+    for name, payload in invalidCases do
+        let input = Path.Combine(temporary, $"{name}.json")
+        let output = Path.Combine(temporary, $"{name}-decision.json")
+        File.WriteAllText(input, payload)
+        let code, stdout, stderr = runBash [ "eng/workflow-selection-sentinel.sh"; "--decision-only"; input; output ]
+        Assert.True((code = 1), stdout + stderr)
+        use invalidDecision = JsonDocument.Parse(File.ReadAllText output)
+        Assert.Equal("disabled", invalidDecision.RootElement.GetProperty("fleetSelection").GetString())
+        Assert.Equal("invalid-q7-decision", invalidDecision.RootElement.GetProperty("reason").GetString())
+
+    let selectionPath = Path.Combine(temporary, "selection.json")
+    let selectionCode, selectionOutput, selectionError =
+        runCli
+            [ "workflow-select"; "--inventory"; "evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json"
+              "--request"; "evidence/github-substrate-v2/gs2-06-7/runtime-request-sentinel.json"
+              "--expected-inventory-version"; "coordination-workflows/1"
+              "--expected-graph-version"; "fsgg.workflow-impact/1"
+              "--expected-seal"; "ba78404be6abddc7f4bd2c057b19468b226f9b51fd9012a48b9d630ef5829421"
+              "--current-base"; "57305e540267f3f4696ba5a6cdfc84361de577d3"
+              "--current-settings"; "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518"
+              "--current-queued-head"; "none" ]
+    Assert.True((selectionCode = 0), selectionError)
+    File.WriteAllText(selectionPath, selectionOutput)
+    let missedFailures = Path.Combine(temporary, "missed-failures.json")
+    File.WriteAllText(missedFailures, "[\"release\"]")
+    let missedDecision = Path.Combine(temporary, "missed-decision.json")
+    let missedCode, missedOutput, missedError =
+        runBash [ "eng/workflow-selection-sentinel.sh"; "--compare-selection"; selectionPath; missedFailures; missedDecision ]
+    Assert.True((missedCode = 1), missedOutput + missedError)
+    use currentMiss = JsonDocument.Parse(File.ReadAllText missedDecision)
+    Assert.Equal("disabled", currentMiss.RootElement.GetProperty("fleetSelection").GetString())
+    Assert.Contains("release", currentMiss.RootElement.GetProperty("missedObligations").EnumerateArray() |> Seq.map _.GetString())
+
+    let passingFailures = Path.Combine(temporary, "passing-failures.json")
+    File.WriteAllText(passingFailures, "[]")
+    let passingDecision = Path.Combine(temporary, "passing-decision.json")
+    let passingCode, passingOutput, passingError =
+        runBash [ "eng/workflow-selection-sentinel.sh"; "--compare-selection"; selectionPath; passingFailures; passingDecision ]
+    Assert.True((passingCode = 0), passingOutput + passingError)
+    use currentPass = JsonDocument.Parse(File.ReadAllText passingDecision)
+    Assert.Equal("eligible", currentPass.RootElement.GetProperty("fleetSelection").GetString())
     Directory.Delete(temporary, true)
+
+[<Fact>]
+let ``stable aggregate correlates every child result with its selection disposition`` () =
+    let passing =
+        [ "eng/workflow-selection-aggregate.sh"; "success"
+          "selected"; "success"; "selected"; "success"; "selected"; "success"
+          "selected"; "success"; "not-applicable"; "skipped"; "not-applicable"; "skipped" ]
+    let passingCode, passingOutput, passingError = runBash passing
+    Assert.True((passingCode = 0), passingOutput + passingError)
+    Assert.Contains("outcome=passed", passingOutput)
+    let skippedSelected = passing |> List.mapi (fun index value -> if index = 3 then "skipped" else value)
+    let failingCode, failingOutput, failingError = runBash skippedSelected
+    Assert.True((failingCode = 1), failingOutput + failingError)
+    Assert.Contains("selection/result mismatch", failingError)
 
 [<Fact>]
 let ``original GS2-06-7 receipt remains byte immutable during repair`` () =
@@ -201,13 +286,13 @@ let ``unknown properties are refused at every retained object boundary`` () =
 [<Fact>]
 let ``workflow selection provider evidence is durable in the candidate Git tree`` () =
     let expected =
-        [ "readiness/262-workflow-selection/analysis.json", "2c677d743162cdb9fa2f16064b8b95ca94ff1ba5810aa252086708700b4112a0"
+        [ "readiness/262-workflow-selection/analysis.json", "ccc160b3530b32cfc1b206593dfaabfb333edc796f0d948edea0579fb5eaf071"
           // These are the canonical FS.GG.SDD.Cli 1.0.0 no-change fixed-point bytes. A later
           // ambient provider can only replace them by updating this executable contract.
-          "readiness/262-workflow-selection/work-model.json", "52e171dc758d093a0ca24ceb616bc80d7b0299e136374eb5e068dd73dfaea72f"
-          "readiness/262-workflow-selection/verify.json", "6be84903f2a31444b7bc04389ac380e0b30afc4c4b8fb51bbe3934cc5aec424f"
-          "readiness/262-workflow-selection/ship-verdict.json", "bd78c9834c912c58bc28dc8b12b5799f84db756aa68c6fd14bd5b5045feeefe6"
-          "artifacts/test-results/262-workflow-selection/unit-tests.trx", "4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77" ]
+          "readiness/262-workflow-selection/work-model.json", "01175a31951aea235b405b4dd68f2d750e336c2f3b64f5adeb0c3699531c0d3e"
+          "readiness/262-workflow-selection/verify.json", "98c16b1c5f6b30d1fc7b7f2f4ac0aacd7b0038c8e5a17f85130657ad488f4085"
+          "readiness/262-workflow-selection/ship-verdict.json", "6a4f8a5320afd8815621c00480469e10d273fb49017bade57d3bd4a9a9201b4a"
+          "artifacts/test-results/262-workflow-selection/unit-tests.trx", "a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd" ]
     let paths = expected |> List.map fst
     let code, output = tracked paths
     if code <> 0 then failwith output
@@ -239,11 +324,11 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
     let workModelSource =
         verified.GetProperty("sources").EnumerateArray()
         |> Seq.find (fun source -> source.GetProperty("path").GetString() = "readiness/262-workflow-selection/work-model.json")
-    Assert.Equal("52e171dc758d093a0ca24ceb616bc80d7b0299e136374eb5e068dd73dfaea72f", workModelSource.GetProperty("digest").GetProperty("value").GetString())
+    Assert.Equal("01175a31951aea235b405b4dd68f2d750e336c2f3b64f5adeb0c3699531c0d3e", workModelSource.GetProperty("digest").GetProperty("value").GetString())
 
     let evidence = read "work/262-workflow-selection/evidence.yml"
     Assert.Equal(19, evidence.Split("source: artifacts/test-results/262-workflow-selection/unit-tests.trx", StringSplitOptions.None).Length - 1)
-    Assert.Equal(19, evidence.Split("sha256:4e0cf739b8509141ba624149034074d2c8cd67420023a615a52fc8cbc7270c77", StringSplitOptions.None).Length - 1)
+    Assert.Equal(19, evidence.Split("sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd", StringSplitOptions.None).Length - 1)
 
     let architectureReport = "artifacts/test-results/262-workflow-selection/workflow-selection-architecture.trx"
     let architectureCode, architectureOutput = tracked [ architectureReport ]

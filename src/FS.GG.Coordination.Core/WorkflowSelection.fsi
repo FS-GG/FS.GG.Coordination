@@ -37,6 +37,7 @@ type WorkflowSelectionInventory =
 
 type MergeGroupSelectionInput =
     { QueuedHead: string
+      CurrentQueuedHead: string
       CurrentBaseRevision: string
       CurrentSettingsSha256: string
       Recomputed: bool }
@@ -44,6 +45,7 @@ type MergeGroupSelectionInput =
 type WorkflowSelectionRequest =
     { InventoryVersion: string
       GraphVersion: string
+      ExpectedInventorySeal: string
       BaseRevision: string
       SettingsSha256: string
       Complete: bool
@@ -91,6 +93,8 @@ type WorkflowSelectionRefusal =
     | InvalidMergeGroup of string
 
 module WorkflowSelection =
+    val supportedInventoryVersion: string
+    val supportedGraphVersion: string
     val obligationId: WorkflowObligation -> string
     val tryParseObligation: string -> WorkflowObligation option
     val ruleMatchId: WorkflowRuleMatch -> string

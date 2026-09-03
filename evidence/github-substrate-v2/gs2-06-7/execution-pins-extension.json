@@ -14,7 +14,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/reusable-obligation-selection.yml",
-      "sha256": "af754fb944b0c0131711ae1182b344ebe8ebd4792fb04231f70ee2f89d04b3da",
+      "sha256": "022db9b59719c4d533a6a06c4c240e6041a5fc10da4439c2b80e1de8bec25891",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
       ],
