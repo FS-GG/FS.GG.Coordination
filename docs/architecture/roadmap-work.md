@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-06.7 units, and the active GS2-06.8
+the subsequently accepted GS2-02 through GS2-06.8 units, and the active GS2-07.1
 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
@@ -248,6 +248,21 @@ not create or execute the Q5 validator, inspect the live fleet, apply a plan, cr
 candidate or acceptance evidence, or authorize GS2-07.1. Architecture controls
 independently refuse changed roadmap bytes, a stale index authority pin, and a catalog
 command that disagrees with the sealed Q5 identity before any gate process can start.
+
+GS2-07.1 is registered against `.github` roadmap commit
+`d0267c02c59de75571f6ee9086f924e8c924da08` and exact roadmap SHA-256
+`152956bff4f264d7a6e034c0d8553d3df2cd44ac6773b03e83f85ff52dfb4655`.
+Its sole prerequisite is the accepted GS2-06.8 receipt. The Q3
+`github-event-envelope-contract` identity reserves the repository-local event
+normalization evidence lane for the implementation unit. That unit must bind source,
+delivery/event identity, subject, revision, causation, correlation, receipt, and an
+ordered cursor while making exact duplicates and reordered delivery converge and
+rejecting conflicting identity reuse. This registration does not create or execute
+the Q3 validator, implement the event envelope, create candidate or acceptance
+evidence, inspect a successor unit, subscribe a webhook, enqueue work, or authorize
+network or production mutation. Architecture controls independently refuse changed
+roadmap bytes, a stale index authority pin, and a catalog command that disagrees with
+the sealed Q3 identity before any gate process can start.
 
 ## Command sequence
 

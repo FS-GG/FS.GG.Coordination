@@ -204,6 +204,12 @@
       "qGate": "Q5",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-fleet-dry-plans.fsx", "--", "."]
+    },
+    {
+      "id": "github-event-envelope-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-event-envelope.fsx", "--", "."]
     }
   ]
 }

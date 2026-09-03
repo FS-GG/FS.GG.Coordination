@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "ac05985f0d60c33fb40a5dccecb271a3e00bec4b",
+    "revision": "d0267c02c59de75571f6ee9086f924e8c924da08",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "888d1c3307ba119f6c7075b0d8963f7fa14d1e357ce1f97fdb7c803f1aa5465f"
+    "sha256": "152956bff4f264d7a6e034c0d8553d3df2cd44ac6773b03e83f85ff52dfb4655"
   },
   "units": [
     {
@@ -793,6 +793,20 @@
         { "id": "github-fleet-dry-plans-contract", "qGate": "Q5", "commandSha256": "a4cf1fb97b50d91c95a94f1669f62b21a73d0f1031eac9668d5202b3686a7a3f" }
       ],
       "contractSha256": "316343c921c7444cb95bee292bec8d6da3c6546ffe8805bf93a0490249c76717"
+    },
+    {
+      "id": "GS2-07.1",
+      "title": "Event envelope and cursor",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-06.8"],
+      "permissionCeiling": ["repository-local additive event-envelope and cursor contracts, pure deterministic normalization of source, delivery and event identity, subject, revision, causation, correlation and receipt, idempotent duplicate and reordered delivery reduction, validation, and retained evidence", "read-only consumption of accepted GS2-06.8 and exact accepted roadmap evidence is allowed; no webhook subscription, event ingestion deployment, network call, queue mutation, production GitHub write, settings change, workflow publication, release, package publication, stable channel, successor-unit inspection, preparation, or implementation authority"],
+      "exitGate": "the Q3 event-envelope contract begins from the exact accepted GS2-06.8 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds repository and source revision, source kind and installation/repository scope, delivery and event identities, normalized subject and revision, causation and correlation identities, receipt identity and disposition, and the complete ordered delivery cursor; exact duplicate deliveries converge without a second scheduling effect, reordered deliveries converge to the same canonical cursor and receipt set, and conflicting reuse of a delivery or event identity fails closed rather than replacing prior facts; missing, malformed, unknown, duplicate-conflicting, reordered-conflicting, cross-source, cross-subject, stale-revision, causation-mismatched, correlation-mismatched, receipt-mismatched, cursor-gap, altered-seal, and replay inputs remain explicit refusals; exact replay is byte-identical and no network, queue, webhook, or production mutation path exists; generated adversarial mutations and independently authored prerequisite, roadmap, completeness, source, identity, subject, revision, causation, correlation, receipt, duplicate, reorder, conflict, cursor, ordering, seal, replay, Quint-preservation, no-network, no-queue, and no-mutation controls all pass without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-event-envelope-contract"],
+      "gateContracts": [
+        { "id": "github-event-envelope-contract", "qGate": "Q3", "commandSha256": "3fe755f4adfd45e0f2ca56dba2cbd60ed6cf119c0680c99df5a292bf9a15fcbc" }
+      ],
+      "contractSha256": "eaf9d224f80eea0136bc17a3998dc1182ac7d4d9b342034d28ab7ec75af4e918"
     }
   ]
 }
