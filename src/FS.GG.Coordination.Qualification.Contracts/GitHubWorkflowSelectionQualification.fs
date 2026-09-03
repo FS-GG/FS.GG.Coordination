@@ -230,7 +230,7 @@ module GitHubWorkflowSelectionQualification =
         if not (isSha snapshot.ObservationSha256) then findings.Add(InvalidPerformanceEvidence "observation-digest")
         if not (isSha snapshot.RemovalLedgerSha256) then findings.Add(InvalidRemovalLedger)
         if snapshot.Repository <> "FS-GG/FS.GG.Coordination" then findings.Add(InvalidWorkflowSelectionField "repositoryBinding")
-        if snapshot.SourceRevision <> "57305e540267f3f4696ba5a6cdfc84361de577d3" then findings.Add(InvalidWorkflowSelectionField "sourceRevisionBinding")
+        if snapshot.SourceRevision <> "6d3b7662ac4d9474a9976ac093ec910f55fb6087" then findings.Add(InvalidWorkflowSelectionField "sourceRevisionBinding")
         if snapshot.RoadmapRevision <> "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9"
            || snapshot.RoadmapSha256 <> "590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57" then
             findings.Add(InvalidWorkflowSelectionField "roadmapBinding")

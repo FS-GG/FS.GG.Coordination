@@ -5,11 +5,12 @@ open System.Collections.Generic
 open System.IO
 open System.Text.Json
 open System.Text.Json.Nodes
+open System.Text.RegularExpressions
 open FS.GG.Coordination.Core
 
 module WorkflowSelectionCommand =
     let private usage () =
-        eprintfn "workflow-select --inventory FILE --request FILE --expected-inventory-version VERSION --expected-graph-version VERSION --expected-seal SHA256 --current-base SHA --current-settings SHA256 --current-queued-head SHA|none | workflow-select --seal-inventory FILE"
+        eprintfn "workflow-select --inventory FILE --request FILE --expected-inventory-version VERSION --expected-graph-version VERSION --expected-seal SHA256 (--authority FILE | --current-base SHA --current-settings SHA256 --current-queued-head SHA|none) | workflow-select --seal-inventory FILE"
         2
 
     let private exact name expected (value: JsonObject) =
@@ -111,6 +112,13 @@ module WorkflowSelectionCommand =
           NonFileInputs = texts "nonFileInputs" value
           MergeGroup = mergeGroup }
 
+    let private parseAuthority path =
+        let value = loadObject path
+        exact "authority" [ "schema"; "baseRevision"; "currentRevision"; "settingsSha256"; "queuedHead" ] value
+        if text "schema" value <> "fsgg.coordination.workflow-selection-authority/1" then
+            invalidArg "authority" "unsupported schema"
+        text "baseRevision" value, text "currentRevision" value, text "settingsSha256" value, text "queuedHead" value
+
     let private refusalCode = function
         | UnsupportedSchemaVersion _ -> "unsupported-schema-version"
         | UnsupportedInventoryVersion _ -> "unsupported-inventory-version"
@@ -168,28 +176,39 @@ module WorkflowSelectionCommand =
         writer.WriteEndArray(); writer.WriteEndObject(); writer.Flush(); eprintfn ""
 
     let run arguments =
-        let rec parse inventory request seal expectedInventory expectedGraph expectedSeal currentBase currentSettings currentQueuedHead = function
-            | [] -> inventory, request, seal, expectedInventory, expectedGraph, expectedSeal, currentBase, currentSettings, currentQueuedHead
-            | "--inventory" :: value :: rest -> parse (Some value) request seal expectedInventory expectedGraph expectedSeal currentBase currentSettings currentQueuedHead rest
-            | "--request" :: value :: rest -> parse inventory (Some value) seal expectedInventory expectedGraph expectedSeal currentBase currentSettings currentQueuedHead rest
-            | "--seal-inventory" :: value :: rest -> parse inventory request (Some value) expectedInventory expectedGraph expectedSeal currentBase currentSettings currentQueuedHead rest
-            | "--expected-inventory-version" :: value :: rest -> parse inventory request seal (Some value) expectedGraph expectedSeal currentBase currentSettings currentQueuedHead rest
-            | "--expected-graph-version" :: value :: rest -> parse inventory request seal expectedInventory (Some value) expectedSeal currentBase currentSettings currentQueuedHead rest
-            | "--expected-seal" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph (Some value) currentBase currentSettings currentQueuedHead rest
-            | "--current-base" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal (Some value) currentSettings currentQueuedHead rest
-            | "--current-settings" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal currentBase (Some value) currentQueuedHead rest
-            | "--current-queued-head" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal currentBase currentSettings (Some value) rest
-            | _ -> None, None, None, None, None, None, None, None, None
-        match parse None None None None None None None None None (Array.toList arguments) with
-        | None, None, Some inventoryPath, None, None, None, None, None, None ->
+        let rec parse inventory request seal expectedInventory expectedGraph expectedSeal authority currentBase currentSettings currentQueuedHead = function
+            | [] -> inventory, request, seal, expectedInventory, expectedGraph, expectedSeal, authority, currentBase, currentSettings, currentQueuedHead
+            | "--inventory" :: value :: rest -> parse (Some value) request seal expectedInventory expectedGraph expectedSeal authority currentBase currentSettings currentQueuedHead rest
+            | "--request" :: value :: rest -> parse inventory (Some value) seal expectedInventory expectedGraph expectedSeal authority currentBase currentSettings currentQueuedHead rest
+            | "--seal-inventory" :: value :: rest -> parse inventory request (Some value) expectedInventory expectedGraph expectedSeal authority currentBase currentSettings currentQueuedHead rest
+            | "--expected-inventory-version" :: value :: rest -> parse inventory request seal (Some value) expectedGraph expectedSeal authority currentBase currentSettings currentQueuedHead rest
+            | "--expected-graph-version" :: value :: rest -> parse inventory request seal expectedInventory (Some value) expectedSeal authority currentBase currentSettings currentQueuedHead rest
+            | "--expected-seal" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph (Some value) authority currentBase currentSettings currentQueuedHead rest
+            | "--authority" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal (Some value) currentBase currentSettings currentQueuedHead rest
+            | "--current-base" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal authority (Some value) currentSettings currentQueuedHead rest
+            | "--current-settings" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal authority currentBase (Some value) currentQueuedHead rest
+            | "--current-queued-head" :: value :: rest -> parse inventory request seal expectedInventory expectedGraph expectedSeal authority currentBase currentSettings (Some value) rest
+            | _ -> None, None, None, None, None, None, None, None, None, None
+        match parse None None None None None None None None None None (Array.toList arguments) with
+        | None, None, Some inventoryPath, None, None, None, None, None, None, None ->
             try printfn "%s" (parseInventory inventoryPath |> WorkflowSelection.computeInventorySeal); 0
             with ex -> eprintfn "workflow-select: malformed input: %s" ex.Message; 2
-        | Some inventoryPath, Some requestPath, None, Some expectedInventory, Some expectedGraph, Some expectedSeal, Some currentBase, Some currentSettings, Some currentQueuedHead ->
+        | Some inventoryPath, Some requestPath, None, Some expectedInventory, Some expectedGraph, Some expectedSeal, authorityPath, legacyBase, legacySettings, legacyQueuedHead ->
             try
                 let inventory = parseInventory inventoryPath
                 let request = parseRequest requestPath
+                let currentBase, currentRevision, currentSettings, currentQueuedHead =
+                    match authorityPath, legacyBase, legacySettings, legacyQueuedHead with
+                    | Some path, None, None, None -> parseAuthority path
+                    | None, Some baseRevision, Some settingsSha256, Some queuedHead -> baseRevision, baseRevision, settingsSha256, queuedHead
+                    | Some _, _, _, _ -> invalidArg "authority" "cannot be combined with current authority flags"
+                    | _ -> invalidArg "authority" "one complete current authority source is required"
                 let authorityRefusals =
-                    [ if expectedInventory <> WorkflowSelection.supportedInventoryVersion || inventory.InventoryVersion <> expectedInventory || request.InventoryVersion <> expectedInventory then
+                    [ if not (Regex.IsMatch(currentRevision, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)) then
+                          InvalidMergeGroup "current revision authority is malformed"
+                      if authorityPath.IsSome && currentRevision = currentBase then
+                          InvalidMergeGroup "current revision authority did not advance from the retained base"
+                      if expectedInventory <> WorkflowSelection.supportedInventoryVersion || inventory.InventoryVersion <> expectedInventory || request.InventoryVersion <> expectedInventory then
                           UnsupportedInventoryVersion(expectedInventory, request.InventoryVersion)
                       if expectedGraph <> WorkflowSelection.supportedGraphVersion || inventory.GraphVersion <> expectedGraph || request.GraphVersion <> expectedGraph then
                           UnsupportedGraphVersion(expectedGraph, request.GraphVersion)

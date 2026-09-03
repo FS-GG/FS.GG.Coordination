@@ -67,6 +67,21 @@ let runGit root args =
     if child.ExitCode <> 0 then fail "RR-GIT" error
     output
 
+let readGitObject root revision relative =
+    let start = ProcessStartInfo("git")
+    start.WorkingDirectory <- root
+    start.RedirectStandardOutput <- true
+    start.RedirectStandardError <- true
+    start.UseShellExecute <- false
+    for argument in [ "show"; $"%s{revision}:%s{relative}" ] do start.ArgumentList.Add argument
+    use child = Process.Start start
+    use bytes = new MemoryStream()
+    child.StandardOutput.BaseStream.CopyTo bytes
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    if child.ExitCode <> 0 then fail "RR-GIT" error
+    bytes.ToArray()
+
 let validateBytes root (bytes: byte array) =
     noDuplicateMembers bytes
     use document = JsonDocument.Parse bytes
@@ -137,7 +152,8 @@ let validateBytes root (bytes: byte array) =
     exact "evidence" [ "observations"; "sdd" ] evidence
     let observations = property "observations" evidence
     exact "observations" [ "path"; "bytes"; "sha256"; "repositories"; "runs"; "jobs" ] observations
-    let observationBytes = File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2", string "path" observations))
+    let implementationMerge = string "mergeSha" implementation
+    let observationBytes = readGitObject root implementationMerge (Path.Combine("evidence/github-substrate-v2", string "path" observations))
     expect "observations.bytes" (int (number "bytes" observations)) observationBytes.Length
     expect "observations.sha256" (string "sha256" observations) (sha256 observationBytes)
     use observed = JsonDocument.Parse observationBytes
@@ -151,7 +167,7 @@ let validateBytes root (bytes: byte array) =
     expect "sdd.generator" "FS.GG.SDD.Artifacts" (string "generator" sdd)
     expect "sdd.version" "1.0.0" (string "version" sdd)
     for field, relative in [ "analysisSha256", "readiness/262-workflow-selection/analysis.json"; "workModelSha256", "readiness/262-workflow-selection/work-model.json"; "verifySha256", "readiness/262-workflow-selection/verify.json"; "shipVerdictSha256", "readiness/262-workflow-selection/ship-verdict.json" ] do
-        expect $"sdd.%s{field}" (string field sdd) (File.ReadAllBytes(Path.Combine(root, relative)) |> sha256)
+        expect $"sdd.%s{field}" (string field sdd) (readGitObject root implementationMerge relative |> sha256)
 
     let boundaries = property "boundaries" receipt
     exact "boundaries" [ "productionMutation"; "fleetEnablement"; "consumerMutation"; "packageOrRelease"; "gs2068" ] boundaries

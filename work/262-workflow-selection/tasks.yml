@@ -13,19 +13,19 @@ work:
 sources:
   - label: spec
     path: work/262-workflow-selection/spec.md
-    digest: 78fe582ec4f8dbd965b67220c6eead07958ae82f6f74a582646586c5ceb0cfdf
+    digest: afdb3914311c6063287157f22701170123a71e99cdb6b9cb5e84c714697eaa54
     schemaVersion: 1
   - label: clarifications
     path: work/262-workflow-selection/clarifications.md
-    digest: 911b939ded6b360d0b29f7a38c4ca215d60fdd176eaa6966ebd0566b1b04838b
+    digest: 291569128c0dee268b5be0deecb509c313e7665f7dc1184fc3607d58dc0a1877
     schemaVersion: 1
   - label: checklist
     path: work/262-workflow-selection/checklist.md
-    digest: 8b791ff54faefbaa294acbba1a7eec95668ca48a3a06a4e10867f25f73241425
+    digest: a389fa2f98d438b0ba3e0850c564dd0c6350d0ee7c25b02d6480432607be007b
     schemaVersion: 1
   - label: plan
     path: work/262-workflow-selection/plan.md
-    digest: 67c4f3bcf96a046621c3031e0b53bc4c2ef58f0159d1250bd6ac2c11ecdcd1d8
+    digest: bfa615aea3bcce35e6494a1e6639877dc24c62589ce06fe28b657eb03d02f0cb
     schemaVersion: 1
 tasks:
   - id: T001
@@ -125,7 +125,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [PC-001, PD-001]
+    sourceIds: [PC-001, PD-001, PD-002]
     requiredSkills: [fsharp]
     requiredEvidence: [EV010]
   - id: T011
