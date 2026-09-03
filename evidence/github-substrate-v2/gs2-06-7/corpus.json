@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "FS-GG/FS.GG.Coordination",
-  "sourceRevision": "57305e540267f3f4696ba5a6cdfc84361de577d3",
+  "sourceRevision": "6d3b7662ac4d9474a9976ac093ec910f55fb6087",
   "roadmapRevision": "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9",
   "roadmapSha256": "590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57",
   "prerequisiteReceiptDigest": "517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f",

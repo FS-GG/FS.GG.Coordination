@@ -66,6 +66,20 @@ let private runBash arguments =
     child.WaitForExit()
     child.ExitCode, output, error
 
+let private runBashAt workingDirectory environment arguments =
+    let startInfo = ProcessStartInfo("bash")
+    for argument in arguments do startInfo.ArgumentList.Add(argument)
+    startInfo.WorkingDirectory <- workingDirectory
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    for key, value in environment do startInfo.Environment[key] <- value
+    use child = Process.Start(startInfo)
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    child.ExitCode, output, error
+
 [<Fact>]
 let ``workflow selection public surface is pure and mutation free`` () =
     let surface = read "src/FS.GG.Coordination.Qualification.Contracts/GitHubWorkflowSelectionQualification.fsi"
@@ -78,11 +92,11 @@ let ``workflow selection public surface is pure and mutation free`` () =
 let ``production selector CLI handles arbitrary and merge-group inputs and fails stale authority closed`` () =
     let common request currentSettings currentQueuedHead =
         [ "workflow-select"; "--inventory"; "evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json"
-          "--request"; request; "--current-base"; "57305e540267f3f4696ba5a6cdfc84361de577d3"
+          "--request"; request; "--current-base"; "6d3b7662ac4d9474a9976ac093ec910f55fb6087"
           "--current-settings"; currentSettings; "--current-queued-head"; currentQueuedHead
           "--expected-inventory-version"; "coordination-workflows/1"
           "--expected-graph-version"; "fsgg.workflow-impact/1"
-          "--expected-seal"; "ba78404be6abddc7f4bd2c057b19468b226f9b51fd9012a48b9d630ef5829421" ]
+          "--expected-seal"; "2ff268103734c9f14d80302575aea4996c1a040a125b7f4356880efde90b5d5a" ]
     let goodCode, goodOutput, goodError =
         runCli (common "evidence/github-substrate-v2/gs2-06-7/runtime-request-arbitrary.json" "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518" "none")
     Assert.Equal(0, goodCode)
@@ -119,6 +133,80 @@ let ``production selector CLI handles arbitrary and merge-group inputs and fails
     Assert.Equal(2, duplicateCode)
     Assert.Contains("duplicate property 'complete'", duplicateError)
     File.Delete duplicateRequest
+
+    let authority = Path.Combine(Path.GetTempPath(), $"fsgg-selector-authority-{Guid.NewGuid():N}.json")
+    File.WriteAllText(authority, """{"schema":"fsgg.coordination.workflow-selection-authority/1","baseRevision":"6d3b7662ac4d9474a9976ac093ec910f55fb6087","currentRevision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","settingsSha256":"5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518","queuedHead":"none"}""")
+    let authorityArguments =
+        [ "workflow-select"; "--inventory"; "evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json"
+          "--request"; "evidence/github-substrate-v2/gs2-06-7/runtime-request-arbitrary.json"
+          "--authority"; authority; "--expected-inventory-version"; "coordination-workflows/1"
+          "--expected-graph-version"; "fsgg.workflow-impact/1"
+          "--expected-seal"; "2ff268103734c9f14d80302575aea4996c1a040a125b7f4356880efde90b5d5a" ]
+    let authorityCode, _, authorityError = runCli authorityArguments
+    Assert.True((authorityCode = 0), authorityError)
+    File.WriteAllText(authority, File.ReadAllText(authority).Replace("6d3b7662ac4d9474a9976ac093ec910f55fb6087", String.replicate 40 "d"))
+    let pairedStaleCode, _, pairedStaleError = runCli authorityArguments
+    Assert.Equal(3, pairedStaleCode)
+    Assert.Contains("stale-base-revision", pairedStaleError)
+    File.WriteAllText(authority, File.ReadAllText(authority).Replace(String.replicate 40 "d", "6d3b7662ac4d9474a9976ac093ec910f55fb6087").Replace("5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518", String.replicate 64 "e"))
+    let authoritySettingsCode, _, authoritySettingsError = runCli authorityArguments
+    Assert.Equal(3, authoritySettingsCode)
+    Assert.Contains("stale-settings", authoritySettingsError)
+    File.Delete authority
+
+[<Fact>]
+let ``sentinel derives current checkout and reviewed settings authority and refuses protected head advancement`` () =
+    let temporary = Path.Combine(Path.GetTempPath(), $"fsgg-gs267-authority-{Guid.NewGuid():N}")
+    Directory.CreateDirectory(Path.Combine(temporary, "eng/repository-settings")) |> ignore
+    File.Copy(Path.Combine(root, "eng/repository-settings/receipt.json"), Path.Combine(temporary, "eng/repository-settings/receipt.json"))
+    let git arguments =
+        let code, output, error = runBashAt temporary [] ([ "-c"; "git " + arguments ])
+        Assert.True((code = 0), output + error)
+    git "init -q"
+    git "config user.name authority-test"
+    git "config user.email authority-test@example.invalid"
+    git "add eng/repository-settings/receipt.json"
+    git "commit -qm initial"
+    let initial =
+        let code, output, error = runBashAt temporary [] [ "-c"; "git rev-parse HEAD" ]
+        Assert.True((code = 0), error)
+        output.Trim()
+    let inventory = Path.Combine(temporary, "inventory.json")
+    let request = Path.Combine(temporary, "request.json")
+    File.WriteAllText(inventory, $"""{{"baseRevision":"{initial}"}}""")
+    File.WriteAllText(request, $"""{{"baseRevision":"{initial}","settingsSha256":"5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518"}}""")
+    git "add inventory.json request.json"
+    git "commit -qm candidate"
+    let candidate =
+        let code, output, error = runBashAt temporary [] [ "-c"; "git rev-parse HEAD" ]
+        Assert.True((code = 0), error)
+        output.Trim()
+    let authority = Path.Combine(temporary, "authority.json")
+    let script = Path.Combine(root, "eng/workflow-selection-sentinel.sh")
+    let firstCode, firstOutput, firstError = runBashAt temporary [ "GITHUB_SHA", candidate; "GITHUB_EVENT_NAME", "schedule" ] [ script; "--resolve-authority"; inventory; request; authority ]
+    Assert.True((firstCode = 0), firstOutput + firstError)
+    use first = JsonDocument.Parse(File.ReadAllText authority)
+    Assert.Equal(initial, first.RootElement.GetProperty("baseRevision").GetString())
+    Assert.Equal(candidate, first.RootElement.GetProperty("currentRevision").GetString())
+    Assert.Equal("none", first.RootElement.GetProperty("queuedHead").GetString())
+    Assert.Equal("5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518", first.RootElement.GetProperty("settingsSha256").GetString())
+    let settingsPath = Path.Combine(temporary, "eng/repository-settings/receipt.json")
+    File.WriteAllText(settingsPath, File.ReadAllText(settingsPath).Replace("5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518", "stale"))
+    let settingsCode, _, _ = runBashAt temporary [ "GITHUB_SHA", candidate; "GITHUB_EVENT_NAME", "schedule" ] [ script; "--resolve-authority"; inventory; request; authority ]
+    Assert.NotEqual(0, settingsCode)
+    File.Copy(Path.Combine(root, "eng/repository-settings/receipt.json"), settingsPath, true)
+    File.WriteAllText(Path.Combine(temporary, "advance.txt"), "protected head advanced")
+    git "add advance.txt"
+    git "commit -qm advance"
+    let staleCode, _, _ = runBashAt temporary [ "GITHUB_SHA", candidate; "GITHUB_EVENT_NAME", "schedule" ] [ script; "--resolve-authority"; inventory; request; authority ]
+    Assert.NotEqual(0, staleCode)
+    let current =
+        let code, output, error = runBashAt temporary [] [ "-c"; "git rev-parse HEAD" ]
+        Assert.True((code = 0), error)
+        output.Trim()
+    let currentCode, _, _ = runBashAt temporary [ "GITHUB_SHA", current; "GITHUB_EVENT_NAME", "schedule" ] [ script; "--resolve-authority"; inventory; request; authority ]
+    Assert.NotEqual(0, currentCode)
+    Directory.Delete(temporary, true)
 
 [<Fact>]
 let ``repository owns callable reusable composite aggregate and sentinel contracts`` () =
@@ -192,8 +280,8 @@ let ``sentinel consumes the typed Q7 missed-obligation decision and disables sel
               "--request"; "evidence/github-substrate-v2/gs2-06-7/runtime-request-sentinel.json"
               "--expected-inventory-version"; "coordination-workflows/1"
               "--expected-graph-version"; "fsgg.workflow-impact/1"
-              "--expected-seal"; "ba78404be6abddc7f4bd2c057b19468b226f9b51fd9012a48b9d630ef5829421"
-              "--current-base"; "57305e540267f3f4696ba5a6cdfc84361de577d3"
+              "--expected-seal"; "2ff268103734c9f14d80302575aea4996c1a040a125b7f4356880efde90b5d5a"
+              "--current-base"; "6d3b7662ac4d9474a9976ac093ec910f55fb6087"
               "--current-settings"; "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518"
               "--current-queued-head"; "none" ]
     Assert.True((selectionCode = 0), selectionError)
@@ -298,13 +386,13 @@ let ``unknown properties are refused at every retained object boundary`` () =
 [<Fact>]
 let ``workflow selection provider evidence is durable in the candidate Git tree`` () =
     let expected =
-        [ "readiness/262-workflow-selection/analysis.json", "75cad9137c67e9812253d54a822777093c04a7a286ba30eb0db88fff59cb0ade"
+        [ "readiness/262-workflow-selection/analysis.json", "34b2b4ba59a99e369dd2231904088129d2829bd93bcd7d9f3074c69480ab65cb"
           // These are the canonical FS.GG.SDD.Cli 1.0.0 no-change fixed-point bytes. A later
           // ambient provider can only replace them by updating this executable contract.
-          "readiness/262-workflow-selection/work-model.json", "5d4a3f00a3924ad77292f8d09cd69870f7d68f8f1d049fdfb0a5cdee43ef401c"
-          "readiness/262-workflow-selection/verify.json", "1a8b8aee8631254e60db9902ee9573bd9ea7094446869ab916115e7b22ccaa2c"
-          "readiness/262-workflow-selection/ship-verdict.json", "3529c9b3b082e25ce59045b98228d08346f792d1ee6697233b1242a7b204beab"
-          "artifacts/test-results/262-workflow-selection/unit-tests.trx", "a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd" ]
+          "readiness/262-workflow-selection/work-model.json", "3ab5563f2e12b63dfb3ba4b81a7df979d04225cba2f3e587199ac55a9230a3d8"
+          "readiness/262-workflow-selection/verify.json", "0cda3aad4f8d5737ffa1d02dc98bc53714f1801fe3f1228159db132aa7b19b2c"
+          "readiness/262-workflow-selection/ship-verdict.json", "361b3af0e5d7c8876ee46e8fb92f94d56f5ca58831e122f089fa626ed7001768"
+          "artifacts/test-results/262-workflow-selection/unit-tests.trx", "24960699d2a7e411f0a418e02b3feb71f109df5411a1d255cd77483647272d98" ]
     let paths = expected |> List.map fst
     let code, output = tracked paths
     if code <> 0 then failwith output
@@ -336,11 +424,11 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
     let workModelSource =
         verified.GetProperty("sources").EnumerateArray()
         |> Seq.find (fun source -> source.GetProperty("path").GetString() = "readiness/262-workflow-selection/work-model.json")
-    Assert.Equal("5d4a3f00a3924ad77292f8d09cd69870f7d68f8f1d049fdfb0a5cdee43ef401c", workModelSource.GetProperty("digest").GetProperty("value").GetString())
+    Assert.Equal("3ab5563f2e12b63dfb3ba4b81a7df979d04225cba2f3e587199ac55a9230a3d8", workModelSource.GetProperty("digest").GetProperty("value").GetString())
 
     let evidence = read "work/262-workflow-selection/evidence.yml"
     Assert.Equal(19, evidence.Split("source: artifacts/test-results/262-workflow-selection/unit-tests.trx", StringSplitOptions.None).Length - 1)
-    Assert.Equal(19, evidence.Split("sha256:a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd", StringSplitOptions.None).Length - 1)
+    Assert.Equal(19, evidence.Split("sha256:24960699d2a7e411f0a418e02b3feb71f109df5411a1d255cd77483647272d98", StringSplitOptions.None).Length - 1)
 
     let architectureReport = "artifacts/test-results/262-workflow-selection/workflow-selection-architecture.trx"
     let architectureCode, architectureOutput = tracked [ architectureReport ]

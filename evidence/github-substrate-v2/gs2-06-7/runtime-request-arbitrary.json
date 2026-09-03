@@ -1,8 +1,8 @@
 {
   "inventoryVersion": "coordination-workflows/1",
   "graphVersion": "fsgg.workflow-impact/1",
-  "expectedInventorySeal": "ba78404be6abddc7f4bd2c057b19468b226f9b51fd9012a48b9d630ef5829421",
-  "baseRevision": "57305e540267f3f4696ba5a6cdfc84361de577d3",
+  "expectedInventorySeal": "2ff268103734c9f14d80302575aea4996c1a040a125b7f4356880efde90b5d5a",
+  "baseRevision": "6d3b7662ac4d9474a9976ac093ec910f55fb6087",
   "settingsSha256": "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518",
   "complete": true,
   "changedPaths": ["src/ArbitraryInput.fs", "eng/release-candidate.json"],
