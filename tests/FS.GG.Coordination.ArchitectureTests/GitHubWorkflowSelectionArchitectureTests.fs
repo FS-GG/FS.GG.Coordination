@@ -99,8 +99,10 @@ let ``unknown properties are refused at every retained object boundary`` () =
 let ``workflow selection provider evidence is durable in the candidate Git tree`` () =
     let expected =
         [ "readiness/262-workflow-selection/analysis.json", "35486521af635d52719802e20471a30d4f8b67f7bf57460f8c9606195500ebbd"
-          "readiness/262-workflow-selection/work-model.json", "56abf7220fe274015a3959c1bf8c34b9cf10837ad165ebff25d61b71dc188ce0"
-          "readiness/262-workflow-selection/verify.json", "e5e5c15da2ae2958aa73e50fe4f5b62ff3e25a978875488ab77d65ec6935d406"
+          // These are the canonical FS.GG.SDD.Cli 1.0.0 no-change fixed-point bytes. A later
+          // ambient provider can only replace them by updating this executable contract.
+          "readiness/262-workflow-selection/work-model.json", "a2b96fd1c4c2180a5cad0fd359c78de3ab2f9e26d48be2965314fd73eff7175a"
+          "readiness/262-workflow-selection/verify.json", "b5d87f7ca2784e0edee9e90656b016f45d247e06cde663850e6d047d86aea1dc"
           "readiness/262-workflow-selection/ship-verdict.json", "13fb2777d7c7a6ad570803bcc39e15b1c249fcb30f03158b268d977c4ec209c1"
           "artifacts/test-results/262-workflow-selection/unit-tests.trx", "e5e82831872d0ee3c26182ee768f7b0bfcb1feb9f59e575f6fd83b8981a8fbae"
           "artifacts/test-results/262-workflow-selection/workflow-selection-architecture.trx", "ad66e4aeb9a9ee31c351221ab45f27db4d1b22d45ad9cbcc62e558032a4c7ccb" ]
@@ -110,6 +112,33 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
     for path, digest in expected do
         Assert.True(File.Exists(Path.Combine(root, path)), $"provider evidence is absent: {path}")
         Assert.Equal(digest, shaFile path)
+
+    use workModel = JsonDocument.Parse(read "readiness/262-workflow-selection/work-model.json")
+    let modelViews = workModel.RootElement.GetProperty("generatedViews").EnumerateArray() |> Seq.toList
+    let modelView = modelViews |> List.exactlyOne
+    Assert.Equal("readiness/262-workflow-selection/work-model.json", modelView.GetProperty("path").GetString())
+    Assert.Equal("FS.GG.SDD.Artifacts", modelView.GetProperty("generator").GetProperty("id").GetString())
+    Assert.Equal("1.0.0", modelView.GetProperty("generator").GetProperty("version").GetString())
+    Assert.Equal("current", modelView.GetProperty("currency").GetString())
+    Assert.Empty(workModel.RootElement.GetProperty("diagnostics").EnumerateArray())
+
+    use verification = JsonDocument.Parse(read "readiness/262-workflow-selection/verify.json")
+    let verified = verification.RootElement
+    Assert.Equal("FS.GG.SDD.Artifacts/1.0.0", verified.GetProperty("generator").GetString())
+    Assert.Equal("verificationReady", verified.GetProperty("status").GetString())
+    Assert.Equal("implementationReady", verified.GetProperty("lifecycleReadiness").GetProperty("status").GetString())
+    Assert.Empty(verified.GetProperty("findings").EnumerateArray())
+    Assert.Empty(verified.GetProperty("diagnostics").EnumerateArray())
+    let verifiedViews = verified.GetProperty("generatedViews").EnumerateArray() |> Seq.toList
+    Assert.Equal(2, verifiedViews.Length)
+    for view in verifiedViews do
+        Assert.Equal("current", view.GetProperty("currency").GetString())
+        Assert.Empty(view.GetProperty("diagnosticIds").EnumerateArray())
+    let workModelSource =
+        verified.GetProperty("sources").EnumerateArray()
+        |> Seq.find (fun source -> source.GetProperty("path").GetString() = "readiness/262-workflow-selection/work-model.json")
+    Assert.Equal("a2b96fd1c4c2180a5cad0fd359c78de3ab2f9e26d48be2965314fd73eff7175a", workModelSource.GetProperty("digest").GetProperty("value").GetString())
+
     let evidence = read "work/262-workflow-selection/evidence.yml"
     Assert.Equal(19, evidence.Split("source: artifacts/test-results/262-workflow-selection/unit-tests.trx", StringSplitOptions.None).Length - 1)
     Assert.Equal(19, evidence.Split("sha256:e5e82831872d0ee3c26182ee768f7b0bfcb1feb9f59e575f6fd83b8981a8fbae", StringSplitOptions.None).Length - 1)
