@@ -190,7 +190,7 @@ let ``sentinel consumes the typed Q7 missed-obligation decision and disables sel
     File.WriteAllText(missedFailures, "[\"release\"]")
     let missedDecision = Path.Combine(temporary, "missed-decision.json")
     let missedCode, missedOutput, missedError =
-        runBash [ "eng/workflow-selection-sentinel.sh"; "--compare-selection"; selectionPath; missedFailures; missedDecision ]
+        runBash [ "eng/workflow-selection-sentinel.sh"; "--compare-selection"; selectionPath; missedFailures; q7Decision; missedDecision ]
     Assert.True((missedCode = 1), missedOutput + missedError)
     use currentMiss = JsonDocument.Parse(File.ReadAllText missedDecision)
     Assert.Equal("disabled", currentMiss.RootElement.GetProperty("fleetSelection").GetString())
@@ -200,7 +200,7 @@ let ``sentinel consumes the typed Q7 missed-obligation decision and disables sel
     File.WriteAllText(passingFailures, "[]")
     let passingDecision = Path.Combine(temporary, "passing-decision.json")
     let passingCode, passingOutput, passingError =
-        runBash [ "eng/workflow-selection-sentinel.sh"; "--compare-selection"; selectionPath; passingFailures; passingDecision ]
+        runBash [ "eng/workflow-selection-sentinel.sh"; "--compare-selection"; selectionPath; passingFailures; q7Decision; passingDecision ]
     Assert.True((passingCode = 0), passingOutput + passingError)
     use currentPass = JsonDocument.Parse(File.ReadAllText passingDecision)
     Assert.Equal("eligible", currentPass.RootElement.GetProperty("fleetSelection").GetString())
@@ -286,12 +286,12 @@ let ``unknown properties are refused at every retained object boundary`` () =
 [<Fact>]
 let ``workflow selection provider evidence is durable in the candidate Git tree`` () =
     let expected =
-        [ "readiness/262-workflow-selection/analysis.json", "ccc160b3530b32cfc1b206593dfaabfb333edc796f0d948edea0579fb5eaf071"
+        [ "readiness/262-workflow-selection/analysis.json", "a044aef5d61873aed4b325c4dd492a38258f9335c0a1d2e4cc2ce9dad4b5c212"
           // These are the canonical FS.GG.SDD.Cli 1.0.0 no-change fixed-point bytes. A later
           // ambient provider can only replace them by updating this executable contract.
-          "readiness/262-workflow-selection/work-model.json", "01175a31951aea235b405b4dd68f2d750e336c2f3b64f5adeb0c3699531c0d3e"
-          "readiness/262-workflow-selection/verify.json", "98c16b1c5f6b30d1fc7b7f2f4ac0aacd7b0038c8e5a17f85130657ad488f4085"
-          "readiness/262-workflow-selection/ship-verdict.json", "6a4f8a5320afd8815621c00480469e10d273fb49017bade57d3bd4a9a9201b4a"
+          "readiness/262-workflow-selection/work-model.json", "c6eb43e525b1b5e654865953587b94c20ae1a4527d814f1274a6a963570e7314"
+          "readiness/262-workflow-selection/verify.json", "f383cf3821728e36f0d1f147fdaee6088d8b1d9d6af61bf4833898d9660b1070"
+          "readiness/262-workflow-selection/ship-verdict.json", "30c5247d71acd593a04569a651d0179bae2d574045198bac829e1038392daaf5"
           "artifacts/test-results/262-workflow-selection/unit-tests.trx", "a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd" ]
     let paths = expected |> List.map fst
     let code, output = tracked paths
@@ -324,7 +324,7 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
     let workModelSource =
         verified.GetProperty("sources").EnumerateArray()
         |> Seq.find (fun source -> source.GetProperty("path").GetString() = "readiness/262-workflow-selection/work-model.json")
-    Assert.Equal("01175a31951aea235b405b4dd68f2d750e336c2f3b64f5adeb0c3699531c0d3e", workModelSource.GetProperty("digest").GetProperty("value").GetString())
+    Assert.Equal("c6eb43e525b1b5e654865953587b94c20ae1a4527d814f1274a6a963570e7314", workModelSource.GetProperty("digest").GetProperty("value").GetString())
 
     let evidence = read "work/262-workflow-selection/evidence.yml"
     Assert.Equal(19, evidence.Split("source: artifacts/test-results/262-workflow-selection/unit-tests.trx", StringSplitOptions.None).Length - 1)

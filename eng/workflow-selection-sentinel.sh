@@ -26,7 +26,8 @@ write_typed_decision() {
 compare_current_selection() {
   local selection="$1"
   local failures="$2"
-  local decision="$3"
+  local q7_decision="$3"
+  local decision="$4"
   local typed="$decision.typed"
   if ! jq -e '
       keys == ["aggregates","children","closure","graphVersion","inventorySeal","inventoryVersion","mergeGroupQueuedHead","roots","schema"]
@@ -36,13 +37,24 @@ compare_current_selection() {
       and (.inventorySeal | test("^[0-9a-f]{64}$"))
       and (.closure | type == "array" and all(.[]; IN("build","test","policy","coordination","packaging","release")) and length == (unique|length))
     ' "$selection" >/dev/null \
-    || ! jq -e 'type == "array" and all(.[]; type == "string" and IN("build","test","policy","coordination","packaging","release")) and length == (unique|length)' "$failures" >/dev/null; then
+    || ! jq -e 'type == "array" and all(.[]; type == "string" and IN("build","test","policy","coordination","packaging","release")) and length == (unique|length)' "$failures" >/dev/null \
+    || ! jq -e '
+      keys == ["fleetSelection","missedObligations","productionMutation","schema","seal"]
+      and .schema == "fsgg.coordination.workflow-selection-supply-chain-decision/1"
+      and (.seal | type == "string" and test("^[0-9a-f]{64}$"))
+      and (.missedObligations | type == "array"
+           and all(.[]; type == "string" and IN("build","test","policy","coordination","packaging","release"))
+           and length == (unique | length))
+      and (.fleetSelection == "eligible" or .fleetSelection == "disabled")
+      and .productionMutation == false
+      and ((.missedObligations | length == 0) == (.fleetSelection == "eligible"))
+    ' "$q7_decision" >/dev/null; then
     printf '{"schema":"fsgg.coordination.workflow-selection-sentinel/1","fullSuite":"failed","missedObligation":true,"fleetSelection":"disabled","productionMutation":false,"reason":"invalid-current-comparison"}\n' > "$decision"
     return 1
   fi
-  jq -n -c --slurpfile selection "$selection" --slurpfile failures "$failures" '
+  jq -n -c --slurpfile selection "$selection" --slurpfile failures "$failures" --slurpfile q7 "$q7_decision" '
       ($failures[0] - $selection[0].closure) as $missed
-      | {schema:"fsgg.coordination.workflow-selection-supply-chain-decision/1",seal:$selection[0].inventorySeal,
+      | {schema:"fsgg.coordination.workflow-selection-supply-chain-decision/1",seal:$q7[0].seal,
          missedObligations:$missed,fleetSelection:(if ($missed|length)==0 then "eligible" else "disabled" end),productionMutation:false}
     ' > "$typed"
   local full_suite
@@ -55,8 +67,8 @@ if [[ "${1:-}" == "--decision-only" && $# == 3 ]]; then
   exit $?
 fi
 
-if [[ "${1:-}" == "--compare-selection" && $# == 4 ]]; then
-  compare_current_selection "$2" "$3" "$4"
+if [[ "${1:-}" == "--compare-selection" && $# == 5 ]]; then
+  compare_current_selection "$2" "$3" "$4" "$5"
   exit $?
 fi
 
@@ -110,7 +122,7 @@ jq -n -c \
 ' > "$failures"
 
 set +e
-compare_current_selection "$selection" "$failures" "$decision"
+compare_current_selection "$selection" "$failures" "$q7_decision" "$decision"
 comparison_exit=$?
 set -e
 if (( comparison_exit != 0 )) || jq -e 'length > 0' "$failures" >/dev/null; then exit 1; fi

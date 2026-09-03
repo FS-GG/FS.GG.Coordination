@@ -11,7 +11,7 @@ sourceAnalysis: readiness/262-workflow-selection/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/262-workflow-selection/analysis.json
-    digest: ccc160b3530b32cfc1b206593dfaabfb333edc796f0d948edea0579fb5eaf071
+    digest: a044aef5d61873aed4b325c4dd492a38258f9335c0a1d2e4cc2ce9dad4b5c212
     schemaVersion: 1
   - label: checklist
     path: work/262-workflow-selection/checklist.md
