@@ -475,7 +475,7 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
           "readiness/262-workflow-selection/work-model.json", "db2913531bbccb53c2bb9d2fd3426ce11d7af3556c9df9c2ffd41209ac05dabe"
           "readiness/262-workflow-selection/verify.json", "0bb92252cb241445c4de0d4dd1d8d797e71b054de80d5c1fbc9f2f0864193ac1"
           "readiness/262-workflow-selection/ship-verdict.json", "5723e90cc9476f8f209c19def6447b922f9b904af2bf8b0c313855950fa0ea38"
-          "artifacts/test-results/262-workflow-selection/unit-tests.trx", "37adf839aabef7bc4f7978cec644cf8db10bfc313cf27c31b718d1d353ec73b6" ]
+          "artifacts/test-results/262-workflow-selection/unit-tests.trx", "4b2b693e2cdf23c2c0eb019555e79630f8e1555fea7181b8a3b492cedba3f52b" ]
     let paths = expected |> List.map fst
     let code, output = tracked paths
     if code <> 0 then failwith output
