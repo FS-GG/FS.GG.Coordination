@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-06.6 units, and the active GS2-06.7
+the subsequently accepted GS2-02 through GS2-06.7 units, and the active GS2-06.8
 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
@@ -233,6 +233,21 @@ selector, workflow consolidation, candidate or acceptance evidence, production m
 or GS2-06.8 authority. Architecture controls independently refuse changed roadmap bytes,
 a stale index authority pin, and a catalog command that disagrees with either sealed
 command identity before the future gate process can start.
+
+GS2-06.8 is registered against `.github` roadmap commit
+`ac05985f0d60c33fb40a5dccecb271a3e00bec4b` and exact roadmap SHA-256
+`888d1c3307ba119f6c7075b0d8963f7fa14d1e357ce1f97fdb7c803f1aa5465f`.
+Its sole prerequisite is the accepted GS2-06.7 receipt. As the final GS2-06 child,
+its comprehensive closure orders all accepted GS2-06 Q3 and Q7 command identities
+before the new Q5 `github-fleet-dry-plans-contract`. The implementation unit must
+inspect, plan, canonically serialize, independently review, and authoritatively
+re-inspect every rostered repository without applying settings, while retaining
+explicit unsupported, unauthorized, unavailable, incomplete, unreadable, stale,
+indeterminate, external-observe-only, and no-op dispositions. This registration does
+not create or execute the Q5 validator, inspect the live fleet, apply a plan, create
+candidate or acceptance evidence, or authorize GS2-07.1. Architecture controls
+independently refuse changed roadmap bytes, a stale index authority pin, and a catalog
+command that disagrees with the sealed Q5 identity before any gate process can start.
 
 ## Command sequence
 
