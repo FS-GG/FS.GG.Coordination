@@ -18,6 +18,7 @@
     <Compile Include="GitHubImmutableExecutionPinsTests.fs" />
     <Compile Include="GitHubPermissionCompilationTests.fs" />
     <Compile Include="GitHubReleaseHardeningTests.fs" />
+    <Compile Include="GitHubWorkflowSelectionTests.fs" />
     <Compile Include="GitHubCommentProjectionTests.fs" />
     <Compile Include="GitHubTransportTests.fs" />
     <Compile Include="GitHubShardedJournalTests.fs" />

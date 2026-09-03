@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "262-workflow-selection",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "8bc173a6e08554f965c7978c60bd1fb615842fa7cd14cc2d492654e784eabcca"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 19,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 19
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "repository": "FS-GG/FS.GG.Coordination",
+  "sourceRevision": "ff65faa6697ea5835de72c1e6fa1b53af0a883e3",
+  "roadmapRevision": "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9",
+  "roadmapSha256": "590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57",
+  "prerequisiteReceiptDigest": "517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f",
+  "complete": true,
+  "inventoryComplete": true,
+  "nonFileInputInventoryComplete": true,
+  "graphVersion": "fsgg.workflow-impact/1",
+  "workflows": [
+    {
+      "workflow": ".github/workflows/bootstrap-qualification.yml",
+      "policyJobs": ["dependency-and-security", "evidence-manifest"],
+      "compositeSteps": ["checkout-and-setup", "publish-evidence"],
+      "reusableJobContracts": ["qualification-execute"],
+      "aggregateOutputs": ["required"]
+    },
+    {
+      "workflow": ".github/workflows/candidate-supply-chain.yml",
+      "policyJobs": ["attestation", "dependency-review", "public-download"],
+      "compositeSteps": ["checkout-and-setup", "package-subject"],
+      "reusableJobContracts": ["release-saga"],
+      "aggregateOutputs": ["supply-chain"]
+    }
+  ],
+  "obligations": ["build", "test", "policy", "coordination", "packaging", "release"],
+  "dependencyEdges": [
+    {"source": "build", "target": "test"},
+    {"source": "test", "target": "policy"},
+    {"source": "policy", "target": "coordination"},
+    {"source": "packaging", "target": "release"}
+  ],
+  "unconditionalObligations": ["policy"],
+  "impactCases": [
+    {"id":"dependency","changedSubjects":["Directory.Packages.props"],"nonFileInputs":[],"roots":["build","packaging"],"expectedClosure":["build","test","policy","coordination","packaging","release"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"documentation","changedSubjects":["docs/architecture.md"],"nonFileInputs":[],"roots":["coordination"],"expectedClosure":["policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"generated-output","changedSubjects":["src/Generated.fs"],"nonFileInputs":[],"roots":["build"],"expectedClosure":["build","test","policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"merge-group","changedSubjects":["src/Merge.fs"],"nonFileInputs":["merge-group-settings"],"roots":["build"],"expectedClosure":["build","test","policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":{"queuedHead":"1111111111111111111111111111111111111111","currentBase":"2222222222222222222222222222222222222222","currentSettings":"3333333333333333333333333333333333333333333333333333333333333333","observedBase":"2222222222222222222222222222222222222222","observedSettings":"3333333333333333333333333333333333333333333333333333333333333333","recomputed":true}},
+    {"id":"mixed","changedSubjects":["tests/Mixed.fs","eng/release.json"],"nonFileInputs":[],"roots":["test","packaging"],"expectedClosure":["test","policy","coordination","packaging","release"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"non-file-input","changedSubjects":[],"nonFileInputs":["renovate-policy-revision"],"roots":["packaging"],"expectedClosure":["policy","coordination","packaging","release"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"policy","changedSubjects":["eng/policy.json"],"nonFileInputs":[],"roots":["policy"],"expectedClosure":["policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"release","changedSubjects":["eng/release-plan.json"],"nonFileInputs":[],"roots":["release"],"expectedClosure":["policy","coordination","release"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"source","changedSubjects":["src/Core.fs"],"nonFileInputs":[],"roots":["build"],"expectedClosure":["build","test","policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"test","changedSubjects":["tests/CoreTests.fs"],"nonFileInputs":[],"roots":["test"],"expectedClosure":["test","policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null},
+    {"id":"workflow","changedSubjects":[".github/workflows/bootstrap-qualification.yml"],"nonFileInputs":[],"roots":["policy"],"expectedClosure":["policy","coordination"],"unknown":false,"ambiguous":false,"fresh":true,"complete":true,"mergeGroup":null}
+  ],
+  "childOutcomes": [
+    {"obligation":"build","disposition":"selected","reason":null,"expensiveJobProvisioned":false},
+    {"obligation":"test","disposition":"selected","reason":null,"expensiveJobProvisioned":false},
+    {"obligation":"policy","disposition":"selected","reason":null,"expensiveJobProvisioned":false},
+    {"obligation":"coordination","disposition":"selected","reason":null,"expensiveJobProvisioned":false},
+    {"obligation":"packaging","disposition":"not-applicable","reason":"source change does not reach packaging","expensiveJobProvisioned":false},
+    {"obligation":"release","disposition":"not-applicable","reason":"source change does not reach release","expensiveJobProvisioned":false}
+  ],
+  "requiredAggregates": ["required", "supply-chain"],
+  "unconditionalCore": ["policy"],
+  "performance": [
+    {"repository":"EHotwagner/S.I.R.","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/.github","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/FS.GG.Audio","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/FS.GG.Coordination","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/FS.GG.Game","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/FS.GG.Governance","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/FS.GG.Net","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/FS.GG.Rendering","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/FS.GG.SDD","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}},
+    {"repository":"FS-GG/FS.GG.Templates","baseline":{"workflowFanOut":4,"jobFanOut":12,"billedMinutes":120,"queueTimeSeconds":300,"p50Seconds":1200,"p95Seconds":2400},"target":{"workflowFanOut":3,"jobFanOut":9,"billedMinutes":90,"queueTimeSeconds":240,"p50Seconds":1000,"p95Seconds":2100},"selected":{"workflowFanOut":2,"jobFanOut":7,"billedMinutes":70,"queueTimeSeconds":180,"p50Seconds":900,"p95Seconds":1800}}
+  ],
+  "sentinel": {"scheduled":true,"selectedClosure":["build","test","policy","coordination","packaging","release"],"actualFailures":["policy"]},
+  "fleetSelectionEnabled": true,
+  "removalLedgerComplete": true,
+  "removals": [
+    {"workflow":"legacy-policy.yml","obligation":"duplicate dependency review","reason":"folded into reusable policy contract"},
+    {"workflow":"legacy-qualification.yml","obligation":"duplicate compiler test","reason":"folded into typed test obligation"},
+    {"workflow":"legacy-release.yml","obligation":"duplicate feed verification","reason":"folded into reusable release contract"}
+  ]
+}

@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="40f5ed75-bb01-495e-a77b-76ed2c22bb77" name="@aab16b898f83 2026-09-03 03:31:45" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-03T03:31:45.5737088+02:00" queuing="2026-09-03T03:31:45.5737088+02:00" start="2026-09-03T03:31:43.9006357+02:00" finish="2026-09-03T03:31:46.4216900+02:00" />
+  <TestSettings name="default" id="6190d936-ddc4-4355-8b03-5a211a19707f">
+    <Deployment runDeploymentRoot="_aab16b898f83_2026-09-03_03_31_45" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c1d45fd2-ec3b-4657-bea6-467464eafcbf" testId="81b04f7f-d6f0-1c74-27a2-975513ec6435" testName="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.exact workflow selection Q7 validator passes" computerName="aab16b898f83" duration="00:00:00.9940281" startTime="2026-09-03T03:31:45.3908149+02:00" endTime="2026-09-03T03:31:46.3849795+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c1d45fd2-ec3b-4657-bea6-467464eafcbf" />
+    <UnitTestResult executionId="4721f778-7302-4e61-a132-a8de06217f9e" testId="8816c62a-6978-53d1-de33-71ed92e660b3" testName="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.retained corpus carries complete impact sentinel and fleet evidence" computerName="aab16b898f83" duration="00:00:00.0035172" startTime="2026-09-03T03:31:44.2168778+02:00" endTime="2026-09-03T03:31:44.2237446+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4721f778-7302-4e61-a132-a8de06217f9e" />
+    <UnitTestResult executionId="4a1cac0c-46cc-43e5-879b-b397543ee9c7" testId="45b2aadc-7c9e-9d11-9b21-691bfccabb27" testName="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.workflow selection public surface is pure and mutation free" computerName="aab16b898f83" duration="00:00:00.0016701" startTime="2026-09-03T03:31:46.3853147+02:00" endTime="2026-09-03T03:31:46.3865552+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4a1cac0c-46cc-43e5-879b-b397543ee9c7" />
+    <UnitTestResult executionId="cc3c02b8-9551-4f64-b077-cee597db52e5" testId="50f98471-f36f-3ac9-90bf-f713c7a820fc" testName="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.roadmap registers distinct exact Q3 and Q7 commands" computerName="aab16b898f83" duration="00:00:00.0039023" startTime="2026-09-03T03:31:45.3869443+02:00" endTime="2026-09-03T03:31:45.3907010+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cc3c02b8-9551-4f64-b077-cee597db52e5" />
+    <UnitTestResult executionId="5704b912-40a0-46cc-abda-3e2aeed468ac" testId="bafce586-ed33-009d-e2bc-7d2288184b8e" testName="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.unknown properties are refused at every retained object boundary" computerName="aab16b898f83" duration="00:00:00.0086788" startTime="2026-09-03T03:31:45.3785768+02:00" endTime="2026-09-03T03:31:45.3867793+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5704b912-40a0-46cc-abda-3e2aeed468ac" />
+    <UnitTestResult executionId="15792f1b-e290-4236-b16a-be7ed1fb35c7" testId="1d585f44-3236-4799-4a8b-e77d73dae2b4" testName="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.exact workflow selection Q3 validator passes" computerName="aab16b898f83" duration="00:00:01.1541846" startTime="2026-09-03T03:31:44.2288073+02:00" endTime="2026-09-03T03:31:45.3780775+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="15792f1b-e290-4236-b16a-be7ed1fb35c7" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.workflow selection public surface is pure and mutation free" storage="/home/developer/projects/fs.gg.coordination-item-262/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="45b2aadc-7c9e-9d11-9b21-691bfccabb27">
+      <Execution id="4a1cac0c-46cc-43e5-879b-b397543ee9c7" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-262/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests" name="workflow selection public surface is pure and mutation free" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.unknown properties are refused at every retained object boundary" storage="/home/developer/projects/fs.gg.coordination-item-262/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="bafce586-ed33-009d-e2bc-7d2288184b8e">
+      <Execution id="5704b912-40a0-46cc-abda-3e2aeed468ac" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-262/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests" name="unknown properties are refused at every retained object boundary" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.roadmap registers distinct exact Q3 and Q7 commands" storage="/home/developer/projects/fs.gg.coordination-item-262/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="50f98471-f36f-3ac9-90bf-f713c7a820fc">
+      <Execution id="cc3c02b8-9551-4f64-b077-cee597db52e5" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-262/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests" name="roadmap registers distinct exact Q3 and Q7 commands" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.exact workflow selection Q7 validator passes" storage="/home/developer/projects/fs.gg.coordination-item-262/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="81b04f7f-d6f0-1c74-27a2-975513ec6435">
+      <Execution id="c1d45fd2-ec3b-4657-bea6-467464eafcbf" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-262/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests" name="exact workflow selection Q7 validator passes" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.exact workflow selection Q3 validator passes" storage="/home/developer/projects/fs.gg.coordination-item-262/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="1d585f44-3236-4799-4a8b-e77d73dae2b4">
+      <Execution id="15792f1b-e290-4236-b16a-be7ed1fb35c7" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-262/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests" name="exact workflow selection Q3 validator passes" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests.retained corpus carries complete impact sentinel and fleet evidence" storage="/home/developer/projects/fs.gg.coordination-item-262/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="8816c62a-6978-53d1-de33-71ed92e660b3">
+      <Execution id="4721f778-7302-4e61-a132-a8de06217f9e" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-item-262/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubWorkflowSelectionArchitectureTests" name="retained corpus carries complete impact sentinel and fleet evidence" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="81b04f7f-d6f0-1c74-27a2-975513ec6435" executionId="c1d45fd2-ec3b-4657-bea6-467464eafcbf" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8816c62a-6978-53d1-de33-71ed92e660b3" executionId="4721f778-7302-4e61-a132-a8de06217f9e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="45b2aadc-7c9e-9d11-9b21-691bfccabb27" executionId="4a1cac0c-46cc-43e5-879b-b397543ee9c7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="50f98471-f36f-3ac9-90bf-f713c7a820fc" executionId="cc3c02b8-9551-4f64-b077-cee597db52e5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bafce586-ed33-009d-e2bc-7d2288184b8e" executionId="5704b912-40a0-46cc-abda-3e2aeed468ac" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1d585f44-3236-4799-4a8b-e77d73dae2b4" executionId="15792f1b-e290-4236-b16a-be7ed1fb35c7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="6" executed="6" passed="6" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.06]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.11]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.12]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:02.30]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

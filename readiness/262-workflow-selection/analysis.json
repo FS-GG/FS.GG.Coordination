@@ -1,0 +1,692 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "262-workflow-selection",
+  "stage": "analyze",
+  "status": "implementationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "70f2a125e819d30332e8178911cfbfaf819dac8fc85fc3d77b309660838da381"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/262-workflow-selection/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "56abf7220fe274015a3959c1bf8c34b9cf10837ad165ebff25d61b71dc188ce0"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/262-workflow-selection/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "94088f1ba035d0cb50503d29a1918bda136cd0dbe92761670dbd4d9998b06fd6"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/262-workflow-selection/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "24fe399bd0532b1c516b422bc26da43a23f188f966328f398588758537d1ea70"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/262-workflow-selection/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "55ae3371e9fd2c3f10a2ba347b9e7bcb549467714bcc4a90ef3b1b3013ad4373"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/262-workflow-selection/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "83bfc6a2527df233367a2fffd91909372781d84137d53fdcf89318ea825c407d"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/262-workflow-selection/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "185b3e55df3ae035d8e94d0277e64c5f41d2096de005fa0060d12f94d12293ed"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "sourceRelationships": [
+    {
+      "id": "AR001",
+      "sourcePath": "work/262-workflow-selection/checklist.md",
+      "targetPath": "work/262-workflow-selection/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR002",
+      "sourcePath": "work/262-workflow-selection/checklist.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR003",
+      "sourcePath": "work/262-workflow-selection/clarifications.md",
+      "targetPath": "work/262-workflow-selection/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR004",
+      "sourcePath": "work/262-workflow-selection/clarifications.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "DEC-001",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR005",
+      "sourcePath": "work/262-workflow-selection/clarifications.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "DEC-002",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR006",
+      "sourcePath": "work/262-workflow-selection/clarifications.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "DEC-003",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR007",
+      "sourcePath": "work/262-workflow-selection/clarifications.md",
+      "targetPath": "work/262-workflow-selection/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/262-workflow-selection/clarifications.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PC-001",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PC-002",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PC-003",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PC-004",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "GV-001",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PM-001",
+      "targetId": null,
+      "relationship": "migrationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR015",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PD-001",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PD-005",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "PD-006",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR021",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourcePlan",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "VO-001",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "VO-002",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "VO-003",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR025",
+      "sourcePath": "work/262-workflow-selection/plan.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "VO-004",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "AC-001",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR027",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "AC-002",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR028",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "AC-003",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "AC-004",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR030",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "AC-005",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR031",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "AC-006",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR032",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR033",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR034",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "FR-001",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR035",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR036",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "FR-003",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR037",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR038",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "FR-005",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR039",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "FR-006",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR040",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/clarifications.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "sourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR041",
+      "sourcePath": "work/262-workflow-selection/spec.md",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR042",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T007",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR043",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T008",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR044",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T009",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR045",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T010",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR046",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T011",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR047",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T012",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR048",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T013",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR049",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T014",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR050",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T015",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR051",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T016",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR052",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T017",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR053",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T018",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR054",
+      "sourcePath": "work/262-workflow-selection/tasks.yml",
+      "targetPath": "work/262-workflow-selection/tasks.yml",
+      "sourceId": "T019",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "readiness": {
+    "status": "implementationReady",
+    "readyCount": 54,
+    "advisoryCount": 0,
+    "warningCount": 0,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0
+  },
+  "findings": [],
+  "generatedViews": [
+    {
+      "path": "readiness/262-workflow-selection/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "optionalBoundaryFacts": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "reason": "Lifecycle sources are current and ready for implementation."
+  }
+}

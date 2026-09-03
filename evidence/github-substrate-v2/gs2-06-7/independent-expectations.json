@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "expectedSeal": "43836b63dc7c0324331a270f462ace5b73c6427ff573d80e152ad4d58e3f18ab",
+  "selectionControls": [
+    "workflow-prerequisite", "workflow-roadmap", "workflow-completeness", "typed-workflow-inventory",
+    "workflow-graph-version", "changed-subject-selection", "non-file-input-selection", "transitive-closure",
+    "unconditional-obligations", "stable-aggregates", "typed-not-applicable", "no-expensive-provisioning",
+    "ambiguous-impact-refusal", "stale-impact-refusal", "merge-group-recomputation", "representative-changes",
+    "mixed-changes", "unknown-changes", "workflow-ordering", "exact-workflow-seal", "exact-workflow-replay",
+    "quint-workflow-unchanged", "no-workflow-mutation-surface"
+  ],
+  "selectionIndependentCases": [
+    {"control":"workflow-prerequisite","fixture":"alternate-prerequisite-receipt"},
+    {"control":"workflow-roadmap","fixture":"alternate-roadmap-bytes"},
+    {"control":"workflow-completeness","fixture":"non-file-inventory-incomplete"},
+    {"control":"typed-workflow-inventory","fixture":"missing-reusable-contract"},
+    {"control":"workflow-graph-version","fixture":"unsupported-graph-major"},
+    {"control":"changed-subject-selection","fixture":"source-well-formed-misclassification"},
+    {"control":"non-file-input-selection","fixture":"blank-non-file-input"},
+    {"control":"transitive-closure","fixture":"dependency-closure-omits-release"},
+    {"control":"unconditional-obligations","fixture":"policy-no-longer-unconditional"},
+    {"control":"stable-aggregates","fixture":"required-aggregate-missing"},
+    {"control":"typed-not-applicable","fixture":"not-applicable-reason-empty"},
+    {"control":"no-expensive-provisioning","fixture":"release-job-provisioned-while-not-applicable"},
+    {"control":"ambiguous-impact-refusal","fixture":"documentation-double-classified"},
+    {"control":"stale-impact-refusal","fixture":"policy-impact-stale"},
+    {"control":"merge-group-recomputation","fixture":"queued-base-differs-from-current"},
+    {"control":"representative-changes","fixture":"release-representative-case-absent"},
+    {"control":"mixed-changes","fixture":"mixed-roots-not-recomputed"},
+    {"control":"unknown-changes","fixture":"unknown-extension-admitted"},
+    {"control":"workflow-ordering","fixture":"workflow-inventory-reversed"},
+    {"control":"exact-workflow-seal","fixture":"one-nibble-seal-divergence"},
+    {"control":"exact-workflow-replay","fixture":"post-seal-case-change"},
+    {"control":"quint-workflow-unchanged","fixture":"protocol-byte-append"},
+    {"control":"no-workflow-mutation-surface","fixture":"forbidden-http-client-surface"}
+  ],
+  "supplyChainControls": [
+    "fleet-baselines", "accepted-targets", "workflow-fan-out-target", "job-fan-out-target",
+    "billed-minute-target", "queue-time-target", "p50-target", "p95-target", "scheduled-sentinel",
+    "missed-obligation-detection", "fleet-disable", "removal-ledger"
+  ],
+  "supplyChainIndependentCases": [
+    {"control":"fleet-baselines","fixture":"fleet-repository-baseline-absent"},
+    {"control":"accepted-targets","fixture":"target-worse-than-baseline"},
+    {"control":"workflow-fan-out-target","fixture":"workflow-fan-out-over-target"},
+    {"control":"job-fan-out-target","fixture":"job-fan-out-over-target"},
+    {"control":"billed-minute-target","fixture":"billed-minutes-over-target"},
+    {"control":"queue-time-target","fixture":"queue-time-over-target"},
+    {"control":"p50-target","fixture":"p50-over-target"},
+    {"control":"p95-target","fixture":"p95-over-target"},
+    {"control":"scheduled-sentinel","fixture":"sentinel-schedule-absent"},
+    {"control":"missed-obligation-detection","fixture":"actual-release-failure-unselected"},
+    {"control":"fleet-disable","fixture":"missed-obligation-leaves-fleet-enabled"},
+    {"control":"removal-ledger","fixture":"removed-obligation-unrecorded"}
+  ],
+  "shapeCases": [
+    "corpus-top-level-extra", "workflow-extra", "edge-extra", "impact-extra", "merge-group-extra",
+    "outcome-extra", "metric-extra", "sentinel-extra", "removal-extra", "expectations-top-level-extra",
+    "selection-case-extra", "supply-case-extra"
+  ]
+}
