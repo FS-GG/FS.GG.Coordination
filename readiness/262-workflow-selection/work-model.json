@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "99441417ad298049f9ab51fa68caef4a22a75552b1c624cd715de924e055502b"
+        "value": "6e02f9b954c4458362f5cc3fdd6ae67dbd3ba3d7d4caebc664e752ad5d2fbc81"
       }
     },
     {
@@ -1284,7 +1284,7 @@
       "schemaVersion": 1,
       "generator": {
         "id": "FS.GG.SDD.Artifacts",
-        "version": "1.5.0"
+        "version": "1.0.0"
       },
       "sources": [
         {
@@ -1331,7 +1331,7 @@
           "path": "work/262-workflow-selection/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "99441417ad298049f9ab51fa68caef4a22a75552b1c624cd715de924e055502b"
+            "value": "6e02f9b954c4458362f5cc3fdd6ae67dbd3ba3d7d4caebc664e752ad5d2fbc81"
           },
           "schemaVersion": 1
         },
@@ -1362,7 +1362,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "ab678bb17da82e750154dd24fd2d19281d02f9de04b5d622d0df4f3ca3496296"
+        "value": "eebea9048c7e0a677575ef2f891ba590c99827b1526dae6017646572bc9260d2"
       },
       "currency": "current"
     }
