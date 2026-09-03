@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 260-gs2-06-7-registration
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/260-gs2-06-7-registration/spec.md
 sourceClarifications: work/260-gs2-06-7-registration/clarifications.md
 sourceChecklist: work/260-gs2-06-7-registration/checklist.md
@@ -11,7 +11,7 @@ sourceAnalysis: readiness/260-gs2-06-7-registration/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/260-gs2-06-7-registration/analysis.json
-    digest: 12871d4178dfdf3eef97a087b2e2bf307dfe62e6fb28a722b67d9ccd7392cf90
+    digest: 1ba9728aa38378884c116e213552e7ebacf69b46368fc691b5fab4a1c09f8dcc
     schemaVersion: 1
   - label: checklist
     path: work/260-gs2-06-7-registration/checklist.md
@@ -35,7 +35,7 @@ sourceSnapshots:
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T001
@@ -50,11 +50,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV002
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T002
@@ -69,11 +77,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV003
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T003
@@ -88,11 +104,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV004
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T004
@@ -107,11 +131,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV005
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T005
@@ -126,11 +158,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV006
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T006
@@ -145,11 +185,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV007
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T007
@@ -164,11 +212,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV008
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T008
@@ -183,11 +239,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV009
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T009
@@ -202,11 +266,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV010
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T010
@@ -221,11 +293,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV011
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T011
@@ -240,11 +320,19 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
   - id: EV012
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T012
@@ -259,8 +347,16 @@ evidence:
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: readiness/260-gs2-06-7-registration/test-results/architecture.trx
+      digest: "sha256:a1ae045765f0b4a924737026b7081fa0bfa231a6e3b6c73a9e9f43bb08a41b33"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 451
+      failed: 0
+      skipped: 0
+    notes: [Observed by the clean architecture qualification run.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
