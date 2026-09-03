@@ -202,6 +202,19 @@ compare_current_selection() {
   write_typed_decision "$typed" "$decision" "$full_suite"
 }
 
+provision_pinned_quint() {
+  local decision="$1" quint_root
+  if ! bash eng/bootstrap-gates/provision-quint.sh; then
+    write_disabled_decision "$decision" "pinned-quint-unavailable"
+    return 1
+  fi
+  source eng/bootstrap-gates/runner-temp.sh
+  fsgg_resolve_runner_temp
+  quint_root="$RUNNER_TEMP/fsgg-quint-0.32.0"
+  export PATH="$quint_root:$PATH"
+  command -v quint >/dev/null
+}
+
 if [[ "${1:-}" == "--decision-only" && $# == 3 ]]; then
   write_typed_decision "$2" "$3"
   exit $?
@@ -214,6 +227,11 @@ fi
 
 if [[ "${1:-}" == "--resolve-authority" && $# == 6 ]]; then
   resolve_current_authority "$2" "$3" "$4" "$5" "$6"
+  exit $?
+fi
+
+if [[ "${1:-}" == "--provision-only" && $# == 2 ]]; then
+  provision_pinned_quint "$2"
   exit $?
 fi
 
@@ -232,6 +250,10 @@ if ! resolve_current_authority \
   evidence/github-substrate-v2/gs2-06-7/runtime-reviewed-authority.json \
   "$authority" "$runtime_request"; then
   write_disabled_decision "$decision" "current-authority-unavailable"
+  exit 1
+fi
+
+if ! provision_pinned_quint "$decision"; then
   exit 1
 fi
 
