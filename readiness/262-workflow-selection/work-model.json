@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "c7d7904a2acbcc142a9f19f7bc8e49ef80f73e80f82c0a24519c02e9ef9e73a7"
+        "value": "49cfe9ac6654c494ac2246485e7d0c2c6ee743779ce241ed632b1cc2dacd8adb"
       }
     },
     {
@@ -1336,7 +1336,7 @@
           "path": "work/262-workflow-selection/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "c7d7904a2acbcc142a9f19f7bc8e49ef80f73e80f82c0a24519c02e9ef9e73a7"
+            "value": "49cfe9ac6654c494ac2246485e7d0c2c6ee743779ce241ed632b1cc2dacd8adb"
           },
           "schemaVersion": 1
         },
@@ -1367,7 +1367,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "f7feeb1c55e15f33dca8b85fd7ec3217fc418d24f309d1298c7c94000b2447e5"
+        "value": "cb5d6772717a5b367adab8706d576f1d1b5196a8664be0da91017edc6f701f25"
       },
       "currency": "current"
     }
