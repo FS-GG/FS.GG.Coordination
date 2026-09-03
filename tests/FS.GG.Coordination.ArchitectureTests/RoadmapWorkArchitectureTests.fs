@@ -7,6 +7,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
+open FS.GG.Coordination.Qualification.Contracts
 open Xunit
 
 let private root =
@@ -40,6 +41,37 @@ let private gateCommandSha256 (command: JsonElement) =
     |> SHA256.HashData
     |> Convert.ToHexString
     |> _.ToLowerInvariant()
+
+let private hasExactGs2067RoadmapAuthority (indexText: string) =
+    use document = JsonDocument.Parse(indexText)
+    let roadmap = document.RootElement.GetProperty("roadmap")
+
+    roadmap.GetProperty("revision").GetString() = "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9"
+    && roadmap.GetProperty("sha256").GetString() = "590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57"
+
+let private gs2067GateCatalogAgrees (indexText: string) (catalogText: string) =
+    use index = JsonDocument.Parse(indexText)
+    use catalog = JsonDocument.Parse(catalogText)
+
+    let unit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-06.7")
+
+    let contracts = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+    let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
+
+    let selected =
+        contracts
+        |> List.choose (fun contract ->
+            commands
+            |> List.tryFind (fun command -> command.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
+            |> Option.map (fun command -> command, contract))
+
+    selected.Length = contracts.Length
+    && (selected
+        |> List.forall (fun (command, contract) ->
+            command.GetProperty("qGate").GetString() = contract.GetProperty("qGate").GetString()
+            && gateCommandSha256 command = contract.GetProperty("commandSha256").GetString()))
 
 let private hasClosedStagedIntakeVocabulary (source: string) =
     let lines = source.Replace("\r", "", StringComparison.Ordinal).Split('\n') |> Set.ofArray
@@ -176,15 +208,61 @@ let ``roadmap work skill satisfies its independent structure ceiling`` () =
     Assert.Equal("", error)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-06-6 release hardening`` () =
+let ``GS2-06-7 inspection refuses stale roadmap bytes`` () =
+    let index =
+        File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+        |> ReadOnlyMemory<byte>
+
+    let staleRoadmap =
+        Encoding.UTF8.GetBytes("# stale GitHub Substrate v2 roadmap\n")
+        |> ReadOnlyMemory<byte>
+
+    match RoadmapWork.inspect index staleRoadmap "GS2-06.7" with
+    | Ok _ -> Assert.Fail("stale roadmap bytes were accepted")
+    | Error findings ->
+        Assert.Contains(findings, fun finding -> finding.Code = "RW-ROADMAP-DIGEST")
+
+[<Fact>]
+let ``GS2-06-7 authority pin refuses a stale index revision independently`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    Assert.True(hasExactGs2067RoadmapAuthority indexText)
+
+    let staleIndex =
+        indexText.Replace(
+            "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9",
+            "185494fa8ba3986834141c2ddc4e8325410df260",
+            StringComparison.Ordinal
+        )
+
+    Assert.NotEqual(indexText, staleIndex)
+    Assert.False(hasExactGs2067RoadmapAuthority staleIndex)
+
+[<Fact>]
+let ``GS2-06-7 gate registration refuses a mismatched catalog command independently`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
+    Assert.True(gs2067GateCatalogAgrees indexText catalogText)
+
+    let mismatchedCatalog =
+        catalogText.Replace(
+            "eng/validate-github-workflow-selection-supply-chain.fsx",
+            "eng/validate-github-workflow-selection.fsx",
+            StringComparison.Ordinal
+        )
+
+    Assert.NotEqual(catalogText, mismatchedCatalog)
+    Assert.False(gs2067GateCatalogAgrees indexText mismatchedCatalog)
+
+[<Fact>]
+let ``roadmap unit index advances through GS2-06-7 workflow selection`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
     let units = document.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
 
     let roadmap = document.RootElement.GetProperty("roadmap")
-    Assert.Equal("185494fa8ba3986834141c2ddc4e8325410df260", roadmap.GetProperty("revision").GetString())
-    Assert.Equal("4a7229b7e1fc5b9417d7d6cf14a4f22ba60e6d8a69cac4ce369d908d9e37ed39", roadmap.GetProperty("sha256").GetString())
+    Assert.Equal("b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57", roadmap.GetProperty("sha256").GetString())
 
     let ids =
         units |> List.map (fun unitValue -> unitValue.GetProperty("id").GetString())
@@ -242,11 +320,42 @@ let ``roadmap unit index advances through GS2-06-6 release hardening`` () =
              "GS2-06.3"
              "GS2-06.4"
              "GS2-06.5"
-             "GS2-06.6" ]
+             "GS2-06.6"
+             "GS2-06.7" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
     Assert.Equal(ids.Length, ids |> List.distinct |> List.length)
+
+    let workflowSelection =
+        units
+        |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-06.7")
+
+    Assert.Equal("FS.GG.Coordination", workflowSelection.GetProperty("owner").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-06.6" ],
+        workflowSelection.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3"; "Q7" ],
+        workflowSelection.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "github-workflow-selection-contract"; "github-workflow-selection-supply-chain-contract" ],
+        workflowSelection.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Contains("typed NotApplicable reason", workflowSelection.GetProperty("exitGate").GetString())
+    Assert.Contains("fleet-wide", workflowSelection.GetProperty("exitGate").GetString())
+    Assert.Contains(
+        "no GS2-06.8 inspection",
+        workflowSelection.GetProperty("permissionCeiling").EnumerateArray() |> Seq.item 1 |> _.GetString()
+    )
+
+    use acceptedGs2066 =
+        JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-06.6.json")))
+
+    Assert.Equal("accepted", acceptedGs2066.RootElement.GetProperty("state").GetString())
+    Assert.Equal("517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f", acceptedGs2066.RootElement.GetProperty("digest").GetString())
 
     let selected =
         units
@@ -1370,7 +1479,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(31, commands.Length)
+    Assert.Equal(33, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -1380,6 +1489,36 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
 
             for token in [ "$"; "`"; ";"; "&&"; "||"; "|"; "\n"; "\r" ] do
                 Assert.DoesNotContain(token, value)
+
+    let workflowSelectionUnit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-06.7")
+
+    let workflowSelectionContracts =
+        workflowSelectionUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+
+    let workflowSelectionCommands =
+        commands
+        |> List.filter (fun command ->
+            workflowSelectionContracts
+            |> List.exists (fun contract ->
+                contract.GetProperty("id").GetString() = command.GetProperty("id").GetString()))
+
+    Assert.Equal(2, workflowSelectionCommands.Length)
+
+    for command, contract in List.zip workflowSelectionCommands workflowSelectionContracts do
+        Assert.Equal(command.GetProperty("id").GetString(), contract.GetProperty("id").GetString())
+        Assert.Equal(command.GetProperty("qGate").GetString(), contract.GetProperty("qGate").GetString())
+        Assert.Equal(gateCommandSha256 command, contract.GetProperty("commandSha256").GetString())
+
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-workflow-selection.fsx"; "--"; "." ],
+        workflowSelectionCommands[0].GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "fsi"; "eng/validate-github-workflow-selection-supply-chain.fsx"; "--"; "." ],
+        workflowSelectionCommands[1].GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
 
     let selected =
         index.RootElement.GetProperty("units").EnumerateArray()
