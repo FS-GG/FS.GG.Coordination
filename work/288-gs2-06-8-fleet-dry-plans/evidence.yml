@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -459,10 +459,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -486,10 +486,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -513,10 +513,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -540,10 +540,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -567,10 +567,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -594,10 +594,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -621,10 +621,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -648,10 +648,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]
@@ -675,10 +675,10 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coordination.UnitTests/TestResults/gs2-06-8-focused.trx
-      digest: "sha256:17851a435ed41ad25bbaeba95acd7b029606805b11e058f70733182f1d3251b4"
+      digest: "sha256:396f2c15357774c53eb5bd939370ae2e3c4a8a9d59384fb54b62456467639db9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 9
       failed: 0
       skipped: 0
     notes: [Observed focused GS2-06.8 qualification tests.]

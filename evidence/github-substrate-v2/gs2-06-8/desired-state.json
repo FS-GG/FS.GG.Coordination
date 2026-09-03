@@ -290,7 +290,7 @@
         },
         {
           "setting": "repository",
-          "desiredSha256": "ab8bd22c82815bfeb925ffa1c998ea2bc13b95a58f5443faa264c754bdc92aa6",
+          "desiredSha256": "6de107107cda25f62cbcaf80a57070790f228a7ce5300e273f65be66608ba8ae",
           "requiredPermission": "administration:write",
           "rollbackOrForwardRepair": "restore captured pre-state or recompile from an authoritative fresh observation"
         },

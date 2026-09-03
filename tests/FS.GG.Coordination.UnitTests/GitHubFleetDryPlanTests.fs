@@ -15,7 +15,8 @@ let private instant = DateTimeOffset.Parse("2026-09-03T17:20:00Z")
 let private page = { Kind = "terminal-page"; Pages = 1; ItemCount = 1; Terminal = true; Next = None }
 
 let private endpoint repository name disposition status =
-    { Endpoint = name; StatusCode = status; Permission = "metadata:read"
+    let permission = if name = "repository" then "metadata:read" elif name = "workflows" then "actions:read" elif name = "environments" then "deployments:read" elif name = "releases-and-tags" then "contents:read" elif List.contains name [ "automated-security-fixes"; "code-security-configuration"; "vulnerability-alerts" ] then "security_events:read" else "administration:read"
+    { Endpoint = name; StatusCode = status; Permission = permission
       Pagination = page; PayloadSha256 = sha $"{repository}:{name}:payload"
       RelevantFingerprint = sha $"{repository}:{name}:state"; Disposition = disposition }
 
@@ -30,25 +31,28 @@ let private targets () =
     |> List.map (fun repository ->
         { Repository = repository; ExternalOwner = repository = "EHotwagner/S.I.R."
           Settings =
-            [ { Setting = "repository"; DesiredSha256 = sha $"{repository}:desired"
-                RequiredPermission = "administration:write"
-                RollbackOrForwardRepair = "restore captured pre-state or recompile from authoritative state" } ] })
+            expectedEndpoints |> List.map (fun setting ->
+                { Setting = setting; DesiredSha256 = sha (if setting = "repository" then $"{repository}:desired" else $"{repository}:{setting}:state")
+                  RequiredPermission = if setting = "workflows" then "actions:write" elif setting = "releases-and-tags" then "contents:write" elif List.contains setting [ "automated-security-fixes"; "code-security-configuration"; "vulnerability-alerts" ] then "security_events:write" else "administration:write"
+                  RollbackOrForwardRepair = "restore captured pre-state or recompile from authoritative state" }) })
 
 let private compileFixture observations targets =
     compile "ac05985f0d60c33fb40a5dccecb271a3e00bec4b"
         "888d1c3307ba119f6c7075b0d8963f7fa14d1e357ce1f97fdb7c803f1aa5465f"
         "316343c921c7444cb95bee292bec8d6da3c6546ffe8805bf93a0490249c76717"
-        "4864d12f13190f2665ddd5e8b5fed3fc29f77cf4" expectedReceiptDigests expectedRepositories observations targets
+        "4864d12f13190f2665ddd5e8b5fed3fc29f77cf4" (instant.AddMinutes 5.) (TimeSpan.FromHours 1.) "plan-author"
+        expectedReceiptDigests expectedRepositories observations targets
 
 [<Fact>]
 let ``fleet dry plan is deterministic canonical and lossless`` () =
     let first = compileFixture (observations ()) (targets ()) |> get
     let second = compileFixture (observations ()) (targets ()) |> get
-    let bytes = serialize first
     Assert.Equal(first, second)
-    Assert.Equal(bytes, serialize second)
-    Assert.Equal(first, parse bytes |> get)
-    Assert.Equal(first, verify first.Seal first |> get)
+    Assert.Equal(serializeDraft first, serializeDraft second)
+    let reviewed = review "plan-author" "independent-reviewer" (instant.AddMinutes 6.) first |> acceptReview first |> get
+    let bytes = serialize reviewed
+    Assert.Equal(reviewed, parse bytes |> get)
+    Assert.Equal(reviewed, verify reviewed.Seal reviewed |> get)
     Assert.Equal(10, first.Plans.Length)
     Assert.Equal(GitHubFleetDisposition.ExternalObserveOnly, first.Plans.Head.Disposition)
     Assert.All(first.Plans, fun plan -> Assert.True(plan.PreservesUnrelatedSettings))
@@ -58,7 +62,7 @@ let ``fleet dry plan is deterministic canonical and lossless`` () =
 let ``authority roster and omission fail closed`` () =
     let observed = observations ()
     let target = targets ()
-    match compile "bad" "bad" "bad" "bad" [] [] observed target with
+    match compile "bad" "bad" "bad" "bad" instant (TimeSpan.FromHours 1.) "author" [] [] observed target with
     | Error findings -> Assert.Contains(GitHubFleetDryPlanFinding.InvalidFleetAuthority "roadmap", findings); Assert.Contains(GitHubFleetDryPlanFinding.InvalidFleetRoster, findings)
     | Ok _ -> failwith "invalid authority survived"
     match compileFixture (List.tail observed) target with
@@ -82,18 +86,18 @@ let ``pagination identity and unsupported permissions stay explicit`` () =
 [<Fact>]
 let ``reinspection is independent and relevant drift stales`` () =
     let plan = compileFixture (observations ()) (targets ()) |> get
-    let bytes = serialize plan
-    let decision = review "independent-reviewer" (instant.AddMinutes 1.) bytes
+    let decision = review "plan-author" "independent-reviewer" (instant.AddMinutes 6.) plan
+    let reviewed = acceptReview plan decision |> get
     let same =
         plan.Plans |> List.map (fun value ->
             { Repository = value.Repository; ObservedAt = instant.AddMinutes 2.
               RelevantFingerprint = value.PreStateSha256; Complete = true; Authoritative = true })
-    Assert.Equal(Confirmed, reinspect plan decision same |> get)
+    Assert.Equal(Confirmed, reinspect reviewed same |> get)
     let drifted = { same.Head with RelevantFingerprint = sha "relevant-drift" } :: same.Tail
-    match reinspect plan decision drifted |> get with
+    match reinspect reviewed drifted |> get with
     | PlanStale names -> Assert.Equal([ expectedRepositories.Head ], names)
     | Confirmed -> failwith "relevant drift survived"
-    match reinspect plan { decision with Independent = false } same with
+    match reinspect { reviewed with Review = { decision with Independent = false } } same with
     | Error findings -> Assert.Contains(GitHubFleetDryPlanFinding.InvalidFleetReview, findings)
     | Ok _ -> failwith "self review survived"
 
@@ -141,7 +145,34 @@ let ``generated and independent Q5 inventories are exact`` () =
 [<Fact>]
 let ``serialization refuses extra fields and altered seals`` () =
     let plan = compileFixture (observations ()) (targets ()) |> get
-    let bytes = serialize plan
-    let altered = bytes.Replace($"\"seal\":\"{plan.Seal}\"", $"\"extra\":true,\"seal\":\"{plan.Seal}\"")
+    let decision = review "plan-author" "independent-reviewer" (instant.AddMinutes 6.) plan
+    let reviewed = acceptReview plan decision |> get
+    let bytes = serialize reviewed
+    let altered = bytes.Replace($"\"seal\":\"{reviewed.Seal}\"", $"\"extra\":true,\"seal\":\"{reviewed.Seal}\"")
     Assert.True(Result.isError (parse altered))
-    Assert.True(Result.isError (verify (sha "wrong") plan))
+    Assert.True(Result.isError (verify (sha "wrong") reviewed))
+
+[<Fact>]
+let ``freshness complete desired inventory and least permission fail closed`` () =
+    let observed = observations ()
+    let desired = targets ()
+    Assert.True(Result.isError (compileFixture observed ({ desired.Head with Settings = desired.Head.Settings.Tail } :: desired.Tail)))
+    let excessive = { desired.Head.Settings.Head with RequiredPermission = "contents:write" }
+    Assert.True(Result.isError (compileFixture observed ({ desired.Head with Settings = excessive :: desired.Head.Settings.Tail } :: desired.Tail)))
+    let expired = { observed.Head with ObservedAt = instant.AddHours(-2.) } :: observed.Tail
+    Assert.True(Result.isError (compileFixture expired desired))
+
+[<Fact>]
+let ``reviewed seal binds setting evidence and distinct reviewer`` () =
+    let plan = compileFixture (observations ()) (targets ()) |> get
+    let self = review plan.Author plan.Author (instant.AddMinutes 6.) plan
+    Assert.False(self.Independent)
+    Assert.True(Result.isError (acceptReview plan self))
+    let independent = review plan.Author "independent-reviewer" (instant.AddMinutes 6.) plan
+    let reviewed = acceptReview plan independent |> get
+    let firstPlan = reviewed.Plan.Plans.Head
+    let firstSetting = firstPlan.Settings.Head
+    let changedSetting = { firstSetting with Permission = "contents:read" }
+    let tampered = { reviewed with Plan = { reviewed.Plan with Plans = { firstPlan with Settings = changedSetting :: firstPlan.Settings.Tail } :: reviewed.Plan.Plans.Tail } }
+    Assert.True(Result.isError (verify reviewed.Seal tampered))
+    Assert.True(Result.isError (parse (serialize tampered)))

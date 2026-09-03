@@ -30,18 +30,23 @@ type GitHubFleetOperation =
       RollbackOrForwardRepair: string }
 
 type GitHubFleetRepositoryPlan =
-    { Repository: string; DefaultBranch: string; ObservedAt: System.DateTimeOffset
+    { Repository: string; DefaultBranch: string; ObservedAt: System.DateTimeOffset; ObservationComplete: bool
       PreStateSha256: string; DesiredStateSha256: string; Disposition: GitHubFleetDisposition
+      Settings: GitHubFleetEndpointObservation list; DesiredSettings: GitHubFleetDesiredSetting list
       Operations: GitHubFleetOperation list; PreservesUnrelatedSettings: bool }
 
 type GitHubFleetDryPlan =
     { SchemaVersion: int; RoadmapRevision: string; RoadmapSha256: string
-      UnitContractSha256: string; SourceRevision: string; ReceiptDigests: string list
+      UnitContractSha256: string; SourceRevision: string; CompiledAt: System.DateTimeOffset
+      MaxObservationAge: System.TimeSpan; Author: string; ReceiptDigests: string list
       Roster: string list; Plans: GitHubFleetRepositoryPlan list; Seal: string }
 
 type GitHubFleetPlanReview =
-    { Reviewer: string; ReviewedAt: System.DateTimeOffset; PlanSha256: string
+    { Author: string; Reviewer: string; ReviewedAt: System.DateTimeOffset; PlanSha256: string
       Independent: bool; Accepted: bool; EvidenceSha256: string }
+
+type GitHubFleetReviewedPlan =
+    { Plan: GitHubFleetDryPlan; Review: GitHubFleetPlanReview; Seal: string }
 
 type GitHubFleetReinspection =
     { Repository: string; ObservedAt: System.DateTimeOffset
@@ -80,16 +85,19 @@ module GitHubFleetDryPlanQualification =
     val controlId: GitHubFleetControl -> string
     val compile:
         roadmapRevision:string -> roadmapSha256:string -> unitContractSha256:string ->
-        sourceRevision:string -> receiptDigests:string list -> roster:string list ->
+        sourceRevision:string -> compiledAt:System.DateTimeOffset -> maxObservationAge:System.TimeSpan -> author:string ->
+        receiptDigests:string list -> roster:string list ->
         observations:GitHubFleetRepositoryObservation list -> targets:GitHubFleetRepositoryTarget list ->
         Result<GitHubFleetDryPlan, GitHubFleetDryPlanFinding list>
-    val review: reviewer:string -> reviewedAt:System.DateTimeOffset -> planBytes:string -> GitHubFleetPlanReview
+    val serializeDraft: GitHubFleetDryPlan -> string
+    val review: author:string -> reviewer:string -> reviewedAt:System.DateTimeOffset -> plan:GitHubFleetDryPlan -> GitHubFleetPlanReview
+    val acceptReview: plan:GitHubFleetDryPlan -> review:GitHubFleetPlanReview -> Result<GitHubFleetReviewedPlan, GitHubFleetDryPlanFinding list>
     val reinspect:
-        plan:GitHubFleetDryPlan -> review:GitHubFleetPlanReview ->
+        reviewed:GitHubFleetReviewedPlan ->
         observations:GitHubFleetReinspection list -> Result<GitHubFleetReinspectionResult, GitHubFleetDryPlanFinding list>
-    val serialize: GitHubFleetDryPlan -> string
-    val parse: string -> Result<GitHubFleetDryPlan, GitHubFleetDryPlanFinding list>
-    val verify: expectedSeal:string -> GitHubFleetDryPlan -> Result<GitHubFleetDryPlan, GitHubFleetDryPlanFinding list>
+    val serialize: GitHubFleetReviewedPlan -> string
+    val parse: string -> Result<GitHubFleetReviewedPlan, GitHubFleetDryPlanFinding list>
+    val verify: expectedSeal:string -> GitHubFleetReviewedPlan -> Result<GitHubFleetReviewedPlan, GitHubFleetDryPlanFinding list>
     val validateControls:
         generated:GitHubFleetControlResult list -> independent:GitHubFleetControlResult list ->
         Result<unit, GitHubFleetQualificationFinding list>

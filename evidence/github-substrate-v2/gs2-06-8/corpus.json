@@ -36,5 +36,205 @@
     "fleet-quint-preservation",
     "fleet-no-apply",
     "fleet-no-mutation"
+  ],
+  "cases": [
+    {
+      "id": "fleet-prerequisites",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-roadmap",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-roster",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-completeness",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-pagination",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-repository-identity",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-default-branch",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-observation-time",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-pre-state",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-desired-state",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-operation-identity",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-ordering",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-least-permission",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-supported",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-unsupported",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-unauthorized",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-unavailable",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-incomplete",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-unreadable",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-stale",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-indeterminate",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-external-owner",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-no-op",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-unrelated-setting",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-review",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-reinspection",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-serialization",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-replay",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-comprehensive-gate",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-omission",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-quint-preservation",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-no-apply",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    },
+    {
+      "id": "fleet-no-mutation",
+      "mutation": "generated typed mutation executed by validate-github-fleet-dry-plans.fsx",
+      "expected": "baseline green and control-specific mutation or positive proof passes",
+      "observed": true
+    }
   ]
 }
