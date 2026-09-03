@@ -1,0 +1,16 @@
+{
+  "schema": "fsgg.github-fleet-plan-review/1",
+  "reviewer": "independent-plan-reviewer/gs2-06.8",
+  "independent": true,
+  "accepted": true,
+  "scope": [
+    "authority",
+    "roster",
+    "complete-settings-census",
+    "explicit-dispositions",
+    "minimal-no-op-plan",
+    "canonical-replay",
+    "no-apply"
+  ],
+  "note": "Exact typed review evidence is recomputed by the Q5 validator from canonical plan bytes."
+}

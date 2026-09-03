@@ -1,0 +1,1148 @@
+{
+  "schema": "fsgg.github-fleet-live-observations/1",
+  "observedAt": "2026-09-03T17:35:39Z",
+  "source": "GitHub REST API via gh 2.76.2",
+  "complete": true,
+  "repositories": [
+    {
+      "repository": "EHotwagner/S.I.R.",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/EHotwagner/S.I.R./actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/EHotwagner/S.I.R./actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/EHotwagner/S.I.R./actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/EHotwagner/S.I.R./automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/EHotwagner/S.I.R./branches/main/protection",
+          "statusCode": 404,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "d6020ee3b0852c3deb66c66d159cc80caabeaa66ee301778307a2a18d486450d",
+          "disposition": "unsupported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/EHotwagner/S.I.R./code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/EHotwagner/S.I.R./environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "cad95a842d6c1e9c3bb637b65c44c535078d53d6a663674e76accbec6df54943",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/EHotwagner/S.I.R./releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/EHotwagner/S.I.R.",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "fc72b75f3b0f53f5d0b17690d7e171f77ae1d70288db01dbc8ee9a282091cd32",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/EHotwagner/S.I.R./rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/EHotwagner/S.I.R./vulnerability-alerts",
+          "statusCode": 404,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "9823ff5229a049b085025a16d246d1aef8fe4df5f4e335238a1d33b2b0874967",
+          "disposition": "unsupported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/EHotwagner/S.I.R./actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "248615f70cc73c3e27f4acb1e263b5544b25463ffdd10c3d7732bdf0c8e7b739",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/.github",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/.github/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/.github/actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/.github/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/.github/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/.github/branches/main/protection",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "c59548953a60605d285f33e78fe436c3a9ffb8812f96fa7daa07fe29a2d5bcfa",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/.github/code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/.github/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "522e4d97d2eaab9f4feadb461ed70508e1ab99ebc94510306d0523e8aec48bd6",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/.github/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "a36c233b41a368a118f52a6f31c40ed1966e0834a80920a66e2c9009d5cc4cc8",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/.github",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "08a173d1e664dba1571c482e212d960dd60307e35c40c1905270558814f5fcad",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/.github/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "ca388a85c4b2ebda66964d7287f0a88fc4f8588401956188ac5670247d32bfe8",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/.github/vulnerability-alerts",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/.github/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "fc1a6a935d44b2d926b487ca479ecc20ff8855a1019ce8e82b133e1b9b27a834",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/FS.GG.Audio",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/branches/main/protection",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "c3ad03fdc42e5b05ed98c89c5c8ed2822f5ecaf5a3017ea4b655da0539ad0da7",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "5b03920c89eb380f95fc9eb2373384b3bd40bbcfc18883c984cdc7f3a36828ec",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/FS.GG.Audio",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "735361a32c2eec7eff2f3afa5b879cef485cde33ceecf4d9e31248a8e33e5e10",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/vulnerability-alerts",
+          "statusCode": 404,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "9823ff5229a049b085025a16d246d1aef8fe4df5f4e335238a1d33b2b0874967",
+          "disposition": "unsupported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/FS.GG.Audio/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "5a0f0f93ef1eae16b80af3fbbcf3f7dcad4f46d50e471ec02011b83a2faa84ca",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "944998420cda4acdda2514d9f449d02a14d588edfa23c174127bc29a282648c0",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/actions/permissions/selected-actions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "eabd08d64453123a5f470711de488ca47fa0154060e056b39bdd92509a11ddf2",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "0ff62c42295fc2725047cf32340e12c912af1d99c7ea5ec8902519de6ae3a477",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/branches/main/protection",
+          "statusCode": 404,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "d6020ee3b0852c3deb66c66d159cc80caabeaa66ee301778307a2a18d486450d",
+          "disposition": "unsupported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/code-security-configuration",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "a82f8ce610e0b6fc90d6d2e8849685fac2a03229bc27f72cb4ac9fc0e32dd018",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "ab8bd22c82815bfeb925ffa1c998ea2bc13b95a58f5443faa264c754bdc92aa6",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "4f6fe3ed045161700b93fe73b96ab67c63c521e4c3244b8e030965ffac47c711",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/vulnerability-alerts",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/FS.GG.Coordination/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "c392c81fd5ace47f92211333a5e3d73ed63fec4f01ca4cd99a60e4ee75c8e62b",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/FS.GG.Game",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Game/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/FS.GG.Game/actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Game/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/FS.GG.Game/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/FS.GG.Game/branches/main/protection",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0eda0a318384a464c7f163730d9b37988fb526342a09b9f24e823d85c682cd43",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/FS.GG.Game/code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/FS.GG.Game/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/FS.GG.Game/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "f1f01f8680b73f4006aad8153009de933bfd8a35fc9c7cacb48e6d865a37f218",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/FS.GG.Game",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "f7c361ec39add7381fce2c82d2d858dd5507013ff02bf4b6604e536f4c10cb39",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/FS.GG.Game/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/FS.GG.Game/vulnerability-alerts",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/FS.GG.Game/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "ede643a41c0dc6d26f87e17e25f12e31d1dcb54da729403adbfd10b6e96ccc82",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/FS.GG.Governance",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/branches/main/protection",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "466322e9250bd370191674fcef0684849249f399a816590b4a9fd7db91543ac9",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "ef5986ddb4af69fde9c739cbc4a4f45b884258c8b40b077ac863a543720f280f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/FS.GG.Governance",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "7a675910f4d5436f3d36177a2fa506ad8f6a1e466efbd48ba7cf1cc62d03dc41",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "e5a1c91c14188a3c886120a73f6f1725ddc7ca238fc6b50072c2a50d60f15d4c",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/vulnerability-alerts",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/FS.GG.Governance/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "a6304fcdd129c1b4bada854b5ba0255e1e434994677554fbd1d14489ae2c06f0",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/FS.GG.Net",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Net/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/FS.GG.Net/actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Net/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/FS.GG.Net/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/FS.GG.Net/branches/main/protection",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "2e631d94378301b4620bd3b291e91882fd7a72b6f6ba4a97b7e0eee7c8f17268",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/FS.GG.Net/code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/FS.GG.Net/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/FS.GG.Net/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "64dcc15330bdffed25bbb239e9132d3897135e1144429dba3751ffa8eeeec568",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/FS.GG.Net",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "5647dc97cb5ade3825a2bcfd0bc04dc2202d79244d1b7ef58b7c2d8b2c47b228",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/FS.GG.Net/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/FS.GG.Net/vulnerability-alerts",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/FS.GG.Net/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "b7a8ff56d51500d748ad9caaace9be43761b74b8496f1d3804ef082a9d6ab6ca",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/FS.GG.Rendering",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/branches/main/protection",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f8f1df04e41b1b5adb50b5937199914593068cc93f1ac9b3b6ed8ef4cbc44370",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "bc39562aa4d721828de1480b4979f119548affec6336efd2a2757a577d677e09",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "b8aff7ee2b2c3c24ddec08072e92ecf1de6e015d381167ee45a9b990b6c13aaa",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "af93d2858f9a49167fa0490966c044189426557d28888bd16fedee6e922346c2",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/vulnerability-alerts",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/FS.GG.Rendering/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "72927c4927e66fec0263a90222edd8e7ba4ec17148c7dd8e9a7e665a04d9e394",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/FS.GG.SDD",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/branches/main/protection",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "811cd44670914dae25cc1d9ad1727425fe0dfd1b8f09526be15e5fbd48a527d6",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "f6798e627d5badf4d24cd5739dfcba03a4e1bb4e38b4c92f48c71ef8f3240c75",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/FS.GG.SDD",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "5f50c2753bfe40885c3aaff1393662c5872d824ef89487f982575b772b06e0a7",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/vulnerability-alerts",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/FS.GG.SDD/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "847035ba5e4d769e20bcf37e14416e84fa9385c503aea4e68d24a21cbf794655",
+          "disposition": "supported"
+        }
+      ]
+    },
+    {
+      "repository": "FS-GG/FS.GG.Templates",
+      "defaultBranch": "main",
+      "endpoints": [
+        {
+          "endpoint": "actions-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/actions/permissions",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "0bffee97e4ad52676c0127aacb5b4b304a2675f5c524de641acf1326e0b0e857",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "actions-selected-actions",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/actions/permissions/selected-actions",
+          "statusCode": 409,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3315625f44975f1f9dd3995e2fde37a00acf839b97edd59ab2125c8e277ce3ae",
+          "disposition": "indeterminate"
+        },
+        {
+          "endpoint": "actions-workflow-permissions",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/actions/permissions/workflow",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "f6e178fc1e56cf43900da383f85398b61de9ae61c6b8433116c1856605745924",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "automated-security-fixes",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/automated-security-fixes",
+          "statusCode": 200,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "8a0a15ba9d18fbed2294a579cbae9c005dd2fc71b83c56a28e7f55f984e8771f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "branch-protection",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/branches/main/protection",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "3e088275dc5be5c34f9eb1dc165808b4da5e5070c9af6407b90a86560eb4830a",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "code-security-configuration",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/code-security-configuration",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "environments",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/environments?per_page=100",
+          "statusCode": 200,
+          "permission": "deployments:read",
+          "terminal": true,
+          "payloadSha256": "5842753b850930f48d60b948a8672f9c448f0065000d402da264da7106c6d96f",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "releases-and-tags",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/releases?per_page=100",
+          "statusCode": 200,
+          "permission": "contents:read",
+          "terminal": true,
+          "payloadSha256": "f42cc32b46550c1a869a8e07573332dcb98418d630d286d84fea41800a7564c4",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "repository",
+          "query": "GET /repos/FS-GG/FS.GG.Templates",
+          "statusCode": 200,
+          "permission": "metadata:read",
+          "terminal": true,
+          "payloadSha256": "7792afedd246604f6194da87f6ba5e34f1031a10b5dfec5f5fdaafa952a27b93",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "rulesets",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/rulesets?per_page=100",
+          "statusCode": 200,
+          "permission": "administration:read",
+          "terminal": true,
+          "payloadSha256": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "vulnerability-alerts",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/vulnerability-alerts",
+          "statusCode": 204,
+          "permission": "security_events:read",
+          "terminal": true,
+          "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "disposition": "supported"
+        },
+        {
+          "endpoint": "workflows",
+          "query": "GET /repos/FS-GG/FS.GG.Templates/actions/workflows?per_page=100",
+          "statusCode": 200,
+          "permission": "actions:read",
+          "terminal": true,
+          "payloadSha256": "af042a42dcf9a0027a2de806ec93905809edff2a83c5a6fd7f172f684945d6bd",
+          "disposition": "supported"
+        }
+      ]
+    }
+  ]
+}
