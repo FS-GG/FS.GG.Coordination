@@ -498,7 +498,9 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
           // ambient provider can only replace them by updating this executable contract.
           "readiness/262-workflow-selection/work-model.json", "f22fff614e7d8ee1e7fd024f9f8620068d02e1c13d771ff6a5e940dd56ffc04a"
           "readiness/262-workflow-selection/verify.json", "2aecda1b2d1e1b0cb000f82be85e5fb622bef3c07d99e20813c3123a519215e6"
+          "readiness/262-workflow-selection/ship.json", "0b4e5756cdeefddf934aaacbf8f5683c13e1ad659a443899c87d4870eaec3b72"
           "readiness/262-workflow-selection/ship-verdict.json", "b3eb891464341c78f14dfc2a8ee577f825a886e0c3343677bf617478d4280868"
+          "readiness/262-workflow-selection/governance-handoff.json", "6c4bd08e91b3a573e7d7e50c61ebd423f81a95f7b4e4891d39b5ed4d0f40c6ce"
           "artifacts/test-results/262-workflow-selection/unit-tests.trx", "6fbe1892e2d3658297991876d86d55344e08b192e98457ee630543b5e8e4f74d" ]
     let paths = expected |> List.map fst
     let code, output = tracked paths
