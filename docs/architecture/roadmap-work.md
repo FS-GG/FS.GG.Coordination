@@ -10,7 +10,8 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-and the active GS2-02.10 frontier with stable IDs, owner,
+the subsequently accepted GS2-02 through GS2-06.6 units, and the active GS2-06.7
+frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -219,6 +220,19 @@ baseline validation require exact six-domain coverage, positive budgets, executa
 symbols, the TLC backend, and the retained counterexample path; focused mutants make
 each field fail closed. The formal scenarios consume canonical functions and fixtures
 inside the canonical test module and do not introduce a second production model.
+
+GS2-06.7 is registered against `.github` roadmap commit
+`b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9` and exact roadmap SHA-256
+`590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57`.
+Its sole prerequisite is the accepted GS2-06.6 receipt. The ordered Q3
+`github-workflow-selection-contract` and Q7
+`github-workflow-selection-supply-chain-contract` identities reserve separate
+semantic-selection and CI/supply-chain evidence lanes for the implementation unit.
+This registration does not create either validator or execute either gate. It adds no
+selector, workflow consolidation, candidate or acceptance evidence, production mutation,
+or GS2-06.8 authority. Architecture controls independently refuse changed roadmap bytes,
+a stale index authority pin, and a catalog command that disagrees with either sealed
+command identity before the future gate process can start.
 
 ## Command sequence
 

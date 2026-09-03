@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "185494fa8ba3986834141c2ddc4e8325410df260",
+    "revision": "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "4a7229b7e1fc5b9417d7d6cf14a4f22ba60e6d8a69cac4ce369d908d9e37ed39"
+    "sha256": "590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57"
   },
   "units": [
     {
@@ -756,6 +756,21 @@
         { "id": "github-release-hardening-contract", "qGate": "Q3", "commandSha256": "51208bb68cea93e3c704383ced266ecac19ca71c9819a22d374fd73ed3c785c8" }
       ],
       "contractSha256": "87ddf9814990e2d46a21b96b47336b4078c78ab1564f208187c9ac9429495c13"
+    },
+    {
+      "id": "GS2-06.7",
+      "title": "Workflow consolidation and change-impact selection",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-06.6"],
+      "permissionCeiling": ["repository-local additive workflow-consolidation and change-impact-selection contracts, pure deterministic compilation of typed workflow inventories, composite and reusable job contracts, stable aggregate outcomes, versioned dependency graphs, sound changed-subject and non-file-input closure, unconditional policy obligations, merge-group recomputation, performance baselines and targets, sentinel comparisons, fleet-disable decisions, removal ledgers, validation, and retained evidence", "read-only consumption of accepted GS2-06.6, exact accepted roadmap, complete workflow and non-file-input inventories, and measured baseline evidence is allowed; no production GitHub setting, workflow, ruleset, required-check, merge-queue, repository, release, package, feed, environment, deployment, or fleet mutation, no GS2-06.7 acceptance receipt, and no GS2-06.8 inspection, preparation, or implementation authority"],
+      "exitGate": "the ordered Q3 and Q7 workflow-selection contracts begin from the accepted GS2-06.6 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds repository and source, roadmap revision and digest, prerequisite receipt, a complete typed inventory of workflows, policy jobs, composite steps, reusable job contracts and stable aggregate outputs, a versioned dependency graph from changed subjects and non-file inputs to build, test, policy, coordination, packaging and release obligations, unconditional policy marks, merge-group queued head and current base and settings, per-repository fan-out, billed-minute, queue-time and p50/p95 completion baselines and accepted targets, the unconditional core suite, scheduled full-suite sentinel comparisons, fleet-disable decisions and the complete removed-workflow and obligation ledger; the compiler returns the smallest sound transitive obligation closure while every required aggregate resolves and an unselected child reports a typed NotApplicable reason without provisioning its expensive job; unknown, ambiguous, stale, incomplete or unsupported impact fails closed rather than skipping work, and merge-group selection is recomputed against the queued head and current base and settings; representative source, test, workflow, dependency, generated-output, documentation, policy, release, mixed and unknown changes are independently classified; the selector meets every accepted performance target without a missed obligation, scheduled sentinels compare the selected closure with actual full-suite failures, and any missed obligation deterministically disables selection fleet-wide; exact replay is byte-identical and no production workflow or fleet mutation path exists; generated adversarial mutations and independently authored prerequisite, roadmap, completeness, inventory, graph-version, changed-subject, non-file-input, transitive-closure, unconditional, aggregate, NotApplicable, no-provisioning, ambiguity, staleness, merge-group, representative-change, mixed-change, unknown-change, baseline, target, fan-out, billed-minute, queue-time, p50, p95, sentinel, missed-obligation, fleet-disable, removal-ledger, ordering, seal, replay, Quint-preservation and no-mutation controls all pass without production writes, acceptance authority or successor-unit authority",
+      "qGates": ["Q3", "Q7"],
+      "gateCommands": ["github-workflow-selection-contract", "github-workflow-selection-supply-chain-contract"],
+      "gateContracts": [
+        { "id": "github-workflow-selection-contract", "qGate": "Q3", "commandSha256": "118d3a97fe1c792601bd74c8dfa192151777f45dae266f12e005ba27ec59a445" },
+        { "id": "github-workflow-selection-supply-chain-contract", "qGate": "Q7", "commandSha256": "395572cfeeaab1b9f288c1073f1a7a4f0740491703c91eefb1fb47b97e4613ba" }
+      ],
+      "contractSha256": "a6eb28bb64a56dc6379cefc6682336b7bface7b8ea2d29711429d05b3e507b79"
     }
   ]
 }

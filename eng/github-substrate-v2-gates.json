@@ -186,6 +186,18 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-release-hardening.fsx", "--", "."]
+    },
+    {
+      "id": "github-workflow-selection-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-workflow-selection.fsx", "--", "."]
+    },
+    {
+      "id": "github-workflow-selection-supply-chain-contract",
+      "qGate": "Q7",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-workflow-selection-supply-chain.fsx", "--", "."]
     }
   ]
 }
