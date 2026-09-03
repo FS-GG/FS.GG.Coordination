@@ -298,7 +298,13 @@ let ``repository owns callable reusable composite aggregate and sentinel contrac
     Assert.Contains("schedule:", sentinel)
     Assert.Contains("workflow-selection-sentinel.sh", sentinel)
     Assert.DoesNotContain("Resolve current protected checkout and settings authority", sentinel)
-    Assert.Contains("runtime-reviewed-authority.json", read "eng/workflow-selection-sentinel.sh")
+    let sentinelScript = read "eng/workflow-selection-sentinel.sh"
+    Assert.Contains("runtime-reviewed-authority.json", sentinelScript)
+    Assert.Contains("bash eng/bootstrap-gates/provision-quint.sh", sentinelScript)
+    Assert.Contains("pinned-quint-unavailable", sentinelScript)
+    let provisionIndex = sentinelScript.IndexOf("provision_pinned_quint \"$decision\"", StringComparison.Ordinal)
+    let testIndex = sentinelScript.IndexOf("dotnet test FS.GG.Coordination.sln", StringComparison.Ordinal)
+    Assert.True(provisionIndex < testIndex, "the full suite must provision pinned Quint before architecture tests start")
     Assert.DoesNotContain("gh api", reusable + sentinel)
     Assert.DoesNotContain("fleetSelectionEnabled=true", reusable + sentinel)
 
@@ -306,6 +312,24 @@ let ``repository owns callable reusable composite aggregate and sentinel contrac
 let ``sentinel consumes the typed Q7 missed-obligation decision and disables selection`` () =
     let temporary = Path.Combine(Path.GetTempPath(), $"fsgg-gs267-sentinel-{Guid.NewGuid():N}")
     Directory.CreateDirectory(temporary) |> ignore
+    let failedProvisionRoot = Path.Combine(temporary, "failed-provision")
+    let fakeBin = Path.Combine(failedProvisionRoot, "bin")
+    Directory.CreateDirectory(fakeBin) |> ignore
+    let fakeCurl = Path.Combine(fakeBin, "curl")
+    File.WriteAllText(fakeCurl, "#!/usr/bin/env bash\nexit 22\n")
+    File.SetUnixFileMode(fakeCurl, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+    let failedProvisionDecision = Path.Combine(failedProvisionRoot, "decision.json")
+    let failedProvisionCode, failedProvisionOutput, failedProvisionError =
+        runBashAt root
+            [ "RUNNER_TEMP", Path.Combine(failedProvisionRoot, "runner")
+              "PATH", fakeBin + ":/usr/bin:/bin" ]
+            [ "eng/workflow-selection-sentinel.sh"; "--provision-only"; failedProvisionDecision ]
+    Assert.True(failedProvisionCode <> 0, failedProvisionOutput + failedProvisionError)
+    use failedProvision = JsonDocument.Parse(File.ReadAllText failedProvisionDecision)
+    Assert.Equal("failed", failedProvision.RootElement.GetProperty("fullSuite").GetString())
+    Assert.Equal("disabled", failedProvision.RootElement.GetProperty("fleetSelection").GetString())
+    Assert.Equal("pinned-quint-unavailable", failedProvision.RootElement.GetProperty("reason").GetString())
+    Assert.False(failedProvision.RootElement.GetProperty("productionMutation").GetBoolean())
     let authorityFailureRoot = Path.Combine(temporary, "authority-failure")
     let authorityFailureDecision = Path.Combine(authorityFailureRoot, "workflow-selection-sentinel/decision.json")
     let authorityFailureCode, authorityFailureOutput, authorityFailureError =
