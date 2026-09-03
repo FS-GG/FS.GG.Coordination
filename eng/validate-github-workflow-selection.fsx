@@ -37,7 +37,7 @@ let report =
     | Error findings -> failwith $"workflow selection baseline failed: {findings}"
 if String.IsNullOrWhiteSpace expectedSeal then failwith $"expectedSeal is empty; computed={report.Seal}"
 match GitHubWorkflowSelectionQualification.verify expectedSeal snapshot with
-| Error findings -> failwith $"workflow selection seal failed: {findings}"
+| Error findings -> failwith $"workflow selection seal failed: expected={expectedSeal} computed={report.Seal} findings={findings}"
 | Ok _ -> ()
 
 let expectedControls = texts "selectionControls" expectations
@@ -55,8 +55,8 @@ let generatedMutation (control: GitHubWorkflowSelectionControl) =
     | WorkflowRoadmap -> expectCompileError { snapshot with RoadmapSha256 = String.replicate 64 "b" }
     | WorkflowCompleteness -> expectCompileError { snapshot with Complete = false }
     | TypedWorkflowInventory ->
-        let first = snapshot.Workflows.Head
-        expectCompileError { snapshot with Workflows = { first with CompositeSteps = [] } :: snapshot.Workflows.Tail }
+        let rows = snapshot.Workflows |> List.map (fun value -> { value with CompositeSteps = [] })
+        expectCompileError { snapshot with Workflows = rows }
     | WorkflowGraphVersion -> expectCompileError { snapshot with GraphVersion = "fsgg.workflow-impact/2" }
     | ChangedSubjectSelection -> expectCompileError (replaceCase "source" (fun value -> { value with ChangedSubjects = [ "" ] }) snapshot)
     | NonFileInputSelection -> expectCompileError { snapshot with NonFileInputInventoryComplete = false }
@@ -91,8 +91,8 @@ let independentMutation (control: GitHubWorkflowSelectionControl) fixture =
     | WorkflowRoadmap, "alternate-roadmap-bytes" -> expectCompileError { snapshot with RoadmapRevision = String.replicate 40 "d" }
     | WorkflowCompleteness, "non-file-inventory-incomplete" -> expectCompileError { snapshot with NonFileInputInventoryComplete = false }
     | TypedWorkflowInventory, "missing-reusable-contract" ->
-        let second = snapshot.Workflows[1]
-        expectCompileError { snapshot with Workflows = [ snapshot.Workflows[0]; { second with ReusableJobContracts = [] } ] }
+        let rows = snapshot.Workflows |> List.map (fun value -> if value.Workflow.EndsWith("reusable-obligation-selection.yml") then { value with ReusableJobContracts = [] } else value)
+        expectCompileError { snapshot with Workflows = rows }
     | WorkflowGraphVersion, "unsupported-graph-major" -> expectCompileError { snapshot with GraphVersion = "workflow-impact/99" }
     | ChangedSubjectSelection, "source-well-formed-misclassification" ->
         expectCompileError (replaceCase "source" (fun value ->
@@ -158,7 +158,15 @@ let shapeMutation = function
     | "outcome-extra" -> let value = corpusNode.DeepClone().AsObject() in addUnknown (firstObject "childOutcomes" value); expectShapeRefusal value
     | "metric-extra" -> let value = corpusNode.DeepClone().AsObject() in addUnknown (((firstObject "performance" value)["baseline"]).AsObject()); expectShapeRefusal value
     | "sentinel-extra" -> let value = corpusNode.DeepClone().AsObject() in addUnknown ((value["sentinel"]).AsObject()); expectShapeRefusal value
-    | "removal-extra" -> let value = corpusNode.DeepClone().AsObject() in addUnknown (firstObject "removals" value); expectShapeRefusal value
+    | "removal-extra" ->
+        let value = corpusNode.DeepClone().AsObject()
+        let removal = JsonObject()
+        removal["workflow"] <- JsonValue.Create("removed.yml")
+        removal["obligation"] <- JsonValue.Create("removed")
+        removal["reason"] <- JsonValue.Create("test")
+        addUnknown removal
+        value["removals"].AsArray().Add(removal)
+        expectShapeRefusal value
     | "expectations-top-level-extra" -> let value = expectations.DeepClone().AsObject() in addUnknown value; expectRefusal (fun () -> validateExpectationsShape value)
     | "selection-case-extra" -> let value = expectations.DeepClone().AsObject() in addUnknown (firstObject "selectionIndependentCases" value); expectRefusal (fun () -> validateExpectationsShape value)
     | "supply-case-extra" -> let value = expectations.DeepClone().AsObject() in addUnknown (firstObject "supplyChainIndependentCases" value); expectRefusal (fun () -> validateExpectationsShape value)

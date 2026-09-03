@@ -1,0 +1,219 @@
+name: Reusable obligation selection
+
+on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        description: Exact candidate revision to qualify.
+        required: true
+        type: string
+      inventory_path:
+        description: Tracked sealed workflow inventory.
+        required: true
+        type: string
+      request_path:
+        description: Tracked selection request derived against the current base and settings.
+        required: true
+        type: string
+      expected_inventory_seal:
+        description: Reviewed seal of the tracked inventory expected by the caller.
+        required: true
+        type: string
+      expected_inventory_version:
+        description: Reviewed supported inventory contract version.
+        required: true
+        type: string
+      expected_graph_version:
+        description: Reviewed supported dependency-graph contract version.
+        required: true
+        type: string
+      current_base_revision:
+        description: Current base revision read by the caller for this event.
+        required: true
+        type: string
+      current_settings_sha256:
+        description: Current reviewed repository-settings digest read by the caller.
+        required: true
+        type: string
+      current_queued_head:
+        description: Current merge-group queued head, or the literal none outside merge-group events.
+        required: true
+        type: string
+    outputs:
+      required:
+        description: Stable required-check aggregate outcome.
+        value: ${{ jobs.required.outputs.outcome }}
+      supply-chain:
+        description: Stable supply-chain aggregate outcome.
+        value: ${{ jobs.required.outputs.supply-chain }}
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    name: derive-obligation-closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      build: ${{ steps.route.outputs.build }}
+      test: ${{ steps.route.outputs.test }}
+      policy: ${{ steps.route.outputs.policy }}
+      coordination: ${{ steps.route.outputs.coordination }}
+      packaging: ${{ steps.route.outputs.packaging }}
+      release: ${{ steps.route.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ inputs.candidate_sha }}", fetch-depth: 0 }
+      - uses: ./.github/actions/coordination-setup
+        with:
+          ref: ${{ inputs.candidate_sha }}
+      - name: Build the production selector
+        run: dotnet build src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj -c Release --nologo
+      - name: Bind selector inputs to tracked files inside the exact checkout
+        env:
+          INVENTORY_PATH: ${{ inputs.inventory_path }}
+          REQUEST_PATH: ${{ inputs.request_path }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CURRENT_QUEUED_HEAD: ${{ inputs.current_queued_head }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for candidate_path in "$INVENTORY_PATH" "$REQUEST_PATH"; do
+            case "$candidate_path" in /*) echo "selector path must be repository-relative" >&2; exit 1 ;; esac
+            git ls-files --error-unmatch -- "$candidate_path" >/dev/null
+            resolved="$(realpath -e -- "$candidate_path")"
+            case "$resolved" in "$GITHUB_WORKSPACE"/*) ;; *) echo "selector path escaped checkout" >&2; exit 1 ;; esac
+          done
+          if [[ "$CURRENT_QUEUED_HEAD" != none && "$CURRENT_QUEUED_HEAD" != "$CANDIDATE_SHA" ]]; then
+            echo "merge-group queued-head authority differs from the exact candidate" >&2
+            exit 1
+          fi
+      - name: Derive the arbitrary-input closure
+        id: route
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/workflow-selection.json"
+          dotnet src/FS.GG.Coordination.Cli/bin/Release/net10.0/FS.GG.Coordination.Cli.dll \
+            workflow-select --inventory "${{ inputs.inventory_path }}" --request "${{ inputs.request_path }}" \
+            --expected-inventory-version "${{ inputs.expected_inventory_version }}" \
+            --expected-graph-version "${{ inputs.expected_graph_version }}" \
+            --expected-seal "${{ inputs.expected_inventory_seal }}" \
+            --current-base "${{ inputs.current_base_revision }}" \
+            --current-settings "${{ inputs.current_settings_sha256 }}" \
+            --current-queued-head "${{ inputs.current_queued_head }}" > "$output"
+          for obligation in build test policy coordination packaging release; do
+            if jq -e --arg obligation "$obligation" '.closure | index($obligation) != null' "$output" >/dev/null; then
+              printf '%s=selected\n' "$obligation" >> "$GITHUB_OUTPUT"
+            else
+              printf '%s=not-applicable\n' "$obligation" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+  build:
+    needs: select
+    if: ${{ needs.select.outputs.build == 'selected' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ inputs.candidate_sha }}", fetch-depth: 0 }
+      - uses: ./.github/actions/coordination-setup
+        with: { ref: "${{ inputs.candidate_sha }}" }
+      - run: bash eng/bootstrap-gates/deterministic-build.sh
+
+  test:
+    needs: select
+    if: ${{ needs.select.outputs.test == 'selected' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ inputs.candidate_sha }}", fetch-depth: 0 }
+      - uses: ./.github/actions/coordination-setup
+        with: { ref: "${{ inputs.candidate_sha }}" }
+      - run: bash eng/bootstrap-gates/compiler-and-tests.sh
+
+  policy:
+    needs: select
+    if: ${{ always() && needs.select.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ inputs.candidate_sha }}", fetch-depth: 0 }
+      - uses: ./.github/actions/coordination-setup
+        with: { ref: "${{ inputs.candidate_sha }}" }
+      - run: bash eng/bootstrap-gates/dependency-and-security.sh
+
+  coordination:
+    needs: select
+    if: ${{ needs.select.outputs.coordination == 'selected' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ inputs.candidate_sha }}", fetch-depth: 0 }
+      - uses: ./.github/actions/coordination-setup
+        with: { ref: "${{ inputs.candidate_sha }}" }
+      - run: dotnet fsi eng/validate-github-workflow-selection.fsx -- .
+
+  packaging:
+    needs: select
+    if: ${{ needs.select.outputs.packaging == 'selected' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ inputs.candidate_sha }}", fetch-depth: 0 }
+      - uses: ./.github/actions/coordination-setup
+        with: { ref: "${{ inputs.candidate_sha }}" }
+      - run: bash eng/bootstrap-gates/package-install-smoke.sh
+
+  release:
+    needs: select
+    if: ${{ needs.select.outputs.release == 'selected' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ inputs.candidate_sha }}", fetch-depth: 0 }
+      - uses: ./.github/actions/coordination-setup
+        with: { ref: "${{ inputs.candidate_sha }}" }
+      - run: dotnet fsi eng/validate-github-release-hardening.fsx -- .
+
+  required:
+    needs: [select, build, test, policy, coordination, packaging, release]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    outputs:
+      outcome: ${{ steps.aggregate.outputs.outcome }}
+      supply-chain: ${{ steps.aggregate.outputs.supply-chain }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ inputs.candidate_sha }}" }
+      - name: Resolve stable aggregates
+        id: aggregate
+        env:
+          SELECT_RESULT: ${{ needs.select.result }}
+          BUILD_SELECTION: ${{ needs.select.outputs.build }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_SELECTION: ${{ needs.select.outputs.test }}
+          TEST_RESULT: ${{ needs.test.result }}
+          POLICY_SELECTION: ${{ needs.select.outputs.policy }}
+          POLICY_RESULT: ${{ needs.policy.result }}
+          COORDINATION_SELECTION: ${{ needs.select.outputs.coordination }}
+          COORDINATION_RESULT: ${{ needs.coordination.result }}
+          PACKAGING_SELECTION: ${{ needs.select.outputs.packaging }}
+          PACKAGING_RESULT: ${{ needs.packaging.result }}
+          RELEASE_SELECTION: ${{ needs.select.outputs.release }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! bash eng/workflow-selection-aggregate.sh \
+            "$SELECT_RESULT" \
+            "$BUILD_SELECTION" "$BUILD_RESULT" \
+            "$TEST_SELECTION" "$TEST_RESULT" \
+            "$POLICY_SELECTION" "$POLICY_RESULT" \
+            "$COORDINATION_SELECTION" "$COORDINATION_RESULT" \
+            "$PACKAGING_SELECTION" "$PACKAGING_RESULT" \
+            "$RELEASE_SELECTION" "$RELEASE_RESULT"; then
+            printf 'outcome=failed\nsupply-chain=failed\n' >> "$GITHUB_OUTPUT"
+            exit 1
+          fi

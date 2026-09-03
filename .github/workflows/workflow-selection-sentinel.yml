@@ -1,0 +1,31 @@
+name: Workflow selection full-suite sentinel
+
+on:
+  schedule:
+    - cron: '43 4 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-suite-sentinel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: "${{ github.sha }}", fetch-depth: 0 }
+      - uses: ./.github/actions/coordination-setup
+        with:
+          ref: ${{ github.sha }}
+      - name: Run the full unselected suite and missed-obligation oracle
+        id: sentinel
+        shell: bash
+        run: bash eng/workflow-selection-sentinel.sh
+      - name: Retain the fail-closed fleet-disable decision
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: workflow-selection-sentinel-${{ github.sha }}
+          path: ${{ runner.temp }}/workflow-selection-sentinel/decision.json
+          if-no-files-found: error

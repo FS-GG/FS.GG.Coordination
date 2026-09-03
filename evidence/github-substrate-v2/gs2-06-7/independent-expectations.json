@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "expectedSeal": "43836b63dc7c0324331a270f462ace5b73c6427ff573d80e152ad4d58e3f18ab",
+  "expectedSeal": "1a7b8201130401a703c9f65812c23412330b9092e8ffe050b945e3a8d11de868",
   "selectionControls": [
     "workflow-prerequisite", "workflow-roadmap", "workflow-completeness", "typed-workflow-inventory",
     "workflow-graph-version", "changed-subject-selection", "non-file-input-selection", "transitive-closure",

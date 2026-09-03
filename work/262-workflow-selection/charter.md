@@ -27,9 +27,9 @@ policyPointers:
 - Bind generated qualification and independently authored controls to one canonical sealed inventory.
 
 ## Scope Boundaries
-- In scope: repository-local additive Q3 and Q7 contracts, typed inventory and graph compilation, tests, retained evidence, and SDD readiness.
-- Read-only consumption of the accepted GS2-06.6 receipt, exact roadmap, workflow/non-file inventories, and measured baselines is allowed.
-- Out of scope: production GitHub settings, workflows, rulesets, required checks, merge queues, repositories, releases, packages, feeds, environments, deployments, fleet mutation, an acceptance receipt, and successor-unit work.
+- In scope: a production-consumable pure Core selector and CLI, repository-owned callable reusable/composite/aggregate contracts, Q3/Q7 gates, a scheduled sentinel contract, read-only fleet observations, tests, retained evidence, and amended SDD readiness.
+- Read-only consumption of the accepted GS2-06.6 receipt, immutable original GS2-06.7 receipt, exact roadmap, current base/settings, workflow/non-file inventories, and GitHub Actions observations is allowed.
+- Out of scope: consumer-repository changes, fleet enablement, production settings/ruleset/required-check mutation, package or release publication, rewriting the original receipt, and GS2-06.8.
 
 ## Policy Pointers
 - The canonical roadmap at `.github` revision `b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9` and accepted GS2-06.6 receipt are authority.
@@ -37,4 +37,4 @@ policyPointers:
 - Governance files are optional compatibility pointers and are not evaluated by this command.
 
 ## Lifecycle Notes
-- Tier 1 contracted change: signature, implementation, both gate validators, tests, retained evidence, and the compact ship verdict land together.
+- Tier 1 contracted repair: Core/CLI signatures, implementation, callable workflow contracts, both gate validators, real observation evidence, tests, and the compact ship verdict land together. A separately indexed superseding receipt is created only after protected merge and independent requalification.

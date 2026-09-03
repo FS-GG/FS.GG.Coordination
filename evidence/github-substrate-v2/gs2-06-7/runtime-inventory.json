@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "inventoryVersion": "coordination-workflows/1",
+  "graphVersion": "fsgg.workflow-impact/1",
+  "baseRevision": "57305e540267f3f4696ba5a6cdfc84361de577d3",
+  "settingsSha256": "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518",
+  "complete": true,
+  "pathRules": [
+    { "id": "directory-build", "pattern": "Directory.Build.props", "match": "exact", "roots": ["build"] },
+    { "id": "directory-packages", "pattern": "Directory.Packages.props", "match": "exact", "roots": ["build", "packaging"] },
+    { "id": "documentation", "pattern": "docs/", "match": "prefix", "roots": ["coordination"] },
+    { "id": "release-input", "pattern": "eng/release", "match": "prefix", "roots": ["packaging"] },
+    { "id": "source", "pattern": "src/", "match": "prefix", "roots": ["build"] },
+    { "id": "tests", "pattern": "tests/", "match": "prefix", "roots": ["test"] },
+    { "id": "workflow", "pattern": ".github/", "match": "prefix", "roots": ["policy"] }
+  ],
+  "nonFileRules": [
+    { "id": "dependency-revision", "pattern": "dependency-revision", "match": "exact", "roots": ["build", "packaging"] },
+    { "id": "merge-group-settings", "pattern": "merge-group-settings", "match": "exact", "roots": ["policy"] },
+    { "id": "repository-settings", "pattern": "repository-settings", "match": "exact", "roots": ["policy"] }
+  ],
+  "dependencies": [
+    { "source": "build", "target": "test" },
+    { "source": "test", "target": "policy" },
+    { "source": "policy", "target": "coordination" },
+    { "source": "packaging", "target": "release" }
+  ],
+  "unconditional": ["policy"],
+  "aggregates": ["required", "supply-chain"],
+  "expensive": ["test", "packaging", "release"],
+  "seal": "ba78404be6abddc7f4bd2c057b19468b226f9b51fd9012a48b9d630ef5829421"
+}

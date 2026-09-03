@@ -1,0 +1,16 @@
+name: Coordination candidate setup
+description: Repository-owned candidate verification and SDK setup shared by GS2-06.7 reusable obligation jobs.
+inputs:
+  ref:
+    description: Exact candidate revision.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Verify the exact candidate
+      shell: bash
+      run: test "$(git rev-parse HEAD)" = "${{ inputs.ref }}"
+    - name: Set up the pinned .NET SDK
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
