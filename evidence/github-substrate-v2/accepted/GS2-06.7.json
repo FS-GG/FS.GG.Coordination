@@ -1,0 +1,59 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-06.7",
+  "state": "accepted",
+  "unitContractSha256": "a6eb28bb64a56dc6379cefc6682336b7bface7b8ea2d29711429d05b3e507b79",
+  "sourceRevision": "3277a7a581f9b75001a851e0b614de3c1eadf812",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-06.6-receipt",
+      "sha256": "7e9395db8352ab6a2af7b3713c9bb51118e998227f7c4650c3a58cd95edbbdf8"
+    },
+    {
+      "name": "github-workflow-selection-corpus",
+      "sha256": "10b09138ba5ee1a2857d17286e9bc89c48754cd2086d5e8cf70e34a9fb961272"
+    },
+    {
+      "name": "github-workflow-selection-independent-expectations",
+      "sha256": "783f9f27391e03c07b018efea720739a8f8f3c0cd8bebfc305f165706bdd4d4a"
+    },
+    {
+      "name": "github-workflow-selection-q3-validator",
+      "sha256": "270cef2db806a439fab5e26b2b4d1619ec5ec8a39dc1c0cac96824713c5b30c5"
+    },
+    {
+      "name": "github-workflow-selection-q7-validator",
+      "sha256": "14e0eb63a2b32b994f66ea27fa6f6dfd1f582c58a9cc8b1bd64bc56069e3339b"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "13fb2777d7c7a6ad570803bcc39e15b1c249fcb30f03158b268d977c4ec209c1"
+    },
+    {
+      "name": "implementation-candidate-6720277cd17f96e044e5afd9b18fa71813f9cbca",
+      "sha256": "9084d9636eb1166c69ef855b9fe29c469415b0d70d468a37a7011a7e1c234e66"
+    },
+    {
+      "name": "structured-review-repair-confirmation-5519081717",
+      "sha256": "7395681afa5bbed16c632018bddc81af05e8eae5774ee1e999c406046d0974d5"
+    },
+    {
+      "name": "structured-review-acceptance-5519120654",
+      "sha256": "558767721a6d425ae0f158ee54eefa43485b283207a936d2fb52c60f1777cc0e"
+    },
+    {
+      "name": "delivery-completion-5519145418",
+      "sha256": "e0e995fab8a077d82a0701d83da935a723ccce4cc26a546291c55077e4d31592"
+    },
+    {
+      "name": "protected-main-codeql-run-33705575434",
+      "sha256": "f180081a9a2aae16d7a7672613aa25e12ff2c7a179634ec54f708942e1f236a0"
+    },
+    {
+      "name": "protected-main-bootstrap-evidence-manifest-run-33705575802",
+      "sha256": "8fffcab231601b8383ce306fb0518d4d004c4529a249387c4a8c26ea9bbdc9b3"
+    }
+  ],
+  "acceptedAt": "2026-09-03T02:01:00Z",
+  "digest": "c6d1662e7df93f8b6ca8f577b5143e1e8a45eb9ac6fe55922488659ff9363036"
+}
