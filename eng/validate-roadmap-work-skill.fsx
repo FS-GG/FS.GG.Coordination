@@ -26,6 +26,15 @@ else
               "roadmap-work gates"
               "--receipts"
               "--artifact gate-catalog=eng/github-substrate-v2-gates.json"
+              "fresh-exact-candidate-checkout"
+              "provider-artifacts-tracked-and-hash-bound"
+              "provider-contract-canonical-version"
+              "two-consecutive-coherent-no-change"
+              "exact-head-hosted-run-artifact"
+              "descendant-authority-matrix"
+              "single-owning-item-two-phase-receipt"
+              "verified-markerless-in-progress-handoff"
+              "Never create a receipt-only board issue"
               "Stop at the unit boundary"
               "Project status is not authority" ]
         let forbidden =
@@ -41,3 +50,6 @@ else
             if text.Contains(token, StringComparison.OrdinalIgnoreCase) then fail "forbidden-authority" token
         if bytes.Length > 12000 then fail "size" "SKILL.md exceeds 12,000 UTF-8 bytes"
         if Environment.ExitCode = 0 then printfn "ROADMAP_WORK_SKILL_OK bytes=%d" bytes.Length
+
+if Environment.ExitCode <> 0 then
+    Environment.Exit Environment.ExitCode
