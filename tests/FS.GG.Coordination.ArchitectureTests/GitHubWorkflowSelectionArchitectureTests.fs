@@ -286,12 +286,12 @@ let ``unknown properties are refused at every retained object boundary`` () =
 [<Fact>]
 let ``workflow selection provider evidence is durable in the candidate Git tree`` () =
     let expected =
-        [ "readiness/262-workflow-selection/analysis.json", "a044aef5d61873aed4b325c4dd492a38258f9335c0a1d2e4cc2ce9dad4b5c212"
+        [ "readiness/262-workflow-selection/analysis.json", "4b6ce85f7b36fdb7e5803888a483d691e386991352fefc97102be74c10ced1b1"
           // These are the canonical FS.GG.SDD.Cli 1.0.0 no-change fixed-point bytes. A later
           // ambient provider can only replace them by updating this executable contract.
-          "readiness/262-workflow-selection/work-model.json", "c6eb43e525b1b5e654865953587b94c20ae1a4527d814f1274a6a963570e7314"
-          "readiness/262-workflow-selection/verify.json", "f383cf3821728e36f0d1f147fdaee6088d8b1d9d6af61bf4833898d9660b1070"
-          "readiness/262-workflow-selection/ship-verdict.json", "30c5247d71acd593a04569a651d0179bae2d574045198bac829e1038392daaf5"
+          "readiness/262-workflow-selection/work-model.json", "93c160daac181327f2ca6b054d450743f6e31ead397ec73fa1bba464136def97"
+          "readiness/262-workflow-selection/verify.json", "7052b9549137650fccf71c207eb4042ef6c545729a37bab4b9af3b972016f136"
+          "readiness/262-workflow-selection/ship-verdict.json", "57700e22ffa7aa7f5343d5eb4fc9b8e0e204cf548a00ac21086a9f8cbd33377e"
           "artifacts/test-results/262-workflow-selection/unit-tests.trx", "a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd" ]
     let paths = expected |> List.map fst
     let code, output = tracked paths
@@ -324,7 +324,7 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
     let workModelSource =
         verified.GetProperty("sources").EnumerateArray()
         |> Seq.find (fun source -> source.GetProperty("path").GetString() = "readiness/262-workflow-selection/work-model.json")
-    Assert.Equal("c6eb43e525b1b5e654865953587b94c20ae1a4527d814f1274a6a963570e7314", workModelSource.GetProperty("digest").GetProperty("value").GetString())
+    Assert.Equal("93c160daac181327f2ca6b054d450743f6e31ead397ec73fa1bba464136def97", workModelSource.GetProperty("digest").GetProperty("value").GetString())
 
     let evidence = read "work/262-workflow-selection/evidence.yml"
     Assert.Equal(19, evidence.Split("source: artifacts/test-results/262-workflow-selection/unit-tests.trx", StringSplitOptions.None).Length - 1)

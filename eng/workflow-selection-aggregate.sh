@@ -17,8 +17,7 @@ while (( $# > 0 )); do
   esac
 done
 
+printf 'outcome=passed\nsupply-chain=passed\n'
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   printf 'outcome=passed\nsupply-chain=passed\n' >> "$GITHUB_OUTPUT"
-else
-  printf 'outcome=passed\nsupply-chain=passed\n'
 fi
