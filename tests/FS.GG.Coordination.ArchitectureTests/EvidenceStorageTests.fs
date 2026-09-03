@@ -692,6 +692,56 @@ let ``GS2-06.6 acceptance is indexed and accepted by the roadmap prerequisite re
     | Error findings -> Assert.Contains("RW-RECEIPT-TAMPERED", findings |> List.map _.Code)
 
 [<Fact>]
+let ``GS2-06.7 acceptance is indexed and accepted by the roadmap prerequisite reader`` () =
+    let indexPath = Path.Combine(root, "eng/github-substrate-v2-units.json")
+    let index = JsonNode.Parse(File.ReadAllText(indexPath)).AsObject()
+    let units = index["units"].AsArray()
+
+    let roadmap =
+        units
+        |> Seq.map (fun unitValue ->
+            let unitObject = unitValue.AsObject()
+            let unitId = unitObject["id"].GetValue<string>()
+            let title = unitObject["title"].GetValue<string>()
+            $"- [ ] **{unitId} — {title}.**")
+        |> String.concat "\n"
+
+    let roadmapBytes = Encoding.UTF8.GetBytes(roadmap + "\n")
+    index["roadmap"].AsObject()["sha256"] <- sha256 roadmapBytes
+    let indexBytes = Encoding.UTF8.GetBytes(index.ToJsonString())
+    let receiptPath unitId = Path.Combine(root, $"evidence/github-substrate-v2/accepted/{unitId}.json")
+    let receipt unitId = File.ReadAllBytes(receiptPath unitId) |> ReadOnlyMemory<byte>
+
+    match
+        RoadmapWork.checkPrerequisites
+            (ReadOnlyMemory<byte>(indexBytes))
+            (ReadOnlyMemory<byte>(roadmapBytes))
+            [ receipt "GS2-06.6"; receipt "GS2-06.7" ]
+            "GS2-06.7"
+    with
+    | Ok status ->
+        Assert.True(status.Ready)
+        Assert.Equal<string list>(
+            [ "517172e0eb31d3fd2eefb5844ed426d67d128f795c16195010eb772b7fcd2a5f" ],
+            status.AcceptedReceiptDigests
+        )
+    | Error findings -> Assert.Fail(String.concat "," (findings |> List.map _.Code))
+
+    let tampered = JsonNode.Parse(File.ReadAllBytes(receiptPath "GS2-06.7")).AsObject()
+    tampered["digest"] <- String.replicate 64 "0"
+
+    match
+        RoadmapWork.checkPrerequisites
+            (ReadOnlyMemory<byte>(indexBytes))
+            (ReadOnlyMemory<byte>(roadmapBytes))
+            [ receipt "GS2-06.6"
+              ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes(tampered.ToJsonString())) ]
+            "GS2-06.7"
+    with
+    | Ok _ -> Assert.Fail("tampered GS2-06.7 acceptance receipt was accepted")
+    | Error findings -> Assert.Contains("RW-RECEIPT-TAMPERED", findings |> List.map _.Code)
+
+[<Fact>]
 let ``frozen corpus preserves the exact Q0 inventory and provenance`` () =
     let corpusRoot = Path.Combine(root, "evidence/github-substrate-v2/corpus")
     let metadata = Directory.GetFiles(corpusRoot, "C-*.json", SearchOption.TopDirectoryOnly)
