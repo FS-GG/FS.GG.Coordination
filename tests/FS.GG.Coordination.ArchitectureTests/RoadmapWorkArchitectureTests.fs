@@ -46,8 +46,8 @@ let private hasExactGs2067RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
 
-    roadmap.GetProperty("revision").GetString() = "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9"
-    && roadmap.GetProperty("sha256").GetString() = "590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57"
+    roadmap.GetProperty("revision").GetString() = "ac05985f0d60c33fb40a5dccecb271a3e00bec4b"
+    && roadmap.GetProperty("sha256").GetString() = "888d1c3307ba119f6c7075b0d8963f7fa14d1e357ce1f97fdb7c803f1aa5465f"
 
 let private gs2067GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -56,6 +56,37 @@ let private gs2067GateCatalogAgrees (indexText: string) (catalogText: string) =
     let unit =
         index.RootElement.GetProperty("units").EnumerateArray()
         |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-06.7")
+
+    let contracts = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+    let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
+
+    let selected =
+        contracts
+        |> List.choose (fun contract ->
+            commands
+            |> List.tryFind (fun command -> command.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
+            |> Option.map (fun command -> command, contract))
+
+    selected.Length = contracts.Length
+    && (selected
+        |> List.forall (fun (command, contract) ->
+            command.GetProperty("qGate").GetString() = contract.GetProperty("qGate").GetString()
+            && gateCommandSha256 command = contract.GetProperty("commandSha256").GetString()))
+
+let private hasExactGs2068RoadmapAuthority (indexText: string) =
+    use document = JsonDocument.Parse(indexText)
+    let roadmap = document.RootElement.GetProperty("roadmap")
+
+    roadmap.GetProperty("revision").GetString() = "ac05985f0d60c33fb40a5dccecb271a3e00bec4b"
+    && roadmap.GetProperty("sha256").GetString() = "888d1c3307ba119f6c7075b0d8963f7fa14d1e357ce1f97fdb7c803f1aa5465f"
+
+let private gs2068GateCatalogAgrees (indexText: string) (catalogText: string) =
+    use index = JsonDocument.Parse(indexText)
+    use catalog = JsonDocument.Parse(catalogText)
+
+    let unit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-06.8")
 
     let contracts = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
     let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
@@ -256,7 +287,7 @@ let ``GS2-06-7 authority pin refuses a stale index revision independently`` () =
 
     let staleIndex =
         indexText.Replace(
-            "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9",
+            "ac05985f0d60c33fb40a5dccecb271a3e00bec4b",
             "185494fa8ba3986834141c2ddc4e8325410df260",
             StringComparison.Ordinal
         )
@@ -281,15 +312,58 @@ let ``GS2-06-7 gate registration refuses a mismatched catalog command independen
     Assert.False(gs2067GateCatalogAgrees indexText mismatchedCatalog)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-06-7 workflow selection`` () =
+let ``GS2-06-8 inspection refuses stale roadmap bytes`` () =
+    let index =
+        File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+        |> ReadOnlyMemory<byte>
+
+    let staleRoadmap = Encoding.UTF8.GetBytes("# stale GS2-06.8 roadmap\n") |> ReadOnlyMemory<byte>
+
+    match RoadmapWork.inspect index staleRoadmap "GS2-06.8" with
+    | Ok _ -> Assert.Fail("stale roadmap bytes were accepted")
+    | Error findings -> Assert.Contains(findings, fun finding -> finding.Code = "RW-ROADMAP-DIGEST")
+
+[<Fact>]
+let ``GS2-06-8 authority pin refuses a stale index revision independently`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    Assert.True(hasExactGs2068RoadmapAuthority indexText)
+
+    let staleIndex =
+        indexText.Replace(
+            "ac05985f0d60c33fb40a5dccecb271a3e00bec4b",
+            "e8b9c5ff978e0f14462514406ac86a71c4826425",
+            StringComparison.Ordinal
+        )
+
+    Assert.NotEqual(indexText, staleIndex)
+    Assert.False(hasExactGs2068RoadmapAuthority staleIndex)
+
+[<Fact>]
+let ``GS2-06-8 gate registration refuses a mismatched catalog command independently`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
+    Assert.True(gs2068GateCatalogAgrees indexText catalogText)
+
+    let mismatchedCatalog =
+        catalogText.Replace(
+            "eng/validate-github-fleet-dry-plans.fsx",
+            "eng/validate-github-ruleset-plans.fsx",
+            StringComparison.Ordinal
+        )
+
+    Assert.NotEqual(catalogText, mismatchedCatalog)
+    Assert.False(gs2068GateCatalogAgrees indexText mismatchedCatalog)
+
+[<Fact>]
+let ``roadmap unit index advances through GS2-06-8 fleet dry plans`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
     let units = document.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
 
     let roadmap = document.RootElement.GetProperty("roadmap")
-    Assert.Equal("b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9", roadmap.GetProperty("revision").GetString())
-    Assert.Equal("590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57", roadmap.GetProperty("sha256").GetString())
+    Assert.Equal("ac05985f0d60c33fb40a5dccecb271a3e00bec4b", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("888d1c3307ba119f6c7075b0d8963f7fa14d1e357ce1f97fdb7c803f1aa5465f", roadmap.GetProperty("sha256").GetString())
 
     let ids =
         units |> List.map (fun unitValue -> unitValue.GetProperty("id").GetString())
@@ -348,7 +422,8 @@ let ``roadmap unit index advances through GS2-06-7 workflow selection`` () =
              "GS2-06.4"
              "GS2-06.5"
              "GS2-06.6"
-             "GS2-06.7" ]
+             "GS2-06.7"
+             "GS2-06.8" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -377,6 +452,23 @@ let ``roadmap unit index advances through GS2-06-7 workflow selection`` () =
         "no GS2-06.8 inspection",
         workflowSelection.GetProperty("permissionCeiling").EnumerateArray() |> Seq.item 1 |> _.GetString()
     )
+
+    let fleetDryPlans =
+        units |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-06.8")
+
+    Assert.Equal("FS.GG.Coordination", fleetDryPlans.GetProperty("owner").GetString())
+    Assert.Equal<string list>(
+        [ "GS2-06.7" ],
+        fleetDryPlans.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Equal<string list>(
+        [ "Q3"; "Q5"; "Q7" ],
+        fleetDryPlans.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+    )
+    Assert.Equal(9, fleetDryPlans.GetProperty("gateCommands").GetArrayLength())
+    Assert.Contains("every rostered repository is inspected", fleetDryPlans.GetProperty("exitGate").GetString())
+    Assert.Contains("no apply or production mutation path exists", fleetDryPlans.GetProperty("exitGate").GetString())
+    Assert.Contains("GS2-07.1 inspection", fleetDryPlans.GetProperty("permissionCeiling").EnumerateArray() |> Seq.item 1 |> _.GetString())
 
     use acceptedGs2066 =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-06.6.json")))
@@ -1506,7 +1598,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(33, commands.Length)
+    Assert.Equal(34, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())

@@ -1,0 +1,362 @@
+schemaVersion: 1
+workId: 286-gs2-06-8-registration
+stage: evidence
+status: evidenceReady
+sourceSpec: work/286-gs2-06-8-registration/spec.md
+sourceClarifications: work/286-gs2-06-8-registration/clarifications.md
+sourceChecklist: work/286-gs2-06-8-registration/checklist.md
+sourcePlan: work/286-gs2-06-8-registration/plan.md
+sourceTasks: work/286-gs2-06-8-registration/tasks.yml
+sourceAnalysis: readiness/286-gs2-06-8-registration/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/286-gs2-06-8-registration/analysis.json
+    digest: 9abb3cf5c0bd7cdb70aad2aedf5cce3105360140ba98e83aa80fc75c4481a0d8
+    schemaVersion: 1
+  - label: checklist
+    path: work/286-gs2-06-8-registration/checklist.md
+    digest: fe8062d7b5c6ef0d8eece3e1af4db78d6c8141af54f47faa9c288d2fc4183391
+    schemaVersion: 1
+  - label: clarifications
+    path: work/286-gs2-06-8-registration/clarifications.md
+    digest: 9ecbd5ad31292400124d79551273755bcab2468175ea6c28a6f8d98982ff24d4
+    schemaVersion: 1
+  - label: plan
+    path: work/286-gs2-06-8-registration/plan.md
+    digest: 05181df7153cb80a130556610a5adaf8b14c72c14b58e8113eec3b271ac0f577
+    schemaVersion: 1
+  - label: spec
+    path: work/286-gs2-06-8-registration/spec.md
+    digest: 73d82d2656b2da6a38d9a62c5ed643b778d6b0799935376c0db4b5a95ddd0b3d
+    schemaVersion: 1
+  - label: tasks
+    path: work/286-gs2-06-8-registration/tasks.yml
+    digest: 33bc91dab958bc813f59f60e5b3a6c2f23bd98f99540a72ba9be6f6d0948b829
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV007]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV008]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV009]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV010]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV012]
+    artifacts: [docs/architecture/roadmap-work.md, eng/github-substrate-v2-gates.json, eng/github-substrate-v2-units.json, tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/286-gs2-06-8-registration/test-results/registration-focused.trx
+      digest: "sha256:5c961752cb0941c23c6faf5e216ba696b976b4334b50c7dc2a1a89f4209361a9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 22
+      failed: 0
+      skipped: 0
+    notes: [Focused roadmap-work tests passed 22/22 and exact inspect/prerequisites returned GS2-06.8 ready.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

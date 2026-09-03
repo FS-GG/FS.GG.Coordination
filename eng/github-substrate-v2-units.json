@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "b6d4b60493d1f0b99daf73b98f4e8ad9bbbc0ed9",
+    "revision": "ac05985f0d60c33fb40a5dccecb271a3e00bec4b",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "590d019dba1f7ce72338d8ca940e66e89d2e9f47d0454495938256c912a35b57"
+    "sha256": "888d1c3307ba119f6c7075b0d8963f7fa14d1e357ce1f97fdb7c803f1aa5465f"
   },
   "units": [
     {
@@ -771,6 +771,28 @@
         { "id": "github-workflow-selection-supply-chain-contract", "qGate": "Q7", "commandSha256": "395572cfeeaab1b9f288c1073f1a7a4f0740491703c91eefb1fb47b97e4613ba" }
       ],
       "contractSha256": "a6eb28bb64a56dc6379cefc6682336b7bface7b8ea2d29711429d05b3e507b79"
+    },
+    {
+      "id": "GS2-06.8",
+      "title": "Fleet dry plans",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-06.7"],
+      "permissionCeiling": ["repository-local additive fleet dry-plan contracts, read-only complete GitHub settings inspection, pure deterministic planning, canonical serialization, independent plan review, authoritative re-inspection, explicit unsupported and unauthorized dispositions, validation, comprehensive GS2-06 closure, and retained evidence", "read-only GitHub API access and consumption of accepted GS2-06.1 through GS2-06.7 receipts are allowed; no production GitHub setting, workflow, ruleset, required-check, merge-queue, repository, custom-property, permission, release, package, feed, environment, deployment, security, dependency-feature, tag, branch, or fleet mutation; no plan apply path, stable release, GS2-07.1 inspection, preparation, or implementation authority"],
+      "exitGate": "the Q5 fleet dry-plan closure begins from the exact accepted GS2-06.7 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; it binds every accepted GS2-06.1 through GS2-06.7 receipt and executes every registered GS2-06 Q3 and Q7 command cold under ADR-0080 comprehensive mode before the Q5 command; one canonical length-framed seal binds the reviewed repository roster and revision, source revision, complete repository census, exact repository identities and default branches, terminal pagination proofs, observation instants and pre-state fingerprints, desired-state digests, permission evidence, deterministic stable operation identities, least required permissions, explicit supported, unsupported, unauthorized, unavailable, incomplete, unreadable, stale, indeterminate, external-observe-only, and no-op dispositions, minimal ordered plans, rollback or forward-repair intent, and independent review; every rostered repository is inspected, planned, canonically serialized, independently reviewed, and authoritatively re-inspected without applying any operation; a plan requires complete fresh observations, preserves unrelated settings, is bound to the exact pre-state and desired state, and becomes stale on relevant re-inspection drift; unsupported capability and insufficient-permission cases remain explicit non-applicable or refused dispositions rather than invented compliance or absence; exact replay is byte-identical, all serialized plans reparse without semantic loss, and no apply or production mutation path exists; generated adversarial mutations and independently authored prerequisite, roadmap, roster, completeness, pagination, repository-identity, default-branch, observation-time, pre-state, desired-state, operation-identity, ordering, least-permission, supported, unsupported, unauthorized, unavailable, incomplete, unreadable, stale, indeterminate, external-owner, no-op, unrelated-setting, review, re-inspection, serialization, replay, comprehensive-gate, omission, Quint-preservation, no-apply, and no-mutation controls all pass; protected acceptance retains the immutable Q3/Q5/Q7 evidence and GS2-06 closure receipt before GS2-07 may consume the milestone",
+      "qGates": ["Q3", "Q5", "Q7"],
+      "gateCommands": ["github-repository-profile-contract", "github-required-check-census-contract", "github-ruleset-plan-contract", "github-immutable-execution-pins-contract", "github-permission-compilation-contract", "github-release-hardening-contract", "github-workflow-selection-contract", "github-workflow-selection-supply-chain-contract", "github-fleet-dry-plans-contract"],
+      "gateContracts": [
+        { "id": "github-repository-profile-contract", "qGate": "Q3", "commandSha256": "e90aa38109dbdee42f9af157b846192e44286dca059ec549fcf1b3609e4db3e5" },
+        { "id": "github-required-check-census-contract", "qGate": "Q3", "commandSha256": "e2b62777509106fc8aec437679bb242c79c326333aca9e8db400ca85e588534b" },
+        { "id": "github-ruleset-plan-contract", "qGate": "Q3", "commandSha256": "fce63cb308cfc8e2c194128df9b720fa720e17863b2e44ab77fcbf1c0c39b28d" },
+        { "id": "github-immutable-execution-pins-contract", "qGate": "Q3", "commandSha256": "b0375df243915c9dd81a345adc63f85c04258da79c905a7d28cb151ed45f73e0" },
+        { "id": "github-permission-compilation-contract", "qGate": "Q3", "commandSha256": "f65461c2982a828c93d249e6c49bba09b7fd7992e67efd5295c632ab53201857" },
+        { "id": "github-release-hardening-contract", "qGate": "Q3", "commandSha256": "51208bb68cea93e3c704383ced266ecac19ca71c9819a22d374fd73ed3c785c8" },
+        { "id": "github-workflow-selection-contract", "qGate": "Q3", "commandSha256": "118d3a97fe1c792601bd74c8dfa192151777f45dae266f12e005ba27ec59a445" },
+        { "id": "github-workflow-selection-supply-chain-contract", "qGate": "Q7", "commandSha256": "395572cfeeaab1b9f288c1073f1a7a4f0740491703c91eefb1fb47b97e4613ba" },
+        { "id": "github-fleet-dry-plans-contract", "qGate": "Q5", "commandSha256": "a4cf1fb97b50d91c95a94f1669f62b21a73d0f1031eac9668d5202b3686a7a3f" }
+      ],
+      "contractSha256": "316343c921c7444cb95bee292bec8d6da3c6546ffe8805bf93a0490249c76717"
     }
   ]
 }
