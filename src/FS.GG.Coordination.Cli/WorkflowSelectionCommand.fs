@@ -1,6 +1,7 @@
 namespace FS.GG.Coordination.Cli
 
 open System
+open System.Collections.Generic
 open System.IO
 open System.Text.Json
 open System.Text.Json.Nodes
@@ -46,7 +47,21 @@ module WorkflowSelectionCommand =
         { Source = text "source" item |> parseObligation; Target = text "target" item |> parseObligation }
 
     let private loadObject path =
-        let node = JsonNode.Parse(File.ReadAllText path)
+        let bytes = File.ReadAllBytes path
+        let mutable reader = Utf8JsonReader(ReadOnlySpan<byte>(bytes))
+        let mutable objectMembers: HashSet<string> list = []
+        while reader.Read() do
+            match reader.TokenType with
+            | JsonTokenType.StartObject -> objectMembers <- HashSet<string>(StringComparer.Ordinal) :: objectMembers
+            | JsonTokenType.EndObject -> objectMembers <- objectMembers.Tail
+            | JsonTokenType.PropertyName ->
+                match objectMembers with
+                | current :: _ ->
+                    let name = reader.GetString()
+                    if not (current.Add name) then invalidArg path $"duplicate property '{name}'"
+                | [] -> invalidArg path "property outside object"
+            | _ -> ()
+        let node = JsonNode.Parse(bytes)
         if isNull node then invalidArg path "JSON document is empty"
         objectAt path node
 

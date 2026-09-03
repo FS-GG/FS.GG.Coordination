@@ -108,6 +108,17 @@ let ``production selector CLI handles arbitrary and merge-group inputs and fails
     let inventedCode, _, inventedError = runCli inventedVersion
     Assert.Equal(3, inventedCode)
     Assert.Contains("unsupported-inventory-version", inventedError)
+    let duplicateRequest = Path.Combine(Path.GetTempPath(), $"fsgg-duplicate-selector-{Guid.NewGuid():N}.json")
+    let duplicatePayload =
+        read "evidence/github-substrate-v2/gs2-06-7/runtime-request-arbitrary.json"
+        |> _.Replace("\"complete\": true", "\"complete\": false, \"complete\": true")
+    File.WriteAllText(duplicateRequest, duplicatePayload)
+    let duplicateArguments =
+        common duplicateRequest "5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518" "none"
+    let duplicateCode, _, duplicateError = runCli duplicateArguments
+    Assert.Equal(2, duplicateCode)
+    Assert.Contains("duplicate property 'complete'", duplicateError)
+    File.Delete duplicateRequest
 
 [<Fact>]
 let ``repository owns callable reusable composite aggregate and sentinel contracts`` () =
@@ -162,6 +173,7 @@ let ``sentinel consumes the typed Q7 missed-obligation decision and disables sel
         [ "non-hex-seal", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz","missedObligations":[],"fleetSelection":"eligible","productionMutation":false}"""
           "unknown-obligation", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","missedObligations":["invented"],"fleetSelection":"disabled","productionMutation":false}"""
           "duplicate-obligation", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","missedObligations":["release","release"],"fleetSelection":"disabled","productionMutation":false}"""
+          "duplicate-member", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","missedObligations":["release"],"missedObligations":[],"fleetSelection":"eligible","productionMutation":false}"""
           "extra-property", """{"schema":"fsgg.coordination.workflow-selection-supply-chain-decision/1","seal":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","missedObligations":[],"fleetSelection":"eligible","productionMutation":false,"invented":true}""" ]
     for name, payload in invalidCases do
         let input = Path.Combine(temporary, $"{name}.json")
@@ -286,12 +298,12 @@ let ``unknown properties are refused at every retained object boundary`` () =
 [<Fact>]
 let ``workflow selection provider evidence is durable in the candidate Git tree`` () =
     let expected =
-        [ "readiness/262-workflow-selection/analysis.json", "4b6ce85f7b36fdb7e5803888a483d691e386991352fefc97102be74c10ced1b1"
+        [ "readiness/262-workflow-selection/analysis.json", "75cad9137c67e9812253d54a822777093c04a7a286ba30eb0db88fff59cb0ade"
           // These are the canonical FS.GG.SDD.Cli 1.0.0 no-change fixed-point bytes. A later
           // ambient provider can only replace them by updating this executable contract.
-          "readiness/262-workflow-selection/work-model.json", "93c160daac181327f2ca6b054d450743f6e31ead397ec73fa1bba464136def97"
-          "readiness/262-workflow-selection/verify.json", "7052b9549137650fccf71c207eb4042ef6c545729a37bab4b9af3b972016f136"
-          "readiness/262-workflow-selection/ship-verdict.json", "57700e22ffa7aa7f5343d5eb4fc9b8e0e204cf548a00ac21086a9f8cbd33377e"
+          "readiness/262-workflow-selection/work-model.json", "5d4a3f00a3924ad77292f8d09cd69870f7d68f8f1d049fdfb0a5cdee43ef401c"
+          "readiness/262-workflow-selection/verify.json", "1a8b8aee8631254e60db9902ee9573bd9ea7094446869ab916115e7b22ccaa2c"
+          "readiness/262-workflow-selection/ship-verdict.json", "3529c9b3b082e25ce59045b98228d08346f792d1ee6697233b1242a7b204beab"
           "artifacts/test-results/262-workflow-selection/unit-tests.trx", "a2746a37b8b8d477a00b43fa702e1c5161c567e0898b2dbf8537e517cbce53cd" ]
     let paths = expected |> List.map fst
     let code, output = tracked paths
@@ -324,7 +336,7 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
     let workModelSource =
         verified.GetProperty("sources").EnumerateArray()
         |> Seq.find (fun source -> source.GetProperty("path").GetString() = "readiness/262-workflow-selection/work-model.json")
-    Assert.Equal("93c160daac181327f2ca6b054d450743f6e31ead397ec73fa1bba464136def97", workModelSource.GetProperty("digest").GetProperty("value").GetString())
+    Assert.Equal("5d4a3f00a3924ad77292f8d09cd69870f7d68f8f1d049fdfb0a5cdee43ef401c", workModelSource.GetProperty("digest").GetProperty("value").GetString())
 
     let evidence = read "work/262-workflow-selection/evidence.yml"
     Assert.Equal(19, evidence.Split("source: artifacts/test-results/262-workflow-selection/unit-tests.trx", StringSplitOptions.None).Length - 1)

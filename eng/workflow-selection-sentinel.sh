@@ -1,11 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+json_has_unique_members() {
+  python3 - "$1" <<'PY'
+import json
+import sys
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON member: {key}")
+        result[key] = value
+    return result
+
+with open(sys.argv[1], "rb") as stream:
+    json.load(stream, object_pairs_hook=unique_object)
+PY
+}
+
 write_typed_decision() {
   local q7_decision="$1"
   local decision="$2"
   local full_suite="${3:-passed}"
-  if ! jq -e '
+  if ! json_has_unique_members "$q7_decision" \
+    || ! jq -e '
       keys == ["fleetSelection","missedObligations","productionMutation","schema","seal"]
       and .schema == "fsgg.coordination.workflow-selection-supply-chain-decision/1"
       and (.seal | type == "string" and test("^[0-9a-f]{64}$"))
@@ -29,7 +48,10 @@ compare_current_selection() {
   local q7_decision="$3"
   local decision="$4"
   local typed="$decision.typed"
-  if ! jq -e '
+  if ! json_has_unique_members "$selection" \
+    || ! json_has_unique_members "$failures" \
+    || ! json_has_unique_members "$q7_decision" \
+    || ! jq -e '
       keys == ["aggregates","children","closure","graphVersion","inventorySeal","inventoryVersion","mergeGroupQueuedHead","roots","schema"]
       and .schema == "fsgg.coordination.workflow-selection-decision/1"
       and .inventoryVersion == "coordination-workflows/1"
