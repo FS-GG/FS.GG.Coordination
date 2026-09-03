@@ -19,11 +19,24 @@ with open(sys.argv[1], "rb") as stream:
 PY
 }
 
+sha256_file() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+write_disabled_decision() {
+  local decision="$1"
+  local reason="$2"
+  printf '{"schema":"fsgg.coordination.workflow-selection-sentinel/1","fullSuite":"failed","missedObligation":true,"fleetSelection":"disabled","productionMutation":false,"reason":"%s"}\n' "$reason" > "$decision"
+}
+
 resolve_current_authority() {
   local inventory="$1"
-  local request="$2"
-  local output="$3"
-  local repository_root checkout_head actions_head event_name settings_receipt settings_sha base_revision request_base request_settings request_queued event_base queued_head distance
+  local source_request="$2"
+  local reviewed_authority="$3"
+  local output="$4"
+  local runtime_request="$5"
+  local repository_root checkout_head actions_head event_name settings_receipt settings_sha base_revision request_base request_settings event_base queued_head
+  local declared_inventory_path declared_request_path declared_settings_path inventory_sha source_request_sha settings_receipt_sha runtime_request_sha
   repository_root="$(git rev-parse --show-toplevel)" || return 1
   checkout_head="$(git -C "$repository_root" rev-parse --verify HEAD)" || return 1
   [[ "$checkout_head" =~ ^[0-9a-f]{40}$ ]] || return 1
@@ -34,6 +47,7 @@ resolve_current_authority() {
   case "$event_name" in
     schedule|workflow_dispatch|local)
       queued_head="none"
+      event_base="$checkout_head"
       ;;
     merge_group)
       [[ -n "${GITHUB_EVENT_PATH:-}" && -f "$GITHUB_EVENT_PATH" ]] || return 1
@@ -41,38 +55,86 @@ resolve_current_authority() {
       event_base="$(jq -er '.merge_group.base_sha | select(type == "string" and test("^[0-9a-f]{40}$"))' "$GITHUB_EVENT_PATH")" || return 1
       queued_head="$(jq -er '.merge_group.head_sha | select(type == "string" and test("^[0-9a-f]{40}$"))' "$GITHUB_EVENT_PATH")" || return 1
       [[ "$queued_head" == "$checkout_head" ]] || return 1
+      git -C "$repository_root" merge-base --is-ancestor "$event_base" "$queued_head" || return 1
       ;;
     *) return 1 ;;
   esac
 
-  [[ -f "$inventory" && -f "$request" ]] || return 1
+  [[ -f "$inventory" && -f "$source_request" && -f "$reviewed_authority" ]] || return 1
   json_has_unique_members "$inventory" || return 1
-  json_has_unique_members "$request" || return 1
+  json_has_unique_members "$source_request" || return 1
+  json_has_unique_members "$reviewed_authority" || return 1
+  jq -e '
+    keys == ["inventory","repository","request","schema","settings"]
+    and .schema == "fsgg.coordination.workflow-selection-reviewed-authority/1"
+    and .repository == "FS-GG/FS.GG.Coordination"
+    and (.inventory | keys == ["baseRevision","graphVersion","inventoryVersion","path","seal","sha256"])
+    and (.request | keys == ["path","sha256"])
+    and (.settings | keys == ["desiredSha256","path","receiptSha256"])
+    and ([.inventory.sha256,.inventory.seal,.request.sha256,.settings.receiptSha256,.settings.desiredSha256]
+         | all(.[]; type == "string" and test("^[0-9a-f]{64}$")))
+    and (.inventory.baseRevision | type == "string" and test("^[0-9a-f]{40}$"))
+  ' "$reviewed_authority" >/dev/null || return 1
+  declared_inventory_path="$(jq -er '.inventory.path' "$reviewed_authority")" || return 1
+  declared_request_path="$(jq -er '.request.path' "$reviewed_authority")" || return 1
+  declared_settings_path="$(jq -er '.settings.path' "$reviewed_authority")" || return 1
+  [[ "$(realpath -e "$inventory")" == "$repository_root/$declared_inventory_path" ]] || return 1
+  [[ "$(realpath -e "$source_request")" == "$repository_root/$declared_request_path" ]] || return 1
+  git -C "$repository_root" ls-files --error-unmatch -- "$declared_inventory_path" "$declared_request_path" "$declared_settings_path" "$reviewed_authority" >/dev/null || return 1
+  inventory_sha="$(sha256_file "$inventory")" || return 1
+  source_request_sha="$(sha256_file "$source_request")" || return 1
+  [[ "$inventory_sha" == "$(jq -er '.inventory.sha256' "$reviewed_authority")" ]] || return 1
+  [[ "$source_request_sha" == "$(jq -er '.request.sha256' "$reviewed_authority")" ]] || return 1
   base_revision="$(jq -er '.baseRevision | select(type == "string" and test("^[0-9a-f]{40}$"))' "$inventory")" || return 1
-  request_base="$(jq -er '.baseRevision | select(type == "string" and test("^[0-9a-f]{40}$"))' "$request")" || return 1
-  request_settings="$(jq -er '.settingsSha256 | select(type == "string" and test("^[0-9a-f]{64}$"))' "$request")" || return 1
+  request_base="$(jq -er '.baseRevision | select(type == "string" and test("^[0-9a-f]{40}$"))' "$source_request")" || return 1
+  request_settings="$(jq -er '.settingsSha256 | select(type == "string" and test("^[0-9a-f]{64}$"))' "$source_request")" || return 1
   [[ "$base_revision" == "$request_base" ]] || return 1
-  if [[ "$event_name" == "merge_group" ]]; then
-    request_queued="$(jq -er '.mergeGroup.queuedHead | select(type == "string" and test("^[0-9a-f]{40}$"))' "$request")" || return 1
-    [[ "$event_base" == "$base_revision" && "$request_queued" == "$queued_head" ]] || return 1
-  fi
+  [[ "$base_revision" == "$(jq -er '.inventory.baseRevision' "$reviewed_authority")" ]] || return 1
+  [[ "$(jq -er '.inventoryVersion' "$inventory")" == "$(jq -er '.inventory.inventoryVersion' "$reviewed_authority")" ]] || return 1
+  [[ "$(jq -er '.graphVersion' "$inventory")" == "$(jq -er '.inventory.graphVersion' "$reviewed_authority")" ]] || return 1
+  [[ "$(jq -er '.seal' "$inventory")" == "$(jq -er '.inventory.seal' "$reviewed_authority")" ]] || return 1
   git -C "$repository_root" merge-base --is-ancestor "$base_revision" "$checkout_head" || return 1
-  distance="$(git -C "$repository_root" rev-list --count "$base_revision..$checkout_head")" || return 1
-  [[ "$distance" == "1" ]] || return 1
 
-  settings_receipt="$repository_root/eng/repository-settings/receipt.json"
+  settings_receipt="$repository_root/$declared_settings_path"
   [[ -f "$settings_receipt" ]] || return 1
   json_has_unique_members "$settings_receipt" || return 1
+  settings_receipt_sha="$(sha256_file "$settings_receipt")" || return 1
+  [[ "$settings_receipt_sha" == "$(jq -er '.settings.receiptSha256' "$reviewed_authority")" ]] || return 1
   jq -e '
     .schema == "fsgg.coordination.repository-settings-receipt/2"
     and .repository.nameWithOwner == "FS-GG/FS.GG.Coordination"
     and (.desiredSha256 | type == "string" and test("^[0-9a-f]{64}$"))
   ' "$settings_receipt" >/dev/null || return 1
   settings_sha="$(jq -er '.desiredSha256' "$settings_receipt")" || return 1
-  [[ "$settings_sha" == "$request_settings" ]] || return 1
+  [[ "$settings_sha" == "$request_settings" && "$settings_sha" == "$(jq -er '.settings.desiredSha256' "$reviewed_authority")" ]] || return 1
 
-  jq -n -c --arg base "$base_revision" --arg current "$checkout_head" --arg settings "$settings_sha" --arg queued "$queued_head" \
-    '{schema:"fsgg.coordination.workflow-selection-authority/1",baseRevision:$base,currentRevision:$current,settingsSha256:$settings,queuedHead:$queued}' > "$output"
+  if [[ "$event_name" == "merge_group" ]]; then
+    local changed_paths
+    changed_paths="$(git -C "$repository_root" diff --name-only --diff-filter=ACDMRTUXB "$event_base" "$queued_head")" || return 1
+    [[ -n "$changed_paths" ]] || return 1
+    jq -n -c \
+      --arg inventoryVersion "$(jq -er '.inventoryVersion' "$inventory")" \
+      --arg graphVersion "$(jq -er '.graphVersion' "$inventory")" \
+      --arg seal "$(jq -er '.seal' "$inventory")" \
+      --arg base "$base_revision" --arg settings "$settings_sha" \
+      --arg queued "$queued_head" --arg eventBase "$event_base" \
+      --rawfile changed <(printf '%s\n' "$changed_paths") '
+      {inventoryVersion:$inventoryVersion,graphVersion:$graphVersion,expectedInventorySeal:$seal,
+       baseRevision:$base,settingsSha256:$settings,complete:true,
+       changedPaths:($changed|split("\n")|map(select(length>0))),nonFileInputs:["merge-group-settings"],
+       mergeGroup:{queuedHead:$queued,currentQueuedHead:$queued,currentBaseRevision:$eventBase,currentSettingsSha256:$settings,recomputed:true}}' > "$runtime_request" || return 1
+  else
+    cp "$source_request" "$runtime_request" || return 1
+  fi
+  json_has_unique_members "$runtime_request" || return 1
+  runtime_request_sha="$(sha256_file "$runtime_request")" || return 1
+
+  jq -n -c --arg base "$base_revision" --arg current "$checkout_head" --arg eventBase "$event_base" \
+    --arg settings "$settings_sha" --arg queued "$queued_head" --arg inventorySha "$inventory_sha" \
+    --arg requestSha "$runtime_request_sha" --arg sourceRequestSha "$source_request_sha" \
+    '{schema:"fsgg.coordination.workflow-selection-authority/2",inventoryBaseRevision:$base,currentRevision:$current,
+      eventBaseRevision:$eventBase,settingsSha256:$settings,queuedHead:$queued,inventorySha256:$inventorySha,
+      requestSha256:$requestSha,sourceRequestSha256:$sourceRequestSha}' > "$output"
 }
 
 write_typed_decision() {
@@ -150,8 +212,8 @@ if [[ "${1:-}" == "--compare-selection" && $# == 5 ]]; then
   exit $?
 fi
 
-if [[ "${1:-}" == "--resolve-authority" && $# == 4 ]]; then
-  resolve_current_authority "$2" "$3" "$4"
+if [[ "${1:-}" == "--resolve-authority" && $# == 6 ]]; then
+  resolve_current_authority "$2" "$3" "$4" "$5" "$6"
   exit $?
 fi
 
@@ -162,12 +224,14 @@ q7_decision="$output_root/q7-decision.json"
 selection="$output_root/current-selection.json"
 failures="$output_root/actual-failures.json"
 authority="$output_root/current-authority.json"
+runtime_request="$output_root/runtime-request.json"
 
 if ! resolve_current_authority \
   evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json \
   evidence/github-substrate-v2/gs2-06-7/runtime-request-sentinel.json \
-  "$authority"; then
-  printf '{"schema":"fsgg.coordination.workflow-selection-sentinel/1","fullSuite":"failed","missedObligation":true,"fleetSelection":"disabled","productionMutation":false,"reason":"current-authority-unavailable"}\n' > "$decision"
+  evidence/github-substrate-v2/gs2-06-7/runtime-reviewed-authority.json \
+  "$authority" "$runtime_request"; then
+  write_disabled_decision "$decision" "current-authority-unavailable"
   exit 1
 fi
 
@@ -188,7 +252,7 @@ dotnet fsi eng/validate-github-release-hardening.fsx -- .
 release_exit=$?
 dotnet src/FS.GG.Coordination.Cli/bin/Release/net10.0/FS.GG.Coordination.Cli.dll workflow-select \
   --inventory evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json \
-  --request evidence/github-substrate-v2/gs2-06-7/runtime-request-sentinel.json \
+  --request "$runtime_request" \
   --expected-inventory-version coordination-workflows/1 --expected-graph-version fsgg.workflow-impact/1 \
   --expected-seal 2ff268103734c9f14d80302575aea4996c1a040a125b7f4356880efde90b5d5a \
   --authority "$authority" > "$selection"
@@ -196,7 +260,7 @@ selection_exit=$?
 set -e
 
 if (( selection_exit != 0 )); then
-  printf '{"schema":"fsgg.coordination.workflow-selection-sentinel/1","fullSuite":"failed","missedObligation":true,"fleetSelection":"disabled","productionMutation":false,"reason":"current-selection-refused"}\n' > "$decision"
+  write_disabled_decision "$decision" "current-selection-refused"
   exit 1
 fi
 

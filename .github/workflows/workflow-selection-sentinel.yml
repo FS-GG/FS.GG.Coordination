@@ -18,15 +18,6 @@ jobs:
       - uses: ./.github/actions/coordination-setup
         with:
           ref: ${{ github.sha }}
-      - name: Resolve current protected checkout and settings authority
-        shell: bash
-        run: |
-          test "$(git rev-parse --verify HEAD)" = "$GITHUB_SHA"
-          mkdir -p "$RUNNER_TEMP/workflow-selection-sentinel"
-          bash eng/workflow-selection-sentinel.sh --resolve-authority \
-            evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json \
-            evidence/github-substrate-v2/gs2-06-7/runtime-request-sentinel.json \
-            "$RUNNER_TEMP/workflow-selection-sentinel/preflight-authority.json"
       - name: Run the full unselected suite and missed-obligation oracle
         id: sentinel
         shell: bash

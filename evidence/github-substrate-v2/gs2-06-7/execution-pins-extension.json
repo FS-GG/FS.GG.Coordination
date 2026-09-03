@@ -25,7 +25,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/workflow-selection-sentinel.yml",
-      "sha256": "0412926fab55fac96b03b7316c20b8c8e194f92886672e5f1e0399038646af41",
+      "sha256": "d15e03009427b7daa4ddbff4282e38937f03844cd5fd680d848a1e35a97211cf",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"

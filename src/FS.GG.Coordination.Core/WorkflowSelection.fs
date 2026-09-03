@@ -151,7 +151,7 @@ module WorkflowSelection =
                   if not (revision merge.CurrentQueuedHead) then InvalidMergeGroup "currentQueuedHead"
                   if merge.QueuedHead <> merge.CurrentQueuedHead then InvalidMergeGroup "queued head differs from current queued head"
                   if not merge.Recomputed then InvalidMergeGroup "selection was not recomputed"
-                  if merge.CurrentBaseRevision <> request.BaseRevision then InvalidMergeGroup "current base differs from request base"
+                  if not (revision merge.CurrentBaseRevision) then InvalidMergeGroup "currentBaseRevision"
                   if merge.CurrentSettingsSha256 <> request.SettingsSha256 then InvalidMergeGroup "current settings differ from request settings" ]
         if not preflight.IsEmpty then Error preflight
         else

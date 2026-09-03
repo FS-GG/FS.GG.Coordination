@@ -155,57 +155,127 @@ let ``production selector CLI handles arbitrary and merge-group inputs and fails
     File.Delete authority
 
 [<Fact>]
-let ``sentinel derives current checkout and reviewed settings authority and refuses protected head advancement`` () =
+let ``sentinel authority survives unrelated protected advances and rejects stale paired evidence`` () =
     let temporary = Path.Combine(Path.GetTempPath(), $"fsgg-gs267-authority-{Guid.NewGuid():N}")
-    Directory.CreateDirectory(Path.Combine(temporary, "eng/repository-settings")) |> ignore
-    File.Copy(Path.Combine(root, "eng/repository-settings/receipt.json"), Path.Combine(temporary, "eng/repository-settings/receipt.json"))
+    let evidence = Path.Combine(temporary, "evidence/github-substrate-v2/gs2-06-7")
+    let settingsDirectory = Path.Combine(temporary, "eng/repository-settings")
+    Directory.CreateDirectory(evidence) |> ignore
+    Directory.CreateDirectory(settingsDirectory) |> ignore
+    let settingsPath = Path.Combine(settingsDirectory, "receipt.json")
+    File.Copy(Path.Combine(root, "eng/repository-settings/receipt.json"), settingsPath)
     let git arguments =
         let code, output, error = runBashAt temporary [] ([ "-c"; "git " + arguments ])
         Assert.True((code = 0), output + error)
+    let gitOutput arguments =
+        let code, output, error = runBashAt temporary [] ([ "-c"; "git " + arguments ])
+        Assert.True((code = 0), output + error)
+        output.Trim()
     git "init -q"
     git "config user.name authority-test"
     git "config user.email authority-test@example.invalid"
-    git "add eng/repository-settings/receipt.json"
+    File.WriteAllText(Path.Combine(temporary, "base.txt"), "reviewed base")
+    git "add base.txt"
     git "commit -qm initial"
-    let initial =
-        let code, output, error = runBashAt temporary [] [ "-c"; "git rev-parse HEAD" ]
-        Assert.True((code = 0), error)
-        output.Trim()
-    let inventory = Path.Combine(temporary, "inventory.json")
-    let request = Path.Combine(temporary, "request.json")
-    File.WriteAllText(inventory, $"""{{"baseRevision":"{initial}"}}""")
-    File.WriteAllText(request, $"""{{"baseRevision":"{initial}","settingsSha256":"5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518"}}""")
-    git "add inventory.json request.json"
-    git "commit -qm candidate"
-    let candidate =
-        let code, output, error = runBashAt temporary [] [ "-c"; "git rev-parse HEAD" ]
-        Assert.True((code = 0), error)
-        output.Trim()
+    let initial = gitOutput "rev-parse HEAD"
+    let inventory = Path.Combine(evidence, "runtime-inventory.json")
+    let request = Path.Combine(evidence, "runtime-request-sentinel.json")
+    let reviewed = Path.Combine(evidence, "runtime-reviewed-authority.json")
+    let oldBase = "6d3b7662ac4d9474a9976ac093ec910f55fb6087"
+    let oldSeal = "2ff268103734c9f14d80302575aea4996c1a040a125b7f4356880efde90b5d5a"
+    File.WriteAllText(inventory, (read "evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json").Replace(oldBase, initial))
+    let sealCode, sealOutput, sealError = runCli [ "workflow-select"; "--seal-inventory"; inventory ]
+    Assert.True((sealCode = 0), sealError)
+    let inventorySeal = sealOutput.Trim()
+    File.WriteAllText(inventory, File.ReadAllText(inventory).Replace(oldSeal, inventorySeal))
+    File.WriteAllText(request,
+        (read "evidence/github-substrate-v2/gs2-06-7/runtime-request-sentinel.json")
+            .Replace(oldBase, initial).Replace(oldSeal, inventorySeal))
+    let shaPath path = File.ReadAllBytes(path) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    File.WriteAllText(reviewed,
+        sprintf """{"schema":"fsgg.coordination.workflow-selection-reviewed-authority/1","repository":"FS-GG/FS.GG.Coordination","inventory":{"path":"evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json","sha256":"%s","inventoryVersion":"coordination-workflows/1","graphVersion":"fsgg.workflow-impact/1","seal":"%s","baseRevision":"%s"},"request":{"path":"evidence/github-substrate-v2/gs2-06-7/runtime-request-sentinel.json","sha256":"%s"},"settings":{"path":"eng/repository-settings/receipt.json","receiptSha256":"%s","desiredSha256":"5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518"}}"""
+            (shaPath inventory) inventorySeal initial (shaPath request) (shaPath settingsPath))
+    git "add evidence eng/repository-settings/receipt.json"
+    git "commit -qm reviewed-inputs"
+    let reviewedCommit = gitOutput "rev-parse HEAD"
+    for index in 1 .. 3 do
+        File.WriteAllText(Path.Combine(temporary, $"advance-{index}.txt"), $"irrelevant protected advance {index}")
+        git $"add advance-{index}.txt"
+        git $"commit -qm advance-{index}"
+    let current = gitOutput "rev-parse HEAD"
     let authority = Path.Combine(temporary, "authority.json")
+    let runtimeRequest = Path.Combine(temporary, "runtime-request.json")
     let script = Path.Combine(root, "eng/workflow-selection-sentinel.sh")
-    let firstCode, firstOutput, firstError = runBashAt temporary [ "GITHUB_SHA", candidate; "GITHUB_EVENT_NAME", "schedule" ] [ script; "--resolve-authority"; inventory; request; authority ]
+    let resolve environment =
+        runBashAt temporary environment
+            [ script; "--resolve-authority"
+              "evidence/github-substrate-v2/gs2-06-7/runtime-inventory.json"
+              "evidence/github-substrate-v2/gs2-06-7/runtime-request-sentinel.json"
+              "evidence/github-substrate-v2/gs2-06-7/runtime-reviewed-authority.json"
+              authority; runtimeRequest ]
+    let firstCode, firstOutput, firstError = resolve [ "GITHUB_SHA", current; "GITHUB_EVENT_NAME", "schedule" ]
     Assert.True((firstCode = 0), firstOutput + firstError)
     use first = JsonDocument.Parse(File.ReadAllText authority)
-    Assert.Equal(initial, first.RootElement.GetProperty("baseRevision").GetString())
-    Assert.Equal(candidate, first.RootElement.GetProperty("currentRevision").GetString())
+    Assert.Equal("fsgg.coordination.workflow-selection-authority/2", first.RootElement.GetProperty("schema").GetString())
+    Assert.Equal(initial, first.RootElement.GetProperty("inventoryBaseRevision").GetString())
+    Assert.Equal(current, first.RootElement.GetProperty("currentRevision").GetString())
     Assert.Equal("none", first.RootElement.GetProperty("queuedHead").GetString())
     Assert.Equal("5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518", first.RootElement.GetProperty("settingsSha256").GetString())
-    let settingsPath = Path.Combine(temporary, "eng/repository-settings/receipt.json")
+    Assert.Equal(shaPath inventory, first.RootElement.GetProperty("inventorySha256").GetString())
+    Assert.Equal(shaPath request, first.RootElement.GetProperty("requestSha256").GetString())
+    Assert.Equal(File.ReadAllText(request), File.ReadAllText(runtimeRequest))
+
+    let forgedCode, _, _ = resolve [ "GITHUB_SHA", reviewedCommit; "GITHUB_EVENT_NAME", "schedule" ]
+    Assert.NotEqual(0, forgedCode)
+    let originalRequest = File.ReadAllText(request)
+    File.WriteAllText(request, originalRequest.Replace("repository-settings", "dependency-revision"))
+    let stalePairCode, _, _ = resolve [ "GITHUB_SHA", current; "GITHUB_EVENT_NAME", "schedule" ]
+    Assert.NotEqual(0, stalePairCode)
+    File.WriteAllText(request, originalRequest)
+    let exactInventory = File.ReadAllText(inventory)
+    File.WriteAllText(inventory, exactInventory.Replace("coordination-workflows/1", "coordination-workflows/2"))
+    let staleInventoryCode, _, _ = resolve [ "GITHUB_SHA", current; "GITHUB_EVENT_NAME", "schedule" ]
+    Assert.NotEqual(0, staleInventoryCode)
+    File.WriteAllText(inventory, exactInventory)
+    let exactReviewed = File.ReadAllText(reviewed)
+    File.WriteAllText(reviewed, exactReviewed.Replace("\"repository\":", "\"repository\":\"forged\",\"repository\":"))
+    let ambiguousCode, _, _ = resolve [ "GITHUB_SHA", current; "GITHUB_EVENT_NAME", "schedule" ]
+    Assert.NotEqual(0, ambiguousCode)
+    File.WriteAllText(reviewed, exactReviewed)
+    let exactSettings = File.ReadAllText(settingsPath)
     File.WriteAllText(settingsPath, File.ReadAllText(settingsPath).Replace("5c7cd805ec9924c1895749df66fc0fd49eedbfeadd8721baafd75ced79a89518", "stale"))
-    let settingsCode, _, _ = runBashAt temporary [ "GITHUB_SHA", candidate; "GITHUB_EVENT_NAME", "schedule" ] [ script; "--resolve-authority"; inventory; request; authority ]
+    let settingsCode, _, _ = resolve [ "GITHUB_SHA", current; "GITHUB_EVENT_NAME", "schedule" ]
     Assert.NotEqual(0, settingsCode)
-    File.Copy(Path.Combine(root, "eng/repository-settings/receipt.json"), settingsPath, true)
-    File.WriteAllText(Path.Combine(temporary, "advance.txt"), "protected head advanced")
-    git "add advance.txt"
-    git "commit -qm advance"
-    let staleCode, _, _ = runBashAt temporary [ "GITHUB_SHA", candidate; "GITHUB_EVENT_NAME", "schedule" ] [ script; "--resolve-authority"; inventory; request; authority ]
-    Assert.NotEqual(0, staleCode)
-    let current =
-        let code, output, error = runBashAt temporary [] [ "-c"; "git rev-parse HEAD" ]
-        Assert.True((code = 0), error)
-        output.Trim()
-    let currentCode, _, _ = runBashAt temporary [ "GITHUB_SHA", current; "GITHUB_EVENT_NAME", "schedule" ] [ script; "--resolve-authority"; inventory; request; authority ]
-    Assert.NotEqual(0, currentCode)
+    File.WriteAllText(settingsPath, exactSettings)
+
+    Directory.CreateDirectory(Path.Combine(temporary, "tests")) |> ignore
+    File.WriteAllText(Path.Combine(temporary, "tests/Rollover.fs"), "module Rollover")
+    git "add tests/Rollover.fs"
+    git "commit -qm merge-group"
+    let queued = gitOutput "rev-parse HEAD"
+    let eventPath = Path.Combine(temporary, "event.json")
+    File.WriteAllText(eventPath, sprintf """{"merge_group":{"base_sha":"%s","head_sha":"%s"}}""" current queued)
+    let mergeCode, mergeOutput, mergeError =
+        resolve [ "GITHUB_SHA", queued; "GITHUB_EVENT_NAME", "merge_group"; "GITHUB_EVENT_PATH", eventPath ]
+    Assert.True((mergeCode = 0), mergeOutput + mergeError)
+    use mergeAuthority = JsonDocument.Parse(File.ReadAllText authority)
+    Assert.Equal(current, mergeAuthority.RootElement.GetProperty("eventBaseRevision").GetString())
+    Assert.Equal(queued, mergeAuthority.RootElement.GetProperty("queuedHead").GetString())
+    use mergeRequest = JsonDocument.Parse(File.ReadAllText runtimeRequest)
+    let mergeGroup = mergeRequest.RootElement.GetProperty("mergeGroup")
+    Assert.Equal(current, mergeGroup.GetProperty("currentBaseRevision").GetString())
+    Assert.Equal(queued, mergeGroup.GetProperty("queuedHead").GetString())
+    Assert.Contains("tests/Rollover.fs", mergeRequest.RootElement.GetProperty("changedPaths").EnumerateArray() |> Seq.map _.GetString())
+    let mergeSelectionCode, mergeSelectionOutput, mergeSelectionError =
+        runCli
+            [ "workflow-select"; "--inventory"; inventory; "--request"; runtimeRequest
+              "--authority"; authority; "--expected-inventory-version"; "coordination-workflows/1"
+              "--expected-graph-version"; "fsgg.workflow-impact/1"; "--expected-seal"; inventorySeal ]
+    Assert.True((mergeSelectionCode = 0), mergeSelectionError)
+    Assert.Contains(queued, mergeSelectionOutput)
+    File.WriteAllText(eventPath, sprintf """{"merge_group":{"base_sha":"%s","head_sha":"%s"}}""" current current)
+    let queuedMismatchCode, _, _ =
+        resolve [ "GITHUB_SHA", queued; "GITHUB_EVENT_NAME", "merge_group"; "GITHUB_EVENT_PATH", eventPath ]
+    Assert.NotEqual(0, queuedMismatchCode)
     Directory.Delete(temporary, true)
 
 [<Fact>]
@@ -227,6 +297,8 @@ let ``repository owns callable reusable composite aggregate and sentinel contrac
     Assert.Contains("Verify the exact candidate", composite)
     Assert.Contains("schedule:", sentinel)
     Assert.Contains("workflow-selection-sentinel.sh", sentinel)
+    Assert.DoesNotContain("Resolve current protected checkout and settings authority", sentinel)
+    Assert.Contains("runtime-reviewed-authority.json", read "eng/workflow-selection-sentinel.sh")
     Assert.DoesNotContain("gh api", reusable + sentinel)
     Assert.DoesNotContain("fleetSelectionEnabled=true", reusable + sentinel)
 
@@ -234,6 +306,17 @@ let ``repository owns callable reusable composite aggregate and sentinel contrac
 let ``sentinel consumes the typed Q7 missed-obligation decision and disables selection`` () =
     let temporary = Path.Combine(Path.GetTempPath(), $"fsgg-gs267-sentinel-{Guid.NewGuid():N}")
     Directory.CreateDirectory(temporary) |> ignore
+    let authorityFailureRoot = Path.Combine(temporary, "authority-failure")
+    let authorityFailureDecision = Path.Combine(authorityFailureRoot, "workflow-selection-sentinel/decision.json")
+    let authorityFailureCode, authorityFailureOutput, authorityFailureError =
+        runBashAt root
+            [ "RUNNER_TEMP", authorityFailureRoot; "GITHUB_SHA", String.replicate 40 "0"; "GITHUB_EVENT_NAME", "schedule" ]
+            [ "eng/workflow-selection-sentinel.sh" ]
+    Assert.True((authorityFailureCode = 1), authorityFailureOutput + authorityFailureError)
+    use authorityFailure = JsonDocument.Parse(File.ReadAllText authorityFailureDecision)
+    Assert.Equal("disabled", authorityFailure.RootElement.GetProperty("fleetSelection").GetString())
+    Assert.Equal("current-authority-unavailable", authorityFailure.RootElement.GetProperty("reason").GetString())
+    Assert.False(authorityFailure.RootElement.GetProperty("productionMutation").GetBoolean())
     let q7Decision = Path.Combine(temporary, "q7.json")
     let sentinelDecision = Path.Combine(temporary, "sentinel.json")
     let q7 = ProcessStartInfo("dotnet")
@@ -386,13 +469,13 @@ let ``unknown properties are refused at every retained object boundary`` () =
 [<Fact>]
 let ``workflow selection provider evidence is durable in the candidate Git tree`` () =
     let expected =
-        [ "readiness/262-workflow-selection/analysis.json", "34b2b4ba59a99e369dd2231904088129d2829bd93bcd7d9f3074c69480ab65cb"
+        [ "readiness/262-workflow-selection/analysis.json", "2dc4c5c43ee8430303a22ceb38c3f33b2bba0d11016b8b5f90d6ada6edf3c83d"
           // These are the canonical FS.GG.SDD.Cli 1.0.0 no-change fixed-point bytes. A later
           // ambient provider can only replace them by updating this executable contract.
-          "readiness/262-workflow-selection/work-model.json", "3ab5563f2e12b63dfb3ba4b81a7df979d04225cba2f3e587199ac55a9230a3d8"
-          "readiness/262-workflow-selection/verify.json", "0cda3aad4f8d5737ffa1d02dc98bc53714f1801fe3f1228159db132aa7b19b2c"
-          "readiness/262-workflow-selection/ship-verdict.json", "361b3af0e5d7c8876ee46e8fb92f94d56f5ca58831e122f089fa626ed7001768"
-          "artifacts/test-results/262-workflow-selection/unit-tests.trx", "24960699d2a7e411f0a418e02b3feb71f109df5411a1d255cd77483647272d98" ]
+          "readiness/262-workflow-selection/work-model.json", "db2913531bbccb53c2bb9d2fd3426ce11d7af3556c9df9c2ffd41209ac05dabe"
+          "readiness/262-workflow-selection/verify.json", "0bb92252cb241445c4de0d4dd1d8d797e71b054de80d5c1fbc9f2f0864193ac1"
+          "readiness/262-workflow-selection/ship-verdict.json", "5723e90cc9476f8f209c19def6447b922f9b904af2bf8b0c313855950fa0ea38"
+          "artifacts/test-results/262-workflow-selection/unit-tests.trx", "37adf839aabef7bc4f7978cec644cf8db10bfc313cf27c31b718d1d353ec73b6" ]
     let paths = expected |> List.map fst
     let code, output = tracked paths
     if code <> 0 then failwith output
@@ -424,7 +507,7 @@ let ``workflow selection provider evidence is durable in the candidate Git tree`
     let workModelSource =
         verified.GetProperty("sources").EnumerateArray()
         |> Seq.find (fun source -> source.GetProperty("path").GetString() = "readiness/262-workflow-selection/work-model.json")
-    Assert.Equal("3ab5563f2e12b63dfb3ba4b81a7df979d04225cba2f3e587199ac55a9230a3d8", workModelSource.GetProperty("digest").GetProperty("value").GetString())
+    Assert.Equal("db2913531bbccb53c2bb9d2fd3426ce11d7af3556c9df9c2ffd41209ac05dabe", workModelSource.GetProperty("digest").GetProperty("value").GetString())
 
     let evidence = read "work/262-workflow-selection/evidence.yml"
     Assert.Equal(19, evidence.Split("source: artifacts/test-results/262-workflow-selection/unit-tests.trx", StringSplitOptions.None).Length - 1)

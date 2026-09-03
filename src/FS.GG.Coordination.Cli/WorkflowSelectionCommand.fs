@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.Cli
 open System
 open System.Collections.Generic
 open System.IO
+open System.Security.Cryptography
 open System.Text.Json
 open System.Text.Json.Nodes
 open System.Text.RegularExpressions
@@ -114,10 +115,22 @@ module WorkflowSelectionCommand =
 
     let private parseAuthority path =
         let value = loadObject path
-        exact "authority" [ "schema"; "baseRevision"; "currentRevision"; "settingsSha256"; "queuedHead" ] value
-        if text "schema" value <> "fsgg.coordination.workflow-selection-authority/1" then
-            invalidArg "authority" "unsupported schema"
-        text "baseRevision" value, text "currentRevision" value, text "settingsSha256" value, text "queuedHead" value
+        match text "schema" value with
+        | "fsgg.coordination.workflow-selection-authority/1" ->
+            exact "authority" [ "schema"; "baseRevision"; "currentRevision"; "settingsSha256"; "queuedHead" ] value
+            text "baseRevision" value, text "currentRevision" value, text "baseRevision" value,
+            text "settingsSha256" value, text "queuedHead" value, None
+        | "fsgg.coordination.workflow-selection-authority/2" ->
+            exact "authority"
+                [ "schema"; "inventoryBaseRevision"; "currentRevision"; "eventBaseRevision"; "settingsSha256"; "queuedHead"
+                  "inventorySha256"; "requestSha256"; "sourceRequestSha256" ] value
+            text "inventoryBaseRevision" value, text "currentRevision" value, text "eventBaseRevision" value,
+            text "settingsSha256" value, text "queuedHead" value,
+            Some(text "inventorySha256" value, text "requestSha256" value, text "sourceRequestSha256" value)
+        | _ -> invalidArg "authority" "unsupported schema"
+
+    let private sha256File path =
+        File.ReadAllBytes(path) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
     let private refusalCode = function
         | UnsupportedSchemaVersion _ -> "unsupported-schema-version"
@@ -197,10 +210,10 @@ module WorkflowSelectionCommand =
             try
                 let inventory = parseInventory inventoryPath
                 let request = parseRequest requestPath
-                let currentBase, currentRevision, currentSettings, currentQueuedHead =
+                let currentBase, currentRevision, eventBase, currentSettings, currentQueuedHead, contentAuthority =
                     match authorityPath, legacyBase, legacySettings, legacyQueuedHead with
                     | Some path, None, None, None -> parseAuthority path
-                    | None, Some baseRevision, Some settingsSha256, Some queuedHead -> baseRevision, baseRevision, settingsSha256, queuedHead
+                    | None, Some baseRevision, Some settingsSha256, Some queuedHead -> baseRevision, baseRevision, baseRevision, settingsSha256, queuedHead, None
                     | Some _, _, _, _ -> invalidArg "authority" "cannot be combined with current authority flags"
                     | _ -> invalidArg "authority" "one complete current authority source is required"
                 let authorityRefusals =
@@ -208,6 +221,13 @@ module WorkflowSelectionCommand =
                           InvalidMergeGroup "current revision authority is malformed"
                       if authorityPath.IsSome && currentRevision = currentBase then
                           InvalidMergeGroup "current revision authority did not advance from the retained base"
+                      match contentAuthority with
+                      | Some(inventorySha, requestSha, sourceRequestSha) ->
+                          if not (Regex.IsMatch(sourceRequestSha, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then
+                              InvalidMergeGroup "source request authority is malformed"
+                          if sha256File inventoryPath <> inventorySha then InvalidInventory "inventory content authority"
+                          if sha256File requestPath <> requestSha then IncompleteRequest
+                      | None -> ()
                       if expectedInventory <> WorkflowSelection.supportedInventoryVersion || inventory.InventoryVersion <> expectedInventory || request.InventoryVersion <> expectedInventory then
                           UnsupportedInventoryVersion(expectedInventory, request.InventoryVersion)
                       if expectedGraph <> WorkflowSelection.supportedGraphVersion || inventory.GraphVersion <> expectedGraph || request.GraphVersion <> expectedGraph then
@@ -219,7 +239,7 @@ module WorkflowSelectionCommand =
                       | None when currentQueuedHead <> "none" -> InvalidMergeGroup "current queued-head authority must be none outside merge group"
                       | Some merge when merge.QueuedHead <> currentQueuedHead -> InvalidMergeGroup "queued head authority differs"
                       | Some merge when merge.CurrentQueuedHead <> currentQueuedHead -> InvalidMergeGroup "current queued head authority differs"
-                      | Some merge when merge.CurrentBaseRevision <> currentBase -> InvalidMergeGroup "current base authority differs"
+                      | Some merge when merge.CurrentBaseRevision <> eventBase -> InvalidMergeGroup "current base authority differs"
                       | Some merge when merge.CurrentSettingsSha256 <> currentSettings -> InvalidMergeGroup "current settings authority differs"
                       | _ -> () ]
                 match authorityRefusals, WorkflowSelection.select inventory request with
