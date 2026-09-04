@@ -216,6 +216,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-narrow-reconciliation.fsx", "--", "."]
+    },
+    {
+      "id": "github-audit-repair-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-audit-repair.fsx", "--", "."]
     }
   ]
 }
