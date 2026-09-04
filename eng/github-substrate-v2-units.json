@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "6849585bc46b542e1d5ca93410a92a0f7ee15cdc",
+    "revision": "9d88c7b7967e8d69c1b8873d718ee8f0f435afd9",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "0a9a10c017b184a50c3348e882b264e90a4f2c5736206de8ab9e52330304f7fd"
+    "sha256": "6e0de6a1f12de38c248c607c60064c8b81e1683460410acaa2f69aea47829844"
   },
   "units": [
     {
@@ -821,6 +821,20 @@
         { "id": "github-narrow-reconciliation-contract", "qGate": "Q3", "commandSha256": "4814f39e64af6ae6394ebf4b8e4f9012a1ad2ad0018af121bfe5d7ca549a85e3" }
       ],
       "contractSha256": "c9f174ed20673813ff948e6c9c329ae5645acc4e1f343f0e28f8fecee146428d"
+    },
+    {
+      "id": "GS2-07.3",
+      "title": "Audit repair",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-07.2"],
+      "permissionCeiling": ["repository-local additive audit-repair contracts, pure deterministic complete scheduled-audit observation and reconciliation planning for dropped deliveries, preview gaps, external repositories, and schema drift, event/audit convergence replay proof, validation, and retained evidence", "read-only consumption of accepted GS2-07.2 and exact accepted roadmap evidence is allowed; no scheduler deployment, no webhook subscription, no event ingestion deployment, no network call, no production queue mutation, no production GitHub write, no settings change, no workflow publication, no release, no package publication, no stable channel, and no GS2-07.4 inspection, preparation, or implementation authority"],
+      "exitGate": "the Q3 audit-repair contract begins from the exact accepted GS2-07.2 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds repository and source revision, complete scheduled-audit scope and cursor, event-derived subject and revision history, authoritative full observations, dropped-delivery, preview-gap, external-repository, and schema-drift classifications, deterministic repair scheduling keys, queue receipts and deduplication dispositions, and the exclusive fresh-observe/reduce/sealed-plan/apply/verify reconciler writer boundary; the complete scheduled audit remains authority where delivery history is absent or incomplete, supported event and audit inputs converge to the same queued subject and newest relevant revision under exact replay, and audit discovery schedules reconciliation without directly authoring derived state; missing, malformed, unknown, incomplete, partial-page, stale-cursor, stale-revision, conflicting-subject, altered-scope, altered-observation, altered-classification, dropped-delivery-omission, preview-gap-omission, external-repository-omission, schema-drift-omission, direct-write, unsealed-plan, altered-seal, and replay inputs remain explicit refusals; exact replay is byte-identical and no network, scheduler, webhook, production queue, or production mutation path exists; generated adversarial mutations and independently authored prerequisite, roadmap, completeness, audit-scope, cursor, event-history, observation, delivery-gap, preview-gap, external-repository, schema-drift, repair-routing, scheduling-key, deduplication, convergence, omission, exclusive-writer, direct-write, sealed-plan, ordering, seal, replay, Quint-preservation, no-network, no-production-queue, and no-mutation controls all pass without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-audit-repair-contract"],
+      "gateContracts": [
+        { "id": "github-audit-repair-contract", "qGate": "Q3", "commandSha256": "62be2f02680c983d0e813fb4fc83a28b8ba6b7a368478cf7807b1b61840a8f1a" }
+      ],
+      "contractSha256": "d6af16fa0323b7ccbacee27e8114e4975d0976429ed409d48eb4981a5fb1c003"
     }
   ]
 }

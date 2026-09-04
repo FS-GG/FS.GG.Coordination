@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-07.1 units, and the active GS2-07.2
+the subsequently accepted GS2-02 through GS2-07.2 units, and the active GS2-07.3
 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
@@ -277,6 +277,26 @@ exclusive normal writer. This registration creates or executes no validator,
 queue, webhook, network call, production write, acceptance receipt, or GS2-07.3
 work. Architecture controls independently refuse changed roadmap bytes, a stale
 index pin, and a catalog command that disagrees with the sealed Q3 identity.
+
+GS2-07.3 is registered against `.github` roadmap commit
+`9d88c7b7967e8d69c1b8873d718ee8f0f435afd9` and exact roadmap SHA-256
+`6e0de6a1f12de38c248c607c60064c8b81e1683460410acaa2f69aea47829844`.
+Its sole prerequisite is the accepted GS2-07.2 receipt. The Q3
+`github-audit-repair-contract` identity reserves the repository-local complete
+scheduled-audit and event/audit convergence evidence lane. The implementation
+unit must retain complete scheduled observation as authority for dropped
+deliveries, preview gaps, external repositories, and schema drift, and prove
+that event and audit inputs converge under replay by scheduling the exclusive
+fresh-observe/reduce/sealed-plan/apply/verify reconciler rather than directly
+authoring derived state. This registration creates or executes no validator,
+scheduler, queue, webhook, network call, production write, acceptance receipt,
+or GS2-07.4 work. Architecture controls independently refuse changed roadmap
+bytes, a stale index pin, mismatched selected command identity or catalog bytes,
+successor authority, and production mutation surfaces. The permanent item and
+roadmap lifecycle telemetry process remains inherited: exact Codex token usage
+is reconciled after response completion from local session JSONL with provenance
+or an explicit post-completion unavailable/error reason; this registration does
+not duplicate that already-published process.
 
 ## Command sequence
 
