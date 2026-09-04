@@ -84,9 +84,9 @@ let executeIndependent control =
     | EventSeal -> parse (bytes.Replace(baseline.Seal,String.replicate 64 "0")) |> isError
     | EventReplay -> replay {baseline with SchemaVersion=2} source [] |> isError
     | EventQuintPreservation -> shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" = text "protocolSha256" c
-    | EventNoNetwork -> let detector v=Regex.IsMatch(v,"httpclient|webrequest|webhook",RegexOptions.IgnoreCase) in not(detector sourceText) && detector(sourceText+"\nhttpCLIENT")
-    | EventNoQueue -> let detector v=Regex.IsMatch(v,"enqueue|dequeue|queueclient",RegexOptions.IgnoreCase) in not(detector sourceText) && detector(sourceText+"\nEnQueue")
-    | EventNoMutation -> let detector v=Regex.IsMatch(v,"octokit|githubclient|\\b(patch|post|put|delete)\\b",RegexOptions.IgnoreCase) in not(detector sourceText) && detector(sourceText+"\nGitHubClient")
+    | EventNoNetwork -> let detector (v:string)=Regex.IsMatch(v,"httpclient|webrequest|webhook",RegexOptions.IgnoreCase) in not(detector sourceText) && detector(sourceText+"\nhttpCLIENT")
+    | EventNoQueue -> let detector (v:string)=Regex.IsMatch(v,"enqueue|dequeue|queueclient",RegexOptions.IgnoreCase) in not(detector sourceText) && detector(sourceText+"\nEnQueue")
+    | EventNoMutation -> let detector (v:string)=Regex.IsMatch(v,"octokit|githubclient|\\b(patch|post|put|delete)\\b",RegexOptions.IgnoreCase) in not(detector sourceText) && detector(sourceText+"\nGitHubClient")
 let baselineGreen = parse bytes = Ok baseline && verify baseline.Seal baseline = Ok baseline
 let generated: GitHubEventEnvelopeControlResult list = requiredControls |> List.map(fun control->{Control=control;ControlPassed=executeGenerated control;BaselineGreen=baselineGreen})
 let independent: GitHubEventEnvelopeControlResult list = requiredControls |> List.map(fun control->{Control=control;ControlPassed=executeIndependent control;BaselineGreen=baselineGreen})

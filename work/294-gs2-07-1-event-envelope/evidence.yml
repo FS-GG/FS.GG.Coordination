@@ -11,7 +11,7 @@ sourceAnalysis: readiness/294-gs2-07-1-event-envelope/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/294-gs2-07-1-event-envelope/analysis.json
-    digest: 2e4274467f729201e23c26f46aa210536e5d3b164828ba9f50c500d1276630a2
+    digest: 1d49825636d39edd2d8dfe9cfd081e6749e434b693b35cc20669713c02b4731c
     schemaVersion: 1
   - label: checklist
     path: work/294-gs2-07-1-event-envelope/checklist.md
@@ -46,7 +46,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [eng/validate-github-event-envelope.fsx, evidence/github-substrate-v2/gs2-07-1/generated-controls.json, evidence/github-substrate-v2/gs2-07-1/independent-controls.json]
+    artifacts: []
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.UnitTests/GitHubEventEnvelopeTests.fs
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
+      digest: "sha256:1ed8d9dc291537874ba9e4ad95331c8c2cca427e1a7a244122aa4cd1596f52d0"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 10
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
+      digest: "sha256:1ed8d9dc291537874ba9e4ad95331c8c2cca427e1a7a244122aa4cd1596f52d0"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 10
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
+      digest: "sha256:1ed8d9dc291537874ba9e4ad95331c8c2cca427e1a7a244122aa4cd1596f52d0"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 10
@@ -127,7 +127,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV004]
-    artifacts: []
+    artifacts: [eng/validate-github-event-envelope.fsx, evidence/github-substrate-v2/gs2-07-1/generated-controls.json, evidence/github-substrate-v2/gs2-07-1/independent-controls.json, readiness/294-gs2-07-1-event-envelope/test-results/q3-gate.txt]
     sourceRefs:
       - kind: verification
         path: eng/validate-github-event-envelope.fsx
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
+      digest: "sha256:1ed8d9dc291537874ba9e4ad95331c8c2cca427e1a7a244122aa4cd1596f52d0"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 10
@@ -154,7 +154,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV005]
-    artifacts: [eng/validate-github-event-envelope.fsx, tests/FS.GG.Coordination.UnitTests/GitHubEventEnvelopeTests.fs]
+    artifacts: []
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coordination.Qualification.Contracts/GitHubEventEnvelopeQualification.fsi
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
+      digest: "sha256:1ed8d9dc291537874ba9e4ad95331c8c2cca427e1a7a244122aa4cd1596f52d0"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 10
@@ -181,7 +181,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
     obligationRefs: [EV006]
-    artifacts: []
+    artifacts: [readiness/294-gs2-07-1-event-envelope/test-results/full-architecture.trx, readiness/294-gs2-07-1-event-envelope/test-results/full-unit.trx, readiness/294-gs2-07-1-event-envelope/test-results/release-build.txt, tests/FS.GG.Coordination.UnitTests/GitHubEventEnvelopeTests.fs]
     sourceRefs:
       - kind: verification
         path: eng/validate-github-event-envelope.fsx
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
+      digest: "sha256:1ed8d9dc291537874ba9e4ad95331c8c2cca427e1a7a244122aa4cd1596f52d0"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 10
       failed: 0
       skipped: 0
-    notes: ["Focused contract behavior is observed by the cited TRX; warning-free build", and Q3 remain separately reported implementation handoff checks., full suites]
+    notes: ["Focused contract behavior is observed by the cited TRX; build and full-suite outputs are separately bound artifacts."]
   - id: EV007
     kind: verification
     subject:
@@ -216,7 +216,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
+      digest: "sha256:1ed8d9dc291537874ba9e4ad95331c8c2cca427e1a7a244122aa4cd1596f52d0"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 10
@@ -243,7 +243,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
+      digest: "sha256:1ed8d9dc291537874ba9e4ad95331c8c2cca427e1a7a244122aa4cd1596f52d0"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 10

@@ -1,0 +1,14 @@
+  FS.GG.Coordination.Protocol -> /home/developer/projects/.worktrees/coord-gs2-07-1-event-envelope/src/FS.GG.Coordination.Protocol/bin/Release/net10.0/FS.GG.Coordination.Protocol.dll
+  FS.GG.Coordination.Qualification.Contracts -> /home/developer/projects/.worktrees/coord-gs2-07-1-event-envelope/src/FS.GG.Coordination.Qualification.Contracts/bin/Release/net10.0/FS.GG.Coordination.Qualification.Contracts.dll
+  FS.GG.Coordination.Core -> /home/developer/projects/.worktrees/coord-gs2-07-1-event-envelope/src/FS.GG.Coordination.Core/bin/Release/net10.0/FS.GG.Coordination.Core.dll
+  FS.GG.Coordination.GitHub -> /home/developer/projects/.worktrees/coord-gs2-07-1-event-envelope/src/FS.GG.Coordination.GitHub/bin/Release/net10.0/FS.GG.Coordination.GitHub.dll
+  FS.GG.Coordination.Cli -> /home/developer/projects/.worktrees/coord-gs2-07-1-event-envelope/src/FS.GG.Coordination.Cli/bin/Release/net10.0/FS.GG.Coordination.Cli.dll
+  FS.GG.Coordination.App -> /home/developer/projects/.worktrees/coord-gs2-07-1-event-envelope/src/FS.GG.Coordination.App/bin/Release/net10.0/FS.GG.Coordination.App.dll
+  FS.GG.Coordination.UnitTests -> /home/developer/projects/.worktrees/coord-gs2-07-1-event-envelope/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll
+  FS.GG.Coordination.ArchitectureTests -> /home/developer/projects/.worktrees/coord-gs2-07-1-event-envelope/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.45
