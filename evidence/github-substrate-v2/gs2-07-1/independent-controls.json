@@ -1,0 +1,7 @@
+{
+  "schema": "fsgg.github-event-envelope-controls/v1",
+  "author": "independent-oracle/gs2-07.1",
+  "controls": ["event-prerequisites","event-roadmap","event-completeness","event-source","event-delivery-identity","event-identity","event-subject","event-revision","event-causation","event-correlation","event-receipt","event-duplicate","event-reorder","event-conflict","event-cursor","event-ordering","event-seal","event-replay","event-quint-preservation","event-no-network","event-no-queue","event-no-mutation"],
+  "caseContract": "independently authored oracle executes distinct adversaries without calling the generated mutation function",
+  "cases": ["receipt digest literal","roadmap revision literal","missing receipt identity","unknown source kind","delivery conflict via receipt","event identity collision","foreign subject","negative subject revision","dangling prior event","split subject correlation","reused receipt identity","replay duplicate collapse","replay reorder convergence","subject revision conflict","delimiter alias inequality","verify rejects reordered structure","serialized seal tamper","replay rejects schema tamper","protocol file hash","case-insensitive network scan plus injected witness","case-insensitive queue scan plus injected witness","case-insensitive mutation scan plus injected witness"]
+}

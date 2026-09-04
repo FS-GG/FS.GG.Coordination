@@ -1,0 +1,11 @@
+{
+  "schema": "fsgg.github-event-envelope-evidence/v1",
+  "unit": "GS2-07.1",
+  "roadmapRevision": "d0267c02c59de75571f6ee9086f924e8c924da08",
+  "roadmapSha256": "152956bff4f264d7a6e034c0d8553d3df2cd44ac6773b03e83f85ff52dfb4655",
+  "unitContractSha256": "eaf9d224f80eea0136bc17a3998dc1182ac7d4d9b342034d28ab7ec75af4e918",
+  "prerequisiteReceiptDigest": "c8831d8e3b06f77ae26d23579b738347794a8d08e460c84c5856cbbff50abd0e",
+  "prerequisiteFileSha256": "bf1be79b6d2e8c35abd88ed80f3bd96049659fb2a73ad85c8eb6d8b98bea622e",
+  "sourceRevision": "c1ae933ab8f4eb0b3f40119cebd985ed7f9e0f80",
+  "protocolSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
+}

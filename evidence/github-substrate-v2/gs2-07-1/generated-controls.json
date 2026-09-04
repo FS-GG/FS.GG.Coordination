@@ -1,0 +1,7 @@
+{
+  "schema": "fsgg.github-event-envelope-controls/v1",
+  "author": "generated-mutation-harness/gs2-07.1",
+  "controls": ["event-prerequisites","event-roadmap","event-completeness","event-source","event-delivery-identity","event-identity","event-subject","event-revision","event-causation","event-correlation","event-receipt","event-duplicate","event-reorder","event-conflict","event-cursor","event-ordering","event-seal","event-replay","event-quint-preservation","event-no-network","event-no-queue","event-no-mutation"],
+  "caseContract": "generated mutations execute one named predicate per ordered control against the canonical baseline",
+  "cases": ["accepted prerequisite exists","roadmap digest exact","empty delivery set","blank source kind","delivery reuse changed bytes","event reuse changed bytes","cross-subject delivery","zero subject revision","self causation","delivery-id correlation","unknown receipt disposition","exact duplicate collapse","arrival reorder convergence","receipt mutation conflict","cursor gap","canonical position sort","wrong expected seal","duplicate replay no effect","protocol digest exact","network symbols absent","queue symbols absent","mutation symbols absent"]
+}

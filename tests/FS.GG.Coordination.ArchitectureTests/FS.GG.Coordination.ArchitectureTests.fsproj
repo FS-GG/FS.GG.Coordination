@@ -33,6 +33,7 @@
     <Compile Include="GitHubWorkflowSelectionArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubFleetDryPlanTests.fs" Link="GitHubFleetDryPlanUnitTests.fs" />
     <Compile Include="GitHubFleetDryPlanArchitectureTests.fs" />
+    <Compile Include="GitHubEventEnvelopeArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs" Link="GitHubCommentProjectionUnitTests.fs" />
     <Compile Include="GitHubCommentProjectionArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs" Link="GitHubShardedJournalUnitTests.fs" />

@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "294-gs2-07-1-event-envelope",
+  "targetId": "claude",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "generated": true,
+  "sources": [
+    {
+      "path": "readiness/294-gs2-07-1-event-envelope/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "08b6d719b9d1b91194595fa9d4c328c1e02fe4aa64b47ca31d3e9bd1af8a48b6"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "behaviorModelDigest": {
+    "algorithm": "sha256",
+    "value": "43ee9eec3a42a0ef33cf271a4ebfaaca37406c78a666b29f8507aed3ffecbcf8"
+  },
+  "commands": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T001 (done) covering AC-001, FR-001, PD-001.",
+      "relatedIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T002 (done) covering AC-002, FR-002, PD-002.",
+      "relatedIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T003 (done) covering AC-003, FR-003, PD-003.",
+      "relatedIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ]
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T004 (done) covering AC-004, FR-004, PD-004.",
+      "relatedIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ]
+    },
+    {
+      "id": "T005",
+      "title": "Update contract surface PC-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T005 (done) covering PC-001, PD-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001"
+      ]
+    },
+    {
+      "id": "T006",
+      "title": "Record verification evidence VO-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T006 (done) covering PC-001, PD-001, PD-002, PD-003, PD-004, VO-001.",
+      "relatedIds": [
+        "PC-001",
+        "PD-001",
+        "PD-002",
+        "PD-003",
+        "PD-004",
+        "VO-001"
+      ]
+    },
+    {
+      "id": "T007",
+      "title": "Handle migration posture PM-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T007 (done) covering PC-001, PM-001.",
+      "relatedIds": [
+        "PC-001",
+        "PM-001"
+      ]
+    },
+    {
+      "id": "T008",
+      "title": "Refresh generated view impact GV-001",
+      "stage": "specify",
+      "purpose": "Carry out lifecycle task T008 (done) covering GV-001, PD-004.",
+      "relatedIds": [
+        "GV-001",
+        "PD-004"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "id": "automated-tests",
+      "title": "automated-tests",
+      "capability": "Required by tasks: T006.",
+      "relatedIds": [
+        "T006"
+      ]
+    },
+    {
+      "id": "deterministic-json",
+      "title": "deterministic-json",
+      "capability": "Required by tasks: T008.",
+      "relatedIds": [
+        "T008"
+      ]
+    },
+    {
+      "id": "fsharp",
+      "title": "fsharp",
+      "capability": "Required by tasks: T001, T002, T003, T004, T005.",
+      "relatedIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004",
+        "T005"
+      ]
+    },
+    {
+      "id": "implementation",
+      "title": "implementation",
+      "capability": "Required by tasks: T001, T002, T003, T004.",
+      "relatedIds": [
+        "T001",
+        "T002",
+        "T003",
+        "T004"
+      ]
+    },
+    {
+      "id": "readiness-evidence",
+      "title": "readiness-evidence",
+      "capability": "Required by tasks: T006.",
+      "relatedIds": [
+        "T006"
+      ]
+    },
+    {
+      "id": "schema-versioning",
+      "title": "schema-versioning",
+      "capability": "Required by tasks: T007.",
+      "relatedIds": [
+        "T007"
+      ]
+    }
+  ],
+  "renderedFiles": [
+    {
+      "path": "readiness/294-gs2-07-1-event-envelope/agent-commands/claude/commands.md",
+      "kind": "commands"
+    },
+    {
+      "path": "readiness/294-gs2-07-1-event-envelope/agent-commands/claude/skills.md",
+      "kind": "skills"
+    }
+  ],
+  "diagnostics": []
+}
