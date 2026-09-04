@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d8152e15-21b4-48f4-bc24-22372c380c88" name="@8814041da899 2026-09-04 10:40:14" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-04T10:40:14.1954255+02:00" queuing="2026-09-04T10:40:14.1954255+02:00" start="2026-09-04T10:40:12.7700699+02:00" finish="2026-09-04T10:40:14.1987296+02:00" />
+  <TestSettings name="default" id="fb1460a0-42f2-498c-b44d-f2710f18281c">
+    <Deployment runDeploymentRoot="_8814041da899_2026-09-04_10_40_14" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="894f7528-b1ef-47c5-a7d8-05e8550f0d06" testId="310ebe40-5fca-3a44-23ca-46a0b3e46896" testName="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests.Q3 narrow reconciliation validator executes all controls" computerName="8814041da899" duration="00:00:01.0405438" startTime="2026-09-04T10:40:13.0901307+02:00" endTime="2026-09-04T10:40:14.1256308+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="894f7528-b1ef-47c5-a7d8-05e8550f0d06" />
+    <UnitTestResult executionId="d0cfcdb0-1e6a-4c1e-a13a-7df01920ca50" testId="182fa528-4975-4c67-d6c5-8dc00dd46efe" testName="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests.narrow reconciliation surface remains pure and repository local" computerName="8814041da899" duration="00:00:00.0074603" startTime="2026-09-04T10:40:14.1261203+02:00" endTime="2026-09-04T10:40:14.1330862+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d0cfcdb0-1e6a-4c1e-a13a-7df01920ca50" />
+    <UnitTestResult executionId="c27dd8b2-6e3c-40ff-9c04-1ab3de87c2a2" testId="ac37cbe2-06b9-2e82-7be4-9e745085fb82" testName="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests.Q3 keeps generated and independent execution paths separate" computerName="8814041da899" duration="00:00:00.0021482" startTime="2026-09-04T10:40:13.0799632+02:00" endTime="2026-09-04T10:40:13.0849754+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c27dd8b2-6e3c-40ff-9c04-1ab3de87c2a2" />
+    <UnitTestResult executionId="53bae508-019e-4cdf-b081-535a8aabdb5a" testId="160a6e42-1d84-9b2e-2048-558ac15ae5f7" testName="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests.retained event writer and control inventories are exact" computerName="8814041da899" duration="00:00:00.0075960" startTime="2026-09-04T10:40:14.1332334+02:00" endTime="2026-09-04T10:40:14.1407097+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="53bae508-019e-4cdf-b081-535a8aabdb5a" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests.Q3 keeps generated and independent execution paths separate" storage="/tmp/gs2-07-2-coord-4m4eps/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="ac37cbe2-06b9-2e82-7be4-9e745085fb82">
+      <Execution id="c27dd8b2-6e3c-40ff-9c04-1ab3de87c2a2" />
+      <TestMethod codeBase="/tmp/gs2-07-2-coord-4M4EPs/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests" name="Q3 keeps generated and independent execution paths separate" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests.retained event writer and control inventories are exact" storage="/tmp/gs2-07-2-coord-4m4eps/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="160a6e42-1d84-9b2e-2048-558ac15ae5f7">
+      <Execution id="53bae508-019e-4cdf-b081-535a8aabdb5a" />
+      <TestMethod codeBase="/tmp/gs2-07-2-coord-4M4EPs/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests" name="retained event writer and control inventories are exact" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests.narrow reconciliation surface remains pure and repository local" storage="/tmp/gs2-07-2-coord-4m4eps/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="182fa528-4975-4c67-d6c5-8dc00dd46efe">
+      <Execution id="d0cfcdb0-1e6a-4c1e-a13a-7df01920ca50" />
+      <TestMethod codeBase="/tmp/gs2-07-2-coord-4M4EPs/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests" name="narrow reconciliation surface remains pure and repository local" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests.Q3 narrow reconciliation validator executes all controls" storage="/tmp/gs2-07-2-coord-4m4eps/tests/fs.gg.coordination.architecturetests/bin/release/net10.0/fs.gg.coordination.architecturetests.dll" id="310ebe40-5fca-3a44-23ca-46a0b3e46896">
+      <Execution id="894f7528-b1ef-47c5-a7d8-05e8550f0d06" />
+      <TestMethod codeBase="/tmp/gs2-07-2-coord-4M4EPs/tests/FS.GG.Coordination.ArchitectureTests/bin/Release/net10.0/FS.GG.Coordination.ArchitectureTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests" name="Q3 narrow reconciliation validator executes all controls" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="310ebe40-5fca-3a44-23ca-46a0b3e46896" executionId="894f7528-b1ef-47c5-a7d8-05e8550f0d06" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="182fa528-4975-4c67-d6c5-8dc00dd46efe" executionId="d0cfcdb0-1e6a-4c1e-a13a-7df01920ca50" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ac37cbe2-06b9-2e82-7be4-9e745085fb82" executionId="c27dd8b2-6e3c-40ff-9c04-1ab3de87c2a2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="160a6e42-1d84-9b2e-2048-558ac15ae5f7" executionId="53bae508-019e-4cdf-b081-535a8aabdb5a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="4" executed="4" passed="4" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.06]   Discovering: FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.10]   Discovered:  FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:00.12]   Starting:    FS.GG.Coordination.ArchitectureTests
+[xUnit.net 00:00:01.19]   Finished:    FS.GG.Coordination.ArchitectureTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

@@ -30,8 +30,8 @@ sources:
 tasks:
   - id: T001
     title: Implement requirement FR-001
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: []
     requirements: [FR-001]
     decisions: []
@@ -40,8 +40,8 @@ tasks:
     requiredEvidence: [EV001]
   - id: T002
     title: Update contract surface PC-001
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -50,8 +50,8 @@ tasks:
     requiredEvidence: [EV002]
   - id: T003
     title: Update contract surface PC-002
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -60,8 +60,8 @@ tasks:
     requiredEvidence: [EV003]
   - id: T004
     title: Update contract surface PC-003
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -70,8 +70,8 @@ tasks:
     requiredEvidence: [EV004]
   - id: T005
     title: Update contract surface PC-004
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -80,8 +80,8 @@ tasks:
     requiredEvidence: [EV005]
   - id: T006
     title: Record verification evidence VO-001
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -90,8 +90,8 @@ tasks:
     requiredEvidence: [EV006]
   - id: T007
     title: Record verification evidence VO-002
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -100,8 +100,8 @@ tasks:
     requiredEvidence: [EV007]
   - id: T008
     title: Record verification evidence VO-003
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -110,8 +110,8 @@ tasks:
     requiredEvidence: [EV008]
   - id: T009
     title: Record verification evidence VO-004
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -120,8 +120,8 @@ tasks:
     requiredEvidence: [EV009]
   - id: T010
     title: Handle migration posture PM-001
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []
@@ -130,8 +130,8 @@ tasks:
     requiredEvidence: [EV010]
   - id: T011
     title: Refresh generated view impact GV-001
-    status: pending
-    owner: sdd
+    status: done
+    owner: godwit-6143
     dependencies: [T001]
     requirements: []
     decisions: []

@@ -3,6 +3,7 @@ module FS.GG.Coordination.GitHubNarrowReconciliationArchitectureTests
 open System
 open System.IO
 open System.Text.Json
+open System.Diagnostics
 open Xunit
 open FS.GG.Coordination.Qualification.Contracts
 
@@ -51,3 +52,19 @@ let ``Q3 keeps generated and independent execution paths separate`` () =
     Assert.Contains("let executeGenerated control", validator, StringComparison.Ordinal)
     Assert.Contains("let executeIndependent control", validator, StringComparison.Ordinal)
     Assert.DoesNotContain("let execute control independent", validator, StringComparison.Ordinal)
+
+[<Fact>]
+let ``Q3 narrow reconciliation validator executes all controls`` () =
+    let info = ProcessStartInfo("dotnet")
+    info.WorkingDirectory <- root
+    info.UseShellExecute <- false
+    info.RedirectStandardOutput <- true
+    info.RedirectStandardError <- true
+    for argument in [ "fsi"; "eng/validate-github-narrow-reconciliation.fsx"; "--"; root ] do info.ArgumentList.Add argument
+    use child = Process.Start info
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.Equal(0, child.ExitCode)
+    Assert.Equal("", error.Trim())
+    Assert.Contains("GITHUB_NARROW_RECONCILIATION_OK events=8 entries=8 controls=23", output, StringComparison.Ordinal)

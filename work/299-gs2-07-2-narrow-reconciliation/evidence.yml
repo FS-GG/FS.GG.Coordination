@@ -1,0 +1,335 @@
+schemaVersion: 1
+workId: 299-gs2-07-2-narrow-reconciliation
+stage: evidence
+status: evidenceReady
+sourceSpec: work/299-gs2-07-2-narrow-reconciliation/spec.md
+sourceClarifications: work/299-gs2-07-2-narrow-reconciliation/clarifications.md
+sourceChecklist: work/299-gs2-07-2-narrow-reconciliation/checklist.md
+sourcePlan: work/299-gs2-07-2-narrow-reconciliation/plan.md
+sourceTasks: work/299-gs2-07-2-narrow-reconciliation/tasks.yml
+sourceAnalysis: readiness/299-gs2-07-2-narrow-reconciliation/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/299-gs2-07-2-narrow-reconciliation/analysis.json
+    digest: 6e60f3ef2afea334f1233819d91c5061efd90e367f68e867e1093bf25887c5e5
+    schemaVersion: 1
+  - label: checklist
+    path: work/299-gs2-07-2-narrow-reconciliation/checklist.md
+    digest: ed1d3eded400eedf61ba2f4ed0d827948487d860b42237414923ce393ffe2d10
+    schemaVersion: 1
+  - label: clarifications
+    path: work/299-gs2-07-2-narrow-reconciliation/clarifications.md
+    digest: 79dd3ba704564c4d87792c0e08ca11cc70d03d2546205270a924a399b2030347
+    schemaVersion: 1
+  - label: plan
+    path: work/299-gs2-07-2-narrow-reconciliation/plan.md
+    digest: 4c667b617105b8a9614f23bccef8d9bb99e70a22db431ef89ce8b20ac4785abe
+    schemaVersion: 1
+  - label: spec
+    path: work/299-gs2-07-2-narrow-reconciliation/spec.md
+    digest: 3ee9e3c492a3727015fb3532a9d58fb96e57c85840dd6f8b5c7689edcdb86673
+    schemaVersion: 1
+  - label: tasks
+    path: work/299-gs2-07-2-narrow-reconciliation/tasks.yml
+    digest: da9b03a1bce0ac5596571597453d061943537e6cebb3473fa07acbe85fde1c0c
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+      digest: "sha256:3e4d466b650fa1fa6fe5c00fcce4cce33859b3398f63dfb676f512287eb8d3a5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+      digest: "sha256:3e4d466b650fa1fa6fe5c00fcce4cce33859b3398f63dfb676f512287eb8d3a5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+      digest: "sha256:3e4d466b650fa1fa6fe5c00fcce4cce33859b3398f63dfb676f512287eb8d3a5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-architecture.trx
+      digest: "sha256:dff696e8af6c7d3da50cfb86646011e3d588d6fe313b4cb8da31fe5b17e52036"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
+      digest: "sha256:8c9eb89af7cc9a3dc80b3ce9acadd5bb79acd49f61bb15f25450f1121370dd3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 499
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+      digest: "sha256:3e4d466b650fa1fa6fe5c00fcce4cce33859b3398f63dfb676f512287eb8d3a5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+      digest: "sha256:3e4d466b650fa1fa6fe5c00fcce4cce33859b3398f63dfb676f512287eb8d3a5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/narrow-focused.trx
+      digest: "sha256:3e4d466b650fa1fa6fe5c00fcce4cce33859b3398f63dfb676f512287eb8d3a5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 10
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
+      digest: "sha256:8c9eb89af7cc9a3dc80b3ce9acadd5bb79acd49f61bb15f25450f1121370dd3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 499
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-unit.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-unit.trx
+      digest: "sha256:2f723400c6500ae11ca87f0fe881563b0fa86149feb00138f2bf1d060c190daa"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 218
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
+      digest: "sha256:8c9eb89af7cc9a3dc80b3ce9acadd5bb79acd49f61bb15f25450f1121370dd3c"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 499
+      failed: 0
+      skipped: 0
+    notes: [Observed automated verification required and recorded below.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

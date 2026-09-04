@@ -1,0 +1,78 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-2-narrow-reconciliation",
+  "milestone": "GS2-07.2 — Narrow reconciliation",
+  "critic": "gs2_07_2_critic",
+  "initial_reviewed_commit": "84829429eee52717db1ce1c19e066e2a4be3203b",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "84829429eee52717db1ce1c19e066e2a4be3203b"
+  ],
+  "findings": [
+    {
+      "id": "GS2072-C01",
+      "severity": "major",
+      "summary": "A stale event source revision is reported as repository cross-scope, so the contract does not provide the separately required stale-revision refusal.",
+      "evidence": [
+        "eng/github-substrate-v2-units.json GS2-07.2 exitGate separately requires cross-scope and stale-revision refusals.",
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubNarrowReconciliationQualification.fs:111-114 combines repository and source-revision mismatches into CrossScope and uses StaleRevision only for non-positive subject revisions.",
+        "eng/validate-github-narrow-reconciliation.fsx:91 mutates SourceRevision for the independent scope control and checks only Result.isError, allowing the wrong CrossScope finding to pass as green."
+      ],
+      "disposition": "follow-up",
+      "resolution_evidence": [
+        "Worker repair is required before acceptance: distinguish repository cross-scope from event source-revision staleness and assert the exact typed findings."
+      ]
+    },
+    {
+      "id": "GS2072-C02",
+      "severity": "major",
+      "summary": "Most refusal controls prove only that some error occurred, so incorrect or collapsed refusal classifications satisfy the advertised mutation-discriminating gate.",
+      "evidence": [
+        "tests/FS.GG.Coordination.UnitTests/GitHubNarrowReconciliationTests.fs:48-59 uses Result.isError for unknown, malformed, stale, cross-scope, and conflicting-subject cases; only incomplete and altered-routing assert exact findings.",
+        "eng/validate-github-narrow-reconciliation.fsx:43-47,56-62 and 73-77,90-97 likewise accept Result.isError for most generated and independent refusal controls.",
+        "The exact Q3 validator still prints GITHUB_NARROW_RECONCILIATION_OK while the stale-source mutation at validator line 91 is classified as CrossScope by implementation lines 111-112, demonstrating an observable false-green path."
+      ],
+      "disposition": "follow-up",
+      "resolution_evidence": [
+        "Worker repair is required before acceptance: make generated and independent controls assert the intended finding class and add focused exact-result tests for every registered refusal family."
+      ]
+    },
+    {
+      "id": "GS2072-C03",
+      "severity": "major",
+      "summary": "The SDD task ledger still declares every implementation and evidence obligation pending despite the candidate claiming a completed first green implementation/evidence loop.",
+      "evidence": [
+        "work/299-gs2-07-2-narrow-reconciliation/tasks.yml:31-140 records T001 through T011 with status pending and owner sdd.",
+        "readiness/299-gs2-07-2-narrow-reconciliation/analysis.json remains implementationReady and names analysis.next.implement rather than verified or shipped evidence.",
+        "The tracked candidate evidence directory contains contract.json and two control inventories, but the current SDD source ledger has no completed task ownership or bound EV001-EV011 evidence dispositions."
+      ],
+      "disposition": "follow-up",
+      "resolution_evidence": [
+        "Worker repair is required before acceptance: complete the task ledger with the real worker identity and bind generated test evidence through verify/ship after the code and controls are repaired."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "84829429eee52717db1ce1c19e066e2a4be3203b",
+    "verdict": "changes-required",
+    "unresolved_blocker_major": [
+      "GS2072-C01",
+      "GS2072-C02",
+      "GS2072-C03"
+    ]
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
