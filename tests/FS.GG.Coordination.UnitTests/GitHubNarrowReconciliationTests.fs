@@ -7,6 +7,7 @@ open FS.GG.Coordination.Qualification.Contracts.GitHubNarrowReconciliationQualif
 let private repository = "FS-GG/FS.GG.Coordination"
 let private revision = "84829429eee52717db1ce1c19e066e2a4be3203b"
 let private get = function Ok value -> value | Error findings -> failwithf "unexpected findings: %A" findings
+let private findings = function Error values -> values | Ok value -> failwithf "expected refusal, received %A" value
 let private event kind id subjectRevision delivery =
     { EventKind = kind; Repository = repository; SourceRevision = revision; SubjectKind = kind
       SubjectId = id; SubjectRevision = subjectRevision; DeliveryId = delivery
@@ -47,15 +48,16 @@ let ``scheduling key uses length framing and repository scope`` () =
 [<Fact>]
 let ``unknown malformed incomplete and stale inputs refuse explicitly`` () =
     Assert.Equal(Error [ GitHubNarrowReconciliationFinding.IncompleteEventInventory ], compile repository revision [])
-    Assert.True(Result.isError(compile repository revision [ event "unsupported" "1" 1L "delivery" ]))
-    Assert.True(Result.isError(compile repository revision [ { event "issue" "1" 1L "delivery" with SubjectId = " " } ]))
-    Assert.True(Result.isError(compile repository revision [ event "issue" "1" 0L "delivery" ]))
+    Assert.Contains(GitHubNarrowReconciliationFinding.UnknownEventKind "unsupported", compile repository revision [ event "unsupported" "1" 1L "delivery" ] |> findings)
+    Assert.Contains(GitHubNarrowReconciliationFinding.MissingField "subjectId", compile repository revision [ { event "issue" "1" 1L "delivery" with SubjectId = " " } ] |> findings)
+    Assert.Contains(GitHubNarrowReconciliationFinding.StaleRevision "0", compile repository revision [ event "issue" "1" 0L "delivery" ] |> findings)
 
 [<Fact>]
 let ``cross scope conflicting subject and altered routing refuse`` () =
     let good = event "issue" "299" 1L "delivery"
-    Assert.True(Result.isError(compile repository revision [ { good with Repository = "FS-GG/Other" } ]))
-    Assert.True(Result.isError(compile repository revision [ { good with SubjectKind = "release" } ]))
+    Assert.Contains(GitHubNarrowReconciliationFinding.CrossScope "FS-GG/Other", compile repository revision [ { good with Repository = "FS-GG/Other" } ] |> findings)
+    Assert.Contains(GitHubNarrowReconciliationFinding.StaleRevision(String.replicate 40 "a"), compile repository revision [ { good with SourceRevision = String.replicate 40 "a" } ] |> findings)
+    Assert.Contains(GitHubNarrowReconciliationFinding.ConflictingSubject "release:299", compile repository revision [ { good with SubjectKind = "release" } ] |> findings)
     Assert.Equal(Error [ GitHubNarrowReconciliationFinding.AlteredRouting "reconcile/release" ], compile repository revision [ { good with Route = "reconcile/release" } ])
 
 [<Fact>]
@@ -77,7 +79,7 @@ let ``exact replay is byte identical and new work refuses replay`` () =
     let plan = compile repository revision [ one ] |> get
     let replayed = replay plan [ one; { one with SubjectRevision = 1L; DeliveryId = "delivery-1" } ] |> get
     Assert.Equal(serialize plan, serialize replayed)
-    Assert.True(Result.isError(replay plan [ { one with SubjectRevision = 3L; DeliveryId = "delivery-3" } ]))
+    Assert.Contains(GitHubNarrowReconciliationFinding.ReplayConflict "new or newer subject requires fresh reconciliation", replay plan [ { one with SubjectRevision = 3L; DeliveryId = "delivery-3" } ] |> findings)
 
 [<Fact>]
 let ``non canonical serialization and ordering refuse`` () =

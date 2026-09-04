@@ -108,8 +108,10 @@ module GitHubNarrowReconciliationQualification =
                 validateText name value
             if not (supportedEventKinds |> List.contains event.EventKind) then
                 errors.Add(GitHubNarrowReconciliationFinding.UnknownEventKind event.EventKind)
-            if event.Repository <> repository || event.SourceRevision <> sourceRevision then
+            if event.Repository <> repository then
                 errors.Add(GitHubNarrowReconciliationFinding.CrossScope event.Repository)
+            if event.SourceRevision <> sourceRevision || not (sha.IsMatch event.SourceRevision) then
+                errors.Add(GitHubNarrowReconciliationFinding.StaleRevision event.SourceRevision)
             if event.SubjectRevision <= 0L then
                 errors.Add(GitHubNarrowReconciliationFinding.StaleRevision(string event.SubjectRevision))
             if event.SubjectKind <> event.EventKind then
