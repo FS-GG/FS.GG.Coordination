@@ -34,6 +34,7 @@ let get = function Ok value -> value | Error errors -> failwithf "baseline refus
 let has expected = function Error errors -> List.contains expected errors | Ok _ -> false
 let baseline = compile repository revision allEvents |> get
 let bytes = serialize baseline
+let tamperedSeal = (if baseline.Seal[0] = '0' then "1" else "0") + baseline.Seal.Substring 1
 let issue = event "issue" "299" 2L "delivery-2"
 let sourceText = File.ReadAllText(path "src/FS.GG.Coordination.Qualification.Contracts/GitHubNarrowReconciliationQualification.fs")
 
@@ -90,11 +91,11 @@ let executeIndependent control =
         compile repository revision rows = compile repository revision [ rows[2]; rows[0]; rows[1] ]
     | ReconciliationUnsupported -> compile repository revision [ event "installation_target" "1" 1L "delivery" ] |> has (GitHubNarrowReconciliationFinding.UnknownEventKind "installation_target")
     | ReconciliationScope -> compile repository revision [ { issue with SourceRevision = String.replicate 40 "a" } ] |> has (GitHubNarrowReconciliationFinding.StaleRevision(String.replicate 40 "a"))
-    | ReconciliationExclusiveWriter -> verify baseline.Seal { baseline with WriterBoundary = writerBoundary |> List.take 4 } |> Result.isError
+    | ReconciliationExclusiveWriter -> verify baseline.Seal { baseline with WriterBoundary = writerBoundary |> List.take 4 } = Error [ GitHubNarrowReconciliationFinding.UnsealedPlan ]
     | ReconciliationDirectWrite -> compile repository revision [ { issue with Origin = "command"; AttemptsDerivedWrite = true } ] |> has (GitHubNarrowReconciliationFinding.DirectWrite "delivery-2")
     | ReconciliationSealedPlan -> verify baseline.Seal { baseline with WriterBoundary = [ "fresh-observe"; "reduce"; "draft-plan"; "apply"; "verify" ] } = Error [ GitHubNarrowReconciliationFinding.UnsealedPlan ]
-    | ReconciliationOrdering -> parse (bytes.Replace("\"entries\":[", "\"entries\":[ ")) |> Result.isError
-    | ReconciliationSeal -> parse (bytes.Replace(baseline.Seal, "0" + baseline.Seal.Substring 1)) |> Result.isError
+    | ReconciliationOrdering -> verify baseline.Seal { baseline with Entries = List.rev baseline.Entries } = Error [ GitHubNarrowReconciliationFinding.InvalidSerialization "entry ordering" ]
+    | ReconciliationSeal -> parse (bytes.Replace(baseline.Seal, tamperedSeal)) = Error [ GitHubNarrowReconciliationFinding.AlteredSeal ]
     | ReconciliationReplay -> replay baseline [ event "issue" "new" 1L "new-delivery" ] |> has (GitHubNarrowReconciliationFinding.ReplayConflict "new or newer subject requires fresh reconciliation")
     | ReconciliationQuintPreservation -> text "protocolSha256" c = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
     | ReconciliationNoNetwork -> let detector (value: string) = Regex.IsMatch(value, "httpclient|webrequest|webhook", RegexOptions.IgnoreCase) in not(detector sourceText) && detector(sourceText + "\nHttpCLIENT")

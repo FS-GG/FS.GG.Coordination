@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/299-gs2-07-2-narrow-reconciliation/ship.json",
-      "digest": "sha256:ca144afcac592fbe93b28dc36b9636010718f3de8888f201e8d8ffe102f505cd",
+      "digest": "sha256:215d5c7ff398f5afb83e435a0596299aa743c0180c89f8d98410cf27b58d40ec",
       "schemaVersion": 1
     },
     {
       "path": "readiness/299-gs2-07-2-narrow-reconciliation/verify.json",
-      "digest": "sha256:13f632973f188de0c42bb3dc7ec995315abd18d5194c02a3417b5398f43d7821",
+      "digest": "sha256:eea47f29116821518d33923f6943613f7fe4bfde82bf94faa2dbaa7e76cf672b",
       "schemaVersion": 1
     },
     {
       "path": "readiness/299-gs2-07-2-narrow-reconciliation/work-model.json",
-      "digest": "sha256:7d9023d6ea38bfc28c1ad108d74e79692553ab42ec18062abef93b3fd7ed305b",
+      "digest": "sha256:2a87cc86e928c01e2b692b35b0df22d04b9b798297440cd4efe79d8e55041344",
       "schemaVersion": 1
     }
   ],

@@ -12,9 +12,10 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 0,
+  "repair_rounds": 1,
   "reviewed_commits": [
-    "84829429eee52717db1ce1c19e066e2a4be3203b"
+    "84829429eee52717db1ce1c19e066e2a4be3203b",
+    "cb98f22603d5b06b4062d6ac91c74c15ac14221b"
   ],
   "findings": [
     {
@@ -26,9 +27,10 @@
         "src/FS.GG.Coordination.Qualification.Contracts/GitHubNarrowReconciliationQualification.fs:111-114 combines repository and source-revision mismatches into CrossScope and uses StaleRevision only for non-positive subject revisions.",
         "eng/validate-github-narrow-reconciliation.fsx:91 mutates SourceRevision for the independent scope control and checks only Result.isError, allowing the wrong CrossScope finding to pass as green."
       ],
-      "disposition": "follow-up",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Worker repair is required before acceptance: distinguish repository cross-scope from event source-revision staleness and assert the exact typed findings."
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubNarrowReconciliationQualification.fs:111-116 at cb98f22603d5b06b4062d6ac91c74c15ac14221b separates repository CrossScope from source-revision StaleRevision.",
+        "tests/FS.GG.Coordination.UnitTests/GitHubNarrowReconciliationTests.fs:58-60 and eng/validate-github-narrow-reconciliation.fsx:91-92 assert the exact CrossScope and StaleRevision values."
       ]
     },
     {
@@ -42,7 +44,8 @@
       ],
       "disposition": "follow-up",
       "resolution_evidence": [
-        "Worker repair is required before acceptance: make generated and independent controls assert the intended finding class and add focused exact-result tests for every registered refusal family."
+        "Round 1 improved typed checks for stale revision, unknown kind, missing field, subject conflict, routing, direct write, unsealed plan, generated ordering, altered seal, and replay conflict.",
+        "Repair remains required: no unit or Q3 case asserts MalformedField, and eng/validate-github-narrow-reconciliation.fsx:93,96-97 still uses Result.isError for independent exclusive-writer, ordering, and seal controls; the independent ordering case mutates whitespace rather than entry ordering."
       ]
     },
     {
@@ -54,19 +57,19 @@
         "readiness/299-gs2-07-2-narrow-reconciliation/analysis.json remains implementationReady and names analysis.next.implement rather than verified or shipped evidence.",
         "The tracked candidate evidence directory contains contract.json and two control inventories, but the current SDD source ledger has no completed task ownership or bound EV001-EV011 evidence dispositions."
       ],
-      "disposition": "follow-up",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Worker repair is required before acceptance: complete the task ledger with the real worker identity and bind generated test evidence through verify/ship after the code and controls are repaired."
+        "work/299-gs2-07-2-narrow-reconciliation/tasks.yml at cb98f22603d5b06b4062d6ac91c74c15ac14221b records T001-T011 done under godwit-6143.",
+        "work/299-gs2-07-2-narrow-reconciliation/evidence.yml binds EV001-EV011 to exact-byte TRX observations: focused 10/10, focused architecture 4/4, full unit 218/218, and full architecture 500/500.",
+        "readiness/299-gs2-07-2-narrow-reconciliation/verify.json reports verificationReady and readiness/299-gs2-07-2-narrow-reconciliation/ship-verdict.json reports shipReady."
       ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "84829429eee52717db1ce1c19e066e2a4be3203b",
+    "reviewed_commit": "cb98f22603d5b06b4062d6ac91c74c15ac14221b",
     "verdict": "changes-required",
     "unresolved_blocker_major": [
-      "GS2072-C01",
-      "GS2072-C02",
-      "GS2072-C03"
+      "GS2072-C02"
     ]
   },
   "human_escalation": null,

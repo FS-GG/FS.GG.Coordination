@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "773f2874dd3e5f694f3bc06ca852cb8f8f72c6ac9b5868d7306b460162a6b9b8"
+        "value": "439f482e0a96fd97266756599e85bb971c5bf7e1221f54b5413360f908980224"
       }
     },
     {
@@ -751,7 +751,7 @@
           "path": "work/299-gs2-07-2-narrow-reconciliation/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "773f2874dd3e5f694f3bc06ca852cb8f8f72c6ac9b5868d7306b460162a6b9b8"
+            "value": "439f482e0a96fd97266756599e85bb971c5bf7e1221f54b5413360f908980224"
           },
           "schemaVersion": 1
         },
@@ -782,7 +782,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "34556cc7d0562de6b01a10be268465f5d1674eedc08aa4e6f0984e124ec4abd0"
+        "value": "9d77779208bc10d99a6f9505d9b3d27ae02a90a7e91cbf9084d99a3a8447f67a"
       },
       "currency": "current"
     }

@@ -50,6 +50,7 @@ let ``unknown malformed incomplete and stale inputs refuse explicitly`` () =
     Assert.Equal(Error [ GitHubNarrowReconciliationFinding.IncompleteEventInventory ], compile repository revision [])
     Assert.Contains(GitHubNarrowReconciliationFinding.UnknownEventKind "unsupported", compile repository revision [ event "unsupported" "1" 1L "delivery" ] |> findings)
     Assert.Contains(GitHubNarrowReconciliationFinding.MissingField "subjectId", compile repository revision [ { event "issue" "1" 1L "delivery" with SubjectId = " " } ] |> findings)
+    Assert.Contains(GitHubNarrowReconciliationFinding.MalformedField "origin", compile repository revision [ { event "issue" "1" 1L "delivery" with Origin = "mutation" } ] |> findings)
     Assert.Contains(GitHubNarrowReconciliationFinding.StaleRevision "0", compile repository revision [ event "issue" "1" 0L "delivery" ] |> findings)
 
 [<Fact>]
@@ -71,7 +72,7 @@ let ``writer boundary and seals fail closed when altered`` () =
     let plan = compile repository revision baselineEvents |> get
     Assert.Equal(Error [ GitHubNarrowReconciliationFinding.UnsealedPlan ], verify plan.Seal { plan with WriterBoundary = writerBoundary.Tail })
     Assert.Equal(Error [ GitHubNarrowReconciliationFinding.AlteredSeal ], verify (String.replicate 64 "0") plan)
-    Assert.True(Result.isError(parse ((serialize plan).Replace(plan.Seal, String.replicate 64 "0"))))
+    Assert.Equal(Error [ GitHubNarrowReconciliationFinding.AlteredSeal ], parse ((serialize plan).Replace(plan.Seal, String.replicate 64 "0")))
 
 [<Fact>]
 let ``exact replay is byte identical and new work refuses replay`` () =
@@ -84,13 +85,13 @@ let ``exact replay is byte identical and new work refuses replay`` () =
 [<Fact>]
 let ``non canonical serialization and ordering refuse`` () =
     let plan = compile repository revision baselineEvents |> get
-    Assert.True(Result.isError(parse (serialize plan + " ")))
-    Assert.True(Result.isError(verify plan.Seal { plan with Entries = List.rev plan.Entries }))
+    Assert.Equal(Error [ GitHubNarrowReconciliationFinding.InvalidSerialization "non-canonical bytes" ], parse (serialize plan + " "))
+    Assert.Equal(Error [ GitHubNarrowReconciliationFinding.InvalidSerialization "entry ordering" ], verify plan.Seal { plan with Entries = List.rev plan.Entries })
 
 [<Fact>]
 let ``generated and independent control inventories are exact`` () =
     let green: GitHubNarrowReconciliationControlResult list =
         requiredControls |> List.map (fun control -> { Control = control; ControlPassed = true; BaselineGreen = true })
     Assert.Equal(Ok (), validateControls green green)
-    Assert.True(Result.isError(validateControls green.Tail green))
-    Assert.True(Result.isError(validateControls green ({ green.Head with ControlPassed = false } :: green.Tail)))
+    Assert.Contains("generated control inventory differs", validateControls green.Tail green |> findings)
+    Assert.Contains("independent control failed", validateControls green ({ green.Head with ControlPassed = false } :: green.Tail) |> findings)
