@@ -29,7 +29,7 @@ The next roadmap worker can inspect GS2-07.3 and prove its accepted GS2-07.2 pre
 - AC-002 [US-001] [FR-004] [FR-005]: Given stale roadmap bytes, a stale index pin, mismatched gate identity or catalog bytes, successor authority, or a production mutation surface, the registration contracts and tests fail closed.
 
 ## Functional Requirements
-- FR-001: Pin roadmap revision `9d88c7b7967e8d69c1b8873d718ee8f0f435afd9` and SHA-256 `6e0de6a1f12de38c248c607c60064c8b81e1683460410acaa2f69aea47829844`. (Stories: US-001; Acceptance: AC-001)
+- FR-001: Pin the exact accepted roadmap revision and SHA-256 named by the issue authority. (Stories: US-001; Acceptance: AC-001)
 - FR-002: Preserve every prior unit contract and receipt while registering only GS2-07.3, owned by FS.GG.Coordination with accepted GS2-07.2 as its sole prerequisite. (Stories: US-001; Acceptance: AC-001)
 - FR-003: Bind a repository-local non-production permission ceiling and one immutable ordered Q3 `github-audit-repair-contract` command identity. (Stories: US-001; Acceptance: AC-001)
 - FR-004: Independently refuse stale roadmap bytes, stale index pins, and mismatched selected gate identity or catalog bytes. (Stories: US-001; Acceptance: AC-002)

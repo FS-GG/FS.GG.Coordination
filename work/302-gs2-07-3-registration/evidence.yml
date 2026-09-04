@@ -11,7 +11,7 @@ sourceAnalysis: readiness/302-gs2-07-3-registration/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/302-gs2-07-3-registration/analysis.json
-    digest: bacf832ab48994f39e646ed82cd83b53e024754365d88ccac6cb59ce7950a8d3
+    digest: 78d5686024e720778d37543fb1e118a2743adcebf3b1b8b48bad5f7421c44914
     schemaVersion: 1
   - label: checklist
     path: work/302-gs2-07-3-registration/checklist.md
@@ -23,11 +23,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/302-gs2-07-3-registration/plan.md
-    digest: 3c30732736209e7934d324d05302902bde2ac8cbbedb8d0bd6be66457975e755
+    digest: 63ac3f1fecd927feac8fdc286e9955633d03fdc8aedf70440ed59cbd92cd6399
     schemaVersion: 1
   - label: spec
     path: work/302-gs2-07-3-registration/spec.md
-    digest: d4d94dea27813440e4c73b92be140a221c21cee8a0b11b663b17988544817ef5
+    digest: 1ea5fdda87f239024eb3e36ac0b1feeaf50296e7859ef8e5b847b639f0dec7a7
     schemaVersion: 1
   - label: tasks
     path: work/302-gs2-07-3-registration/tasks.yml

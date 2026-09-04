@@ -16,7 +16,7 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/302-gs2-07-3-registration/spec.md sha256:d4d94dea27813440e4c73b92be140a221c21cee8a0b11b663b17988544817ef5 schemaVersion:1
+- spec: work/302-gs2-07-3-registration/spec.md sha256:1ea5fdda87f239024eb3e36ac0b1feeaf50296e7859ef8e5b847b639f0dec7a7 schemaVersion:1
 - clarifications: work/302-gs2-07-3-registration/clarifications.md sha256:46fcf8ebf46d919c1da8321b19fd28cb8fea6c74cca103e8ba15d63ae5a93e9e schemaVersion:1
 - checklist: work/302-gs2-07-3-registration/checklist.md sha256:26ba4e6430ea7873d73019e5a3e1b6ba97637f22190b6ee7b0edb786cf65c6e9 schemaVersion:1
 

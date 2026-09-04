@@ -53,7 +53,7 @@ The clean-checkout supply-chain precondition required committing the candidate b
 
 - Registration issue: [#302](https://github.com/FS-GG/FS.GG.Coordination/issues/302).
 - Candidate PR: [#303](https://github.com/FS-GG/FS.GG.Coordination/pull/303).
-- Roadmap authority: `9d88c7b7967e8d69c1b8873d718ee8f0f435afd9`, SHA-256 `6e0de6a1f12de38c248c607c60064c8b81e1683460410acaa2f69aea47829844`.
+- Roadmap authority: the exact revision and SHA-256 pinned by the registration issue and serialized unit index.
 - Registered contract: command `62be2f02680c983d0e813fb4fc83a28b8ba6b7a368478cf7807b1b61840a8f1a`, unit `d6af16fa0323b7ccbacee27e8114e4975d0976429ed409d48eb4981a5fb1c003`.
 
 ## §11 Falsifiable improvements
