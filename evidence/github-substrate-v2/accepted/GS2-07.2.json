@@ -1,0 +1,67 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-07.2",
+  "state": "accepted",
+  "unitContractSha256": "c9f174ed20673813ff948e6c9c329ae5645acc4e1f343f0e28f8fecee146428d",
+  "sourceRevision": "ba32c93adfe581dab113a692687314a345a3f013",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-07.1-receipt",
+      "sha256": "88c65417874d486bdda8523d99c62bccc16c6f2698252adf7d130da602e05d2b"
+    },
+    {
+      "name": "narrow-reconciliation-contract",
+      "sha256": "8fc04f61eb0bed151520a01e90cc6a831a06bd035e259e47cd5cccd4dd564676"
+    },
+    {
+      "name": "narrow-reconciliation-generated-controls",
+      "sha256": "03d8ff0388d4804ede70444bade838ffa6cd06fb0dd3d26a515ef2a6df26719d"
+    },
+    {
+      "name": "narrow-reconciliation-independent-controls",
+      "sha256": "1cd3a13b34be718bd0ac4cd096d2445e13727f3b1428ae95b375b62089d95b41"
+    },
+    {
+      "name": "narrow-reconciliation-q3-gate",
+      "sha256": "3354a1a0027e34573e2ef86f9d8e48e15f409023e9da1f65090406505c29212b"
+    },
+    {
+      "name": "sdd-verify",
+      "sha256": "c8ba83c71995364ef83bd56331ef5e2e80ec6307efdffcb99167b7bf9af2e539"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "bd8243059e620db28efe2e89b3dc9a5226cf73408ec7511fbaad9f507aeee3d1"
+    },
+    {
+      "name": "schema-v3-milestone-critique",
+      "sha256": "a0cd683b1dafc301e0ce0c412ff6e36347cb13effa2a113a3f0df3e384acfad1"
+    },
+    {
+      "name": "implementation-candidate-ba32c93adfe581dab113a692687314a345a3f013",
+      "sha256": "f11a78ba03da0bfaa38fb92dcbad5eeff662c887ae9eb82b51e9330c870fd1cf"
+    },
+    {
+      "name": "structured-review-pass-5538093041",
+      "sha256": "79297ffd426db79384ef5bf05893d46c9b104d5ee837438aeb25c885712ac333"
+    },
+    {
+      "name": "structured-review-acceptance-5538162595",
+      "sha256": "cf82ce27a00698820908dcf8d1c6d51ab03542200c64448cfa52b9cf55bfd406"
+    },
+    {
+      "name": "implementation-merge-47d628dc16ca9cca12853dd5c55a016356998173",
+      "sha256": "17ee9a436710cb2f927286fb9de8e7c388100620042055e412480d6ba15c6924"
+    },
+    {
+      "name": "protected-main-bootstrap-run-33856405424",
+      "sha256": "7b62ee998f5a29005ba9265fd4bd088fa59fd639269457b1e09f1e345855320f"
+    },
+    {
+      "name": "protected-main-codeql-run-33856404529",
+      "sha256": "8178d29a35ee6d0d29fad330c71b4e9482e0280f79747a7f44d5cde9defe21e4"
+    }
+  ],
+  "acceptedAt": "2026-09-04T09:07:42Z",
+  "digest": "6ae56a7c9dce52f3ac25e39145b275ed5e8127a1020ee8c65a392b976661c298"
+}
