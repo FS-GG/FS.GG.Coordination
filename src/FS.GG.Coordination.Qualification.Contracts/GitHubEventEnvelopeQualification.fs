@@ -58,6 +58,9 @@ module GitHubEventEnvelopeQualification =
         [ string value.CursorPosition; value.DeliveryId; value.EventId; value.Subject; value.SubjectRevision
           value.CausationId; value.CorrelationId; value.ReceiptId; value.ReceiptDisposition ]
         |> List.map frame |> String.concat ""
+    let private cursorEntry (value: GitHubEventDelivery) =
+        [ string value.CursorPosition; value.DeliveryId; value.EventId; value.ReceiptId ]
+        |> List.map frame |> String.concat ""
     let private envelopeSeal source deliveries cursor =
         [ "github-event-envelope/v1"; source.Kind; source.InstallationId; source.Repository; source.SourceRevision
           deliveries |> List.map deliveryBytes |> String.concat ""
@@ -97,6 +100,9 @@ module GitHubEventEnvelopeQualification =
                 if rows |> List.map deliveryBytes |> Set.ofList |> Set.count > 1 then errors.Add(finding identity))
         conflicting _.DeliveryId GitHubEventEnvelopeFinding.DuplicateDeliveryConflict
         conflicting _.EventId GitHubEventEnvelopeFinding.DuplicateEventConflict
+        deliveries |> List.groupBy _.ReceiptId |> List.iter (fun (receiptId, rows) ->
+            if rows |> List.map deliveryBytes |> Set.ofList |> Set.count > 1 then
+                errors.Add(GitHubEventEnvelopeFinding.ReceiptMismatch receiptId))
         deliveries |> List.groupBy _.CursorPosition |> List.iter (fun (position, rows) ->
             if rows |> List.map deliveryBytes |> Set.ofList |> Set.count > 1 then errors.Add(GitHubEventEnvelopeFinding.CursorPositionConflict position))
         let distinct = deliveries |> List.distinctBy deliveryBytes |> List.sortBy _.CursorPosition
@@ -104,12 +110,27 @@ module GitHubEventEnvelopeQualification =
             let expected = int64 index + 1L
             if row.CursorPosition <> expected then errors.Add(GitHubEventEnvelopeFinding.CursorGap(expected, row.CursorPosition)))
         let subjectRevisions = distinct |> List.groupBy _.Subject
+        match distinct |> List.map _.Subject |> List.distinct with
+        | [] | [_] -> ()
+        | _ :: otherSubjects ->
+            for subject in otherSubjects do errors.Add(GitHubEventEnvelopeFinding.CrossSubject subject)
         for subject, rows in subjectRevisions do
+            let orderedRows = rows |> List.sortBy _.CursorPosition
             let revisions = rows |> List.choose (fun row -> tryPositiveRevision row.SubjectRevision)
             if revisions <> List.sort revisions || revisions |> List.distinct |> List.length <> revisions.Length then errors.Add(GitHubEventEnvelopeFinding.CrossSubject subject)
+            match orderedRows with
+            | [] -> ()
+            | first :: rest ->
+                let mutable priorEventIds = Set.singleton first.EventId
+                for row in rest do
+                    if not (priorEventIds.Contains row.CausationId) then
+                        errors.Add(GitHubEventEnvelopeFinding.CausationMismatch row.CausationId)
+                    if row.CorrelationId <> first.CorrelationId then
+                        errors.Add(GitHubEventEnvelopeFinding.CorrelationMismatch row.CorrelationId)
+                    priorEventIds <- priorEventIds.Add row.EventId
         if errors.Count > 0 then Error(List.ofSeq errors)
         else
-            let cursor = distinct |> List.map (fun row -> $"{row.CursorPosition}:{row.DeliveryId}:{row.EventId}:{row.ReceiptId}")
+            let cursor = distinct |> List.map cursorEntry
             Ok { SchemaVersion = 1; Source = source; Deliveries = distinct; Cursor = cursor; Seal = envelopeSeal source distinct cursor }
 
     let serialize envelope =
@@ -146,6 +167,8 @@ module GitHubEventEnvelopeQualification =
     let verify expectedSeal envelope =
         match compile envelope.Source envelope.Deliveries with
         | Error errors -> Error errors
+        | Ok _ when envelope.SchemaVersion <> 1 -> Error [ GitHubEventEnvelopeFinding.InvalidSerialization "schemaVersion" ]
+        | Ok candidate when candidate.Deliveries <> envelope.Deliveries -> Error [ GitHubEventEnvelopeFinding.InvalidSerialization "deliveries" ]
         | Ok candidate when candidate.Cursor <> envelope.Cursor -> Error [ GitHubEventEnvelopeFinding.InvalidSerialization "cursor" ]
         | Ok candidate when candidate.Seal <> envelope.Seal || candidate.Seal <> expectedSeal -> Error [ GitHubEventEnvelopeFinding.AlteredSeal ]
         | Ok candidate -> Ok candidate

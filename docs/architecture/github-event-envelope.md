@@ -8,12 +8,14 @@ outside this unit.
 Each `GitHubEventDelivery` binds a positive cursor position, delivery and event identities, subject and
 monotonic subject revision, causal and correlation identities, and receipt identity/disposition. The
 compiler validates every field before it constructs state, collapses only byte-identical duplicates,
-orders distinct deliveries by cursor position, rejects gaps and conflicting reuse, and derives the
-complete cursor. The envelope seal is SHA-256 over nested UTF-8 byte-length frames for the schema,
+orders distinct deliveries by cursor position, requires one subject with monotonic revisions, prior-event
+causation, stable correlation, and unique receipts, rejects gaps and conflicting reuse, and derives the
+complete length-framed cursor. The envelope seal is SHA-256 over nested UTF-8 byte-length frames for the schema,
 source, ordered deliveries, and cursor; delimiter-bearing values therefore cannot alias one another.
 
 Serialization emits one deterministic JSON shape. Parsing recompiles semantics, compares cursor and
-seal, and requires byte-identical canonical serialization. Replay first verifies the prior envelope,
+seal, and requires byte-identical canonical serialization. Direct verification also refuses a changed
+schema or any noncanonical delivery representation instead of silently normalizing it. Replay first verifies the prior envelope,
 requires the exact same source authority, and compiles the union. Exact replay is a no-op; independent
 reordering converges; conflicting reuse is refused without replacing prior facts.
 

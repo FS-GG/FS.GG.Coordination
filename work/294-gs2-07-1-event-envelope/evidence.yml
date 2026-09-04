@@ -11,7 +11,7 @@ sourceAnalysis: readiness/294-gs2-07-1-event-envelope/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/294-gs2-07-1-event-envelope/analysis.json
-    digest: d0c21bd52dd2bf1aa0d2b7fdd062bf2a9d509c31800318b85f62769316a4d4a2
+    digest: 2e4274467f729201e23c26f46aa210536e5d3b164828ba9f50c500d1276630a2
     schemaVersion: 1
   - label: checklist
     path: work/294-gs2-07-1-event-envelope/checklist.md
@@ -46,7 +46,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: []
+    artifacts: [eng/validate-github-event-envelope.fsx, evidence/github-substrate-v2/gs2-07-1/generated-controls.json, evidence/github-substrate-v2/gs2-07-1/independent-controls.json]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.UnitTests/GitHubEventEnvelopeTests.fs
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Canonical compile parse seal and cursor test passed.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Duplicate and reorder convergence test passed.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Typed conflict gap source revision causal correlation receipt and seal refusals passed; duplicate-conflict inversion produced one expected red focused test before repair."]
@@ -135,13 +135,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
-    notes: [Q3 generated and independent 22-control inventories passed with protocol and no-side-effect boundaries.]
+    notes: ["Focused contract tests observe the control validator; the tracked gate and two distinct retained case inventories are the separately bound Q3 execution inputs."]
   - id: EV005
     kind: verification
     subject:
@@ -154,7 +154,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV005]
-    artifacts: []
+    artifacts: [eng/validate-github-event-envelope.fsx, tests/FS.GG.Coordination.UnitTests/GitHubEventEnvelopeTests.fs]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Coordination.Qualification.Contracts/GitHubEventEnvelopeQualification.fsi
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Additive public surface compiled warning-free and focused tests passed.]
@@ -189,13 +189,13 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
-    notes: [Warning-free build full suites focused tests and Q3 gate recorded in the implementation handoff.]
+    notes: ["Focused contract behavior is observed by the cited TRX; warning-free build", and Q3 remain separately reported implementation handoff checks., full suites]
   - id: EV007
     kind: verification
     subject:
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: [First schema is additive and rejects unsupported or noncanonical serialized forms.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
-      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digest: "sha256:5d9d7a54dd3596a566b1dc06d3896fae5cdc03ea1a4b11eb030157998ba5c8b4"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: [Tracked evidence binds roadmap prerequisite source revision contract and protocol digests.]

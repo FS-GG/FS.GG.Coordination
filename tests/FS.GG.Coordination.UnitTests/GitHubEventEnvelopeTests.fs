@@ -20,7 +20,7 @@ let ``canonical envelope round trips and binds all fields`` () =
     let bytes = serialize envelope
     Assert.Equal(envelope, parse bytes |> get)
     Assert.Equal(envelope, verify envelope.Seal envelope |> get)
-    Assert.True(envelope.Cursor = [ "1:delivery-1:event-1:receipt-1"; "2:delivery-2:event-2:receipt-2" ])
+    Assert.True(envelope.Cursor = [ "1:110:delivery-17:event-19:receipt-1"; "1:210:delivery-27:event-29:receipt-2" ])
     Assert.Equal(64, envelope.Seal.Length)
 
 [<Fact>]
@@ -50,6 +50,32 @@ let ``gaps stale revisions and causal receipt mismatches remain explicit`` () =
         Assert.Contains(GitHubEventEnvelopeFinding.CorrelationMismatch "delivery-2", findings)
         Assert.Contains(GitHubEventEnvelopeFinding.ReceiptMismatch "delivery-2", findings)
     | Ok _ -> failwith "invalid cursor chain survived"
+
+[<Fact>]
+let ``dangling causation split correlation and reused receipts fail closed`` () =
+    let broken = { second with CausationId="event-999"; CorrelationId="corr-other"; ReceiptId=first.ReceiptId }
+    match compile source [ first; broken ] with
+    | Error findings ->
+        Assert.Contains(GitHubEventEnvelopeFinding.CausationMismatch "event-999", findings)
+        Assert.Contains(GitHubEventEnvelopeFinding.CorrelationMismatch "corr-other", findings)
+        Assert.Contains(GitHubEventEnvelopeFinding.ReceiptMismatch "receipt-1", findings)
+    | Ok _ -> failwith "broken causal receipt chain survived"
+    match compile source [ first; { second with Subject="issue-elsewhere" } ] with
+    | Error findings -> Assert.Contains(GitHubEventEnvelopeFinding.CrossSubject "issue-elsewhere", findings)
+    | Ok _ -> failwith "cross-subject envelope survived"
+
+[<Fact>]
+let ``cursor length framing prevents delimiter aliases`` () =
+    let left = delivery 1L "a:b" "c" "issue-294" 1 "cause-root" "corr-294" "r"
+    let right = delivery 1L "a" "b:c" "issue-294" 1 "cause-root" "corr-294" "r"
+    Assert.True((compile source [ left ] |> get).Cursor <> (compile source [ right ] |> get).Cursor)
+
+[<Fact>]
+let ``verification refuses noncanonical envelope structure`` () =
+    let envelope = compile source [ first; second ] |> get
+    Assert.Equal(Error [ GitHubEventEnvelopeFinding.InvalidSerialization "schemaVersion" ], verify envelope.Seal { envelope with SchemaVersion=2 })
+    Assert.Equal(Error [ GitHubEventEnvelopeFinding.InvalidSerialization "deliveries" ], verify envelope.Seal { envelope with Deliveries=[second;first] })
+    Assert.Equal(Error [ GitHubEventEnvelopeFinding.InvalidSerialization "deliveries" ], verify envelope.Seal { envelope with Deliveries=[first;second;first] })
 
 [<Fact>]
 let ``unknown malformed source and cross source replay refuse`` () =
