@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-06.8 units, and the active GS2-07.1
+the subsequently accepted GS2-02 through GS2-07.1 units, and the active GS2-07.2
 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
@@ -263,6 +263,20 @@ evidence, inspect a successor unit, subscribe a webhook, enqueue work, or author
 network or production mutation. Architecture controls independently refuse changed
 roadmap bytes, a stale index authority pin, and a catalog command that disagrees with
 the sealed Q3 identity before any gate process can start.
+
+GS2-07.2 is registered against `.github` roadmap commit
+`6849585bc46b542e1d5ca93410a92a0f7ee15cdc` and exact roadmap SHA-256
+`0a9a10c017b184a50c3348e882b264e90a4f2c5736206de8ab9e52330304f7fd`.
+Its sole prerequisite is the accepted GS2-07.1 receipt. The Q3
+`github-narrow-reconciliation-contract` identity reserves the repository-local
+event-routing and deduplicating subject-queue evidence lane. The implementation
+unit must prove that supported issue, relation, Project, repository, ruleset,
+run/check, release, and installation events only schedule the shared
+fresh-observe/reduce/sealed-plan/apply/verify reconciler, which remains the
+exclusive normal writer. This registration creates or executes no validator,
+queue, webhook, network call, production write, acceptance receipt, or GS2-07.3
+work. Architecture controls independently refuse changed roadmap bytes, a stale
+index pin, and a catalog command that disagrees with the sealed Q3 identity.
 
 ## Command sequence
 

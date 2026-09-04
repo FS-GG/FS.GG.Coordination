@@ -1,0 +1,126 @@
+schemaVersion: 1
+work:
+  id: 297-gs2-07-2-registration
+  title: "Gs2 07 2 Registration"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/297-gs2-07-2-registration/spec.md
+  sourceClarifications: work/297-gs2-07-2-registration/clarifications.md
+  sourceChecklist: work/297-gs2-07-2-registration/checklist.md
+  sourcePlan: work/297-gs2-07-2-registration/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/297-gs2-07-2-registration/spec.md
+    digest: 4719f923c441da49cd5cab9349fe9d1c21c388073c3b81cf9a89332425e0182e
+    schemaVersion: 1
+  - label: clarifications
+    path: work/297-gs2-07-2-registration/clarifications.md
+    digest: 200637c49376e6f6250776fbb75609f82f8ec4fce0b34ddba973821ce58d32f0
+    schemaVersion: 1
+  - label: checklist
+    path: work/297-gs2-07-2-registration/checklist.md
+    digest: a62cdd91a2ec45266b9d42155e58c249189ddc008fcc0f5e81fd1f97c9cf8b58
+    schemaVersion: 1
+  - label: plan
+    path: work/297-gs2-07-2-registration/plan.md
+    digest: d613d06ecaa7f1fcc9ae9b6efcc4eb949675dcb574ea9802d050575f97d159d6
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: shrike-59ad
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: shrike-59ad
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: shrike-59ad
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: shrike-59ad
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement clarification decision DEC-001
+    status: done
+    owner: shrike-59ad
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Update contract surface PC-001
+    status: done
+    owner: shrike-59ad
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Record verification evidence VO-001
+    status: done
+    owner: shrike-59ad
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Handle migration posture PM-001
+    status: done
+    owner: shrike-59ad
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: shrike-59ad
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV009]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 297-gs2-07-2-registration."
