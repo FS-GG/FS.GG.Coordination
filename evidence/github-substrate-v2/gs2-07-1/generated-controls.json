@@ -1,0 +1,5 @@
+{
+  "schema": "fsgg.github-event-envelope-controls/v1",
+  "author": "generated-mutation-harness/gs2-07.1",
+  "controls": ["event-prerequisites","event-roadmap","event-completeness","event-source","event-delivery-identity","event-identity","event-subject","event-revision","event-causation","event-correlation","event-receipt","event-duplicate","event-reorder","event-conflict","event-cursor","event-ordering","event-seal","event-replay","event-quint-preservation","event-no-network","event-no-queue","event-no-mutation"]
+}

@@ -1,0 +1,116 @@
+schemaVersion: 1
+work:
+  id: 294-gs2-07-1-event-envelope
+  title: "Gs2 07 1 Event Envelope"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/294-gs2-07-1-event-envelope/spec.md
+  sourceClarifications: work/294-gs2-07-1-event-envelope/clarifications.md
+  sourceChecklist: work/294-gs2-07-1-event-envelope/checklist.md
+  sourcePlan: work/294-gs2-07-1-event-envelope/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/294-gs2-07-1-event-envelope/spec.md
+    digest: 89e07583188cad3b29b2511b4495579089c409ca5293bf3235e8ccda361cb99d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/294-gs2-07-1-event-envelope/clarifications.md
+    digest: 0007955a43839b8f23fb3e67c62ae4a9d2d4668568f56a3709f567cd91faf09e
+    schemaVersion: 1
+  - label: checklist
+    path: work/294-gs2-07-1-event-envelope/checklist.md
+    digest: 7b84b86eff58521510043a0da46daec0f979b6dfddba9ed79d3a3706df7fc38a
+    schemaVersion: 1
+  - label: plan
+    path: work/294-gs2-07-1-event-envelope/plan.md
+    digest: 113d756941af1003111ef7f0c35030de7cfc3f5c6fb63146c6f3d001edffd82e
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: codex
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-001
+    status: done
+    owner: codex
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-001
+    status: done
+    owner: codex
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Handle migration posture PM-001
+    status: done
+    owner: codex
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: codex
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-004]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV008]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 294-gs2-07-1-event-envelope."

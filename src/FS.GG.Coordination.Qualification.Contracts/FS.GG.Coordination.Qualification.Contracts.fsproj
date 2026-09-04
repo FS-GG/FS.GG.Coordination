@@ -61,6 +61,8 @@
     <Compile Include="GitHubWorkflowSelectionQualification.fs" />
     <Compile Include="GitHubFleetDryPlanQualification.fsi" />
     <Compile Include="GitHubFleetDryPlanQualification.fs" />
+    <Compile Include="GitHubEventEnvelopeQualification.fsi" />
+    <Compile Include="GitHubEventEnvelopeQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />

@@ -1,0 +1,254 @@
+schemaVersion: 1
+workId: 294-gs2-07-1-event-envelope
+stage: evidence
+status: evidenceReady
+sourceSpec: work/294-gs2-07-1-event-envelope/spec.md
+sourceClarifications: work/294-gs2-07-1-event-envelope/clarifications.md
+sourceChecklist: work/294-gs2-07-1-event-envelope/checklist.md
+sourcePlan: work/294-gs2-07-1-event-envelope/plan.md
+sourceTasks: work/294-gs2-07-1-event-envelope/tasks.yml
+sourceAnalysis: readiness/294-gs2-07-1-event-envelope/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/294-gs2-07-1-event-envelope/analysis.json
+    digest: d0c21bd52dd2bf1aa0d2b7fdd062bf2a9d509c31800318b85f62769316a4d4a2
+    schemaVersion: 1
+  - label: checklist
+    path: work/294-gs2-07-1-event-envelope/checklist.md
+    digest: 7b84b86eff58521510043a0da46daec0f979b6dfddba9ed79d3a3706df7fc38a
+    schemaVersion: 1
+  - label: clarifications
+    path: work/294-gs2-07-1-event-envelope/clarifications.md
+    digest: 0007955a43839b8f23fb3e67c62ae4a9d2d4668568f56a3709f567cd91faf09e
+    schemaVersion: 1
+  - label: plan
+    path: work/294-gs2-07-1-event-envelope/plan.md
+    digest: 113d756941af1003111ef7f0c35030de7cfc3f5c6fb63146c6f3d001edffd82e
+    schemaVersion: 1
+  - label: spec
+    path: work/294-gs2-07-1-event-envelope/spec.md
+    digest: 89e07583188cad3b29b2511b4495579089c409ca5293bf3235e8ccda361cb99d
+    schemaVersion: 1
+  - label: tasks
+    path: work/294-gs2-07-1-event-envelope/tasks.yml
+    digest: f57c8b54189f6044c36740adbab6205d2afe1aa02c17875a77c9894aecbde0fc
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubEventEnvelopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
+      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Canonical compile parse seal and cursor test passed.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubEventEnvelopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
+      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Duplicate and reorder convergence test passed.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubEventEnvelopeTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
+      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Typed conflict gap source revision causal correlation receipt and seal refusals passed; duplicate-conflict inversion produced one expected red focused test before repair."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-github-event-envelope.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
+      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Q3 generated and independent 22-control inventories passed with protocol and no-side-effect boundaries.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coordination.Qualification.Contracts/GitHubEventEnvelopeQualification.fsi
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
+      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Additive public surface compiled warning-free and focused tests passed.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: eng/validate-github-event-envelope.fsx
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
+      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Warning-free build full suites focused tests and Q3 gate recorded in the implementation handoff.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Coordination.Qualification.Contracts/GitHubEventEnvelopeQualification.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
+      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [First schema is additive and rejects unsupported or noncanonical serialized forms.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: evidence/github-substrate-v2/gs2-07-1/contract.json
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/294-gs2-07-1-event-envelope/test-results/event-envelope-focused.trx
+      digest: "sha256:38a525300675d284bea7782a3e286b753d92d9b8fdda0049cc35138349906bf5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: [Tracked evidence binds roadmap prerequisite source revision contract and protocol digests.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
