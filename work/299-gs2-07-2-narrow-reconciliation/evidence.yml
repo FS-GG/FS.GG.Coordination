@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
-      digest: "sha256:56e10204c76da6c2fe3be164af52d201b0efeb7c69fa37ee82be99c3102346f9"
+      digest: "sha256:2448a903300547a4f0c65402a597c4d2d317dd807974f5a249e8e58c1e56a6d8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 500
@@ -270,7 +270,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
-      digest: "sha256:56e10204c76da6c2fe3be164af52d201b0efeb7c69fa37ee82be99c3102346f9"
+      digest: "sha256:2448a903300547a4f0c65402a597c4d2d317dd807974f5a249e8e58c1e56a6d8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 500
@@ -297,7 +297,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-unit.trx
-      digest: "sha256:2f723400c6500ae11ca87f0fe881563b0fa86149feb00138f2bf1d060c190daa"
+      digest: "sha256:5611ace26db3a31ca4111a48df56b828a71d61094cfa17cbb8b51f5de98216eb"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 218
@@ -324,7 +324,7 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
-      digest: "sha256:56e10204c76da6c2fe3be164af52d201b0efeb7c69fa37ee82be99c3102346f9"
+      digest: "sha256:2448a903300547a4f0c65402a597c4d2d317dd807974f5a249e8e58c1e56a6d8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 500
