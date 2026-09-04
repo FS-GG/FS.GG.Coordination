@@ -210,6 +210,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-event-envelope.fsx", "--", "."]
+    },
+    {
+      "id": "github-narrow-reconciliation-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-narrow-reconciliation.fsx", "--", "."]
     }
   ]
 }

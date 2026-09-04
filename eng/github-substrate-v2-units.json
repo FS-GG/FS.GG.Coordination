@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "d0267c02c59de75571f6ee9086f924e8c924da08",
+    "revision": "6849585bc46b542e1d5ca93410a92a0f7ee15cdc",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "152956bff4f264d7a6e034c0d8553d3df2cd44ac6773b03e83f85ff52dfb4655"
+    "sha256": "0a9a10c017b184a50c3348e882b264e90a4f2c5736206de8ab9e52330304f7fd"
   },
   "units": [
     {
@@ -807,6 +807,20 @@
         { "id": "github-event-envelope-contract", "qGate": "Q3", "commandSha256": "3fe755f4adfd45e0f2ca56dba2cbd60ed6cf119c0680c99df5a292bf9a15fcbc" }
       ],
       "contractSha256": "eaf9d224f80eea0136bc17a3998dc1182ac7d4d9b342034d28ab7ec75af4e918"
+    },
+    {
+      "id": "GS2-07.2",
+      "title": "Narrow reconciliation",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-07.1"],
+      "permissionCeiling": ["repository-local additive narrow-reconciliation contracts, pure deterministic routing of supported issue, relation, Project, repository, ruleset, run/check, release, and installation events to a deduplicating subject queue, exclusive shared-reconciler writer-path enforcement, validation, and retained evidence", "read-only consumption of accepted GS2-07.1 and exact accepted roadmap evidence is allowed; no webhook subscription, event ingestion deployment, network call, production queue mutation, production GitHub write, settings change, workflow publication, release, package publication, stable channel, GS2-07.3 inspection, preparation, or implementation authority"],
+      "exitGate": "the Q3 narrow-reconciliation contract begins from the exact accepted GS2-07.1 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds repository and source revision, the complete supported issue, relation, Project, repository, ruleset, run/check, release, and installation event-kind inventory, each event's normalized subject identity and revision, deterministic scheduling key, queue receipt and deduplication disposition, and the exclusive fresh-observe/reduce/sealed-plan/apply/verify reconciler writer boundary; commands and events produce scheduling intent only and cannot directly author derived state, while duplicate and reordered supported events converge to one queued subject without losing the newest relevant revision; unsupported, missing, malformed, unknown, incomplete, cross-scope, stale-revision, conflicting-subject, altered-routing, direct-write, unsealed-plan, altered-seal, and replay inputs remain explicit refusals; exact replay is byte-identical and no network, webhook, production queue, or production mutation path exists; generated adversarial mutations and independently authored prerequisite, roadmap, completeness, event-kind, subject, revision, routing, scheduling-key, deduplication, duplicate, reorder, unsupported, scope, exclusive-writer, direct-write, sealed-plan, ordering, seal, replay, Quint-preservation, no-network, no-production-queue, and no-mutation controls all pass without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-narrow-reconciliation-contract"],
+      "gateContracts": [
+        { "id": "github-narrow-reconciliation-contract", "qGate": "Q3", "commandSha256": "4814f39e64af6ae6394ebf4b8e4f9012a1ad2ad0018af121bfe5d7ca549a85e3" }
+      ],
+      "contractSha256": "c9f174ed20673813ff948e6c9c329ae5645acc4e1f343f0e28f8fecee146428d"
     }
   ]
 }
