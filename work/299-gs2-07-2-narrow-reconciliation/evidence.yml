@@ -11,7 +11,7 @@ sourceAnalysis: readiness/299-gs2-07-2-narrow-reconciliation/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/299-gs2-07-2-narrow-reconciliation/analysis.json
-    digest: 6e60f3ef2afea334f1233819d91c5061efd90e367f68e867e1093bf25887c5e5
+    digest: 2a4778ffc656d0eb737cfdf95ecddfa8c0405bf88eb86a9f886f73083d0edb1c
     schemaVersion: 1
   - label: checklist
     path: work/299-gs2-07-2-narrow-reconciliation/checklist.md
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
-      digest: "sha256:8c9eb89af7cc9a3dc80b3ce9acadd5bb79acd49f61bb15f25450f1121370dd3c"
+      digest: "sha256:56e10204c76da6c2fe3be164af52d201b0efeb7c69fa37ee82be99c3102346f9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 499
+      passed: 500
       failed: 0
       skipped: 0
     notes: [Observed automated verification required and recorded below.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
-      digest: "sha256:8c9eb89af7cc9a3dc80b3ce9acadd5bb79acd49f61bb15f25450f1121370dd3c"
+      digest: "sha256:56e10204c76da6c2fe3be164af52d201b0efeb7c69fa37ee82be99c3102346f9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 499
+      passed: 500
       failed: 0
       skipped: 0
     notes: [Observed automated verification required and recorded below.]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/299-gs2-07-2-narrow-reconciliation/test-results/full-architecture.trx
-      digest: "sha256:8c9eb89af7cc9a3dc80b3ce9acadd5bb79acd49f61bb15f25450f1121370dd3c"
+      digest: "sha256:56e10204c76da6c2fe3be164af52d201b0efeb7c69fa37ee82be99c3102346f9"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 499
+      passed: 500
       failed: 0
       skipped: 0
     notes: [Observed automated verification required and recorded below.]

@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/299-gs2-07-2-narrow-reconciliation/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "7d9023d6ea38bfc28c1ad108d74e79692553ab42ec18062abef93b3fd7ed305b"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/299-gs2-07-2-narrow-reconciliation/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "42776afa7bb1c1a53a8c6925b59c34f184a7bc253b523d776ea91fded1247eb8"
+        "value": "da9b03a1bce0ac5596571597453d061943537e6cebb3473fa07acbe85fde1c0c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -466,7 +476,7 @@
     {
       "path": "readiness/299-gs2-07-2-narrow-reconciliation/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

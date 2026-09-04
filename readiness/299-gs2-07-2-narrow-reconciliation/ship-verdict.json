@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "workId": "299-gs2-07-2-narrow-reconciliation",
+  "status": "shipReady",
+  "verificationStatus": "verificationReady",
+  "observedEvidence": 11,
+  "selfAttestedEvidence": 0,
+  "blockingFindings": 0
+}
