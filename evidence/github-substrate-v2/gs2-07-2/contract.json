@@ -1,0 +1,15 @@
+{
+  "schema": "fsgg.github-narrow-reconciliation-evidence/v1",
+  "unit": "GS2-07.2",
+  "sourceRevision": "84829429eee52717db1ce1c19e066e2a4be3203b",
+  "roadmapRevision": "6849585bc46b542e1d5ca93410a92a0f7ee15cdc",
+  "roadmapSha256": "0a9a10c017b184a50c3348e882b264e90a4f2c5736206de8ab9e52330304f7fd",
+  "prerequisiteReceiptDigest": "825781cedeebbd56aad3a3d41499d6f9bbc647da372f8a91df7c7e2a5ed336e1",
+  "prerequisiteFileSha256": "88c65417874d486bdda8523d99c62bccc16c6f2698252adf7d130da602e05d2b",
+  "protocolSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "eventKinds": ["issue", "relation", "project", "repository", "ruleset", "run-check", "release", "installation"],
+  "writerBoundary": ["fresh-observe", "reduce", "sealed-plan", "apply", "verify"],
+  "network": false,
+  "productionQueue": false,
+  "productionMutation": false
+}

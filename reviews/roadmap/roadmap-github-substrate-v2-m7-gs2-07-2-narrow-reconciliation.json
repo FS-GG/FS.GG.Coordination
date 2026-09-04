@@ -1,0 +1,82 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-2-narrow-reconciliation",
+  "milestone": "GS2-07.2 — Narrow reconciliation",
+  "critic": "gs2_07_2_critic",
+  "initial_reviewed_commit": "84829429eee52717db1ce1c19e066e2a4be3203b",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 2,
+  "reviewed_commits": [
+    "84829429eee52717db1ce1c19e066e2a4be3203b",
+    "cb98f22603d5b06b4062d6ac91c74c15ac14221b",
+    "44fbef7e5b13ce4c9a954296d979767315cb929a"
+  ],
+  "findings": [
+    {
+      "id": "GS2072-C01",
+      "severity": "major",
+      "summary": "A stale event source revision is reported as repository cross-scope, so the contract does not provide the separately required stale-revision refusal.",
+      "evidence": [
+        "eng/github-substrate-v2-units.json GS2-07.2 exitGate separately requires cross-scope and stale-revision refusals.",
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubNarrowReconciliationQualification.fs:111-114 combines repository and source-revision mismatches into CrossScope and uses StaleRevision only for non-positive subject revisions.",
+        "eng/validate-github-narrow-reconciliation.fsx:91 mutates SourceRevision for the independent scope control and checks only Result.isError, allowing the wrong CrossScope finding to pass as green."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubNarrowReconciliationQualification.fs:111-116 at cb98f22603d5b06b4062d6ac91c74c15ac14221b separates repository CrossScope from source-revision StaleRevision.",
+        "tests/FS.GG.Coordination.UnitTests/GitHubNarrowReconciliationTests.fs:58-60 and eng/validate-github-narrow-reconciliation.fsx:91-92 assert the exact CrossScope and StaleRevision values."
+      ]
+    },
+    {
+      "id": "GS2072-C02",
+      "severity": "major",
+      "summary": "Most refusal controls prove only that some error occurred, so incorrect or collapsed refusal classifications satisfy the advertised mutation-discriminating gate.",
+      "evidence": [
+        "tests/FS.GG.Coordination.UnitTests/GitHubNarrowReconciliationTests.fs:48-59 uses Result.isError for unknown, malformed, stale, cross-scope, and conflicting-subject cases; only incomplete and altered-routing assert exact findings.",
+        "eng/validate-github-narrow-reconciliation.fsx:43-47,56-62 and 73-77,90-97 likewise accept Result.isError for most generated and independent refusal controls.",
+        "The exact Q3 validator still prints GITHUB_NARROW_RECONCILIATION_OK while the stale-source mutation at validator line 91 is classified as CrossScope by implementation lines 111-112, demonstrating an observable false-green path."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "Round 1 improved typed checks for stale revision, unknown kind, missing field, subject conflict, routing, direct write, unsealed plan, generated ordering, altered seal, and replay conflict.",
+        "tests/FS.GG.Coordination.UnitTests/GitHubNarrowReconciliationTests.fs:49-96 at 44fbef7e5b13ce4c9a954296d979767315cb929a asserts the exact malformed-origin, stale, scope, subject, routing, direct-write, unsealed-plan, altered-seal, noncanonical-byte, entry-ordering, and control-inventory findings without a generic Result.isError assertion.",
+        "eng/validate-github-narrow-reconciliation.fsx:37 and 94-98 at 44fbef7e5b13ce4c9a954296d979767315cb929a uses a guaranteed changed seal nibble and exact UnsealedPlan, InvalidSerialization entry ordering, and AlteredSeal assertions; the independent ordering adversary now reverses actual queue entries.",
+        "Fresh critic rerun at 44fbef7e5b13ce4c9a954296d979767315cb929a passed focused unit 10/10 and exact Q3 23/23 with seal 9e26a7a1f0c23759fbe07af04abf8ea3eba754084d687dbb002f2a9897c960cf."
+      ]
+    },
+    {
+      "id": "GS2072-C03",
+      "severity": "major",
+      "summary": "The SDD task ledger still declares every implementation and evidence obligation pending despite the candidate claiming a completed first green implementation/evidence loop.",
+      "evidence": [
+        "work/299-gs2-07-2-narrow-reconciliation/tasks.yml:31-140 records T001 through T011 with status pending and owner sdd.",
+        "readiness/299-gs2-07-2-narrow-reconciliation/analysis.json remains implementationReady and names analysis.next.implement rather than verified or shipped evidence.",
+        "The tracked candidate evidence directory contains contract.json and two control inventories, but the current SDD source ledger has no completed task ownership or bound EV001-EV011 evidence dispositions."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "work/299-gs2-07-2-narrow-reconciliation/tasks.yml at cb98f22603d5b06b4062d6ac91c74c15ac14221b records T001-T011 done under godwit-6143.",
+        "work/299-gs2-07-2-narrow-reconciliation/evidence.yml binds EV001-EV011 to exact-byte TRX observations: focused 10/10, focused architecture 4/4, full unit 218/218, and full architecture 500/500.",
+        "readiness/299-gs2-07-2-narrow-reconciliation/verify.json reports verificationReady and readiness/299-gs2-07-2-narrow-reconciliation/ship-verdict.json reports shipReady."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "44fbef7e5b13ce4c9a954296d979767315cb929a",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

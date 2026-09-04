@@ -1,0 +1,8 @@
+{
+  "schema": "fsgg.github-narrow-reconciliation-controls/v1",
+  "unit": "GS2-07.2",
+  "authoring": "independent",
+  "caseContract": "independently selected boundary and alias adversaries",
+  "controls": ["reconciliation-prerequisites", "reconciliation-roadmap", "reconciliation-completeness", "reconciliation-event-kind", "reconciliation-subject", "reconciliation-revision", "reconciliation-routing", "reconciliation-scheduling-key", "reconciliation-deduplication", "reconciliation-duplicate", "reconciliation-reorder", "reconciliation-unsupported", "reconciliation-scope", "reconciliation-exclusive-writer", "reconciliation-direct-write", "reconciliation-sealed-plan", "reconciliation-ordering", "reconciliation-seal", "reconciliation-replay", "reconciliation-quint-preservation", "reconciliation-no-network", "reconciliation-no-production-queue", "reconciliation-no-mutation"],
+  "cases": ["compare accepted receipt identity", "compare exact roadmap revision", "reject whitespace identity", "compare retained inventory to API", "cross-wire issue as release subject", "use zero and negative revisions", "route issue toward release", "prove delimiter aliases differ", "retain newest of three revisions", "repeat delivery after newer observation", "permute three deliveries", "use webhook-only event spelling", "cross repository and source revision", "drop verify from writer chain", "command attempts apply directly", "replace sealed-plan with draft-plan", "reverse serialized queue order", "tamper one seal nibble", "introduce a new subject during replay", "re-hash protocol independently", "case-insensitive network-token canary", "case-insensitive queue-token canary", "case-insensitive mutation-token canary"]
+}

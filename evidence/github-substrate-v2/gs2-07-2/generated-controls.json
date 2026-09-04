@@ -1,0 +1,8 @@
+{
+  "schema": "fsgg.github-narrow-reconciliation-controls/v1",
+  "unit": "GS2-07.2",
+  "authoring": "generated",
+  "caseContract": "systematic one-field mutation over the canonical baseline",
+  "controls": ["reconciliation-prerequisites", "reconciliation-roadmap", "reconciliation-completeness", "reconciliation-event-kind", "reconciliation-subject", "reconciliation-revision", "reconciliation-routing", "reconciliation-scheduling-key", "reconciliation-deduplication", "reconciliation-duplicate", "reconciliation-reorder", "reconciliation-unsupported", "reconciliation-scope", "reconciliation-exclusive-writer", "reconciliation-direct-write", "reconciliation-sealed-plan", "reconciliation-ordering", "reconciliation-seal", "reconciliation-replay", "reconciliation-quint-preservation", "reconciliation-no-network", "reconciliation-no-production-queue", "reconciliation-no-mutation"],
+  "cases": ["hash registered prerequisite bytes", "match registered roadmap digest", "reject empty event input", "exercise every closed event kind", "mutate normalized subject kind", "mutate positive subject revision", "mutate canonical event route", "compare length-framed subject keys", "collapse same-subject revisions", "repeat an identical delivery", "reverse canonical input order", "supply an unknown event kind", "mutate repository scope", "alter canonical writer phases", "request direct derived-state write", "remove sealed-plan phase", "reverse sealed entries", "replace the plan seal", "replay only known revisions", "hash canonical protocol bytes", "scan contract source for network clients", "scan contract source for queue clients", "scan contract source for GitHub mutation clients"]
+}
