@@ -1,0 +1,24 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-07.1",
+  "state": "accepted",
+  "unitContractSha256": "eaf9d224f80eea0136bc17a3998dc1182ac7d4d9b342034d28ab7ec75af4e918",
+  "sourceRevision": "b05804181117736dbcf47cf77ad0b130637b8105",
+  "artifacts": [
+    { "name": "accepted-GS2-06.8-receipt", "sha256": "c8831d8e3b06f77ae26d23579b738347794a8d08e460c84c5856cbbff50abd0e" },
+    { "name": "event-envelope-contract", "sha256": "9a663b2e27ba076d785ca1f32c771c55679f67bef932a39e9a0e3cd5f3d2ae17" },
+    { "name": "event-envelope-generated-controls", "sha256": "a8cc0500c672e0e16ff928ed01456c8cf877531b2dfe5236e2bfd57cc6aef04c" },
+    { "name": "event-envelope-independent-controls", "sha256": "3d1e2de9a48e0002bf992d4a96fb4fa0f57f25283730948ae696e6bd12e388dd" },
+    { "name": "event-envelope-q3-gate", "sha256": "1055be6f080456a19b1f9c2142981b29a5712a21fbe70464e0ba89e837c53ec7" },
+    { "name": "sdd-verify", "sha256": "3cdd17bafaaf80765462f40e4d151e274bc8df096058a957932e1e19f2647422" },
+    { "name": "sdd-ship-verdict", "sha256": "2efe8ac4c39c316d7a5c675446269e7cd3ee1a058e412a2ae3dc399878f57f34" },
+    { "name": "implementation-candidate-b05804181117736dbcf47cf77ad0b130637b8105", "sha256": "37b465d615e4b4a20ec6449e01aec1b9a5e6b3da92f0be8c8df2424215c6dbc2" },
+    { "name": "structured-review-pass-5536376535", "sha256": "7baebe7a312820bc828a056cbd233592c432a6d493c986db9ba6691893bb8624" },
+    { "name": "structured-review-acceptance-5536418801", "sha256": "2045f282662bfba22753ef48a9c84ddf5b08465882ae228e891ae8f639035ac9" },
+    { "name": "implementation-merge-83facfdea578d2ceddb1a80da9b6255f5ff29bc8", "sha256": "17471ec35b883d34c21e841ccd1076dc753ea9f61ded8108cd5d2908849ba8e7" },
+    { "name": "protected-main-bootstrap-jobs-33843013664", "sha256": "d223df4a56fd72f500fd2ff73db72b036ffa983d4b801489cee295c11b4dd4b3" },
+    { "name": "protected-main-codeql-run-33843013454", "sha256": "75f85da2c75c621f62652e12114a7639c361a2b5392f001486b6184bd9afa82f" }
+  ],
+  "acceptedAt": "2026-09-04T06:14:46Z",
+  "digest": "825781cedeebbd56aad3a3d41499d6f9bbc647da372f8a91df7c7e2a5ed336e1"
+}
