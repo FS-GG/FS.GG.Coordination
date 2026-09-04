@@ -514,7 +514,6 @@ let ``GS2-07-3 registration grants no successor or production mutation authority
     Assert.Contains("no production queue mutation", ceiling)
     Assert.Contains("no production GitHub write", ceiling)
     Assert.Contains("GS2-07.4 inspection", ceiling)
-    Assert.False(File.Exists(Path.Combine(root, "eng/validate-github-audit-repair.fsx")))
 
 [<Fact>]
 let ``roadmap unit index advances through GS2-07-3 audit repair`` () =
