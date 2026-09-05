@@ -1,0 +1,187 @@
+schemaVersion: 1
+workId: 304-gs2-07-3-audit-repair
+stage: evidence
+status: evidenceReady
+sourceSpec: work/304-gs2-07-3-audit-repair/spec.md
+sourceClarifications: work/304-gs2-07-3-audit-repair/clarifications.md
+sourceChecklist: work/304-gs2-07-3-audit-repair/checklist.md
+sourcePlan: work/304-gs2-07-3-audit-repair/plan.md
+sourceTasks: work/304-gs2-07-3-audit-repair/tasks.yml
+sourceAnalysis: readiness/304-gs2-07-3-audit-repair/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/304-gs2-07-3-audit-repair/analysis.json
+    digest: 0cf1e181fd91393e580befbd8bdf7943855e0bb1acd6f456cc6acc8e9c55e2be
+    schemaVersion: 1
+  - label: checklist
+    path: work/304-gs2-07-3-audit-repair/checklist.md
+    digest: 5797034fa2d1422f80c6829a1837427ce2125771ce4f38537e8bf7e9d3b8361b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/304-gs2-07-3-audit-repair/clarifications.md
+    digest: cd602c59f304779075fe71817750b60a5ff575d1cb2bde06a6427011bb0e1988
+    schemaVersion: 1
+  - label: plan
+    path: work/304-gs2-07-3-audit-repair/plan.md
+    digest: 04a98e14dd65cb5c1a0103d98c4f0c29b6fa90adb30605c1468ff394a7b69576
+    schemaVersion: 1
+  - label: spec
+    path: work/304-gs2-07-3-audit-repair/spec.md
+    digest: 173b814e9214fdf8180022737fd3b8837e79e964ceb23fb4915a399bdbb4fafb
+    schemaVersion: 1
+  - label: tasks
+    path: work/304-gs2-07-3-audit-repair/tasks.yml
+    digest: 85464093a5686934e2948eef2bec1a0c74fba5342af94b5e25433e82531a5e1a
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/GitHubAuditRepairQualification.fs, tests/FS.GG.Coordination.UnitTests/GitHubAuditRepairTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubAuditRepairTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/304-gs2-07-3-audit-repair/test-results/unit-focused.trx
+      digest: "sha256:d80354ec54faa18ea2b2bf498698f35b1486b5e8e233a34773752ba06e557e0a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Nine focused tests exercise complete and history-free audit repair, and both control inventories., canonical sealing, exact scope/source/cursor/page binding, mandatory classifications, replay, routing and direct-write refusal]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/GitHubAuditRepairQualification.fsi, tests/FS.GG.Coordination.UnitTests/GitHubAuditRepairTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubAuditRepairTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/304-gs2-07-3-audit-repair/test-results/unit-focused.trx
+      digest: "sha256:d80354ec54faa18ea2b2bf498698f35b1486b5e8e233a34773752ba06e557e0a"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [The focused run compiles and exercises the additive public signature and its canonical plan contract without altering an existing API.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [eng/validate-github-audit-repair.fsx, evidence/github-substrate-v2/gs2-07-3/generated-controls.json, evidence/github-substrate-v2/gs2-07-3/independent-controls.json, tests/FS.GG.Coordination.ArchitectureTests/GitHubAuditRepairArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubAuditRepairArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/304-gs2-07-3-audit-repair/test-results/architecture-focused.trx
+      digest: "sha256:a61430fcab575b73e1ff1bcb1caa03a587a8d8b0814cc9a0cd4304d50fea3fa6"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: [Four architecture tests enforce purity and isolation, and execute all 26 controls through the registered validator., exact retained inventories, separate generated and independent Q3 paths]
+  - id: EV004
+    kind: review
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [docs/architecture/github-audit-repair.md, tests/FS.GG.Coordination.ArchitectureTests/GitHubAuditRepairArchitectureTests.fs, work/304-gs2-07-3-audit-repair/plan.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/GitHubAuditRepairArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/304-gs2-07-3-audit-repair/test-results/architecture-focused.trx
+      digest: "sha256:a61430fcab575b73e1ff1bcb1caa03a587a8d8b0814cc9a0cd4304d50fea3fa6"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    recordReceipt:
+      kind: decision
+      locator: work/304-gs2-07-3-audit-repair/plan.md
+      locatorContract: durable-locator-v1
+      digest: "sha256:04a98e14dd65cb5c1a0103d98c4f0c29b6fa90adb30605c1468ff394a7b69576"
+      statement: "PM-001 records that the new qualification module is additive only and introduces no runtime migration, network access, production queue access, or derived GitHub write authority."
+      recordedAt: "2026-09-05T17:45:00Z"
+    notes: ["The byte-bound PM-001 decision records migration posture; the architecture receipt is present because schema-versioning is a required test obligation and verifies the additive isolated surface and unchanged protocol boundary."]
+  - id: EV005
+    kind: review
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [readiness/304-gs2-07-3-audit-repair/work-model.json]
+    sourceRefs:
+      - kind: verification
+        path: readiness/304-gs2-07-3-audit-repair/work-model.json
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/304-gs2-07-3-audit-repair/test-results/architecture-focused.trx
+      digest: "sha256:a61430fcab575b73e1ff1bcb1caa03a587a8d8b0814cc9a0cd4304d50fea3fa6"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    recordReceipt:
+      kind: decision
+      locator: work/304-gs2-07-3-audit-repair/plan.md
+      locatorContract: durable-locator-v1
+      digest: "sha256:04a98e14dd65cb5c1a0103d98c4f0c29b6fa90adb30605c1468ff394a7b69576"
+      statement: "GV-001 records that only standard readiness projections refresh from accepted SDD sources while retained audit evidence remains source-owned; the generated work model is the resulting projection."
+      recordedAt: "2026-09-05T17:45:00Z"
+    notes: ["The byte-bound GV-001 decision records ownership; the architecture receipt is present because the deterministic-json task is a required test obligation and independently verifies exact retained inventories and Q3 execution."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

@@ -1,0 +1,8 @@
+{
+  "schema": "fsgg.github-audit-repair-controls/v1",
+  "unit": "GS2-07.3",
+  "authoring": "generated",
+  "caseContract": "systematic one-field mutation over the canonical complete-audit baseline",
+  "controls": ["audit-prerequisites", "audit-roadmap", "audit-completeness", "audit-scope", "audit-cursor", "audit-event-history", "audit-observation", "audit-delivery-gap", "audit-preview-gap", "audit-external-repository", "audit-schema-drift", "audit-repair-routing", "audit-scheduling-key", "audit-deduplication", "audit-convergence", "audit-omission", "audit-exclusive-writer", "audit-direct-write", "audit-sealed-plan", "audit-ordering", "audit-seal", "audit-replay", "audit-quint-preservation", "audit-no-network", "audit-no-production-queue", "audit-no-mutation"],
+  "cases": ["hash accepted GS2-07.2 receipt", "match exact registered roadmap digest", "remove all audit observations", "reverse canonical scope", "replace exact audit cursor", "add unobserved event subject", "change audit origin", "retain audit-only dropped delivery", "retain preview-gap classification", "retain external repository scope", "retain schema-drift classification", "mutate canonical reconciler route", "compare length-framed repository subjects", "collapse event and audit subject", "retain newest event/audit revision", "remove each required classification", "remove verify writer phase", "request derived-state write", "remove sealed-plan phase", "reverse plan entries", "replace seal", "replay exact inputs", "hash canonical protocol", "scan source for network clients", "scan source for production queue clients", "scan source for mutation clients" ]
+}
