@@ -1,0 +1,17 @@
+{
+  "schema": "fsgg.github-audit-repair-evidence/v1",
+  "unit": "GS2-07.3",
+  "sourceRevision": "ae444d693cb819aae19f39791062d11aacb167a7",
+  "roadmapRevision": "9d88c7b7967e8d69c1b8873d718ee8f0f435afd9",
+  "roadmapSha256": "6e0de6a1f12de38c248c607c60064c8b81e1683460410acaa2f69aea47829844",
+  "prerequisiteReceiptDigest": "6ae56a7c9dce52f3ac25e39145b275ed5e8127a1020ee8c65a392b976661c298",
+  "prerequisiteFileSha256": "890e41e916a9ea98cfe3e5632fa54edef28c92074634b6727bb5bd26422b42ae",
+  "protocolSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "auditScope": ["FS-GG/External", "FS-GG/FS.GG.Coordination"],
+  "cursor": "audit:2026-09-05T17:00:00Z",
+  "classifications": ["dropped-delivery", "preview-gap", "external-repository", "schema-drift"],
+  "writerBoundary": ["fresh-observe", "reduce", "sealed-plan", "apply", "verify"],
+  "network": false,
+  "productionQueue": false,
+  "productionMutation": false
+}

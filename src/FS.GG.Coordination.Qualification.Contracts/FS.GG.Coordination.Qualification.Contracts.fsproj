@@ -65,6 +65,8 @@
     <Compile Include="GitHubEventEnvelopeQualification.fs" />
     <Compile Include="GitHubNarrowReconciliationQualification.fsi" />
     <Compile Include="GitHubNarrowReconciliationQualification.fs" />
+    <Compile Include="GitHubAuditRepairQualification.fsi" />
+    <Compile Include="GitHubAuditRepairQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />

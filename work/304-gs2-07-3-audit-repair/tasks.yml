@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 304-gs2-07-3-audit-repair
+  title: "GS2-07.3 audit repair"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/304-gs2-07-3-audit-repair/spec.md
+  sourceClarifications: work/304-gs2-07-3-audit-repair/clarifications.md
+  sourceChecklist: work/304-gs2-07-3-audit-repair/checklist.md
+  sourcePlan: work/304-gs2-07-3-audit-repair/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/304-gs2-07-3-audit-repair/spec.md
+    digest: 173b814e9214fdf8180022737fd3b8837e79e964ceb23fb4915a399bdbb4fafb
+    schemaVersion: 1
+  - label: clarifications
+    path: work/304-gs2-07-3-audit-repair/clarifications.md
+    digest: cd602c59f304779075fe71817750b60a5ff575d1cb2bde06a6427011bb0e1988
+    schemaVersion: 1
+  - label: checklist
+    path: work/304-gs2-07-3-audit-repair/checklist.md
+    digest: 5797034fa2d1422f80c6829a1837427ce2125771ce4f38537e8bf7e9d3b8361b
+    schemaVersion: 1
+  - label: plan
+    path: work/304-gs2-07-3-audit-repair/plan.md
+    digest: 04a98e14dd65cb5c1a0103d98c4f0c29b6fa90adb30605c1468ff394a7b69576
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: dunlin-74c5
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: done
+    owner: dunlin-74c5
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: done
+    owner: dunlin-74c5
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: done
+    owner: dunlin-74c5
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: dunlin-74c5
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 304-gs2-07-3-audit-repair."
