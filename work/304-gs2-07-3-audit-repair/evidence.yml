@@ -53,8 +53,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/304-gs2-07-3-audit-repair/test-results/unit-focused.trx
-      digest: "sha256:d80354ec54faa18ea2b2bf498698f35b1486b5e8e233a34773752ba06e557e0a"
+      source: evidence/github-substrate-v2/gs2-07-3/unit-focused.trx
+      digest: "sha256:f668bf6ff5e43072ba51b462b85f135f48eb6e47116114bf05b1a71bcd5156a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 9
@@ -80,8 +80,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/304-gs2-07-3-audit-repair/test-results/unit-focused.trx
-      digest: "sha256:d80354ec54faa18ea2b2bf498698f35b1486b5e8e233a34773752ba06e557e0a"
+      source: evidence/github-substrate-v2/gs2-07-3/unit-focused.trx
+      digest: "sha256:f668bf6ff5e43072ba51b462b85f135f48eb6e47116114bf05b1a71bcd5156a2"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 9
@@ -107,8 +107,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/304-gs2-07-3-audit-repair/test-results/architecture-focused.trx
-      digest: "sha256:a61430fcab575b73e1ff1bcb1caa03a587a8d8b0814cc9a0cd4304d50fea3fa6"
+      source: evidence/github-substrate-v2/gs2-07-3/architecture-focused.trx
+      digest: "sha256:5f61a1d0ebec13567799b90a196a309ce61d945eb43ead1f638735dc4a2d8877"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 4
@@ -134,8 +134,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/304-gs2-07-3-audit-repair/test-results/architecture-focused.trx
-      digest: "sha256:a61430fcab575b73e1ff1bcb1caa03a587a8d8b0814cc9a0cd4304d50fea3fa6"
+      source: evidence/github-substrate-v2/gs2-07-3/architecture-focused.trx
+      digest: "sha256:5f61a1d0ebec13567799b90a196a309ce61d945eb43ead1f638735dc4a2d8877"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 4
@@ -168,8 +168,8 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: readiness/304-gs2-07-3-audit-repair/test-results/architecture-focused.trx
-      digest: "sha256:a61430fcab575b73e1ff1bcb1caa03a587a8d8b0814cc9a0cd4304d50fea3fa6"
+      source: evidence/github-substrate-v2/gs2-07-3/architecture-focused.trx
+      digest: "sha256:5f61a1d0ebec13567799b90a196a309ce61d945eb43ead1f638735dc4a2d8877"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 4

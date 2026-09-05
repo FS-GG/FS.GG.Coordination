@@ -5,7 +5,7 @@ workspace: FS.GG.Coordination
 cycle: roadmap-github-substrate-v2-m7-gs2-07-3-audit-repair
 lane: github-substrate-v2
 toolVersion: n/a
-commit: pending
+commit: a836283f51354194867c906d8ab2889b2678e82a
 ---
 
 ## §1 Provenance and confidence
@@ -23,7 +23,7 @@ Published compiler 0.83.1 selected and registered the first unchecked GS2-07.3 u
 
 ## §3 What did not
 
-The first full architecture invocation ran while the candidate checkout was dirty and passed 508/509 because the supply-chain reproducibility self-check intentionally refuses packaging from a dirty checkout. A clean exact-candidate rerun is required before PR handoff; no supply-chain implementation changed.
+The first full architecture invocation ran while the candidate checkout was dirty and passed 508/509 because the supply-chain reproducibility self-check intentionally refuses packaging from a dirty checkout. The clean exact-candidate rerun passed 509/509 in 2m46s; no supply-chain implementation changed.
 
 ## §4 Findings
 
@@ -70,7 +70,7 @@ A fully materialized Coordination scaffold should include the feedback skill twi
 | sdd-authoring | exercised | Full lifecycle reached verificationReady and shipReady. |
 | implementation-apis | exercised | Additive qualification-contract module with canonical serialization, sealing, and replay. |
 | dependencies-build | exercised | Release build passed with zero warnings/errors. |
-| testing | exercised | Focused unit 9/9, focused architecture 4/4, full unit 227/227, Q3 26-control validator; clean full architecture rerun pending exact candidate. |
+| testing | exercised | Focused unit 9/9, focused architecture 4/4, full unit 227/227, clean full architecture 509/509, and Q3 26-control validator. |
 | evidence | exercised | Exact compiler/prerequisite pins, retained dual controls, SDD receipts, critique gate, and acceptance receipts. |
 | runtime-playtest | not-exercised | Non-game unit. |
 | performance | not-exercised | Pure bounded qualification contract; no runtime performance claim. |
