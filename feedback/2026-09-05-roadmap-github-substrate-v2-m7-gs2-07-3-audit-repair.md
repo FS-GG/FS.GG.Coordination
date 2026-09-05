@@ -19,7 +19,7 @@ This report covers issue #304's audit-repair SDD, implementation, verification, 
 
 ## §2 What worked
 
-Published compiler 0.83.1 selected and registered the first unchecked GS2-07.3 unit from a partial catalog without weakening the separate first-unchecked guard. Exact GS2-07.2 prerequisite bytes, source revision, sorted audit scope, cursor, page inventory, event history, and authoritative observations produced deterministic sealed repair entries. Focused 9/9 unit and 4/4 architecture tests, all 26 generated and independent controls, full 227/227 unit tests, and SDD verify/ship passed.
+Published compiler 0.83.1 selected and registered the first unchecked GS2-07.3 unit from a partial catalog without weakening the separate first-unchecked guard. Exact GS2-07.2 prerequisite bytes, source revision, sorted audit scope, cursor, page inventory, event history, and authoritative observations produced deterministic sealed repair entries. Focused 10/10 unit and 4/4 architecture tests, all 26 generated and independent controls, full 227/227 unit tests, and SDD verify/ship passed.
 
 ## §3 What did not
 
@@ -70,7 +70,7 @@ A fully materialized Coordination scaffold should include the feedback skill twi
 | sdd-authoring | exercised | Full lifecycle reached verificationReady and shipReady. |
 | implementation-apis | exercised | Additive qualification-contract module with canonical serialization, sealing, and replay. |
 | dependencies-build | exercised | Release build passed with zero warnings/errors. |
-| testing | exercised | Focused unit 9/9, focused architecture 4/4, full unit 227/227, clean full architecture 509/509, and Q3 26-control validator. |
+| testing | exercised | Focused unit 10/10, focused architecture 4/4, full unit 227/227, clean full architecture 509/509, and Q3 26-control validator. |
 | evidence | exercised | Exact compiler/prerequisite pins, retained dual controls, SDD receipts, critique gate, and acceptance receipts. |
 | runtime-playtest | not-exercised | Non-game unit. |
 | performance | not-exercised | Pure bounded qualification contract; no runtime performance claim. |

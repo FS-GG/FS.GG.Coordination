@@ -56,6 +56,7 @@ type GitHubAuditRepairFinding =
     | ConflictingSubject of string
     | AlteredScope of string
     | AlteredObservation of string
+    | UnknownSubjectKind of string
     | AlteredClassification of string
     | OmittedClassification of string
     | AlteredRouting of string

@@ -1,0 +1,65 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-3-audit-repair",
+  "milestone": "GS2-07.3 — Audit repair",
+  "critic": "snipe-b065",
+  "initial_reviewed_commit": "d3d92de69b4f2c019964fa477a5a4bf54ce5cec9",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "d3d92de69b4f2c019964fa477a5a4bf54ce5cec9"
+  ],
+  "findings": [
+    {
+      "id": "GS2073-C01",
+      "severity": "major",
+      "summary": "Audit repair changes the accepted GS2-07.2 subject and scheduling-key identity, so event and audit inputs do not converge to the same queued subject.",
+      "evidence": [
+        "eng/github-substrate-v2-units.json:831 requires supported event and audit inputs to converge to the same queued subject and newest relevant revision.",
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubNarrowReconciliationQualification.fs:80-81,145 compiles the local event subject as kind:id and hashes repository plus that subject, while src/FS.GG.Coordination.Qualification.Contracts/GitHubAuditRepairQualification.fs:74-76,180 prefixes the repository into the subject and then hashes the repository a second time.",
+        "Built-artifact comparison at d3d92de69b4f2c019964fa477a5a4bf54ce5cec9 produced narrow subject issue:304/key e6114ed3b46399c49a15a0ebbf59ff347ab1b4b21c9675b19fe7dbedfc6d3dd2 and audit subject FS-GG/FS.GG.Coordination|issue:304/key 332958f079b48a3cb9e4cd1d58fe5397912f7e9001d8179868ae1ed6a2869fb2; both equality checks were false.",
+        "eng/validate-github-audit-repair.fsx:73 and tests/FS.GG.Coordination.UnitTests/GitHubAuditRepairTests.fs:32-40 call only the audit-repair compiler, so the advertised convergence controls stay green without comparing the accepted narrow-reconciliation route they claim to converge with."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Pending implementation repair and exact-head confirmation round 1."
+      ]
+    },
+    {
+      "id": "GS2073-C02",
+      "severity": "major",
+      "summary": "The audit compiler accepts unknown subject kinds, so the required unknown-input refusal and supported-event convergence boundary are absent.",
+      "evidence": [
+        "eng/github-substrate-v2-units.json:831 requires unknown inputs to remain explicit refusals and limits convergence to supported event and audit inputs inherited from GS2-07.2.",
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubAuditRepairQualification.fs:123-139 validates only token shape and checks Route against the caller-supplied SubjectKind; it never compares SubjectKind with GS2-07.2's supportedEventKinds inventory.",
+        "Built-artifact execution at d3d92de69b4f2c019964fa477a5a4bf54ce5cec9 replaced the issue observation with SubjectKind=mystery and Route=reconcile/mystery, retained a complete four-class/page baseline with empty event history, and returned Ok with four queue entries.",
+        "tests/FS.GG.Coordination.UnitTests/GitHubAuditRepairTests.fs:58-65 and eng/validate-github-audit-repair.fsx:94,98 cover stale source revision and unknown classification but contain no unknown-subject-kind adversary, so the Q3 validator remains green on this acceptance escape."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Pending implementation repair and exact-head confirmation round 1."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "d3d92de69b4f2c019964fa477a5a4bf54ce5cec9",
+    "verdict": "changes-required",
+    "unresolved_blocker_major": [
+      "GS2073-C01",
+      "GS2073-C02"
+    ]
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

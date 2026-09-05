@@ -40,6 +40,19 @@ let ``complete audit remains authoritative and converges with event history`` ()
     Assert.Equal(serialize plan, serialize (compile repository revision scope cursor (List.rev histories) (List.rev observations) |> get))
 
 [<Fact>]
+let ``audit and accepted narrow reconciliation share queued subject and scheduling key`` () =
+    let event: GitHubReconciliationEvent =
+        { EventKind = "issue"; Repository = repository; SourceRevision = revision; DeliveryId = "delivery-issue-1"
+          SubjectKind = "issue"; SubjectId = "304"; SubjectRevision = 1L; Origin = "event"
+          Route = "reconcile/issue"; AttemptsDerivedWrite = false }
+    let narrow = GitHubNarrowReconciliationQualification.compile repository revision [ event ] |> get
+    let audit = compile repository revision scope cursor histories observations |> get
+    let narrowEntry = narrow.Entries |> List.exactlyOne
+    let auditEntry = audit.Entries |> List.find (fun entry -> entry.Repository = repository && entry.Subject = "issue:304")
+    Assert.Equal(narrowEntry.Subject, auditEntry.Subject)
+    Assert.Equal(narrowEntry.SchedulingKey, auditEntry.SchedulingKey)
+
+[<Fact>]
 let ``complete audit works without delivery history`` () =
     let plan = compile repository revision scope cursor [] observations |> get
     Assert.All(plan.Entries, fun entry -> Assert.Equal("audit-repair", entry.DeduplicationDisposition))
@@ -63,6 +76,8 @@ let ``observation identity revision and classification fail closed`` () =
     Assert.Contains(GitHubAuditRepairFinding.AlteredObservation "audit-drop-1", compile repository revision scope cursor histories ({ row with Origin = "event" } :: observations.Tail) |> findings)
     let staleHistory = { histories.Head with SourceRevision = String.replicate 40 "a" }
     Assert.Contains(GitHubAuditRepairFinding.StaleRevision(String.replicate 40 "a"), compile repository revision scope cursor (staleHistory :: histories.Tail) observations |> findings)
+    let unknown = { row with SubjectKind = "mystery"; Route = "reconcile/mystery" }
+    Assert.Contains(GitHubAuditRepairFinding.UnknownSubjectKind "mystery", compile repository revision scope cursor [] (unknown :: observations.Tail) |> findings)
 
 [<Fact>]
 let ``every repair classification is mandatory`` () =

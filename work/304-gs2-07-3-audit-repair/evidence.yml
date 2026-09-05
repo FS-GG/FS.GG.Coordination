@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-3/unit-focused.trx
-      digest: "sha256:f668bf6ff5e43072ba51b462b85f135f48eb6e47116114bf05b1a71bcd5156a2"
+      digest: "sha256:765d482e673227fadf01d6975c6b9e9865ab79f279a622db4ae711913e875a92"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 9
+      passed: 10
       failed: 0
       skipped: 0
-    notes: [Nine focused tests exercise complete and history-free audit repair, and both control inventories., canonical sealing, exact scope/source/cursor/page binding, mandatory classifications, replay, routing and direct-write refusal]
+    notes: [Ten focused tests exercise complete and history-free audit repair, and both control inventories., canonical sealing, exact cross-contract subject/key convergence, replay, routing and direct-write refusal, scope/source/cursor/page binding, unknown-kind and classification refusal]
   - id: EV002
     kind: verification
     subject:
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-3/unit-focused.trx
-      digest: "sha256:f668bf6ff5e43072ba51b462b85f135f48eb6e47116114bf05b1a71bcd5156a2"
+      digest: "sha256:765d482e673227fadf01d6975c6b9e9865ab79f279a622db4ae711913e875a92"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 9
+      passed: 10
       failed: 0
       skipped: 0
     notes: [The focused run compiles and exercises the additive public signature and its canonical plan contract without altering an existing API.]
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-3/architecture-focused.trx
-      digest: "sha256:5f61a1d0ebec13567799b90a196a309ce61d945eb43ead1f638735dc4a2d8877"
+      digest: "sha256:3b1a33f28be821853aa7bf4a48e5956805c2af947eca0c25653b8ecc3b013e49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 4
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-3/architecture-focused.trx
-      digest: "sha256:5f61a1d0ebec13567799b90a196a309ce61d945eb43ead1f638735dc4a2d8877"
+      digest: "sha256:3b1a33f28be821853aa7bf4a48e5956805c2af947eca0c25653b8ecc3b013e49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 4
@@ -169,7 +169,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-3/architecture-focused.trx
-      digest: "sha256:5f61a1d0ebec13567799b90a196a309ce61d945eb43ead1f638735dc4a2d8877"
+      digest: "sha256:3b1a33f28be821853aa7bf4a48e5956805c2af947eca0c25653b8ecc3b013e49"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 4

@@ -23,7 +23,7 @@ type GitHubAuditRepairPlan =
 type GitHubAuditRepairFinding =
     | MissingField of string | MalformedField of string | IncompleteAuditScope | PartialPage of string
     | StaleCursor of string | StaleRevision of string | ConflictingSubject of string | AlteredScope of string
-    | AlteredObservation of string | AlteredClassification of string | OmittedClassification of string
+    | AlteredObservation of string | UnknownSubjectKind of string | AlteredClassification of string | OmittedClassification of string
     | AlteredRouting of string | DirectWrite of string | UnsealedPlan | AlteredSeal | ReplayConflict of string
     | InvalidSerialization of string
 type GitHubAuditRepairControl =
@@ -71,7 +71,9 @@ module GitHubAuditRepairQualification =
     let private strings (values: string list) = values |> List.map frame |> String.concat ""
     let private hash (value: string) =
         value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
-    let private subject (repository: string) (kind: string) (id: string) = $"{repository}|{kind}:{id}"
+    let private subject (kind: string) (id: string) = $"{kind}:{id}"
+    let private subjectIdentity (repository: string) (kind: string) (id: string) = repository, subject kind id
+    let private subjectLabel (repository: string) (subjectValue: string) = $"{repository}|{subjectValue}"
     let private expectedRoute (kind: string) = $"reconcile/{kind}"
     let private schedulingKey (repository: string) (subjectValue: string) = strings [ repository; subjectValue ] |> hash
     let private historyBytes (history: GitHubAuditEventHistory list) =
@@ -112,13 +114,15 @@ module GitHubAuditRepairQualification =
 
         let historySubjects =
             eventHistory
-            |> List.map (fun (row: GitHubAuditEventHistory) -> subject row.Repository row.SubjectKind row.SubjectId)
+            |> List.map (fun (row: GitHubAuditEventHistory) -> subjectIdentity row.Repository row.SubjectKind row.SubjectId)
             |> Set.ofList
         for row in eventHistory do
             for name, value in [ "history.repository", row.Repository; "history.sourceRevision", row.SourceRevision; "history.subjectKind", row.SubjectKind; "history.subjectId", row.SubjectId; "history.deliveryId", row.DeliveryId ] do validateText name value
             if not (auditScope |> List.contains row.Repository) then errors.Add(GitHubAuditRepairFinding.AlteredScope row.Repository)
             if row.SourceRevision <> sourceRevision then errors.Add(GitHubAuditRepairFinding.StaleRevision row.SourceRevision)
             if row.SubjectRevision <= 0L then errors.Add(GitHubAuditRepairFinding.StaleRevision(string row.SubjectRevision))
+            if not (GitHubNarrowReconciliationQualification.supportedEventKinds |> List.contains row.SubjectKind) then
+                errors.Add(GitHubAuditRepairFinding.UnknownSubjectKind row.SubjectKind)
 
         for row in observations do
             for name, value in
@@ -133,6 +137,8 @@ module GitHubAuditRepairQualification =
             if row.Cursor <> cursor then errors.Add(GitHubAuditRepairFinding.StaleCursor row.Cursor)
             if row.Page <= 0 || row.PageCount <= 0 || row.Page > row.PageCount then errors.Add(GitHubAuditRepairFinding.PartialPage row.Repository)
             if row.SubjectRevision <= 0L then errors.Add(GitHubAuditRepairFinding.StaleRevision(string row.SubjectRevision))
+            if not (GitHubNarrowReconciliationQualification.supportedEventKinds |> List.contains row.SubjectKind) then
+                errors.Add(GitHubAuditRepairFinding.UnknownSubjectKind row.SubjectKind)
             if not (requiredClassifications |> List.contains row.Classification) then errors.Add(GitHubAuditRepairFinding.AlteredClassification row.Classification)
             if row.Route <> expectedRoute row.SubjectKind then errors.Add(GitHubAuditRepairFinding.AlteredRouting row.Route)
             if row.Origin <> "audit" then errors.Add(GitHubAuditRepairFinding.AlteredObservation row.EvidenceId)
@@ -149,35 +155,35 @@ module GitHubAuditRepairQualification =
                 errors.Add GitHubAuditRepairFinding.IncompleteAuditScope
         for classification in requiredClassifications do
             if observations |> List.exists (fun (row: GitHubScheduledAuditObservation) -> row.Classification = classification) |> not then errors.Add(GitHubAuditRepairFinding.OmittedClassification classification)
-        for historySubject in historySubjects do
-            if observations |> List.exists (fun (row: GitHubScheduledAuditObservation) -> subject row.Repository row.SubjectKind row.SubjectId = historySubject) |> not then
-                errors.Add(GitHubAuditRepairFinding.AlteredObservation historySubject)
+        for historyRepository, historySubject in historySubjects do
+            if observations |> List.exists (fun (row: GitHubScheduledAuditObservation) -> subjectIdentity row.Repository row.SubjectKind row.SubjectId = (historyRepository, historySubject)) |> not then
+                errors.Add(GitHubAuditRepairFinding.AlteredObservation(subjectLabel historyRepository historySubject))
         observations
-        |> List.groupBy (fun (row: GitHubScheduledAuditObservation) -> subject row.Repository row.SubjectKind row.SubjectId, row.SubjectRevision)
-        |> List.iter (fun ((identity, _), rows) ->
-            if rows |> List.map (fun (row: GitHubScheduledAuditObservation) -> row.SubjectKind, row.Route) |> Set.ofList |> Set.count > 1 then errors.Add(GitHubAuditRepairFinding.ConflictingSubject identity))
+        |> List.groupBy (fun (row: GitHubScheduledAuditObservation) -> subjectIdentity row.Repository row.SubjectKind row.SubjectId, row.SubjectRevision)
+        |> List.iter (fun (((identityRepository, identitySubject), _), rows) ->
+            if rows |> List.map (fun (row: GitHubScheduledAuditObservation) -> row.SubjectKind, row.Route) |> Set.ofList |> Set.count > 1 then
+                errors.Add(GitHubAuditRepairFinding.ConflictingSubject(subjectLabel identityRepository identitySubject)))
 
         if errors.Count > 0 then Error(List.ofSeq errors)
         else
             let historyDigest = historyBytes eventHistory |> hash
-            let auditRows: (string * Choice<GitHubAuditEventHistory, GitHubScheduledAuditObservation>) list =
+            let auditRows: ((string * string) * Choice<GitHubAuditEventHistory, GitHubScheduledAuditObservation>) list =
                 observations
-                |> List.map (fun (row: GitHubScheduledAuditObservation) -> subject row.Repository row.SubjectKind row.SubjectId, Choice2Of2 row)
-            let historyRows: (string * Choice<GitHubAuditEventHistory, GitHubScheduledAuditObservation>) list =
+                |> List.map (fun (row: GitHubScheduledAuditObservation) -> subjectIdentity row.Repository row.SubjectKind row.SubjectId, Choice2Of2 row)
+            let historyRows: ((string * string) * Choice<GitHubAuditEventHistory, GitHubScheduledAuditObservation>) list =
                 eventHistory
-                |> List.map (fun (row: GitHubAuditEventHistory) -> subject row.Repository row.SubjectKind row.SubjectId, Choice1Of2 row)
+                |> List.map (fun (row: GitHubAuditEventHistory) -> subjectIdentity row.Repository row.SubjectKind row.SubjectId, Choice1Of2 row)
             let entries =
                 historyRows @ auditRows
                 |> List.groupBy fst
-                |> List.map (fun (identity, rows) ->
+                |> List.map (fun ((repo, identity), rows) ->
                     let histories: GitHubAuditEventHistory list = rows |> List.choose (function _, Choice1Of2 row -> Some row | _ -> None)
                     let audits: GitHubScheduledAuditObservation list = rows |> List.choose (function _, Choice2Of2 row -> Some row | _ -> None)
-                    let repo = audits.Head.Repository
                     let revision =
                         [ yield! histories |> List.map (fun (row: GitHubAuditEventHistory) -> row.SubjectRevision)
                           yield! audits |> List.map (fun (row: GitHubScheduledAuditObservation) -> row.SubjectRevision) ] |> List.max
                     let classifications = audits |> List.map (fun (row: GitHubScheduledAuditObservation) -> row.Classification) |> List.distinct |> List.sort
-                    let key = schedulingKey repository identity
+                    let key = schedulingKey repo identity
                     let evidence =
                         [ yield! histories |> List.map (fun (row: GitHubAuditEventHistory) -> row.DeliveryId)
                           yield! audits |> List.map (fun (row: GitHubScheduledAuditObservation) -> row.EvidenceId) ] |> List.distinct |> List.sort

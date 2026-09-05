@@ -46,6 +46,11 @@ let observations =
 let get = function Ok value -> value | Error errors -> failwithf "baseline refused: %A" errors
 let has expected = function Error errors -> List.contains expected errors | Ok _ -> false
 let baseline = compile repository revision scope cursor histories observations |> get
+let narrowEvent: GitHubReconciliationEvent =
+    { EventKind = "issue"; Repository = repository; SourceRevision = revision; DeliveryId = "delivery-issue-1"
+      SubjectKind = "issue"; SubjectId = "304"; SubjectRevision = 1L; Origin = "event"
+      Route = "reconcile/issue"; AttemptsDerivedWrite = false }
+let narrowBaseline = GitHubNarrowReconciliationQualification.compile repository revision [ narrowEvent ] |> get
 let bytes = serialize baseline
 let sourceText = File.ReadAllText(path "src/FS.GG.Coordination.Qualification.Contracts/GitHubAuditRepairQualification.fs")
 let issue = observations.Head
@@ -58,7 +63,10 @@ let executeGenerated control =
     | AuditScope -> compile repository revision (List.rev scope) cursor histories observations |> has GitHubAuditRepairFinding.IncompleteAuditScope
     | AuditCursor -> compile repository revision scope "stale" histories observations |> has (GitHubAuditRepairFinding.StaleCursor "stale")
     | AuditEventHistory -> compile repository revision scope cursor (history repository "release" "missing" 1L "delivery-missing" :: histories) observations |> has (GitHubAuditRepairFinding.AlteredObservation $"{repository}|release:missing")
-    | AuditObservation -> compile repository revision scope cursor histories ({ issue with Origin = "event" } :: observations.Tail) |> has (GitHubAuditRepairFinding.AlteredObservation "audit-drop-1")
+    | AuditObservation ->
+        let unknown = { issue with SubjectKind = "mystery"; Route = "reconcile/mystery" }
+        compile repository revision scope cursor histories ({ issue with Origin = "event" } :: observations.Tail) |> has (GitHubAuditRepairFinding.AlteredObservation "audit-drop-1")
+        && compile repository revision scope cursor [] (unknown :: observations.Tail) |> has (GitHubAuditRepairFinding.UnknownSubjectKind "mystery")
     | AuditDeliveryGap -> (compile repository revision scope cursor [] observations |> get).Entries |> List.exists (fun entry -> entry.Classifications = [ "dropped-delivery" ] && entry.DeduplicationDisposition = "audit-repair")
     | AuditPreviewGap -> baseline.Entries |> List.exists (fun entry -> entry.Classifications = [ "preview-gap" ])
     | AuditExternalRepository -> baseline.Entries |> List.exists (fun entry -> entry.Repository = externalRepository)
@@ -70,7 +78,13 @@ let executeGenerated control =
         (compile repository revision scope cursor histories observations |> get).Entries.Head.SchedulingKey <>
         (compile "FS-GG/Other" revision otherScope cursor [] other |> get).Entries.Head.SchedulingKey
     | AuditDeduplication -> baseline.Entries.Length = 4
-    | AuditConvergence -> baseline.Entries |> List.exists (fun entry -> entry.SubjectRevision = 2L && entry.DeduplicationDisposition = "event-audit-converged")
+    | AuditConvergence ->
+        let narrow = narrowBaseline.Entries |> List.exactlyOne
+        baseline.Entries
+        |> List.exists (fun entry ->
+            entry.Repository = repository && entry.Subject = narrow.Subject
+            && entry.SchedulingKey = narrow.SchedulingKey && entry.SubjectRevision = 2L
+            && entry.DeduplicationDisposition = "event-audit-converged")
     | AuditOmission -> requiredClassifications |> List.forall (fun classification -> compile repository revision scope cursor [] (observations |> List.filter (fun row -> row.Classification <> classification)) |> has (GitHubAuditRepairFinding.OmittedClassification classification))
     | AuditExclusiveWriter -> baseline.WriterBoundary = writerBoundary
     | AuditDirectWrite -> compile repository revision scope cursor histories ({ issue with AttemptsDerivedWrite = true } :: observations.Tail) |> has (GitHubAuditRepairFinding.DirectWrite "audit-drop-1")
@@ -91,7 +105,9 @@ let executeIndependent control =
     | AuditScope -> compile repository revision scope cursor histories ({ issue with Repository = "FS-GG/Outside" } :: observations.Tail) |> has (GitHubAuditRepairFinding.AlteredScope "FS-GG/Outside")
     | AuditCursor -> compile repository revision scope cursor histories ({ issue with Cursor = "audit:old" } :: observations.Tail) |> has (GitHubAuditRepairFinding.StaleCursor "audit:old")
     | AuditEventHistory -> let newer = { histories.Head with SubjectRevision = 9L } in (compile repository revision scope cursor (newer :: histories.Tail) observations |> get).Entries |> List.exists (fun entry -> entry.SubjectRevision = 9L)
-    | AuditObservation -> compile repository revision scope cursor histories ({ issue with SourceRevision = String.replicate 40 "a" } :: observations.Tail) |> has (GitHubAuditRepairFinding.StaleRevision(String.replicate 40 "a"))
+    | AuditObservation ->
+        let unknown = { issue with SubjectKind = "mystery"; Route = "reconcile/mystery" }
+        compile repository revision scope cursor [] (unknown :: observations.Tail) |> has (GitHubAuditRepairFinding.UnknownSubjectKind "mystery")
     | AuditDeliveryGap -> (compile repository revision scope cursor [] observations |> get).Entries.Length = 4
     | AuditPreviewGap -> compile repository revision scope cursor [] (observations |> List.filter (fun row -> row.Classification <> "preview-gap")) |> has (GitHubAuditRepairFinding.OmittedClassification "preview-gap")
     | AuditExternalRepository -> compile repository revision [ repository ] cursor [] observations |> has (GitHubAuditRepairFinding.AlteredScope externalRepository)
@@ -99,7 +115,11 @@ let executeIndependent control =
     | AuditRepairRouting -> compile repository revision scope cursor histories ({ issue with Route = "reconcile/project" } :: observations.Tail) |> has (GitHubAuditRepairFinding.AlteredRouting "reconcile/project")
     | AuditSchedulingKey -> baseline.Entries |> List.map _.SchedulingKey |> Set.ofList |> Set.count = baseline.Entries.Length
     | AuditDeduplication -> let repeated = observations @ [ observations.Head ] in (compile repository revision scope cursor histories repeated |> get).Entries.Length = baseline.Entries.Length
-    | AuditConvergence -> compile repository revision scope cursor (List.rev histories) (List.rev observations) = Ok baseline
+    | AuditConvergence ->
+        let reversed = compile repository revision scope cursor (List.rev histories) (List.rev observations)
+        let narrow = narrowBaseline.Entries |> List.exactlyOne
+        let audit = baseline.Entries |> List.find (fun entry -> entry.Repository = repository && entry.Subject = "issue:304")
+        reversed = Ok baseline && (narrow.Subject, narrow.SchedulingKey) = (audit.Subject, audit.SchedulingKey)
     | AuditOmission -> compile repository revision scope cursor [] (observations |> List.filter (fun row -> row.Classification <> "external-repository")) |> has (GitHubAuditRepairFinding.OmittedClassification "external-repository")
     | AuditExclusiveWriter -> verify baseline.Seal { baseline with WriterBoundary = [ "fresh-observe"; "reduce"; "draft-plan"; "apply"; "verify" ] } = Error [ GitHubAuditRepairFinding.UnsealedPlan ]
     | AuditDirectWrite -> compile repository revision scope cursor histories ({ issue with Origin = "writer"; AttemptsDerivedWrite = true } :: observations.Tail) |> has (GitHubAuditRepairFinding.DirectWrite "audit-drop-1")
