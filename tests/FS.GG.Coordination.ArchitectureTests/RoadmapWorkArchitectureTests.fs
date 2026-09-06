@@ -46,8 +46,8 @@ let private hasExactGs2067RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
 
-    roadmap.GetProperty("revision").GetString() = "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6"
-    && roadmap.GetProperty("sha256").GetString() = "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a"
+    roadmap.GetProperty("revision").GetString() = "64e9a2b7753f438f8ad31298fd17698ff2a142e6"
+    && roadmap.GetProperty("sha256").GetString() = "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
 
 let private gs2067GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -77,8 +77,8 @@ let private hasExactGs2068RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
 
-    roadmap.GetProperty("revision").GetString() = "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6"
-    && roadmap.GetProperty("sha256").GetString() = "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a"
+    roadmap.GetProperty("revision").GetString() = "64e9a2b7753f438f8ad31298fd17698ff2a142e6"
+    && roadmap.GetProperty("sha256").GetString() = "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
 
 let private gs2068GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -108,8 +108,8 @@ let private hasExactGs2071RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
 
-    roadmap.GetProperty("revision").GetString() = "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6"
-    && roadmap.GetProperty("sha256").GetString() = "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a"
+    roadmap.GetProperty("revision").GetString() = "64e9a2b7753f438f8ad31298fd17698ff2a142e6"
+    && roadmap.GetProperty("sha256").GetString() = "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
 
 let private gs2071GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -130,8 +130,8 @@ let private gs2071GateCatalogAgrees (indexText: string) (catalogText: string) =
 let private hasExactGs2072RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
-    roadmap.GetProperty("revision").GetString() = "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6"
-    && roadmap.GetProperty("sha256").GetString() = "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a"
+    roadmap.GetProperty("revision").GetString() = "64e9a2b7753f438f8ad31298fd17698ff2a142e6"
+    && roadmap.GetProperty("sha256").GetString() = "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
 
 let private gs2072GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -145,8 +145,8 @@ let private gs2072GateCatalogAgrees (indexText: string) (catalogText: string) =
 let private hasExactGs2073RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
-    roadmap.GetProperty("revision").GetString() = "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6"
-    && roadmap.GetProperty("sha256").GetString() = "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a"
+    roadmap.GetProperty("revision").GetString() = "64e9a2b7753f438f8ad31298fd17698ff2a142e6"
+    && roadmap.GetProperty("sha256").GetString() = "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
 
 let private gs2073GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -160,8 +160,8 @@ let private gs2073GateCatalogAgrees (indexText: string) (catalogText: string) =
 let private hasExactGs2074RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
-    roadmap.GetProperty("revision").GetString() = "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6"
-    && roadmap.GetProperty("sha256").GetString() = "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a"
+    roadmap.GetProperty("revision").GetString() = "64e9a2b7753f438f8ad31298fd17698ff2a142e6"
+    && roadmap.GetProperty("sha256").GetString() = "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
 
 let private gs2074GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -171,6 +171,36 @@ let private gs2074GateCatalogAgrees (indexText: string) (catalogText: string) =
     let command = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
     command.GetProperty("qGate").GetString() = contract.GetProperty("qGate").GetString()
     && gateCommandSha256 command = contract.GetProperty("commandSha256").GetString()
+
+let private hasExactGs2075RoadmapAuthority (indexText: string) =
+    use document = JsonDocument.Parse(indexText)
+    let roadmap = document.RootElement.GetProperty("roadmap")
+    roadmap.GetProperty("revision").GetString() = "64e9a2b7753f438f8ad31298fd17698ff2a142e6"
+    && roadmap.GetProperty("sha256").GetString() = "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
+
+let private gs2075GateCatalogAgrees (indexText: string) (catalogText: string) =
+    use index = JsonDocument.Parse(indexText)
+    use catalog = JsonDocument.Parse(catalogText)
+    let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.5")
+    let contract = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
+    let command = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
+    command.GetProperty("qGate").GetString() = contract.GetProperty("qGate").GetString()
+    && gateCommandSha256 command = contract.GetProperty("commandSha256").GetString()
+
+let private hasExactGs2075BaseFreshnessContract (indexText: string) =
+    use index = JsonDocument.Parse(indexText)
+    let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.5")
+    let ceiling = unit.GetProperty("permissionCeiling").EnumerateArray() |> Seq.head |> _.GetString()
+    let exitGate = unit.GetProperty("exitGate").GetString()
+    ceiling.Contains("merge-group base identity/ref/SHA", StringComparison.Ordinal)
+    && exitGate.Contains("canonical base repository identity, full base ref, exact base SHA, base-observation revision, observed-at, and freshness deadline", StringComparison.Ordinal)
+    && exitGate.Contains("re-observes and revalidates current merge-group base identity, base ref, base SHA, and base freshness", StringComparison.Ordinal)
+    && exitGate.Contains("missing-base-identity", StringComparison.Ordinal)
+    && exitGate.Contains("malformed-base-ref", StringComparison.Ordinal)
+    && exitGate.Contains("missing-base-sha", StringComparison.Ordinal)
+    && exitGate.Contains("stale-base", StringComparison.Ordinal)
+    && exitGate.Contains("changed-base", StringComparison.Ordinal)
+    && exitGate.Contains("base-observation-revision, base-freshness, changed-base", StringComparison.Ordinal)
 
 let private hasClosedStagedIntakeVocabulary (source: string) =
     let lines = source.Replace("\r", "", StringComparison.Ordinal).Split('\n') |> Set.ofArray
@@ -355,7 +385,7 @@ let ``GS2-06-7 authority pin refuses a stale index revision independently`` () =
 
     let staleIndex =
         indexText.Replace(
-            "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6",
+            "64e9a2b7753f438f8ad31298fd17698ff2a142e6",
             "185494fa8ba3986834141c2ddc4e8325410df260",
             StringComparison.Ordinal
         )
@@ -398,7 +428,7 @@ let ``GS2-06-8 authority pin refuses a stale index revision independently`` () =
 
     let staleIndex =
         indexText.Replace(
-            "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6",
+            "64e9a2b7753f438f8ad31298fd17698ff2a142e6",
             "e8b9c5ff978e0f14462514406ac86a71c4826425",
             StringComparison.Ordinal
         )
@@ -438,7 +468,7 @@ let ``GS2-07-1 authority pin refuses a stale index revision independently`` () =
 
     let staleIndex =
         indexText.Replace(
-            "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6",
+            "64e9a2b7753f438f8ad31298fd17698ff2a142e6",
             "84729d040a7d8baf039d5490d95ef982bb5e3f09",
             StringComparison.Ordinal
         )
@@ -474,7 +504,7 @@ let ``GS2-07-2 inspection refuses stale roadmap bytes`` () =
 let ``GS2-07-2 authority pin refuses a stale index revision independently`` () =
     let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
     Assert.True(hasExactGs2072RoadmapAuthority indexText)
-    let staleIndex = indexText.Replace("cac998e81bbbdd1f4b1259e3b9a7173e161a9da6", "37a8c8275e101f0da9f26b1d0ce120533a879833", StringComparison.Ordinal)
+    let staleIndex = indexText.Replace("64e9a2b7753f438f8ad31298fd17698ff2a142e6", "37a8c8275e101f0da9f26b1d0ce120533a879833", StringComparison.Ordinal)
     Assert.NotEqual(indexText, staleIndex)
     Assert.False(hasExactGs2072RoadmapAuthority staleIndex)
 
@@ -499,7 +529,7 @@ let ``GS2-07-3 inspection refuses stale roadmap bytes`` () =
 let ``GS2-07-3 authority pin refuses a stale index revision independently`` () =
     let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
     Assert.True(hasExactGs2073RoadmapAuthority indexText)
-    let staleIndex = indexText.Replace("cac998e81bbbdd1f4b1259e3b9a7173e161a9da6", "de1b7475505fa34748dc3b1b76d649f2bd3c84d3", StringComparison.Ordinal)
+    let staleIndex = indexText.Replace("64e9a2b7753f438f8ad31298fd17698ff2a142e6", "de1b7475505fa34748dc3b1b76d649f2bd3c84d3", StringComparison.Ordinal)
     Assert.NotEqual(indexText, staleIndex)
     Assert.False(hasExactGs2073RoadmapAuthority staleIndex)
 
@@ -531,16 +561,15 @@ let ``GS2-07-4 authority and gate identity refuse stale or altered inputs`` () =
     let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
     Assert.True(hasExactGs2074RoadmapAuthority indexText)
     Assert.True(gs2074GateCatalogAgrees indexText catalogText)
-    let staleIndex = indexText.Replace("cac998e81bbbdd1f4b1259e3b9a7173e161a9da6", "4ad66d094092cb1ee858b6cb76f60d6d39e17079", StringComparison.Ordinal)
+    let staleIndex = indexText.Replace("64e9a2b7753f438f8ad31298fd17698ff2a142e6", "4ad66d094092cb1ee858b6cb76f60d6d39e17079", StringComparison.Ordinal)
     Assert.False(hasExactGs2074RoadmapAuthority staleIndex)
     let mismatchedCatalog = catalogText.Replace("eng/validate-github-event-security.fsx", "eng/validate-github-audit-repair.fsx", StringComparison.Ordinal)
     Assert.False(gs2074GateCatalogAgrees indexText mismatchedCatalog)
 
 [<Fact>]
-let ``GS2-07-4 registration grants no successor or production mutation authority`` () =
+let ``GS2-07-4 contract retains its production mutation ceiling after successor registration`` () =
     use index = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
     let units = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
-    Assert.DoesNotContain(units, fun value -> value.GetProperty("id").GetString() = "GS2-07.5")
 
     let eventSecurity = units |> List.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.4")
     let ceiling = eventSecurity.GetProperty("permissionCeiling").EnumerateArray() |> Seq.item 1 |> _.GetString()
@@ -550,15 +579,65 @@ let ``GS2-07-4 registration grants no successor or production mutation authority
     Assert.Contains("GS2-07.5 inspection", ceiling)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-07-4 event security`` () =
+let ``GS2-07-5 inspection refuses stale roadmap bytes`` () =
+    let index = File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")) |> ReadOnlyMemory<byte>
+    let staleRoadmap = Encoding.UTF8.GetBytes("# stale GS2-07.5 roadmap\n") |> ReadOnlyMemory<byte>
+    match RoadmapWork.inspect index staleRoadmap "GS2-07.5" with
+    | Ok _ -> Assert.Fail("stale roadmap bytes were accepted")
+    | Error findings -> Assert.Contains(findings, fun finding -> finding.Code = "RW-ROADMAP-DIGEST")
+
+[<Fact>]
+let ``GS2-07-5 authority and gate identity refuse stale or altered inputs`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
+    Assert.True(hasExactGs2075RoadmapAuthority indexText)
+    Assert.True(gs2075GateCatalogAgrees indexText catalogText)
+    let staleIndex = indexText.Replace("64e9a2b7753f438f8ad31298fd17698ff2a142e6", "c460923ccef2f6ef30d9457967e717bec0e084ed", StringComparison.Ordinal)
+    Assert.False(hasExactGs2075RoadmapAuthority staleIndex)
+    let mismatchedCatalog = catalogText.Replace("eng/validate-github-merge-group-support.fsx", "eng/validate-github-event-security.fsx", StringComparison.Ordinal)
+    Assert.False(gs2075GateCatalogAgrees indexText mismatchedCatalog)
+
+[<Fact>]
+let ``GS2-07-5 base identity and freshness contract refuses adversarial omissions`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    Assert.True(hasExactGs2075BaseFreshnessContract indexText)
+
+    let mutations =
+        [ "canonical base repository identity", "base repository identity"
+          "full base ref", "base ref"
+          "exact base SHA", "base SHA"
+          "base-observation revision", "base observation"
+          "observed-at, and freshness deadline", "observation time"
+          "stale-base", "stale-authority"
+          "changed-base", "conflicting-group" ]
+
+    for original, replacement in mutations do
+        let mutated = indexText.Replace(original, replacement, StringComparison.Ordinal)
+        Assert.NotEqual(indexText, mutated)
+        Assert.False(hasExactGs2075BaseFreshnessContract mutated)
+
+[<Fact>]
+let ``GS2-07-5 registration grants no successor or production mutation authority`` () =
+    use index = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
+    let units = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
+    Assert.DoesNotContain(units, fun value -> value.GetProperty("id").GetString() = "GS2-07.6")
+    let mergeGroup = units |> List.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.5")
+    let ceiling = mergeGroup.GetProperty("permissionCeiling").EnumerateArray() |> Seq.item 1 |> _.GetString()
+    Assert.Contains("no production queue mutation", ceiling)
+    Assert.Contains("no settings mutation", ceiling)
+    Assert.Contains("no release", ceiling)
+    Assert.Contains("GS2-07.6 inspection", ceiling)
+
+[<Fact>]
+let ``roadmap unit index advances through GS2-07-5 merge group support`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
     let units = document.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
 
     let roadmap = document.RootElement.GetProperty("roadmap")
-    Assert.Equal("cac998e81bbbdd1f4b1259e3b9a7173e161a9da6", roadmap.GetProperty("revision").GetString())
-    Assert.Equal("66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a", roadmap.GetProperty("sha256").GetString())
+    Assert.Equal("64e9a2b7753f438f8ad31298fd17698ff2a142e6", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a", roadmap.GetProperty("sha256").GetString())
 
     let ids =
         units |> List.map (fun unitValue -> unitValue.GetProperty("id").GetString())
@@ -622,7 +701,8 @@ let ``roadmap unit index advances through GS2-07-4 event security`` () =
              "GS2-07.1"
              "GS2-07.2"
              "GS2-07.3"
-             "GS2-07.4" ]
+             "GS2-07.4"
+             "GS2-07.5" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -713,6 +793,18 @@ let ``roadmap unit index advances through GS2-07-4 event security`` () =
     Assert.Contains("only authentic, in-scope, fresh", eventSecurity.GetProperty("exitGate").GetString())
     Assert.Contains("no event can directly author derived state", eventSecurity.GetProperty("exitGate").GetString())
     Assert.Contains("GS2-07.5 inspection", eventSecurity.GetProperty("permissionCeiling").EnumerateArray() |> Seq.item 1 |> _.GetString())
+
+    let mergeGroup = units |> List.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-07.5")
+    Assert.Equal("FS.GG.Coordination", mergeGroup.GetProperty("owner").GetString())
+    Assert.Equal<string list>([ "GS2-07.4" ], mergeGroup.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Equal<string list>([ "Q3" ], mergeGroup.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Equal<string list>([ "github-merge-group-support-contract" ], mergeGroup.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Contains("every aggregate required check runs for merge_group", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("canonical base repository identity, full base ref, exact base SHA", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("re-observes and revalidates current merge-group base identity, base ref, base SHA, and base freshness", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("together with current claim, review, head, dependency, release, and settings authority", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("stale-base, changed-base", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("GS2-07.6 inspection", mergeGroup.GetProperty("permissionCeiling").EnumerateArray() |> Seq.item 1 |> _.GetString())
 
     use acceptedGs2066 =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-06.6.json")))
@@ -1842,7 +1934,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(38, commands.Length)
+    Assert.Equal(39, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -1913,6 +2005,14 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>([ "fsi"; "eng/validate-github-event-security.fsx"; "--"; "." ], eventSecurityCommand.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
     Assert.Equal(eventSecurityCommand.GetProperty("id").GetString(), eventSecurityContract.GetProperty("id").GetString())
     Assert.Equal(gateCommandSha256 eventSecurityCommand, eventSecurityContract.GetProperty("commandSha256").GetString())
+
+    let mergeGroupCommand = commands |> List.find (fun command -> command.GetProperty("id").GetString() = "github-merge-group-support-contract")
+    let mergeGroupUnit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-07.5")
+    let mergeGroupContract = mergeGroupUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
+    Assert.Equal("Q3", mergeGroupCommand.GetProperty("qGate").GetString())
+    Assert.Equal<string list>([ "fsi"; "eng/validate-github-merge-group-support.fsx"; "--"; "." ], mergeGroupCommand.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Equal(mergeGroupCommand.GetProperty("id").GetString(), mergeGroupContract.GetProperty("id").GetString())
+    Assert.Equal(gateCommandSha256 mergeGroupCommand, mergeGroupContract.GetProperty("commandSha256").GetString())
 
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-workflow-selection.fsx"; "--"; "." ],
