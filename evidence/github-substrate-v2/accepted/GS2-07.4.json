@@ -1,0 +1,91 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-07.4",
+  "state": "accepted",
+  "unitContractSha256": "64b16f2d6228fc6a575e9814703671f8fcd2080cfee49f3ee1006eb21a16512a",
+  "sourceRevision": "dc59dd0238d7b0e5af5cbd5b9fd90c2f36bd45b8",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-07.3-receipt",
+      "sha256": "4c6a18a3c8cca8ebd59ce040f63f0192c07f9468ad155e7941f676b0b611719c"
+    },
+    {
+      "name": "owner-item-310",
+      "sha256": "69ee606a5a79e9eb632fcc5e19527222a4de0dd3de0da452185a458f4a3b5988"
+    },
+    {
+      "name": "implementation-pr-311",
+      "sha256": "9a6520d44f57f94e40f883336ea2cf99fc2103392223183b3a8dd8c701d912e9"
+    },
+    {
+      "name": "event-security-contract",
+      "sha256": "91c776eed789ff001db7ecdc842e4815b090dfe012bf7cfc5d28edede55bd69a"
+    },
+    {
+      "name": "event-security-generated-controls",
+      "sha256": "f33a77976c219c77ade82603ac7f5e0c57d02dfac0c0b8dae14e8f466e189b20"
+    },
+    {
+      "name": "event-security-independent-controls",
+      "sha256": "6fc785bf6c708ba6bc1125c7b05e49e9e38569057af3292a09636fc1169aef41"
+    },
+    {
+      "name": "roadmap-work-candidate-manifest",
+      "sha256": "07e59ec644194c73a3c5c69f2e4c0b7f116e971175e623c836e15966dd21cb67"
+    },
+    {
+      "name": "roadmap-work-Q3-gate-results",
+      "sha256": "1f0b43d2efebecd532c3ff2b28eb703555e4e7dffcbf57a6820b767e0fd6a30b"
+    },
+    {
+      "name": "sdd-verify",
+      "sha256": "e67f05761c8261b6cb9849c54496c38376469241af4354f045cf48c09d9d7177"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "6bb0689579a6e5455e5f66a38639a0b950199000e9708b6a793c81ff26f522b2"
+    },
+    {
+      "name": "schema-v3-milestone-critique-PASS",
+      "sha256": "2dc2a920548beda7e05cf387cef3a616d5211362fcf23495256c3680c2db5060"
+    },
+    {
+      "name": "reviewed-head-dc59dd0238d7b0e5af5cbd5b9fd90c2f36bd45b8",
+      "sha256": "d9c762d6955f710ddce9b998b25b6b8f565aa41f50b960663d1e1a021d9ed742"
+    },
+    {
+      "name": "structured-review-pass-5560036607",
+      "sha256": "ad735a7377b082ae6f159dcf05ea047b730d85397772d6353118e0031c66ea5e"
+    },
+    {
+      "name": "structured-review-acceptance-5560075580",
+      "sha256": "330dc4a5af9d891cb8d059d7bf05f851f07a91ea6d2785459aaa77d36439f38f"
+    },
+    {
+      "name": "implementation-merge-f290382850c8698125b296e9dbeb00aa59d392da",
+      "sha256": "fea9e582c5792b79befa23c477db098e93c9e50ff882e7753808000350c32dfe"
+    },
+    {
+      "name": "protected-main-bootstrap-run-34041226277",
+      "sha256": "bea7fc634a8bd53cdaba7d75060e330e225e33057fd20fb433021a59186b4f15"
+    },
+    {
+      "name": "protected-main-codeql-run-34041225895",
+      "sha256": "be12b33953be4d87f372cca5cf1dc9c80d541f45a15265ee4ffac02862faa039"
+    },
+    {
+      "name": "protected-main-evidence-manifest-artifact-9991738778",
+      "sha256": "8420b1fd89a902b9c9af27dbf1f8f7b2522c4997fbf2ad30aa3aecdc49d0e851"
+    },
+    {
+      "name": "protected-main-evidence-manifest-json",
+      "sha256": "705f4cd8a4f6962cb4c008bcf1ee5c5ecc14d7e2eb519d867588681eac983940"
+    },
+    {
+      "name": "completed-lifecycle-frontier-revision-18",
+      "sha256": "15977f3a25961b774f6c93282dd539f488b0d82a0e896ced07ce02140797b12a"
+    }
+  ],
+  "acceptedAt": "2026-09-06T15:18:39Z",
+  "digest": "d2cf3b943fc153047652d73de77bfdcb35fe6a087f414a494eec35542edd2a50"
+}
