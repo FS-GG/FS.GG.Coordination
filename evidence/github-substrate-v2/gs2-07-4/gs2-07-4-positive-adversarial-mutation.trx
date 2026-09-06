@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="c31d658e-2361-4aab-ac10-b5722dc1f679" name="@04f35f7c357d 2026-09-06 16:21:09" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-06T16:21:09.8412173+02:00" queuing="2026-09-06T16:21:09.8412173+02:00" start="2026-09-06T16:21:09.4574099+02:00" finish="2026-09-06T16:21:09.8448569+02:00" />
+  <TestSettings name="default" id="34c659be-a438-48aa-a979-149b107281b7">
+    <Deployment runDeploymentRoot="_04f35f7c357d_2026-09-06_16_21_09" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="04f3bfe1-499f-4807-89df-5e0e670d9b60" testId="6a30d12f-8ae4-3768-c17d-6a0c1e4b08fc" testName="FS.GG.Coordination.GitHubEventSecurityTests.replay window is inclusive and duplicates are rejected" computerName="04f35f7c357d" duration="00:00:00.0007001" startTime="2026-09-06T16:21:09.7859565+02:00" endTime="2026-09-06T16:21:09.7865618+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="04f3bfe1-499f-4807-89df-5e0e670d9b60" />
+    <UnitTestResult executionId="65676ca2-5461-4605-85c4-de016572eff3" testId="fbcd05d2-5736-fecd-b23b-c15b30ecdbcd" testName="FS.GG.Coordination.GitHubEventSecurityTests.valid signed event emits only a reconciliation schedule" computerName="04f35f7c357d" duration="00:00:00.0029105" startTime="2026-09-06T16:21:09.7829265+02:00" endTime="2026-09-06T16:21:09.7858230+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="65676ca2-5461-4605-85c4-de016572eff3" />
+    <UnitTestResult executionId="4221d285-3015-4f97-9827-69da049e58e5" testId="1d79664a-7223-e8e5-aeeb-3385e5dff079" testName="FS.GG.Coordination.GitHubEventSecurityTests.payload and API authority must agree exactly" computerName="04f35f7c357d" duration="00:00:00.0002718" startTime="2026-09-06T16:21:09.7873043+02:00" endTime="2026-09-06T16:21:09.7875198+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4221d285-3015-4f97-9827-69da049e58e5" />
+    <UnitTestResult executionId="3569f2dd-2ab5-417e-bdb0-eca0f1aab472" testId="6a8b8a9e-5f3d-dde7-e824-ebbfeab7fc6d" testName="FS.GG.Coordination.GitHubEventSecurityTests.signature authenticates exact raw bytes and canonical header" computerName="04f35f7c357d" duration="00:00:00.0004407" startTime="2026-09-06T16:21:09.7823219+02:00" endTime="2026-09-06T16:21:09.7826901+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3569f2dd-2ab5-417e-bdb0-eca0f1aab472" />
+    <UnitTestResult executionId="c21f15d5-6785-400e-9317-39cee619bf9e" testId="f3159d19-bf51-0f8e-20cb-907fcca69447" testName="FS.GG.Coordination.GitHubEventSecurityTests.least privilege is exact and canonical" computerName="04f35f7c357d" duration="00:00:00.0006333" startTime="2026-09-06T16:21:09.7866712+02:00" endTime="2026-09-06T16:21:09.7872205+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c21f15d5-6785-400e-9317-39cee619bf9e" />
+    <UnitTestResult executionId="d016de86-7fc3-4c22-8d76-f237c8b97c67" testId="7bd622e3-2edb-8fb8-4a54-ff0d19a05000" testName="FS.GG.Coordination.GitHubEventSecurityTests.direct derived write is refused" computerName="04f35f7c357d" duration="00:00:00.0001803" startTime="2026-09-06T16:21:09.7827887+02:00" endTime="2026-09-06T16:21:09.7828539+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d016de86-7fc3-4c22-8d76-f237c8b97c67" />
+    <UnitTestResult executionId="d9aea2c9-f16c-49c4-8bef-a86afcb3e3e9" testId="b9c1485e-e06b-f6a0-ad83-6ed5ae465576" testName="FS.GG.Coordination.GitHubEventSecurityTests.seal canonical serialization and replay fail closed" computerName="04f35f7c357d" duration="00:00:00.0156707" startTime="2026-09-06T16:21:09.7717664+02:00" endTime="2026-09-06T16:21:09.7816365+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d9aea2c9-f16c-49c4-8bef-a86afcb3e3e9" />
+    <UnitTestResult executionId="88b77447-d68d-4060-90cf-3701969d3001" testId="040a0490-d78d-46e5-b2d8-83bcfeaeec54" testName="FS.GG.Coordination.GitHubEventSecurityTests.installation and repository scopes are exact" computerName="04f35f7c357d" duration="00:00:00.0005597" startTime="2026-09-06T16:21:09.7821433+02:00" endTime="2026-09-06T16:21:09.7821946+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="88b77447-d68d-4060-90cf-3701969d3001" />
+    <UnitTestResult executionId="259b4867-eb94-48b6-860d-2c2fbcbcf48e" testId="8bef4cf0-89cd-f505-0502-b576b5590e1e" testName="FS.GG.Coordination.GitHubEventSecurityTests.control inventory mutation is detected" computerName="04f35f7c357d" duration="00:00:00.0133678" startTime="2026-09-06T16:21:09.7489465+02:00" endTime="2026-09-06T16:21:09.7659970+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="259b4867-eb94-48b6-860d-2c2fbcbcf48e" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.valid signed event emits only a reconciliation schedule" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="fbcd05d2-5736-fecd-b23b-c15b30ecdbcd">
+      <Execution id="65676ca2-5461-4605-85c4-de016572eff3" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="valid signed event emits only a reconciliation schedule" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.direct derived write is refused" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="7bd622e3-2edb-8fb8-4a54-ff0d19a05000">
+      <Execution id="d016de86-7fc3-4c22-8d76-f237c8b97c67" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="direct derived write is refused" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.seal canonical serialization and replay fail closed" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="b9c1485e-e06b-f6a0-ad83-6ed5ae465576">
+      <Execution id="d9aea2c9-f16c-49c4-8bef-a86afcb3e3e9" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="seal canonical serialization and replay fail closed" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.replay window is inclusive and duplicates are rejected" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="6a30d12f-8ae4-3768-c17d-6a0c1e4b08fc">
+      <Execution id="04f3bfe1-499f-4807-89df-5e0e670d9b60" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="replay window is inclusive and duplicates are rejected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.control inventory mutation is detected" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="8bef4cf0-89cd-f505-0502-b576b5590e1e">
+      <Execution id="259b4867-eb94-48b6-860d-2c2fbcbcf48e" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="control inventory mutation is detected" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.least privilege is exact and canonical" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="f3159d19-bf51-0f8e-20cb-907fcca69447">
+      <Execution id="c21f15d5-6785-400e-9317-39cee619bf9e" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="least privilege is exact and canonical" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.payload and API authority must agree exactly" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="1d79664a-7223-e8e5-aeeb-3385e5dff079">
+      <Execution id="4221d285-3015-4f97-9827-69da049e58e5" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="payload and API authority must agree exactly" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.signature authenticates exact raw bytes and canonical header" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="6a8b8a9e-5f3d-dde7-e824-ebbfeab7fc6d">
+      <Execution id="3569f2dd-2ab5-417e-bdb0-eca0f1aab472" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="signature authenticates exact raw bytes and canonical header" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubEventSecurityTests.installation and repository scopes are exact" storage="/home/developer/projects/fs.gg.coordination-gs2074.ynfif3/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="040a0490-d78d-46e5-b2d8-83bcfeaeec54">
+      <Execution id="88b77447-d68d-4060-90cf-3701969d3001" />
+      <TestMethod codeBase="/home/developer/projects/FS.GG.Coordination-gs2074.yNfIF3/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubEventSecurityTests" name="installation and repository scopes are exact" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="6a30d12f-8ae4-3768-c17d-6a0c1e4b08fc" executionId="04f3bfe1-499f-4807-89df-5e0e670d9b60" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fbcd05d2-5736-fecd-b23b-c15b30ecdbcd" executionId="65676ca2-5461-4605-85c4-de016572eff3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1d79664a-7223-e8e5-aeeb-3385e5dff079" executionId="4221d285-3015-4f97-9827-69da049e58e5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6a8b8a9e-5f3d-dde7-e824-ebbfeab7fc6d" executionId="3569f2dd-2ab5-417e-bdb0-eca0f1aab472" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f3159d19-bf51-0f8e-20cb-907fcca69447" executionId="c21f15d5-6785-400e-9317-39cee619bf9e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7bd622e3-2edb-8fb8-4a54-ff0d19a05000" executionId="d016de86-7fc3-4c22-8d76-f237c8b97c67" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b9c1485e-e06b-f6a0-ad83-6ed5ae465576" executionId="d9aea2c9-f16c-49c4-8bef-a86afcb3e3e9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="040a0490-d78d-46e5-b2d8-83bcfeaeec54" executionId="88b77447-d68d-4060-90cf-3701969d3001" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8bef4cf0-89cd-f505-0502-b576b5590e1e" executionId="259b4867-eb94-48b6-860d-2c2fbcbcf48e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="9" executed="9" passed="9" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.08]   Discovered:  FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.10]   Starting:    FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.15]   Finished:    FS.GG.Coordination.UnitTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
