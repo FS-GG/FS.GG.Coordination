@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/313-gs2-07-5-registration/spec.md sha256:10329dd29c5e0bde54347f2e9a606c8411d712f62fa17883f02dcc10396f49ac schemaVersion:1
+- spec: work/313-gs2-07-5-registration/spec.md sha256:6983e91996daaa922e8aa06b8b0fd0904b78fc2c7530a24b59cd08878f25daff schemaVersion:1
 - clarifications: work/313-gs2-07-5-registration/clarifications.md sha256:9c2e2779e1d06578e63af34aa6a25b18d566fa689e1553a16e40d2aed9445774 schemaVersion:1
-- checklist: work/313-gs2-07-5-registration/checklist.md sha256:bc83d509f68e0f1910c434244d29e54e831f57c78e0b01388078b1124c363151 schemaVersion:1
+- checklist: work/313-gs2-07-5-registration/checklist.md sha256:0e920300d0d4be846d9a885be5b9a21afffc0a8a4522396a181ab2692187eb94 schemaVersion:1
 
 ## Plan Scope
 - Work item 313-gs2-07-5-registration is planned from the current specification, clarification, and checklist facts.
@@ -28,9 +28,9 @@ Prose status: planned
 
 ## Plan Decisions
 - PD-001 [AC-001] [FR-001] complete: Replace only the roadmap revision and digest with the exact accepted `.github` source bytes.
-- PD-002 [AC-001] [FR-002] complete: Append one GS2-07.5 unit record, compute its canonical contract digest after freezing its authority contract, and preserve all prior records byte-for-byte.
-- PD-003 [AC-001] [FR-003] complete: Append one Q3 merge-group-support command and bind its executable-plus-argument identity without adding or executing the future validator.
-- PD-004 [AC-002] [FR-004] complete: Extend architecture coverage with independent roadmap, index, selected-command identity, and selected-catalog-byte mutations and require every control to fail before gate execution.
+- PD-002 [AC-001] [FR-002] complete: Append one GS2-07.5 unit record, seal canonical merge-group base repository identity, full ref, exact SHA, observation revision and freshness facts into its authority contract, compute the canonical contract digest, and preserve all prior records byte-for-byte.
+- PD-003 [AC-001] [FR-003] complete: Append one Q3 merge-group-support command, bind its unchanged executable-plus-argument identity without adding or executing the future validator, and require every merge-group evaluation to re-observe and revalidate the current base with the other temporal authorities.
+- PD-004 [AC-002] [FR-004] complete: Extend architecture coverage with independent roadmap, index, selected-command, selected-catalog, missing-base-fact, stale-base, and changed-base mutations and require every control to fail before gate execution.
 - PD-005 [AC-002] [FR-005] complete: Prove only GS2-07.5 is newly admitted, reject production-capable command surfaces, and cite the inherited permanent telemetry process without changing its implementation.
 
 ## Contract Impact

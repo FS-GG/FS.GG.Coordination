@@ -315,12 +315,16 @@ GS2-07.5 is registered against `.github` roadmap commit
 `da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a`.
 Its sole prerequisite is the accepted GS2-07.4 receipt. The Q3
 `github-merge-group-support-contract` identity reserves repository-local proof
-that every aggregate required check runs for `merge_group` and that each
-evaluation revalidates current claim, accepted review, candidate head,
+that every aggregate required check runs for `merge_group`. Its sealed authority
+also binds the canonical base repository identity, full base ref, exact base SHA,
+base-observation revision, observed-at time, and freshness deadline. Each
+evaluation must re-observe and revalidate current base identity/ref/SHA and base
+freshness together with current claim, accepted review, candidate head,
 dependency receipts, release obligations, and repository settings. The future
-implementation must fail closed when any required check or temporal authority
-is missing, incomplete, failed, or stale rather than carrying pull-request-time
-approval into the merge group. This registration creates or executes no
+implementation must explicitly refuse missing or malformed base facts and stale
+or changed bases, as well as any missing, incomplete, failed, or stale required
+check or temporal authority, rather than carrying pull-request-time approval
+into the merge group. This registration creates or executes no
 validator, merge queue, workflow publication, network call, production queue,
 settings mutation, release, acceptance receipt, or GS2-07.6 work.
 

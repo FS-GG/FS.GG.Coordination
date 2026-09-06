@@ -11,11 +11,11 @@ sourceAnalysis: readiness/313-gs2-07-5-registration/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/313-gs2-07-5-registration/analysis.json
-    digest: 7efee5c0d5e67d5a23c7cd20aa8e566d562dca257df0b7686bd17c592c941d5b
+    digest: c1ea0d2448548425cbbf130ad03efc729b5263b1935c383adc56127cc3a85999
     schemaVersion: 1
   - label: checklist
     path: work/313-gs2-07-5-registration/checklist.md
-    digest: bc83d509f68e0f1910c434244d29e54e831f57c78e0b01388078b1124c363151
+    digest: 0e920300d0d4be846d9a885be5b9a21afffc0a8a4522396a181ab2692187eb94
     schemaVersion: 1
   - label: clarifications
     path: work/313-gs2-07-5-registration/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/313-gs2-07-5-registration/plan.md
-    digest: cc08834117f29f7d6a4040b7ef46b194ec5ebcb8159b29fe22dcfac042ecaf53
+    digest: e5af4fadfffbbf8938a9f72fa786c9155e520ad0f5599e07679f07ef7023e073
     schemaVersion: 1
   - label: spec
     path: work/313-gs2-07-5-registration/spec.md
-    digest: 10329dd29c5e0bde54347f2e9a606c8411d712f62fa17883f02dcc10396f49ac
+    digest: 6983e91996daaa922e8aa06b8b0fd0904b78fc2c7530a24b59cd08878f25daff
     schemaVersion: 1
   - label: tasks
     path: work/313-gs2-07-5-registration/tasks.yml
-    digest: cf6dc6596ad89cee31cd9d80cd568c0d093324734ec4e514d2b59fa674bfc4cb
+    digest: b0ba105e99843caefe7f7a7978e0f3e10a34ccf000e46d4387dd750ddca25290
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/313-gs2-07-5-registration/test-results/registration-focused.trx
-      digest: "sha256:057783c055ba31d62ac4b5e95340ac10f5ec40d378af14fae706161790155bae"
+      digest: "sha256:2e61a4f7994aca7ea619d1dcf59fba10ef04c3d72a0cb204ba4f1453c5369113"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 37
+      passed: 38
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]

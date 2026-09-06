@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/313-gs2-07-5-registration/clarifications.md
 
 ## Source Snapshot
-- spec: work/313-gs2-07-5-registration/spec.md sha256:10329dd29c5e0bde54347f2e9a606c8411d712f62fa17883f02dcc10396f49ac schemaVersion:1
+- spec: work/313-gs2-07-5-registration/spec.md sha256:6983e91996daaa922e8aa06b8b0fd0904b78fc2c7530a24b59cd08878f25daff schemaVersion:1
 - clarifications: work/313-gs2-07-5-registration/clarifications.md sha256:9c2e2779e1d06578e63af34aa6a25b18d566fa689e1553a16e40d2aed9445774 schemaVersion:1
 
 ## Checklist Items

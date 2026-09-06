@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/313-gs2-07-5-registration/spec.md
-    digest: 10329dd29c5e0bde54347f2e9a606c8411d712f62fa17883f02dcc10396f49ac
+    digest: 6983e91996daaa922e8aa06b8b0fd0904b78fc2c7530a24b59cd08878f25daff
     schemaVersion: 1
   - label: clarifications
     path: work/313-gs2-07-5-registration/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/313-gs2-07-5-registration/checklist.md
-    digest: bc83d509f68e0f1910c434244d29e54e831f57c78e0b01388078b1124c363151
+    digest: 0e920300d0d4be846d9a885be5b9a21afffc0a8a4522396a181ab2692187eb94
     schemaVersion: 1
   - label: plan
     path: work/313-gs2-07-5-registration/plan.md
-    digest: cc08834117f29f7d6a4040b7ef46b194ec5ebcb8159b29fe22dcfac042ecaf53
+    digest: e5af4fadfffbbf8938a9f72fa786c9155e520ad0f5599e07679f07ef7023e073
     schemaVersion: 1
 tasks:
   - id: T001

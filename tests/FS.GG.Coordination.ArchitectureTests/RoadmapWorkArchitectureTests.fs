@@ -187,6 +187,21 @@ let private gs2075GateCatalogAgrees (indexText: string) (catalogText: string) =
     command.GetProperty("qGate").GetString() = contract.GetProperty("qGate").GetString()
     && gateCommandSha256 command = contract.GetProperty("commandSha256").GetString()
 
+let private hasExactGs2075BaseFreshnessContract (indexText: string) =
+    use index = JsonDocument.Parse(indexText)
+    let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.5")
+    let ceiling = unit.GetProperty("permissionCeiling").EnumerateArray() |> Seq.head |> _.GetString()
+    let exitGate = unit.GetProperty("exitGate").GetString()
+    ceiling.Contains("merge-group base identity/ref/SHA", StringComparison.Ordinal)
+    && exitGate.Contains("canonical base repository identity, full base ref, exact base SHA, base-observation revision, observed-at, and freshness deadline", StringComparison.Ordinal)
+    && exitGate.Contains("re-observes and revalidates current merge-group base identity, base ref, base SHA, and base freshness", StringComparison.Ordinal)
+    && exitGate.Contains("missing-base-identity", StringComparison.Ordinal)
+    && exitGate.Contains("malformed-base-ref", StringComparison.Ordinal)
+    && exitGate.Contains("missing-base-sha", StringComparison.Ordinal)
+    && exitGate.Contains("stale-base", StringComparison.Ordinal)
+    && exitGate.Contains("changed-base", StringComparison.Ordinal)
+    && exitGate.Contains("base-observation-revision, base-freshness, changed-base", StringComparison.Ordinal)
+
 let private hasClosedStagedIntakeVocabulary (source: string) =
     let lines = source.Replace("\r", "", StringComparison.Ordinal).Split('\n') |> Set.ofArray
     lines.Contains "type CaptureAuthorityRead = IssueIdentity | NativeTypeAndFields | ProjectMembership | Relations | RepositoryScope | ProtocolState"
@@ -583,6 +598,25 @@ let ``GS2-07-5 authority and gate identity refuse stale or altered inputs`` () =
     Assert.False(gs2075GateCatalogAgrees indexText mismatchedCatalog)
 
 [<Fact>]
+let ``GS2-07-5 base identity and freshness contract refuses adversarial omissions`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    Assert.True(hasExactGs2075BaseFreshnessContract indexText)
+
+    let mutations =
+        [ "canonical base repository identity", "base repository identity"
+          "full base ref", "base ref"
+          "exact base SHA", "base SHA"
+          "base-observation revision", "base observation"
+          "observed-at, and freshness deadline", "observation time"
+          "stale-base", "stale-authority"
+          "changed-base", "conflicting-group" ]
+
+    for original, replacement in mutations do
+        let mutated = indexText.Replace(original, replacement, StringComparison.Ordinal)
+        Assert.NotEqual(indexText, mutated)
+        Assert.False(hasExactGs2075BaseFreshnessContract mutated)
+
+[<Fact>]
 let ``GS2-07-5 registration grants no successor or production mutation authority`` () =
     use index = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
     let units = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
@@ -766,7 +800,10 @@ let ``roadmap unit index advances through GS2-07-5 merge group support`` () =
     Assert.Equal<string list>([ "Q3" ], mergeGroup.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
     Assert.Equal<string list>([ "github-merge-group-support-contract" ], mergeGroup.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
     Assert.Contains("every aggregate required check runs for merge_group", mergeGroup.GetProperty("exitGate").GetString())
-    Assert.Contains("revalidates current claim, review, head, dependency, release, and settings authority", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("canonical base repository identity, full base ref, exact base SHA", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("re-observes and revalidates current merge-group base identity, base ref, base SHA, and base freshness", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("together with current claim, review, head, dependency, release, and settings authority", mergeGroup.GetProperty("exitGate").GetString())
+    Assert.Contains("stale-base, changed-base", mergeGroup.GetProperty("exitGate").GetString())
     Assert.Contains("GS2-07.6 inspection", mergeGroup.GetProperty("permissionCeiling").EnumerateArray() |> Seq.item 1 |> _.GetString())
 
     use acceptedGs2066 =

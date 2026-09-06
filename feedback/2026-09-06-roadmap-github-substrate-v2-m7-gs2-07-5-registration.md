@@ -11,27 +11,27 @@ commit: c460923ccef2f6ef30d9457967e717bec0e084ed
 ## §1 Provenance and confidence
 
 - **activation:** active
-- **phases:** onboarding-first-build, lifecycle-authoring, implementation-test-evidence
+- **phases:** onboarding-first-build, lifecycle-authoring, implementation-test-evidence, independent-critique, repair-round-1
 - **material events:** 0
-- **zero-event reason:** `fs-gg-feedback-report` is not materialized in the Coordination product tree; every in-scope pre-critique registration phase was exercised, no substitute checkpoint tool was used, and the recurring scaffold gap remains deduplicated to [FS-GG/.github#2366](https://github.com/FS-GG/.github/issues/2366).
+- **zero-event reason:** `fs-gg-feedback-report` is not materialized in the Coordination product tree; every in-scope registration, critique, and repair phase was exercised, no substitute checkpoint tool was used, and the recurring scaffold gap remains deduplicated to [FS-GG/.github#2366](https://github.com/FS-GG/.github/issues/2366).
 
-This report covers issue #313's registration-only SDD and pre-critique candidate verification. Confidence is limited to the exact Git, roadmap, receipt, test, SDD, and lifecycle identities cited by the issue and candidate tree.
+This report covers issue #313's registration-only SDD, initial independent critique, and first repair candidate verification. Confidence is limited to the exact Git, roadmap, receipt, test, SDD, critique, and lifecycle identities cited by the issue and candidate tree.
 
 ## §2 What worked
 
-The exact accepted roadmap pin and GS2-07.4 receipt made GS2-07.5 inspectable and dependency-ready without granting implementation authority. Exact inspect returned the registered merge-group contract, prerequisites returned `ready:true`, and focused RoadmapWork architecture coverage passed 37/37 with direct mutations of the roadmap, authority pin, selected command, and selected catalog bytes.
+The exact accepted roadmap pin and GS2-07.4 receipt made GS2-07.5 inspectable and dependency-ready without granting implementation authority. The repair now seals canonical base repository identity, full ref, exact SHA, observation revision, observed-at time, and freshness deadline; every merge-group evaluation must re-observe and revalidate those facts. Exact inspect returned the repaired contract, prerequisites returned `ready:true`, and focused RoadmapWork architecture coverage passed 38/38 with direct roadmap, authority, command, catalog, missing-base-fact, stale-base, and changed-base mutations.
 
 ## §3 What did not
 
-The first focused run passed 36/37 because the prior GS2-07.4 registration regression still asserted that GS2-07.5 was absent. The assertion was correctly narrowed to preserve GS2-07.4's production-mutation ceiling after its now-authorized successor registration; the rerun passed 37/37.
+The initial candidate omitted exact merge-group base identity/ref/SHA and base freshness from the sealed authority, producing critic major finding `REG-C01`. Repair round 1 adds those facts and explicit stale/changed-base refusals without changing the future gate invocation. Its first focused run used an intermediate unit digest and correctly failed 33/38 at the canonical digest guard; after inserting the exact recomputed digest, the rerun passed 38/38.
 
 ## §4 Findings
 
-No checkpoint-backed development-feedback finding was created because the feedback skill is absent. The missing skill remains deduplicated to [FS-GG/.github#2366](https://github.com/FS-GG/.github/issues/2366). Product critique is intentionally outside this bounded invocation and remains the next lifecycle boundary.
+Independent critique recorded major finding `REG-C01`, exact merge-group base authority omitted. Repair round 1 closes it in the candidate contract and adversarial coverage; independent critic confirmation remains the next boundary. No checkpoint-backed development-feedback finding was created because the feedback skill is absent. The missing skill remains deduplicated to [FS-GG/.github#2366](https://github.com/FS-GG/.github/issues/2366).
 
 ## §5 Did not exercise
 
-No merge-group-support validator, merge queue, workflow publication, webhook, network route, production queue, settings mutation, release, acceptance receipt, or GS2-07.6 authority was implemented or executed. No critic, PR, merge, or protected-main transition belongs to this pre-critique registration invocation.
+No merge-group-support validator, merge queue, workflow publication, webhook, network route, production queue, settings mutation, release, acceptance receipt, or GS2-07.6 authority was implemented or executed. Critic confirmation, PR, merge, and protected-main transition remain outside this repair invocation.
 
 ## §6 Doc-versus-behavior contradictions
 
@@ -47,7 +47,7 @@ The pre-existing GS2-07.4 absence assertion encoded the registration frontier ra
 
 ## §9 Skill value and gaps
 
-`work-roadmap`, `github-substrate-v2-work`, and the SDD lifecycle preserved exact authority, bounded scope, immutable command identity, negative controls, and the pre-critique stop boundary. The absent feedback skill is the sole activation gap.
+`work-roadmap`, `github-substrate-v2-work`, and the SDD lifecycle preserved exact authority, bounded scope, immutable command identity, negative controls, and the post-repair pre-confirmation stop boundary. The absent feedback skill is the sole activation gap.
 
 ## §10 Outcome markers
 
@@ -55,7 +55,7 @@ The pre-existing GS2-07.4 absence assertion encoded the registration frontier ra
 - Base commit: `c460923ccef2f6ef30d9457967e717bec0e084ed`.
 - Roadmap authority: revision `64e9a2b7753f438f8ad31298fd17698ff2a142e6`, SHA-256 `da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a`.
 - Accepted prerequisite receipt: GS2-07.4 digest `d2cf3b943fc153047652d73de77bfdcb35fe6a087f414a494eec35542edd2a50`.
-- Registered contract: command `ff20b32c73325e185e6ee072253ceb02b8657ee4f6281652acf187f16a703937`, unit `bd6cd26eed8e151609af54c6f25d19026e9252a9613bf683cb1ca9772385f71c`.
+- Registered contract: unchanged command `ff20b32c73325e185e6ee072253ceb02b8657ee4f6281652acf187f16a703937`, repaired unit `6ad620d58509ce141ee0eda476375b56d610cb150ee4ee089173f339a30ea9f2`.
 
 ## §11 Falsifiable improvements
 
@@ -70,10 +70,10 @@ A fully materialized Coordination scaffold should include the feedback skill twi
 | sdd-authoring | exercised | Full charter-through-ship package is retained in the candidate. |
 | implementation-apis | not-exercised | Registration-only boundary; merge-group support remains future work. |
 | dependencies-build | exercised | Release build and unit result are recorded by the terminal handoff. |
-| testing | exercised | Focused RoadmapWork architecture passed 37/37; proportional full results are recorded by the terminal handoff. |
+| testing | exercised | Focused RoadmapWork architecture passed 38/38; proportional full results are recorded by the terminal handoff. |
 | evidence | exercised | Exact inspect/prerequisites, focused TRX, SDD receipts, and lifecycle start. |
 | runtime-playtest | not-exercised | Non-game unit. |
 | performance | not-exercised | No runtime performance claim. |
 | documentation | exercised | Roadmap-work architecture, SDD, feedback, and issue lifecycle evidence. |
 | packaging-upgrade | not-exercised | No publication or deployment obligation. |
-| worker-git-pr | partial | Fresh worktree and exact candidate commit; critique/PR/delivery are deliberately deferred to the next bounded invocation. |
+| worker-git-pr | partial | Initial independent critique completed; repair candidate commit is local, while critic confirmation/PR/delivery are deliberately deferred to the next bounded invocation. |
