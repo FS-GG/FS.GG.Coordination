@@ -1,0 +1,16 @@
+{
+  "schema": "fsgg.github-merge-group-evidence/v1",
+  "unit": "GS2-07.5",
+  "sourceRevision": "05c6694b1ee64431ecd8f89507d2bad8b087164c",
+  "roadmapRevision": "64e9a2b7753f438f8ad31298fd17698ff2a142e6",
+  "roadmapSha256": "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a",
+  "prerequisiteReceiptDigest": "d2cf3b943fc153047652d73de77bfdcb35fe6a087f414a494eec35542edd2a50",
+  "prerequisiteFileSha256": "aef4b114f71f4226cf619691fc679b75830b4ae3dca6043dd0f5897c7a097ce8",
+  "protocolSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "baseRef": "refs/heads/main",
+  "event": "merge_group:checks_requested",
+  "disposition": "merge-group-qualified",
+  "network": false,
+  "productionMutation": false
+}

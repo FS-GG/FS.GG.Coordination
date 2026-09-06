@@ -1,0 +1,173 @@
+schemaVersion: 1
+workId: 315-gs2-07-5-merge-group-support
+stage: evidence
+status: evidenceReady
+sourceSpec: work/315-gs2-07-5-merge-group-support/spec.md
+sourceClarifications: work/315-gs2-07-5-merge-group-support/clarifications.md
+sourceChecklist: work/315-gs2-07-5-merge-group-support/checklist.md
+sourcePlan: work/315-gs2-07-5-merge-group-support/plan.md
+sourceTasks: work/315-gs2-07-5-merge-group-support/tasks.yml
+sourceAnalysis: readiness/315-gs2-07-5-merge-group-support/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/315-gs2-07-5-merge-group-support/analysis.json
+    digest: 7f940ad11ca1c7f4f53cb37f830f47e38e203c07feb945ad173ea440056070d8
+    schemaVersion: 1
+  - label: checklist
+    path: work/315-gs2-07-5-merge-group-support/checklist.md
+    digest: 3a9faeae44261613a916268623c1dff95162f56a5f253fc13b2554098353e4a7
+    schemaVersion: 1
+  - label: clarifications
+    path: work/315-gs2-07-5-merge-group-support/clarifications.md
+    digest: 1ab4539924ef2f65c8fe15ce721ffe2e0de9cda420dd65df6bc5efcd2b1aeed6
+    schemaVersion: 1
+  - label: plan
+    path: work/315-gs2-07-5-merge-group-support/plan.md
+    digest: 789ecb00b3678b0607041e92c8833046548e96518a4725ac471bb0dde09bae1b
+    schemaVersion: 1
+  - label: spec
+    path: work/315-gs2-07-5-merge-group-support/spec.md
+    digest: e7a483c90e13ef50ebb8364341044d7cae7c92a0accfa151b704ab5c7c3d4701
+    schemaVersion: 1
+  - label: tasks
+    path: work/315-gs2-07-5-merge-group-support/tasks.yml
+    digest: 91e230272963b7582465e5195452cdba3f7d747494ae4a7f6e0b38efcd0bb91e
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubMergeGroupTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-5/unit-tests.trx
+      digest: "sha256:5ded49e0b25f01f95af6c99d700c2c4641824a9583d8dd2eb37c68d4d62849b0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 244
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubMergeGroupTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-5/unit-tests.trx
+      digest: "sha256:5ded49e0b25f01f95af6c99d700c2c4641824a9583d8dd2eb37c68d4d62849b0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 244
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubMergeGroupTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-5/unit-tests.trx
+      digest: "sha256:5ded49e0b25f01f95af6c99d700c2c4641824a9583d8dd2eb37c68d4d62849b0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 244
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubMergeGroupTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-5/unit-tests.trx
+      digest: "sha256:5ded49e0b25f01f95af6c99d700c2c4641824a9583d8dd2eb37c68d4d62849b0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 244
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubMergeGroupTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-5/unit-tests.trx
+      digest: "sha256:5ded49e0b25f01f95af6c99d700c2c4641824a9583d8dd2eb37c68d4d62849b0"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 244
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

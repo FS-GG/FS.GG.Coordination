@@ -69,6 +69,8 @@
     <Compile Include="GitHubAuditRepairQualification.fs" />
     <Compile Include="GitHubEventSecurityQualification.fsi" />
     <Compile Include="GitHubEventSecurityQualification.fs" />
+    <Compile Include="GitHubMergeGroupQualification.fsi" />
+    <Compile Include="GitHubMergeGroupQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />
