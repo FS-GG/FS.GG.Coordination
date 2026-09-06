@@ -25,9 +25,11 @@ The pure contract binds exact merge-group identity; observed and current base re
 
 The first full architecture run was diagnostic because the candidate checkout was dirty. The supply-chain reproducibility test correctly refused packaging from that state; the candidate must be committed and clean before its qualifying rerun.
 
+The first independent critique also found three real gaps: ignored SDD readiness inputs made verification non-portable to a fresh checkout; public verification trusted a correctly recomputed seal without revalidating all plan semantics; and base repository/ref plus aggregate check-result authority were not fully re-observed and sealed. Repair round 1 tracks the complete SDD provider set, performs full semantic verification before seal acceptance, separates observed/current base identity and expected/observed check inventories, and seals every result row.
+
 ## §4 Findings
 
-No development-feedback finding was created. The feedback skill absence remains deduplicated to `.github#2366`; product review findings belong only in the later independent schema-v3 critique artifact.
+Independent findings `GS2075-C01`, `GS2075-C02`, and `GS2075-C03` drove repair round 1. Their final disposition remains owned by critic confirmation. The feedback skill absence remains deduplicated to `.github#2366`.
 
 ## §5 Did not exercise
 
