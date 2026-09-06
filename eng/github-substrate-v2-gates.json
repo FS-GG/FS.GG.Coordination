@@ -222,6 +222,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-audit-repair.fsx", "--", "."]
+    },
+    {
+      "id": "github-event-security-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-event-security.fsx", "--", "."]
     }
   ]
 }

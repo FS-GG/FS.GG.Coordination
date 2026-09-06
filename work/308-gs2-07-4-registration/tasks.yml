@@ -1,0 +1,126 @@
+schemaVersion: 1
+work:
+  id: 308-gs2-07-4-registration
+  title: "Gs2 07 4 Registration"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/308-gs2-07-4-registration/spec.md
+  sourceClarifications: work/308-gs2-07-4-registration/clarifications.md
+  sourceChecklist: work/308-gs2-07-4-registration/checklist.md
+  sourcePlan: work/308-gs2-07-4-registration/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/308-gs2-07-4-registration/spec.md
+    digest: dfc6abce8068928a1c423d4b07c197845852fa888756db89beda08101b9107f3
+    schemaVersion: 1
+  - label: clarifications
+    path: work/308-gs2-07-4-registration/clarifications.md
+    digest: a6a91b3dd9e9f21ddda91a307150f5a19451b7243d9e1354d5d1d3c3003918e7
+    schemaVersion: 1
+  - label: checklist
+    path: work/308-gs2-07-4-registration/checklist.md
+    digest: d58f6dff4b4317bbbfde9006eda9d0d9a156b898560acc09a3940fe98d4c7404
+    schemaVersion: 1
+  - label: plan
+    path: work/308-gs2-07-4-registration/plan.md
+    digest: 29d5e2f089ad2ae80c1b6655ebe7542c0ec75badbf920155e4748a16c5faa98e
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-002, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-002, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, PD-005, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-002, PD-003]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV009]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 308-gs2-07-4-registration."
