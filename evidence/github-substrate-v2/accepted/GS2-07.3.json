@@ -1,0 +1,71 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-07.3",
+  "state": "accepted",
+  "unitContractSha256": "d6af16fa0323b7ccbacee27e8114e4975d0976429ed409d48eb4981a5fb1c003",
+  "sourceRevision": "0e07d58820c5480efb0c20901f361cf0ddba5dc9",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-07.2-receipt",
+      "sha256": "6ae56a7c9dce52f3ac25e39145b275ed5e8127a1020ee8c65a392b976661c298"
+    },
+    {
+      "name": "audit-repair-contract",
+      "sha256": "229a5e06928513086ef2fbd7af6e044f29346dc1f1746359afb14c7e0738a82f"
+    },
+    {
+      "name": "audit-repair-generated-controls",
+      "sha256": "d2f68ed93beef2211af9535a6a382d57523e913b61d65ac3257140e5d6602a4b"
+    },
+    {
+      "name": "audit-repair-independent-controls",
+      "sha256": "4012b34794a5df991a5bd83061a9f5d0b61d8d27108a18303bd7cf5f4acb0fa0"
+    },
+    {
+      "name": "audit-repair-q3-gate",
+      "sha256": "5294677e4f25973c46c1c9d7201f0fd30f0d5061fd867a325ee7360642354506"
+    },
+    {
+      "name": "sdd-verify",
+      "sha256": "82e15e1234acd076747990862baebd584b73f63cafd87fc1c49543fdd6b38b3a"
+    },
+    {
+      "name": "sdd-ship-verdict",
+      "sha256": "e3b27f64dc8bb664c061c7c972d90b9f4eeedd902d83ae8865b9606441de0c05"
+    },
+    {
+      "name": "schema-v3-milestone-critique",
+      "sha256": "a9562fe4ecc449c7b241c84ee00f70030e3d536fe24f9ca021c52774439809a1"
+    },
+    {
+      "name": "implementation-candidate-0e07d58820c5480efb0c20901f361cf0ddba5dc9",
+      "sha256": "d4ef53acb015d0057898759c4c8a72b034c9a11a53e757d420e16c516bb1c6cc"
+    },
+    {
+      "name": "structured-review-pass-5553832850",
+      "sha256": "846a4a5c12c74d4def4c221a562d08a67dc24490bb4c32f7c4ecb8e25add2da3"
+    },
+    {
+      "name": "structured-review-acceptance-5553863708",
+      "sha256": "2062b9a55fc06a08788dd7e1366aacba176ff1a90ed8641b30a9acc719a0cc87"
+    },
+    {
+      "name": "implementation-merge-3e81b5df1ffc87c9dcad42e30733bb36073c3a57",
+      "sha256": "5f2582894777b19fc98e116bdc64c46a5113fa1e14a021a6257b6070a24f2b1e"
+    },
+    {
+      "name": "protected-main-codeql-run-33983946453",
+      "sha256": "707b6320bf65a224c9fd5241591d9ac8c263089b32445b43cd853b46983595c3"
+    },
+    {
+      "name": "protected-main-bootstrap-run-33983946470",
+      "sha256": "805e56e3285d3ebbcd837ad00ef4c07a28292d80ea4e7ee587e2ab5d9893b718"
+    },
+    {
+      "name": "roadmap-acceptance-evidence-5556437026",
+      "sha256": "d2f1233cdab17717584f1fefa38a2419e6658716196bb8ef0d336b376d1b4148"
+    }
+  ],
+  "acceptedAt": "2026-09-06T03:09:14Z",
+  "digest": "bb8fbae5ca53ab25038fdf26f99f16f930e944434fe156e2ec22e441294537e2"
+}
