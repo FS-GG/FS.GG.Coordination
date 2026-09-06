@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/315-gs2-07-5-merge-group-support/spec.md
-    digest: e7a483c90e13ef50ebb8364341044d7cae7c92a0accfa151b704ab5c7c3d4701
+    digest: ce856456e0c9bd779607d3c961a5d8000b0972787624ac6ae7ae7e31b1d966ab
     schemaVersion: 1
   - label: clarifications
     path: work/315-gs2-07-5-merge-group-support/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/315-gs2-07-5-merge-group-support/checklist.md
-    digest: 3a9faeae44261613a916268623c1dff95162f56a5f253fc13b2554098353e4a7
+    digest: 13d00b3142ba33ba7ad16078795126749b1bf4821de51583f4fc9b2954570c18
     schemaVersion: 1
   - label: plan
     path: work/315-gs2-07-5-merge-group-support/plan.md
-    digest: 789ecb00b3678b0607041e92c8833046548e96518a4725ac471bb0dde09bae1b
+    digest: 7c108f96bc0155d175355d3099937640787634a49e0c8f8a57996bf711851677
     schemaVersion: 1
 tasks:
   - id: T001

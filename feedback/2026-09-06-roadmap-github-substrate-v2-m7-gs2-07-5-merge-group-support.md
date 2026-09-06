@@ -19,7 +19,7 @@ This report covers issue #315's merge-group SDD, implementation, and candidate q
 
 ## §2 What worked
 
-The pure contract binds exact merge-group and base identity, full base ref, current base SHA and freshness, complete aggregate checks, and current claim/review/head/dependency/release/settings authority into one deterministic sealed decision. Generated and independent control paths remain distinct.
+The pure contract binds exact merge-group identity; observed and current base repository/ref/SHA/revision; configured and observed required-check inventories; every full check result; freshness; and current claim/review/head/dependency/release/settings authority into one deterministic sealed decision. Public verification repeats semantic validation independently of seal correctness. Generated and independent control paths remain distinct.
 
 ## §3 What did not
 

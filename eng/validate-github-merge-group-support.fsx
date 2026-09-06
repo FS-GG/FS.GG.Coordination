@@ -23,10 +23,11 @@ let digest ch = String.replicate 64 ch
 let checks = [ "architecture"; "unit" ]
 let baselineFacts =
     { EventName = eventName; Repository = "FS-GG/FS.GG.Coordination"; MergeGroupId = "mg-315"; MergeGroupHeadSha = head
-      BaseRepository = "FS-GG/FS.GG.Coordination"; BaseRef = "refs/heads/main"
+      ObservedBaseRepository = "FS-GG/FS.GG.Coordination"; CurrentBaseRepository = "FS-GG/FS.GG.Coordination"
+      ObservedBaseRef = "refs/heads/main"; CurrentBaseRef = "refs/heads/main"
       ObservedBaseSha = baseSha; CurrentBaseSha = baseSha; BaseObservationRevision = 17L; CurrentBaseObservationRevision = 17L
       ObservedAtUnixSeconds = 1000L; FreshUntilUnixSeconds = 1100L; EvaluatedAtUnixSeconds = 1050L
-      RequiredChecks = checks
+      ExpectedRequiredChecks = checks; ObservedRequiredChecks = checks
       CheckResults = checks |> List.map (fun name -> { Name = name; EventName = "merge_group"; HeadSha = head; Conclusion = MergeGroupCheckConclusion.Success })
       ObservedClaimGeneration = 5561468721L; CurrentClaimGeneration = 5561468721L
       ObservedReviewDigest = digest "a"; CurrentReviewDigest = digest "a"; ObservedCandidateHeadSha = head; CurrentCandidateHeadSha = head
@@ -39,6 +40,20 @@ let baseline = compile baselineFacts |> get
 let bytes = serialize baseline
 let sourceText = read "src/FS.GG.Coordination.Qualification.Contracts/GitHubMergeGroupQualification.fs"
 let alterFirst change = { baselineFacts with CheckResults = change baselineFacts.CheckResults.Head :: baselineFacts.CheckResults.Tail }
+let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+let strings values = values |> List.map frame |> String.concat ""
+let conclusion = function MergeGroupCheckConclusion.Success -> "success" | MergeGroupCheckConclusion.Pending -> "pending" | MergeGroupCheckConclusion.Failure -> "failure"
+let reseal (plan: GitHubMergeGroupPlan) =
+    let checkFrame (check: MergeGroupCheckFact) = strings [ check.Name; check.EventName; check.HeadSha; conclusion check.Conclusion ]
+    let payload =
+        [ "github-merge-group/v1"; plan.EventName; plan.Repository; plan.MergeGroupId; plan.MergeGroupHeadSha
+          plan.BaseRepository; plan.BaseRef; plan.BaseSha; string plan.BaseObservationRevision
+          string plan.ObservedAtUnixSeconds; string plan.FreshUntilUnixSeconds; string plan.EvaluatedAtUnixSeconds
+          strings plan.RequiredChecks; strings (plan.CheckResults |> List.map checkFrame); string plan.ClaimGeneration
+          plan.ReviewDigest; plan.CandidateHeadSha; plan.DependencyDigest; string plan.ReleaseObligationsMet
+          plan.SettingsDigest; plan.Disposition ] |> strings
+    let seal = payload |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    { plan with Seal = seal }
 
 let executeGenerated control =
     match control with
@@ -48,8 +63,8 @@ let executeGenerated control =
     | MergeGroupEvent -> compile { baselineFacts with EventName = "merge_group:destroyed" } |> has (GitHubMergeGroupFinding.UnknownEvent "merge_group:destroyed")
     | MergeGroupIdentity -> compile { baselineFacts with MergeGroupId = "" } |> has (GitHubMergeGroupFinding.MissingField "mergeGroupId")
     | MergeGroupHead -> compile { baselineFacts with MergeGroupHeadSha = "bad" } |> has (GitHubMergeGroupFinding.MalformedField "mergeGroupHeadSha")
-    | BaseRepositoryIdentity -> compile { baselineFacts with BaseRepository = "" } |> has (GitHubMergeGroupFinding.MissingField "baseRepository")
-    | BaseRef -> compile { baselineFacts with BaseRef = "main" } |> has (GitHubMergeGroupFinding.MalformedField "baseRef")
+    | BaseRepositoryIdentity -> compile { baselineFacts with CurrentBaseRepository = "FS-GG/Other" } |> has (GitHubMergeGroupFinding.BaseRepositoryChanged("FS-GG/FS.GG.Coordination", "FS-GG/Other"))
+    | BaseRef -> compile { baselineFacts with CurrentBaseRef = "refs/heads/release" } |> has (GitHubMergeGroupFinding.BaseRefChanged("refs/heads/main", "refs/heads/release"))
     | BaseSha -> compile { baselineFacts with ObservedBaseSha = "bad" } |> has (GitHubMergeGroupFinding.MalformedField "observedBaseSha")
     | BaseRevision -> compile { baselineFacts with CurrentBaseObservationRevision = 18L } |> has (GitHubMergeGroupFinding.BaseRevisionChanged(17L, 18L))
     | BaseFreshness -> compile { baselineFacts with EvaluatedAtUnixSeconds = 1101L } |> has (GitHubMergeGroupFinding.BaseObservationStale 1100L)
@@ -68,7 +83,10 @@ let executeGenerated control =
     | ConflictingGroup -> compile { baselineFacts with HasConflictingGroup = true } |> has GitHubMergeGroupFinding.ConflictingGroup
     | DirectMerge -> compile { baselineFacts with AttemptsDirectMerge = true } |> has GitHubMergeGroupFinding.DirectMergeAttempt
     | MergeGroupOrdering -> parse (bytes + " ") = Error [ GitHubMergeGroupFinding.InvalidSerialization "non-canonical bytes" ]
-    | MergeGroupSeal -> verify (digest "0") baseline = Error [ GitHubMergeGroupFinding.AlteredSeal ]
+    | MergeGroupSeal ->
+        let malformed = reseal { baseline with Repository = "" }
+        verify (digest "0") baseline = Error [ GitHubMergeGroupFinding.AlteredSeal ]
+        && verify malformed.Seal malformed |> has (GitHubMergeGroupFinding.MissingField "repository")
     | MergeGroupReplay -> replay baseline baselineFacts = Ok baseline && serialize (replay baseline baselineFacts |> get) = bytes
     | MergeGroupQuintPreservation -> shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" = text "protocolSha256"
     | MergeGroupNoNetwork -> not(Regex.IsMatch(sourceText, "HttpClient|WebRequest", RegexOptions.IgnoreCase))
@@ -82,13 +100,13 @@ let executeIndependent control =
     | MergeGroupEvent -> compile { baselineFacts with EventName = "pull_request:closed" } |> Result.isError
     | MergeGroupIdentity -> compile { baselineFacts with MergeGroupId = " " } |> Result.isError
     | MergeGroupHead -> compile { baselineFacts with MergeGroupHeadSha = String.replicate 40 "A" } |> Result.isError
-    | BaseRepositoryIdentity -> compile { baselineFacts with BaseRepository = "bad repo" } |> Result.isError
-    | BaseRef -> compile { baselineFacts with BaseRef = "refs/pull/1/head" } |> Result.isError
+    | BaseRepositoryIdentity -> compile { baselineFacts with ObservedBaseRepository = "bad repo" } |> Result.isError
+    | BaseRef -> compile { baselineFacts with ObservedBaseRef = "refs/pull/1/head" } |> Result.isError
     | BaseSha -> compile { baselineFacts with CurrentBaseSha = String.replicate 40 "B" } |> Result.isError
     | BaseRevision -> compile { baselineFacts with BaseObservationRevision = 0L } |> Result.isError
     | BaseFreshness -> compile { baselineFacts with EvaluatedAtUnixSeconds = baselineFacts.FreshUntilUnixSeconds + 1L } |> Result.isError
     | BaseChanged -> compile { baselineFacts with ObservedBaseSha = head } |> Result.isError
-    | RequiredCheckInventory -> compile { baselineFacts with RequiredChecks = [ "unit"; "unit" ] } |> Result.isError
+    | RequiredCheckInventory -> compile { baselineFacts with ObservedRequiredChecks = [ "architecture" ] } |> Result.isError
     | RequiredCheckEvent -> alterFirst (fun row -> { row with EventName = "workflow_dispatch" }) |> compile |> Result.isError
     | RequiredCheckHead -> alterFirst (fun row -> { row with HeadSha = "3333333333333333333333333333333333333333" }) |> compile |> Result.isError
     | RequiredCheckPending -> alterFirst (fun row -> { row with Conclusion = MergeGroupCheckConclusion.Pending }) |> compile |> Result.isError
@@ -104,7 +122,9 @@ let executeIndependent control =
     | MergeGroupOrdering -> parse (bytes + "\n") |> Result.isError
     | MergeGroupSeal ->
         let changed = (if baseline.Seal[0] = '0' then "1" else "0") + baseline.Seal.Substring 1
+        let malformed = reseal { baseline with BaseRef = "refs/pull/315/head" }
         parse (bytes.Replace(baseline.Seal, changed)) = Error [ GitHubMergeGroupFinding.AlteredSeal ]
+        && parse (serialize malformed) |> has (GitHubMergeGroupFinding.MalformedField "baseRef")
     | MergeGroupReplay -> replay baseline { baselineFacts with EvaluatedAtUnixSeconds = 1051L } = Error [ GitHubMergeGroupFinding.ReplayConflict ]
     | MergeGroupQuintPreservation -> text "protocolSha256" = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
     | MergeGroupNoNetwork ->

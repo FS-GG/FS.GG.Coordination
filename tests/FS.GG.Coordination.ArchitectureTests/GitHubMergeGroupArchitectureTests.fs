@@ -25,6 +25,9 @@ let ``merge-group surface is pure and repository local`` () =
     Assert.DoesNotContain("FS.GG.Coordination.GitHub", project, StringComparison.Ordinal)
     Assert.DoesNotContain("FS.GG.Coordination.Core", project, StringComparison.Ordinal)
     Assert.Contains("GitHubMergeGroupQualification.fsi", project, StringComparison.Ordinal)
+    for required in [ "ObservedBaseRepository"; "CurrentBaseRepository"; "ObservedBaseRef"; "CurrentBaseRef"; "ObservedRequiredChecks"; "CheckResults" ] do
+        Assert.Contains(required, source + signature, StringComparison.Ordinal)
+    Assert.Contains("strings (plan.CheckResults |> List.map checkFrame)", source, StringComparison.Ordinal)
 
 [<Fact>]
 let ``retained merge-group control inventories are exact and independent`` () =

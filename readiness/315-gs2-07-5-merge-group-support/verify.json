@@ -1,0 +1,477 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "315-gs2-07-5-merge-group-support",
+  "stage": "verify",
+  "status": "verificationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.5.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "70f2a125e819d30332e8178911cfbfaf819dac8fc85fc3d77b309660838da381"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/315-gs2-07-5-merge-group-support/analysis.json",
+      "kind": "analysis",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "54e670fe4137e1243c6c2502768a5c028666f6b61a8d4a2fcb212f88138eab63"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "readiness/315-gs2-07-5-merge-group-support/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "bfd1f0fab9ff9a1d5c724b39f8db267047445aaa65640fbb0169a4abb2138a41"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/315-gs2-07-5-merge-group-support/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "13d00b3142ba33ba7ad16078795126749b1bf4821de51583f4fc9b2954570c18"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/315-gs2-07-5-merge-group-support/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "1ab4539924ef2f65c8fe15ce721ffe2e0de9cda420dd65df6bc5efcd2b1aeed6"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/315-gs2-07-5-merge-group-support/evidence.yml",
+      "kind": "evidence",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "b98ce07c22b668776cc397a061db072743caf6b44569f0654d19ce179811093a"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/315-gs2-07-5-merge-group-support/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "7c108f96bc0155d175355d3099937640787634a49e0c8f8a57996bf711851677"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/315-gs2-07-5-merge-group-support/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ce856456e0c9bd779607d3c961a5d8000b0972787624ac6ae7ae7e31b1d966ab"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/315-gs2-07-5-merge-group-support/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "36e42ed5e8e705683416164bc3b594328291f0014b4785054e0558754b0d5f77"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "lifecycleReadiness": {
+    "status": "implementationReady",
+    "stages": [
+      {
+        "stage": "analyze",
+        "status": "implementationReady"
+      },
+      {
+        "stage": "checklist",
+        "status": "current"
+      },
+      {
+        "stage": "clarify",
+        "status": "current"
+      },
+      {
+        "stage": "evidence",
+        "status": "evidenceReady"
+      },
+      {
+        "stage": "plan",
+        "status": "current"
+      },
+      {
+        "stage": "specify",
+        "status": "current"
+      },
+      {
+        "stage": "tasks",
+        "status": "current"
+      }
+    ]
+  },
+  "taskGraph": {
+    "taskCount": 5,
+    "dependencyCount": 4,
+    "dependenciesValid": true,
+    "statusesValid": true,
+    "findingIds": []
+  },
+  "evidenceDispositions": [
+    {
+      "id": "ED-EV001",
+      "obligationId": "EV001",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV001"
+      ],
+      "affectedTaskIds": [
+        "T001"
+      ],
+      "affectedSourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV002",
+      "obligationId": "EV002",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV002"
+      ],
+      "affectedTaskIds": [
+        "T002"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV003",
+      "obligationId": "EV003",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV003"
+      ],
+      "affectedTaskIds": [
+        "T003"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV004",
+      "obligationId": "EV004",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV004"
+      ],
+      "affectedTaskIds": [
+        "T004"
+      ],
+      "affectedSourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "ED-EV005",
+      "obligationId": "EV005",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV005"
+      ],
+      "affectedTaskIds": [
+        "T005"
+      ],
+      "affectedSourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    }
+  ],
+  "testDispositions": [
+    {
+      "id": "TD-EV001",
+      "obligationId": "EV001",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV001"
+      ],
+      "affectedTaskIds": [
+        "T001"
+      ],
+      "affectedRequirementIds": [
+        "FR-001"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV002",
+      "obligationId": "EV002",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV002"
+      ],
+      "affectedTaskIds": [
+        "T002"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV003",
+      "obligationId": "EV003",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV003"
+      ],
+      "affectedTaskIds": [
+        "T003"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV004",
+      "obligationId": "EV004",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV004"
+      ],
+      "affectedTaskIds": [
+        "T004"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "id": "TD-EV005",
+      "obligationId": "EV005",
+      "state": "satisfied",
+      "observed": true,
+      "recordRequirement": false,
+      "evidenceIds": [
+        "EV005"
+      ],
+      "affectedTaskIds": [
+        "T005"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    }
+  ],
+  "skillVisibility": [
+    {
+      "skill": "automated-tests",
+      "requiringTaskIds": [
+        "T003"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/315-gs2-07-5-merge-group-support/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "deterministic-json",
+      "requiringTaskIds": [
+        "T005"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/315-gs2-07-5-merge-group-support/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "fsharp",
+      "requiringTaskIds": [
+        "T001",
+        "T002"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/315-gs2-07-5-merge-group-support/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "implementation",
+      "requiringTaskIds": [
+        "T001"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/315-gs2-07-5-merge-group-support/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "readiness-evidence",
+      "requiringTaskIds": [
+        "T003"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/315-gs2-07-5-merge-group-support/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    },
+    {
+      "skill": "schema-versioning",
+      "requiringTaskIds": [
+        "T004"
+      ],
+      "visibility": "visible",
+      "sourceArtifactPath": "work/315-gs2-07-5-merge-group-support/tasks.yml",
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/315-gs2-07-5-merge-group-support/analysis.json",
+      "kind": "verification",
+      "currency": "current",
+      "diagnosticIds": []
+    },
+    {
+      "path": "readiness/315-gs2-07-5-merge-group-support/work-model.json",
+      "kind": "workModel",
+      "currency": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "findings": [],
+  "governanceCompatibility": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [],
+  "readiness": "verificationReady",
+  "nextAction": {
+    "actionId": "verify.next.ship",
+    "command": null,
+    "reason": "Verification readiness is current and ready for ship."
+  }
+}

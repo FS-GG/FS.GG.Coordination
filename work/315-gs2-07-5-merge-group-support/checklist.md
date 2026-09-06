@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/315-gs2-07-5-merge-group-support/clarifications.md
 
 ## Source Snapshot
-- spec: work/315-gs2-07-5-merge-group-support/spec.md sha256:e7a483c90e13ef50ebb8364341044d7cae7c92a0accfa151b704ab5c7c3d4701 schemaVersion:1
+- spec: work/315-gs2-07-5-merge-group-support/spec.md sha256:ce856456e0c9bd779607d3c961a5d8000b0972787624ac6ae7ae7e31b1d966ab schemaVersion:1
 - clarifications: work/315-gs2-07-5-merge-group-support/clarifications.md sha256:1ab4539924ef2f65c8fe15ce721ffe2e0de9cda420dd65df6bc5efcd2b1aeed6 schemaVersion:1
 
 ## Checklist Items

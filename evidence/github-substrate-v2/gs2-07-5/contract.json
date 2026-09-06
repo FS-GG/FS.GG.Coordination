@@ -11,6 +11,8 @@
   "baseRef": "refs/heads/main",
   "event": "merge_group:checks_requested",
   "disposition": "merge-group-qualified",
+  "baseAuthority": "observed-and-current-repository-ref-sha-revision-must-match",
+  "checkAuthority": "configured-expected-and-observed-inventories-plus-full-results-are-sealed",
   "network": false,
   "productionMutation": false
 }

@@ -14,8 +14,10 @@ type GitHubMergeGroupFacts =
       Repository: string
       MergeGroupId: string
       MergeGroupHeadSha: string
-      BaseRepository: string
-      BaseRef: string
+      ObservedBaseRepository: string
+      CurrentBaseRepository: string
+      ObservedBaseRef: string
+      CurrentBaseRef: string
       ObservedBaseSha: string
       CurrentBaseSha: string
       BaseObservationRevision: int64
@@ -23,7 +25,8 @@ type GitHubMergeGroupFacts =
       ObservedAtUnixSeconds: int64
       FreshUntilUnixSeconds: int64
       EvaluatedAtUnixSeconds: int64
-      RequiredChecks: string list
+      ExpectedRequiredChecks: string list
+      ObservedRequiredChecks: string list
       CheckResults: MergeGroupCheckFact list
       ObservedClaimGeneration: int64
       CurrentClaimGeneration: int64
@@ -54,6 +57,7 @@ type GitHubMergeGroupPlan =
       FreshUntilUnixSeconds: int64
       EvaluatedAtUnixSeconds: int64
       RequiredChecks: string list
+      CheckResults: MergeGroupCheckFact list
       ClaimGeneration: int64
       ReviewDigest: string
       CandidateHeadSha: string
@@ -69,6 +73,8 @@ type GitHubMergeGroupFinding =
     | MalformedField of string
     | UnknownEvent of string
     | BaseObservationStale of int64
+    | BaseRepositoryChanged of string * string
+    | BaseRefChanged of string * string
     | BaseChanged of string * string
     | BaseRevisionChanged of int64 * int64
     | NonCanonicalCheckInventory
