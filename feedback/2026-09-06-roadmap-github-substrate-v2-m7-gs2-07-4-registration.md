@@ -5,7 +5,7 @@ workspace: FS.GG.Coordination
 cycle: roadmap-github-substrate-v2-m7-gs2-07-4-registration
 lane: github-substrate-v2
 toolVersion: n/a
-commit: 4ad66d094092cb1ee858b6cb76f60d6d39e17079
+commit: 7c7675e588fd0536cd5bc9b7414d17f9f60c8a09
 ---
 
 ## §1 Provenance and confidence
@@ -19,11 +19,11 @@ This report covers issue #308's registration-only SDD, implementation, verificat
 
 ## §2 What worked
 
-The exact accepted roadmap pin and GS2-07.3 receipt made GS2-07.4 inspectable and dependency-ready without granting implementation authority. Focused RoadmapWork architecture coverage passed 34/34, exact inspect returned the registered contract, prerequisites returned `ready:true`, and SDD reached `verificationReady` and `shipReady`.
+The exact accepted roadmap pin and GS2-07.3 receipt made GS2-07.4 inspectable and dependency-ready without granting implementation authority. Focused RoadmapWork architecture coverage passed 34/34, the exact clean-candidate architecture suite passed 511/511, unit tests passed 228/228, the warning-as-error Release build had zero warnings/errors, exact inspect returned the registered contract, prerequisites returned `ready:true`, and SDD reached `verificationReady` and `shipReady`.
 
 ## §3 What did not
 
-The pre-commit full architecture invocation reached the known supply-chain reproducibility refusal because that self-check requires a clean candidate. The exact candidate will be rerun after commit; no supply-chain source is in the change.
+The pre-commit full architecture invocation passed 510/511 and reached the expected supply-chain reproducibility refusal because that self-check requires a clean candidate. The exact committed candidate rerun passed 511/511; no supply-chain source changed.
 
 ## §4 Findings
 
@@ -43,7 +43,7 @@ No product workaround remains. This zero-event report is the feedback contract's
 
 ## §8 Friction and avoidable cost
 
-The clean-checkout supply-chain precondition requires committing the candidate before the full architecture suite can produce valid evidence. The pre-commit refusal is retained transparently and the clean rerun is part of the PR gate.
+The clean-checkout supply-chain precondition required committing the candidate before the full architecture suite could produce valid evidence. The pre-commit 510/511 refusal and clean 511/511 rerun are both retained and distinguished.
 
 ## §9 Skill value and gaps
 
@@ -69,7 +69,7 @@ A fully materialized Coordination scaffold should include the feedback skill twi
 | sdd-authoring | exercised | Full lifecycle reached verificationReady and shipReady. |
 | implementation-apis | not-exercised | Registration-only boundary; event security remains future work. |
 | dependencies-build | exercised | Release build passed with zero warnings/errors. |
-| testing | exercised | Focused RoadmapWork architecture 34/34; full clean-candidate suites are PR-gated. |
+| testing | exercised | Focused RoadmapWork architecture 34/34, unit 228/228, clean architecture 511/511, and warning-free Release build. |
 | evidence | exercised | Exact inspect/prerequisites, SDD receipts, lifecycle comments, and critique gate. |
 | runtime-playtest | not-exercised | Non-game unit. |
 | performance | not-exercised | No runtime performance claim. |
