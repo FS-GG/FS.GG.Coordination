@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-07.3 units, and the active GS2-07.4
+the subsequently accepted GS2-02 through GS2-07.4 units, and the active GS2-07.5
 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
@@ -309,6 +309,20 @@ unit must prove that accepted events can schedule reconciliation but can never
 directly author derived state, with adversarial refusals for each security
 boundary. This registration creates or executes no validator, webhook, network
 call, production queue or state mutation, acceptance receipt, or GS2-07.5 work.
+
+GS2-07.5 is registered against `.github` roadmap commit
+`64e9a2b7753f438f8ad31298fd17698ff2a142e6` and exact roadmap SHA-256
+`da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a`.
+Its sole prerequisite is the accepted GS2-07.4 receipt. The Q3
+`github-merge-group-support-contract` identity reserves repository-local proof
+that every aggregate required check runs for `merge_group` and that each
+evaluation revalidates current claim, accepted review, candidate head,
+dependency receipts, release obligations, and repository settings. The future
+implementation must fail closed when any required check or temporal authority
+is missing, incomplete, failed, or stale rather than carrying pull-request-time
+approval into the merge group. This registration creates or executes no
+validator, merge queue, workflow publication, network call, production queue,
+settings mutation, release, acceptance receipt, or GS2-07.6 work.
 
 ## Command sequence
 

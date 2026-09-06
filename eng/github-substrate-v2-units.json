@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6",
+    "revision": "64e9a2b7753f438f8ad31298fd17698ff2a142e6",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a"
+    "sha256": "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
   },
   "units": [
     {
@@ -849,6 +849,20 @@
         { "id": "github-event-security-contract", "qGate": "Q3", "commandSha256": "4a2eadf2992eb919b0196009dec1f85a8a7be5d109c5b8f31403407b5a994a2d" }
       ],
       "contractSha256": "64b16f2d6228fc6a575e9814703671f8fcd2080cfee49f3ee1006eb21a16512a"
+    },
+    {
+      "id": "GS2-07.5",
+      "title": "Merge-group support",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-07.4"],
+      "permissionCeiling": ["repository-local additive merge-group qualification contracts, pure deterministic aggregate-required-check inventory and temporal claim, review, head, dependency, release, and settings re-evaluation, validation, and retained evidence", "read-only consumption of accepted GS2-07.4 and exact accepted roadmap evidence is allowed; no merge-queue deployment, no workflow publication, no network call, no production queue mutation, no production GitHub write, no settings mutation, no release or package publication, no stable channel, and no GS2-07.6 inspection, preparation, or implementation authority"],
+      "exitGate": "the Q3 merge-group-support contract begins from the exact accepted GS2-07.4 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds repository, merge-group identity and head, aggregate required-check inventory and results, temporal claim generation, review acceptance, candidate head, dependency receipts, release obligations, repository settings snapshot, and deterministic disposition; every aggregate required check runs for merge_group and each evaluation revalidates current claim, review, head, dependency, release, and settings authority rather than carrying pull-request-time approval forward; missing, malformed, unknown-event, incomplete-check-inventory, missing-check, pending-check, failed-check, stale-claim, stale-review, stale-head, stale-dependency, unmet-release, changed-settings, conflicting-group, direct-merge, unsealed, altered-seal, and replay inputs remain explicit refusals; exact replay is byte-identical and no network, production queue, settings, release, or production mutation path exists; generated adversarial mutations and independently authored prerequisite, roadmap, merge-group-event, aggregate-check-completeness, required-check-result, claim-freshness, review-freshness, head-freshness, dependency-freshness, release-obligation, settings-freshness, stale-authority, direct-merge, ordering, seal, replay, Quint-preservation, no-network, no-production-queue, no-settings, no-release, and no-mutation controls all pass without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-merge-group-support-contract"],
+      "gateContracts": [
+        { "id": "github-merge-group-support-contract", "qGate": "Q3", "commandSha256": "ff20b32c73325e185e6ee072253ceb02b8657ee4f6281652acf187f16a703937" }
+      ],
+      "contractSha256": "bd6cd26eed8e151609af54c6f25d19026e9252a9613bf683cb1ca9772385f71c"
     }
   ]
 }

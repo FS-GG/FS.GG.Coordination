@@ -228,6 +228,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-event-security.fsx", "--", "."]
+    },
+    {
+      "id": "github-merge-group-support-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-merge-group-support.fsx", "--", "."]
     }
   ]
 }
