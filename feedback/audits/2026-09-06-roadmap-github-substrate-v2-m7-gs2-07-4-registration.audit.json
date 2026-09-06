@@ -1,0 +1,8 @@
+{
+  "auditSchema": 1,
+  "report": "feedback/2026-09-06-roadmap-github-substrate-v2-m7-gs2-07-4-registration.md",
+  "reportSha256": "78f2143e0a8b1ca37b7a446ff834f6a6d1b0a3d0dd86b9836ba11c6e8405bb60",
+  "criticMode": "zero-event-contract-validation",
+  "criticPromptVersion": "actionability-v1",
+  "findings": []
+}

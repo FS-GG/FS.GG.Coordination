@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "9d88c7b7967e8d69c1b8873d718ee8f0f435afd9",
+    "revision": "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "6e0de6a1f12de38c248c607c60064c8b81e1683460410acaa2f69aea47829844"
+    "sha256": "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a"
   },
   "units": [
     {
@@ -835,6 +835,20 @@
         { "id": "github-audit-repair-contract", "qGate": "Q3", "commandSha256": "62be2f02680c983d0e813fb4fc83a28b8ba6b7a368478cf7807b1b61840a8f1a" }
       ],
       "contractSha256": "d6af16fa0323b7ccbacee27e8114e4975d0976429ed409d48eb4981a5fb1c003"
+    },
+    {
+      "id": "GS2-07.4",
+      "title": "Event security",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-07.3"],
+      "permissionCeiling": ["repository-local additive event-security contracts, pure deterministic signature, installation/repository scope, replay-bound, payload/API agreement, least-privilege, reconciliation-scheduling validation, and retained evidence", "read-only consumption of accepted GS2-07.3 and exact accepted roadmap evidence is allowed; no webhook subscription or deployment, no network call, no production queue mutation, no direct derived-state mutation, no production GitHub write, no settings change, no workflow publication, no release, no package publication, no stable channel, and no GS2-07.5 inspection, preparation, or implementation authority"],
+      "exitGate": "the Q3 event-security contract begins from the exact accepted GS2-07.3 receipt and exact accepted roadmap revision without changing the canonical Quint protocol; one canonical length-framed seal binds delivery identity, algorithm and signature, installation and repository scope, delivery timestamp and replay bounds, payload subject and revision, authoritative API subject and revision, permission inventory, scheduling key, and reconciliation-only disposition; only authentic, in-scope, fresh, payload/API-agreeing, least-privileged events may schedule reconciliation, and no event can directly author derived state; missing, malformed, unknown-algorithm, invalid-signature, wrong-installation, wrong-repository, cross-scope, expired, future, duplicate, replayed, payload/API-disagreement, excessive-permission, missing-permission, direct-write, unsealed, altered-seal, and replay inputs remain explicit refusals; exact replay is byte-identical and no network, webhook, production queue, or production mutation path exists; generated adversarial mutations and independently authored prerequisite, roadmap, signature-positive, signature-negative, installation-scope, repository-scope, replay-lower-bound, replay-upper-bound, duplicate-delivery, payload-API-agreement, payload-API-disagreement, least-privilege, excessive-permission, missing-permission, scheduling-only, exclusive-writer, direct-write, ordering, seal, replay, Quint-preservation, no-network, no-production-queue, and no-mutation controls all pass without production writes or successor-unit authority",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-event-security-contract"],
+      "gateContracts": [
+        { "id": "github-event-security-contract", "qGate": "Q3", "commandSha256": "4a2eadf2992eb919b0196009dec1f85a8a7be5d109c5b8f31403407b5a994a2d" }
+      ],
+      "contractSha256": "64b16f2d6228fc6a575e9814703671f8fcd2080cfee49f3ee1006eb21a16512a"
     }
   ]
 }

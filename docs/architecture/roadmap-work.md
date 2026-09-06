@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-07.2 units, and the active GS2-07.3
+the subsequently accepted GS2-02 through GS2-07.3 units, and the active GS2-07.4
 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
@@ -297,6 +297,18 @@ roadmap lifecycle telemetry process remains inherited: exact Codex token usage
 is reconciled after response completion from local session JSONL with provenance
 or an explicit post-completion unavailable/error reason; this registration does
 not duplicate that already-published process.
+
+GS2-07.4 is registered against `.github` roadmap commit
+`cac998e81bbbdd1f4b1259e3b9a7173e161a9da6` and exact roadmap SHA-256
+`66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a`.
+Its sole prerequisite is the accepted GS2-07.3 receipt. The Q3
+`github-event-security-contract` identity reserves repository-local verification
+of signatures, installation/repository scope, replay bounds, payload/API
+agreement, least privilege, and scheduling-only event effects. The implementation
+unit must prove that accepted events can schedule reconciliation but can never
+directly author derived state, with adversarial refusals for each security
+boundary. This registration creates or executes no validator, webhook, network
+call, production queue or state mutation, acceptance receipt, or GS2-07.5 work.
 
 ## Command sequence
 
