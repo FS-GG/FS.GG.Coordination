@@ -1,0 +1,50 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-5-registration",
+  "milestone": "GS2-07.5 — executable-frontier registration",
+  "critic": "swift-c8b3",
+  "initial_reviewed_commit": "bfcc992e4e567d55703ad2b0c052aa5782d1a450",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
+  "reviewed_commits": [
+    "bfcc992e4e567d55703ad2b0c052aa5782d1a450",
+    "6832a07246c4a4676ede04e3ef8dcd22ca84332f"
+  ],
+  "findings": [
+    {
+      "id": "REG-C01",
+      "severity": "major",
+      "summary": "The initial sealed GS2-07.5 contract omitted exact merge-group base repository identity, full base ref, exact base SHA, and base freshness re-evaluation, so a changed base could retain pull-request-time authority.",
+      "evidence": [
+        "eng/github-substrate-v2-units.json:858-859 at bfcc992e4e567d55703ad2b0c052aa5782d1a450 binds claim, review, head, dependency, release, and settings but no canonical base identity/ref/SHA or base-freshness facts.",
+        "tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs at bfcc992e4e567d55703ad2b0c052aa5782d1a450 contains no adversarial omitted-base, stale-base, or changed-base registration control.",
+        "Critic major verdict is retained by lifecycle revision 4 at https://github.com/FS-GG/FS.GG.Coordination/issues/313#issuecomment-5561037941 with digest 291803e9605d9ac5a0a8573d6405f9d2d98e1d2c5775714f69f3e590a8719889."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "eng/github-substrate-v2-units.json:858-865 at 6832a07246c4a4676ede04e3ef8dcd22ca84332f binds canonical base repository identity, full base ref, exact base SHA, base-observation revision, observed-at time, and freshness deadline; it requires re-observation and rejects missing, malformed, stale, and changed base facts.",
+        "tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs:600-617 at 6832a07246c4a4676ede04e3ef8dcd22ca84332f independently mutates every base identity/ref/SHA/revision/freshness clause and requires refusal; focused RoadmapWork architecture passed 38/38.",
+        "docs/architecture/roadmap-work.md:313-329 and work/313-gs2-07-5-registration/spec.md at 6832a07246c4a4676ede04e3ef8dcd22ca84332f retain the repaired authority and non-production boundary.",
+        "Same critic swift-c8b3 confirmed PASS for exact repaired head 6832a07246c4a4676ede04e3ef8dcd22ca84332f in lifecycle revision 8 at https://github.com/FS-GG/FS.GG.Coordination/issues/313#issuecomment-5561168542; evidence binds candidate tree d9cdbac3d16d9a39929b509037a955828ccf0076, unit contract 6ad620d58509ce141ee0eda476375b56d610cb150ee4ee089173f339a30ea9f2, unchanged gate command ff20b32c73325e185e6ee072253ceb02b8657ee4f6281652acf187f16a703937, prerequisites ready:true, focused 38/38, coherent SDD verify/ship, and a clean worktree."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "6832a07246c4a4676ede04e3ef8dcd22ca84332f",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
