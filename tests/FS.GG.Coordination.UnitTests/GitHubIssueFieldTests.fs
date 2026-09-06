@@ -124,7 +124,7 @@ let ``idempotency identities use unambiguous length-prefixed opaque values`` () 
     let first = IssueFields.plan "rev" "cause" (UpdateField(liveId "I|F", liveId "G", desired)) (complete "rev" [ FieldAbsent ])
     let second = IssueFields.plan "rev" "cause" (UpdateField(liveId "I", liveId "F|G", desired)) (complete "rev" [ FieldAbsent ])
     match first, second with
-    | Ok(Planned left), Ok(Planned right) -> Assert.NotEqual(left.IdempotencyIdentity, right.IdempotencyIdentity)
+    | Ok(Planned left), Ok(Planned right) -> Assert.NotEqual<string>(left.IdempotencyIdentity, right.IdempotencyIdentity)
     | values -> failwith $"expected two update plans, got {values}"
 
 [<Fact>]
