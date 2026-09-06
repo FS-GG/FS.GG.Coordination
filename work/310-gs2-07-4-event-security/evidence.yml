@@ -11,11 +11,11 @@ sourceAnalysis: readiness/310-gs2-07-4-event-security/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/310-gs2-07-4-event-security/analysis.json
-    digest: 5532449b3c32dbc4f638bb95f5721b1250e2b8595ef63060ea659db581db57f0
+    digest: c50678c05136fd90a491ca3551cf543b4ade13ce53f04a1ee3a1ba2aec4194d6
     schemaVersion: 1
   - label: checklist
     path: work/310-gs2-07-4-event-security/checklist.md
-    digest: fc80c69c40ee4098471a4f1290ecc688ba0d0a4af18b0ed77f6c8e273f8bd7ce
+    digest: 30fa1e44ae3775f2d4d27f700451711954376b341389775624580614ee777270
     schemaVersion: 1
   - label: clarifications
     path: work/310-gs2-07-4-event-security/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/310-gs2-07-4-event-security/plan.md
-    digest: e2f5175e3b489353d00c2afaee971f922ccc7761106f17a0016355bf8173f04f
+    digest: 0754516a800dd4c92307beeb4752f70e00ba46dbd4eaa917951746309a083595
     schemaVersion: 1
   - label: spec
     path: work/310-gs2-07-4-event-security/spec.md
-    digest: e4f11a5fef937e245ba4a0f861e840829893c243d2322a3fa48f90065ee262f4
+    digest: c4fc2a37ccd870b874fe9d4ccd071b284f1a6725f47798464acfaa05a91675a9
     schemaVersion: 1
   - label: tasks
     path: work/310-gs2-07-4-event-security/tasks.yml
-    digest: e3d7ac93f9e24efb635e530417830e0838c6c3e0277e827e45ffd5ff897282c8
+    digest: b4749caad63ecbfeb1ea8d6458f23b977c24706ffb075527b4813ca9b16b18b5
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
-      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digest: "sha256:8d15ec521632d60eda41f9f06a5c6908647d92dd390e12d762f2b05622317059"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 9
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
-      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digest: "sha256:8d15ec521632d60eda41f9f06a5c6908647d92dd390e12d762f2b05622317059"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 9
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
-      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digest: "sha256:8d15ec521632d60eda41f9f06a5c6908647d92dd390e12d762f2b05622317059"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 9
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
-      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digest: "sha256:8d15ec521632d60eda41f9f06a5c6908647d92dd390e12d762f2b05622317059"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 9
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
-      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digest: "sha256:8d15ec521632d60eda41f9f06a5c6908647d92dd390e12d762f2b05622317059"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 9

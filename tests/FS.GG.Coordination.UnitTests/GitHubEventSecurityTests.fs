@@ -5,16 +5,17 @@ open Xunit
 open FS.GG.Coordination.Qualification.Contracts
 open FS.GG.Coordination.Qualification.Contracts.GitHubEventSecurityQualification
 
-let private payload = Encoding.UTF8.GetBytes "{\"action\":\"edited\",\"issue\":{\"id\":310}}"
+let private payloadFor installation repository kind id revision =
+    Encoding.UTF8.GetBytes $"{{\"action\":\"edited\",\"installation\":{{\"id\":{installation}}},\"repository\":{{\"full_name\":\"{repository}\"}},\"subject\":{{\"kind\":\"{kind}\",\"id\":\"{id}\",\"revision\":{revision}}}}}"
+let private payload = payloadFor 81234L "FS-GG/FS.GG.Coordination" "issue" "310" 7L
 let private secret = Encoding.UTF8.GetBytes "0123456789abcdef0123456789abcdef"
 let private received = 1788702000L
 let private facts () =
     let unsigned =
         { RawPayload = payload; Signature = ""; Secret = secret; DeliveryId = "delivery-gs2-07-4"
-          InstallationId = 81234L; ExpectedInstallationId = 81234L
-          Repository = "FS-GG/FS.GG.Coordination"; ExpectedRepository = "FS-GG/FS.GG.Coordination"
+          ExpectedInstallationId = 81234L; ExpectedRepository = "FS-GG/FS.GG.Coordination"
           ReceivedAtUnixSeconds = received; EventTimestampUnixSeconds = received; ReplayWindowSeconds = 300L
-          SeenDeliveryIds = []; PayloadSubject = "issue:310"; PayloadRevision = 7L
+          SeenDeliveryIds = []; SeenPayloadSha256 = []
           ApiSubject = "issue:310"; ApiRevision = 7L
           RequiredPermissions = [ "contents:read"; "metadata:read" ]
           GrantedPermissions = [ "contents:read"; "metadata:read" ]; AttemptsDerivedWrite = false }
@@ -38,12 +39,16 @@ let ``signature authenticates exact raw bytes and canonical header`` () =
     Assert.True(compile original |> Result.isOk)
     Assert.Contains(GitHubEventSecurityFinding.InvalidSignature, compile { original with RawPayload = Encoding.UTF8.GetBytes "{}" } |> findings)
     Assert.Contains(GitHubEventSecurityFinding.InvalidSignature, compile { original with Signature = original.Signature.ToUpperInvariant() } |> findings)
+    let malformed = Encoding.UTF8.GetBytes "{\"installation\":{\"id\":81234},\"repository\":{\"full_name\":\"FS-GG/FS.GG.Coordination\"}}"
+    Assert.Contains(GitHubEventSecurityFinding.MalformedPayload "missing subject", compile { original with RawPayload = malformed; Signature = sign secret malformed } |> findings)
 
 [<Fact>]
 let ``installation and repository scopes are exact`` () =
     let original = facts ()
-    Assert.Contains(GitHubEventSecurityFinding.InstallationScopeMismatch 7L, compile { original with InstallationId = 7L } |> findings)
-    Assert.Contains(GitHubEventSecurityFinding.RepositoryScopeMismatch "FS-GG/Outside", compile { original with Repository = "FS-GG/Outside" } |> findings)
+    let wrongInstallation = payloadFor 7L "FS-GG/FS.GG.Coordination" "issue" "310" 7L
+    Assert.Contains(GitHubEventSecurityFinding.InstallationScopeMismatch 7L, compile { original with RawPayload = wrongInstallation; Signature = sign secret wrongInstallation } |> findings)
+    let wrongRepository = payloadFor 81234L "FS-GG/Outside" "issue" "310" 7L
+    Assert.Contains(GitHubEventSecurityFinding.RepositoryScopeMismatch "FS-GG/Outside", compile { original with RawPayload = wrongRepository; Signature = sign secret wrongRepository } |> findings)
 
 [<Fact>]
 let ``replay window is inclusive and duplicates are rejected`` () =
@@ -54,12 +59,20 @@ let ``replay window is inclusive and duplicates are rejected`` () =
     Assert.Contains(GitHubEventSecurityFinding.ReplayFromFuture(received + 301L), compile { original with EventTimestampUnixSeconds = received + 301L } |> findings)
     Assert.Contains(GitHubEventSecurityFinding.MalformedField "replayWindow", compile { original with ReceivedAtUnixSeconds = System.Int64.MaxValue } |> findings)
     Assert.Contains(GitHubEventSecurityFinding.DuplicateDelivery original.DeliveryId, compile { original with SeenDeliveryIds = [ original.DeliveryId ] } |> findings)
+    let baseline = compile original |> get
+    let changedDelivery = { original with DeliveryId = "delivery-changed"; SeenDeliveryIds = [ original.DeliveryId ]; SeenPayloadSha256 = [ baseline.PayloadSha256 ] }
+    Assert.Contains(GitHubEventSecurityFinding.DuplicatePayload baseline.PayloadSha256, compile changedDelivery |> findings)
 
 [<Fact>]
 let ``payload and API authority must agree exactly`` () =
     let original = facts ()
     Assert.Contains(GitHubEventSecurityFinding.PayloadApiDisagreement "subject", compile { original with ApiSubject = "issue:311" } |> findings)
     Assert.Contains(GitHubEventSecurityFinding.PayloadApiDisagreement "revision", compile { original with ApiRevision = 8L } |> findings)
+    let contradictory = payloadFor 81234L "FS-GG/Outside" "issue" "999" 99L
+    let contradictions = compile { original with RawPayload = contradictory; Signature = sign secret contradictory } |> findings
+    Assert.Contains(GitHubEventSecurityFinding.RepositoryScopeMismatch "FS-GG/Outside", contradictions)
+    Assert.Contains(GitHubEventSecurityFinding.PayloadApiDisagreement "subject", contradictions)
+    Assert.Contains(GitHubEventSecurityFinding.PayloadApiDisagreement "revision", contradictions)
 
 [<Fact>]
 let ``least privilege is exact and canonical`` () =

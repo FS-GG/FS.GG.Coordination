@@ -5,16 +5,13 @@ type GitHubEventSecurityFacts =
       Signature: string
       Secret: byte array
       DeliveryId: string
-      InstallationId: int64
       ExpectedInstallationId: int64
-      Repository: string
       ExpectedRepository: string
       ReceivedAtUnixSeconds: int64
       EventTimestampUnixSeconds: int64
       ReplayWindowSeconds: int64
       SeenDeliveryIds: string list
-      PayloadSubject: string
-      PayloadRevision: int64
+      SeenPayloadSha256: string list
       ApiSubject: string
       ApiRevision: int64
       RequiredPermissions: string list
@@ -44,12 +41,14 @@ type GitHubEventSecurityPlan =
 type GitHubEventSecurityFinding =
     | MissingField of string
     | MalformedField of string
+    | MalformedPayload of string
     | InvalidSignature
     | InstallationScopeMismatch of int64
     | RepositoryScopeMismatch of string
     | ReplayExpired of int64
     | ReplayFromFuture of int64
     | DuplicateDelivery of string
+    | DuplicatePayload of string
     | PayloadApiDisagreement of string
     | NonCanonicalPermissions of string
     | MissingPermission of string

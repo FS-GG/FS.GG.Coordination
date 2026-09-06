@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/310-gs2-07-4-event-security/clarifications.md
 
 ## Source Snapshot
-- spec: work/310-gs2-07-4-event-security/spec.md sha256:e4f11a5fef937e245ba4a0f861e840829893c243d2322a3fa48f90065ee262f4 schemaVersion:1
+- spec: work/310-gs2-07-4-event-security/spec.md sha256:c4fc2a37ccd870b874fe9d4ccd071b284f1a6725f47798464acfaa05a91675a9 schemaVersion:1
 - clarifications: work/310-gs2-07-4-event-security/clarifications.md sha256:6f606545c1ad25948f3e44eab0288d3c716eb3563dabcf52759ac7eb2601c604 schemaVersion:1
 
 ## Checklist Items

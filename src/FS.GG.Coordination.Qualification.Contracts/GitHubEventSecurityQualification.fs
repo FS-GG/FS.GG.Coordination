@@ -8,9 +8,9 @@ open System.Text.RegularExpressions
 
 type GitHubEventSecurityFacts =
     { RawPayload: byte array; Signature: string; Secret: byte array; DeliveryId: string
-      InstallationId: int64; ExpectedInstallationId: int64; Repository: string; ExpectedRepository: string
+      ExpectedInstallationId: int64; ExpectedRepository: string
       ReceivedAtUnixSeconds: int64; EventTimestampUnixSeconds: int64; ReplayWindowSeconds: int64
-      SeenDeliveryIds: string list; PayloadSubject: string; PayloadRevision: int64
+      SeenDeliveryIds: string list; SeenPayloadSha256: string list
       ApiSubject: string; ApiRevision: int64; RequiredPermissions: string list
       GrantedPermissions: string list; AttemptsDerivedWrite: bool }
 type GitHubEventSecurityPlan =
@@ -21,9 +21,9 @@ type GitHubEventSecurityPlan =
       AttemptsDerivedWrite: bool; SchedulingKey: string; Seal: string }
 [<RequireQualifiedAccess>]
 type GitHubEventSecurityFinding =
-    | MissingField of string | MalformedField of string | InvalidSignature
+    | MissingField of string | MalformedField of string | MalformedPayload of string | InvalidSignature
     | InstallationScopeMismatch of int64 | RepositoryScopeMismatch of string
-    | ReplayExpired of int64 | ReplayFromFuture of int64 | DuplicateDelivery of string
+    | ReplayExpired of int64 | ReplayFromFuture of int64 | DuplicateDelivery of string | DuplicatePayload of string
     | PayloadApiDisagreement of string | NonCanonicalPermissions of string
     | MissingPermission of string | ExcessivePermission of string | DirectWriteAttempt of string
     | AlteredSeal | ReplayConflict of string | InvalidSerialization of string
@@ -86,22 +86,70 @@ module GitHubEventSecurityQualification =
         |> strings |> hash
     let private isCanonical values = values = (values |> List.distinct |> List.sort)
 
+    type private AuthenticatedPayload =
+        { InstallationId: int64
+          Repository: string
+          Subject: string
+          SubjectRevision: int64 }
+
+    let private parseAuthenticatedPayload (rawPayload: byte array) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory<byte>(rawPayload))
+            let oneProperty (name: string) (node: JsonElement) =
+                let matches = node.EnumerateObject() |> Seq.filter (fun property -> property.Name = name) |> Seq.toList
+                match matches with
+                | [ property ] -> property.Value
+                | [] -> raise (JsonException $"missing {name}")
+                | _ -> raise (JsonException $"duplicate {name}")
+            let root = document.RootElement
+            if root.ValueKind <> JsonValueKind.Object then raise (JsonException "root must be an object")
+            let installation = oneProperty "installation" root
+            let repository = oneProperty "repository" root
+            let subject = oneProperty "subject" root
+            let installationId = (oneProperty "id" installation).GetInt64()
+            let repositoryName = (oneProperty "full_name" repository).GetString()
+            let subjectKind = (oneProperty "kind" subject).GetString()
+            let subjectId = (oneProperty "id" subject).GetString()
+            let subjectRevision = (oneProperty "revision" subject).GetInt64()
+            if installationId <= 0L then raise (JsonException "installation.id must be positive")
+            if String.IsNullOrWhiteSpace repositoryName || not(token.IsMatch repositoryName) then raise (JsonException "repository.full_name is malformed")
+            if String.IsNullOrWhiteSpace subjectKind || not(token.IsMatch subjectKind) then raise (JsonException "subject.kind is malformed")
+            if String.IsNullOrWhiteSpace subjectId || not(token.IsMatch subjectId) then raise (JsonException "subject.id is malformed")
+            if subjectRevision <= 0L then raise (JsonException "subject.revision must be positive")
+            Ok
+                { InstallationId = installationId
+                  Repository = repositoryName
+                  Subject = $"{subjectKind}:{subjectId}"
+                  SubjectRevision = subjectRevision }
+        with error -> Error(GitHubEventSecurityFinding.MalformedPayload error.Message)
+
     let compile (facts: GitHubEventSecurityFacts) =
         let errors = ResizeArray<GitHubEventSecurityFinding>()
         let requireText name value =
             if String.IsNullOrWhiteSpace value then errors.Add(GitHubEventSecurityFinding.MissingField name)
             elif not(token.IsMatch value) then errors.Add(GitHubEventSecurityFinding.MalformedField name)
         requireText "deliveryId" facts.DeliveryId
-        requireText "repository" facts.Repository
         requireText "expectedRepository" facts.ExpectedRepository
-        requireText "payloadSubject" facts.PayloadSubject
         requireText "apiSubject" facts.ApiSubject
         if isNull facts.RawPayload || facts.RawPayload.Length = 0 then errors.Add(GitHubEventSecurityFinding.MissingField "rawPayload")
+        let mutable authenticatedPayload = None
+        let mutable payloadDigest = None
         if isNull facts.Secret || facts.Secret.Length < 32 then errors.Add(GitHubEventSecurityFinding.MalformedField "secret")
+        elif isNull facts.RawPayload || facts.RawPayload.Length = 0 then ()
         elif not(signatureMatches facts.Secret facts.RawPayload facts.Signature) then errors.Add GitHubEventSecurityFinding.InvalidSignature
-        if facts.InstallationId <= 0L || facts.ExpectedInstallationId <= 0L then errors.Add(GitHubEventSecurityFinding.MalformedField "installationId")
-        elif facts.InstallationId <> facts.ExpectedInstallationId then errors.Add(GitHubEventSecurityFinding.InstallationScopeMismatch facts.InstallationId)
-        if facts.Repository <> facts.ExpectedRepository then errors.Add(GitHubEventSecurityFinding.RepositoryScopeMismatch facts.Repository)
+        else
+            let digest = facts.RawPayload |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+            payloadDigest <- Some digest
+            match parseAuthenticatedPayload facts.RawPayload with
+            | Ok payload -> authenticatedPayload <- Some payload
+            | Error finding -> errors.Add finding
+        if facts.ExpectedInstallationId <= 0L then errors.Add(GitHubEventSecurityFinding.MalformedField "installationId")
+        match authenticatedPayload with
+        | Some payload when payload.InstallationId <> facts.ExpectedInstallationId -> errors.Add(GitHubEventSecurityFinding.InstallationScopeMismatch payload.InstallationId)
+        | _ -> ()
+        match authenticatedPayload with
+        | Some payload when payload.Repository <> facts.ExpectedRepository -> errors.Add(GitHubEventSecurityFinding.RepositoryScopeMismatch payload.Repository)
+        | _ -> ()
         if facts.ReplayWindowSeconds <= 0L || facts.ReceivedAtUnixSeconds < 0L || facts.EventTimestampUnixSeconds < 0L
            || facts.ReceivedAtUnixSeconds > Int64.MaxValue - facts.ReplayWindowSeconds then
             errors.Add(GitHubEventSecurityFinding.MalformedField "replayWindow")
@@ -111,9 +159,16 @@ module GitHubEventSecurityQualification =
             if facts.EventTimestampUnixSeconds < lower then errors.Add(GitHubEventSecurityFinding.ReplayExpired facts.EventTimestampUnixSeconds)
             if facts.EventTimestampUnixSeconds > upper then errors.Add(GitHubEventSecurityFinding.ReplayFromFuture facts.EventTimestampUnixSeconds)
         if facts.SeenDeliveryIds |> List.exists ((=) facts.DeliveryId) then errors.Add(GitHubEventSecurityFinding.DuplicateDelivery facts.DeliveryId)
-        if facts.PayloadSubject <> facts.ApiSubject then errors.Add(GitHubEventSecurityFinding.PayloadApiDisagreement "subject")
-        if facts.PayloadRevision <= 0L || facts.ApiRevision <= 0L then errors.Add(GitHubEventSecurityFinding.MalformedField "subjectRevision")
-        elif facts.PayloadRevision <> facts.ApiRevision then errors.Add(GitHubEventSecurityFinding.PayloadApiDisagreement "revision")
+        match payloadDigest with
+        | Some digest when facts.SeenPayloadSha256 |> List.contains digest -> errors.Add(GitHubEventSecurityFinding.DuplicatePayload digest)
+        | _ -> ()
+        match authenticatedPayload with
+        | Some payload when payload.Subject <> facts.ApiSubject -> errors.Add(GitHubEventSecurityFinding.PayloadApiDisagreement "subject")
+        | _ -> ()
+        if facts.ApiRevision <= 0L then errors.Add(GitHubEventSecurityFinding.MalformedField "subjectRevision")
+        match authenticatedPayload with
+        | Some payload when facts.ApiRevision > 0L && payload.SubjectRevision <> facts.ApiRevision -> errors.Add(GitHubEventSecurityFinding.PayloadApiDisagreement "revision")
+        | _ -> ()
         if facts.RequiredPermissions.IsEmpty || not(isCanonical facts.RequiredPermissions) then errors.Add(GitHubEventSecurityFinding.NonCanonicalPermissions "required")
         if not(isCanonical facts.GrantedPermissions) then errors.Add(GitHubEventSecurityFinding.NonCanonicalPermissions "granted")
         for permission in facts.RequiredPermissions do
@@ -125,15 +180,17 @@ module GitHubEventSecurityQualification =
         if facts.AttemptsDerivedWrite then errors.Add(GitHubEventSecurityFinding.DirectWriteAttempt facts.DeliveryId)
         if errors.Count > 0 then Error(List.ofSeq errors)
         else
+            let payload = authenticatedPayload |> Option.get
+            let digest = payloadDigest |> Option.get
             let lower = facts.ReceivedAtUnixSeconds - facts.ReplayWindowSeconds
             let upper = facts.ReceivedAtUnixSeconds + facts.ReplayWindowSeconds
-            let schedulingKey = strings [ facts.Repository; facts.PayloadSubject ] |> hash
+            let schedulingKey = strings [ payload.Repository; payload.Subject ] |> hash
             let unsigned =
-                { SchemaVersion = 1; DeliveryId = facts.DeliveryId; InstallationId = facts.InstallationId
-                  Repository = facts.Repository; SignatureAlgorithm = "sha256"; Signature = facts.Signature
-                  PayloadSha256 = facts.RawPayload |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+                { SchemaVersion = 1; DeliveryId = facts.DeliveryId; InstallationId = payload.InstallationId
+                  Repository = payload.Repository; SignatureAlgorithm = "sha256"; Signature = facts.Signature
+                  PayloadSha256 = digest
                   EventTimestampUnixSeconds = facts.EventTimestampUnixSeconds
-                  Subject = facts.PayloadSubject; SubjectRevision = facts.PayloadRevision
+                  Subject = payload.Subject; SubjectRevision = payload.SubjectRevision
                   RequiredPermissions = facts.RequiredPermissions; ReplayLowerBound = lower; ReplayUpperBound = upper
                   Disposition = disposition; AttemptsDerivedWrite = false; SchedulingKey = schedulingKey; Seal = "" }
             Ok { unsigned with Seal = sealOf unsigned }

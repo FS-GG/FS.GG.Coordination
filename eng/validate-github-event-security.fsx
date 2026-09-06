@@ -25,17 +25,18 @@ if shaFile "evidence/github-substrate-v2/accepted/GS2-07.3.json" <> text "prereq
 if shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" <> text "protocolSha256" c then failwith "canonical Quint protocol changed"
 if text "disposition" c <> disposition then failwith "event disposition differs"
 
-let payload = Encoding.UTF8.GetBytes "{\"action\":\"edited\",\"issue\":{\"id\":310}}"
+let payloadFor installation repository kind id revision =
+    Encoding.UTF8.GetBytes $"{{\"action\":\"edited\",\"installation\":{{\"id\":{installation}}},\"repository\":{{\"full_name\":\"{repository}\"}},\"subject\":{{\"kind\":\"{kind}\",\"id\":\"{id}\",\"revision\":{revision}}}}}"
+let payload = payloadFor 81234L "FS-GG/FS.GG.Coordination" "issue" "310" 7L
 let secret = Encoding.UTF8.GetBytes "0123456789abcdef0123456789abcdef"
 let received = c.GetProperty("receivedAtUnixSeconds").GetInt64()
 let window = c.GetProperty("replayWindowSeconds").GetInt64()
 let baselineFacts =
     let unsigned =
         { RawPayload = payload; Signature = ""; Secret = secret; DeliveryId = "delivery-gs2-07-4"
-          InstallationId = c.GetProperty("installationId").GetInt64(); ExpectedInstallationId = c.GetProperty("installationId").GetInt64()
-          Repository = text "repository" c; ExpectedRepository = text "repository" c
+          ExpectedInstallationId = c.GetProperty("installationId").GetInt64(); ExpectedRepository = text "repository" c
           ReceivedAtUnixSeconds = received; EventTimestampUnixSeconds = received; ReplayWindowSeconds = window
-          SeenDeliveryIds = []; PayloadSubject = "issue:310"; PayloadRevision = 7L
+          SeenDeliveryIds = []; SeenPayloadSha256 = []
           ApiSubject = "issue:310"; ApiRevision = 7L
           RequiredPermissions = strings "requiredPermissions" c; GrantedPermissions = strings "requiredPermissions" c
           AttemptsDerivedWrite = false }
@@ -56,8 +57,12 @@ let executeGenerated control =
             "sha256=" + (hmac.ComputeHash(payload) |> Convert.ToHexString |> _.ToLowerInvariant())
         baselineFacts.Signature = independent && compile baselineFacts = Ok baseline
     | SignatureNegative -> compile { baselineFacts with RawPayload = Encoding.UTF8.GetBytes "{}" } |> has GitHubEventSecurityFinding.InvalidSignature
-    | EventInstallationScope -> compile { baselineFacts with InstallationId = 7L } |> has (GitHubEventSecurityFinding.InstallationScopeMismatch 7L)
-    | EventRepositoryScope -> compile { baselineFacts with Repository = "FS-GG/Outside" } |> has (GitHubEventSecurityFinding.RepositoryScopeMismatch "FS-GG/Outside")
+    | EventInstallationScope ->
+        let changed = payloadFor 7L baselineFacts.ExpectedRepository "issue" "310" 7L
+        compile { baselineFacts with RawPayload = changed; Signature = sign secret changed } |> has (GitHubEventSecurityFinding.InstallationScopeMismatch 7L)
+    | EventRepositoryScope ->
+        let changed = payloadFor baselineFacts.ExpectedInstallationId "FS-GG/Outside" "issue" "310" 7L
+        compile { baselineFacts with RawPayload = changed; Signature = sign secret changed } |> has (GitHubEventSecurityFinding.RepositoryScopeMismatch "FS-GG/Outside")
     | ReplayLowerBound -> compile { baselineFacts with EventTimestampUnixSeconds = received - window } |> Result.isOk
     | ReplayUpperBound -> compile { baselineFacts with EventTimestampUnixSeconds = received + window } |> Result.isOk
     | DuplicateDelivery -> compile { baselineFacts with SeenDeliveryIds = [ baselineFacts.DeliveryId ] } |> has (GitHubEventSecurityFinding.DuplicateDelivery baselineFacts.DeliveryId)
@@ -84,10 +89,12 @@ let executeIndependent control =
     | SignaturePositive -> sign secret payload = baselineFacts.Signature
     | SignatureNegative -> compile { baselineFacts with Signature = baselineFacts.Signature.ToUpperInvariant() } |> has GitHubEventSecurityFinding.InvalidSignature
     | EventInstallationScope -> compile { baselineFacts with ExpectedInstallationId = 0L } |> has (GitHubEventSecurityFinding.MalformedField "installationId")
-    | EventRepositoryScope -> compile { baselineFacts with ExpectedRepository = "FS-GG/Other" } |> has (GitHubEventSecurityFinding.RepositoryScopeMismatch baselineFacts.Repository)
+    | EventRepositoryScope -> compile { baselineFacts with ExpectedRepository = "FS-GG/Other" } |> has (GitHubEventSecurityFinding.RepositoryScopeMismatch baseline.Repository)
     | ReplayLowerBound -> compile { baselineFacts with EventTimestampUnixSeconds = received - window - 1L } |> has (GitHubEventSecurityFinding.ReplayExpired(received - window - 1L))
     | ReplayUpperBound -> compile { baselineFacts with EventTimestampUnixSeconds = received + window + 1L } |> has (GitHubEventSecurityFinding.ReplayFromFuture(received + window + 1L))
-    | DuplicateDelivery -> compile { baselineFacts with SeenDeliveryIds = [ "other"; baselineFacts.DeliveryId ] } |> has (GitHubEventSecurityFinding.DuplicateDelivery baselineFacts.DeliveryId)
+    | DuplicateDelivery ->
+        let changedId = { baselineFacts with DeliveryId = "delivery-changed"; SeenDeliveryIds = [ baselineFacts.DeliveryId ]; SeenPayloadSha256 = [ baseline.PayloadSha256 ] }
+        compile changedId |> has (GitHubEventSecurityFinding.DuplicatePayload baseline.PayloadSha256)
     | PayloadApiAgreement -> compile baselineFacts |> Result.isOk
     | PayloadApiDisagreement -> compile { baselineFacts with ApiSubject = "issue:311" } |> has (GitHubEventSecurityFinding.PayloadApiDisagreement "subject")
     | LeastPrivilege -> compile { baselineFacts with GrantedPermissions = List.rev baselineFacts.GrantedPermissions } |> has (GitHubEventSecurityFinding.NonCanonicalPermissions "granted")

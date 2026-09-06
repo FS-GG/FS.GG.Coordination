@@ -1,0 +1,65 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-4-event-security",
+  "milestone": "GS2-07.4 — Event security",
+  "critic": "critic-gs2-07-4-r1",
+  "initial_reviewed_commit": "084ac6a3502c81b478e5ccc4fb16e797d11d376e",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "084ac6a3502c81b478e5ccc4fb16e797d11d376e"
+  ],
+  "findings": [
+    {
+      "id": "GS2074-C01",
+      "severity": "major",
+      "summary": "The authenticated raw payload is not the source of the installation, repository, subject, or revision that the contract authorizes.",
+      "evidence": [
+        "/home/developer/projects/.github/docs/github-substrate-v2-roadmap.md:1270-1272 requires signature verification, exact installation/repository scope, and payload/API disagreement checking.",
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubEventSecurityQualification.fs:99-104 authenticates RawPayload but scope-checks independent InstallationId and Repository fields; lines 114-116 compare independently supplied PayloadSubject/PayloadRevision with the API fields without deriving them from RawPayload.",
+        "A built-artifact F# Interactive adversary signed raw JSON containing installation.id=999, repository.full_name=FS-GG/Outside, and issue.id=999, while supplying InstallationId=81234, Repository=FS-GG/FS.GG.Coordination, PayloadSubject=issue:310, and matching API facts; compile returned Ok with the claimed in-scope repository and issue:310.",
+        "tests/FS.GG.Coordination.UnitTests/GitHubEventSecurityTests.fs:35-46 mutates raw bytes and supplied scope separately, and lines 58-62 mutate only API facts; no test contradicts signed payload contents with the separately supplied authorization facts."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "No repair round has been reviewed; bind all payload-derived authorization facts to a strict parse of the authenticated raw bytes (or a comparably unforgeable typed boundary) and add contradictory-payload negative coverage."
+      ]
+    },
+    {
+      "id": "GS2074-C02",
+      "severity": "major",
+      "summary": "A captured valid payload and signature can be accepted again by changing the unauthenticated delivery ID.",
+      "evidence": [
+        "/home/developer/projects/.github/docs/github-substrate-v2-roadmap.md:1270-1272 requires replay bounds, and work/310-gs2-07-4-event-security/spec.md:30 requires acceptance only for first-seen deliveries and rejection of replayed hints.",
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubEventSecurityQualification.fs:71-79 authenticates only RawPayload; line 113 checks replay only by caller-supplied DeliveryId, while the public compile path has no seen payload digest/signature inventory.",
+        "A built-artifact F# Interactive adversary compiled one signed payload as delivery-original, then submitted identical RawPayload, Signature, timestamp, and event facts as delivery-changed with SeenDeliveryIds=[delivery-original]; the second compile returned Ok.",
+        "tests/FS.GG.Coordination.UnitTests/GitHubEventSecurityTests.fs:49-56 covers only an exact repeated delivery ID. Lines 77-86 detect a changed ID only when a caller already supplies the specific prior plan to replay, which does not close the public compile acceptance path."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "No repair round has been reviewed; make the normal acceptance path reject replay of authenticated event bytes independently of a mutable delivery header and add a changed-delivery-ID replay test through that path."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "084ac6a3502c81b478e5ccc4fb16e797d11d376e",
+    "verdict": "changes-required",
+    "unresolved_blocker_major": [
+      "GS2074-C01",
+      "GS2074-C02"
+    ]
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

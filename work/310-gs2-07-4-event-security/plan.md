@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/310-gs2-07-4-event-security/spec.md sha256:e4f11a5fef937e245ba4a0f861e840829893c243d2322a3fa48f90065ee262f4 schemaVersion:1
+- spec: work/310-gs2-07-4-event-security/spec.md sha256:c4fc2a37ccd870b874fe9d4ccd071b284f1a6725f47798464acfaa05a91675a9 schemaVersion:1
 - clarifications: work/310-gs2-07-4-event-security/clarifications.md sha256:6f606545c1ad25948f3e44eab0288d3c716eb3563dabcf52759ac7eb2601c604 schemaVersion:1
-- checklist: work/310-gs2-07-4-event-security/checklist.md sha256:fc80c69c40ee4098471a4f1290ecc688ba0d0a4af18b0ed77f6c8e273f8bd7ce schemaVersion:1
+- checklist: work/310-gs2-07-4-event-security/checklist.md sha256:30fa1e44ae3775f2d4d27f700451711954376b341389775624580614ee777270 schemaVersion:1
 
 ## Plan Scope
 - Work item 310-gs2-07-4-event-security is planned from the current specification, clarification, and checklist facts.
@@ -27,7 +27,7 @@ Prose status: planned
 - Checklist result count: 1.
 
 ## Plan Decisions
-- PD-001 [AC-001] [FR-001] complete: Add a pure `GitHubEventSecurityQualification` module that parses strict event facts, verifies lowercase HMAC-SHA256 in constant time, checks exact installation/repository scope, inclusive replay bounds and first-seen delivery identity, exact payload/API subject and revision agreement, and equality of required versus granted permission sets before emitting a reconciliation-only scheduling disposition.
+- PD-001 [AC-001] [FR-001] complete: Add a pure `GitHubEventSecurityQualification` module that verifies lowercase HMAC-SHA256 in constant time before strictly parsing installation, repository, subject, and revision from authenticated bytes; checks exact configured/API agreement, inclusive replay bounds, first-seen delivery identity and authenticated payload digest, and equality of required versus granted permission sets before emitting a reconciliation-only scheduling disposition.
 
 ## Contract Impact
 - PC-001 [PD-001] additiveApi: Add an isolated public qualification-contract module with canonical length-framed serialization, SHA-256 sealing, explicit refusal codes, and no dependency on GitHub IO, network, queue, mutation, or canonical Quint protocol modules.
