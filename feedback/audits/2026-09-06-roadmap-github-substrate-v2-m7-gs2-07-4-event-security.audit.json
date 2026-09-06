@@ -1,0 +1,8 @@
+{
+  "auditSchema": 1,
+  "report": "feedback/2026-09-06-roadmap-github-substrate-v2-m7-gs2-07-4-event-security.md",
+  "reportSha256": "10c652d1019af46abf88344c01c7ba885358eebf1ee6a8e8a16bb1410ae9395a",
+  "criticMode": "zero-event-contract-validation",
+  "criticPromptVersion": "actionability-v1",
+  "findings": []
+}

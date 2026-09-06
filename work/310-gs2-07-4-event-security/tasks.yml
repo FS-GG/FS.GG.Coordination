@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 310-gs2-07-4-event-security
+  title: "Gs2 07 4 Event Security"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/310-gs2-07-4-event-security/spec.md
+  sourceClarifications: work/310-gs2-07-4-event-security/clarifications.md
+  sourceChecklist: work/310-gs2-07-4-event-security/checklist.md
+  sourcePlan: work/310-gs2-07-4-event-security/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/310-gs2-07-4-event-security/spec.md
+    digest: e4f11a5fef937e245ba4a0f861e840829893c243d2322a3fa48f90065ee262f4
+    schemaVersion: 1
+  - label: clarifications
+    path: work/310-gs2-07-4-event-security/clarifications.md
+    digest: 6f606545c1ad25948f3e44eab0288d3c716eb3563dabcf52759ac7eb2601c604
+    schemaVersion: 1
+  - label: checklist
+    path: work/310-gs2-07-4-event-security/checklist.md
+    digest: fc80c69c40ee4098471a4f1290ecc688ba0d0a4af18b0ed77f6c8e273f8bd7ce
+    schemaVersion: 1
+  - label: plan
+    path: work/310-gs2-07-4-event-security/plan.md
+    digest: e2f5175e3b489353d00c2afaee971f922ccc7761106f17a0016355bf8173f04f
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: wren-0df1
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: done
+    owner: wren-0df1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: done
+    owner: wren-0df1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: done
+    owner: wren-0df1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: wren-0df1
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 310-gs2-07-4-event-security."

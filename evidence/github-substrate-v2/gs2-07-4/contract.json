@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.github-event-security-evidence/v1",
+  "unit": "GS2-07.4",
+  "sourceRevision": "41885e9a2a2a9c50bf99e6a085d0ce7c861e4e84",
+  "roadmapRevision": "cac998e81bbbdd1f4b1259e3b9a7173e161a9da6",
+  "roadmapSha256": "66b69d9a0c5df8f4786a5c7954a5d0b3fb87e6ce2f4ed0563b3b43e45179952a",
+  "prerequisiteReceiptDigest": "4c6a18a3c8cca8ebd59ce040f63f0192c07f9468ad155e7941f676b0b611719c",
+  "prerequisiteFileSha256": "27195572e11d21b4438b0dbf94ec8ec341f4fb99e65574e92203bf37d1ceefd2",
+  "protocolSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "installationId": 81234,
+  "receivedAtUnixSeconds": 1788702000,
+  "replayWindowSeconds": 300,
+  "requiredPermissions": ["contents:read", "metadata:read"],
+  "disposition": "schedule-reconciliation",
+  "network": false,
+  "productionQueue": false,
+  "productionMutation": false
+}

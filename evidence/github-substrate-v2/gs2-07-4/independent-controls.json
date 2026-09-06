@@ -1,0 +1,8 @@
+{
+  "schema": "fsgg.github-event-security-controls/v1",
+  "unit": "GS2-07.4",
+  "authoring": "independent",
+  "caseContract": "independently selected boundary, encoding, scope, authority, and privilege adversaries",
+  "controls": ["prerequisite", "roadmap", "signature-positive", "signature-negative", "installation-scope", "repository-scope", "replay-lower-bound", "replay-upper-bound", "duplicate-delivery", "payload-api-agreement", "payload-api-disagreement", "least-privilege", "excessive-permission", "missing-permission", "scheduling-only", "exclusive-writer", "direct-write", "ordering", "seal", "replay", "quint-preservation", "no-network", "no-production-queue", "no-mutation"],
+  "cases": ["compare prerequisite digest and bytes", "compare canonical roadmap revision", "recompute signature independently", "uppercase signature encoding", "supply non-positive expected installation", "change expected repository", "reject one second before lower bound", "reject one second after upper bound", "place delivery in seen set", "match payload/API subject", "change API subject", "reject reversed granted permissions", "detect surplus write permission", "detect absent metadata permission", "verify plan has no writer instruction", "verify disposition cannot be changed", "set input write flag", "reject non-canonical serialized bytes", "tamper one seal nibble", "change delivery on replay", "compare retained protocol digest", "case-insensitive network-token canary", "case-insensitive queue-token canary", "case-insensitive write-client canary"]
+}

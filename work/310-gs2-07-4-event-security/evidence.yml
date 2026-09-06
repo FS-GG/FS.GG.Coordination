@@ -1,0 +1,173 @@
+schemaVersion: 1
+workId: 310-gs2-07-4-event-security
+stage: evidence
+status: evidenceReady
+sourceSpec: work/310-gs2-07-4-event-security/spec.md
+sourceClarifications: work/310-gs2-07-4-event-security/clarifications.md
+sourceChecklist: work/310-gs2-07-4-event-security/checklist.md
+sourcePlan: work/310-gs2-07-4-event-security/plan.md
+sourceTasks: work/310-gs2-07-4-event-security/tasks.yml
+sourceAnalysis: readiness/310-gs2-07-4-event-security/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/310-gs2-07-4-event-security/analysis.json
+    digest: 5532449b3c32dbc4f638bb95f5721b1250e2b8595ef63060ea659db581db57f0
+    schemaVersion: 1
+  - label: checklist
+    path: work/310-gs2-07-4-event-security/checklist.md
+    digest: fc80c69c40ee4098471a4f1290ecc688ba0d0a4af18b0ed77f6c8e273f8bd7ce
+    schemaVersion: 1
+  - label: clarifications
+    path: work/310-gs2-07-4-event-security/clarifications.md
+    digest: 6f606545c1ad25948f3e44eab0288d3c716eb3563dabcf52759ac7eb2601c604
+    schemaVersion: 1
+  - label: plan
+    path: work/310-gs2-07-4-event-security/plan.md
+    digest: e2f5175e3b489353d00c2afaee971f922ccc7761106f17a0016355bf8173f04f
+    schemaVersion: 1
+  - label: spec
+    path: work/310-gs2-07-4-event-security/spec.md
+    digest: e4f11a5fef937e245ba4a0f861e840829893c243d2322a3fa48f90065ee262f4
+    schemaVersion: 1
+  - label: tasks
+    path: work/310-gs2-07-4-event-security/tasks.yml
+    digest: e3d7ac93f9e24efb635e530417830e0838c6c3e0277e827e45ffd5ff897282c8
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubEventSecurityTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
+      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubEventSecurityTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
+      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubEventSecurityTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
+      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubEventSecurityTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
+      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubEventSecurityTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-4/gs2-07-4-positive-adversarial-mutation.trx
+      digest: "sha256:96f9b4b1e3ab026eee8a3e5614534d60ee9603ea50dd7c8ce734eff0fe8928a4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
