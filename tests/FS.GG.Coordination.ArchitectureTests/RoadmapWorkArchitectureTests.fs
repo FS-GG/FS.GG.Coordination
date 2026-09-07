@@ -391,7 +391,12 @@ let ``roadmap work skill safety clauses are independently deletion sensitive`` (
     let validator = Path.Combine(root, "eng/validate-roadmap-work-skill.fsx")
     let original = File.ReadAllText skillPath
     let requiredClauses =
-        [ "fresh-exact-candidate-checkout"
+        [ "routine-development/v1"
+          "one accountable owner"
+          "They are not a\nuniversal six-check preflight"
+          "Do not open a receipt phase for routine work"
+          "asynchronous and non-blocking"
+          "fresh-exact-candidate-checkout"
           "provider-artifacts-tracked-and-hash-bound"
           "provider-contract-canonical-version"
           "two-consecutive-coherent-no-change"

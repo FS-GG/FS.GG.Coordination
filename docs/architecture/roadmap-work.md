@@ -367,3 +367,10 @@ All operations require one immutable `--unit`. No operation reads the Project,
 claims work, writes GitHub settings, deploys, subscribes to events, or selects a
 successor. After gate results report the selected unit boundary, the invocation
 stops. A successor needs a new authority decision and invocation.
+
+The skill selects delivery separately from qualification. Source work explicitly admitted by the shared
+routine policy uses one accountable owner and one exact-head PR, without a second SDD, critique, receipt,
+or projection cycle. The immutable unit, prerequisite, manifest, and gate bindings remain. Migration,
+cutover, settings, credentials, deployment, publication, destructive effects, and external-contract
+acceptance remain on the strict path. Post-merge telemetry and receiver-adoption observation are
+asynchronous unless the selected unit's exact acceptance contract makes them synchronous evidence.
