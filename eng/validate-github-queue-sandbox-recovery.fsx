@@ -21,6 +21,22 @@ let prestateDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-presta
 let prestate = prestateDocument.RootElement
 let proofDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-proof.json"
 let proof = proofDocument.RootElement
+let checkpointDocument = json "evidence/github-substrate-v2/gs2-07-6/durable-checkpoint.json"
+let checkpoint = checkpointDocument.RootElement
+let checkpointJournalDocument = json "evidence/github-substrate-v2/gs2-07-6/checkpoint-journal.json"
+let checkpointJournal = checkpointJournalDocument.RootElement
+let finalJournalDocument = json "evidence/github-substrate-v2/gs2-07-6/final-journal.json"
+let finalJournal = finalJournalDocument.RootElement
+let refusalDocument = json "evidence/github-substrate-v2/gs2-07-6/expired-admission-refusal.json"
+let refusal = refusalDocument.RootElement
+let handoffDocument = json "evidence/github-substrate-v2/gs2-07-6/process-handoff.json"
+let handoff = handoffDocument.RootElement
+let cleanupReadbackDocument = json "evidence/github-substrate-v2/gs2-07-6/cleanup-readback.json"
+let cleanupReadback = cleanupReadbackDocument.RootElement
+let observedRecordDocument = json "evidence/github-substrate-v2/gs2-07-6/authority-observed.json"
+let observedRecord = observedRecordDocument.RootElement
+let currentRecordDocument = json "evidence/github-substrate-v2/gs2-07-6/authority-current.json"
+let currentRecord = currentRecordDocument.RootElement
 let text (name:string) = c.GetProperty(name).GetString()
 let boolean (name:string) = c.GetProperty(name).GetBoolean()
 let integer (name:string) = c.GetProperty(name).GetInt64()
@@ -55,16 +71,21 @@ let pilotFacts:QueuePilotFacts =
 let get = function Ok value -> value | Error errors -> failwithf "baseline refused: %A" errors
 let has expected = function Error errors -> List.contains expected errors | Ok _ -> false
 let pilot = Sandbox.compilePilot pilotFacts |> get
-let retryEffect = recovery.GetProperty("retryEffect")
-let operation = stringAt retryEffect "operation"
-let retryDigest = stringAt retryEffect "firstResultDigest"
-let rulesetId = cleanup.GetProperty("rulesetId").GetInt64()
-let effects = [ { OperationId=operation; Attempt=1; ResultDigest=retryDigest } ]
+let effectsAt (node:JsonElement) (name:string) =
+    node.GetProperty(name).EnumerateArray()
+    |> Seq.map(fun effect -> ({ OperationId=stringAt effect "operationId"; Attempt=effect.GetProperty("attempt").GetInt32(); ResultDigest=stringAt effect "resultDigest" }:QueueEffect))
+    |> Seq.toList
+let compensationsAt (node:JsonElement) (name:string) =
+    node.GetProperty(name).EnumerateArray()
+    |> Seq.map(fun row -> ({ OperationId=stringAt row "operationId"; CompensationId=stringAt row "compensationId"; FinalStateDigest=stringAt row "finalStateDigest" }:QueueCompensation))
+    |> Seq.toList
+let effects = effectsAt recovery "appliedEffects"
+let retryEffects = effectsAt recovery "retryEffects"
+let compensations = compensationsAt cleanup "compensations"
 let recoveryFacts =
     { Repository=Sandbox.repository; RepositoryId=Sandbox.repositoryId; PilotSeal=pilot.Seal
       DurableCheckpointDigest=stringAt initial "durableCheckpointDigest"; ResumeCheckpointDigest=stringAt initial "resumeCheckpointDigest"; Interrupted=initial.GetProperty("interrupted").GetBoolean(); FailedStepInjected=initial.GetProperty("failedStepInjected").GetBoolean()
-      AppliedEffects=effects; RetryEffects=effects |> List.map(fun effect -> { effect with Attempt=2 })
-      Compensations=[ { OperationId=operation; CompensationId=$"delete-ruleset-{rulesetId}"; FinalStateDigest=stringAt cleanup "finalSettingsDigest" } ]
+      AppliedEffects=effects; RetryEffects=retryEffects; Compensations=compensations
       DuplicateEffectCount=recovery.GetProperty("duplicateEffectCount").GetInt32(); TemporaryResourceCount=cleanup.GetProperty("temporaryBranchCount").GetInt32()+cleanup.GetProperty("queueRefCount").GetInt32()+cleanup.GetProperty("temporaryWorkflowFileCount").GetInt32(); PreVisibility=stringAt settings "visibility"; FinalVisibility=stringAt cleanup "finalVisibility"
       PreSettingsDigest=stringAt settings "digest"; FinalSettingsDigest=stringAt cleanup "finalSettingsDigest"; Recoverable=true }
 let baseline = Sandbox.compileRecovery recoveryFacts |> get
@@ -83,10 +104,17 @@ let hostedRecovery () =
     let recoveryBaseSha = stringAt recovery "baseSha"
     let expectedQueueRef = $"refs/heads/gh-readonly-queue/{baseName}/pr-{pullRequestNumber}-{recoveryBaseSha}"
     let authoritySources (row:JsonElement) =
-        stringAt row "claimSource"="https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5565937139"
+        stringAt row "claimSource"="https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5575246586"
         && stringAt row "reviewSource"="https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174"
         && stringAt row "dependencySource"="evidence/github-substrate-v2/accepted/GS2-07.5.json"
         && stringAt row "settingsSource"="evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json"
+    let effectRows (node:JsonElement) name = effectsAt node name |> List.map(fun row -> row.OperationId,row.Attempt,row.ResultDigest)
+    let compensationRows (node:JsonElement) name = compensationsAt node name |> List.map(fun row -> row.OperationId,row.CompensationId,row.FinalStateDigest)
+    let sameAuthority (left:JsonElement) (right:JsonElement) =
+        [ "claimSource"; "reviewDigest"; "reviewSource"; "dependencyDigest"; "dependencySource"; "settingsDigest"; "settingsSource" ]
+        |> List.forall(fun name -> stringAt left name=stringAt right name)
+        && int64At left "observedAtUnixSeconds"=int64At right "observedAtUnixSeconds"
+        && int64At left "claimGeneration"=int64At right "claimGeneration"
     stringAt hosted "repository"=Sandbox.repository
     && int64At hosted "repositoryId"=Sandbox.repositoryId
     && stringAt prestate "repository"=Sandbox.repository
@@ -95,6 +123,20 @@ let hostedRecovery () =
     && initial.GetProperty("interrupted").GetBoolean()
     && int64At initial "expiredObservedAtUnixSeconds">=int64At initial "expiresAtUnixSeconds"
     && stringAt initial "durableCheckpointDigest"=stringAt initial "resumeCheckpointDigest"
+    && shaFile "evidence/github-substrate-v2/gs2-07-6/durable-checkpoint.json"=stringAt initial "durableCheckpointDigest"
+    && shaFile "evidence/github-substrate-v2/gs2-07-6/checkpoint-journal.json"=stringAt initial "checkpointJournalDigest"
+    && stringAt checkpoint "journalDigest"=stringAt initial "checkpointJournalDigest"
+    && stringAt checkpoint "candidateSha"=stringAt candidate "sha"
+    && stringAt checkpoint "baseRef"=baseRef
+    && stringAt checkpoint "baseSha"=stringAt initial "baseSha"
+    && int64At checkpoint "runId"=int64At initialRun "id"
+    && stringAt handoff "checkpointDigest"=stringAt initial "durableCheckpointDigest"
+    && handoff.GetProperty("separateProcesses").GetBoolean()
+    && int64At handoff "preparePid"<>int64At handoff "resumePid"
+    && stringAt refusal "decision"="refused-expired-admission"
+    && refusal.GetProperty("freshAdmissionRequired").GetBoolean()
+    && int64At refusal "priorAdmissionExpiresAtUnixSeconds"=int64At initial "expiresAtUnixSeconds"
+    && int64At refusal "observedAtUnixSeconds"=int64At initial "expiredObservedAtUnixSeconds"
     && stringAt candidate "sha"=stringAt pullRequestRun "headSha"
     && stringAt pullRequestRun "event"="pull_request"
     && stringAt pullRequestRun "status"="completed"
@@ -110,17 +152,13 @@ let hostedRecovery () =
     && (recovery.GetProperty("jobs").EnumerateArray() |> Seq.map(fun job -> stringAt job "name", stringAt job "headSha", stringAt job "conclusion") |> Seq.toList)=[("queue-growth",stringAt recoveryRun "headSha","success");("queue-pilot",stringAt recoveryRun "headSha","success")]
     && recovery.GetProperty("newRequiredCheckExecuted").GetBoolean()
     && recovery.GetProperty("duplicateEffectCount").GetInt32()=0
-    && retryEffect.GetProperty("attempts").GetInt32()=2
-    && stringAt retryEffect "firstResultDigest"=stringAt retryEffect "secondResultDigest"
+    && effectRows recovery "appliedEffects"=effectRows finalJournal "appliedEffects"
+    && effectRows recovery "retryEffects"=effectRows finalJournal "retryEffects"
+    && compensationRows cleanup "compensations"=compensationRows finalJournal "compensations"
+    && effectRows checkpointJournal "appliedEffects"=(effectRows finalJournal "appliedEffects" |> List.take (checkpointJournal.GetProperty("appliedEffects").GetArrayLength()))
+    && stringAt cleanup "finalJournalDigest"=shaFile "evidence/github-substrate-v2/gs2-07-6/final-journal.json"
     && stringAt candidate "sha"=stringAt candidate "currentShaAtReevaluation"
     && stringAt recovery "priorBaseSha"<>stringAt recovery "baseSha"
-    && int64At observedAuthority "observedAtUnixSeconds"=int64At initial "admittedAtUnixSeconds"
-    && int64At currentAuthority "observedAtUnixSeconds"=int64At recovery "evaluatedAtUnixSeconds"
-    && authoritySources observedAuthority && authoritySources currentAuthority
-    && stringAt observedAuthority "dependencyDigest"=text "prerequisiteReceiptDigest"
-    && stringAt currentAuthority "dependencyDigest"=text "prerequisiteReceiptDigest"
-    && stringAt observedAuthority "settingsDigest"=stringAt settings "digest"
-    && stringAt currentAuthority "settingsDigest"=stringAt settings "digest"
     && cleanup.GetProperty("temporaryBranchCount").GetInt32()=0
     && cleanup.GetProperty("queueRefCount").GetInt32()=0
     && cleanup.GetProperty("temporaryWorkflowFileCount").GetInt32()=0
@@ -130,6 +168,21 @@ let hostedRecovery () =
     && stringAt cleanup "finalActiveWorkflowInventoryDigest"=stringAt prestate "workflowInventoryDigest"
     && cleanup.GetProperty("repositorySecretCount").GetInt32()=secrets.GetProperty("repositorySecretCount").GetInt32()
     && cleanup.GetProperty("environmentSecretCount").GetInt32()=secrets.GetProperty("environmentSecretCount").GetInt32()
+    && stringAt cleanupReadback "finalVisibility"=stringAt cleanup "finalVisibility"
+    && stringAt cleanupReadback "finalSettingsDigest"=stringAt cleanup "finalSettingsDigest"
+    && stringAt cleanupReadback "finalBranchInventoryDigest"=stringAt cleanup "finalBranchInventoryDigest"
+    && stringAt cleanupReadback "finalActiveWorkflowInventoryDigest"=stringAt cleanup "finalActiveWorkflowInventoryDigest"
+    && sameAuthority observedAuthority observedRecord
+    && sameAuthority currentAuthority currentRecord
+    && int64At observedAuthority "observedAtUnixSeconds">=int64At initial "admittedAtUnixSeconds"
+    && int64At observedAuthority "observedAtUnixSeconds"<=int64At checkpoint "sealedAtUnixSeconds"
+    && int64At currentAuthority "observedAtUnixSeconds">=int64At refusal "observedAtUnixSeconds"
+    && int64At currentAuthority "observedAtUnixSeconds"<=int64At recovery "admittedAtUnixSeconds"
+    && authoritySources observedAuthority && authoritySources currentAuthority
+    && stringAt observedAuthority "dependencyDigest"=text "prerequisiteReceiptDigest"
+    && stringAt currentAuthority "dependencyDigest"=text "prerequisiteReceiptDigest"
+    && stringAt observedAuthority "settingsDigest"=stringAt settings "digest"
+    && stringAt currentAuthority "settingsDigest"=stringAt settings "digest"
     && let artifact=recovery.GetProperty("typedArtifact") in
        artifact.GetProperty("id").GetInt64()>0L
        && not(artifact.GetProperty("expired").GetBoolean())

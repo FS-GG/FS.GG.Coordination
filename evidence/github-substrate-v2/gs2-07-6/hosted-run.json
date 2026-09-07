@@ -1,181 +1,369 @@
 {
-  "schemaVersion": 1,
-  "provider": "github-rest-2022-11-28",
-  "repository": "FS-GG/FS.GG.GitHub.Substrate.Sandbox",
-  "repositoryId": 1353050537,
-  "pilotId": "gs2-07-6-pilot",
-  "claimGeneration": 5565937139,
-  "executedAt": "2026-09-07T07:30:08Z",
-  "readbackAt": "2026-09-07T07:32:58Z",
+  "authority": {
+    "current": {
+      "claimGeneration": 5575246586,
+      "claimSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5575246586",
+      "dependencyDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
+      "dependencySource": "evidence/github-substrate-v2/accepted/GS2-07.5.json",
+      "observedAtUnixSeconds": 1788813261,
+      "releaseObligationsMet": true,
+      "reviewDigest": "296e6c87a7cc064a6cea5016fcb9e0026ff79a5373eca81aa0d5dec9001db53e",
+      "reviewSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174",
+      "settingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
+      "settingsSource": "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json"
+    },
+    "fleet": false,
+    "observed": {
+      "claimGeneration": 5575246586,
+      "claimSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5575246586",
+      "dependencyDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
+      "dependencySource": "evidence/github-substrate-v2/accepted/GS2-07.5.json",
+      "observedAtUnixSeconds": 1788813172,
+      "releaseObligationsMet": true,
+      "reviewDigest": "296e6c87a7cc064a6cea5016fcb9e0026ff79a5373eca81aa0d5dec9001db53e",
+      "reviewSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174",
+      "settingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
+      "settingsSource": "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json"
+    },
+    "package": false,
+    "productionWriter": false,
+    "release": false,
+    "successor": false
+  },
   "candidate": {
-    "sha": "3daa72357df81d682951f05e6c9bcbfcb7faad06",
-    "currentShaAtReevaluation": "3daa72357df81d682951f05e6c9bcbfcb7faad06",
-    "pullRequestNumber": 11,
-    "pullRequest": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/11",
+    "currentShaAtReevaluation": "bfbdd530708c4f6cec03687a5bf1c2c15d673531",
+    "merged": false,
+    "pullRequest": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/14",
+    "pullRequestNumber": 14,
     "pullRequestState": "closed",
-    "merged": false
+    "sha": "bfbdd530708c4f6cec03687a5bf1c2c15d673531"
   },
-  "initialAdmission": {
-    "baseRef": "refs/heads/gs2-07-6-pilot-base",
-    "baseSha": "e172cef81cd52f8d1034eb8397f960f2666622f0",
-    "admittedAtUnixSeconds": 1788766220,
-    "expiresAtUnixSeconds": 1788766250,
-    "expiredObservedAtUnixSeconds": 1788766250,
-    "requiredChecks": ["queue-pilot"],
-    "pullRequestRun": {
-      "id": 34095773393,
-      "headSha": "3daa72357df81d682951f05e6c9bcbfcb7faad06",
-      "event": "pull_request",
-      "status": "completed",
-      "conclusion": "success",
-      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095773393",
-      "createdAt": "2026-09-07T07:30:08Z",
-      "updatedAt": "2026-09-07T07:30:16Z"
-    },
-    "mergeGroupRun": {
-      "id": 34095815108,
-      "headSha": "e8f9e74d16f8deffdeafd6ff26beea6c48c84579",
-      "event": "merge_group",
-      "status": "completed",
-      "conclusion": "cancelled",
-      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095815108",
-      "createdAt": "2026-09-07T07:30:37Z",
-      "updatedAt": "2026-09-07T07:31:01Z"
-    },
-    "jobs": [
-      {
-        "name": "queue-growth",
-        "headSha": "e8f9e74d16f8deffdeafd6ff26beea6c48c84579",
-        "status": "completed",
-        "conclusion": "failure",
-        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095815108/job/101659113535",
-        "startedAt": "2026-09-07T07:30:39Z",
-        "completedAt": "2026-09-07T07:30:45Z"
-      },
-      {
-        "name": "queue-pilot",
-        "headSha": "e8f9e74d16f8deffdeafd6ff26beea6c48c84579",
-        "status": "completed",
-        "conclusion": "cancelled",
-        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095815108/job/101659113422",
-        "startedAt": "2026-09-07T07:30:39Z",
-        "completedAt": "2026-09-07T07:31:01Z"
-      }
-    ],
-    "failedStepInjected": true,
-    "interrupted": true,
-    "durableCheckpoint": "pull-request checks green; queue entry admitted; first merge-group head observed",
-    "durableCheckpointDigest": "33b21600a4cb8565ada4aaeb148f423de9601d7383b4de9294f5e7eb8df84a96",
-    "resumeCheckpointDigest": "33b21600a4cb8565ada4aaeb148f423de9601d7383b4de9294f5e7eb8df84a96"
-  },
-  "recovery": {
-    "baseRef": "refs/heads/gs2-07-6-pilot-base",
-    "priorBaseSha": "e172cef81cd52f8d1034eb8397f960f2666622f0",
-    "baseSha": "44276e613060f9bd496bafb18b31bd777befba10",
-    "requiredChecks": ["queue-growth", "queue-pilot"],
-    "admittedAtUnixSeconds": 1788766273,
-    "expiresAtUnixSeconds": 1788766400,
-    "evaluatedAtUnixSeconds": 1788766324,
-    "mergeGroupRun": {
-      "id": 34095865706,
-      "headSha": "4b73597b05ea92ae3f4350fd156d0e2e92142b0a",
-      "event": "merge_group",
-      "status": "completed",
-      "conclusion": "success",
-      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095865706",
-      "createdAt": "2026-09-07T07:31:13Z",
-      "updatedAt": "2026-09-07T07:32:04Z"
-    },
-    "jobs": [
-      {
-        "name": "queue-growth",
-        "headSha": "4b73597b05ea92ae3f4350fd156d0e2e92142b0a",
-        "status": "completed",
-        "conclusion": "success",
-        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095865706/job/101659272220",
-        "startedAt": "2026-09-07T07:31:15Z",
-        "completedAt": "2026-09-07T07:31:20Z"
-      },
-      {
-        "name": "queue-pilot",
-        "headSha": "4b73597b05ea92ae3f4350fd156d0e2e92142b0a",
-        "status": "completed",
-        "conclusion": "success",
-        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095865706/job/101659272517",
-        "startedAt": "2026-09-07T07:31:15Z",
-        "completedAt": "2026-09-07T07:32:03Z"
-      }
-    ],
-    "candidateUnchanged": true,
-    "baseReevaluated": true,
-    "requiredChecksGrew": true,
-    "newRequiredCheckExecuted": true,
-    "retryEffect": {
-      "operation": "install-grown-ruleset",
-      "attempts": 2,
-      "firstResultDigest": "509215e9f5d344194b5ce070ccbf500d48c1f58b23d996446f80d05f0dfa5123",
-      "secondResultDigest": "509215e9f5d344194b5ce070ccbf500d48c1f58b23d996446f80d05f0dfa5123"
-    },
-    "duplicateEffectCount": 0,
-    "typedArtifact": {
-      "id": 10008553381,
-      "name": "gs2-07-6-34095865706",
-      "sizeInBytes": 440,
-      "expired": false,
-      "expiresAt": "2026-12-06T07:31:13Z",
-      "contentSha256": "3e16a87564139ecf3debb3e509cd061b8df7311d5ca74b07312045919b311df7",
-      "downloadUrl": "https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/artifacts/10008553381/zip"
-    }
-  },
+  "claimGeneration": 5575246586,
   "cleanup": {
-    "rulesetId": 22430743,
+    "compensations": [
+      {
+        "compensationId": "refuse-fresh-queue-entry",
+        "finalStateDigest": "46f2cae424bdbbe02a7b01670629d9717015818d4e4b1221076717b6070e0296",
+        "operationId": "fresh-queue-admission"
+      },
+      {
+        "compensationId": "disable-grown-ruleset",
+        "finalStateDigest": "0a0acbaa2d8153639df0cab1466204aefbb263815a664482be2e205b5accb065",
+        "operationId": "grow-required-checks"
+      },
+      {
+        "compensationId": "restore-initial-base",
+        "finalStateDigest": "722d9b909d258a8bf47f86fc1015960c3672e6d249a0956b9e1280c09a1b461d",
+        "operationId": "advance-base-ref"
+      },
+      {
+        "compensationId": "refuse-expired-queue-entry",
+        "finalStateDigest": "11bb20dc22472621944158ac86be3d123e6710df1e0b5c2afcbde90112c85f3b",
+        "operationId": "initial-queue-admission"
+      },
+      {
+        "compensationId": "close-pilot-pr",
+        "finalStateDigest": "c3eefb58d7c42440a9d4abec51d629544d635a6d936ff3c4d3fca96d611b3cf3",
+        "operationId": "create-pilot-pr"
+      },
+      {
+        "compensationId": "delete-pilot-ruleset",
+        "finalStateDigest": "bf5808caecfc69caac9031e712ee41ab81a96c09280092c8cac296b543197fe4",
+        "operationId": "create-initial-ruleset"
+      },
+      {
+        "compensationId": "restore-private-visibility",
+        "finalStateDigest": "adbc7c4696a442eb8418e1871b0bc0c3d01389d639990609399002a0377ecb2b",
+        "operationId": "make-sandbox-public"
+      },
+      {
+        "compensationId": "disable-pilot-workflow",
+        "finalStateDigest": "8934de1005f36b11c7ae777317090a7a57194627bc69fdbd723a59464a3919bc",
+        "operationId": "enable-pilot-workflow"
+      },
+      {
+        "compensationId": "delete-advanced-ref",
+        "finalStateDigest": "43ebd46ed664d24b356e95a05d7511d0ca2e4cd71b32aeae4fd7ce1bfb2cad6a",
+        "operationId": "create-advanced-ref"
+      },
+      {
+        "compensationId": "delete-candidate-ref",
+        "finalStateDigest": "8c953b7a0904c3195b0e2e70b4b5ac6de4c1deb6a13d5429504ef358fb3ac4d6",
+        "operationId": "create-candidate-ref"
+      },
+      {
+        "compensationId": "delete-base-ref",
+        "finalStateDigest": "a09bf5bd5f74cead052b54d400dbf22d6656f13cb6e5ed197b6d1be1f7f629c2",
+        "operationId": "create-base-ref"
+      }
+    ],
+    "environmentSecretCount": 0,
+    "finalActiveWorkflowInventoryDigest": "ac55f313d337ef9469ef992b74cc5fe00a6b3f7b3fe6a635bea33e0abdf2a508",
+    "finalBranchInventoryDigest": "3c3d74cff5ea950fe3527e2a74a1040ec81fd3e800e07749e3295a9fb4ffa281",
+    "finalJournalDigest": "96540159617db8c3e40e81780be73db386b720f3d55f2c5adbf2698a15b065cb",
+    "finalSettingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
+    "finalVisibility": "private",
+    "providerLimitReadback": "private ruleset endpoint returned expected HTTP 403",
     "pullRequestClosed": true,
-    "temporaryBranchCount": 0,
     "queueRefCount": 0,
+    "repositorySecretCount": 0,
+    "rulesetId": 22481905,
+    "schemaVersion": 1,
+    "temporaryBranchCount": 0,
     "temporaryWorkflowFileCount": 0,
     "temporaryWorkflowRegistration": {
       "id": 352059031,
-      "state": "disabled_manually",
-      "reason": "GitHub retains immutable workflow/run registry history after the file and every containing ref are removed."
-    },
-    "repositorySecretCount": 0,
-    "environmentSecretCount": 0,
-    "finalVisibility": "private",
-    "finalSettingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
-    "finalBranchInventoryDigest": "3c3d74cff5ea950fe3527e2a74a1040ec81fd3e800e07749e3295a9fb4ffa281",
-    "finalActiveWorkflowInventoryDigest": "ac55f313d337ef9469ef992b74cc5fe00a6b3f7b3fe6a635bea33e0abdf2a508",
-    "providerLimitReadback": "private ruleset endpoint returned expected HTTP 403"
+      "reason": "GitHub retains immutable workflow/run registry history after the file and every containing ref are removed.",
+      "state": "disabled_manually"
+    }
   },
-  "authority": {
-    "observed": {
-      "observedAtUnixSeconds": 1788766220,
-      "claimGeneration": 5565937139,
-      "claimSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5565937139",
-      "reviewDigest": "296e6c87a7cc064a6cea5016fcb9e0026ff79a5373eca81aa0d5dec9001db53e",
-      "reviewSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174",
-      "dependencyDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
-      "dependencySource": "evidence/github-substrate-v2/accepted/GS2-07.5.json",
-      "settingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
-      "settingsSource": "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json",
-      "releaseObligationsMet": true
+  "disposition": "queue-sandbox-recovered",
+  "executedAt": "2026-09-07T20:32:09Z",
+  "initialAdmission": {
+    "admittedAtUnixSeconds": 1788813140,
+    "authorityObservationDigest": "2514f507373331f19494e07e3a51e4394e32aab0c64f1398cec657e5350448bf",
+    "baseRef": "refs/heads/gs2-07-6-pilot-base",
+    "baseSha": "0bba1eef981c70f2cf1e73015e6548ed671c72bb",
+    "checkpointJournalDigest": "d74c13f5ee3f3055ce3e745c437ae03ccfefa00c8c9d518c86f7edce733280a5",
+    "durableCheckpoint": "evidence/github-substrate-v2/gs2-07-6/durable-checkpoint.json",
+    "durableCheckpointDigest": "30ad6fd7739872b0a2f06a458d6fc41d828f89b4a62cc4eb007c48e7485252d2",
+    "expiredObservedAtUnixSeconds": 1788813260,
+    "expiresAtUnixSeconds": 1788813260,
+    "failedStepInjected": true,
+    "interrupted": true,
+    "jobs": [
+      {
+        "completedAt": "2026-09-07T20:32:48Z",
+        "conclusion": "failure",
+        "headSha": "f8b3e5c2af01a9a80c5d24d8128a50d8eace964b",
+        "name": "queue-growth",
+        "startedAt": "2026-09-07T20:32:43Z",
+        "status": "completed",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159805161/job/101859039247"
+      },
+      {
+        "completedAt": "2026-09-07T20:33:05Z",
+        "conclusion": "cancelled",
+        "headSha": "f8b3e5c2af01a9a80c5d24d8128a50d8eace964b",
+        "name": "queue-pilot",
+        "startedAt": "2026-09-07T20:32:41Z",
+        "status": "completed",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159805161/job/101859038859"
+      }
+    ],
+    "mergeGroupRun": {
+      "conclusion": "cancelled",
+      "createdAt": "2026-09-07T20:32:39Z",
+      "event": "merge_group",
+      "headSha": "f8b3e5c2af01a9a80c5d24d8128a50d8eace964b",
+      "id": 34159805161,
+      "status": "completed",
+      "updatedAt": "2026-09-07T20:33:06Z",
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159805161"
     },
-    "current": {
-      "observedAtUnixSeconds": 1788766324,
-      "claimGeneration": 5565937139,
-      "claimSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5565937139",
-      "reviewDigest": "296e6c87a7cc064a6cea5016fcb9e0026ff79a5373eca81aa0d5dec9001db53e",
-      "reviewSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174",
-      "dependencyDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
-      "dependencySource": "evidence/github-substrate-v2/accepted/GS2-07.5.json",
-      "settingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
-      "settingsSource": "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json",
-      "releaseObligationsMet": true
+    "pullRequestRun": {
+      "conclusion": "success",
+      "createdAt": "2026-09-07T20:32:09Z",
+      "event": "pull_request",
+      "headSha": "bfbdd530708c4f6cec03687a5bf1c2c15d673531",
+      "id": 34159773964,
+      "status": "completed",
+      "updatedAt": "2026-09-07T20:32:18Z",
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159773964"
     },
-    "fleet": false,
-    "productionWriter": false,
-    "release": false,
-    "package": false,
-    "successor": false
+    "requiredChecks": [
+      "queue-pilot"
+    ],
+    "resumeCheckpointDigest": "30ad6fd7739872b0a2f06a458d6fc41d828f89b4a62cc4eb007c48e7485252d2"
   },
-  "disposition": "queue-sandbox-recovered"
+  "pilotId": "gs2-07-6-pilot",
+  "provider": "github-rest-2022-11-28",
+  "readbackAt": "2026-09-07T20:35:53Z",
+  "recovery": {
+    "admittedAtUnixSeconds": 1788813267,
+    "appliedEffects": [
+      {
+        "attempt": 1,
+        "operationId": "create-base-ref",
+        "resultDigest": "9d9b46dff3e4bc7cf583f68ea8651a89de67e541096c53dea230d3db4c252f79"
+      },
+      {
+        "attempt": 1,
+        "operationId": "create-candidate-ref",
+        "resultDigest": "51f37feb8b715243177c6119073b5d5c550983bb4bb5df30a0461a0769f82967"
+      },
+      {
+        "attempt": 1,
+        "operationId": "create-advanced-ref",
+        "resultDigest": "02c868ffe7c65b98b00b07062f6950aa10147c7821c72e1162ee2fb1607773f6"
+      },
+      {
+        "attempt": 1,
+        "operationId": "enable-pilot-workflow",
+        "resultDigest": "8715ceac726efca9c27295787403da0f862a3c5634dffd62491b4366d57f9ad6"
+      },
+      {
+        "attempt": 1,
+        "operationId": "make-sandbox-public",
+        "resultDigest": "4bdffc66bc1d8b5a93feaff2843739ea0df7a1b53abbd6dced2cd7be724820e9"
+      },
+      {
+        "attempt": 1,
+        "operationId": "create-initial-ruleset",
+        "resultDigest": "9d9554e090bbbdb06bebfdb2d916e783d012718374fef06653b228a1453fef29"
+      },
+      {
+        "attempt": 1,
+        "operationId": "create-pilot-pr",
+        "resultDigest": "af9745ac5b70f672e7afcab8bd915e9b58fb952ba64063465e2a064975a5a0ca"
+      },
+      {
+        "attempt": 1,
+        "operationId": "initial-queue-admission",
+        "resultDigest": "eb8ed24faa022f194bd39d8fb2a7537601f3b51ee1b20fb319f14e2ce334d62b"
+      },
+      {
+        "attempt": 1,
+        "operationId": "advance-base-ref",
+        "resultDigest": "f906e4265180ace3a2d79702979d14eb773135229e0d1a7da2e93449794acbe8"
+      },
+      {
+        "attempt": 1,
+        "operationId": "grow-required-checks",
+        "resultDigest": "8ee9aeb960bb2f009707a3a54589b5670d120774c54d4631a753b1cb02a7e185"
+      },
+      {
+        "attempt": 1,
+        "operationId": "fresh-queue-admission",
+        "resultDigest": "028cd93f9272ef1327c01a48ce49f6299b1ff7f38f960696d50e4cc4aebb74b5"
+      }
+    ],
+    "baseReevaluated": true,
+    "baseRef": "refs/heads/gs2-07-6-pilot-base",
+    "baseSha": "a280c8acf66d247eb4ae9ce8fecb369a9e133e5a",
+    "candidateUnchanged": true,
+    "duplicateEffectCount": 0,
+    "evaluatedAtUnixSeconds": 1788813334,
+    "expiredAdmissionRefusal": {
+      "decision": "refused-expired-admission",
+      "freshAdmissionRequired": true,
+      "observedAtUnixSeconds": 1788813260,
+      "priorAdmissionExpiresAtUnixSeconds": 1788813260,
+      "schemaVersion": 1
+    },
+    "expiresAtUnixSeconds": 1788813387,
+    "jobs": [
+      {
+        "completedAt": "2026-09-07T20:34:52Z",
+        "conclusion": "success",
+        "headSha": "bdff30feeeef4c4f85415f729b4a558e1fe7b540",
+        "name": "queue-growth",
+        "startedAt": "2026-09-07T20:34:46Z",
+        "status": "completed",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159940287/job/101859423422"
+      },
+      {
+        "completedAt": "2026-09-07T20:35:33Z",
+        "conclusion": "success",
+        "headSha": "bdff30feeeef4c4f85415f729b4a558e1fe7b540",
+        "name": "queue-pilot",
+        "startedAt": "2026-09-07T20:34:46Z",
+        "status": "completed",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159940287/job/101859423312"
+      }
+    ],
+    "mergeGroupRun": {
+      "conclusion": "success",
+      "createdAt": "2026-09-07T20:34:44Z",
+      "event": "merge_group",
+      "headSha": "bdff30feeeef4c4f85415f729b4a558e1fe7b540",
+      "id": 34159940287,
+      "status": "completed",
+      "updatedAt": "2026-09-07T20:35:34Z",
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159940287"
+    },
+    "newRequiredCheckExecuted": true,
+    "priorBaseSha": "0bba1eef981c70f2cf1e73015e6548ed671c72bb",
+    "processHandoff": {
+      "checkpointDigest": "30ad6fd7739872b0a2f06a458d6fc41d828f89b4a62cc4eb007c48e7485252d2",
+      "preparePid": 3110717,
+      "resumePid": 3111961,
+      "schemaVersion": 1,
+      "separateProcesses": true
+    },
+    "requiredChecks": [
+      "queue-growth",
+      "queue-pilot"
+    ],
+    "requiredChecksGrew": true,
+    "retryEffects": [
+      {
+        "attempt": 2,
+        "operationId": "create-base-ref",
+        "resultDigest": "9d9b46dff3e4bc7cf583f68ea8651a89de67e541096c53dea230d3db4c252f79"
+      },
+      {
+        "attempt": 2,
+        "operationId": "create-candidate-ref",
+        "resultDigest": "51f37feb8b715243177c6119073b5d5c550983bb4bb5df30a0461a0769f82967"
+      },
+      {
+        "attempt": 2,
+        "operationId": "create-advanced-ref",
+        "resultDigest": "02c868ffe7c65b98b00b07062f6950aa10147c7821c72e1162ee2fb1607773f6"
+      },
+      {
+        "attempt": 2,
+        "operationId": "enable-pilot-workflow",
+        "resultDigest": "8715ceac726efca9c27295787403da0f862a3c5634dffd62491b4366d57f9ad6"
+      },
+      {
+        "attempt": 2,
+        "operationId": "make-sandbox-public",
+        "resultDigest": "4bdffc66bc1d8b5a93feaff2843739ea0df7a1b53abbd6dced2cd7be724820e9"
+      },
+      {
+        "attempt": 2,
+        "operationId": "create-initial-ruleset",
+        "resultDigest": "9d9554e090bbbdb06bebfdb2d916e783d012718374fef06653b228a1453fef29"
+      },
+      {
+        "attempt": 2,
+        "operationId": "create-pilot-pr",
+        "resultDigest": "af9745ac5b70f672e7afcab8bd915e9b58fb952ba64063465e2a064975a5a0ca"
+      },
+      {
+        "attempt": 2,
+        "operationId": "initial-queue-admission",
+        "resultDigest": "eb8ed24faa022f194bd39d8fb2a7537601f3b51ee1b20fb319f14e2ce334d62b"
+      },
+      {
+        "attempt": 2,
+        "operationId": "advance-base-ref",
+        "resultDigest": "f906e4265180ace3a2d79702979d14eb773135229e0d1a7da2e93449794acbe8"
+      },
+      {
+        "attempt": 2,
+        "operationId": "grow-required-checks",
+        "resultDigest": "8ee9aeb960bb2f009707a3a54589b5670d120774c54d4631a753b1cb02a7e185"
+      },
+      {
+        "attempt": 2,
+        "operationId": "fresh-queue-admission",
+        "resultDigest": "028cd93f9272ef1327c01a48ce49f6299b1ff7f38f960696d50e4cc4aebb74b5"
+      }
+    ],
+    "typedArtifact": {
+      "contentSha256": "0570c1e65d2e30ffa852cdcc2edbad80a1043e5f32640e88b3e2529b6910ba8c",
+      "downloadUrl": "https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/artifacts/10032244056/zip",
+      "expired": false,
+      "expiresAt": "2026-12-06T20:34:44Z",
+      "id": 10032244056,
+      "name": "gs2-07-6-34159940287",
+      "sizeInBytes": 439
+    }
+  },
+  "repository": "FS-GG/FS.GG.GitHub.Substrate.Sandbox",
+  "repositoryId": 1353050537,
+  "schemaVersion": 2
 }

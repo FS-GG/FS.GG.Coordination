@@ -144,10 +144,28 @@ let ``Q4 and Q6 reject a retained proof bound to the wrong queue ref`` () =
     finally Directory.Delete(isolated.FullName, true)
 
 [<Fact>]
+let ``Q6 rejects tampered checkpoint journal handoff and expiry records`` () =
+    let cases : (string * string * (JsonNode -> unit)) list =
+        [ "checkpoint", "durable-checkpoint.json", fun node -> node.AsObject()["candidateSha"] <- JsonValue.Create(String.replicate 40 "e")
+          "journal", "final-journal.json", fun node -> (((node["appliedEffects"].AsArray())[0]).AsObject())["resultDigest"] <- JsonValue.Create(String.replicate 64 "f")
+          "handoff", "process-handoff.json", fun node -> node.AsObject()["resumePid"] <- (node["preparePid"].DeepClone())
+          "expiry", "expired-admission-refusal.json", fun node -> node.AsObject()["decision"] <- JsonValue.Create("accepted-expired-admission") ]
+    for name, relative, mutation in cases do
+        let isolated = isolatedEvidence()
+        try
+            let path = Path.Combine(isolated.FullName, "evidence/github-substrate-v2/gs2-07-6", relative)
+            mutateJson path mutation
+            let exitCode, output, error = runGateAt isolated.FullName "eng/validate-github-queue-sandbox-recovery.fsx"
+            Assert.NotEqual(0, exitCode)
+            Assert.DoesNotContain("_OK", output, StringComparison.Ordinal)
+            Assert.False(String.IsNullOrWhiteSpace error, $"{name} should fail closed")
+        finally Directory.Delete(isolated.FullName, true)
+
+[<Fact>]
 let ``hosted harness fails closed and retains typed exact-head proof`` () =
     let harness = read "evidence/github-substrate-v2/gs2-07-6/execute-sandbox-pilot.sh"
     let workflow = read "evidence/github-substrate-v2/gs2-07-6/sandbox-queue-workflow.yml"
-    for required in [ "ref_status"; "cleanup_armed=false"; "cleanup_failed"; "on_exit"; "final_settings"; "final_branches"; "final_workflows"; "CHECKPOINT"; "DETERMINISTIC_RETRY"; "HOSTED_ARTIFACT" ] do
+    for required in [ "ref_status"; "cleanup_armed=false"; "cleanup_failed"; "on_exit"; "prepare_phase"; "resume_phase"; "CHECKPOINT_SEALED"; "EXPIRED_ADMISSION_REFUSED"; "separateProcesses"; "record_effect"; "record_compensation"; "final-journal.json"; "DETERMINISTIC_RETRY"; "HOSTED_ARTIFACT"; "final_settings"; "final_branches"; "final_workflows" ] do
         Assert.Contains(required, harness, StringComparison.Ordinal)
     Assert.True(harness.IndexOf("[[ $(ref_status", StringComparison.Ordinal) < harness.IndexOf("cleanup_armed=true", StringComparison.Ordinal))
     for required in [ "hosted-proof.json"; "repositoryId"; "runId"; "mergeGroupHeadSha"; "fullRef"; "workflowSha"; "actions/upload-artifact@v4"; "retention-days: 90" ] do

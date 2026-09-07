@@ -21,6 +21,20 @@ let prestateDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-presta
 let prestate = prestateDocument.RootElement
 let proofDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-proof.json"
 let proof = proofDocument.RootElement
+let checkpointDocument = json "evidence/github-substrate-v2/gs2-07-6/durable-checkpoint.json"
+let checkpoint = checkpointDocument.RootElement
+let refusalDocument = json "evidence/github-substrate-v2/gs2-07-6/expired-admission-refusal.json"
+let refusal = refusalDocument.RootElement
+let handoffDocument = json "evidence/github-substrate-v2/gs2-07-6/process-handoff.json"
+let handoff = handoffDocument.RootElement
+let observedRecordDocument = json "evidence/github-substrate-v2/gs2-07-6/authority-observed.json"
+let observedRecord = observedRecordDocument.RootElement
+let currentRecordDocument = json "evidence/github-substrate-v2/gs2-07-6/authority-current.json"
+let currentRecord = currentRecordDocument.RootElement
+let observedClaimDocument = json "evidence/github-substrate-v2/gs2-07-6/authority-observed-claim.json"
+let observedClaim = observedClaimDocument.RootElement
+let currentClaimDocument = json "evidence/github-substrate-v2/gs2-07-6/authority-current-claim.json"
+let currentClaim = currentClaimDocument.RootElement
 let text (name:string) = c.GetProperty(name).GetString()
 let boolean (name:string) = c.GetProperty(name).GetBoolean()
 let integer (name:string) = c.GetProperty(name).GetInt64()
@@ -70,10 +84,16 @@ let hostedAdmission () =
     let recoveryBaseSha = stringAt recovery "baseSha"
     let expectedQueueRef = $"refs/heads/gh-readonly-queue/{baseName}/pr-{pullRequestNumber}-{recoveryBaseSha}"
     let authoritySources (row:JsonElement) =
-        stringAt row "claimSource"="https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5565937139"
+        stringAt row "claimSource"="https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5575246586"
         && stringAt row "reviewSource"="https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174"
         && stringAt row "dependencySource"="evidence/github-substrate-v2/accepted/GS2-07.5.json"
         && stringAt row "settingsSource"="evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json"
+    let sameAuthority (left:JsonElement) (right:JsonElement) =
+        [ "claimSource"; "reviewDigest"; "reviewSource"; "dependencyDigest"; "dependencySource"; "settingsDigest"; "settingsSource" ]
+        |> List.forall(fun name -> stringAt left name=stringAt right name)
+        && int64At left "observedAtUnixSeconds"=int64At right "observedAtUnixSeconds"
+        && int64At left "claimGeneration"=int64At right "claimGeneration"
+        && left.GetProperty("releaseObligationsMet").GetBoolean()=right.GetProperty("releaseObligationsMet").GetBoolean()
     int64At hosted "repositoryId"=Sandbox.repositoryId
     && stringAt hosted "repository"=Sandbox.repository
     && int64At prestate "repositoryId"=Sandbox.repositoryId
@@ -93,8 +113,27 @@ let hostedAdmission () =
     && int64At proof "runId"=int64At recoveryRun "id"
     && stringAt proof "mergeGroupHeadSha"=stringAt recoveryRun "headSha"
     && stringAt proof "workflowSha"=stringAt recoveryRun "headSha"
-    && int64At observedAuthority "observedAtUnixSeconds"=int64At initial "admittedAtUnixSeconds"
-    && int64At currentAuthority "observedAtUnixSeconds"=int64At recovery "evaluatedAtUnixSeconds"
+    && int64At observedAuthority "observedAtUnixSeconds">=int64At initial "admittedAtUnixSeconds"
+    && int64At observedAuthority "observedAtUnixSeconds"<=int64At checkpoint "sealedAtUnixSeconds"
+    && int64At currentAuthority "observedAtUnixSeconds">=int64At refusal "observedAtUnixSeconds"
+    && int64At currentAuthority "observedAtUnixSeconds"<=int64At recovery "admittedAtUnixSeconds"
+    && sameAuthority observedAuthority observedRecord
+    && sameAuthority currentAuthority currentRecord
+    && int64At checkpoint "claimGeneration"=int64At observedAuthority "claimGeneration"
+    && stringAt checkpoint "candidateSha"=stringAt candidate "sha"
+    && stringAt checkpoint "baseRef"=baseRef
+    && stringAt checkpoint "baseSha"=stringAt initial "baseSha"
+    && int64At checkpoint "runId"=int64At initialRun "id"
+    && shaFile "evidence/github-substrate-v2/gs2-07-6/durable-checkpoint.json"=stringAt initial "durableCheckpointDigest"
+    && stringAt initial "durableCheckpointDigest"=stringAt handoff "checkpointDigest"
+    && handoff.GetProperty("separateProcesses").GetBoolean()
+    && int64At handoff "preparePid"<>int64At handoff "resumePid"
+    && stringAt refusal "decision"="refused-expired-admission"
+    && refusal.GetProperty("freshAdmissionRequired").GetBoolean()
+    && int64At refusal "priorAdmissionExpiresAtUnixSeconds"=int64At initial "expiresAtUnixSeconds"
+    && stringAt observedClaim "html_url"=stringAt observedAuthority "claimSource"
+    && stringAt currentClaim "html_url"=stringAt currentAuthority "claimSource"
+    && stringAt observedClaim "body" |> fun body -> body.Contains("fsgg:claim worker=curlew-2b4b")
     && authoritySources observedAuthority && authoritySources currentAuthority
     && stringAt observedAuthority "dependencyDigest"=text "prerequisiteReceiptDigest"
     && stringAt currentAuthority "dependencyDigest"=text "prerequisiteReceiptDigest"
