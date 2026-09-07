@@ -5,6 +5,7 @@ open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open System.Text.Json.Nodes
 open FS.GG.Coordination.Qualification.Contracts
 open Xunit
@@ -312,6 +313,44 @@ let ``cadence recommendation trades measured cost for yield without weakening pr
     Assert.Equal(QualificationCadence.Retain, (QualificationCadence.evaluate now policy "dependency-and-security" security).Kind)
 
 [<Fact>]
+let ``economics report carries bounded census completeness without becoming delivery authority`` () =
+    withScratch "fsgg-economics-report-" (fun root ->
+        copyContract root
+        let observations = Path.Combine(root, "observations.json")
+        let completeness = Path.Combine(root, "completeness.json")
+        let report = Path.Combine(root, "recommendations.json")
+        File.WriteAllText(observations, "[]")
+        File.WriteAllText(
+            completeness,
+            """{"schema":"fsgg.coordination.qualification-census-completeness/1","windowStart":"2026-08-24T00:00:00Z","windowEnd":"2026-09-07T00:00:00Z","status":"partial","runsEnumerated":2,"attemptsExpected":3,"attemptsObserved":2,"failedRequests":1,"complete":false}""")
+        let exitCode, output, error =
+            runBootstrap root
+                [ "cadence"; "--observations"; observations; "--completeness"; completeness
+                  "--output"; report; "--now"; "2026-09-07T00:00:00Z"; "--data-status"; "partial" ]
+        Assert.Equal(0, exitCode)
+        Assert.Equal("BOOTSTRAP_CI_OK mode=cadence", output)
+        Assert.Equal("", error)
+        use document = JsonDocument.Parse(File.ReadAllBytes report)
+        Assert.Equal("fsgg.coordination.qualification-cadence-report/2", document.RootElement.GetProperty("schema").GetString())
+        Assert.Equal("partial", document.RootElement.GetProperty("dataStatus").GetString())
+        let census = document.RootElement.GetProperty("completeness")
+        Assert.Equal(3, census.GetProperty("attemptsExpected").GetInt32())
+        Assert.Equal(2, census.GetProperty("attemptsObserved").GetInt32())
+        Assert.False(census.GetProperty("complete").GetBoolean()))
+
+[<Fact>]
+let ``economics producer paginates every run attempt and cannot gate pull request delivery`` () =
+    let producer = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/qualification-economics.sh"))
+    Assert.Contains("--paginate --slurp", producer)
+    Assert.Contains("range(1; (($run.run_attempt // 1) + 1))", producer)
+    Assert.Contains("actions/runs/$run_id/attempts/$attempt/jobs", producer)
+    Assert.DoesNotContain("filter=latest", producer)
+    let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+    let economics = workflow.Substring(workflow.IndexOf("  qualification-economics:", StringComparison.Ordinal))
+    Assert.Contains("if: ${{ github.event_name == 'schedule' }}", economics)
+    Assert.Contains("root=\"$RUNNER_TEMP/qualification-economics\"", producer)
+
+[<Fact>]
 let ``bootstrap workflow satisfies the reuse decision plus exact seven-gate contract`` () =
     let exitCode, output, error = runBootstrap repositoryRoot [ "workflow" ]
     Assert.Equal(0, exitCode)
@@ -503,8 +542,9 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 1280)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 380)
-    Assert.InRange(gateLines, 1, 270)
-    Assert.InRange(uniqueGateLines, 1, 210)
+    // Complete run/attempt pagination adds explicit census handling to the economics observer.
+    Assert.InRange(gateLines, 1, 330)
+    Assert.InRange(uniqueGateLines, 1, 240)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)

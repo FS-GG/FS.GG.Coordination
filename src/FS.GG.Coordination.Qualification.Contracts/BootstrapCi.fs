@@ -972,7 +972,7 @@ let private optionalNonNegativeDecimal name arguments =
         | true, parsed when parsed >= 0M -> Some parsed
         | _ -> failwith $"%s{name} must be a non-negative invariant decimal"
 
-let private writeCadenceRecommendations (input: string) (output: string) (now: DateTimeOffset) (dataStatus: string) (contract: BootstrapContract) =
+let private writeCadenceRecommendations (input: string) (completeness: string) (output: string) (now: DateTimeOffset) (dataStatus: string) (contract: BootstrapContract) =
     use document = JsonDocument.Parse(File.ReadAllBytes input)
     let observations =
         document.RootElement.EnumerateArray()
@@ -1012,10 +1012,16 @@ let private writeCadenceRecommendations (input: string) (output: string) (now: D
     let gates = contract.Jobs |> List.filter (fun job -> not job.DownloadArtifacts) |> List.map _.Id
     let recommendations = gates |> List.map (fun gate -> QualificationCadence.evaluate now policy gate observations)
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath output)) |> ignore
+    use completenessDocument = JsonDocument.Parse(File.ReadAllBytes completeness)
+    let completenessRoot = completenessDocument.RootElement
+    if stringProperty "schema" completenessRoot <> Some "fsgg.coordination.qualification-census-completeness/1"
+       || stringProperty "status" completenessRoot <> Some dataStatus then
+        failwith "qualification census completeness is unsupported or disagrees with data status"
     use stream = File.Create output
     use writer = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false))
-    writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.qualification-cadence-report/1")
+    writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.qualification-cadence-report/2")
     writer.WriteString("evaluatedAt", now.ToUniversalTime().ToString("O")); writer.WriteString("policyVersion", policy.Version); writer.WriteString("dataStatus", dataStatus)
+    writer.WritePropertyName("completeness"); completenessRoot.WriteTo writer
     writer.WriteStartArray("recommendations")
     for recommendation in recommendations do
         use valueDocument = JsonDocument.Parse(QualificationCadence.recommendationBytes recommendation)
@@ -1130,13 +1136,13 @@ let execute (arguments: string list) =
                     []
                 | _ -> [ violation "argument" "formal-select requires an exact --head and --output" ]
             | "cadence" ->
-                match optionValue "--observations" arguments, optionValue "--output" arguments, optionValue "--now" arguments with
-                | Some input, Some output, Some now ->
+                match optionValue "--observations" arguments, optionValue "--completeness" arguments, optionValue "--output" arguments, optionValue "--now" arguments with
+                | Some input, Some completeness, Some output, Some now ->
                     let dataStatus = optionValue "--data-status" arguments |> Option.defaultValue "available"
-                    if dataStatus <> "available" && dataStatus <> "unavailable" then failwith "cadence data status is unsupported"
-                    writeCadenceRecommendations (Path.GetFullPath input) (Path.GetFullPath output) (DateTimeOffset.Parse now) dataStatus contract
+                    if dataStatus <> "available" && dataStatus <> "partial" && dataStatus <> "unavailable" then failwith "cadence data status is unsupported"
+                    writeCadenceRecommendations (Path.GetFullPath input) (Path.GetFullPath completeness) (Path.GetFullPath output) (DateTimeOffset.Parse now) dataStatus contract
                     []
-                | _ -> [ violation "argument" "cadence requires --observations, --output, and --now" ]
+                | _ -> [ violation "argument" "cadence requires --observations, --completeness, --output, and --now" ]
             | "vulnerability" ->
                 optionValue "--report" arguments
                 |> Option.map (fun path -> inspectVulnerabilityReport (Path.GetFullPath path) root contract)
