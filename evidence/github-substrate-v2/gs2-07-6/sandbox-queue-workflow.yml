@@ -1,0 +1,34 @@
+name: GS2-07.6 queue pilot
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  queue-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Bind exact hosted heads
+        run: |
+          set -euo pipefail
+          test -n "$GITHUB_SHA"
+          printf 'event=%s head=%s ref=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_SHA" "$GITHUB_REF"
+      - name: Hold the first merge group for forward-base movement
+        if: github.event_name == 'merge_group'
+        run: sleep 45
+  queue-growth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v5
+      - name: Execute the grown required check
+        run: |
+          set -euo pipefail
+          printf 'grown-check event=%s head=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_SHA"
+          if [ "$GITHUB_EVENT_NAME" = merge_group ]; then
+            test -f gs2-07-6-forward-base.txt
+          fi

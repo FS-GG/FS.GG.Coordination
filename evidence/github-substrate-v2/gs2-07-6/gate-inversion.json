@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "gate": "Q4 github-queue-sandbox-pilot-contract",
+  "mutation": {
+    "path": "evidence/github-substrate-v2/gs2-07-6/contract.json",
+    "field": "repositoryId",
+    "from": 1353050537,
+    "to": 1353050538
+  },
+  "redRun": {
+    "command": "dotnet fsi eng/validate-github-queue-sandbox-pilot.fsx -- .",
+    "exitCode": 1,
+    "finding": "generated:sandbox-identity: control did not turn red"
+  },
+  "restoration": {
+    "repositoryId": 1353050537,
+    "command": "dotnet fsi eng/validate-github-queue-sandbox-pilot.fsx -- .",
+    "exitCode": 0,
+    "output": "GITHUB_QUEUE_SANDBOX_PILOT_OK disposition=queue-pilot-qualified controls=24 seal=bad5ee1d0085eee0db6aa06ea8492bd6aabb2cd166cf28ff7c83fd2de6e7f8ee"
+  },
+  "disposition": "mutation-sensitive"
+}

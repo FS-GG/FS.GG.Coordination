@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "provider": "github-rest-2022-11-28",
+  "capturedAt": "2026-09-07T06:45:45Z",
+  "repository": "FS-GG/FS.GG.GitHub.Substrate.Sandbox",
+  "repositoryId": 1353050537,
+  "settings": {
+    "visibility": "private",
+    "private": true,
+    "defaultBranch": "main",
+    "archived": false,
+    "disabled": false,
+    "allowMergeCommit": true,
+    "allowSquashMerge": true,
+    "allowRebaseMerge": true,
+    "allowAutoMerge": false,
+    "deleteBranchOnMerge": false,
+    "digest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e"
+  },
+  "secrets": {
+    "repositorySecretCount": 0,
+    "repositorySecretNames": [],
+    "environmentCount": 0,
+    "environmentSecretCount": 0,
+    "environmentNames": []
+  },
+  "branches": [
+    { "name": "main", "sha": "8fc2b1c6f492a949c1ddca983b29a2dfa0a72644", "protected": false },
+    { "name": "renovate/configure", "sha": "bf5f8821ae867266722c44be598f17f3c8efc4d6", "protected": false }
+  ],
+  "branchInventoryDigest": "3c3d74cff5ea950fe3527e2a74a1040ec81fd3e800e07749e3295a9fb4ffa281",
+  "workflows": [
+    { "id": 347129448, "name": "Sandbox probe", "path": ".github/workflows/sandbox-probe.yml", "state": "active" }
+  ],
+  "workflowInventoryDigest": "ac55f313d337ef9469ef992b74cc5fe00a6b3f7b3fe6a635bea33e0abdf2a508",
+  "workflowRunCount": 0,
+  "providerLimit": {
+    "rulesets": "HTTP 403: Upgrade to GitHub Pro or make this repository public",
+    "branchProtection": "HTTP 403: Upgrade to GitHub Pro or make this repository public"
+  },
+  "mutationAuthorized": true,
+  "reason": "Exact private prestate and zero repository/environment secrets satisfy issue #320's bounded temporary-public exception."
+}

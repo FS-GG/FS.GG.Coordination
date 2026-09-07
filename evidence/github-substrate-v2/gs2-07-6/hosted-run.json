@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "provider": "github-rest-2022-11-28",
+  "repository": "FS-GG/FS.GG.GitHub.Substrate.Sandbox",
+  "repositoryId": 1353050537,
+  "pilotId": "gs2-07-6-pilot",
+  "claimGeneration": 5565937139,
+  "executedAt": "2026-09-07T07:08:39Z",
+  "readbackAt": "2026-09-07T07:11:10Z",
+  "candidate": {
+    "sha": "d9ae5fba4d09e2c858ac8af2723cb62e3cb5cc5e",
+    "currentShaAtReevaluation": "d9ae5fba4d09e2c858ac8af2723cb62e3cb5cc5e",
+    "pullRequest": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/10",
+    "pullRequestState": "closed",
+    "merged": false
+  },
+  "initialAdmission": {
+    "baseRef": "refs/heads/gs2-07-6-pilot-base",
+    "baseSha": "5483ae6fb194174c95423470b05560ea470a18b8",
+    "requiredChecks": ["queue-pilot"],
+    "pullRequestRun": {
+      "id": 34094024804,
+      "headSha": "d9ae5fba4d09e2c858ac8af2723cb62e3cb5cc5e",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094024804",
+      "createdAt": "2026-09-07T07:08:39Z",
+      "updatedAt": "2026-09-07T07:08:49Z"
+    },
+    "mergeGroupRun": {
+      "id": 34094063213,
+      "headSha": "92becd32d02433ed90b36e18e9d88c33489b873d",
+      "event": "merge_group",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094063213",
+      "createdAt": "2026-09-07T07:09:08Z",
+      "updatedAt": "2026-09-07T07:09:32Z"
+    },
+    "jobs": [
+      {
+        "name": "queue-growth",
+        "headSha": "92becd32d02433ed90b36e18e9d88c33489b873d",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094063213/job/101653597411",
+        "startedAt": "2026-09-07T07:09:11Z",
+        "completedAt": "2026-09-07T07:09:14Z"
+      },
+      {
+        "name": "queue-pilot",
+        "headSha": "92becd32d02433ed90b36e18e9d88c33489b873d",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094063213/job/101653597252",
+        "startedAt": "2026-09-07T07:09:11Z",
+        "completedAt": "2026-09-07T07:09:31Z"
+      }
+    ],
+    "failedStepInjected": true,
+    "interrupted": true,
+    "durableCheckpoint": "pull-request checks green; queue entry admitted; first merge-group head observed"
+  },
+  "recovery": {
+    "baseRef": "refs/heads/gs2-07-6-pilot-base",
+    "priorBaseSha": "5483ae6fb194174c95423470b05560ea470a18b8",
+    "baseSha": "5b3d5ae0007c938a6499047411467b08107abd98",
+    "requiredChecks": ["queue-growth", "queue-pilot"],
+    "mergeGroupRun": {
+      "id": 34094105152,
+      "headSha": "5db98781d89fee5f500debe00d367d3c0c826fab",
+      "event": "merge_group",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094105152",
+      "createdAt": "2026-09-07T07:09:38Z",
+      "updatedAt": "2026-09-07T07:10:29Z"
+    },
+    "jobs": [
+      {
+        "name": "queue-growth",
+        "headSha": "5db98781d89fee5f500debe00d367d3c0c826fab",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094105152/job/101653722446",
+        "startedAt": "2026-09-07T07:09:41Z",
+        "completedAt": "2026-09-07T07:09:44Z"
+      },
+      {
+        "name": "queue-pilot",
+        "headSha": "5db98781d89fee5f500debe00d367d3c0c826fab",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094105152/job/101653722552",
+        "startedAt": "2026-09-07T07:09:41Z",
+        "completedAt": "2026-09-07T07:10:28Z"
+      }
+    ],
+    "candidateUnchanged": true,
+    "baseReevaluated": true,
+    "requiredChecksGrew": true,
+    "newRequiredCheckExecuted": true,
+    "duplicateEffectCount": 0
+  },
+  "cleanup": {
+    "rulesetId": 22429744,
+    "pullRequestClosed": true,
+    "temporaryBranchCount": 0,
+    "queueRefCount": 0,
+    "temporaryWorkflowFileCount": 0,
+    "temporaryWorkflowRegistration": {
+      "id": 352059031,
+      "state": "disabled_manually",
+      "reason": "GitHub retains immutable workflow/run registry history after the file and every containing ref are removed."
+    },
+    "repositorySecretCount": 0,
+    "environmentSecretCount": 0,
+    "finalVisibility": "private",
+    "finalSettingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
+    "finalBranchInventoryDigest": "3c3d74cff5ea950fe3527e2a74a1040ec81fd3e800e07749e3295a9fb4ffa281",
+    "finalActiveWorkflowInventoryDigest": "ac55f313d337ef9469ef992b74cc5fe00a6b3f7b3fe6a635bea33e0abdf2a508",
+    "providerLimitReadback": "private ruleset endpoint returned expected HTTP 403"
+  },
+  "authority": {
+    "fleet": false,
+    "productionWriter": false,
+    "release": false,
+    "package": false,
+    "successor": false
+  },
+  "disposition": "queue-sandbox-recovered"
+}
