@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 315-gs2-07-5-merge-group-support
+  title: "GS2-07.5 merge-group support"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/315-gs2-07-5-merge-group-support/spec.md
+  sourceClarifications: work/315-gs2-07-5-merge-group-support/clarifications.md
+  sourceChecklist: work/315-gs2-07-5-merge-group-support/checklist.md
+  sourcePlan: work/315-gs2-07-5-merge-group-support/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/315-gs2-07-5-merge-group-support/spec.md
+    digest: ce856456e0c9bd779607d3c961a5d8000b0972787624ac6ae7ae7e31b1d966ab
+    schemaVersion: 1
+  - label: clarifications
+    path: work/315-gs2-07-5-merge-group-support/clarifications.md
+    digest: 1ab4539924ef2f65c8fe15ce721ffe2e0de9cda420dd65df6bc5efcd2b1aeed6
+    schemaVersion: 1
+  - label: checklist
+    path: work/315-gs2-07-5-merge-group-support/checklist.md
+    digest: 13d00b3142ba33ba7ad16078795126749b1bf4821de51583f4fc9b2954570c18
+    schemaVersion: 1
+  - label: plan
+    path: work/315-gs2-07-5-merge-group-support/plan.md
+    digest: 7c108f96bc0155d175355d3099937640787634a49e0c8f8a57996bf711851677
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 315-gs2-07-5-merge-group-support."

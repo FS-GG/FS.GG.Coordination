@@ -1,0 +1,79 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-5-merge-group-support",
+  "milestone": "GS2-07.5 — Merge-group support",
+  "critic": "plover-33f2",
+  "initial_reviewed_commit": "fa639da4d539eac507493b87c8c0819ed5f56e80",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 1,
+  "reviewed_commits": [
+    "fa639da4d539eac507493b87c8c0819ed5f56e80",
+    "0873a515bb0efdf53d4544e09fa6a027f9ebdc40"
+  ],
+  "findings": [
+    {
+      "id": "GS2075-C01",
+      "severity": "blocker",
+      "summary": "The committed candidate cannot reproduce its claimed SDD verification from a fresh exact checkout because a required provider input is ignored and absent from Git.",
+      "evidence": [
+        "The github-substrate-v2-work pre-acceptance contract requires a fresh exact candidate checkout, tracked and hash-bound provider inputs, and two consecutive coherent noChange provider verifications.",
+        "At initial commit fa639da4d539eac507493b87c8c0819ed5f56e80, work/315-gs2-07-5-merge-group-support/evidence.yml declared readiness/315-gs2-07-5-merge-group-support/analysis.json, but `git ls-files readiness/315-gs2-07-5-merge-group-support` listed only ship-verdict.json and fresh `fsgg-sdd verify --work 315-gs2-07-5-merge-group-support` returned outcome=blocked, coherent=false, diagnostic evidence.missingAnalysisPrerequisite."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "At repaired commit 0873a515bb0efdf53d4544e09fa6a027f9ebdc40, `git ls-files readiness/315-gs2-07-5-merge-group-support` includes analysis.json, governance-handoff.json, ship-verdict.json, ship.json, verify.json, and work-model.json.",
+        "In a new detached checkout created directly from 0873a515bb0efdf53d4544e09fa6a027f9ebdc40 with no ignored or working-tree bytes copied, every candidate-manifest artifact passed `git ls-files --error-unmatch` and exact SHA-256 comparison; analysis.json=54e670fe4137e1243c6c2502768a5c028666f6b61a8d4a2fcb212f88138eab63, verify.json=b68beacd90e58d6d9535274bd0fb751291e817ad4d43056b4827fe97015b0537, ship.json=20c16fd926cf50de8b90736993cad2d1576198c1bf863efe1a50188be59a2e44, and work-model.json=bfd1f0fab9ff9a1d5c724b39f8db267047445aaa65640fbb0169a4abb2138a41.",
+        "Two consecutive `fsgg-sdd verify --work 315-gs2-07-5-merge-group-support` and two consecutive `fsgg-sdd ship --work 315-gs2-07-5-merge-group-support` runs in that checkout each exited 0 with outcome=noChange, coherent=true, only noChange operations, and zero diagnostics; Git remained clean."
+      ]
+    },
+    {
+      "id": "GS2075-C02",
+      "severity": "major",
+      "summary": "The public parser and verifier accept malformed authority data when the caller recomputes the unkeyed seal.",
+      "evidence": [
+        "At initial commit fa639da4d539eac507493b87c8c0819ed5f56e80, GitHubMergeGroupQualification.fs performed semantic validation only in compile while public verify checked only schema, event, disposition, check ordering, and seal.",
+        "An initial Release-assembly adversary constructed canonical bytes with an empty repository and inverted freshness interval, recomputed the specified length-framed SHA-256, and both verify and parse returned Ok."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubMergeGroupQualification.fs:185-227 at 0873a515bb0efdf53d4544e09fa6a027f9ebdc40 independently validates repository, merge-group identity/head, base scope/ref/SHA/revision/freshness, complete check inventory/results, claim, review, candidate head, dependency, release, settings, and disposition before accepting a seal.",
+        "Against the repaired Release assembly, a fresh adversarial probe correctly resealed a plan with repository empty plus observedAt=1101 and freshUntil=1100; both verify and parse returned Error containing MissingField repository, MalformedField baseRepositoryScope, and MalformedField baseFreshness.",
+        "tests/FS.GG.Coordination.UnitTests/GitHubMergeGroupTests.fs:106-118 and both generated and independent registered gate paths now exercise correctly resealed malformed plans."
+      ]
+    },
+    {
+      "id": "GS2075-C03",
+      "severity": "major",
+      "summary": "The decision cannot prove current base repository/ref equality or bind aggregate required-check results and completeness as required by the exit gate.",
+      "evidence": [
+        "At initial commit fa639da4d539eac507493b87c8c0819ed5f56e80, GitHubMergeGroupFacts had only one BaseRepository and BaseRef, GitHubMergeGroupPlan omitted CheckResults, and the seal bound only the caller-declared RequiredChecks names.",
+        "An initial Release-assembly adversary supplied only [unit] with one successful result plus BaseRepository=Other/Repository and BaseRef=refs/heads/changed-base; compile returned Ok and merge-group-qualified."
+      ],
+      "disposition": "resolved",
+      "resolution_evidence": [
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubMergeGroupQualification.fs:12-31 at 0873a515bb0efdf53d4544e09fa6a027f9ebdc40 separately represents observed/current base repository and ref, expected/observed required-check inventories, and result rows in the emitted plan.",
+        "src/FS.GG.Coordination.Qualification.Contracts/GitHubMergeGroupQualification.fs:86-99 length-frames each check name, event, head, and conclusion into the seal; lines 115-145 refuse changed repository/ref, incomplete observed inventory, missing result, wrong event/head, pending result, and failed result.",
+        "A fresh repaired-assembly adversarial probe returned BaseRepositoryChanged for a changed current repository, BaseRefChanged for a changed current ref, IncompleteCheckInventory for a shortened observed inventory and for a dropped resealed result in both verify and parse, and CheckFailed for a resealed failed result; altering a result also changed the seal.",
+        "Fresh exact-candidate qualification passed 245/245 unit tests, 523/523 architecture tests, and two consecutive registered `dotnet fsi eng/validate-github-merge-group-support.fsx -- .` executions with the identical seal f781ccd10052c3d7bf20cd1f4b4c04a1b95c7b6d249f83cc3510f0c8752e2d89."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "0873a515bb0efdf53d4544e09fa6a027f9ebdc40",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
