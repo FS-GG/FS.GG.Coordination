@@ -329,8 +329,8 @@ validator, merge queue, workflow publication, network call, production queue,
 settings mutation, release, acceptance receipt, or GS2-07.6 work.
 
 GS2-07.6 is registered against `.github` roadmap commit
-`7e5754e23d274b31d21f9a2b4c0c0a00265ee366` and exact roadmap SHA-256
-`33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee`.
+`7216ec4aae14b17f151a1ed3616eb8a2f4ed2d47` and exact roadmap SHA-256
+`0498209c27cdf75d3c1067dad2c3b88084b03c20f1bd87dcb99192aa43457c36`.
 Its sole prerequisite is the accepted GS2-07.5 receipt with digest
 `dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8`.
 The Q4 `github-queue-sandbox-pilot-contract` identity reserves the isolated
@@ -338,6 +338,15 @@ admission, exact candidate/forward-base, required-check growth, and expiry
 evidence lane. The Q6 `github-queue-sandbox-recovery-contract` identity reserves
 interruption, failed-step, sealed resume, deterministic retry, compensation,
 rollback, cleanup, and authoritative readback evidence.
+
+The accepted routine-development amendment additionally requires this pilot to
+exercise bounded bursts of pull-request edits, superseded hints, an unrelated
+routine pull request, source/base movement, and required-check identity changes.
+It measures attributable work and waiting without cancelling in-flight effects,
+losing distinct subjects, accepting a missing required context, or carrying a
+stale-green authorization. These are additions to the registered pilot and
+recovery contracts; they do not rewrite the accepted GS2-07.5 prerequisite or
+authorize an ordinary production writer.
 
 The preferred target is the dedicated private
 `FS-GG/FS.GG.GitHub.Substrate.Sandbox` repository (id `1353050537`). Its current

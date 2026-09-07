@@ -13,6 +13,9 @@ open Xunit
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
+let private roadmapRevision = "7216ec4aae14b17f151a1ed3616eb8a2f4ed2d47"
+let private roadmapSha256 = "0498209c27cdf75d3c1067dad2c3b88084b03c20f1bd87dcb99192aa43457c36"
+
 let private runAt workingDirectory executable arguments =
     let startInfo = ProcessStartInfo(executable)
 
@@ -46,8 +49,8 @@ let private hasExactGs2067RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
 
-    roadmap.GetProperty("revision").GetString() = "7e5754e23d274b31d21f9a2b4c0c0a00265ee366"
-    && roadmap.GetProperty("sha256").GetString() = "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
 
 let private gs2067GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -77,8 +80,8 @@ let private hasExactGs2068RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
 
-    roadmap.GetProperty("revision").GetString() = "7e5754e23d274b31d21f9a2b4c0c0a00265ee366"
-    && roadmap.GetProperty("sha256").GetString() = "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
 
 let private gs2068GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -108,8 +111,8 @@ let private hasExactGs2071RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
 
-    roadmap.GetProperty("revision").GetString() = "7e5754e23d274b31d21f9a2b4c0c0a00265ee366"
-    && roadmap.GetProperty("sha256").GetString() = "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
 
 let private gs2071GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -130,8 +133,8 @@ let private gs2071GateCatalogAgrees (indexText: string) (catalogText: string) =
 let private hasExactGs2072RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
-    roadmap.GetProperty("revision").GetString() = "7e5754e23d274b31d21f9a2b4c0c0a00265ee366"
-    && roadmap.GetProperty("sha256").GetString() = "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
 
 let private gs2072GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -145,8 +148,8 @@ let private gs2072GateCatalogAgrees (indexText: string) (catalogText: string) =
 let private hasExactGs2073RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
-    roadmap.GetProperty("revision").GetString() = "7e5754e23d274b31d21f9a2b4c0c0a00265ee366"
-    && roadmap.GetProperty("sha256").GetString() = "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
 
 let private gs2073GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -160,8 +163,8 @@ let private gs2073GateCatalogAgrees (indexText: string) (catalogText: string) =
 let private hasExactGs2074RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
-    roadmap.GetProperty("revision").GetString() = "7e5754e23d274b31d21f9a2b4c0c0a00265ee366"
-    && roadmap.GetProperty("sha256").GetString() = "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
 
 let private gs2074GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -175,8 +178,8 @@ let private gs2074GateCatalogAgrees (indexText: string) (catalogText: string) =
 let private hasExactGs2075RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
-    roadmap.GetProperty("revision").GetString() = "7e5754e23d274b31d21f9a2b4c0c0a00265ee366"
-    && roadmap.GetProperty("sha256").GetString() = "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
 
 let private gs2075GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -205,8 +208,8 @@ let private hasExactGs2075BaseFreshnessContract (indexText: string) =
 let private hasExactGs2076RoadmapAuthority (indexText: string) =
     use document = JsonDocument.Parse(indexText)
     let roadmap = document.RootElement.GetProperty("roadmap")
-    roadmap.GetProperty("revision").GetString() = "7e5754e23d274b31d21f9a2b4c0c0a00265ee366"
-    && roadmap.GetProperty("sha256").GetString() = "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
 
 let private gs2076GateCatalogAgrees (indexText: string) (catalogText: string) =
     use index = JsonDocument.Parse(indexText)
@@ -439,7 +442,7 @@ let ``GS2-06-7 authority pin refuses a stale index revision independently`` () =
 
     let staleIndex =
         indexText.Replace(
-            "7e5754e23d274b31d21f9a2b4c0c0a00265ee366",
+            roadmapRevision,
             "185494fa8ba3986834141c2ddc4e8325410df260",
             StringComparison.Ordinal
         )
@@ -482,7 +485,7 @@ let ``GS2-06-8 authority pin refuses a stale index revision independently`` () =
 
     let staleIndex =
         indexText.Replace(
-            "7e5754e23d274b31d21f9a2b4c0c0a00265ee366",
+            roadmapRevision,
             "e8b9c5ff978e0f14462514406ac86a71c4826425",
             StringComparison.Ordinal
         )
@@ -522,7 +525,7 @@ let ``GS2-07-1 authority pin refuses a stale index revision independently`` () =
 
     let staleIndex =
         indexText.Replace(
-            "7e5754e23d274b31d21f9a2b4c0c0a00265ee366",
+            roadmapRevision,
             "84729d040a7d8baf039d5490d95ef982bb5e3f09",
             StringComparison.Ordinal
         )
@@ -558,7 +561,7 @@ let ``GS2-07-2 inspection refuses stale roadmap bytes`` () =
 let ``GS2-07-2 authority pin refuses a stale index revision independently`` () =
     let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
     Assert.True(hasExactGs2072RoadmapAuthority indexText)
-    let staleIndex = indexText.Replace("7e5754e23d274b31d21f9a2b4c0c0a00265ee366", "37a8c8275e101f0da9f26b1d0ce120533a879833", StringComparison.Ordinal)
+    let staleIndex = indexText.Replace(roadmapRevision, "37a8c8275e101f0da9f26b1d0ce120533a879833", StringComparison.Ordinal)
     Assert.NotEqual(indexText, staleIndex)
     Assert.False(hasExactGs2072RoadmapAuthority staleIndex)
 
@@ -583,7 +586,7 @@ let ``GS2-07-3 inspection refuses stale roadmap bytes`` () =
 let ``GS2-07-3 authority pin refuses a stale index revision independently`` () =
     let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
     Assert.True(hasExactGs2073RoadmapAuthority indexText)
-    let staleIndex = indexText.Replace("7e5754e23d274b31d21f9a2b4c0c0a00265ee366", "de1b7475505fa34748dc3b1b76d649f2bd3c84d3", StringComparison.Ordinal)
+    let staleIndex = indexText.Replace(roadmapRevision, "de1b7475505fa34748dc3b1b76d649f2bd3c84d3", StringComparison.Ordinal)
     Assert.NotEqual(indexText, staleIndex)
     Assert.False(hasExactGs2073RoadmapAuthority staleIndex)
 
@@ -615,7 +618,7 @@ let ``GS2-07-4 authority and gate identity refuse stale or altered inputs`` () =
     let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
     Assert.True(hasExactGs2074RoadmapAuthority indexText)
     Assert.True(gs2074GateCatalogAgrees indexText catalogText)
-    let staleIndex = indexText.Replace("7e5754e23d274b31d21f9a2b4c0c0a00265ee366", "4ad66d094092cb1ee858b6cb76f60d6d39e17079", StringComparison.Ordinal)
+    let staleIndex = indexText.Replace(roadmapRevision, "4ad66d094092cb1ee858b6cb76f60d6d39e17079", StringComparison.Ordinal)
     Assert.False(hasExactGs2074RoadmapAuthority staleIndex)
     let mismatchedCatalog = catalogText.Replace("eng/validate-github-event-security.fsx", "eng/validate-github-audit-repair.fsx", StringComparison.Ordinal)
     Assert.False(gs2074GateCatalogAgrees indexText mismatchedCatalog)
@@ -646,7 +649,7 @@ let ``GS2-07-5 authority and gate identity refuse stale or altered inputs`` () =
     let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
     Assert.True(hasExactGs2075RoadmapAuthority indexText)
     Assert.True(gs2075GateCatalogAgrees indexText catalogText)
-    let staleIndex = indexText.Replace("7e5754e23d274b31d21f9a2b4c0c0a00265ee366", "c460923ccef2f6ef30d9457967e717bec0e084ed", StringComparison.Ordinal)
+    let staleIndex = indexText.Replace(roadmapRevision, "c460923ccef2f6ef30d9457967e717bec0e084ed", StringComparison.Ordinal)
     Assert.False(hasExactGs2075RoadmapAuthority staleIndex)
     let mismatchedCatalog = catalogText.Replace("eng/validate-github-merge-group-support.fsx", "eng/validate-github-event-security.fsx", StringComparison.Ordinal)
     Assert.False(gs2075GateCatalogAgrees indexText mismatchedCatalog)
@@ -695,7 +698,7 @@ let ``GS2-07-6 authority and both gate identities refuse stale or altered inputs
     let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
     Assert.True(hasExactGs2076RoadmapAuthority indexText)
     Assert.True(gs2076GateCatalogAgrees indexText catalogText)
-    Assert.False(hasExactGs2076RoadmapAuthority (indexText.Replace("7e5754e23d274b31d21f9a2b4c0c0a00265ee366", "b460923ccef2f6ef30d9457967e717bec0e084ed", StringComparison.Ordinal)))
+    Assert.False(hasExactGs2076RoadmapAuthority (indexText.Replace(roadmapRevision, "b460923ccef2f6ef30d9457967e717bec0e084ed", StringComparison.Ordinal)))
     Assert.False(gs2076GateCatalogAgrees indexText (catalogText.Replace("eng/validate-github-queue-sandbox-pilot.fsx", "eng/validate-github-merge-group-support.fsx", StringComparison.Ordinal)))
     Assert.False(gs2076GateCatalogAgrees indexText (catalogText.Replace("eng/validate-github-queue-sandbox-recovery.fsx", "eng/validate-github-merge-group-support.fsx", StringComparison.Ordinal)))
 
@@ -750,8 +753,8 @@ let ``roadmap unit index advances through GS2-07-6 queue sandbox pilot`` () =
     let units = document.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
 
     let roadmap = document.RootElement.GetProperty("roadmap")
-    Assert.Equal("7e5754e23d274b31d21f9a2b4c0c0a00265ee366", roadmap.GetProperty("revision").GetString())
-    Assert.Equal("33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee", roadmap.GetProperty("sha256").GetString())
+    Assert.Equal(roadmapRevision, roadmap.GetProperty("revision").GetString())
+    Assert.Equal(roadmapSha256, roadmap.GetProperty("sha256").GetString())
 
     let ids =
         units |> List.map (fun unitValue -> unitValue.GetProperty("id").GetString())
