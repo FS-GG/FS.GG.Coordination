@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-07.4 units, and the active GS2-07.5
+the subsequently accepted GS2-02 through GS2-07.5 units, and the active GS2-07.6
 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
@@ -327,6 +327,30 @@ check or temporal authority, rather than carrying pull-request-time approval
 into the merge group. This registration creates or executes no
 validator, merge queue, workflow publication, network call, production queue,
 settings mutation, release, acceptance receipt, or GS2-07.6 work.
+
+GS2-07.6 is registered against `.github` roadmap commit
+`7e5754e23d274b31d21f9a2b4c0c0a00265ee366` and exact roadmap SHA-256
+`33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee`.
+Its sole prerequisite is the accepted GS2-07.5 receipt with digest
+`dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8`.
+The Q4 `github-queue-sandbox-pilot-contract` identity reserves the isolated
+admission, exact candidate/forward-base, required-check growth, and expiry
+evidence lane. The Q6 `github-queue-sandbox-recovery-contract` identity reserves
+interruption, failed-step, sealed resume, deterministic retry, compensation,
+rollback, cleanup, and authoritative readback evidence.
+
+The preferred target is the dedicated private
+`FS-GG/FS.GG.GitHub.Substrate.Sandbox` repository (id `1353050537`). Its current
+plan returns provider-capability HTTP 403 for rulesets and branch protection, so
+the implementation must either name a public representative or prove a bounded
+temporary public transition of that sandbox after recording exact prestate and
+proving it carries no repository or environment secrets. It must then restore
+private visibility exactly and verify post-rollback settings/readback. Unknown
+or unsupported capability refuses. The pilot may not enable the fleet or mutate
+an ordinary production writer, settings profile, release, or package, and it
+must retain hosted artifacts at each exact exercised revision. This registration
+does not execute a validator or pilot, change visibility/settings/queue state,
+create an acceptance receipt, or inspect or authorize GS2-07.7.
 
 ## Command sequence
 
