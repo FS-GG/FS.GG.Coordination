@@ -217,7 +217,7 @@ let private gs2076GateCatalogAgrees (indexText: string) (catalogText: string) =
     let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.6")
     let contracts = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
     let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
-    contracts.Length = 2
+    contracts.Length = 3
     && (contracts |> List.forall (fun contract ->
         commands
         |> List.tryFind (fun command -> command.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
@@ -231,7 +231,7 @@ let private hasExactGs2076SandboxRecoveryContract (indexText: string) =
     unit.GetProperty("owner").GetString() = "FS.GG.Coordination"
     && (unit.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList) = [ "GS2-07.5" ]
     && (unit.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList) = [ "Q4"; "Q6" ]
-    && (unit.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList) = [ "github-queue-sandbox-pilot-contract"; "github-queue-sandbox-recovery-contract" ]
+    && (unit.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList) = [ "github-queue-sandbox-pilot-contract"; "github-queue-sandbox-recovery-contract"; "github-queue-routine-burst-contract" ]
     && ceiling.Contains("FS-GG/FS.GG.GitHub.Substrate.Sandbox repository (id 1353050537)", StringComparison.Ordinal)
     && ceiling.Contains("bounded temporary public-visibility transition", StringComparison.Ordinal)
     && ceiling.Contains("explicitly named public representative", StringComparison.Ordinal)
@@ -248,6 +248,7 @@ let private hasExactGs2076SandboxRecoveryContract (indexText: string) =
     && exitGate.Contains("retries deterministically without duplicate effects", StringComparison.Ordinal)
     && exitGate.Contains("compensates or rolls back every partially applied mutation in reverse order", StringComparison.Ordinal)
     && exitGate.Contains("authoritative cleanup and final repository/visibility/settings readback", StringComparison.Ordinal)
+    && ceiling.Contains("bounded same-subject edit burst and one unrelated routine subject", StringComparison.Ordinal)
     && exitGate.Contains("unsupported-capability", StringComparison.Ordinal)
     && exitGate.Contains("unknown-capability", StringComparison.Ordinal)
     && exitGate.Contains("retained hosted artifacts bind every exercised run to the exact tested revisions", StringComparison.Ordinal)
@@ -2052,7 +2053,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(41, commands.Length)
+    Assert.Equal(42, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())

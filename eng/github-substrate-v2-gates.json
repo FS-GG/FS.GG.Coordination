@@ -246,6 +246,12 @@
       "qGate": "Q6",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-queue-sandbox-recovery.fsx", "--", "."]
+    },
+    {
+      "id": "github-queue-routine-burst-contract",
+      "qGate": "Q4",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-queue-routine-burst.fsx", "--", "."]
     }
   ]
 }

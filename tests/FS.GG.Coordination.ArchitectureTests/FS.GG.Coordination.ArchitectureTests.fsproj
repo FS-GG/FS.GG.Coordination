@@ -38,6 +38,7 @@
     <Compile Include="GitHubAuditRepairArchitectureTests.fs" />
     <Compile Include="GitHubEventSecurityArchitectureTests.fs" />
     <Compile Include="GitHubMergeGroupArchitectureTests.fs" />
+    <Compile Include="GitHubQueueSandboxArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs" Link="GitHubCommentProjectionUnitTests.fs" />
     <Compile Include="GitHubCommentProjectionArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs" Link="GitHubShardedJournalUnitTests.fs" />

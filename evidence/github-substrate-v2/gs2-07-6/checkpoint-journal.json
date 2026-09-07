@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "appliedEffects": [
+    {
+      "operationId": "create-base-ref",
+      "attempt": 1,
+      "resultDigest": "9d9b46dff3e4bc7cf583f68ea8651a89de67e541096c53dea230d3db4c252f79"
+    },
+    {
+      "operationId": "create-candidate-ref",
+      "attempt": 1,
+      "resultDigest": "51f37feb8b715243177c6119073b5d5c550983bb4bb5df30a0461a0769f82967"
+    },
+    {
+      "operationId": "create-advanced-ref",
+      "attempt": 1,
+      "resultDigest": "02c868ffe7c65b98b00b07062f6950aa10147c7821c72e1162ee2fb1607773f6"
+    },
+    {
+      "operationId": "enable-pilot-workflow",
+      "attempt": 1,
+      "resultDigest": "8715ceac726efca9c27295787403da0f862a3c5634dffd62491b4366d57f9ad6"
+    },
+    {
+      "operationId": "make-sandbox-public",
+      "attempt": 1,
+      "resultDigest": "4bdffc66bc1d8b5a93feaff2843739ea0df7a1b53abbd6dced2cd7be724820e9"
+    },
+    {
+      "operationId": "create-initial-ruleset",
+      "attempt": 1,
+      "resultDigest": "9d9554e090bbbdb06bebfdb2d916e783d012718374fef06653b228a1453fef29"
+    },
+    {
+      "operationId": "create-pilot-pr",
+      "attempt": 1,
+      "resultDigest": "af9745ac5b70f672e7afcab8bd915e9b58fb952ba64063465e2a064975a5a0ca"
+    },
+    {
+      "operationId": "initial-queue-admission",
+      "attempt": 1,
+      "resultDigest": "eb8ed24faa022f194bd39d8fb2a7537601f3b51ee1b20fb319f14e2ce334d62b"
+    }
+  ],
+  "retryEffects": [
+    {
+      "operationId": "create-base-ref",
+      "attempt": 2,
+      "resultDigest": "9d9b46dff3e4bc7cf583f68ea8651a89de67e541096c53dea230d3db4c252f79"
+    },
+    {
+      "operationId": "create-candidate-ref",
+      "attempt": 2,
+      "resultDigest": "51f37feb8b715243177c6119073b5d5c550983bb4bb5df30a0461a0769f82967"
+    },
+    {
+      "operationId": "create-advanced-ref",
+      "attempt": 2,
+      "resultDigest": "02c868ffe7c65b98b00b07062f6950aa10147c7821c72e1162ee2fb1607773f6"
+    },
+    {
+      "operationId": "enable-pilot-workflow",
+      "attempt": 2,
+      "resultDigest": "8715ceac726efca9c27295787403da0f862a3c5634dffd62491b4366d57f9ad6"
+    },
+    {
+      "operationId": "make-sandbox-public",
+      "attempt": 2,
+      "resultDigest": "4bdffc66bc1d8b5a93feaff2843739ea0df7a1b53abbd6dced2cd7be724820e9"
+    },
+    {
+      "operationId": "create-initial-ruleset",
+      "attempt": 2,
+      "resultDigest": "9d9554e090bbbdb06bebfdb2d916e783d012718374fef06653b228a1453fef29"
+    },
+    {
+      "operationId": "create-pilot-pr",
+      "attempt": 2,
+      "resultDigest": "af9745ac5b70f672e7afcab8bd915e9b58fb952ba64063465e2a064975a5a0ca"
+    },
+    {
+      "operationId": "initial-queue-admission",
+      "attempt": 2,
+      "resultDigest": "eb8ed24faa022f194bd39d8fb2a7537601f3b51ee1b20fb319f14e2ce334d62b"
+    }
+  ],
+  "compensations": []
+}

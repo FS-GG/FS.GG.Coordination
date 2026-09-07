@@ -1,0 +1,173 @@
+schemaVersion: 1
+workId: 320-gs2-07-6-queue-sandbox-pilot
+stage: evidence
+status: evidenceReady
+sourceSpec: work/320-gs2-07-6-queue-sandbox-pilot/spec.md
+sourceClarifications: work/320-gs2-07-6-queue-sandbox-pilot/clarifications.md
+sourceChecklist: work/320-gs2-07-6-queue-sandbox-pilot/checklist.md
+sourcePlan: work/320-gs2-07-6-queue-sandbox-pilot/plan.md
+sourceTasks: work/320-gs2-07-6-queue-sandbox-pilot/tasks.yml
+sourceAnalysis: readiness/320-gs2-07-6-queue-sandbox-pilot/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/320-gs2-07-6-queue-sandbox-pilot/analysis.json
+    digest: 2541db25a2f6a074b5c6f6f4264086a9f8165429e3f6d21fdc28671e1eea7c26
+    schemaVersion: 1
+  - label: checklist
+    path: work/320-gs2-07-6-queue-sandbox-pilot/checklist.md
+    digest: 9b5e523c16ec34f5f8df155c4728643c57998482767c82f41f84202b47704d7b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/320-gs2-07-6-queue-sandbox-pilot/clarifications.md
+    digest: 849fcc8b54070763837f85db57905216b4cd526af83ecbcbc042eb01e237b1d1
+    schemaVersion: 1
+  - label: plan
+    path: work/320-gs2-07-6-queue-sandbox-pilot/plan.md
+    digest: 2a05f66661b41d50ef9de1516d413e5d7298803aebe29a612139000a48bce8d5
+    schemaVersion: 1
+  - label: spec
+    path: work/320-gs2-07-6-queue-sandbox-pilot/spec.md
+    digest: 4cde1023c82d22139c8d7f24c19aa7c5f1919c92b64f3288861210366d05bca7
+    schemaVersion: 1
+  - label: tasks
+    path: work/320-gs2-07-6-queue-sandbox-pilot/tasks.yml
+    digest: 10c52f03442b8e74d48bb27ccf492b1a1adc8a7ea7e88be4b5689b56f2967ea0
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [evidence/github-substrate-v2/gs2-07-6/hosted-run.json, evidence/github-substrate-v2/gs2-07-6/hosted-proof.json, evidence/github-substrate-v2/gs2-07-6/routine-burst.json, evidence/github-substrate-v2/gs2-07-6/stale-green-refusal.json, evidence/github-substrate-v2/gs2-07-6/burst-cleanup.json, src/FS.GG.Coordination.Qualification.Contracts/GitHubQueueSandbox.fs, tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Pure qualification, bounded hosted pilot, and routine-burst qualification satisfy the repository-scoped admission requirement.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coordination.Qualification.Contracts/GitHubQueueSandbox.fs, src/FS.GG.Coordination.Qualification.Contracts/GitHubQueueSandbox.fsi, tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Signature and implementation expose the versioned sealed queue and recovery contract.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [eng/validate-github-queue-sandbox-pilot.fsx, eng/validate-github-queue-sandbox-recovery.fsx, eng/validate-github-queue-routine-burst.fsx, evidence/github-substrate-v2/gs2-07-6/gate-inversion.json, evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json, evidence/github-substrate-v2/gs2-07-6/hosted-run.json, evidence/github-substrate-v2/gs2-07-6/hosted-proof.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Q4, Q6, and the Section 12.2 routine-burst gate execute their retained controls and the identity inversion turns Q4 red.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [evidence/github-substrate-v2/gs2-07-6/contract.json, tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Schema-v1 canonical serialization and strict parse, and replay tests define the migration posture., seal]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [evidence/github-substrate-v2/gs2-07-6/generated-controls.json, evidence/github-substrate-v2/gs2-07-6/independent-controls.json, tests/FS.GG.Coordination.ArchitectureTests/GitHubQueueSandboxArchitectureTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [Architecture tests prove exact independently authored retained control inventories and offline execution.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

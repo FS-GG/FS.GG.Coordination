@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "unitId": "GS2-07.6",
+  "roadmapRevision": "7216ec4aae14b17f151a1ed3616eb8a2f4ed2d47",
+  "roadmapSha256": "0498209c27cdf75d3c1067dad2c3b88084b03c20f1bd87dcb99192aa43457c36",
+  "registeredBaseRevision": "a87dcf18e7065d5985141f15b3ff10f23d006328",
+  "prerequisiteUnit": "GS2-07.5",
+  "prerequisiteReceiptDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
+  "prerequisiteFileSha256": "317befe0b0e0ed14d9604f76326c6bde0c7fab1c78678081f9ec6c40b4d1f540",
+  "repository": "FS-GG/FS.GG.GitHub.Substrate.Sandbox",
+  "repositoryId": 1353050537,
+  "preVisibility": "private",
+  "requiredProviderVersion": "github-rest-2022-11-28",
+  "fleetAuthority": false,
+  "productionWriterAuthority": false,
+  "releaseAuthority": false,
+  "packageAuthority": false,
+  "successorAuthority": false
+}

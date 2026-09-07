@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "producer": "generated-adversarial",
+  "pilotControls": ["prerequisite","roadmap","sandbox-identity","provider-capability","prestate","no-secrets","visibility-transition","admission","exact-candidate","forward-base-movement","required-check-growth","expiry","claim","review","dependency","release","settings","ordering","seal","no-fleet","no-production-writer","no-release","no-package","no-successor-authority"],
+  "recoveryControls": ["prerequisite","roadmap","sandbox-identity","interruption","failed-step","sealed-resume","deterministic-retry","duplicate-effect","compensation","rollback","cleanup","authoritative-readback","ordering","seal","unrecoverable","no-fleet","no-production-writer","no-release","no-package","no-successor-authority"],
+  "caseContract": "Each generated case changes exactly the named typed fact from a green baseline and must produce its named refusal or a red inventory result.",
+  "cases": ["receipt-byte-digest","roadmap-pin","repository-id","unsupported-capability","visibility-prestate","repository-secret","private-transition","pre-expiry-admission","candidate-current-sha","forward-base-sha","grown-check-inventory","expiry-boundary","claim-generation","review-digest","dependency-digest","release-obligation","settings-digest","noncanonical-json","altered-seal","production-target","source-network-detector","release-authority","package-authority","successor-authority","interruption-flag","failed-step-flag","checkpoint-digest","retry-result","duplicate-count","reverse-operation-order","visibility-and-settings-rollback","temporary-resource-count","final-readback","unrecoverable-flag"]
+}
