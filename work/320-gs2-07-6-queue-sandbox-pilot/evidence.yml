@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digest: "sha256:b18bb640001c5b82aa65f6e751fde1f72eeb2ffe94664f3081485bef6c62a155"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 8
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digest: "sha256:b18bb640001c5b82aa65f6e751fde1f72eeb2ffe94664f3081485bef6c62a155"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 8
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digest: "sha256:b18bb640001c5b82aa65f6e751fde1f72eeb2ffe94664f3081485bef6c62a155"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 8
@@ -135,7 +135,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digest: "sha256:b18bb640001c5b82aa65f6e751fde1f72eeb2ffe94664f3081485bef6c62a155"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 8
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
+      digest: "sha256:b18bb640001c5b82aa65f6e751fde1f72eeb2ffe94664f3081485bef6c62a155"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 8
