@@ -20,29 +20,49 @@ Use the repository CLI through:
 dotnet run --project src/FS.GG.Coordination.Cli --configuration Release --no-build -- roadmap-work <operation> ...
 ```
 
+## Select the delivery route
+
+Use the canonical shared routine-development policy at the roadmap revision in force. A unit uses
+`routine-development/v1` only when that roadmap and policy explicitly admit its source change and the
+change stays outside every protected operation and path. Routine source work has one accountable owner,
+one `routine/<slug>` branch, one PR, an exact-head eligibility marker, the smallest relevant automated
+checks, native merge, and merged-state readback. Do not layer on a second issue or claim, SDD artifact
+family, independent critique, feedback cycle, telemetry receipt, receipt-only PR, projection PR, or
+metadata-`Done` write. Roadmap inspection, prerequisite validation, manifest binding, and declared gates
+remain because they protect unit sequencing and executable identity; they do not create extra delivery
+phases.
+
+Migration or cutover, settings or credential changes, publication or deployment, destructive effects,
+external-contract acceptance, and any unit that requires an immutable acceptance receipt remain strict.
+If eligibility is absent or unclear, refuse the routine route rather than weakening a protected boundary.
+
 ## Workflow
 
 1. Run `roadmap-work inspect` with `--index`, `--roadmap`, and `--unit`. Confirm the owner, permission ceiling, exit gate, Q gates, and gate commands match the assigned unit. A roadmap digest mismatch, unknown unit, or incomplete index is a stop.
 2. Run `roadmap-work prerequisites` with the same inputs plus `--receipts`. Proceed only when it returns `ready: true`. Missing, duplicate, rejected, stale, malformed, contradictory, or tampered receipts are refusals; never replace them with prose, checkboxes, or Project fields.
-3. Implement only the named unit within its declared touch-set and permission ceiling. Complete repository SDD and ordinary review requirements separately; this skill grants no claim, scheduling, settings, deployment, or production-write authority.
+3. Implement only the named unit within its declared touch-set and permission ceiling, using the route selected above. This skill grants no claim, scheduling, settings, deployment, or production-write authority.
 4. Commit the candidate and require a clean worktree. Run `roadmap-work manifest` with the candidate's tracked `--index`, the same `--receipts` directory proven in step 2, explicit `--repo`, canonical UTC `--created-at YYYY-MM-DDTHH:MM:SSZ`, one or more tracked `--artifact name=path` values, and an ignored `--output artifacts/roadmap-work/<unit>/candidate.json`. When the unit declares gate commands, the artifact set MUST bind the tracked catalog that step 5 will execute, for example `--artifact gate-catalog=eng/github-substrate-v2-gates.json`. The output state is `candidate`, not qualified or accepted.
 5. Run `roadmap-work gates` with the exact manifest, the same tracked index, roadmap, unit, receipts, and repository, plus the reviewed `--catalog` and an ignored result `--output`. Before starting any process, it requires the tracked candidate index and catalog to be exact manifest artifacts, revalidates prerequisite receipts, and requires each selected catalog entry to match the unit's ordered command ID, Q-gate, and executable-plus-arguments digest. It stops on the first failure, rechecks the candidate/artifact bindings, and writes results beneath `artifacts/roadmap-work/`.
-6. Publish generated and independently authored evidence through the unit's owning review path. Acceptance still requires the merged PR or protected administrative receipt named by the roadmap.
+6. Put evidence available before merge in the owning PR. Keep telemetry, receiver adoption, and other
+   post-merge observation asynchronous and non-blocking unless the unit's exact external acceptance
+   contract requires those facts synchronously. Acceptance still requires the merged PR or protected
+   administrative receipt named by the roadmap.
 
-## Pre-acceptance evidence contract
+## Claim-dependent protected evidence
 
-The following checks are mandatory before host acceptance; a unit-specific test may add to them but may
-not replace them.
+Activate only the checks needed to substantiate claims made by the selected unit. They are not a
+universal six-check preflight for ordinary source work. A unit-specific test may add to an activated
+check but may not replace it.
 
-1. `fresh-exact-candidate-checkout`: export or create an isolated Git checkout at the exact candidate
+1. `fresh-exact-candidate-checkout`: when acceptance depends on isolated reproducibility, export or create an isolated Git checkout at the exact candidate
    revision. Copy no ignored, untracked, generated, tool-cache, or working-directory bytes into it.
-2. `provider-artifacts-tracked-and-hash-bound`: enumerate every provider input declared by the unit's
+2. `provider-artifacts-tracked-and-hash-bound`: when the unit consumes provider evidence, enumerate every provider input declared by the unit's
    evidence contract. Require `git ls-files --error-unmatch`, file presence, and an exact match to the
    declared digest for every row. An ignored local prerequisite is missing evidence even if a dirty
    authoring checkout can read it.
-3. `provider-contract-canonical-version`: install the exact provider/tool version named by the unit or
+3. `provider-contract-canonical-version`: when the unit pins a provider or tool, install the exact version named by the unit or
    provider contract in the isolated checkout. An ambient newer or older executable is not equivalent.
-4. `two-consecutive-coherent-no-change`: run the canonical provider verification twice against the same
+4. `two-consecutive-coherent-no-change`: when the unit claims a provider fixed point, run the canonical provider verification twice against the same
    clean candidate. Both runs must report success, `coherent=true`, only `noChange` operations, zero
    diagnostics/blockers, and leave the Git tree clean. The second run proves the first did not merely
    repair stale generated state.
@@ -54,14 +74,15 @@ not replace them.
    implementation merge, its receipt descendant, a further unrelated descendant, and a descendant with
    an unrefreshed relevant mutation. The first three must pass; the relevant mutation must fail closed.
 
-Any unreadable declaration, missing artifact, unavailable canonical version, absent hosted artifact,
-dirty fixed point, or unexercised required matrix is a refusal. Do not file a unit-specific repair merely
-to make this preflight pass; repair the class-level producer or process first.
+For an activated check, any unreadable declaration, missing artifact, unavailable canonical version,
+absent hosted artifact, dirty fixed point, or unexercised required matrix is a refusal. Repair a
+class-level producer or process at its source rather than filing unit-specific ceremony to satisfy it.
 
 ## One item across implementation and receipt phases
 
-Use `single-owning-item-two-phase-receipt` whenever the unit's append-only acceptance or repair receipt
-needs facts that exist only after its implementation merge:
+Do not open a receipt phase for routine work merely to copy merged facts. When a strict unit's exact
+acceptance contract requires an append-only acceptance or repair receipt containing facts that exist only
+after its implementation merge, use `single-owning-item-two-phase-receipt`:
 
 1. Declare implementation and receipt paths in the original touch-set. The implementation PR must not
    carry a closing keyword for the issue.
