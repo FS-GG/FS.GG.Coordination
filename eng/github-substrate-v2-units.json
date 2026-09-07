@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "64e9a2b7753f438f8ad31298fd17698ff2a142e6",
+    "revision": "7e5754e23d274b31d21f9a2b4c0c0a00265ee366",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "da6477affae014d9ef5cc473f608ca1c1cb25bcffe51f99ed9e5b22994844a0a"
+    "sha256": "33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
   },
   "units": [
     {
@@ -863,6 +863,21 @@
         { "id": "github-merge-group-support-contract", "qGate": "Q3", "commandSha256": "ff20b32c73325e185e6ee072253ceb02b8657ee4f6281652acf187f16a703937" }
       ],
       "contractSha256": "6ad620d58509ce141ee0eda476375b56d610cb150ee4ee089173f339a30ea9f2"
+    },
+    {
+      "id": "GS2-07.6",
+      "title": "Queue sandbox/pilot",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-07.5"],
+      "permissionCeiling": ["an isolated or explicitly named public representative low-volume queue pilot, with queue admission and exact candidate/base/check authority, expiry, interruption and failure recovery, deterministic retry, compensation or rollback, cleanup, authoritative readback, retained evidence, and no fleet enablement or ordinary production mutation", "the dedicated FS-GG/FS.GG.GitHub.Substrate.Sandbox repository (id 1353050537) is the preferred isolated target; because its private plan currently refuses rulesets and branch protection with provider-capability HTTP 403, execution may instead name one public representative or use a bounded temporary public-visibility transition on that sandbox only after recording exact prestate, proving no repository or environment secrets, and requiring exact rollback to private plus post-rollback readback; unknown or unsupported capability refuses; registration itself is repository-local and read-only outside its catalog/test/documentation paths, consumes only the accepted GS2-07.5 receipt and exact roadmap evidence, performs no live visibility, settings, queue, workflow, fleet, production, release, or package mutation, and grants no GS2-07.7 inspection, preparation, or implementation authority"],
+      "exitGate": "the Q4 queue-sandbox-pilot and Q6 queue-sandbox-recovery contracts begin from the exact accepted GS2-07.5 receipt and exact accepted roadmap revision; one isolated or explicitly named representative low-volume repository proves queue admission bound to exact repository, candidate head, merge-group head, full base ref, base SHA, observation revision, required-check inventory and results, claim/review/dependency/release/settings authority, admission time, freshness deadline, and deterministic pilot identity; the pilot advances the base exactly and proves the queued candidate is re-evaluated against the forward base, grows the required-check inventory and proves the new check is required and executed, observes admission expiry, injects interruption and failed steps, resumes only from sealed durable state, retries deterministically without duplicate effects, compensates or rolls back every partially applied mutation in reverse order, removes temporary branches/rulesets/workflows/queue state, and verifies authoritative cleanup and final repository/visibility/settings readback; the dedicated sandbox identity and its private/provider-capability prestate are recorded, and execution either uses an explicitly named public representative or proves a bounded no-secrets temporary public transition with exact private rollback and post-rollback verification; missing, malformed, unknown-repository, unsupported-capability, unknown-capability, unrecorded-prestate, secret-present, wrong-visibility, stale-candidate, moved-candidate, stale-base, moved-base, wrong-base-ref, wrong-base-sha, incomplete-check-inventory, missing-check, pending-check, failed-check, ungrown-check-inventory, stale-claim, stale-review, stale-dependency, unmet-release, changed-settings, expired-admission, interrupted, failed-step, retry-divergence, duplicate-effect, partial-apply, compensation-failure, rollback-failure, cleanup-failure, readback-mismatch, fleet-target, production-writer, unsealed, altered-seal, contradictory, and unrecoverable inputs remain explicit refusals; generated adversarial cases and independently authored prerequisite, roadmap, sandbox-identity, provider-capability, prestate, no-secrets, visibility-transition, admission, exact-candidate, forward-base-movement, required-check-growth, expiry, interruption, failed-step, sealed-resume, deterministic-retry, duplicate-effect, compensation, rollback, cleanup, authoritative-readback, ordering, seal, no-fleet, no-production-writer, no-release, no-package, and no-successor-authority controls all pass; retained hosted artifacts bind every exercised run to the exact tested revisions, all temporary state is absent after rollback, and no fleet repository, ordinary production writer, production settings profile, release, package, or GS2-07.7 surface is enabled or mutated",
+      "qGates": ["Q4", "Q6"],
+      "gateCommands": ["github-queue-sandbox-pilot-contract", "github-queue-sandbox-recovery-contract"],
+      "gateContracts": [
+        { "id": "github-queue-sandbox-pilot-contract", "qGate": "Q4", "commandSha256": "90320b3cd537670096cc0567ef78026c4511a3a0355926810f188266e2c438f7" },
+        { "id": "github-queue-sandbox-recovery-contract", "qGate": "Q6", "commandSha256": "9acb5fb82e526dda24ef0961ad66e0508aea4a620867b6c9cfcf0a81cb489fea" }
+      ],
+      "contractSha256": "8ea41da924db3a3277ef3cc5f95f8ed9331bced2e0dfb0d9faf8a258970e5527"
     }
   ]
 }

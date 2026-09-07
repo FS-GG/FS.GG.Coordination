@@ -1,0 +1,31 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-6-registration",
+  "milestone": "GS2-07.6 — Queue sandbox/pilot (registration boundary)",
+  "critic": "dunlin-7634",
+  "initial_reviewed_commit": "f22393cea2b5b270ed61f3384a30ea7a6fba4f14",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "pass",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "f22393cea2b5b270ed61f3384a30ea7a6fba4f14"
+  ],
+  "findings": [],
+  "confirmation": {
+    "reviewed_commit": "f22393cea2b5b270ed61f3384a30ea7a6fba4f14",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

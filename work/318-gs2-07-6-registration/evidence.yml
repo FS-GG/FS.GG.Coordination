@@ -1,0 +1,335 @@
+schemaVersion: 1
+workId: 318-gs2-07-6-registration
+stage: evidence
+status: evidenceReady
+sourceSpec: work/318-gs2-07-6-registration/spec.md
+sourceClarifications: work/318-gs2-07-6-registration/clarifications.md
+sourceChecklist: work/318-gs2-07-6-registration/checklist.md
+sourcePlan: work/318-gs2-07-6-registration/plan.md
+sourceTasks: work/318-gs2-07-6-registration/tasks.yml
+sourceAnalysis: readiness/318-gs2-07-6-registration/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/318-gs2-07-6-registration/analysis.json
+    digest: 3674468dd544c93ba28f1a0ae528e6387da3d7594874ffc5fb5b1b67f5a64240
+    schemaVersion: 1
+  - label: checklist
+    path: work/318-gs2-07-6-registration/checklist.md
+    digest: f97dc5be18aaef3bf381e7f62b387c32391ce054bd383b8668f5a37065a0763f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/318-gs2-07-6-registration/clarifications.md
+    digest: 95427b71d28d651f0a8596c559ba5eac5ccf5dac8aaa49e6f08cbc1d2f7858a0
+    schemaVersion: 1
+  - label: plan
+    path: work/318-gs2-07-6-registration/plan.md
+    digest: 498b4563175db491cc888a631f55be688dade5748d85ff25a440e41b1d9b0225
+    schemaVersion: 1
+  - label: spec
+    path: work/318-gs2-07-6-registration/spec.md
+    digest: f5e4552d1ceebbf4bdccb7cb2406f4c7639f4259374c5718b4927266fc7a1833
+    schemaVersion: 1
+  - label: tasks
+    path: work/318-gs2-07-6-registration/tasks.yml
+    digest: c9ae0259f788f939a29e0b89d4e43810a368e082525348dea739ea45808697fc
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coordination.ArchitectureTests/RoadmapWorkArchitectureTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/318-gs2-07-6-registration/test-results/registration-focused.trx
+      digest: "sha256:f4d679d9dc94d3beda9fce53bbd3cbbeb9c5e155eff57513b29cac7f3de2c850"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 6
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
