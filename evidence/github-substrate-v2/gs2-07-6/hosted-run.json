@@ -10,6 +10,7 @@
   "candidate": {
     "sha": "3daa72357df81d682951f05e6c9bcbfcb7faad06",
     "currentShaAtReevaluation": "3daa72357df81d682951f05e6c9bcbfcb7faad06",
+    "pullRequestNumber": 11,
     "pullRequest": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/11",
     "pullRequestState": "closed",
     "merged": false
@@ -146,11 +147,30 @@
     "providerLimitReadback": "private ruleset endpoint returned expected HTTP 403"
   },
   "authority": {
-    "claimGeneration": 5565937139,
-    "reviewDigest": "296e6c87a7cc064a6cea5016fcb9e0026ff79a5373eca81aa0d5dec9001db53e",
-    "dependencyDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
-    "settingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
-    "releaseObligationsMet": true,
+    "observed": {
+      "observedAtUnixSeconds": 1788766220,
+      "claimGeneration": 5565937139,
+      "claimSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5565937139",
+      "reviewDigest": "296e6c87a7cc064a6cea5016fcb9e0026ff79a5373eca81aa0d5dec9001db53e",
+      "reviewSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174",
+      "dependencyDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
+      "dependencySource": "evidence/github-substrate-v2/accepted/GS2-07.5.json",
+      "settingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
+      "settingsSource": "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json",
+      "releaseObligationsMet": true
+    },
+    "current": {
+      "observedAtUnixSeconds": 1788766324,
+      "claimGeneration": 5565937139,
+      "claimSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5565937139",
+      "reviewDigest": "296e6c87a7cc064a6cea5016fcb9e0026ff79a5373eca81aa0d5dec9001db53e",
+      "reviewSource": "https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174",
+      "dependencyDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
+      "dependencySource": "evidence/github-substrate-v2/accepted/GS2-07.5.json",
+      "settingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
+      "settingsSource": "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json",
+      "releaseObligationsMet": true
+    },
     "fleet": false,
     "productionWriter": false,
     "release": false,

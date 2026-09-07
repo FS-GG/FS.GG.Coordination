@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open System.Text.Json
+open System.Text.Json.Nodes
 open Xunit
 open FS.GG.Coordination.Qualification.Contracts
 
@@ -62,6 +63,44 @@ let private runGate script expected =
     Assert.Equal(0, child.ExitCode)
     Assert.Contains(expected, output, StringComparison.Ordinal)
 
+let private copyTree source destination =
+    Directory.CreateDirectory(destination) |> ignore
+    for file in Directory.GetFiles(source, "*", SearchOption.AllDirectories) do
+        let relative = Path.GetRelativePath(source, file)
+        let target = Path.Combine(destination, relative)
+        Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
+        File.Copy(file, target)
+
+let private isolatedEvidence () =
+    let directory = Directory.CreateTempSubdirectory("gs2-07-6-tamper-")
+    let evidenceRoot = Path.Combine(root, "evidence/github-substrate-v2")
+    copyTree (Path.Combine(evidenceRoot, "gs2-07-6")) (Path.Combine(directory.FullName, "evidence/github-substrate-v2/gs2-07-6"))
+    let accepted = Path.Combine(directory.FullName, "evidence/github-substrate-v2/accepted")
+    Directory.CreateDirectory(accepted) |> ignore
+    File.Copy(Path.Combine(evidenceRoot, "accepted/GS2-07.5.json"), Path.Combine(accepted, "GS2-07.5.json"))
+    let source = Path.Combine(directory.FullName, "src/FS.GG.Coordination.Qualification.Contracts")
+    Directory.CreateDirectory(source) |> ignore
+    File.Copy(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/GitHubQueueSandbox.fs"), Path.Combine(source, "GitHubQueueSandbox.fs"))
+    directory
+
+let private runGateAt evidenceRoot script =
+    let info = ProcessStartInfo("dotnet")
+    info.WorkingDirectory <- root
+    info.UseShellExecute <- false
+    info.RedirectStandardOutput <- true
+    info.RedirectStandardError <- true
+    for argument in [ "fsi"; script; "--"; evidenceRoot ] do info.ArgumentList.Add argument
+    use child = Process.Start info
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    child.ExitCode, output, error
+
+let private mutateJson path mutation =
+    let document = JsonNode.Parse(File.ReadAllText path)
+    mutation document
+    File.WriteAllText(path, document.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
 [<Fact>]
 let ``Q4 and Q6 execute generated and independent controls offline`` () =
     for script in [ "eng/validate-github-queue-sandbox-pilot.fsx"; "eng/validate-github-queue-sandbox-recovery.fsx" ] do
@@ -71,6 +110,38 @@ let ``Q4 and Q6 execute generated and independent controls offline`` () =
         for forbidden in [ "new HttpClient"; "api.github.com"; "Environment.GetEnvironmentVariable("; "Process.Start(" ] do Assert.DoesNotContain(forbidden, text, StringComparison.Ordinal)
     runGate "eng/validate-github-queue-sandbox-pilot.fsx" "GITHUB_QUEUE_SANDBOX_PILOT_OK disposition=queue-pilot-qualified controls=24"
     runGate "eng/validate-github-queue-sandbox-recovery.fsx" "GITHUB_QUEUE_SANDBOX_RECOVERY_OK disposition=queue-sandbox-recovered controls=20"
+
+[<Fact>]
+let ``Q4 and Q6 reject contradictory retained hosted evidence`` () =
+    let cases : (string * (JsonNode -> unit)) list =
+        [ "candidate head", fun node -> (node["candidate"].AsObject())["sha"] <- JsonValue.Create(String.replicate 40 "a")
+          "initial base", fun node -> (node["initialAdmission"].AsObject())["baseSha"] <- JsonValue.Create(String.replicate 40 "b")
+          "dependency authority", fun node -> (((node["authority"].AsObject())["current"]).AsObject())["dependencyDigest"] <- JsonValue.Create(String.replicate 64 "c")
+          "settings authority", fun node -> (((node["authority"].AsObject())["observed"]).AsObject())["settingsDigest"] <- JsonValue.Create(String.replicate 64 "d")
+          "distinct authority observation", fun node -> (((node["authority"].AsObject())["current"]).AsObject())["observedAtUnixSeconds"] <- JsonValue.Create(1L) ]
+    for name, mutation in cases do
+        let isolated = isolatedEvidence()
+        try
+            let hosted = Path.Combine(isolated.FullName, "evidence/github-substrate-v2/gs2-07-6/hosted-run.json")
+            mutateJson hosted mutation
+            for script in [ "eng/validate-github-queue-sandbox-pilot.fsx"; "eng/validate-github-queue-sandbox-recovery.fsx" ] do
+                let exitCode, output, error = runGateAt isolated.FullName script
+                Assert.NotEqual(0, exitCode)
+                Assert.DoesNotContain("_OK", output, StringComparison.Ordinal)
+                Assert.False(String.IsNullOrWhiteSpace error, $"{name} should fail closed in {script}")
+        finally Directory.Delete(isolated.FullName, true)
+
+[<Fact>]
+let ``Q4 and Q6 reject a retained proof bound to the wrong queue ref`` () =
+    let isolated = isolatedEvidence()
+    try
+        let proofPath = Path.Combine(isolated.FullName, "evidence/github-substrate-v2/gs2-07-6/hosted-proof.json")
+        mutateJson proofPath (fun node -> node.AsObject()["fullRef"] <- JsonValue.Create("refs/heads/gh-readonly-queue/wrong"))
+        for script in [ "eng/validate-github-queue-sandbox-pilot.fsx"; "eng/validate-github-queue-sandbox-recovery.fsx" ] do
+            let exitCode, output, _ = runGateAt isolated.FullName script
+            Assert.NotEqual(0, exitCode)
+            Assert.DoesNotContain("_OK", output, StringComparison.Ordinal)
+    finally Directory.Delete(isolated.FullName, true)
 
 [<Fact>]
 let ``hosted harness fails closed and retains typed exact-head proof`` () =

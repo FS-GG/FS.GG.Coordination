@@ -19,6 +19,8 @@ let hostedDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-run.json
 let hosted = hostedDocument.RootElement
 let prestateDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json"
 let prestate = prestateDocument.RootElement
+let proofDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-proof.json"
+let proof = proofDocument.RootElement
 let text (name:string) = c.GetProperty(name).GetString()
 let boolean (name:string) = c.GetProperty(name).GetBoolean()
 let integer (name:string) = c.GetProperty(name).GetInt64()
@@ -33,6 +35,8 @@ let initialRun = initial.GetProperty("mergeGroupRun")
 let recovery = hosted.GetProperty("recovery")
 let recoveryRun = recovery.GetProperty("mergeGroupRun")
 let authority = hosted.GetProperty("authority")
+let observedAuthority = authority.GetProperty("observed")
+let currentAuthority = authority.GetProperty("current")
 let cleanup = hosted.GetProperty("cleanup")
 let settings = prestate.GetProperty("settings")
 let secrets = prestate.GetProperty("secrets")
@@ -44,9 +48,9 @@ let facts:QueuePilotFacts =
       ObservedBaseSha=stringAt recovery "priorBaseSha"; CurrentBaseSha=stringAt recovery "baseSha"; ReevaluatedBaseSha=stringAt recovery "baseSha"; BaseObservationRevision=int64At initialRun "id"; CurrentBaseObservationRevision=int64At recoveryRun "id"
       OriginalRequiredChecks=stringsAt initial "requiredChecks"; CurrentRequiredChecks=checks
       CheckResults=recovery.GetProperty("jobs").EnumerateArray() |> Seq.map(fun job -> ({ Name=stringAt job "name"; HeadSha=stringAt job "headSha"; EventName=stringAt recoveryRun "event"; Conclusion=if stringAt job "conclusion"="success" then QueueCheckConclusion.Success else QueueCheckConclusion.Failure }:QueueCheckResult)) |> Seq.toList
-      ObservedClaimGeneration=int64At authority "claimGeneration"; CurrentClaimGeneration=int64At authority "claimGeneration"
-      ObservedReviewDigest=stringAt authority "reviewDigest"; CurrentReviewDigest=stringAt authority "reviewDigest"; ObservedDependencyDigest=stringAt authority "dependencyDigest"; CurrentDependencyDigest=stringAt authority "dependencyDigest"
-      ObservedReleaseObligationsMet=authority.GetProperty("releaseObligationsMet").GetBoolean(); CurrentReleaseObligationsMet=authority.GetProperty("releaseObligationsMet").GetBoolean(); ObservedSettingsDigest=stringAt authority "settingsDigest"; CurrentSettingsDigest=stringAt authority "settingsDigest"
+      ObservedClaimGeneration=int64At observedAuthority "claimGeneration"; CurrentClaimGeneration=int64At currentAuthority "claimGeneration"
+      ObservedReviewDigest=stringAt observedAuthority "reviewDigest"; CurrentReviewDigest=stringAt currentAuthority "reviewDigest"; ObservedDependencyDigest=stringAt observedAuthority "dependencyDigest"; CurrentDependencyDigest=stringAt currentAuthority "dependencyDigest"
+      ObservedReleaseObligationsMet=observedAuthority.GetProperty("releaseObligationsMet").GetBoolean(); CurrentReleaseObligationsMet=currentAuthority.GetProperty("releaseObligationsMet").GetBoolean(); ObservedSettingsDigest=stringAt observedAuthority "settingsDigest"; CurrentSettingsDigest=stringAt currentAuthority "settingsDigest"
       AdmittedAtUnixSeconds=int64At recovery "admittedAtUnixSeconds"; ExpiresAtUnixSeconds=int64At recovery "expiresAtUnixSeconds"; EvaluatedAtUnixSeconds=int64At recovery "evaluatedAtUnixSeconds" }
 let get = function Ok value -> value | Error errors -> failwithf "baseline refused: %A" errors
 let has expected = function Error errors -> List.contains expected errors | Ok _ -> false
@@ -57,16 +61,45 @@ let prerequisite () =
     use receipt = json "evidence/github-substrate-v2/accepted/GS2-07.5.json"
     shaFile "evidence/github-substrate-v2/accepted/GS2-07.5.json"=text "prerequisiteFileSha256"
     && receipt.RootElement.GetProperty("digest").GetString()=text "prerequisiteReceiptDigest"
-let roadmap () = text "roadmapRevision"="7e5754e23d274b31d21f9a2b4c0c0a00265ee366" && text "roadmapSha256"="33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
+let roadmap () = text "roadmapRevision"="7216ec4aae14b17f151a1ed3616eb8a2f4ed2d47" && text "roadmapSha256"="0498209c27cdf75d3c1067dad2c3b88084b03c20f1bd87dcb99192aa43457c36"
 let hostedAdmission () =
+    let pullRequestRun = initial.GetProperty("pullRequestRun")
+    let pullRequestNumber = candidate.GetProperty("pullRequestNumber").GetInt64()
+    let baseRef = stringAt recovery "baseRef"
+    let baseName = baseRef.Substring("refs/heads/".Length)
+    let recoveryBaseSha = stringAt recovery "baseSha"
+    let expectedQueueRef = $"refs/heads/gh-readonly-queue/{baseName}/pr-{pullRequestNumber}-{recoveryBaseSha}"
+    let authoritySources (row:JsonElement) =
+        stringAt row "claimSource"="https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5565937139"
+        && stringAt row "reviewSource"="https://github.com/FS-GG/FS.GG.Coordination/issues/320#issuecomment-5564723174"
+        && stringAt row "dependencySource"="evidence/github-substrate-v2/accepted/GS2-07.5.json"
+        && stringAt row "settingsSource"="evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json"
     int64At hosted "repositoryId"=Sandbox.repositoryId
     && stringAt hosted "repository"=Sandbox.repository
     && int64At prestate "repositoryId"=Sandbox.repositoryId
     && stringAt prestate "repository"=Sandbox.repository
     && stringAt candidate "sha"=stringAt candidate "currentShaAtReevaluation"
-    && stringAt (initial.GetProperty("pullRequestRun")) "conclusion"="success"
+    && stringAt candidate "sha"=stringAt pullRequestRun "headSha"
+    && stringAt pullRequestRun "event"="pull_request"
+    && stringAt pullRequestRun "status"="completed"
+    && stringAt pullRequestRun "conclusion"="success"
+    && stringAt initial "baseRef"=baseRef
+    && stringAt initial "baseSha"=stringAt recovery "priorBaseSha"
+    && stringAt initialRun "event"="merge_group"
+    && (initial.GetProperty("jobs").EnumerateArray() |> Seq.forall(fun job -> stringAt job "headSha"=stringAt initialRun "headSha"))
     && stringAt recoveryRun "event"="merge_group"
     && stringAt recoveryRun "conclusion"="success"
+    && stringAt proof "fullRef"=expectedQueueRef
+    && int64At proof "runId"=int64At recoveryRun "id"
+    && stringAt proof "mergeGroupHeadSha"=stringAt recoveryRun "headSha"
+    && stringAt proof "workflowSha"=stringAt recoveryRun "headSha"
+    && int64At observedAuthority "observedAtUnixSeconds"=int64At initial "admittedAtUnixSeconds"
+    && int64At currentAuthority "observedAtUnixSeconds"=int64At recovery "evaluatedAtUnixSeconds"
+    && authoritySources observedAuthority && authoritySources currentAuthority
+    && stringAt observedAuthority "dependencyDigest"=text "prerequisiteReceiptDigest"
+    && stringAt currentAuthority "dependencyDigest"=text "prerequisiteReceiptDigest"
+    && stringAt observedAuthority "settingsDigest"=stringAt settings "digest"
+    && stringAt currentAuthority "settingsDigest"=stringAt settings "digest"
     && recovery.GetProperty("baseReevaluated").GetBoolean()
     && recovery.GetProperty("requiredChecksGrew").GetBoolean()
     && recovery.GetProperty("newRequiredCheckExecuted").GetBoolean()
