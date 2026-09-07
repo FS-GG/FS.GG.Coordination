@@ -32,6 +32,17 @@ type QueuePilotPlan =
       Disposition:string; Seal:string }
 type QueueEffect = { OperationId:string; Attempt:int; ResultDigest:string }
 type QueueCompensation = { OperationId:string; CompensationId:string; FinalStateDigest:string }
+type QueueBurstHint = { Subject:string; HintId:string; Sequence:int; SupersedesHintId:string option }
+type QueueBurstDecision =
+    { Subject:string; PriorHeadSha:string; HeadSha:string; AuthorizationHeadSha:string
+      PriorBaseSha:string; BaseSha:string; PriorRequiredChecks:string list; RequiredChecks:string list
+      SuccessfulChecks:string list; WorkMilliseconds:int64; WaitingMilliseconds:int64; Delivered:bool }
+type QueueBurstFacts =
+    { Hints:QueueBurstHint list; Decisions:QueueBurstDecision list; MaxHintsPerSubject:int
+      InFlightEffectCount:int; CancelledInFlightEffectCount:int; WorkMilliseconds:int64; WaitingMilliseconds:int64 }
+type QueueBurstReceipt =
+    { SchemaVersion:int; Subjects:string list; HintCount:int; SupersededHintCount:int
+      WorkMilliseconds:int64; WaitingMilliseconds:int64; DeliveredSubjects:string list; Disposition:string; Seal:string }
 type QueueRecoveryFacts =
     { Repository:string; RepositoryId:int64; PilotSeal:string; DurableCheckpointDigest:string; ResumeCheckpointDigest:string
       Interrupted:bool; FailedStepInjected:bool; AppliedEffects:QueueEffect list; RetryEffects:QueueEffect list
@@ -50,6 +61,9 @@ type GitHubQueueSandboxFinding =
     | AuthorityChanged of string | AdmissionExpired | MissingInterruption | MissingFailedStep | UnsealedResume
     | RetryDiverged | DuplicateEffect | CompensationOrderInvalid | CleanupIncomplete
     | RollbackMismatch of string | Unrecoverable | AlteredSeal | ReplayConflict | InvalidSerialization
+    | BurstTooLarge | DistinctSubjectLost | InvalidSupersession | InFlightEffectCancelled
+    | MissingRequiredContext of string | StaleGreenAuthorization of string | MovementNotExercised of string
+    | MetricMismatch of string
 type QueueSandboxControlResult = { ControlId:string; ControlPassed:bool; BaselineGreen:bool }
 
 module GitHubQueueSandbox =
@@ -57,6 +71,7 @@ module GitHubQueueSandbox =
     let repositoryId = 1353050537L
     let pilotDisposition = "queue-pilot-qualified"
     let recoveryDisposition = "queue-sandbox-recovered"
+    let burstDisposition = "routine-burst-qualified"
     let pilotControlIds =
         [ "prerequisite"; "roadmap"; "sandbox-identity"; "provider-capability"; "prestate"; "no-secrets"
           "visibility-transition"; "admission"; "exact-candidate"; "forward-base-movement"; "required-check-growth"
@@ -80,6 +95,9 @@ module GitHubQueueSandbox =
     let private effectFrame (effect:QueueEffect) = join [ effect.OperationId; string effect.Attempt; effect.ResultDigest ]
     let private compensationFrame (compensation:QueueCompensation) =
         join [ compensation.OperationId; compensation.CompensationId; compensation.FinalStateDigest ]
+    let private burstSeal (r:QueueBurstReceipt) =
+        join [ "github-queue-routine-burst/v1"; join r.Subjects; string r.HintCount; string r.SupersededHintCount
+               string r.WorkMilliseconds; string r.WaitingMilliseconds; join r.DeliveredSubjects; r.Disposition ] |> hash
     let private pilotSeal (p:QueuePilotPlan) =
         join [ "github-queue-sandbox-pilot/v1"; p.Repository; string p.RepositoryId; p.PilotId; p.CandidateSha
                p.MergeGroupHeadSha; p.BaseRef; p.PriorBaseSha; p.BaseSha; string p.BaseObservationRevision
@@ -255,6 +273,46 @@ module GitHubQueueSandbox =
         | Ok receipt when serializeRecovery receipt=serializeRecovery prior -> Ok receipt
         | Ok _ -> Error [ GitHubQueueSandboxFinding.ReplayConflict ]
         | Error findings -> Error findings
+
+    let compileBurst (f:QueueBurstFacts) =
+        let e=ResizeArray<GitHubQueueSandboxFinding>()
+        let hintSubjects=f.Hints |> List.map _.Subject |> List.distinct |> List.sort
+        let decisionSubjects=f.Decisions |> List.map _.Subject
+        if f.MaxHintsPerSubject<=0 || f.MaxHintsPerSubject>20
+           || (f.Hints |> List.groupBy _.Subject |> List.exists(fun (_,rows) -> rows.Length>f.MaxHintsPerSubject)) then e.Add GitHubQueueSandboxFinding.BurstTooLarge
+        if hintSubjects.Length<2 || decisionSubjects<>hintSubjects then e.Add GitHubQueueSandboxFinding.DistinctSubjectLost
+        let hintsById=f.Hints |> List.map(fun h -> h.HintId,h) |> Map.ofList
+        if f.Hints |> List.exists(fun h ->
+            not(token.IsMatch h.Subject) || not(token.IsMatch h.HintId) || h.Sequence<=0
+            || match h.SupersedesHintId with
+               | None -> false
+               | Some prior -> match Map.tryFind prior hintsById with Some p -> p.Subject<>h.Subject || p.Sequence>=h.Sequence | None -> true)
+           || (f.Hints |> List.map _.HintId |> List.distinct |> List.length)<>f.Hints.Length
+           || not(f.Hints |> List.exists _.SupersedesHintId.IsSome) then e.Add GitHubQueueSandboxFinding.InvalidSupersession
+        if f.InFlightEffectCount<=0 || f.CancelledInFlightEffectCount<>0 then e.Add GitHubQueueSandboxFinding.InFlightEffectCancelled
+        for d in f.Decisions do
+            for name,value in [ "priorHeadSha",d.PriorHeadSha; "headSha",d.HeadSha; "authorizationHeadSha",d.AuthorizationHeadSha; "priorBaseSha",d.PriorBaseSha; "baseSha",d.BaseSha ] do addInvalid e name value sha
+            if d.AuthorizationHeadSha<>d.HeadSha then e.Add(GitHubQueueSandboxFinding.StaleGreenAuthorization d.Subject)
+            if not(canonical d.RequiredChecks) || not(canonical d.SuccessfulChecks) || d.RequiredChecks<>d.SuccessfulChecks then e.Add(GitHubQueueSandboxFinding.MissingRequiredContext d.Subject)
+            if d.WorkMilliseconds<0L || d.WaitingMilliseconds<0L then e.Add(GitHubQueueSandboxFinding.MetricMismatch d.Subject)
+        if not(f.Decisions |> List.exists(fun d -> d.PriorHeadSha<>d.HeadSha)) then e.Add(GitHubQueueSandboxFinding.MovementNotExercised "source")
+        if not(f.Decisions |> List.exists(fun d -> d.PriorBaseSha<>d.BaseSha)) then e.Add(GitHubQueueSandboxFinding.MovementNotExercised "base")
+        if not(f.Decisions |> List.exists(fun d -> d.PriorRequiredChecks<>d.RequiredChecks)) then e.Add(GitHubQueueSandboxFinding.MovementNotExercised "required-checks")
+        if not(f.Decisions |> List.exists _.Delivered) then e.Add GitHubQueueSandboxFinding.DistinctSubjectLost
+        if f.WorkMilliseconds<>(f.Decisions |> List.sumBy _.WorkMilliseconds) then e.Add(GitHubQueueSandboxFinding.MetricMismatch "work")
+        if f.WaitingMilliseconds<>(f.Decisions |> List.sumBy _.WaitingMilliseconds) then e.Add(GitHubQueueSandboxFinding.MetricMismatch "waiting")
+        if e.Count>0 then Error(List.ofSeq e) else
+        let unsigned={ SchemaVersion=1; Subjects=hintSubjects; HintCount=f.Hints.Length; SupersededHintCount=f.Hints|>List.filter _.SupersedesHintId.IsSome|>List.length; WorkMilliseconds=f.WorkMilliseconds; WaitingMilliseconds=f.WaitingMilliseconds; DeliveredSubjects=f.Decisions|>List.filter _.Delivered|>List.map _.Subject; Disposition=burstDisposition; Seal="" }
+        Ok { unsigned with Seal=burstSeal unsigned }
+
+    let serializeBurst (r:QueueBurstReceipt) =
+        JsonSerializer.Serialize {| schemaVersion=r.SchemaVersion; subjects=r.Subjects; hintCount=r.HintCount; supersededHintCount=r.SupersededHintCount; workMilliseconds=r.WorkMilliseconds; waitingMilliseconds=r.WaitingMilliseconds; deliveredSubjects=r.DeliveredSubjects; disposition=r.Disposition; seal=r.Seal |}
+    let verifyBurst (expectedSeal:string) (r:QueueBurstReceipt) =
+        if r.SchemaVersion<>1 || r.Subjects.Length<2 || r.Subjects<>(r.Subjects|>List.distinct|>List.sort)
+           || r.HintCount<r.Subjects.Length || r.SupersededHintCount<=0 || r.WorkMilliseconds<0L || r.WaitingMilliseconds<0L
+           || List.isEmpty r.DeliveredSubjects || r.DeliveredSubjects|>List.exists(fun s -> not(List.contains s r.Subjects))
+           || r.Disposition<>burstDisposition then Error [ GitHubQueueSandboxFinding.InvalidSerialization ]
+        elif r.Seal<>expectedSeal || r.Seal<>burstSeal r then Error [ GitHubQueueSandboxFinding.AlteredSeal ] else Ok r
     let validateControls (expected:string list) (generated:QueueSandboxControlResult list) (independent:QueueSandboxControlResult list) =
         let validate (producer:string) (rows:QueueSandboxControlResult list) =
             [ if rows|>List.map _.ControlId<>expected then $"{producer}: inventory mismatch"

@@ -107,9 +107,12 @@ let ``Q4 and Q6 execute generated and independent controls offline`` () =
         let text = read script
         Assert.Contains("let generated", text, StringComparison.Ordinal)
         Assert.Contains("let independent", text, StringComparison.Ordinal)
+    for script in [ "eng/validate-github-queue-sandbox-pilot.fsx"; "eng/validate-github-queue-sandbox-recovery.fsx"; "eng/validate-github-queue-routine-burst.fsx" ] do
+        let text = read script
         for forbidden in [ "new HttpClient"; "api.github.com"; "Environment.GetEnvironmentVariable("; "Process.Start(" ] do Assert.DoesNotContain(forbidden, text, StringComparison.Ordinal)
     runGate "eng/validate-github-queue-sandbox-pilot.fsx" "GITHUB_QUEUE_SANDBOX_PILOT_OK disposition=queue-pilot-qualified controls=24"
     runGate "eng/validate-github-queue-sandbox-recovery.fsx" "GITHUB_QUEUE_SANDBOX_RECOVERY_OK disposition=queue-sandbox-recovered controls=20"
+    runGate "eng/validate-github-queue-routine-burst.fsx" "GITHUB_QUEUE_ROUTINE_BURST_OK subjects=2 hints=5"
 
 [<Fact>]
 let ``Q4 and Q6 reject contradictory retained hosted evidence`` () =
@@ -156,6 +159,22 @@ let ``Q6 rejects tampered checkpoint journal handoff and expiry records`` () =
             let path = Path.Combine(isolated.FullName, "evidence/github-substrate-v2/gs2-07-6", relative)
             mutateJson path mutation
             let exitCode, output, error = runGateAt isolated.FullName "eng/validate-github-queue-sandbox-recovery.fsx"
+            Assert.NotEqual(0, exitCode)
+            Assert.DoesNotContain("_OK", output, StringComparison.Ordinal)
+            Assert.False(String.IsNullOrWhiteSpace error, $"{name} should fail closed")
+        finally Directory.Delete(isolated.FullName, true)
+
+[<Fact>]
+let ``routine burst gate rejects stale hosted heads and cleanup mismatch`` () =
+    let cases : (string * string * (JsonNode -> unit)) list =
+        [ "current head", "routine-burst.json", fun node -> (((((node["decisions"].AsArray())[0]).AsObject())["currentRun"]).AsObject())["headSha"] <- JsonValue.Create(String.replicate 40 "9")
+          "cleanup", "burst-cleanup.json", fun node -> node.AsObject()["settingsDigest"] <- JsonValue.Create(String.replicate 64 "8") ]
+    for name, relative, mutation in cases do
+        let isolated = isolatedEvidence()
+        try
+            let path = Path.Combine(isolated.FullName, "evidence/github-substrate-v2/gs2-07-6", relative)
+            mutateJson path mutation
+            let exitCode, output, error = runGateAt isolated.FullName "eng/validate-github-queue-routine-burst.fsx"
             Assert.NotEqual(0, exitCode)
             Assert.DoesNotContain("_OK", output, StringComparison.Ordinal)
             Assert.False(String.IsNullOrWhiteSpace error, $"{name} should fail closed")

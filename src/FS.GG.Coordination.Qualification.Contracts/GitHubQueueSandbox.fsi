@@ -73,6 +73,38 @@ type QueuePilotPlan =
 
 type QueueEffect = { OperationId: string; Attempt: int; ResultDigest: string }
 type QueueCompensation = { OperationId: string; CompensationId: string; FinalStateDigest: string }
+type QueueBurstHint = { Subject: string; HintId: string; Sequence: int; SupersedesHintId: string option }
+type QueueBurstDecision =
+    { Subject: string
+      PriorHeadSha: string
+      HeadSha: string
+      AuthorizationHeadSha: string
+      PriorBaseSha: string
+      BaseSha: string
+      PriorRequiredChecks: string list
+      RequiredChecks: string list
+      SuccessfulChecks: string list
+      WorkMilliseconds: int64
+      WaitingMilliseconds: int64
+      Delivered: bool }
+type QueueBurstFacts =
+    { Hints: QueueBurstHint list
+      Decisions: QueueBurstDecision list
+      MaxHintsPerSubject: int
+      InFlightEffectCount: int
+      CancelledInFlightEffectCount: int
+      WorkMilliseconds: int64
+      WaitingMilliseconds: int64 }
+type QueueBurstReceipt =
+    { SchemaVersion: int
+      Subjects: string list
+      HintCount: int
+      SupersededHintCount: int
+      WorkMilliseconds: int64
+      WaitingMilliseconds: int64
+      DeliveredSubjects: string list
+      Disposition: string
+      Seal: string }
 
 type QueueRecoveryFacts =
     { Repository: string
@@ -136,6 +168,14 @@ type GitHubQueueSandboxFinding =
     | AlteredSeal
     | ReplayConflict
     | InvalidSerialization
+    | BurstTooLarge
+    | DistinctSubjectLost
+    | InvalidSupersession
+    | InFlightEffectCancelled
+    | MissingRequiredContext of string
+    | StaleGreenAuthorization of string
+    | MovementNotExercised of string
+    | MetricMismatch of string
 
 type QueueSandboxControlResult = { ControlId: string; ControlPassed: bool; BaselineGreen: bool }
 
@@ -144,6 +184,7 @@ module GitHubQueueSandbox =
     val repositoryId: int64
     val pilotDisposition: string
     val recoveryDisposition: string
+    val burstDisposition: string
     val pilotControlIds: string list
     val recoveryControlIds: string list
     val compilePilot: QueuePilotFacts -> Result<QueuePilotPlan, GitHubQueueSandboxFinding list>
@@ -156,4 +197,7 @@ module GitHubQueueSandbox =
     val parseRecovery: string -> Result<QueueRecoveryReceipt, GitHubQueueSandboxFinding list>
     val verifyRecovery: expectedSeal:string -> QueueRecoveryReceipt -> Result<QueueRecoveryReceipt, GitHubQueueSandboxFinding list>
     val replayRecovery: prior:QueueRecoveryReceipt -> facts:QueueRecoveryFacts -> Result<QueueRecoveryReceipt, GitHubQueueSandboxFinding list>
+    val compileBurst: QueueBurstFacts -> Result<QueueBurstReceipt, GitHubQueueSandboxFinding list>
+    val serializeBurst: QueueBurstReceipt -> string
+    val verifyBurst: expectedSeal:string -> QueueBurstReceipt -> Result<QueueBurstReceipt, GitHubQueueSandboxFinding list>
     val validateControls: expected:string list -> generated:QueueSandboxControlResult list -> independent:QueueSandboxControlResult list -> Result<unit,string list>

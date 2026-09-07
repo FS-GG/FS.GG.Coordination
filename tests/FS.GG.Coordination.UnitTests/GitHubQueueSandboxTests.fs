@@ -67,6 +67,20 @@ let private recoveryFacts pilotSeal =
       FinalSettingsDigest = digest "f"
       Recoverable = true }
 
+let private burstFacts () =
+    let primary = "pr-14"
+    let unrelated = "pr-15"
+    let decisions =
+        [ { Subject=primary; PriorHeadSha=sha "1"; HeadSha=sha "2"; AuthorizationHeadSha=sha "2"; PriorBaseSha=sha "3"; BaseSha=sha "4"; PriorRequiredChecks=[ "queue-pilot" ]; RequiredChecks=[ "queue-growth"; "queue-pilot" ]; SuccessfulChecks=[ "queue-growth"; "queue-pilot" ]; WorkMilliseconds=1200L; WaitingMilliseconds=8000L; Delivered=false }
+          { Subject=unrelated; PriorHeadSha=sha "5"; HeadSha=sha "5"; AuthorizationHeadSha=sha "5"; PriorBaseSha=sha "3"; BaseSha=sha "4"; PriorRequiredChecks=[ "queue-pilot" ]; RequiredChecks=[ "queue-pilot" ]; SuccessfulChecks=[ "queue-pilot" ]; WorkMilliseconds=600L; WaitingMilliseconds=3000L; Delivered=true } ]
+    { Hints=
+        [ { Subject=primary; HintId="primary-1"; Sequence=1; SupersedesHintId=None }
+          { Subject=primary; HintId="primary-2"; Sequence=2; SupersedesHintId=Some "primary-1" }
+          { Subject=primary; HintId="primary-3"; Sequence=3; SupersedesHintId=Some "primary-2" }
+          { Subject=unrelated; HintId="unrelated-1"; Sequence=1; SupersedesHintId=None } ]
+      Decisions=decisions; MaxHintsPerSubject=4; InFlightEffectCount=2; CancelledInFlightEffectCount=0
+      WorkMilliseconds=decisions |> List.sumBy _.WorkMilliseconds; WaitingMilliseconds=decisions |> List.sumBy _.WaitingMilliseconds }
+
 let private get = function Ok value -> value | Error findings -> failwithf "unexpected refusal: %A" findings
 let private findings = function Error values -> values | Ok value -> failwithf "expected refusal: %A" value
 
@@ -152,3 +166,25 @@ let ``recovery serialization seal replay and control inventory are exact`` () =
     let green ids = ids |> List.map (fun id -> { ControlId = id; ControlPassed = true; BaselineGreen = true })
     Assert.Equal(Ok (), Sandbox.validateControls Sandbox.pilotControlIds (green Sandbox.pilotControlIds) (green Sandbox.pilotControlIds))
     Assert.Contains("generated: inventory mismatch", Sandbox.validateControls Sandbox.pilotControlIds (green Sandbox.pilotControlIds |> List.tail) (green Sandbox.pilotControlIds) |> findings)
+
+[<Fact>]
+let ``routine burst preserves distinct subjects and current authorization while coalescing hints`` () =
+    let baseline = burstFacts ()
+    let receipt = Sandbox.compileBurst baseline |> get
+    Assert.Equal<string list>([ "pr-14"; "pr-15" ], receipt.Subjects)
+    Assert.Equal(4, receipt.HintCount)
+    Assert.Equal(2, receipt.SupersededHintCount)
+    Assert.Equal<string list>([ "pr-15" ], receipt.DeliveredSubjects)
+    Assert.Equal(Ok receipt, Sandbox.verifyBurst receipt.Seal receipt)
+    Assert.Equal(Error [ GitHubQueueSandboxFinding.AlteredSeal ], Sandbox.verifyBurst (digest "0") receipt)
+
+[<Fact>]
+let ``routine burst refuses cancellation lost subjects missing contexts stale green and absent movement`` () =
+    let baseline = burstFacts ()
+    Assert.Contains(GitHubQueueSandboxFinding.InFlightEffectCancelled, Sandbox.compileBurst { baseline with CancelledInFlightEffectCount=1 } |> findings)
+    Assert.Contains(GitHubQueueSandboxFinding.DistinctSubjectLost, Sandbox.compileBurst { baseline with Decisions=baseline.Decisions.Tail } |> findings)
+    let primary=baseline.Decisions.Head
+    Assert.Contains(GitHubQueueSandboxFinding.MissingRequiredContext primary.Subject, Sandbox.compileBurst { baseline with Decisions={ primary with SuccessfulChecks=[ "queue-pilot" ] }::baseline.Decisions.Tail } |> findings)
+    Assert.Contains(GitHubQueueSandboxFinding.StaleGreenAuthorization primary.Subject, Sandbox.compileBurst { baseline with Decisions={ primary with AuthorizationHeadSha=primary.PriorHeadSha }::baseline.Decisions.Tail } |> findings)
+    Assert.Contains(GitHubQueueSandboxFinding.MovementNotExercised "source", Sandbox.compileBurst { baseline with Decisions=baseline.Decisions |> List.map(fun d -> { d with PriorHeadSha=d.HeadSha }) } |> findings)
+    Assert.Contains(GitHubQueueSandboxFinding.MetricMismatch "work", Sandbox.compileBurst { baseline with WorkMilliseconds=baseline.WorkMilliseconds+1L } |> findings)

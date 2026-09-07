@@ -46,7 +46,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [evidence/github-substrate-v2/gs2-07-6/hosted-run.json, evidence/github-substrate-v2/gs2-07-6/hosted-proof.json, src/FS.GG.Coordination.Qualification.Contracts/GitHubQueueSandbox.fs, tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs]
+    artifacts: [evidence/github-substrate-v2/gs2-07-6/hosted-run.json, evidence/github-substrate-v2/gs2-07-6/hosted-proof.json, evidence/github-substrate-v2/gs2-07-6/routine-burst.json, evidence/github-substrate-v2/gs2-07-6/stale-green-refusal.json, evidence/github-substrate-v2/gs2-07-6/burst-cleanup.json, src/FS.GG.Coordination.Qualification.Contracts/GitHubQueueSandbox.fs, tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs
@@ -54,13 +54,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:52689b9f70a01576bae55cda00a5bd6b10a74f834543a875b1bb25e75c0a9d2a"
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
-    notes: [Pure qualification and bounded hosted pilot satisfy the repository-scoped admission requirement.]
+    notes: [Pure qualification, bounded hosted pilot, and routine-burst qualification satisfy the repository-scoped admission requirement.]
   - id: EV002
     kind: verification
     subject:
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:52689b9f70a01576bae55cda00a5bd6b10a74f834543a875b1bb25e75c0a9d2a"
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Signature and implementation expose the versioned sealed queue and recovery contract.]
@@ -100,7 +100,7 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV003]
-    artifacts: [eng/validate-github-queue-sandbox-pilot.fsx, eng/validate-github-queue-sandbox-recovery.fsx, evidence/github-substrate-v2/gs2-07-6/gate-inversion.json, evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json, evidence/github-substrate-v2/gs2-07-6/hosted-run.json, evidence/github-substrate-v2/gs2-07-6/hosted-proof.json]
+    artifacts: [eng/validate-github-queue-sandbox-pilot.fsx, eng/validate-github-queue-sandbox-recovery.fsx, eng/validate-github-queue-routine-burst.fsx, evidence/github-substrate-v2/gs2-07-6/gate-inversion.json, evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json, evidence/github-substrate-v2/gs2-07-6/hosted-run.json, evidence/github-substrate-v2/gs2-07-6/hosted-proof.json]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coordination.UnitTests/GitHubQueueSandboxTests.fs
@@ -108,13 +108,13 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:52689b9f70a01576bae55cda00a5bd6b10a74f834543a875b1bb25e75c0a9d2a"
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
-    notes: [Q4 and Q6 execute all generated and independent controls and the identity inversion turns Q4 red.]
+    notes: [Q4, Q6, and the Section 12.2 routine-burst gate execute their retained controls and the identity inversion turns Q4 red.]
   - id: EV004
     kind: verification
     subject:
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:52689b9f70a01576bae55cda00a5bd6b10a74f834543a875b1bb25e75c0a9d2a"
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Schema-v1 canonical serialization and strict parse, and replay tests define the migration posture., seal]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: evidence/github-substrate-v2/gs2-07-6/queue-sandbox-tests.trx
-      digest: "sha256:52689b9f70a01576bae55cda00a5bd6b10a74f834543a875b1bb25e75c0a9d2a"
+      digest: "sha256:fa52ebfd8f7251f422ac5119ce346e7de245c56a75b984d983e6f46a6441c037"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 8
       failed: 0
       skipped: 0
     notes: [Architecture tests prove exact independently authored retained control inventories and offline execution.]

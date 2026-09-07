@@ -14,7 +14,11 @@ must occur before the bound expiry. Unsupported or unknown provider capability,
 changed authority, a moved candidate, stale base evaluation, incomplete checks,
 or an expired window fails closed.
 
-Recovery resumes only from the same durable checkpoint. Every applied operation
+Recovery is a real process boundary: `prepare` exits after writing and sealing
+the checkpoint, journal and observed authority, while a separately identified
+`resume` process verifies those exact bytes before acting. It refuses the expired
+admission, re-observes claim/review/dependency/settings authority, and only then
+creates a fresh admission. Every applied operation
 has one deterministic retry with the same result digest and next attempt number.
 Compensations name applied operations in reverse order, have unique identities,
 and end in digest-bound states. A valid receipt requires no duplicate effects,
@@ -32,7 +36,19 @@ workflow's historical registry row alongside immutable run history; cleanup
 therefore disables that row and proves that its file is absent from every
 remaining branch.
 
-Q4 and Q6 are independently executable offline gates. Each reads tracked
+The accepted Section 12.2 amendment is covered by a separate bounded fixture.
+It issued four rapid body edits on sandbox PR 19 while two workflow effects were
+in flight, retained five provider edit records, and treated each newer hint as
+superseding only the prior hint for that same PR. Distinct sandbox PR 20 stayed
+independent and merged successfully. The fixture then moved PR 19's source,
+observed the unrelated merge advance its base, changed required contexts from
+`queue-pilot` to `queue-growth` plus `queue-pilot`, and accepted only green checks
+at the current head. The earlier green head was retained as an explicit
+`refused-stale-green` decision. No in-flight run was cancelled. Its measured
+attributable work was 22.852 seconds and waiting was 77.790 seconds; these are a
+single observed fixture, not a performance target or cohort claim.
+
+Q4 and Q6 plus the Q4 routine-burst command are independently executable offline gates. Each reads tracked
 provider/authority inputs, runs separately authored generated and independent
 negative controls, and validates canonical serialization, sealing, replay,
 authority denial, and cleanup. The live transcript supplies the hosted

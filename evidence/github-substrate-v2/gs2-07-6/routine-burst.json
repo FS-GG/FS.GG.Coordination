@@ -1,0 +1,175 @@
+{
+  "cancelledInFlightEffectCount": 0,
+  "decisions": [
+    {
+      "authorizationHeadSha": "4530f110ae7bf405486316e50500a143f44355ac",
+      "baseSha": "e26c25fd6eec1dfe6a70f50e3febf40577efdb8f",
+      "currentRun": {
+        "conclusion": "success",
+        "createdAt": "2026-09-07T21:04:51Z",
+        "event": "pull_request",
+        "headSha": "4530f110ae7bf405486316e50500a143f44355ac",
+        "id": 34161792852,
+        "status": "completed",
+        "updatedAt": "2026-09-07T21:05:27Z",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34161792852"
+      },
+      "delivered": false,
+      "headSha": "4530f110ae7bf405486316e50500a143f44355ac",
+      "initialRun": {
+        "conclusion": "success",
+        "createdAt": "2026-09-07T21:04:04Z",
+        "event": "pull_request",
+        "headSha": "2d154e57767ba79c232d060cf07588e293e74721",
+        "id": 34161744694,
+        "status": "completed",
+        "updatedAt": "2026-09-07T21:04:39Z",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34161744694"
+      },
+      "priorBaseSha": "6020ea028dd50fd90cc42ff9033fa16767043f71",
+      "priorHeadSha": "2d154e57767ba79c232d060cf07588e293e74721",
+      "priorRequiredChecks": [
+        "queue-pilot"
+      ],
+      "requiredChecks": [
+        "queue-growth",
+        "queue-pilot"
+      ],
+      "subject": "pr-19",
+      "successfulChecks": [
+        "queue-growth",
+        "queue-pilot"
+      ],
+      "waitingMilliseconds": 44650,
+      "workMilliseconds": 20850
+    },
+    {
+      "authorizationHeadSha": "8b51d305dbe600d0853e17977ddf61e89fc0750a",
+      "baseSha": "e26c25fd6eec1dfe6a70f50e3febf40577efdb8f",
+      "delivered": true,
+      "headSha": "8b51d305dbe600d0853e17977ddf61e89fc0750a",
+      "priorBaseSha": "6020ea028dd50fd90cc42ff9033fa16767043f71",
+      "priorHeadSha": "8b51d305dbe600d0853e17977ddf61e89fc0750a",
+      "priorRequiredChecks": [
+        "queue-pilot"
+      ],
+      "requiredChecks": [
+        "queue-pilot"
+      ],
+      "run": {
+        "conclusion": "success",
+        "createdAt": "2026-09-07T21:04:05Z",
+        "event": "pull_request",
+        "headSha": "8b51d305dbe600d0853e17977ddf61e89fc0750a",
+        "id": 34161745880,
+        "status": "completed",
+        "updatedAt": "2026-09-07T21:04:40Z",
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34161745880"
+      },
+      "subject": "pr-20",
+      "successfulChecks": [
+        "queue-pilot"
+      ],
+      "waitingMilliseconds": 33140,
+      "workMilliseconds": 2002
+    }
+  ],
+  "disposition": "routine-burst-qualified",
+  "hints": [
+    {
+      "bodyDigest": "6b16f578cad0bdf4f043af8ce27142031e4684f1e3b24c1ab15973383553603b",
+      "completedAtUnixMilliseconds": 1788815044857,
+      "hintId": "primary-1",
+      "sequence": 1,
+      "startedAtUnixMilliseconds": 1788815043647,
+      "subject": "pr-19",
+      "supersedesHintId": null
+    },
+    {
+      "bodyDigest": "521f62a9dddb8eb9ce5ae2c738aa2da65df547fa61938e3f3ed1faf48a2e14ed",
+      "completedAtUnixMilliseconds": 1788815045900,
+      "hintId": "primary-2",
+      "sequence": 2,
+      "startedAtUnixMilliseconds": 1788815044867,
+      "subject": "pr-19",
+      "supersedesHintId": "primary-1"
+    },
+    {
+      "bodyDigest": "7d5f31802b168c7f9d28ded81c39c8e844efa111c77f1cd5fc9dde2b2c52170d",
+      "completedAtUnixMilliseconds": 1788815046964,
+      "hintId": "primary-3",
+      "sequence": 3,
+      "startedAtUnixMilliseconds": 1788815045909,
+      "subject": "pr-19",
+      "supersedesHintId": "primary-2"
+    },
+    {
+      "bodyDigest": "e569a3a45cb64f11671feb9e7c0687e7236743d6ab199f4abc7f6730a44c6a8f",
+      "completedAtUnixMilliseconds": 1788815047869,
+      "hintId": "primary-4",
+      "sequence": 4,
+      "startedAtUnixMilliseconds": 1788815046974,
+      "subject": "pr-19",
+      "supersedesHintId": "primary-3"
+    },
+    {
+      "bodyDigest": "8b51d305dbe600d0853e17977ddf61e89fc0750a",
+      "completedAtUnixMilliseconds": 1788815083838,
+      "hintId": "unrelated-1",
+      "sequence": 1,
+      "startedAtUnixMilliseconds": 1788815081836,
+      "subject": "pr-20",
+      "supersedesHintId": null
+    }
+  ],
+  "inFlightEffectCount": 2,
+  "maxHintsPerSubject": 4,
+  "providerEdits": {
+    "nodes": [
+      {
+        "editedAt": "2026-09-07T21:04:07Z",
+        "editor": {
+          "login": "EHotwagner"
+        },
+        "id": "UCE_lAHOUKXpqc8AAAABQJ0BPs7pep_0"
+      },
+      {
+        "editedAt": "2026-09-07T21:04:06Z",
+        "editor": {
+          "login": "EHotwagner"
+        },
+        "id": "UCE_lAHOUKXpqc8AAAABQJ0BPs7pep9_"
+      },
+      {
+        "editedAt": "2026-09-07T21:04:05Z",
+        "editor": {
+          "login": "EHotwagner"
+        },
+        "id": "UCE_lAHOUKXpqc8AAAABQJ0BPs7pep7b"
+      },
+      {
+        "editedAt": "2026-09-07T21:04:04Z",
+        "editor": {
+          "login": "EHotwagner"
+        },
+        "id": "UCE_lAHOUKXpqc8AAAABQJ0BPs7pep5G"
+      },
+      {
+        "editedAt": "2026-09-07T21:04:00Z",
+        "editor": {
+          "login": "EHotwagner"
+        },
+        "id": "UCE_lAHOUKXpqc8AAAABQJ0BPs7pep5B"
+      }
+    ],
+    "totalCount": 5
+  },
+  "schemaVersion": 1,
+  "staleGreenRefusal": "evidence/github-substrate-v2/gs2-07-6/stale-green-refusal.json",
+  "waitingBreakdown": {
+    "inFlightObservationMilliseconds": 811,
+    "providerCapabilityMilliseconds": 389
+  },
+  "waitingMilliseconds": 77790,
+  "workMilliseconds": 22852
+}

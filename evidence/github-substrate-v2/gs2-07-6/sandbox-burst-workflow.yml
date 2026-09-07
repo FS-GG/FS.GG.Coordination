@@ -1,0 +1,24 @@
+name: GS2-07.6 routine burst
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  queue-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Keep the effect in flight across the edit burst
+        run: sleep 30
+      - name: Bind the exact current head
+        run: test -n "$GITHUB_SHA"
+  queue-growth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v5
+      - name: Bind the grown context to the current head
+        run: test -n "$GITHUB_SHA"
