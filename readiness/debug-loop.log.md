@@ -12,3 +12,12 @@
 
 **Narrow re-run result:** fail before candidate commit with `SUPPLY_CHAIN_REFUSED candidate checkout must be clean before packaging`
 **Full verify result:** deferred until the exact candidate commit is clean
+
+## Result — 2026-09-07T16:18:53Z
+
+**Stop condition:** Green
+**Iterations:** 1
+
+The narrow reproducibility test passed from the clean candidate commit. The full solution then passed
+245 unit tests and 530 architecture tests. No product or test change was required for the dirty-checkout
+refusal.
