@@ -1,7 +1,7 @@
 {
   "auditSchema": 1,
   "report": "feedback/2026-09-07-roadmap-github-substrate-v2-m7-gs2-07-6-queue-sandbox-pilot.md",
-  "reportSha256": "6c87aef8e436722cc781b7edd41f1f0b0b974507ca60da2a8c9cb1cffeb83701",
+  "reportSha256": "20342aae1caa764073e30c1fd21db100f45e865bd865486cd1db4652c80cb403",
   "criticMode": "zero-event-contract-validation",
   "criticPromptVersion": "actionability-v1",
   "findings": []

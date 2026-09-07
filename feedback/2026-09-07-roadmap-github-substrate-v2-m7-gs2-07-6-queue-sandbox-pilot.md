@@ -5,7 +5,7 @@ workspace: FS.GG.Coordination
 cycle: roadmap-github-substrate-v2-m7-gs2-07-6-queue-sandbox-pilot
 lane: github-substrate-v2
 toolVersion: n/a
-commit: pending-exact-candidate
+commit: fca5b917558aea8d7e186a7be73737104e35de5e
 ---
 
 ## §1 Provenance and confidence
@@ -16,17 +16,26 @@ commit: pending-exact-candidate
 - **zero-event reason:** `fs-gg-feedback-report` is not materialized in this tree (see [.github#2366](https://github.com/FS-GG/.github/issues/2366)); all four phases were exercised and no substitute checkpoint tool was used.
 
 This report covers issue #320's recovered lifecycle, SDD, pure qualification
-contract, bounded hosted merge-queue pilot, rollback, and candidate evidence.
+contract, bounded hosted merge-queue pilot, durable recovery, routine edit-burst
+qualification, rollback, and candidate evidence.
 Confidence is bound to the retained GitHub run URLs and exact readback digests.
 
 ## §2 What worked
 
 The dedicated sandbox supported merge queue rulesets after a bounded public
-transition. Exact candidate checks admitted PR #11, the first merge-group
+transition. Exact candidate checks admitted PR #14, the first merge-group
 observed an intentionally failed growth step and interruption, and a forward
 base movement plus grown required-check inventory produced a different green
 merge-group head. The final private settings, branch, and active-workflow
 digests exactly match prestate.
+
+A second bounded fixture exercised four superseding edits to PR #19 while PR
+#20 remained a distinct routine subject. It observed two effects in flight,
+cancelled none, merged the unrelated subject normally, moved both source and
+base, grew required-check identity, and refused authorization from the prior
+green head before qualifying the current one. Its attributed totals were
+22,852 ms of work and 77,790 ms of provider waiting; these describe this
+fixture and are not a fleet performance claim.
 
 The pure contract separates candidate and merge-group heads and binds the base
 observation, canonical required checks, authority snapshots, expiry, sealed
@@ -93,13 +102,14 @@ skill is the only materialization gap.
 ## §10 Outcome markers
 
 - Implementation issue: [#320](https://github.com/FS-GG/FS.GG.Coordination/issues/320).
-- Exact sandbox candidate: `3daa72357df81d682951f05e6c9bcbfcb7faad06`.
-- Pull-request run: [34095773393](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095773393).
-- Interrupted merge-group run: [34095815108](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095815108).
-- Recovered merge-group run: [34095865706](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095865706).
-- Typed hosted artifact: `10008553381`, content SHA-256 `3e16a87564139ecf3debb3e509cd061b8df7311d5ca74b07312045919b311df7`.
-- Successful dispositions: `queue-pilot-qualified`, `queue-sandbox-recovered`.
-- Controls: 24 Q4 and 20 Q6, each generated and independently authored.
+- Exact sandbox candidate: `bfbdd530708c4f6cec03687a5bf1c2c15d673531`.
+- Pull-request run: [34159773964](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159773964).
+- Interrupted merge-group run: [34159805161](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159805161).
+- Recovered merge-group run: [34159940287](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34159940287).
+- Typed hosted artifact: `10032244056`, content SHA-256 `0570c1e65d2e30ffa852cdcc2edbad80a1043e5f32640e88b3e2529b6910ba8c`.
+- Routine burst runs: [primary current 34161792852](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34161792852) and [unrelated 34161745880](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34161745880).
+- Successful dispositions: `queue-pilot-qualified`, `queue-sandbox-recovered`, `routine-burst-qualified`.
+- Controls: 24 Q4, 20 Q6, plus retained routine-burst cross-binding and tamper controls.
 
 ## §11 Falsifiable improvements
 
@@ -121,7 +131,7 @@ required and testable.
 | sdd-authoring | exercised | Five real obligations observed; verificationReady and shipReady. |
 | implementation-apis | exercised | Additive pure sealed queue/recovery contract. |
 | dependencies-build | exercised | Warning-free Release build and clean candidate reproducibility. |
-| testing | exercised | Full unit/architecture, Q4/Q6, hosted, negative controls, and inversion. |
+| testing | exercised | 253 unit and 538 architecture tests, Q4/Q6/burst hosted gates, negative controls, and inversion. |
 | evidence | exercised | Exact provider prestate, run/job URLs, rollback digests, and TRX receipt. |
 | runtime-playtest | not-exercised | Non-game unit. |
 | performance | not-exercised | Bounded provider polling and pure contract. |

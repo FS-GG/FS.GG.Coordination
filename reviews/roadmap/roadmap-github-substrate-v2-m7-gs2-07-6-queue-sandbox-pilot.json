@@ -6,8 +6,8 @@
   "initial_reviewed_commit": "c8290fedac6b2be63a0cbd219a347e62ff19684e",
   "scope": ["requirements", "diff", "tests", "architecture", "roadmap-evidence"],
   "initial_verdict": "changes-required",
-  "repair_rounds": 1,
-  "reviewed_commits": ["c8290fedac6b2be63a0cbd219a347e62ff19684e", "9fed417b9d895d724ffa5748c228cfe8cb8afaad"],
+  "repair_rounds": 2,
+  "reviewed_commits": ["c8290fedac6b2be63a0cbd219a347e62ff19684e", "9fed417b9d895d724ffa5748c228cfe8cb8afaad", "fca5b917558aea8d7e186a7be73737104e35de5e"],
   "findings": [
     {
       "id": "GS2-07.6-R1-01",
@@ -36,9 +36,11 @@
         "Verification: repair confirmation 1 at 9fed417b9d895d724ffa5748c228cfe8cb8afaad, execute-sandbox-pilot.sh:198-211 now writes a checkpoint after cancelling the workflow and hashes that same file twice immediately. It never parses this file into resumed execution, restarts a process, or retains the checkpoint bytes. A killed executor cannot resume: a fresh invocation creates new scratch state and its ref-absence preflight refuses the existing branches. git ls-files evidence/github-substrate-v2/gs2-07-6 confirms no checkpoint/journal is retained.",
         "Verification: execute-sandbox-pilot.sh:174-175,208-225 waits for a wall-clock deadline but never records an expired admission refusal or a separately authorized fresh admission; it proceeds to mutate base/ruleset and enqueue. The recovery admittedAt/expiresAt fields in hosted-run.json are not emitted by this script. Lines 215-220 do execute and compare two ruleset PUTs, but Q6 lines 60-65 reduce the effect/compensation inventory to only install-grown-ruleset/delete-ruleset and synthesize the compensation receipt. Visibility, all branches, workflow, PR and queue effects are absent from the journal; reverse order across these effects is not exercised."
       ],
-      "disposition": "unresolved",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Unresolved after repair confirmation 1. Implement and exercise a process that stops after persisting complete sealed state and a separate resume entry that verifies and consumes that state, revalidates authority, refuses expired admission and records any fresh admission. Retain the exact journal bytes, complete mutation/retry/compensation inventory, operation-specific readbacks, and reverse cleanup order. Add executable interruption/resume and cleanup-failure tests; token-presence assertions in GitHubQueueSandboxArchitectureTests.fs do not establish those behaviors."
+        "Owner resolution at fca5b917558aea8d7e186a7be73737104e35de5e: live prepare process 3110717 sealed durable-checkpoint.json with digest 30ad6fd7739872b0a2f06a458d6fc41d828f89b4a62cc4eb007c48e7485252d2 and exited with the resumable refusal code; distinct process 3111961 verified and consumed that exact checkpoint. Retained process-handoff.json and checkpoint-journal.json bind the two processes and sealed bytes.",
+        "The retained run records admission 1788813140/expiry 1788813260, explicit expiry refusal at 1788813260, fresh authority observation and admission at 1788813267, and successful evaluation before the fresh 1788813387 deadline. final-journal.json contains 11 applied operations, deterministic attempt-2 receipts with identical result digests, and 11 compensations in exact reverse order; cleanup-readback.json proves private visibility and exact settings, branch, and active-workflow inventory restoration.",
+        "The executable recovery gate passes with GITHUB_QUEUE_SANDBOX_RECOVERY_OK seal a99576f28410e40dea41cb6fc708c3d06a57d18cf36702f97209d1db0a160268. Architecture tests execute retained checkpoint, journal, handoff, refusal, ordering, and cleanup tamper cases."
       ]
     },
     {
@@ -54,9 +56,11 @@
         "Verification: independent in-memory mutation of only hosted-run.json at the repaired commit set candidate.sha and currentShaAtReevaluation to forty a characters, recovery.baseRef to refs/heads/not-the-tested-base, recovery.priorBaseSha to forty b characters, authority.claimGeneration to 1, and authority.reviewDigest/dependencyDigest/settingsDigest to 64 c/d/e characters respectively. Both otherwise unchanged gate bodies exited 0 and qualified these contradictory inputs, with Q4 seal 3aa76de823600588c86e7c506d7472ac728d483d915589f3c683d438c84c1375 and Q6 seal 59ff5589c8f5726e10275e8f18569bbfe8e872f65d69c837532838354ee5987a. The probe streamed the scripts to dotnet fsi --readline- --quiet with an in-memory JsonDocument replacement and Environment.Exit(0) after the gate body; no checkout evidence was edited.",
         "Verification: validate-github-queue-sandbox-pilot.fsx:43-49 and matching Q6 construction copy one authority value into both observed/current fields; hostedAdmission does not bind candidate to pullRequestRun.headSha or priorBase to initialAdmission.baseSha. Q6 hostedRecovery:105-115 binds the typed run/head but ignores proof.fullRef, so the wrong full base ref is accepted. Neither gate matches the purported dependency/settings authority to accepted GS2-07.5/prestate digests or checks distinct observed/current admission records."
       ],
-      "disposition": "unresolved",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Unresolved after repair confirmation 1. Cross-bind the candidate to its hosted PR head and merge-group inputs; full base ref/SHA to initial admission and hosted event/artifact; dependency/settings to accepted authority artifacts; and observed/current authority to separately retained observations instead of copying one field twice. Retain real checkpoint and admission records from R1-02, validate their exact digests and semantics, and add executable retained-input mutations proving these contradictions fail closed."
+        "Owner resolution at fca5b917558aea8d7e186a7be73737104e35de5e: Q4 and Q6 now cross-bind the pull-request candidate head, merge-group heads, full base ref and both base SHAs, workflow/run/artifact identity, accepted dependency receipt, prestate settings digest, and separately retained observed/current claim and review authority records.",
+        "The exact retained hosted proof is run 34159940287 at head bdff30feeeef4c4f85415f729b4a558e1fe7b540 with artifact 10032244056 and content digest 0570c1e65d2e30ffa852cdcc2edbad80a1043e5f32640e88b3e2529b6910ba8c. Q4 passes with seal c4680f25fdfe035abf2132ad2975289c745bca561faad482ba91d93f8109a18d and Q6 with seal a99576f28410e40dea41cb6fc708c3d06a57d18cf36702f97209d1db0a160268.",
+        "GitHubQueueSandboxArchitectureTests performs retained-input mutations over candidate, base, proof, authority, checkpoint, journal, and cleanup fields and requires each contradiction to fail closed. The additive Section 12.2 burst gate binds two distinct subjects, five provider-observed hints, source/base/check movement, zero cancellation, current successful contexts, stale-green refusal, cleanup, and attributed work/waiting; it passes with seal 488c773b9c1a7932a4ec8b1bab9462f20d10005849f69c015deb92f97af44ba5."
       ]
     },
     {
@@ -77,9 +81,9 @@
     }
   ],
   "confirmation": {
-    "reviewed_commit": "9fed417b9d895d724ffa5748c228cfe8cb8afaad",
-    "verdict": "changes-required",
-    "unresolved_blocker_major": ["GS2-07.6-R1-02", "GS2-07.6-R1-03"]
+    "reviewed_commit": "fca5b917558aea8d7e186a7be73737104e35de5e",
+    "verdict": "approved",
+    "unresolved_blocker_major": []
   },
   "human_escalation": null,
   "game_functionality": false,
