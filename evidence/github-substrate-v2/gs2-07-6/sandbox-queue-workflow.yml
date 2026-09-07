@@ -32,3 +32,28 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = merge_group ]; then
             test -f gs2-07-6-forward-base.txt
           fi
+      - name: Retain exact-head hosted proof
+        if: github.event_name == 'merge_group' && success()
+        env:
+          REPOSITORY_ID: "1353050537"
+        run: |
+          jq -n -c \
+            --argjson schemaVersion 1 \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --argjson repositoryId "$REPOSITORY_ID" \
+            --argjson runId "$GITHUB_RUN_ID" \
+            --arg mergeGroupHeadSha "$GITHUB_SHA" \
+            --arg fullRef "$GITHUB_REF" \
+            --arg workflowSha "$GITHUB_WORKFLOW_SHA" \
+            --arg event "$GITHUB_EVENT_NAME" \
+            --arg check "queue-growth" \
+            --arg disposition "hosted-check-succeeded" \
+            '{schemaVersion:$schemaVersion,repository:$repository,repositoryId:$repositoryId,runId:$runId,mergeGroupHeadSha:$mergeGroupHeadSha,fullRef:$fullRef,workflowSha:$workflowSha,event:$event,requiredCheck:$check,disposition:$disposition}' > hosted-proof.json
+      - name: Upload exact-head hosted proof
+        if: github.event_name == 'merge_group' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gs2-07-6-${{ github.run_id }}
+          path: hosted-proof.json
+          if-no-files-found: error
+          retention-days: 90

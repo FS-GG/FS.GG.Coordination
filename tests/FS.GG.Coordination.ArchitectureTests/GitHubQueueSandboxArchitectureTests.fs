@@ -71,3 +71,13 @@ let ``Q4 and Q6 execute generated and independent controls offline`` () =
         for forbidden in [ "new HttpClient"; "api.github.com"; "Environment.GetEnvironmentVariable("; "Process.Start(" ] do Assert.DoesNotContain(forbidden, text, StringComparison.Ordinal)
     runGate "eng/validate-github-queue-sandbox-pilot.fsx" "GITHUB_QUEUE_SANDBOX_PILOT_OK disposition=queue-pilot-qualified controls=24"
     runGate "eng/validate-github-queue-sandbox-recovery.fsx" "GITHUB_QUEUE_SANDBOX_RECOVERY_OK disposition=queue-sandbox-recovered controls=20"
+
+[<Fact>]
+let ``hosted harness fails closed and retains typed exact-head proof`` () =
+    let harness = read "evidence/github-substrate-v2/gs2-07-6/execute-sandbox-pilot.sh"
+    let workflow = read "evidence/github-substrate-v2/gs2-07-6/sandbox-queue-workflow.yml"
+    for required in [ "ref_status"; "cleanup_armed=false"; "cleanup_failed"; "on_exit"; "final_settings"; "final_branches"; "final_workflows"; "CHECKPOINT"; "DETERMINISTIC_RETRY"; "HOSTED_ARTIFACT" ] do
+        Assert.Contains(required, harness, StringComparison.Ordinal)
+    Assert.True(harness.IndexOf("[[ $(ref_status", StringComparison.Ordinal) < harness.IndexOf("cleanup_armed=true", StringComparison.Ordinal))
+    for required in [ "hosted-proof.json"; "repositoryId"; "runId"; "mergeGroupHeadSha"; "fullRef"; "workflowSha"; "actions/upload-artifact@v4"; "retention-days: 90" ] do
+        Assert.Contains(required, workflow, StringComparison.Ordinal)

@@ -1,0 +1,83 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-6-queue-sandbox-pilot",
+  "milestone": "GS2-07.6 Queue sandbox/pilot",
+  "critic": "/root/gs2_07_6_worker/gs2_07_6_critic",
+  "initial_reviewed_commit": "c8290fedac6b2be63a0cbd219a347e62ff19684e",
+  "scope": ["requirements", "diff", "tests", "architecture", "roadmap-evidence"],
+  "initial_verdict": "fail",
+  "repair_rounds": 0,
+  "reviewed_commits": ["c8290fedac6b2be63a0cbd219a347e62ff19684e"],
+  "findings": [
+    {
+      "id": "GS2-07.6-R1-01",
+      "severity": "blocker",
+      "summary": "The live executor can mutate pre-existing state after a preflight refusal and report successful rollback after cleanup failure.",
+      "evidence": [
+        "Verification: git show c8290fedac6b2be63a0cbd219a347e62ff19684e:evidence/github-substrate-v2/gs2-07-6/execute-sandbox-pilot.sh, lines 36-60: EXIT cleanup is armed before repository/private/no-secret/ref-absence checks and unconditionally restores private visibility, deletes all fixed-name branches, and disables the workflow. A ref collision causes the refusal path itself to delete that pre-existing ref.",
+        "Verification: the same committed script, lines 15-22, 36-49 and 186-189: any failed GET is treated as ref absence; cleanup disables errexit globally, ignores mutation/readback failures and returns printf success. The final failed visibility assertion can be followed by ROLLBACK_OK and exit zero.",
+        "Verification: current working-tree repair observed during initial review adds cleanup_armed and per-resource flags, but still retains set +e, false absence on arbitrary GET failure, ignored cleanup results, and final printf success. The repair has no independently confirmed commit yet."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Unresolved at initial review. Require ownership-bounded cleanup only after successful preflight, explicit HTTP 404 absence handling, preserved original exit status, aggregated cleanup failures, exact final inventory/settings verification, and negative tests proving no mutation on refused preflight and nonzero exit on failed rollback. Confirm the repaired exact commit before another hosted mutation."
+      ]
+    },
+    {
+      "id": "GS2-07.6-R1-02",
+      "severity": "major",
+      "summary": "The hosted pilot does not exercise admission expiry or recovery from a sealed durable checkpoint with deterministic retries and reverse compensation.",
+      "evidence": [
+        "Verification: eng/github-substrate-v2-units.json entry GS2-07.6 exitGate and GitHub issue FS-GG/FS.GG.Coordination#320 Acceptance explicitly require observed expiry, interruption, sealed durable resume, deterministic retry without duplicate effects, and reversal of each partial mutation.",
+        "Verification: committed evidence/github-substrate-v2/gs2-07-6/execute-sandbox-pilot.sh runs continuously from branch creation through cancellation, base/ruleset updates, reenqueuing and cleanup; it writes and reads no durable checkpoint, supplies no resume operation, and evaluates no admission deadline. Cancelling a GitHub workflow does not interrupt and resume this executor.",
+        "Verification: evidence/github-substrate-v2/gs2-07-6/hosted-run.json initialAdmission.durableCheckpoint is prose, and recovery supplies duplicateEffectCount=0 without an applied/retried operation journal or compensation receipts. eng/validate-github-queue-sandbox-recovery.fsx:40-47 constructs those facts from repeated synthetic digests and maps attempt 1 to attempt 2; validate-github-queue-sandbox-pilot.fsx:36,72 tests expiry only at synthetic times 100/200/150.",
+        "Verification: work/320-gs2-07-6-queue-sandbox-pilot/spec.md FR-001 and plan.md VO-001 claim these hosted obligations, while evidence.yml EV001 and EV003 mark them pass on the retained summary and six pure unit tests."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Unresolved at initial review. Implement and exercise a real sealed durable journal, interrupted-process resume and idempotent replay tied to exact hosted operations; retain expiry refusal and reverse compensation/readback evidence. Update SDD claims to match the exercised facts. A synthetic contract fixture cannot substitute for the registered hosted acceptance."
+      ]
+    },
+    {
+      "id": "GS2-07.6-R1-03",
+      "severity": "major",
+      "summary": "Q4 and Q6 qualify synthetic fixtures while permitting contradictory or missing hosted authority and cleanup evidence.",
+      "evidence": [
+        "Verification: eng/validate-github-queue-sandbox-pilot.fsx:26-40 compiles repeated 1/2/3/4 SHA fixtures and a/b/c authority digests; hostedAdmission at lines 47-53 only checks repository ID, candidate equality, two event/result values and Boolean assertions. It does not validate hosted SHA syntax or cross-bind run/jobs, base ref/advancement, check inventories, authorities, or admission times.",
+        "Verification: eng/validate-github-queue-sandbox-recovery.fsx:56-69 checks summary Booleans/counts and private visibility but never compares final settings/branch/workflow digests to hosted-prestate.json. Neither gate reads hosted-prestate.json at all.",
+        "Verification: independent read-only in-memory F# gate probe on 2026-09-07 replaced candidate.sha and currentShaAtReevaluation with not-a-sha, recovery.baseSha with priorBaseSha, all recovery job heads with wrong-head and conclusions with failure, and finalSettingsDigest with wrong-settings. Both gate bodies still reached their GITHUB_QUEUE_SANDBOX_PILOT_OK and GITHUB_QUEUE_SANDBOX_RECOVERY_OK markers with the original seals. The interactive FSI process subsequently exited 1; the observed claim here is the completed gate success markers, not a zero process exit.",
+        "Verification: normal commands dotnet fsi eng/validate-github-queue-sandbox-pilot.fsx -- . and dotnet fsi eng/validate-github-queue-sandbox-recovery.fsx -- . both exited zero in this checkout and reported 24 and 20 controls respectively, demonstrating that their green state does not cover the missing hosted validation."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Unresolved at initial review. Deserialize and validate the actual retained provider inputs into the sealed qualification facts, cross-bind every run/job/base/check/authority/deadline and prestate/final-state digest, and add independent retained-evidence mutations for each contradiction and missing input. Require both gates to fail for the demonstrated alterations."
+      ]
+    },
+    {
+      "id": "GS2-07.6-R1-04",
+      "severity": "major",
+      "summary": "The successful hosted run has no downloadable typed decision artifact required by the v2 pre-acceptance contract.",
+      "evidence": [
+        "Verification: /home/developer/projects/FS.GG.Coordination/.agents/skills/github-substrate-v2-work/SKILL.md Pre-acceptance evidence contract item 5 requires a successful hosted run at the exact exercised head and download/validation of its retained typed decision artifact; unit-specific tests may not replace this check.",
+        "Verification: gh api repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094105152/artifacts returned {total_count:0,artifacts:[]} during this review. The committed sandbox-queue-workflow.yml contains only head printing, sleep, checkout, and file-existence test steps, with no artifact upload.",
+        "Verification: gh api of runs 34094024804, 34094063213 and 34094105152 and the two merge-group jobs APIs confirms the retained candidate/head/event/conclusion values, including failed queue-growth plus cancelled queue-pilot in the first merge group and both successful jobs in the recovered group. Those correct run summaries do not supply a typed decision artifact.",
+        "Verification: read-only repository, branches, and workflows APIs confirm current private visibility, the two retained original branch SHAs, the original active workflow, and the pilot workflow registry disabled_manually. This corroborates current cleanup state but does not cure absent retained hosted qualification evidence."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Unresolved at initial review. After the executor and recovery contract repairs, execute the exact reviewed hosted workflow that produces a typed decision artifact; download, retain and digest-bind its bytes and run/head identity, then independently validate the artifact. The working-tree text-proof upload has not been exercised or reviewed at a new exact commit."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "c8290fedac6b2be63a0cbd219a347e62ff19684e",
+    "verdict": "fail",
+    "unresolved_blocker_major": ["GS2-07.6-R1-01", "GS2-07.6-R1-02", "GS2-07.6-R1-03", "GS2-07.6-R1-04"]
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

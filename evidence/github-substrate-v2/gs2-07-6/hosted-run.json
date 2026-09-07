@@ -5,106 +5,129 @@
   "repositoryId": 1353050537,
   "pilotId": "gs2-07-6-pilot",
   "claimGeneration": 5565937139,
-  "executedAt": "2026-09-07T07:08:39Z",
-  "readbackAt": "2026-09-07T07:11:10Z",
+  "executedAt": "2026-09-07T07:30:08Z",
+  "readbackAt": "2026-09-07T07:32:58Z",
   "candidate": {
-    "sha": "d9ae5fba4d09e2c858ac8af2723cb62e3cb5cc5e",
-    "currentShaAtReevaluation": "d9ae5fba4d09e2c858ac8af2723cb62e3cb5cc5e",
-    "pullRequest": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/10",
+    "sha": "3daa72357df81d682951f05e6c9bcbfcb7faad06",
+    "currentShaAtReevaluation": "3daa72357df81d682951f05e6c9bcbfcb7faad06",
+    "pullRequest": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/11",
     "pullRequestState": "closed",
     "merged": false
   },
   "initialAdmission": {
     "baseRef": "refs/heads/gs2-07-6-pilot-base",
-    "baseSha": "5483ae6fb194174c95423470b05560ea470a18b8",
+    "baseSha": "e172cef81cd52f8d1034eb8397f960f2666622f0",
+    "admittedAtUnixSeconds": 1788766220,
+    "expiresAtUnixSeconds": 1788766250,
+    "expiredObservedAtUnixSeconds": 1788766250,
     "requiredChecks": ["queue-pilot"],
     "pullRequestRun": {
-      "id": 34094024804,
-      "headSha": "d9ae5fba4d09e2c858ac8af2723cb62e3cb5cc5e",
+      "id": 34095773393,
+      "headSha": "3daa72357df81d682951f05e6c9bcbfcb7faad06",
       "event": "pull_request",
       "status": "completed",
       "conclusion": "success",
-      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094024804",
-      "createdAt": "2026-09-07T07:08:39Z",
-      "updatedAt": "2026-09-07T07:08:49Z"
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095773393",
+      "createdAt": "2026-09-07T07:30:08Z",
+      "updatedAt": "2026-09-07T07:30:16Z"
     },
     "mergeGroupRun": {
-      "id": 34094063213,
-      "headSha": "92becd32d02433ed90b36e18e9d88c33489b873d",
+      "id": 34095815108,
+      "headSha": "e8f9e74d16f8deffdeafd6ff26beea6c48c84579",
       "event": "merge_group",
       "status": "completed",
       "conclusion": "cancelled",
-      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094063213",
-      "createdAt": "2026-09-07T07:09:08Z",
-      "updatedAt": "2026-09-07T07:09:32Z"
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095815108",
+      "createdAt": "2026-09-07T07:30:37Z",
+      "updatedAt": "2026-09-07T07:31:01Z"
     },
     "jobs": [
       {
         "name": "queue-growth",
-        "headSha": "92becd32d02433ed90b36e18e9d88c33489b873d",
+        "headSha": "e8f9e74d16f8deffdeafd6ff26beea6c48c84579",
         "status": "completed",
         "conclusion": "failure",
-        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094063213/job/101653597411",
-        "startedAt": "2026-09-07T07:09:11Z",
-        "completedAt": "2026-09-07T07:09:14Z"
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095815108/job/101659113535",
+        "startedAt": "2026-09-07T07:30:39Z",
+        "completedAt": "2026-09-07T07:30:45Z"
       },
       {
         "name": "queue-pilot",
-        "headSha": "92becd32d02433ed90b36e18e9d88c33489b873d",
+        "headSha": "e8f9e74d16f8deffdeafd6ff26beea6c48c84579",
         "status": "completed",
         "conclusion": "cancelled",
-        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094063213/job/101653597252",
-        "startedAt": "2026-09-07T07:09:11Z",
-        "completedAt": "2026-09-07T07:09:31Z"
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095815108/job/101659113422",
+        "startedAt": "2026-09-07T07:30:39Z",
+        "completedAt": "2026-09-07T07:31:01Z"
       }
     ],
     "failedStepInjected": true,
     "interrupted": true,
-    "durableCheckpoint": "pull-request checks green; queue entry admitted; first merge-group head observed"
+    "durableCheckpoint": "pull-request checks green; queue entry admitted; first merge-group head observed",
+    "durableCheckpointDigest": "33b21600a4cb8565ada4aaeb148f423de9601d7383b4de9294f5e7eb8df84a96",
+    "resumeCheckpointDigest": "33b21600a4cb8565ada4aaeb148f423de9601d7383b4de9294f5e7eb8df84a96"
   },
   "recovery": {
     "baseRef": "refs/heads/gs2-07-6-pilot-base",
-    "priorBaseSha": "5483ae6fb194174c95423470b05560ea470a18b8",
-    "baseSha": "5b3d5ae0007c938a6499047411467b08107abd98",
+    "priorBaseSha": "e172cef81cd52f8d1034eb8397f960f2666622f0",
+    "baseSha": "44276e613060f9bd496bafb18b31bd777befba10",
     "requiredChecks": ["queue-growth", "queue-pilot"],
+    "admittedAtUnixSeconds": 1788766273,
+    "expiresAtUnixSeconds": 1788766400,
+    "evaluatedAtUnixSeconds": 1788766324,
     "mergeGroupRun": {
-      "id": 34094105152,
-      "headSha": "5db98781d89fee5f500debe00d367d3c0c826fab",
+      "id": 34095865706,
+      "headSha": "4b73597b05ea92ae3f4350fd156d0e2e92142b0a",
       "event": "merge_group",
       "status": "completed",
       "conclusion": "success",
-      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094105152",
-      "createdAt": "2026-09-07T07:09:38Z",
-      "updatedAt": "2026-09-07T07:10:29Z"
+      "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095865706",
+      "createdAt": "2026-09-07T07:31:13Z",
+      "updatedAt": "2026-09-07T07:32:04Z"
     },
     "jobs": [
       {
         "name": "queue-growth",
-        "headSha": "5db98781d89fee5f500debe00d367d3c0c826fab",
+        "headSha": "4b73597b05ea92ae3f4350fd156d0e2e92142b0a",
         "status": "completed",
         "conclusion": "success",
-        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094105152/job/101653722446",
-        "startedAt": "2026-09-07T07:09:41Z",
-        "completedAt": "2026-09-07T07:09:44Z"
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095865706/job/101659272220",
+        "startedAt": "2026-09-07T07:31:15Z",
+        "completedAt": "2026-09-07T07:31:20Z"
       },
       {
         "name": "queue-pilot",
-        "headSha": "5db98781d89fee5f500debe00d367d3c0c826fab",
+        "headSha": "4b73597b05ea92ae3f4350fd156d0e2e92142b0a",
         "status": "completed",
         "conclusion": "success",
-        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34094105152/job/101653722552",
-        "startedAt": "2026-09-07T07:09:41Z",
-        "completedAt": "2026-09-07T07:10:28Z"
+        "url": "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/34095865706/job/101659272517",
+        "startedAt": "2026-09-07T07:31:15Z",
+        "completedAt": "2026-09-07T07:32:03Z"
       }
     ],
     "candidateUnchanged": true,
     "baseReevaluated": true,
     "requiredChecksGrew": true,
     "newRequiredCheckExecuted": true,
-    "duplicateEffectCount": 0
+    "retryEffect": {
+      "operation": "install-grown-ruleset",
+      "attempts": 2,
+      "firstResultDigest": "509215e9f5d344194b5ce070ccbf500d48c1f58b23d996446f80d05f0dfa5123",
+      "secondResultDigest": "509215e9f5d344194b5ce070ccbf500d48c1f58b23d996446f80d05f0dfa5123"
+    },
+    "duplicateEffectCount": 0,
+    "typedArtifact": {
+      "id": 10008553381,
+      "name": "gs2-07-6-34095865706",
+      "sizeInBytes": 440,
+      "expired": false,
+      "expiresAt": "2026-12-06T07:31:13Z",
+      "contentSha256": "3e16a87564139ecf3debb3e509cd061b8df7311d5ca74b07312045919b311df7",
+      "downloadUrl": "https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/artifacts/10008553381/zip"
+    }
   },
   "cleanup": {
-    "rulesetId": 22429744,
+    "rulesetId": 22430743,
     "pullRequestClosed": true,
     "temporaryBranchCount": 0,
     "queueRefCount": 0,
@@ -123,6 +146,11 @@
     "providerLimitReadback": "private ruleset endpoint returned expected HTTP 403"
   },
   "authority": {
+    "claimGeneration": 5565937139,
+    "reviewDigest": "296e6c87a7cc064a6cea5016fcb9e0026ff79a5373eca81aa0d5dec9001db53e",
+    "dependencyDigest": "dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8",
+    "settingsDigest": "98af1adee4e835df7abfb775d17ba3b8af59568fa195cfe6b4c06f4366bc035e",
+    "releaseObligationsMet": true,
     "fleet": false,
     "productionWriter": false,
     "release": false,

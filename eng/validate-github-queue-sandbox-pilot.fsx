@@ -17,23 +17,37 @@ let contract = json "evidence/github-substrate-v2/gs2-07-6/contract.json"
 let c = contract.RootElement
 let hostedDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-run.json"
 let hosted = hostedDocument.RootElement
+let prestateDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json"
+let prestate = prestateDocument.RootElement
 let text (name:string) = c.GetProperty(name).GetString()
 let boolean (name:string) = c.GetProperty(name).GetBoolean()
 let integer (name:string) = c.GetProperty(name).GetInt64()
 let sha character = String.replicate 40 character
 let digest character = String.replicate 64 character
-let checks = [ "architecture"; "queue-growth" ]
-let facts =
-    { Repository=Sandbox.repository; RepositoryId=Sandbox.repositoryId; IsProduction=false; ProviderCapability=QueueProviderCapability.Supported
-      PreVisibility="private"; RepositorySecretCount=0; EnvironmentSecretCount=0; PilotId="gs2-07-6-pilot"
-      CandidateSha=sha "1"; CurrentCandidateSha=sha "1"; MergeGroupHeadSha=sha "2"; BaseRef="refs/heads/main"
-      ObservedBaseSha=sha "3"; CurrentBaseSha=sha "4"; ReevaluatedBaseSha=sha "4"; BaseObservationRevision=10L; CurrentBaseObservationRevision=11L
-      OriginalRequiredChecks=[ "architecture" ]; CurrentRequiredChecks=checks
-      CheckResults=checks |> List.map(fun name -> { Name=name; HeadSha=sha "2"; EventName="merge_group"; Conclusion=QueueCheckConclusion.Success })
-      ObservedClaimGeneration=5565937139L; CurrentClaimGeneration=5565937139L
-      ObservedReviewDigest=digest "a"; CurrentReviewDigest=digest "a"; ObservedDependencyDigest=digest "b"; CurrentDependencyDigest=digest "b"
-      ObservedReleaseObligationsMet=true; CurrentReleaseObligationsMet=true; ObservedSettingsDigest=digest "c"; CurrentSettingsDigest=digest "c"
-      AdmittedAtUnixSeconds=100L; ExpiresAtUnixSeconds=200L; EvaluatedAtUnixSeconds=150L }
+let stringAt (node:JsonElement) (name:string) = node.GetProperty(name).GetString()
+let int64At (node:JsonElement) (name:string) = node.GetProperty(name).GetInt64()
+let stringsAt (node:JsonElement) (name:string) = node.GetProperty(name).EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+let candidate = hosted.GetProperty("candidate")
+let initial = hosted.GetProperty("initialAdmission")
+let initialRun = initial.GetProperty("mergeGroupRun")
+let recovery = hosted.GetProperty("recovery")
+let recoveryRun = recovery.GetProperty("mergeGroupRun")
+let authority = hosted.GetProperty("authority")
+let cleanup = hosted.GetProperty("cleanup")
+let settings = prestate.GetProperty("settings")
+let secrets = prestate.GetProperty("secrets")
+let checks = stringsAt recovery "requiredChecks"
+let facts:QueuePilotFacts =
+    { Repository=stringAt hosted "repository"; RepositoryId=int64At hosted "repositoryId"; IsProduction=false; ProviderCapability=QueueProviderCapability.Supported
+      PreVisibility=stringAt settings "visibility"; RepositorySecretCount=secrets.GetProperty("repositorySecretCount").GetInt32(); EnvironmentSecretCount=secrets.GetProperty("environmentSecretCount").GetInt32(); PilotId=stringAt hosted "pilotId"
+      CandidateSha=stringAt candidate "sha"; CurrentCandidateSha=stringAt candidate "currentShaAtReevaluation"; MergeGroupHeadSha=stringAt recoveryRun "headSha"; BaseRef=stringAt recovery "baseRef"
+      ObservedBaseSha=stringAt recovery "priorBaseSha"; CurrentBaseSha=stringAt recovery "baseSha"; ReevaluatedBaseSha=stringAt recovery "baseSha"; BaseObservationRevision=int64At initialRun "id"; CurrentBaseObservationRevision=int64At recoveryRun "id"
+      OriginalRequiredChecks=stringsAt initial "requiredChecks"; CurrentRequiredChecks=checks
+      CheckResults=recovery.GetProperty("jobs").EnumerateArray() |> Seq.map(fun job -> ({ Name=stringAt job "name"; HeadSha=stringAt job "headSha"; EventName=stringAt recoveryRun "event"; Conclusion=if stringAt job "conclusion"="success" then QueueCheckConclusion.Success else QueueCheckConclusion.Failure }:QueueCheckResult)) |> Seq.toList
+      ObservedClaimGeneration=int64At authority "claimGeneration"; CurrentClaimGeneration=int64At authority "claimGeneration"
+      ObservedReviewDigest=stringAt authority "reviewDigest"; CurrentReviewDigest=stringAt authority "reviewDigest"; ObservedDependencyDigest=stringAt authority "dependencyDigest"; CurrentDependencyDigest=stringAt authority "dependencyDigest"
+      ObservedReleaseObligationsMet=authority.GetProperty("releaseObligationsMet").GetBoolean(); CurrentReleaseObligationsMet=authority.GetProperty("releaseObligationsMet").GetBoolean(); ObservedSettingsDigest=stringAt authority "settingsDigest"; CurrentSettingsDigest=stringAt authority "settingsDigest"
+      AdmittedAtUnixSeconds=int64At recovery "admittedAtUnixSeconds"; ExpiresAtUnixSeconds=int64At recovery "expiresAtUnixSeconds"; EvaluatedAtUnixSeconds=int64At recovery "evaluatedAtUnixSeconds" }
 let get = function Ok value -> value | Error errors -> failwithf "baseline refused: %A" errors
 let has expected = function Error errors -> List.contains expected errors | Ok _ -> false
 let baseline = Sandbox.compilePilot facts |> get
@@ -45,12 +59,24 @@ let prerequisite () =
     && receipt.RootElement.GetProperty("digest").GetString()=text "prerequisiteReceiptDigest"
 let roadmap () = text "roadmapRevision"="7e5754e23d274b31d21f9a2b4c0c0a00265ee366" && text "roadmapSha256"="33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
 let hostedAdmission () =
-    hosted.GetProperty("repositoryId").GetInt64()=Sandbox.repositoryId
-    && hosted.GetProperty("candidate").GetProperty("sha").GetString()=hosted.GetProperty("candidate").GetProperty("currentShaAtReevaluation").GetString()
-    && hosted.GetProperty("initialAdmission").GetProperty("pullRequestRun").GetProperty("conclusion").GetString()="success"
-    && hosted.GetProperty("initialAdmission").GetProperty("mergeGroupRun").GetProperty("event").GetString()="merge_group"
-    && hosted.GetProperty("recovery").GetProperty("baseReevaluated").GetBoolean()
-    && hosted.GetProperty("recovery").GetProperty("requiredChecksGrew").GetBoolean()
+    int64At hosted "repositoryId"=Sandbox.repositoryId
+    && stringAt hosted "repository"=Sandbox.repository
+    && int64At prestate "repositoryId"=Sandbox.repositoryId
+    && stringAt prestate "repository"=Sandbox.repository
+    && stringAt candidate "sha"=stringAt candidate "currentShaAtReevaluation"
+    && stringAt (initial.GetProperty("pullRequestRun")) "conclusion"="success"
+    && stringAt recoveryRun "event"="merge_group"
+    && stringAt recoveryRun "conclusion"="success"
+    && recovery.GetProperty("baseReevaluated").GetBoolean()
+    && recovery.GetProperty("requiredChecksGrew").GetBoolean()
+    && recovery.GetProperty("newRequiredCheckExecuted").GetBoolean()
+    && checks=[ "queue-growth"; "queue-pilot" ]
+    && stringAt cleanup "finalVisibility"=stringAt settings "visibility"
+    && stringAt cleanup "finalSettingsDigest"=stringAt settings "digest"
+    && stringAt cleanup "finalBranchInventoryDigest"=stringAt prestate "branchInventoryDigest"
+    && stringAt cleanup "finalActiveWorkflowInventoryDigest"=stringAt prestate "workflowInventoryDigest"
+    && cleanup.GetProperty("repositorySecretCount").GetInt32()=secrets.GetProperty("repositorySecretCount").GetInt32()
+    && cleanup.GetProperty("environmentSecretCount").GetInt32()=secrets.GetProperty("environmentSecretCount").GetInt32()
 let alterFirst change = { facts with CheckResults=change facts.CheckResults.Head::facts.CheckResults.Tail }
 let noWriter () =
     let detector (value:string) = Regex.IsMatch(value, "HttpClient|WebRequest|Octokit|GitHubClient|QueueClient|GetEnvironmentVariable", RegexOptions.IgnoreCase)

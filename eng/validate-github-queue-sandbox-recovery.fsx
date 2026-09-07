@@ -17,34 +17,54 @@ let contract = json "evidence/github-substrate-v2/gs2-07-6/contract.json"
 let c = contract.RootElement
 let hostedDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-run.json"
 let hosted = hostedDocument.RootElement
+let prestateDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-prestate.json"
+let prestate = prestateDocument.RootElement
+let proofDocument = json "evidence/github-substrate-v2/gs2-07-6/hosted-proof.json"
+let proof = proofDocument.RootElement
 let text (name:string) = c.GetProperty(name).GetString()
 let boolean (name:string) = c.GetProperty(name).GetBoolean()
 let integer (name:string) = c.GetProperty(name).GetInt64()
 let sha character = String.replicate 40 character
 let digest character = String.replicate 64 character
-let checks = [ "architecture"; "queue-growth" ]
-let pilotFacts =
-    { Repository=Sandbox.repository; RepositoryId=Sandbox.repositoryId; IsProduction=false; ProviderCapability=QueueProviderCapability.Supported
-      PreVisibility="private"; RepositorySecretCount=0; EnvironmentSecretCount=0; PilotId="gs2-07-6-pilot"
-      CandidateSha=sha "1"; CurrentCandidateSha=sha "1"; MergeGroupHeadSha=sha "2"; BaseRef="refs/heads/main"
-      ObservedBaseSha=sha "3"; CurrentBaseSha=sha "4"; ReevaluatedBaseSha=sha "4"; BaseObservationRevision=10L; CurrentBaseObservationRevision=11L
-      OriginalRequiredChecks=[ "architecture" ]; CurrentRequiredChecks=checks
-      CheckResults=checks |> List.map(fun name -> { Name=name; HeadSha=sha "2"; EventName="merge_group"; Conclusion=QueueCheckConclusion.Success })
-      ObservedClaimGeneration=5565937139L; CurrentClaimGeneration=5565937139L
-      ObservedReviewDigest=digest "a"; CurrentReviewDigest=digest "a"; ObservedDependencyDigest=digest "b"; CurrentDependencyDigest=digest "b"
-      ObservedReleaseObligationsMet=true; CurrentReleaseObligationsMet=true; ObservedSettingsDigest=digest "c"; CurrentSettingsDigest=digest "c"
-      AdmittedAtUnixSeconds=100L; ExpiresAtUnixSeconds=200L; EvaluatedAtUnixSeconds=150L }
+let stringAt (node:JsonElement) (name:string) = node.GetProperty(name).GetString()
+let int64At (node:JsonElement) (name:string) = node.GetProperty(name).GetInt64()
+let stringsAt (node:JsonElement) (name:string) = node.GetProperty(name).EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+let candidate = hosted.GetProperty("candidate")
+let initial = hosted.GetProperty("initialAdmission")
+let initialRun = initial.GetProperty("mergeGroupRun")
+let recovery = hosted.GetProperty("recovery")
+let recoveryRun = recovery.GetProperty("mergeGroupRun")
+let authority = hosted.GetProperty("authority")
+let cleanup = hosted.GetProperty("cleanup")
+let settings = prestate.GetProperty("settings")
+let secrets = prestate.GetProperty("secrets")
+let checks = stringsAt recovery "requiredChecks"
+let pilotFacts:QueuePilotFacts =
+    { Repository=stringAt hosted "repository"; RepositoryId=int64At hosted "repositoryId"; IsProduction=false; ProviderCapability=QueueProviderCapability.Supported
+      PreVisibility=stringAt settings "visibility"; RepositorySecretCount=secrets.GetProperty("repositorySecretCount").GetInt32(); EnvironmentSecretCount=secrets.GetProperty("environmentSecretCount").GetInt32(); PilotId=stringAt hosted "pilotId"
+      CandidateSha=stringAt candidate "sha"; CurrentCandidateSha=stringAt candidate "currentShaAtReevaluation"; MergeGroupHeadSha=stringAt recoveryRun "headSha"; BaseRef=stringAt recovery "baseRef"
+      ObservedBaseSha=stringAt recovery "priorBaseSha"; CurrentBaseSha=stringAt recovery "baseSha"; ReevaluatedBaseSha=stringAt recovery "baseSha"; BaseObservationRevision=int64At initialRun "id"; CurrentBaseObservationRevision=int64At recoveryRun "id"
+      OriginalRequiredChecks=stringsAt initial "requiredChecks"; CurrentRequiredChecks=checks
+      CheckResults=recovery.GetProperty("jobs").EnumerateArray() |> Seq.map(fun job -> ({ Name=stringAt job "name"; HeadSha=stringAt job "headSha"; EventName=stringAt recoveryRun "event"; Conclusion=if stringAt job "conclusion"="success" then QueueCheckConclusion.Success else QueueCheckConclusion.Failure }:QueueCheckResult)) |> Seq.toList
+      ObservedClaimGeneration=int64At authority "claimGeneration"; CurrentClaimGeneration=int64At authority "claimGeneration"
+      ObservedReviewDigest=stringAt authority "reviewDigest"; CurrentReviewDigest=stringAt authority "reviewDigest"; ObservedDependencyDigest=stringAt authority "dependencyDigest"; CurrentDependencyDigest=stringAt authority "dependencyDigest"
+      ObservedReleaseObligationsMet=authority.GetProperty("releaseObligationsMet").GetBoolean(); CurrentReleaseObligationsMet=authority.GetProperty("releaseObligationsMet").GetBoolean(); ObservedSettingsDigest=stringAt authority "settingsDigest"; CurrentSettingsDigest=stringAt authority "settingsDigest"
+      AdmittedAtUnixSeconds=int64At recovery "admittedAtUnixSeconds"; ExpiresAtUnixSeconds=int64At recovery "expiresAtUnixSeconds"; EvaluatedAtUnixSeconds=int64At recovery "evaluatedAtUnixSeconds" }
 let get = function Ok value -> value | Error errors -> failwithf "baseline refused: %A" errors
 let has expected = function Error errors -> List.contains expected errors | Ok _ -> false
 let pilot = Sandbox.compilePilot pilotFacts |> get
-let effects = [ "visibility-public"; "base-advance"; "required-check-growth"; "queue-admission" ] |> List.mapi(fun index operation -> { OperationId=operation; Attempt=1; ResultDigest=digest(string(index+1)) })
+let retryEffect = recovery.GetProperty("retryEffect")
+let operation = stringAt retryEffect "operation"
+let retryDigest = stringAt retryEffect "firstResultDigest"
+let rulesetId = cleanup.GetProperty("rulesetId").GetInt64()
+let effects = [ { OperationId=operation; Attempt=1; ResultDigest=retryDigest } ]
 let recoveryFacts =
     { Repository=Sandbox.repository; RepositoryId=Sandbox.repositoryId; PilotSeal=pilot.Seal
-      DurableCheckpointDigest=digest "d"; ResumeCheckpointDigest=digest "d"; Interrupted=true; FailedStepInjected=true
+      DurableCheckpointDigest=stringAt initial "durableCheckpointDigest"; ResumeCheckpointDigest=stringAt initial "resumeCheckpointDigest"; Interrupted=initial.GetProperty("interrupted").GetBoolean(); FailedStepInjected=initial.GetProperty("failedStepInjected").GetBoolean()
       AppliedEffects=effects; RetryEffects=effects |> List.map(fun effect -> { effect with Attempt=2 })
-      Compensations=effects |> List.rev |> List.mapi(fun index effect -> { OperationId=effect.OperationId; CompensationId=$"rollback-{index+1}"; FinalStateDigest=digest "e" })
-      DuplicateEffectCount=0; TemporaryResourceCount=0; PreVisibility="private"; FinalVisibility="private"
-      PreSettingsDigest=digest "f"; FinalSettingsDigest=digest "f"; Recoverable=true }
+      Compensations=[ { OperationId=operation; CompensationId=$"delete-ruleset-{rulesetId}"; FinalStateDigest=stringAt cleanup "finalSettingsDigest" } ]
+      DuplicateEffectCount=recovery.GetProperty("duplicateEffectCount").GetInt32(); TemporaryResourceCount=cleanup.GetProperty("temporaryBranchCount").GetInt32()+cleanup.GetProperty("queueRefCount").GetInt32()+cleanup.GetProperty("temporaryWorkflowFileCount").GetInt32(); PreVisibility=stringAt settings "visibility"; FinalVisibility=stringAt cleanup "finalVisibility"
+      PreSettingsDigest=stringAt settings "digest"; FinalSettingsDigest=stringAt cleanup "finalSettingsDigest"; Recoverable=true }
 let baseline = Sandbox.compileRecovery recoveryFacts |> get
 let bytes = Sandbox.serializeRecovery baseline
 let source = read "src/FS.GG.Coordination.Qualification.Contracts/GitHubQueueSandbox.fs"
@@ -54,19 +74,45 @@ let prerequisite () =
     && receipt.RootElement.GetProperty("digest").GetString()=text "prerequisiteReceiptDigest"
 let roadmap () = text "roadmapRevision"="7e5754e23d274b31d21f9a2b4c0c0a00265ee366" && text "roadmapSha256"="33d303a888752d0b0f53e5443b2322bd601ebce43c86166ab6dc8d8387bd82ee"
 let hostedRecovery () =
-    let initial = hosted.GetProperty("initialAdmission")
-    let recovery = hosted.GetProperty("recovery")
-    let cleanup = hosted.GetProperty("cleanup")
-    initial.GetProperty("failedStepInjected").GetBoolean()
+    stringAt hosted "repository"=Sandbox.repository
+    && int64At hosted "repositoryId"=Sandbox.repositoryId
+    && stringAt prestate "repository"=Sandbox.repository
+    && int64At prestate "repositoryId"=Sandbox.repositoryId
+    && initial.GetProperty("failedStepInjected").GetBoolean()
     && initial.GetProperty("interrupted").GetBoolean()
-    && (initial.GetProperty("jobs").EnumerateArray() |> Seq.exists(fun job -> job.GetProperty("name").GetString()="queue-growth" && job.GetProperty("conclusion").GetString()="failure"))
-    && recovery.GetProperty("mergeGroupRun").GetProperty("conclusion").GetString()="success"
+    && int64At initial "expiredObservedAtUnixSeconds">=int64At initial "expiresAtUnixSeconds"
+    && stringAt initial "durableCheckpointDigest"=stringAt initial "resumeCheckpointDigest"
+    && (initial.GetProperty("jobs").EnumerateArray() |> Seq.exists(fun job -> stringAt job "name"="queue-growth" && stringAt job "headSha"=stringAt initialRun "headSha" && stringAt job "conclusion"="failure"))
+    && (initial.GetProperty("jobs").EnumerateArray() |> Seq.exists(fun job -> stringAt job "name"="queue-pilot" && stringAt job "headSha"=stringAt initialRun "headSha" && stringAt job "conclusion"="cancelled"))
+    && stringAt recoveryRun "event"="merge_group"
+    && stringAt recoveryRun "conclusion"="success"
+    && (recovery.GetProperty("jobs").EnumerateArray() |> Seq.map(fun job -> stringAt job "name", stringAt job "headSha", stringAt job "conclusion") |> Seq.toList)=[("queue-growth",stringAt recoveryRun "headSha","success");("queue-pilot",stringAt recoveryRun "headSha","success")]
     && recovery.GetProperty("newRequiredCheckExecuted").GetBoolean()
     && recovery.GetProperty("duplicateEffectCount").GetInt32()=0
+    && retryEffect.GetProperty("attempts").GetInt32()=2
+    && stringAt retryEffect "firstResultDigest"=stringAt retryEffect "secondResultDigest"
+    && stringAt candidate "sha"=stringAt candidate "currentShaAtReevaluation"
+    && stringAt recovery "priorBaseSha"<>stringAt recovery "baseSha"
     && cleanup.GetProperty("temporaryBranchCount").GetInt32()=0
     && cleanup.GetProperty("queueRefCount").GetInt32()=0
     && cleanup.GetProperty("temporaryWorkflowFileCount").GetInt32()=0
-    && cleanup.GetProperty("finalVisibility").GetString()="private"
+    && stringAt cleanup "finalVisibility"=stringAt settings "visibility"
+    && stringAt cleanup "finalSettingsDigest"=stringAt settings "digest"
+    && stringAt cleanup "finalBranchInventoryDigest"=stringAt prestate "branchInventoryDigest"
+    && stringAt cleanup "finalActiveWorkflowInventoryDigest"=stringAt prestate "workflowInventoryDigest"
+    && cleanup.GetProperty("repositorySecretCount").GetInt32()=secrets.GetProperty("repositorySecretCount").GetInt32()
+    && cleanup.GetProperty("environmentSecretCount").GetInt32()=secrets.GetProperty("environmentSecretCount").GetInt32()
+    && let artifact=recovery.GetProperty("typedArtifact") in
+       artifact.GetProperty("id").GetInt64()>0L
+       && not(artifact.GetProperty("expired").GetBoolean())
+       && stringAt artifact "contentSha256"=shaFile "evidence/github-substrate-v2/gs2-07-6/hosted-proof.json"
+       && stringAt proof "repository"=Sandbox.repository
+       && int64At proof "repositoryId"=Sandbox.repositoryId
+       && int64At proof "runId"=int64At recoveryRun "id"
+       && stringAt proof "mergeGroupHeadSha"=stringAt recoveryRun "headSha"
+       && stringAt proof "workflowSha"=stringAt recoveryRun "headSha"
+       && stringAt proof "event"="merge_group"
+       && stringAt proof "requiredCheck"="queue-growth"
 let noWriter () =
     let detector (value:string) = Regex.IsMatch(value, "HttpClient|WebRequest|Octokit|GitHubClient|QueueClient|GetEnvironmentVariable", RegexOptions.IgnoreCase)
     not(detector source) && detector(source+"\nHttpClient")
@@ -81,7 +127,7 @@ let generated control =
     | "sealed-resume" -> Sandbox.compileRecovery { recoveryFacts with ResumeCheckpointDigest=digest "0" } |> has GitHubQueueSandboxFinding.UnsealedResume
     | "deterministic-retry" -> Sandbox.compileRecovery { recoveryFacts with RetryEffects=recoveryFacts.RetryEffects.Tail } |> has GitHubQueueSandboxFinding.RetryDiverged
     | "duplicate-effect" -> Sandbox.compileRecovery { recoveryFacts with DuplicateEffectCount=1 } |> has GitHubQueueSandboxFinding.DuplicateEffect
-    | "compensation" -> Sandbox.compileRecovery { recoveryFacts with Compensations=List.rev recoveryFacts.Compensations } |> has GitHubQueueSandboxFinding.CompensationOrderInvalid
+    | "compensation" -> let changed={ recoveryFacts.Compensations.Head with OperationId="wrong-operation" } in Sandbox.compileRecovery { recoveryFacts with Compensations=[ changed ] } |> has GitHubQueueSandboxFinding.CompensationOrderInvalid
     | "rollback" -> Sandbox.compileRecovery { recoveryFacts with FinalVisibility="public" } |> has (GitHubQueueSandboxFinding.RollbackMismatch "visibility")
     | "cleanup" -> hostedRecovery() && (Sandbox.compileRecovery { recoveryFacts with TemporaryResourceCount=1 } |> has GitHubQueueSandboxFinding.CleanupIncomplete)
     | "authoritative-readback" -> Sandbox.compileRecovery { recoveryFacts with FinalSettingsDigest=digest "0" } |> has (GitHubQueueSandboxFinding.RollbackMismatch "settings")

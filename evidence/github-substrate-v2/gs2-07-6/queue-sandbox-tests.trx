@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="d10c5780-64e4-42c5-9c0c-a308b4ce318a" name="@04f35f7c357d 2026-09-07 09:41:49" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-07T09:41:49.8685313+02:00" queuing="2026-09-07T09:41:49.8685313+02:00" start="2026-09-07T09:41:49.4662977+02:00" finish="2026-09-07T09:41:49.8720543+02:00" />
+  <TestSettings name="default" id="1a308dae-80de-44fa-a6c6-8b7d8b5c6de3">
+    <Deployment runDeploymentRoot="_04f35f7c357d_2026-09-07_09_41_49" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="f73c3bf3-6c6b-453b-ac82-198919d6c13f" testId="c27f0739-387d-5194-1ab0-368f6a6b3c37" testName="FS.GG.Coordination.GitHubQueueSandboxTests.pilot refuses capability prestate visibility identity and authority drift" computerName="04f35f7c357d" duration="00:00:00.0009294" startTime="2026-09-07T09:41:49.7943730+02:00" endTime="2026-09-07T09:41:49.7949628+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f73c3bf3-6c6b-453b-ac82-198919d6c13f" />
+    <UnitTestResult executionId="a1a23b7d-d77c-45d4-b901-536f26c64073" testId="1aaccd37-6665-48a3-feb3-607afdb59b7e" testName="FS.GG.Coordination.GitHubQueueSandboxTests.recovery requires sealed resume deterministic retry reverse compensation and cleanup" computerName="04f35f7c357d" duration="00:00:00.0056403" startTime="2026-09-07T09:41:49.7950602+02:00" endTime="2026-09-07T09:41:49.8006401+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a1a23b7d-d77c-45d4-b901-536f26c64073" />
+    <UnitTestResult executionId="d5d88490-3478-4dad-974b-6c8d5957787b" testId="38f62470-1ec6-4579-3fe1-ec96c53a2114" testName="FS.GG.Coordination.GitHubQueueSandboxTests.recovery serialization seal replay and control inventory are exact" computerName="04f35f7c357d" duration="00:00:00.0105937" startTime="2026-09-07T09:41:49.8007215+02:00" endTime="2026-09-07T09:41:49.8112684+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d5d88490-3478-4dad-974b-6c8d5957787b" />
+    <UnitTestResult executionId="b9ddeec3-6721-44f5-8ab4-a9a2b02136b1" testId="098e2c1a-58b6-1c78-c190-1282ef69a676" testName="FS.GG.Coordination.GitHubQueueSandboxTests.pilot refuses stale base incomplete or unsuccessful grown checks and expiry" computerName="04f35f7c357d" duration="00:00:00.0132573" startTime="2026-09-07T09:41:49.7685856+02:00" endTime="2026-09-07T09:41:49.7848429+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b9ddeec3-6721-44f5-8ab4-a9a2b02136b1" />
+    <UnitTestResult executionId="e303ba40-855d-4199-9c9f-ce2047321048" testId="b28c2137-438c-ba17-9870-9e6becd814e2" testName="FS.GG.Coordination.GitHubQueueSandboxTests.pilot serialization seal and replay are exact" computerName="04f35f7c357d" duration="00:00:00.0039430" startTime="2026-09-07T09:41:49.8113829+02:00" endTime="2026-09-07T09:41:49.8152374+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e303ba40-855d-4199-9c9f-ce2047321048" />
+    <UnitTestResult executionId="a8fea4d6-49e9-4412-934a-c3ed3ae812b2" testId="9b60b37f-c320-de33-2408-2cb272acb52f" testName="FS.GG.Coordination.GitHubQueueSandboxTests.pilot binds distinct candidate and merge-group heads plus forward base and grown checks" computerName="04f35f7c357d" duration="00:00:00.0091959" startTime="2026-09-07T09:41:49.7903671+02:00" endTime="2026-09-07T09:41:49.7940195+02:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a8fea4d6-49e9-4412-934a-c3ed3ae812b2" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="FS.GG.Coordination.GitHubQueueSandboxTests.pilot serialization seal and replay are exact" storage="/tmp/fsgg-320-gs2-07-6-recovery.lbz2nv/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="b28c2137-438c-ba17-9870-9e6becd814e2">
+      <Execution id="e303ba40-855d-4199-9c9f-ce2047321048" />
+      <TestMethod codeBase="/tmp/fsgg-320-gs2-07-6-recovery.LBz2NV/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubQueueSandboxTests" name="pilot serialization seal and replay are exact" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubQueueSandboxTests.pilot refuses capability prestate visibility identity and authority drift" storage="/tmp/fsgg-320-gs2-07-6-recovery.lbz2nv/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="c27f0739-387d-5194-1ab0-368f6a6b3c37">
+      <Execution id="f73c3bf3-6c6b-453b-ac82-198919d6c13f" />
+      <TestMethod codeBase="/tmp/fsgg-320-gs2-07-6-recovery.LBz2NV/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubQueueSandboxTests" name="pilot refuses capability prestate visibility identity and authority drift" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubQueueSandboxTests.pilot binds distinct candidate and merge-group heads plus forward base and grown checks" storage="/tmp/fsgg-320-gs2-07-6-recovery.lbz2nv/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="9b60b37f-c320-de33-2408-2cb272acb52f">
+      <Execution id="a8fea4d6-49e9-4412-934a-c3ed3ae812b2" />
+      <TestMethod codeBase="/tmp/fsgg-320-gs2-07-6-recovery.LBz2NV/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubQueueSandboxTests" name="pilot binds distinct candidate and merge-group heads plus forward base and grown checks" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubQueueSandboxTests.recovery requires sealed resume deterministic retry reverse compensation and cleanup" storage="/tmp/fsgg-320-gs2-07-6-recovery.lbz2nv/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="1aaccd37-6665-48a3-feb3-607afdb59b7e">
+      <Execution id="a1a23b7d-d77c-45d4-b901-536f26c64073" />
+      <TestMethod codeBase="/tmp/fsgg-320-gs2-07-6-recovery.LBz2NV/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubQueueSandboxTests" name="recovery requires sealed resume deterministic retry reverse compensation and cleanup" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubQueueSandboxTests.recovery serialization seal replay and control inventory are exact" storage="/tmp/fsgg-320-gs2-07-6-recovery.lbz2nv/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="38f62470-1ec6-4579-3fe1-ec96c53a2114">
+      <Execution id="d5d88490-3478-4dad-974b-6c8d5957787b" />
+      <TestMethod codeBase="/tmp/fsgg-320-gs2-07-6-recovery.LBz2NV/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubQueueSandboxTests" name="recovery serialization seal replay and control inventory are exact" />
+    </UnitTest>
+    <UnitTest name="FS.GG.Coordination.GitHubQueueSandboxTests.pilot refuses stale base incomplete or unsuccessful grown checks and expiry" storage="/tmp/fsgg-320-gs2-07-6-recovery.lbz2nv/tests/fs.gg.coordination.unittests/bin/release/net10.0/fs.gg.coordination.unittests.dll" id="098e2c1a-58b6-1c78-c190-1282ef69a676">
+      <Execution id="b9ddeec3-6721-44f5-8ab4-a9a2b02136b1" />
+      <TestMethod codeBase="/tmp/fsgg-320-gs2-07-6-recovery.LBz2NV/tests/FS.GG.Coordination.UnitTests/bin/Release/net10.0/FS.GG.Coordination.UnitTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="FS.GG.Coordination.GitHubQueueSandboxTests" name="pilot refuses stale base incomplete or unsuccessful grown checks and expiry" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="c27f0739-387d-5194-1ab0-368f6a6b3c37" executionId="f73c3bf3-6c6b-453b-ac82-198919d6c13f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1aaccd37-6665-48a3-feb3-607afdb59b7e" executionId="a1a23b7d-d77c-45d4-b901-536f26c64073" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="38f62470-1ec6-4579-3fe1-ec96c53a2114" executionId="d5d88490-3478-4dad-974b-6c8d5957787b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="098e2c1a-58b6-1c78-c190-1282ef69a676" executionId="b9ddeec3-6721-44f5-8ab4-a9a2b02136b1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b28c2137-438c-ba17-9870-9e6becd814e2" executionId="e303ba40-855d-4199-9c9f-ce2047321048" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9b60b37f-c320-de33-2408-2cb272acb52f" executionId="a8fea4d6-49e9-4412-934a-c3ed3ae812b2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="6" executed="6" passed="6" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.11)
+[xUnit.net 00:00:00.05]   Discovering: FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.09]   Discovered:  FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.10]   Starting:    FS.GG.Coordination.UnitTests
+[xUnit.net 00:00:00.16]   Finished:    FS.GG.Coordination.UnitTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
