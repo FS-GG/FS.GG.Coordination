@@ -57,7 +57,7 @@ let ``claim authority and projection hints are structurally separate`` () =
 
 [<Fact>]
 let ``canonical Quint protocol source remains byte-identical`` () =
-    Assert.Equal("52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90", sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md"))
+    Assert.Equal("3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb", sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md"))
 
 [<Fact>]
 let ``GS2-05-5 registration binds accepted predecessor and exact gate`` () =

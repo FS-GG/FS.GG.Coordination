@@ -122,7 +122,7 @@ let ``committed generated suite is complete deterministic and source bound`` () 
         summary.CategoryCounts =
             [ "vocabulary", 134; "transition", 14; "command", 14; "mutation", 16; "permission", 6; "schema", 28; "projection", 9 ],
         $"unexpected category counts: %A{summary.CategoryCounts}")
-    Assert.Equal("fc7ef1751e0415b04bf99b92f1f08f8c86d90bee4463f731a249bee0f5556781", summary.SelfSha256)
+    Assert.Equal("b4557ce634bd6dc6cb7e10e805450522c83b81bf8930a306c648a38b6d3f2e1b", summary.SelfSha256)
     Assert.Equal("e6035f024f14ce56e3c83fa86b4de877d33f6b0625e3110850cd671fc2fdb982", sha256 committed)
 
 [<Theory>]

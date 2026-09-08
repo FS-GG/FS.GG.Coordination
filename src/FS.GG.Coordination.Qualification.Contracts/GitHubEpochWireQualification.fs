@@ -31,7 +31,7 @@ module GitHubEpochWireQualification =
     let fleetId = "fs-gg-production"
     let repository = "FS-GG/FS.GG.Coordination.Authority"
     let repositoryId = 1351660651L
-    let epochRef = "refs/heads/fsgg/v2/journal/fleet-cutover/9f"
+    let epochRef = "refs/heads/fsgg/v2/journal/cutover/d5"
     let tagPrefix = "refs/tags/fsgg/v2/fleet-cutover/"
     let requiredPhases =
         [ OperatingV1; Preparing; FreezeRequested; Frozen; SwitchedV2; VerifiedV2
