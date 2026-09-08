@@ -47,6 +47,15 @@ let ``repository SDK selection matches the exact candidate supply-chain pin`` ()
     Assert.Equal("10.0.400", sdkVersion)
     Assert.Equal("disable", rollForward)
     Assert.Contains($"let pinnedDotnetSdkVersion = \"{sdkVersion}\"", implementation)
+    for relativePath in
+        [ ".github/actions/coordination-setup/action.yml"
+          ".github/workflows/bootstrap-qualification.yml"
+          ".github/workflows/candidate-supply-chain.yml" ] do
+        let setup = File.ReadAllText(Path.Combine(root, relativePath))
+        let setupCount = setup.Split("uses: actions/setup-dotnet@", StringSplitOptions.None).Length - 1
+        let exactPinCount = setup.Split($"dotnet-version: {sdkVersion}", StringSplitOptions.None).Length - 1
+        Assert.True(setupCount > 0, $"{relativePath} must contain a setup-dotnet invocation")
+        Assert.Equal(setupCount, exactPinCount)
 
 [<Fact>]
 let ``candidate supply chain proves positive and independent negative controls`` () =
