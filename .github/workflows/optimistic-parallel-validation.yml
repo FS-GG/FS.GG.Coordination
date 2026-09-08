@@ -90,7 +90,9 @@ jobs:
           if-no-files-found: error
 
   shared-build:
-    needs: prepare
+    # Cheap reuse classification is the admission boundary. Once accepted,
+    # this coherent lane and native delivery may proceed independently.
+    needs: [prepare, classify-reuse]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

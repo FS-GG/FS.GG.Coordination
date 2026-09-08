@@ -145,6 +145,8 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     Assert.Contains("passed-candidates.txt", recovery)
     Assert.Contains("coherentRunPending:true", recovery)
     Assert.Contains("max-parallel: 6", workflow)
+    Assert.Contains("shared-build:\n    # Cheap reuse classification is the admission boundary", workflow)
+    Assert.Contains("needs: [prepare, classify-reuse]", workflow)
     Assert.Contains("optimistic-dispatch-recovery.sh", workflow)
     Assert.Contains("coherent-aggregate-", workflow)
     for forbidden in [ "git commit"; "git push"; "gh release"; "npm publish"; "dotnet nuget push" ] do
