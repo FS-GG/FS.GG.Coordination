@@ -101,6 +101,7 @@ type ReuseSelection =
 
 type PartitionPlan =
     { Candidate: CandidateObligation
+      QualificationPlanSha256: string
       Obligations: string list
       PartitionCount: int
       Partitions: (int * string list) list
@@ -561,10 +562,11 @@ let parseCandidateObligation (bytes: byte array) =
         else Ok value
     with error -> Error error.Message
 
-let private partitionPayload (obligationSha: string) (obligations: string list) (partitions: (int * string list) list) =
+let private partitionPayload (obligationSha: string) (qualificationPlanSha: string) (obligations: string list) (partitions: (int * string list) list) =
     compactBytes (fun writer ->
         writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.coherent-partition-plan/1")
         writer.WriteString("candidateObligationSha256", obligationSha)
+        writer.WriteString("qualificationPlanSha256", qualificationPlanSha)
         writer.WriteStartArray("obligations"); obligations |> List.iter writer.WriteStringValue; writer.WriteEndArray()
         writer.WriteStartArray("partitions")
         for index, values in partitions do
@@ -572,17 +574,18 @@ let private partitionPayload (obligationSha: string) (obligations: string list) 
             values |> List.iter writer.WriteStringValue; writer.WriteEndArray(); writer.WriteEndObject()
         writer.WriteEndArray(); writer.WriteEndObject())
 
-let createPartitionPlan (candidate: CandidateObligation) maxPartitions (obligations: string list) =
+let createPartitionPlan (candidate: CandidateObligation) qualificationPlanSha256 maxPartitions (obligations: string list) =
+    requireDigest (nameof qualificationPlanSha256) qualificationPlanSha256
     if maxPartitions < 1 || maxPartitions > 6 then invalidArg (nameof maxPartitions) "partition count must be between one and six"
     let ordered = obligations |> List.sort
     if ordered.IsEmpty || ordered <> List.distinct ordered || ordered |> List.exists String.IsNullOrWhiteSpace then invalidArg (nameof obligations) "obligations must be non-empty and distinct"
     let count = min maxPartitions ordered.Length
     let partitions = [ for index in 0 .. count - 1 -> index, (ordered |> List.mapi (fun i value -> i, value) |> List.choose (fun (i, value) -> if i % count = index then Some value else None)) ]
-    { Candidate = candidate; Obligations = ordered; PartitionCount = count; Partitions = partitions
-      PlanSha256 = partitionPayload candidate.ObligationSha256 ordered partitions |> sha256 }
+    { Candidate = candidate; QualificationPlanSha256 = qualificationPlanSha256; Obligations = ordered; PartitionCount = count; Partitions = partitions
+      PlanSha256 = partitionPayload candidate.ObligationSha256 qualificationPlanSha256 ordered partitions |> sha256 }
 
 let partitionPlanBytes (plan: PartitionPlan) =
-    let payload = partitionPayload plan.Candidate.ObligationSha256 plan.Obligations plan.Partitions
+    let payload = partitionPayload plan.Candidate.ObligationSha256 plan.QualificationPlanSha256 plan.Obligations plan.Partitions
     if sha256 payload <> plan.PlanSha256 then invalidArg (nameof plan) "partition plan digest is stale"
     Array.append
         (compactBytes (fun writer ->
@@ -600,10 +603,11 @@ let parsePartitionPlan (candidate: CandidateObligation) (bytes: byte array) =
             root.GetProperty("partitions").EnumerateArray()
             |> Seq.map (fun item -> item.GetProperty("index").GetInt32(), strings (item.GetProperty "obligations")) |> Seq.toList
         let count = partitions.Length
-        let value = { Candidate = candidate; Obligations = obligations; PartitionCount = count; Partitions = partitions; PlanSha256 = root.GetProperty("planSha256").GetString() }
+        let qualificationPlanSha = root.GetProperty("qualificationPlanSha256").GetString()
+        let value = { Candidate = candidate; QualificationPlanSha256 = qualificationPlanSha; Obligations = obligations; PartitionCount = count; Partitions = partitions; PlanSha256 = root.GetProperty("planSha256").GetString() }
         if root.GetProperty("schema").GetString() <> "fsgg.coordination.coherent-partition-plan/1" then Error "partition plan schema is unsupported"
         elif root.GetProperty("candidateObligationSha256").GetString() <> candidate.ObligationSha256 then Error "partition plan candidate differs"
-        elif value.PlanSha256 <> (partitionPayload candidate.ObligationSha256 obligations partitions |> sha256) then Error "partition plan digest differs"
+        elif value.PlanSha256 <> (partitionPayload candidate.ObligationSha256 qualificationPlanSha obligations partitions |> sha256) then Error "partition plan digest differs"
         elif bytes <> partitionPlanBytes value then Error "partition plan bytes are not canonical"
         else Ok value
     with error -> Error error.Message

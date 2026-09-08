@@ -108,6 +108,7 @@ type ReuseSelection =
 
 type PartitionPlan =
     { Candidate: CandidateObligation
+      QualificationPlanSha256: string
       Obligations: string list
       PartitionCount: int
       Partitions: (int * string list) list
@@ -142,7 +143,7 @@ val parseCandidateObligation: byte array -> Result<CandidateObligation, string>
 val selectReusable: now: System.DateTimeOffset -> candidate: CandidateObligation -> prior: PriorExecution option -> semanticDelta: SemanticDelta -> bindingCorrespondenceSha256: string option -> ReuseSelection
 val applyCoherentOutcome: merged: bool -> passed: bool -> ReuseSelection -> ReuseSelection
 val selectionBytes: ReuseSelection -> byte array
-val createPartitionPlan: candidate: CandidateObligation -> maxPartitions: int -> obligations: string list -> PartitionPlan
+val createPartitionPlan: candidate: CandidateObligation -> qualificationPlanSha256: string -> maxPartitions: int -> obligations: string list -> PartitionPlan
 val partitionPlanBytes: PartitionPlan -> byte array
 val parsePartitionPlan: candidate: CandidateObligation -> byte array -> Result<PartitionPlan, string>
 val createPartitionReceipt: plan: PartitionPlan -> partition: int -> obligations: string list -> passed: bool -> PartitionReceipt

@@ -17,7 +17,7 @@ match args.Head with
           FormalCorpusSha256 = required "--corpus"; HarnessSha256 = required "--harness"; BindingSha256 = required "--binding" }
     let obligation = createCandidateObligation (required "--candidate") (required "--base") (required "--tree") (required "--source") identity
     let obligations = required "--obligations" |> fun value -> value.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.toList
-    let plan = createPartitionPlan obligation (option "--partitions" |> Option.map int |> Option.defaultValue 6) obligations
+    let plan = createPartitionPlan obligation (required "--qualification-plan") (option "--partitions" |> Option.map int |> Option.defaultValue 6) obligations
     let outputRoot = required "--output-root" |> Path.GetFullPath
     Directory.CreateDirectory outputRoot |> ignore
     File.WriteAllBytes(Path.Combine(outputRoot, "candidate-obligation.json"), candidateObligationBytes obligation)

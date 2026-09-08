@@ -75,7 +75,10 @@ let ``coherent failures block before merge and dispute after merge`` () =
 
 [<Fact>]
 let ``partition aggregation is complete deterministic and order independent`` () =
-    let plan = createPartitionPlan (candidate "b" "6") 6 [ "unit"; "architecture"; "formal"; "security"; "package"; "recovery"; "projection" ]
+    let plan = createPartitionPlan (candidate "b" "6") (digest "7") 6 [ "unit"; "architecture"; "formal"; "security"; "package"; "recovery"; "projection" ]
+    let processChanged = createPartitionPlan plan.Candidate (digest "8") 6 plan.Obligations
+    Assert.Equal(plan.Candidate.ObligationSha256, processChanged.Candidate.ObligationSha256)
+    Assert.NotEqual(plan.PlanSha256, processChanged.PlanSha256)
     let receipts = plan.Partitions |> List.map (fun (index, obligations) -> createPartitionReceipt plan index obligations true)
     Assert.Equal(6, plan.PartitionCount)
     Assert.Equal(Ok true, aggregatePartitions plan (List.rev receipts))
@@ -152,6 +155,10 @@ let ``hosted partition scripts use typed receipts and complete suites`` () =
     let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
     let run = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-run-partition.sh"))
     let aggregate = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-aggregate.sh"))
+    let prepare = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-prepare.sh"))
+    Assert.Contains("--bounds \"$(digest_tracked_set eng/quint-qualification.json eng/quint-qualification-baseline.json)\"", prepare)
+    Assert.Contains("--qualification-plan \"$(digest_tracked_set eng/optimistic-qualification-plan.json)\"", prepare)
+    Assert.DoesNotContain("QualificationReuseSelectionTests.fs eng/bootstrap-gates/canonical-quint.sh", prepare)
     Assert.Contains("FS.GG.Coordination.UnitTests.fsproj -c Release --no-restore --no-build", run)
     Assert.Contains("FS.GG.Coordination.ArchitectureTests.fsproj -c Release --no-restore --no-build", run)
     Assert.DoesNotContain("--filter", run)
