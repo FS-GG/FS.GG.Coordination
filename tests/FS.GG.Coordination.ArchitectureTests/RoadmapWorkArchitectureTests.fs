@@ -13,8 +13,8 @@ open Xunit
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
-let private roadmapRevision = "7216ec4aae14b17f151a1ed3616eb8a2f4ed2d47"
-let private roadmapSha256 = "0498209c27cdf75d3c1067dad2c3b88084b03c20f1bd87dcb99192aa43457c36"
+let private roadmapRevision = "68ae405e413aa40e6e44ade0c0e1db8fbfd74603"
+let private roadmapSha256 = "1b9077ff132652849ed2143824c5291d6700cbfd7b009f24d073cd2b02ead05c"
 
 let private runAt workingDirectory executable arguments =
     let startInfo = ProcessStartInfo(executable)
@@ -445,6 +445,11 @@ let ``roadmap work skill safety clauses are independently deletion sensitive`` (
     let requiredClauses =
         [ "routine-development/v1"
           "one accountable owner"
+          "recorded explicit human instruction"
+          "absence or ambiguity selects routine"
+          "GS2 registration"
+          "does not select heavyweight"
+          "affected effect"
           "They are not a\nuniversal six-check preflight"
           "Do not open a receipt phase for routine work"
           "asynchronous and non-blocking"

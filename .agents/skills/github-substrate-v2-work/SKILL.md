@@ -22,9 +22,11 @@ dotnet run --project src/FS.GG.Coordination.Cli --configuration Release --no-bui
 
 ## Select the delivery route
 
-Use the canonical shared routine-development policy at the roadmap revision in force. A unit uses
-`routine-development/v1` only when that roadmap and policy explicitly admit its source change and the
-change stays outside every protected operation and path. Routine source work has one accountable owner,
+Use the canonical shared `routine-development/v1` policy at the roadmap revision in force. Routine delivery
+is the default for every registered GS2 unit. Only a recorded explicit human instruction selects heavyweight
+process for named scope; absence or ambiguity selects routine. A strict label, GS2 registration, protected
+path, policy change, modeled work, protected operation, immutable historical receipt, or inherited strict
+state does not select heavyweight ceremony. Routine source work has one accountable owner,
 one `routine/<slug>` branch, one PR, an exact-head eligibility marker, the smallest relevant automated
 checks, native merge, and merged-state readback. Do not layer on a second issue or claim, SDD artifact
 family, independent critique, feedback cycle, telemetry receipt, receipt-only PR, projection PR, or
@@ -32,9 +34,11 @@ metadata-`Done` write. Roadmap inspection, prerequisite validation, manifest bin
 remain because they protect unit sequencing and executable identity; they do not create extra delivery
 phases.
 
-Migration or cutover, settings or credential changes, publication or deployment, destructive effects,
-external-contract acceptance, and any unit that requires an immutable acceptance receipt remain strict.
-If eligibility is absent or unclear, refuse the routine route rather than weakening a protected boundary.
+Technical qualification and operation authority remain orthogonal and fail closed. Preserve exact roadmap
+prerequisites, command/catalog and candidate binding, canonical models, permissions, migration/cutover,
+settings/credential, publication/deployment, destructive-effect and external-acceptance safeguards. Missing,
+invalid or unknown authority blocks its affected effect and may leave it pending; it does not select
+heavyweight delivery ceremony or weaken a protected boundary.
 
 ## Workflow
 
@@ -80,8 +84,8 @@ class-level producer or process at its source rather than filing unit-specific c
 
 ## One item across implementation and receipt phases
 
-Do not open a receipt phase for routine work merely to copy merged facts. When a strict unit's exact
-acceptance contract requires an append-only acceptance or repair receipt containing facts that exist only
+Do not open a receipt phase for routine work merely to copy merged facts. When an exact acceptance contract
+inside human-named heavyweight scope requires an append-only acceptance or repair receipt containing facts that exist only
 after its implementation merge, use `single-owning-item-two-phase-receipt`:
 
 1. Declare implementation and receipt paths in the original touch-set. The implementation PR must not
