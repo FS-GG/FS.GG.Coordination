@@ -79,6 +79,8 @@
     <Compile Include="GitHubRuntimeOperationsQualification.fs" />
     <Compile Include="GitHubEpochWireQualification.fsi" />
     <Compile Include="GitHubEpochWireQualification.fs" />
+    <Compile Include="GitHubLedgerProtectionQualification.fsi" />
+    <Compile Include="GitHubLedgerProtectionQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />

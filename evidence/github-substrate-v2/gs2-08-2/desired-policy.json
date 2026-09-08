@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "fleetIdentity": "fleet-cutover:fs-gg-production",
+  "fleetRef": "refs/heads/fsgg/v2/journal/cutover/d5",
+  "sharedWriterAction": "exclude-fleet-ref",
+  "dedicatedWriter": { "permission": "contents-only", "appId": null, "status": "blocked-missing-real-id" },
+  "namespaceIntegrity": { "target": "refs/heads/fsgg/v2/journal/**", "retain": true },
+  "phaseTag": { "target": "refs/tags/fsgg/v2/epoch/fs-gg-production/phase/*", "allowCreate": true, "immutableAfterCreate": true },
+  "environment": "fleet-cutover",
+  "applyAuthorized": false,
+  "sharedAppProductionBlocker": true
+}

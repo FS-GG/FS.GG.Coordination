@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    "baseline-prestate", "unknown-rulesets", "proven-absent-rulesets", "incomplete-pagination",
+    "stale-observation", "invalid-page-digest", "broken-continuity", "partial-integrity",
+    "shared-writer-overlap", "missing-dedicated-app", "altered-seal"
+  ],
+  "source": "sanitized-deterministic-fixture",
+  "liveObservation": false,
+  "applyAuthorized": false
+}

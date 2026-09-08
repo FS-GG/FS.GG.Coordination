@@ -13,7 +13,7 @@ open Xunit
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
-let private roadmapRevision = "e3dcd3cde5416a620cf59989c203b11e82c90294"
+let private roadmapRevision = "71c7ae798db7fc33cd186ae4d97ae103f24d99d7"
 let private roadmapSha256 = "20450bccb71d8656330960cfade25150d370255ac58094523492c98f049e58c1"
 
 let private runAt workingDirectory executable arguments =
@@ -1035,7 +1035,8 @@ let ``roadmap unit index advances through GS2-08-1 epoch wire`` () =
              "GS2-07.6"
              "GS2-07.7"
              "GS2-07.8"
-             "GS2-08.1" ]
+             "GS2-08.1"
+             "GS2-08.2" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -2267,7 +2268,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(47, commands.Length)
+    Assert.Equal(48, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
