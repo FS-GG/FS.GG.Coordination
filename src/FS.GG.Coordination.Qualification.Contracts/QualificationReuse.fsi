@@ -146,6 +146,7 @@ val selectionBytes: ReuseSelection -> byte array
 val createPartitionPlan: candidate: CandidateObligation -> qualificationPlanSha256: string -> maxPartitions: int -> obligations: string list -> PartitionPlan
 val partitionPlanBytes: PartitionPlan -> byte array
 val parsePartitionPlan: candidate: CandidateObligation -> byte array -> Result<PartitionPlan, string>
+val resolvePartitionObligation: plan: PartitionPlan -> partition: int -> Result<string, string>
 val createPartitionReceipt: plan: PartitionPlan -> partition: int -> obligations: string list -> passed: bool -> PartitionReceipt
 val partitionReceiptBytes: PartitionReceipt -> byte array
 val parsePartitionReceipt: byte array -> Result<PartitionReceipt, string>

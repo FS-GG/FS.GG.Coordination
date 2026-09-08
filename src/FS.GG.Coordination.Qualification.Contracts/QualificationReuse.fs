@@ -625,6 +625,12 @@ let createPartitionReceipt (plan: PartitionPlan) partition obligations passed =
     { PlanSha256 = plan.PlanSha256; Partition = partition; Obligations = obligations; Passed = passed
       ReceiptSha256 = receiptPayload plan.PlanSha256 partition obligations passed |> sha256 }
 
+let resolvePartitionObligation (plan: PartitionPlan) partition =
+    match plan.Partitions |> List.tryFind (fst >> (=) partition) with
+    | None -> Error $"partition {partition} is not declared by the plan"
+    | Some(_, [ obligation ]) -> Ok obligation
+    | Some(_, obligations) -> Error $"partition {partition} must have exactly one hosted obligation, found {obligations.Length}"
+
 let partitionReceiptBytes (receipt: PartitionReceipt) =
     let payload = receiptPayload receipt.PlanSha256 receipt.Partition receipt.Obligations receipt.Passed
     if sha256 payload <> receipt.ReceiptSha256 then invalidArg (nameof receipt) "partition receipt digest is stale"

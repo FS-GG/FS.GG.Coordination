@@ -1,6 +1,7 @@
 module FS.GG.Coordination.QualificationReuseSelectionTests
 
 open System
+open System.Diagnostics
 open System.IO
 open Xunit
 open FS.GG.Coordination.Qualification.Contracts.QualificationReuse
@@ -99,6 +100,69 @@ let ``partition aggregation is complete deterministic and order independent`` ()
     Assert.True(parseCoherentAggregateReceipt aggregateStale |> Result.isError)
 
 [<Fact>]
+let ``hosted partition obligation resolver follows every canonical plan assignment and rejects invalid cardinality`` () =
+    let plan =
+        createPartitionPlan
+            (candidate "b" "6")
+            (digest "7")
+            6
+            [ "unit"; "architecture"; "formal"; "security"; "package"; "recovery" ]
+    for partition, obligations in plan.Partitions do
+        Assert.Equal(Ok(List.exactlyOne obligations), resolvePartitionObligation plan partition)
+    Assert.Equal(Error "partition 6 is not declared by the plan", resolvePartitionObligation plan 6)
+    let empty = { plan with Partitions = (0, []) :: List.tail plan.Partitions }
+    Assert.Equal(Error "partition 0 must have exactly one hosted obligation, found 0", resolvePartitionObligation empty 0)
+    let multiple = { plan with Partitions = (0, [ "architecture"; "unit" ]) :: List.tail plan.Partitions }
+    Assert.Equal(Error "partition 0 must have exactly one hosted obligation, found 2", resolvePartitionObligation multiple 0)
+
+[<Fact>]
+let ``partition obligation command resolves every generated plan entry and refuses invalid assignments`` () =
+    let repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+    let scratch = Directory.CreateTempSubdirectory("qsel-partition-obligation-")
+    let obligationPath = Path.Combine(scratch.FullName, "candidate-obligation.json")
+    let planPath = Path.Combine(scratch.FullName, "partition-plan.json")
+    let write (plan: PartitionPlan) =
+        File.WriteAllBytes(obligationPath, candidateObligationBytes plan.Candidate)
+        File.WriteAllBytes(planPath, partitionPlanBytes plan)
+    let invoke partition =
+        let startInfo = ProcessStartInfo("dotnet")
+        startInfo.WorkingDirectory <- repositoryRoot
+        startInfo.UseShellExecute <- false
+        startInfo.RedirectStandardOutput <- true
+        startInfo.RedirectStandardError <- true
+        for argument in
+            [ "fsi"; "eng/optimistic-validation.fsx"; "--"; "partition-obligation"
+              "--obligation"; obligationPath; "--plan"; planPath; "--partition"; string partition ] do
+            startInfo.ArgumentList.Add argument
+        use child = Process.Start startInfo
+        let output = child.StandardOutput.ReadToEnd().Trim()
+        let error = child.StandardError.ReadToEnd().Trim()
+        child.WaitForExit()
+        child.ExitCode, output, error
+    let plan =
+        createPartitionPlan
+            (candidate "b" "6")
+            (digest "7")
+            6
+            [ "unit"; "architecture"; "formal"; "security"; "package"; "recovery" ]
+    write plan
+    for partition, obligations in plan.Partitions do
+        let code, output, error = invoke partition
+        Assert.Equal(0, code)
+        Assert.Equal(List.exactlyOne obligations, output)
+        Assert.Equal("", error)
+    let unknownCode, _, unknownError = invoke 6
+    Assert.NotEqual(0, unknownCode)
+    Assert.Contains("partition 6 is not declared by the plan", unknownError)
+    let multi = createPartitionPlan plan.Candidate (digest "7") 5 plan.Obligations
+    let multiIndex = multi.Partitions |> List.find (snd >> List.length >> (=) 2) |> fst
+    write multi
+    let multiCode, _, multiError = invoke multiIndex
+    Assert.NotEqual(0, multiCode)
+    Assert.Contains("must have exactly one hosted obligation, found 2", multiError)
+    scratch.Delete(true)
+
+[<Fact>]
 let ``optimistic workflow projection retains recovery and continuation bounds`` () =
     let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
     let code, output, error = BootstrapCi.execute [ "optimistic-projection"; "--root"; root ]
@@ -164,6 +228,14 @@ let ``hosted partition scripts use typed receipts and complete suites`` () =
     Assert.Contains("FS.GG.Coordination.UnitTests.fsproj -c Release --no-restore --no-build", run)
     Assert.Contains("FS.GG.Coordination.ArchitectureTests.fsproj -c Release --no-restore --no-build", run)
     Assert.DoesNotContain("--filter", run)
+    Assert.Contains("partition-obligation", run)
+    Assert.Contains("case \"$obligation\" in", run)
+    Assert.Contains("unit) dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj", run)
+    Assert.Contains("architecture) dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj", run)
+    Assert.Contains("formal) bash eng/bootstrap-gates/canonical-quint.sh", run)
+    Assert.Contains("security) bash eng/bootstrap-gates/dependency-and-security.sh", run)
+    Assert.Contains("package) bash eng/bootstrap-gates/package-install-smoke.sh", run)
+    Assert.Contains("recovery) bash eng/bootstrap-gates/bootstrap-recovery.sh", run)
     Assert.Contains("eng/optimistic-validation.fsx -- run-partition", run)
     Assert.Contains("eng/optimistic-validation.fsx -- aggregate", aggregate)
     Assert.DoesNotContain("jq -e", aggregate)

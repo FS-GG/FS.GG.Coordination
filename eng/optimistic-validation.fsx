@@ -30,6 +30,11 @@ match args.Head with
     let obligations = plan.Partitions |> List.find (fst >> (=) partition) |> snd
     let passed = required "--passed" |> Boolean.Parse
     File.WriteAllBytes(required "--output", createPartitionReceipt plan partition obligations passed |> partitionReceiptBytes)
+| "partition-obligation" ->
+    let obligation = File.ReadAllBytes(required "--obligation") |> parseCandidateObligation |> Result.defaultWith failwith
+    let plan = File.ReadAllBytes(required "--plan") |> parsePartitionPlan obligation |> Result.defaultWith failwith
+    let partition = required "--partition" |> int
+    resolvePartitionObligation plan partition |> Result.defaultWith failwith |> printfn "%s"
 | "classify" ->
     let current = File.ReadAllBytes(required "--obligation") |> parseCandidateObligation |> Result.defaultWith failwith
     let prior =
