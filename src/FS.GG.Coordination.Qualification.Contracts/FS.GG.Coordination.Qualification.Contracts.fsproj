@@ -81,6 +81,8 @@
     <Compile Include="GitHubEpochWireQualification.fs" />
     <Compile Include="GitHubLedgerProtectionQualification.fsi" />
     <Compile Include="GitHubLedgerProtectionQualification.fs" />
+    <Compile Include="GitHubLedgerProtectionProviderQualification.fsi" />
+    <Compile Include="GitHubLedgerProtectionProviderQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />

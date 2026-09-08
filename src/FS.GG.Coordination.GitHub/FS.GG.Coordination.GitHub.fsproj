@@ -19,6 +19,8 @@
     <Compile Include="ShardedJournalAdapter.fs" />
     <Compile Include="LedgerProtectionPlanAdapter.fsi" />
     <Compile Include="LedgerProtectionPlanAdapter.fs" />
+    <Compile Include="LedgerProtectionProviderAdapter.fsi" />
+    <Compile Include="LedgerProtectionProviderAdapter.fs" />
     <Compile Include="ClaimTouchSetAdapter.fsi" />
     <Compile Include="ClaimTouchSetAdapter.fs" />
     <Compile Include="ReviewDeliveryAdapter.fsi" />

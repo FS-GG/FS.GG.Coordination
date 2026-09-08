@@ -31,6 +31,7 @@
     <Compile Include="GitHubRuntimeOperationsTests.fs" />
     <Compile Include="GitHubEpochWireTests.fs" />
     <Compile Include="GitHubLedgerProtectionTests.fs" />
+    <Compile Include="GitHubLedgerProtectionProviderTests.fs" />
     <Compile Include="GitHubCommentProjectionTests.fs" />
     <Compile Include="GitHubTransportTests.fs" />
     <Compile Include="GitHubShardedJournalTests.fs" />

@@ -26,18 +26,22 @@ let ``historical sharded journal implementation remains unmodified`` () =
     Assert.Equal(0, child.ExitCode)
 
 [<Fact>]
-let ``GS2-08-2 registration binds accepted predecessor roadmap and exact Q3 command`` () =
+let ``GS2-08-2 registration binds accepted predecessor roadmap and exact Q3 and Q4 commands`` () =
     use units = JsonDocument.Parse(read "eng/github-substrate-v2-units.json")
     use gates = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
     let roadmap = units.RootElement.GetProperty("roadmap")
-    Assert.Equal("71c7ae798db7fc33cd186ae4d97ae103f24d99d7", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("7eeb0303a21947a36baa01a6a467a3ddf8b64306", roadmap.GetProperty("revision").GetString())
     Assert.Equal("20450bccb71d8656330960cfade25150d370255ac58094523492c98f049e58c1", roadmap.GetProperty("sha256").GetString())
     let unitValue = units.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("id").GetString()="GS2-08.2")
     Assert.Equal<string list>(["GS2-08.1"], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
-    Assert.Equal("4de31989d1bddaf63c231fc2a3e8fb26f820ff9ae5834bf39a26e95cd528533e", unitValue.GetProperty("contractSha256").GetString())
-    let command = gates.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("id").GetString()="github-ledger-protection-contract")
-    Assert.Equal("Q3", command.GetProperty("qGate").GetString())
-    let components = seq { command.GetProperty("executable").GetString(); yield! command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() }
-    Assert.Equal("09806459596dae7d79efdc1a6fd0e370261ef954cfaedecef8ab67edea6cd91b", components |> String.concat "\u0000" |> sha256Text)
+    Assert.Equal("23261d2b412661a33445bccfca2f7b9e3f96f360dd6f9ad8e101f5148276da7a", unitValue.GetProperty("contractSha256").GetString())
+    let contracts = unitValue.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+    let commands =
+        contracts
+        |> List.map (fun contract -> gates.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun command -> command.GetProperty("id").GetString()=contract.GetProperty("id").GetString()))
+    Assert.Equal<string list>(["Q3";"Q4"], commands |> List.map (fun command -> command.GetProperty("qGate").GetString()))
+    for command, contract in List.zip commands contracts do
+        let components = seq { command.GetProperty("executable").GetString(); yield! command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() }
+        Assert.Equal(contract.GetProperty("commandSha256").GetString(), components |> String.concat "\u0000" |> sha256Text)
     use receipt = JsonDocument.Parse(read "evidence/github-substrate-v2/accepted/GS2-08.1.json")
     Assert.Equal("49c70359ebfbc00331ba90c7c5b100a292efa4cc95a5dfa8007867ceceec5c31", receipt.RootElement.GetProperty("digest").GetString())

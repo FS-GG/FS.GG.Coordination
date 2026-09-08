@@ -1,0 +1,17 @@
+{
+  "schema": "fsgg.github-ledger-protection-provider-independent-expectations/v1",
+  "controls": [
+    "provider-binding",
+    "page-ordering",
+    "complete-pagination",
+    "payload-digest",
+    "provider-freshness",
+    "provider-unknown-vs-absent",
+    "provider-effective-composition",
+    "provider-continuity",
+    "provider-exact-fleet-ref",
+    "dry-operation-seal",
+    "dedicated-writer-blocker",
+    "provider-no-apply"
+  ]
+}

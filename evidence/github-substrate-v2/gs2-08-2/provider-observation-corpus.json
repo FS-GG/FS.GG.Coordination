@@ -1,0 +1,30 @@
+{
+  "schema": "fsgg.github-ledger-protection-provider-corpus/v1",
+  "sourceCategory": "sanitized-deterministic-fixture",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "repositoryId": 849557450,
+  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "observedAt": "2026-09-08T18:00:00Z",
+  "endpoints": [
+    { "id": "rulesets", "pages": 2, "terminal": true },
+    { "id": "phase-tags", "pages": 1, "terminal": true },
+    { "id": "environment", "pages": 1, "terminal": true },
+    { "id": "dedicated-writer-app", "pages": 1, "terminal": true },
+    { "id": "control-issue", "pages": 1, "terminal": true }
+  ],
+  "mutations": [
+    "wrong-repository",
+    "missing-page",
+    "duplicate-page",
+    "http-failure",
+    "stale-page",
+    "altered-payload-digest",
+    "unknown-environment",
+    "missing-continuity",
+    "contradictory-effective-composition",
+    "altered-operation-seal"
+  ],
+  "writesAttempted": 0,
+  "providerReadbackClaimed": false,
+  "applyAuthorized": false
+}
