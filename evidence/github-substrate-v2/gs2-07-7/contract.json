@@ -1,0 +1,26 @@
+{
+  "schema": "fsgg.github-event-benefit-evidence/v1",
+  "unit": "GS2-07.7",
+  "prerequisiteReceiptDigest": "eaf032038cc3ed1fb3f1a21db81a32f7af7969f84a0d9b77cd1d7eea68346bc6",
+  "prerequisiteFileSha256": "855d656d9db078c6e45cc85250a25d52da3f076cbf398cf607766fd51dd91767",
+  "roadmapRevision": "7216ec4aae14b17f151a1ed3616eb8a2f4ed2d47",
+  "roadmapSha256": "0498209c27cdf75d3c1067dad2c3b88084b03c20f1bd87dcb99192aa43457c36",
+  "candidateBase": "a8b10e073eb7098014ea38ce6edadc35b784ff5c",
+  "protocolSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
+  "population": ["issue:A", "issue:B", "issue:C"],
+  "window": { "start": "2026-09-08T01:00:00Z", "end": "2026-09-08T02:00:00Z" },
+  "sources": [
+    { "category": "current-provider-observation", "path": "evidence/github-substrate-v2/gs2-07-7/provider-observation.json", "sha256": "4db6b0ab1ab32e22186890a988a469fa14c0c8992788fd11ef7d29e3fd9df06b" },
+    { "category": "historical-provider-evidence", "path": "evidence/github-substrate-v2/gs2-07-6/routine-burst.json", "sha256": "4ba0dbd50779e59216733e2ead36097f31a11147169831330fbe21bddaba2afb" },
+    { "category": "executable-replay", "path": "eng/validate-github-event-benefit-measurement.fsx", "sha256": "27aa03c366c858012ef48576fa944f6eeae19925716b0b4751d6aecb382cc1fd" },
+    { "category": "injected-negative-control", "path": "eng/validate-github-event-benefit-measurement.fsx", "sha256": "27aa03c366c858012ef48576fa944f6eeae19925716b0b4751d6aecb382cc1fd" }
+  ],
+  "observationDeclarationSha256": "0d99db425a430a68383f992f77e91cc1a47364cf9907caa6a44d31ce18a366fd",
+  "measurementClaim": "bounded replay benefit only",
+  "providerClaim": "read-only run observation; no event dispatch latency",
+  "pollingDecision": "retain",
+  "installedBenefit": false,
+  "productionBenefit": false,
+  "writePermission": false,
+  "acceptanceReceiptPhase": "post-protected-merge"
+}
