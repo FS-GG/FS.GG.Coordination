@@ -23,6 +23,6 @@ dotnet fsi eng/optimistic-validation.fsx -- prepare --candidate "$candidate" --b
   --corpus "$(digest_tracked_set 'src/FS.GG.Coordination.Protocol/Generated/**' eng/qualify-canonical-quint.sh eng/validate-canonical-quint-protocol.fsx eng/validate-quint-qualification.fsx)" \
   --harness "$(digest_tracked_set 'tests/FS.GG.Coordination.ArchitectureTests/*Quint*' eng/bootstrap-gates/canonical-quint.sh)" \
   --binding "$(digest_tracked_set src/FS.GG.Coordination.Protocol/Generated/Protocol.Generated.fs src/FS.GG.Coordination.Protocol/Generated/contract.json src/FS.GG.Coordination.Protocol/Protocol.bindings.json)" \
-  --qualification-plan "$(digest_tracked_set eng/optimistic-qualification-plan.json)" \
+  --qualification-plan "$(digest_tracked_set eng/optimistic-qualification-plan.json eng/optimistic-validation.fsx eng/bootstrap-gates/optimistic-run-partition.sh)" \
   --obligations unit,architecture,formal,security,package,recovery --partitions 6 --output-root "$output_root" > "$output_root/plan.identity"
 install -m 0644 src/FS.GG.Coordination.Protocol/Protocol.bindings.json "$output_root/protocol.bindings.json"

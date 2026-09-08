@@ -631,6 +631,13 @@ let resolvePartitionObligation (plan: PartitionPlan) partition =
     | Some(_, [ obligation ]) -> Ok obligation
     | Some(_, obligations) -> Error $"partition {partition} must have exactly one hosted obligation, found {obligations.Length}"
 
+let validatePriorAggregateBinding (currentPlan: PartitionPlan) (priorPlan: PartitionPlan) (receipt: CoherentAggregateReceipt) =
+    if currentPlan.QualificationPlanSha256 <> priorPlan.QualificationPlanSha256 then Error "prior coherent execution plan is stale"
+    elif receipt.CandidateObligationSha256 <> priorPlan.Candidate.ObligationSha256 then Error "prior aggregate receipt does not bind the prior candidate"
+    elif receipt.PlanSha256 <> priorPlan.PlanSha256 then Error "prior aggregate receipt does not bind the prior partition plan"
+    elif not receipt.Passed then Error "prior aggregate receipt did not pass"
+    else Ok()
+
 let partitionReceiptBytes (receipt: PartitionReceipt) =
     let payload = receiptPayload receipt.PlanSha256 receipt.Partition receipt.Obligations receipt.Passed
     if sha256 payload <> receipt.ReceiptSha256 then invalidArg (nameof receipt) "partition receipt digest is stale"

@@ -147,6 +147,7 @@ val createPartitionPlan: candidate: CandidateObligation -> qualificationPlanSha2
 val partitionPlanBytes: PartitionPlan -> byte array
 val parsePartitionPlan: candidate: CandidateObligation -> byte array -> Result<PartitionPlan, string>
 val resolvePartitionObligation: plan: PartitionPlan -> partition: int -> Result<string, string>
+val validatePriorAggregateBinding: currentPlan: PartitionPlan -> priorPlan: PartitionPlan -> receipt: CoherentAggregateReceipt -> Result<unit, string>
 val createPartitionReceipt: plan: PartitionPlan -> partition: int -> obligations: string list -> passed: bool -> PartitionReceipt
 val partitionReceiptBytes: PartitionReceipt -> byte array
 val parsePartitionReceipt: byte array -> Result<PartitionReceipt, string>

@@ -35,6 +35,13 @@ match args.Head with
     let plan = File.ReadAllBytes(required "--plan") |> parsePartitionPlan obligation |> Result.defaultWith failwith
     let partition = required "--partition" |> int
     resolvePartitionObligation plan partition |> Result.defaultWith failwith |> printfn "%s"
+| "validate-prior" ->
+    let current = File.ReadAllBytes(required "--obligation") |> parseCandidateObligation |> Result.defaultWith failwith
+    let currentPlan = File.ReadAllBytes(required "--current-plan") |> parsePartitionPlan current |> Result.defaultWith failwith
+    let old = File.ReadAllBytes(required "--prior-obligation") |> parseCandidateObligation |> Result.defaultWith failwith
+    let priorPlan = File.ReadAllBytes(required "--prior-plan") |> parsePartitionPlan old |> Result.defaultWith failwith
+    let aggregate = File.ReadAllBytes(required "--aggregate-receipt") |> parseCoherentAggregateReceipt |> Result.defaultWith failwith
+    validatePriorAggregateBinding currentPlan priorPlan aggregate |> Result.defaultWith failwith
 | "classify" ->
     let current = File.ReadAllBytes(required "--obligation") |> parseCandidateObligation |> Result.defaultWith failwith
     let prior =
@@ -54,9 +61,11 @@ match args.Head with
     let semantic = { EvaluatorSha256 = sha256 (File.ReadAllBytes(Path.Combine(__SOURCE_DIRECTORY__, "optimistic-validation.fsx"))); DeltaSha256 = sha256 deltaBytes; IsEmpty = empty }
     option "--aggregate-receipt"
     |> Option.iter (fun path ->
+        let old = prior |> Option.map (fun value -> value.Candidate) |> Option.defaultWith (fun () -> failwith "prior aggregate receipt requires a prior candidate")
+        let currentPlan = File.ReadAllBytes(required "--current-plan") |> parsePartitionPlan current |> Result.defaultWith failwith
+        let priorPlan = File.ReadAllBytes(required "--prior-plan") |> parsePartitionPlan old |> Result.defaultWith failwith
         let aggregate = File.ReadAllBytes path |> parseCoherentAggregateReceipt |> Result.defaultWith failwith
-        if not aggregate.Passed || aggregate.CandidateObligationSha256 <> (prior |> Option.map (fun value -> value.Candidate.ObligationSha256) |> Option.defaultValue "") then
-            failwith "prior aggregate receipt does not bind the prior candidate")
+        validatePriorAggregateBinding currentPlan priorPlan aggregate |> Result.defaultWith failwith)
     let selected = selectReusable DateTimeOffset.UtcNow current prior semantic (option "--binding-correspondence")
     File.WriteAllBytes(required "--output", selectionBytes selected)
 | "aggregate" ->

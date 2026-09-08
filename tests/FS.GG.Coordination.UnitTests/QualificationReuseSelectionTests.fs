@@ -116,6 +116,54 @@ let ``hosted partition obligation resolver follows every canonical plan assignme
     Assert.Equal(Error "partition 0 must have exactly one hosted obligation, found 2", resolvePartitionObligation multiple 0)
 
 [<Fact>]
+let ``pre-fix self-consistent aggregate is rejected while current execution plan is reusable`` () =
+    let obligations = [ "unit"; "architecture"; "formal"; "security"; "package"; "recovery" ]
+    let oldPlan = createPartitionPlan (candidate "a" "6") (digest "7") 6 obligations
+    let currentPlan = createPartitionPlan (candidate "b" "6") (digest "8") 6 obligations
+    let validPriorPlan = createPartitionPlan oldPlan.Candidate (digest "8") 6 obligations
+    let receiptFor plan =
+        plan.Partitions
+        |> List.map (fun (partition, assigned) -> createPartitionReceipt plan partition assigned true)
+        |> createCoherentAggregateReceipt plan
+        |> Result.defaultWith failwith
+    let staleReceipt = receiptFor oldPlan
+    let validReceipt = receiptFor validPriorPlan
+    Assert.Equal(Error "prior coherent execution plan is stale", validatePriorAggregateBinding currentPlan oldPlan staleReceipt)
+    Assert.Equal(Ok(), validatePriorAggregateBinding currentPlan validPriorPlan validReceipt)
+    let repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+    let scratch = Directory.CreateTempSubdirectory("qsel-prior-validation-")
+    let path name = Path.Combine(scratch.FullName, name)
+    File.WriteAllBytes(path "current-obligation.json", candidateObligationBytes currentPlan.Candidate)
+    File.WriteAllBytes(path "current-plan.json", partitionPlanBytes currentPlan)
+    let invoke (priorPlan: PartitionPlan) receipt =
+        File.WriteAllBytes(path "prior-obligation.json", candidateObligationBytes priorPlan.Candidate)
+        File.WriteAllBytes(path "prior-plan.json", partitionPlanBytes priorPlan)
+        File.WriteAllBytes(path "aggregate.json", coherentAggregateReceiptBytes receipt)
+        let startInfo = ProcessStartInfo("dotnet")
+        startInfo.WorkingDirectory <- repositoryRoot
+        startInfo.UseShellExecute <- false
+        startInfo.RedirectStandardOutput <- true
+        startInfo.RedirectStandardError <- true
+        for argument in
+            [ "fsi"; "eng/optimistic-validation.fsx"; "--"; "validate-prior"
+              "--obligation"; path "current-obligation.json"; "--current-plan"; path "current-plan.json"
+              "--prior-obligation"; path "prior-obligation.json"; "--prior-plan"; path "prior-plan.json"
+              "--aggregate-receipt"; path "aggregate.json" ] do
+            startInfo.ArgumentList.Add argument
+        use child = Process.Start startInfo
+        child.StandardOutput.ReadToEnd() |> ignore
+        let error = child.StandardError.ReadToEnd()
+        child.WaitForExit()
+        child.ExitCode, error
+    let staleCode, staleError = invoke oldPlan staleReceipt
+    Assert.NotEqual(0, staleCode)
+    Assert.Contains("prior coherent execution plan is stale", staleError)
+    let validCode, validError = invoke validPriorPlan validReceipt
+    Assert.Equal(0, validCode)
+    Assert.Equal("", validError)
+    scratch.Delete(true)
+
+[<Fact>]
 let ``partition obligation command resolves every generated plan entry and refuses invalid assignments`` () =
     let repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
     let scratch = Directory.CreateTempSubdirectory("qsel-partition-obligation-")
@@ -223,7 +271,7 @@ let ``hosted partition scripts use typed receipts and complete suites`` () =
     let aggregate = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-aggregate.sh"))
     let prepare = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-prepare.sh"))
     Assert.Contains("--bounds \"$(digest_tracked_set eng/quint-qualification.json eng/quint-qualification-baseline.json)\"", prepare)
-    Assert.Contains("--qualification-plan \"$(digest_tracked_set eng/optimistic-qualification-plan.json)\"", prepare)
+    Assert.Contains("--qualification-plan \"$(digest_tracked_set eng/optimistic-qualification-plan.json eng/optimistic-validation.fsx eng/bootstrap-gates/optimistic-run-partition.sh)\"", prepare)
     Assert.DoesNotContain("QualificationReuseSelectionTests.fs eng/bootstrap-gates/canonical-quint.sh", prepare)
     Assert.Contains("FS.GG.Coordination.UnitTests.fsproj -c Release --no-restore --no-build", run)
     Assert.Contains("FS.GG.Coordination.ArchitectureTests.fsproj -c Release --no-restore --no-build", run)
@@ -241,3 +289,10 @@ let ``hosted partition scripts use typed receipts and complete suites`` () =
     Assert.DoesNotContain("jq -e", aggregate)
     let typed = File.ReadAllText(Path.Combine(root, "eng/optimistic-validation.fsx"))
     Assert.Contains("if Directory.Exists receiptRoot then", typed)
+    let classify = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-classify.sh"))
+    Assert.Contains("--current-plan", classify)
+    Assert.Contains("--prior-plan", classify)
+    Assert.Contains("validate-prior", classify)
+    Assert.Contains("stale_diagnostics -lt 3", classify)
+    Assert.Contains("skip_prior \"incompatible or invalid executed receipt", classify)
+    Assert.Contains("validatePriorAggregateBinding currentPlan priorPlan aggregate", typed)
