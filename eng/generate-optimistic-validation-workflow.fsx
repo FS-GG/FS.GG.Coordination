@@ -17,6 +17,6 @@ let checking = fsi.CommandLineArgs |> Array.contains "--check"
 if checking && (not (File.Exists workflow) || File.ReadAllText workflow <> expected) then failwith "optimistic validation workflow projection is stale"
 if not checking then File.WriteAllText(workflow, expected, Text.UTF8Encoding(false))
 let text = File.ReadAllText workflow
-for required in [ "cancel-in-progress: false"; "fail-fast: false"; "max-parallel: 6"; "cron: '17 3 * * *'"; "prepare:"; "run-partition:"; "aggregate:" ] do
+for required in [ "group: optimistic-coherent-${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}"; "cancel-in-progress: false"; "fail-fast: false"; "max-parallel: 6"; "cron: '17 3 * * *'"; "prepare:"; "run-partition:"; "aggregate:" ] do
     if not (text.Contains required) then failwith $"workflow projection missing {required}"
 printfn "optimistic validation projection is current"

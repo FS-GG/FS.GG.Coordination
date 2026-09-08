@@ -126,6 +126,8 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     let workflow = File.ReadAllText(Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml"))
     let template = File.ReadAllText(Path.Combine(root, "eng/optimistic-parallel-validation.yml.template"))
     let recovery = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-recovery.sh"))
+    Assert.Contains("group: optimistic-coherent-${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}", workflow)
+    Assert.DoesNotContain("github.event.pull_request.number", workflow)
     Assert.Contains("cancel-in-progress: false", workflow)
     Assert.Contains("fail-fast: false", workflow)
     Assert.Contains("cron: '17 3 * * *'", workflow)
