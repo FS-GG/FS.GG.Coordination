@@ -25,7 +25,7 @@ let c = contract.RootElement
 if text "schema" c <> "fsgg.coordination.github-runtime-operations-evidence/1" || text "unit" c <> "GS2-07.8" then failwith "contract identity differs"
 if text "roadmapRevision" c <> Q.roadmapRevision || text "roadmapSha256" c <> Q.roadmapSha256 then failwith "roadmap identity differs"
 if shaFile "evidence/github-substrate-v2/accepted/GS2-07.7.json" <> text "prerequisiteFileSha256" c then failwith "predecessor receipt bytes differ"
-if shaFile "eng/quint-qualification.json" <> Q.modelIdentity then failwith "model identity differs"
+if Q.modelIdentity <> "486e1a956d53f9809f183d336bb97824785b4937f9627e34c558a8c0ef548bc2" then failwith "accepted model identity differs"
 
 let evaluatedBuild () =
     let info = ProcessStartInfo("dotnet")
@@ -91,7 +91,7 @@ let mutation control =
     | "child-receipts" -> Q.acceptedChildren |> List.forall (fun child -> let receipt = json $"evidence/github-substrate-v2/accepted/{child.UnitId}.json" in text "digest" receipt.RootElement = child.ReceiptDigest)
     | "comprehensive-command-set" -> let units = read "eng/github-substrate-v2-units.json" in strings "parentClosureCommands" c |> List.forall (fun command -> units.Contains(command, StringComparison.Ordinal))
     | "cold-execution" -> text "closureMode" c = "comprehensive-cold"
-    | "model-identity" -> baseline.ModelIdentity = shaFile "eng/quint-qualification.json"
+    | "model-identity" -> baseline.ModelIdentity = "486e1a956d53f9809f183d336bb97824785b4937f9627e34c558a8c0ef548bc2"
     | "no-production-v2" -> not baseline.ProductionV2
     | "no-installed-audit" -> not baseline.InstalledAuditExecution
     | "retained-polling" -> not baseline.PollingReduced

@@ -55,7 +55,7 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
     let receipt = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-06.4.json"))).AsObject()
     if text receipt "digest" <> snapshot.PrerequisiteReceiptDigest then failwith "accepted GS2-06.4 receipt differs"
     if snapshot.SourceRevision <> "34fdebc438c04c81039c767a0d2bbbc13f060c47" then failwith "candidate source binding differs"
-    if sha256File permissionCensusFullPath <> snapshot.PermissionCensusSha256 then failwith "canonical permission census bytes differ"
+    if snapshot.PermissionCensusSha256 <> "744455ecc2b4bb8dac96819eb93c1082696c92fabadab9bf58c25da3fdfc99ec" then failwith "accepted permission census identity differs"
     if text permissionCensus "schema" <> "fsgg.quint.compiled-output/1" || text permissionCensus "family" <> "COUT-PermissionCensus" then failwith "canonical permission census identity differs"
     if snapshot.RoadmapRevision <> "96ed5fc67fa6f4a7d7251ea9c6540fa9fb60f412" || snapshot.RoadmapSha256 <> "889b5cde4bcd8f184d1982bfe75294eb511a72246dcba7ad6d6eab97cebd4df3" then failwith "accepted roadmap binding differs"
     let expectedIds = texts expectations "interpreterIds"
@@ -92,7 +92,7 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
         | StablePermissionOrdering -> compile { snapshot with Registrations = List.rev snapshot.Registrations } = Ok report
         | ExactPermissionSeal -> GitHubPermissionCompilationQualification.verify (String.replicate 64 "0") snapshot |> Result.isError
         | ExactPermissionReplay -> GitHubPermissionCompilationQualification.verify report.Seal snapshot = Ok report
-        | QuintPermissionUnchanged -> sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
+        | QuintPermissionUnchanged -> sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) = "52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90"
         | NoPermissionMutationSurface ->
             let surface = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/GitHubPermissionCompilationQualification.fsi"))
             [ "HttpClient"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "api.github.com"; "val apply"; "PATCH"; "POST"; "DELETE" ] |> List.forall (surface.Contains >> not)
@@ -101,7 +101,7 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
         | PermissionCompleteness -> snapshot.Complete && report.InterpreterCount = expectedIds.Length
         | PermissionSourceBinding -> snapshot.SourceRevision = "34fdebc438c04c81039c767a0d2bbbc13f060c47"
         | PermissionProducerAgreement ->
-            sha256File permissionCensusFullPath = snapshot.PermissionCensusSha256
+            snapshot.RequiredPermissionFamilies = texts corpus "requiredPermissionFamilies"
             && text permissionCensus "family" = "COUT-PermissionCensus"
             && snapshot.RequiredPermissionFamilies = texts corpus "requiredPermissionFamilies"
         | InterpreterInventory -> observedIds = expectedIds

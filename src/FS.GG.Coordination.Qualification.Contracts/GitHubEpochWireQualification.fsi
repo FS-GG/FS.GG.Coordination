@@ -5,9 +5,9 @@ type EpochPhase =
     | OpenV2 | ObservingV2 | ContractingV1 | OperatingV2 | RollingBack
 
 type WriterClass = NewOrdinaryV1 | IncumbentV1Effect | OrdinaryV2 | CutoverControl | RollbackControl
-type AuthorityRead = Observed | Unreadable | Contradictory | Partial
-type Admission = Authorized | Refused of string list | Indeterminate of string
-type Settlement = KnownApplied | ProvenAbsentMayRetry | EffectPartial | SettlementIndeterminate
+type AuthorityRead = AuthorityObserved | AuthorityUnreadable | AuthorityContradictory | AuthorityPartial
+type Admission = AdmissionAuthorized | AdmissionRefused of string list | AdmissionIndeterminate of string
+type Settlement = SettlementKnownApplied | SettlementProvenAbsentMayRetry | SettlementPartial | SettlementIndeterminate
 
 type EpochAuthority = {
     Schema: string; FleetId: string; Repository: string; RepositoryId: int64; Ref: string

@@ -6,9 +6,9 @@ type EpochPhase =
     | OperatingV1 | Preparing | FreezeRequested | Frozen | SwitchedV2 | VerifiedV2
     | OpenV2 | ObservingV2 | ContractingV1 | OperatingV2 | RollingBack
 type WriterClass = NewOrdinaryV1 | IncumbentV1Effect | OrdinaryV2 | CutoverControl | RollbackControl
-type AuthorityRead = Observed | Unreadable | Contradictory | Partial
-type Admission = Authorized | Refused of string list | Indeterminate of string
-type Settlement = KnownApplied | ProvenAbsentMayRetry | EffectPartial | SettlementIndeterminate
+type AuthorityRead = AuthorityObserved | AuthorityUnreadable | AuthorityContradictory | AuthorityPartial
+type Admission = AdmissionAuthorized | AdmissionRefused of string list | AdmissionIndeterminate of string
+type Settlement = SettlementKnownApplied | SettlementProvenAbsentMayRetry | SettlementPartial | SettlementIndeterminate
 type EpochAuthority = {
     Schema: string; FleetId: string; Repository: string; RepositoryId: int64; Ref: string
     Tag: string; GenesisCommit: string; TrustAnchorSha256: string; ManifestSha256: string
@@ -49,11 +49,11 @@ module GitHubEpochWireQualification =
         | OpenV2 -> "OpenV2" | ObservingV2 -> "ObservingV2" | ContractingV1 -> "ContractingV1"
         | OperatingV2 -> "OperatingV2" | RollingBack -> "RollingBack"
     let legalTransition current proposed = List.contains (current, proposed) requiredTransitions
-    let private digest value = value.Length = 64 && value |> Seq.forall Uri.IsHexDigit
-    let validateAuthority read authority =
-        [ if read = Unreadable then "authority-unreadable"
-          if read = Contradictory then "authority-contradictory"
-          if read = Partial || not authority.Complete then "authority-partial"
+    let private digest (value: string) = value.Length = 64 && value |> Seq.forall Uri.IsHexDigit
+    let validateAuthority (read: AuthorityRead) (authority: EpochAuthority) =
+        [ if read = AuthorityUnreadable then "authority-unreadable"
+          if read = AuthorityContradictory then "authority-contradictory"
+          if read = AuthorityPartial || not authority.Complete then "authority-partial"
           if not authority.Fresh then "authority-stale"
           if authority.CacheUsedAsAuthority then "cache-cannot-authorize"
           if authority.Schema <> schema then "wrong-schema"
@@ -67,7 +67,7 @@ module GitHubEpochWireQualification =
           if not(digest authority.TrustAnchorSha256) then "wrong-trust-anchor"
           if not authority.UnknownFields.IsEmpty then "unknown-fields"
           if not authority.DuplicateFields.IsEmpty then "duplicate-fields" ]
-    let admit read authority fence =
+    let admit (read: AuthorityRead) (authority: EpochAuthority) (fence: EffectFence) =
         let errors = ResizeArray(validateAuthority read authority)
         if authority.ManifestSha256 <> fence.ExpectedManifestSha256 then errors.Add "manifest-mismatch"
         if authority.Commit <> fence.ExpectedEpochCommit || authority.Generation <> fence.ExpectedEpochGeneration then errors.Add "stale-epoch-generation"
@@ -84,20 +84,20 @@ module GitHubEpochWireQualification =
             | RollbackControl, RollingBack -> true
             | _ -> false
         if not phaseAllows then errors.Add "phase-refuses-writer"
-        if errors.Count = 0 then Authorized
-        elif read = Unreadable || read = Partial then Indeterminate(String.concat "," errors)
-        else Refused(List.ofSeq errors)
-    let settleLostResponse fence readback =
-        if readback.Read <> Observed then SettlementIndeterminate
-        elif readback.PartialEffect then EffectPartial
+        if errors.Count = 0 then AdmissionAuthorized
+        elif read = AuthorityUnreadable || read = AuthorityPartial then AdmissionIndeterminate(String.concat "," errors)
+        else AdmissionRefused(List.ofSeq errors)
+    let settleLostResponse (fence: EffectFence) (readback: EffectReadback) =
+        if readback.Read <> AuthorityObserved then SettlementIndeterminate
+        elif readback.PartialEffect then SettlementPartial
         elif readback.OperationId = Some fence.OperationId
              && readback.EpochCommit = Some fence.ExpectedEpochCommit
              && readback.EpochGeneration = Some fence.ExpectedEpochGeneration
-             && readback.EffectDigest |> Option.exists (String.IsNullOrWhiteSpace >> not) then KnownApplied
-        elif readback.OperationId.IsNone && readback.EffectDigest.IsNone then ProvenAbsentMayRetry
+             && readback.EffectDigest |> Option.exists (String.IsNullOrWhiteSpace >> not) then SettlementKnownApplied
+        elif readback.OperationId.IsNone && readback.EffectDigest.IsNone then SettlementProvenAbsentMayRetry
         else SettlementIndeterminate
-    let projectIssue authority =
+    let projectIssue (authority: EpochAuthority) =
         { FleetId = authority.FleetId; ManifestSha256 = authority.ManifestSha256; EpochCommit = authority.Commit
           Generation = authority.Generation; Phase = authority.Phase; SourceRef = authority.Ref; Authoritative = false }
-    let validateProjection authority projection =
+    let validateProjection (authority: EpochAuthority) (projection: IssueProjection) =
         not projection.Authoritative && projection = projectIssue authority

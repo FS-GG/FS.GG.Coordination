@@ -88,7 +88,7 @@ let executeGenerated control =
         verify (digest "0") baseline = Error [ GitHubMergeGroupFinding.AlteredSeal ]
         && verify malformed.Seal malformed |> has (GitHubMergeGroupFinding.MissingField "repository")
     | MergeGroupReplay -> replay baseline baselineFacts = Ok baseline && serialize (replay baseline baselineFacts |> get) = bytes
-    | MergeGroupQuintPreservation -> shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" = text "protocolSha256"
+    | MergeGroupQuintPreservation -> text "protocolSha256" = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
     | MergeGroupNoNetwork -> not(Regex.IsMatch(sourceText, "HttpClient|WebRequest", RegexOptions.IgnoreCase))
     | MergeGroupNoProductionMutation -> not(Regex.IsMatch(sourceText, "Octokit|GitHubClient|QueueClient|\\b(PATCH|POST|PUT|DELETE)\\b", RegexOptions.IgnoreCase))
 

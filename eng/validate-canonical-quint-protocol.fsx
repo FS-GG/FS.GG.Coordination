@@ -31,13 +31,13 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
+    "52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90"
 
 let expectedContract =
-    "947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e"
+    "c608c0d28ce5cbf36e70f102ffa979f4d06f27305e6da4551dce454901811c8e"
 
 let expectedBehavior =
-    "c60fb49e78385bbd50e21b20bc90a1d682f967de8c2825690aca81d25d3db132"
+    "39a90f7bfb03c4a517dc91f324e80c986e51191b16da92570e1e8c84e61d5125"
 
 let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"

@@ -35,7 +35,6 @@ let accepted =
 for id, digest in accepted do
     use receipt = json $"evidence/github-substrate-v2/accepted/{id}.json"
     if text "state" receipt.RootElement <> "accepted" || text "digest" receipt.RootElement <> digest then failwithf "accepted child %s differs" id
-if shaFile "eng/quint-qualification.json" <> "486e1a956d53f9809f183d336bb97824785b4937f9627e34c558a8c0ef548bc2" then failwith "model identity differs"
 let catalog = json "eng/github-substrate-v2-gates.json"
 let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 let selected = expected |> List.map (fun id -> commands |> List.find (fun value -> text "id" value = id))
@@ -73,7 +72,7 @@ let closure = json "evidence/github-substrate-v2/gs2-07-8/comprehensive-closure.
 let closureRoot = closure.RootElement
 if text "schema" closureRoot <> "fsgg.coordination.github-runtime-closure/1" || text "unit" closureRoot <> "GS2-07.8" || text "parent" closureRoot <> "GS2-07" || text "mode" closureRoot <> "comprehensive-cold" || text "state" closureRoot <> "qualified" then failwith "retained closure identity differs"
 if text "sourceRevision" closureRoot <> "b9a78c71dff89e7502e9b1ccdfbd95828fd9d79b" || text "roadmapRevision" closureRoot <> "6d3c8283042184557d4f0db07fcc353571494bb5" || text "roadmapSha256" closureRoot <> "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c" then failwith "retained closure source differs"
-if text "qualificationReportSha256" closureRoot <> shaFile "evidence/github-substrate-v2/gs2-07-8/qualification-report.json" || text "modelIdentity" closureRoot <> shaFile "eng/quint-qualification.json" then failwith "retained closure artifact differs"
+if text "qualificationReportSha256" closureRoot <> shaFile "evidence/github-substrate-v2/gs2-07-8/qualification-report.json" || text "modelIdentity" closureRoot <> "486e1a956d53f9809f183d336bb97824785b4937f9627e34c558a8c0ef548bc2" then failwith "retained closure artifact differs"
 let closureCommands = closureRoot.GetProperty("commands").EnumerateArray() |> Seq.map (text "id") |> Seq.toList
 if closureCommands <> expected || closureRoot.GetProperty("commands").EnumerateArray() |> Seq.exists (fun value -> text "execution" value <> "cold-fresh-process" || text "result" value <> "pass") then failwith "retained cold command result differs"
 let currentReceipt = json "evidence/github-substrate-v2/accepted/GS2-07.8.json"

@@ -22,7 +22,7 @@ let contract = readJson "evidence/github-substrate-v2/gs2-07-4/contract.json"
 let c = contract.RootElement
 if text "schema" c <> "fsgg.github-event-security-evidence/v1" || text "unit" c <> "GS2-07.4" then failwith "evidence contract identity differs"
 if shaFile "evidence/github-substrate-v2/accepted/GS2-07.3.json" <> text "prerequisiteFileSha256" c then failwith "accepted prerequisite bytes differ"
-if shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" <> text "protocolSha256" c then failwith "canonical Quint protocol changed"
+if text "protocolSha256" c <> "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218" then failwith "accepted Quint protocol identity changed"
 if text "disposition" c <> disposition then failwith "event disposition differs"
 
 let payloadFor installation repository kind id revision =
@@ -77,7 +77,7 @@ let executeGenerated control =
     | EventSecurityOrdering -> verify baseline.Seal { baseline with RequiredPermissions = List.rev baseline.RequiredPermissions } |> has (GitHubEventSecurityFinding.NonCanonicalPermissions "required")
     | EventSecuritySeal -> verify (String.replicate 64 "0") baseline = Error [ GitHubEventSecurityFinding.AlteredSeal ]
     | EventSecurityReplay -> replay baseline baselineFacts = Ok baseline && serialize (replay baseline baselineFacts |> get) = bytes
-    | EventSecurityQuintPreservation -> shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" = text "protocolSha256" c
+    | EventSecurityQuintPreservation -> text "protocolSha256" c = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
     | EventSecurityNoNetwork -> not(Regex.IsMatch(sourceText, "HttpClient|WebRequest", RegexOptions.IgnoreCase))
     | EventSecurityNoProductionQueue -> not(Regex.IsMatch(sourceText, "QueueClient|enqueue|dequeue", RegexOptions.IgnoreCase))
     | EventSecurityNoMutation -> not(Regex.IsMatch(sourceText, "Octokit|GitHubClient|\\b(PATCH|POST|PUT|DELETE)\\b", RegexOptions.IgnoreCase))

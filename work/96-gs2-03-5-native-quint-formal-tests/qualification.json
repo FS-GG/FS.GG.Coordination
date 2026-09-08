@@ -4,9 +4,9 @@
   "q2Outcome": "passed",
   "positiveInvariantCount": 8,
   "negativeControlCount": 126,
-  "preparationDurationMs": 42698,
-  "q2DurationMs": 550886,
-  "totalDurationMs": 593584,
+  "preparationDurationMs": 41131,
+  "q2DurationMs": 464244,
+  "totalDurationMs": 505375,
   "processCounts": {
     "external": 186,
     "quintCli": 161,
@@ -15,68 +15,68 @@
   "formalCounterexamples": [
     {
       "id": "authority-reconciliation",
-      "manifestSha256": "a758c551da9d6fffb92213aed03ab4f4d4642fe287a6c1b463bf3e819772f68b",
+      "manifestSha256": "6cd152b482ed97112ff8d44f60605406855bf315ac37fa5f6b1ff62c980fd4b4",
       "traceSha256": "67cf2a7322e4f8fc8038cf38cbdc816a0de188b45897f329b2f7751c0a8cb002",
       "itfSha256": "56296f1f3f2792660dcafdca73cdeb1f407b9d94345b906c43bc98945e692165"
     },
     {
       "id": "claim-election",
-      "manifestSha256": "d07b9f6079f481e8c1a6a3c5bb3d93d0008639d4d7d4a7ac5d72d37afc392b65",
-      "traceSha256": "d62c25b8ed27c79f614e3d25578c09d6488e0b9364a05f9dbac6d35411a00b4c",
+      "manifestSha256": "4669db05605e4807fc81f194323dffe593a270c3dea72c86a0c2c0838780df0c",
+      "traceSha256": "baa0aebe5a82bdb2dccf8b45b36999eed7f52279f27b520457a38387a781f014",
       "itfSha256": "020e920225ce3c124478d392fd1445c193d09a1b85bb54cca627adad24a4a45f"
     },
     {
       "id": "cutover-observation",
-      "manifestSha256": "127bb95debefbc335382788d39c8142e3753164a201dcd1f8b1c0c649b5d5ef4",
+      "manifestSha256": "dddaa1440d6a4054692a8ba8d2a4eed25a4248719762bd84425e59739edd60a4",
       "traceSha256": "12843c5446978de59fab0fb99688ebe21aa89e516e5c80a83cba60071c0aea75",
       "itfSha256": "ff805e666ba920f9b493462b4196b3b2e9019c2373be70e9eb22edd3dcb0f489"
     },
     {
       "id": "epoch",
-      "manifestSha256": "3dcee045ee3cd17d3cff3e3a66021665ae28acf4f6c5bb3cd93ac13c994b6676",
-      "traceSha256": "f434a7eeac7cede7f430091d18f310bf9026a462ac70ecb421412c791785b188",
+      "manifestSha256": "6c7a1dc533a5f9fe962c8111f4aed080c8019e0946be89c21bda7ededd8f8655",
+      "traceSha256": "b2ac74f011470c7df9dcbf99c7edab02728772baf1449061465b6e9e01fb643e",
       "itfSha256": "684c51f550cd6c649fca80046977094f9381f4df368a3add08a456f4a7377667"
     },
     {
       "id": "journal-fencing",
-      "manifestSha256": "7e3a690a0a6e633b6035c9af42882b6c6b4bb2e63a1f056665ab20e8608b123e",
+      "manifestSha256": "489751ee0b049d60af766654e4e5b86954eaf437fff608e34b914b05847a584f",
       "traceSha256": "54c2e028fb40a5b1ed7fa5236f3aec6cd26bba2ffa8d9aa06ee415e136b3d3c3",
       "itfSha256": "bfdcb10aa006bc958520e3fc7698839222192fa34d0b53a535103a45f438238a"
     },
     {
       "id": "journal-reconciliation",
-      "manifestSha256": "01ee1d7416e60cb71f67c078a6f0e86e24d207deaa6409d635ca3002fe933a7e",
+      "manifestSha256": "d0473f382c90d99830a543a4c84743847efcfc4dffc92221790e61344082f80e",
       "traceSha256": "1146c94ab159929a8d3f8467a013af02a28a3ac7e8269c08c7adbd98180fdabe",
       "itfSha256": "bce27cd16c1b0e2fa63e639cfe5e18168a703b364e289a58ef8d2084b67692b4"
     },
     {
       "id": "lifecycle",
-      "manifestSha256": "810cf7732221db1edcf4a354e2af7638b4ce13c036e4ae34912bc1fc97c0344c",
-      "traceSha256": "2da6bbc6774af8eaeae167e7ca801dab4d235a4cc3686028111bb68f3cf3dea3",
+      "manifestSha256": "37389af994e8bfa9fe29ca078b9c20beefe004c69d7cf6964c30693bba789f06",
+      "traceSha256": "9e0905085d26cb8dedbb8840984fff569fd676fc752ab4357661f4fc15011dd4",
       "itfSha256": "74e6f1b54aec3e1ee11633797c8d93a9fb2d5e16f19ed226b72b48be93604d60"
     },
     {
       "id": "operation-saga",
-      "manifestSha256": "6a7aa2f19f357e7fe9cfb8ff70cdde5cbe0978ea1d2cb6f2e98dda33198e58bd",
-      "traceSha256": "49d52d022719798b4917f92e4dfb7deb1703a89c14ca5a86aff48d559d0b2c18",
+      "manifestSha256": "defff60955b31a2cb2bb2acc926dc3cd234cfb99d6e6719e9e61118150e41cac",
+      "traceSha256": "d17bfa8383b3eab99dfb8ff97c8e8ac3543d341fe48943b827db16cca9850d60",
       "itfSha256": "514365d16b441e2be7d6b45248cb2cd11d05533a10e3120767c35c98798a6a9d"
     },
     {
       "id": "relation-mutation",
-      "manifestSha256": "ceb7342fcd47c27dc1d795ae526f069717cb49215dadcb686f3ab25f54659911",
-      "traceSha256": "cc5fe49236fd61307f0f4d6ac5cc020d697d2ed2b26ef87724d043650b90ac5d",
+      "manifestSha256": "30e9ba5480bfb2fc40370587bac0a7ff6986c614f46d580936ad57789ae7c0f3",
+      "traceSha256": "5d75d07c8d3066353fd68a8ead44529abfea3bc1708fc380dd5f5aaa77c9b40a",
       "itfSha256": "bcae8d4b2aa84a8e898ac8bef7734789fa6f6fb0bc0ce5ec76ca5290aaf2bf8a"
     },
     {
       "id": "review-epoch",
-      "manifestSha256": "22cb5259b0253a90457d3895d25ea4e84a2075c5550419061b51468b81c5fd54",
+      "manifestSha256": "c818eefbba7b334d4b959aeb8651f74df57daa70e25d34e77e793c7abeeafeb0",
       "traceSha256": "7778b1e5ebc44f801f2350630760cfe42b3a8956fc0933b5d8e5a3226235e8cb",
       "itfSha256": "39d1ae3d500011dd19a55741df6a938c7cd5b13523834f9ecb17a9d8c6c45fa0"
     },
     {
       "id": "rollback",
-      "manifestSha256": "a4b6d6649f8137ae2ed32ff81a45c22f9df912c9128a61f3e90bddb83b5e7cc7",
-      "traceSha256": "8c7084ce266ab3838ec972ca3ad89e5de34e4280814a095179e5293c2518a75d",
+      "manifestSha256": "6cde50488ff4dded3ab754c847fc7991a1cc474edb353743416df6ab51d277f4",
+      "traceSha256": "91384e4477fef1166e303a76a170b0f73e55577da1a69c394a6b1fd14f565fcd",
       "itfSha256": "50e81fe45e26710ae889b0d58413a88cdd97a4d8042da0d2e1341b10d4356436"
     }
   ],
@@ -86,10 +86,10 @@
     "apalacheJarSha256": "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
   },
   "inputs": {
-    "sourceSha256": "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218",
-    "contractSha256": "947262bc9f70c371d79a917804d2ed4adcabbb1cc2ff683eedc637e36e6b163e"
+    "sourceSha256": "52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90",
+    "contractSha256": "c608c0d28ce5cbf36e70f102ffa979f4d06f27305e6da4551dce454901811c8e"
   },
-  "preparationSha256": "f6cb043ac66c9857243c501bf93cd97f1f050ec9207741801dcc8a8a9726f119",
+  "preparationSha256": "3e0a7a9c367afb0aaacf3b3bb8b8c47f547695e1e46bb3bdd416d393e82ef41e",
   "failure": null,
-  "resultSha256": "d68b2c8a25bff5174cab55cb5292d382a1f577cdf807739ba759705c42fbd33b"
+  "resultSha256": "ebcb9355f324a30862bd194cd3ecc8ba2e058d4e9a2c4d4fb648157e78bb9eae"
 }
