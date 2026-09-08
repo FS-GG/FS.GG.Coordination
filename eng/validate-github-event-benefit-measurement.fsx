@@ -164,7 +164,27 @@ let independentMutation control =
     | "exact-head-hosted-evidence" -> compile { facts with HostedClaim = Some(hostedIdentity facts.CandidateHead "2026-09-08T01:00:01Z" facts.WindowEnd) } |> has EventBenefitFinding.HostedEvidenceIncomplete
     | "no-write-permission" -> Regex.Matches(sourceText, "HttpClient|Octokit|GitHubClient|\\b(PATCH|POST|PUT|DELETE)\\b", RegexOptions.IgnoreCase).Count = 0
     | "no-production-mutation" -> not(cliText.Contains("event-benefit", StringComparison.OrdinalIgnoreCase)) && noMutation sourceText
-    | "no-acceptance-claim" -> not(File.Exists(path "evidence/github-substrate-v2/accepted/GS2-07.7.json")) && text "acceptanceReceiptPhase" c = "post-protected-merge"
+    | "no-acceptance-claim" ->
+        let relative = "evidence/github-substrate-v2/accepted/GS2-07.7.json"
+        if not(File.Exists(path relative)) then
+            text "acceptanceReceiptPhase" c = "post-protected-merge"
+        else
+            use receipt = json relative
+            let value = receipt.RootElement
+            let artifacts = value.GetProperty("artifacts").EnumerateArray() |> Seq.toList
+            let artifact name sha =
+                artifacts
+                |> List.exists (fun item -> text "name" item = name && text "sha256" item = sha)
+            text "acceptanceReceiptPhase" c = "post-protected-merge"
+            && shaFile relative = "aca767f445f0feb5db6d9034d5c3e40f60924727f2c340fff771f3dafe12e646"
+            && text "schema" value = "fsgg.coordination.unit-acceptance/1"
+            && text "unitId" value = "GS2-07.7"
+            && text "state" value = "accepted"
+            && text "unitContractSha256" value = "9a95bfaea95586912a8906ccd2aaa11f83f0a118839d8fc251333f17d950ecb5"
+            && text "sourceRevision" value = "32985e9b62a287cb8854dad8da5d1f8561b3a5ee"
+            && artifact "implementation-merge-a304c739ef3256e4a798ff193afa455885cb20f9" "50da0d0fd7fa3030ae31b8fe21d0b49f69c03306203bb6e30b0ac59f42cd824b"
+            && artifact "protected-main-bootstrap-run-34186030882" "5f2d325d93b0334ea7595c6472b18b405b23c48910c6e4d19c54f661363f90be"
+            && artifact "protected-main-codeql-run-34186030416" "32d3a00c177b89b62adcadb819c7c9d02c3ccb84c18e3241585b1d2796d2abb0"
     | "no-successor-authority" ->
         let index = json "eng/github-substrate-v2-units.json"
         let ids = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.map (fun value -> text "id" value) |> Seq.toList
