@@ -1,0 +1,13 @@
+{
+  "schema": "fsgg.telemetry.runtime-receiver/1",
+  "enginePackage": "FS.GG.Coord.Cli",
+  "engineVersion": "0.87.0",
+  "entrypoint": "eng/codex-exec.sh",
+  "runtime": "codex-exec",
+  "scope": "prospective-repository-owned",
+  "storeEnvironment": "FSGG_TELEMETRY_STORE",
+  "observerAuthority": "advisory",
+  "historicalSessionDiscovery": false,
+  "hostedDaemon": false,
+  "platformNativeSpawnSupported": false
+}
