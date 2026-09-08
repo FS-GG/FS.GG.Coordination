@@ -252,6 +252,18 @@
       "qGate": "Q4",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-queue-routine-burst.fsx", "--", "."]
+    },
+    {
+      "id": "github-event-benefit-measurement-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-event-benefit-measurement.fsx", "--", "."]
+    },
+    {
+      "id": "github-event-benefit-provider-observation-contract",
+      "qGate": "Q4",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-event-benefit-provider-observation.fsx", "--", "."]
     }
   ]
 }

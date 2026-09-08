@@ -1,0 +1,176 @@
+schemaVersion: 1
+work:
+  id: 326-gs2-07-7-registration
+  title: "Gs2 07 7 Registration"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/326-gs2-07-7-registration/spec.md
+  sourceClarifications: work/326-gs2-07-7-registration/clarifications.md
+  sourceChecklist: work/326-gs2-07-7-registration/checklist.md
+  sourcePlan: work/326-gs2-07-7-registration/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/326-gs2-07-7-registration/spec.md
+    digest: 87a95c4dbbae7a42778bf02ac161be68e1528b61416eb88b5f0834279ec70755
+    schemaVersion: 1
+  - label: clarifications
+    path: work/326-gs2-07-7-registration/clarifications.md
+    digest: 6ebd509f03e495bbf042dd44d2f78bce82f8891320fc71f51046a1de9f07e790
+    schemaVersion: 1
+  - label: checklist
+    path: work/326-gs2-07-7-registration/checklist.md
+    digest: e124987d0087047b35cdc110137b92b5f9607eff3b11306b4664d8e14f246811
+    schemaVersion: 1
+  - label: plan
+    path: work/326-gs2-07-7-registration/plan.md
+    digest: 50db864f394938197ebc39e822995ccae3d034282cc18a5deb92ab086e199004
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: swift-2412
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement clarification decision DEC-001
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement clarification decision DEC-002
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement clarification decision DEC-003
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-003]
+    sourceIds: [DEC-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement clarification decision DEC-004
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-004]
+    sourceIds: [DEC-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement clarification decision DEC-005
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-005]
+    sourceIds: [DEC-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement plan decision PD-001
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-001, DEC-004, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement plan decision PD-002
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [DEC-002, DEC-003, FR-001, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Implement plan decision PD-003
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-003, DEC-004, FR-001, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Implement plan decision PD-004
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [DEC-005, FR-001, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Update contract surface PC-001
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Record verification evidence VO-001
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-002, PD-003, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Handle migration posture PM-001
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV013]
+  - id: T014
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: swift-2412
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV014]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 326-gs2-07-7-registration."

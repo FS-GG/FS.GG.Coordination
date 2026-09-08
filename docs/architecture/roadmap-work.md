@@ -10,7 +10,7 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-07.5 units, and the active GS2-07.6
+the subsequently accepted GS2-02 through GS2-07.6 units, and the active GS2-07.7
 frontier with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
@@ -360,6 +360,39 @@ an ordinary production writer, settings profile, release, or package, and it
 must retain hosted artifacts at each exact exercised revision. This registration
 does not execute a validator or pilot, change visibility/settings/queue state,
 create an acceptance receipt, or inspect or authorize GS2-07.7.
+
+GS2-07.7 is registered against `.github` roadmap commit
+`7216ec4aae14b17f151a1ed3616eb8a2f4ed2d47` and exact roadmap SHA-256
+`0498209c27cdf75d3c1067dad2c3b88084b03c20f1bd87dcb99192aa43457c36`.
+Its sole prerequisite is the accepted GS2-07.6 receipt with digest
+`eaf032038cc3ed1fb3f1a21db81a32f7af7969f84a0d9b77cd1d7eea68346bc6`.
+The Q3 `github-event-benefit-measurement-contract` identity reserves bounded
+pure measurement and replay. The Q4
+`github-event-benefit-provider-observation-contract` identity reserves bounded
+read-only observation of real provider facts. Neither command exists or runs in
+this registration.
+
+The later contracts compare narrow reconciliation, same-subject hint coalescing,
+scheduled complete-audit repair, and subject isolation over a finite declared
+population and window. They record latency, API cost, schedule count,
+dropped-event repair, false and unknown outcomes, population, provenance,
+coverage, and limits from retained inputs rather than caller-supplied success
+booleans. Every input remains classified as current provider observation,
+historical provider evidence, executable replay, or injected negative control;
+complete pages and run attempts, actual timestamps, call attempts, and rate
+outcomes are retained, while unavailable facts remain unknown. Hosted claims
+require retained typed exact-head artifacts. Replay and sandbox benefit never
+become installed or production benefit.
+
+Scheduled complete audits remain authoritative and polling is retained by
+default. The registered ceiling permits repository-local implementation and
+bounded read-only observation only. It grants no production write, polling,
+visibility or settings change, deployment, secret access or change,
+publication, acceptance receipt, measurement claim, or GS2-07.8 authority.
+Architecture controls independently refuse changed prerequisite, roadmap, or
+command digests, missing metric provenance, and added write permission. The
+feature subroadmap is an execution outline; the pinned roadmap, this unit index,
+and accepted receipt remain the sole completion authority.
 
 ## Command sequence
 
