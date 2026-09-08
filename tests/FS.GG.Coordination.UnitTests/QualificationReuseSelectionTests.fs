@@ -108,7 +108,7 @@ let ``squash tree identity is explicit while equal behavior can still reuse`` ()
     let old = candidate "a" "6"
     let changedTree = createCandidateObligation (head "b") (head "0") (digest "9") (digest "8") (identity "6")
     let selected = selectReusable now changedTree (Some(prior old)) (delta true) None
-    Assert.NotEqual(old.ObligationSha256, changedTree.ObligationSha256)
+    Assert.NotEqual<string>(old.ObligationSha256, changedTree.ObligationSha256)
     Assert.Equal(Reused, selected.Disposition)
 
 [<Fact>]
