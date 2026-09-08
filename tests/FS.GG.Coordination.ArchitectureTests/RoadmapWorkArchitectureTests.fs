@@ -13,7 +13,7 @@ open Xunit
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
-let private roadmapRevision = "71c7ae798db7fc33cd186ae4d97ae103f24d99d7"
+let private roadmapRevision = "7eeb0303a21947a36baa01a6a467a3ddf8b64306"
 let private roadmapSha256 = "20450bccb71d8656330960cfade25150d370255ac58094523492c98f049e58c1"
 
 let private runAt workingDirectory executable arguments =
@@ -2268,7 +2268,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(48, commands.Length)
+    Assert.Equal(49, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
