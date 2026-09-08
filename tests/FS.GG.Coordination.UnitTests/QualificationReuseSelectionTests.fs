@@ -167,3 +167,5 @@ let ``hosted partition scripts use typed receipts and complete suites`` () =
     Assert.Contains("eng/optimistic-validation.fsx -- run-partition", run)
     Assert.Contains("eng/optimistic-validation.fsx -- aggregate", aggregate)
     Assert.DoesNotContain("jq -e", aggregate)
+    let typed = File.ReadAllText(Path.Combine(root, "eng/optimistic-validation.fsx"))
+    Assert.Contains("if Directory.Exists receiptRoot then", typed)

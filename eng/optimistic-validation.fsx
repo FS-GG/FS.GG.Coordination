@@ -57,7 +57,13 @@ match args.Head with
 | "aggregate" ->
     let obligation = File.ReadAllBytes(required "--obligation") |> parseCandidateObligation |> Result.defaultWith failwith
     let plan = File.ReadAllBytes(required "--plan") |> parsePartitionPlan obligation |> Result.defaultWith failwith
-    let receipts = Directory.GetFiles(required "--receipts", "receipt.json", SearchOption.AllDirectories) |> Array.map (File.ReadAllBytes >> parsePartitionReceipt >> Result.defaultWith failwith) |> Array.toList
+    let receiptRoot = required "--receipts"
+    let receipts =
+        if Directory.Exists receiptRoot then
+            Directory.GetFiles(receiptRoot, "receipt.json", SearchOption.AllDirectories)
+            |> Array.map (File.ReadAllBytes >> parsePartitionReceipt >> Result.defaultWith failwith)
+            |> Array.toList
+        else []
     match createCoherentAggregateReceipt plan receipts with
     | Ok receipt when receipt.Passed ->
         option "--output" |> Option.iter (fun path -> File.WriteAllBytes(path, coherentAggregateReceiptBytes receipt))
