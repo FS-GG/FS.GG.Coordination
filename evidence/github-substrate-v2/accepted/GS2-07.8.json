@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-07.8",
+  "state": "accepted",
+  "unitContractSha256": "34e0a41c1a379916d87af62dc19f51cba89ebcfb123461543b5974e65b907286",
+  "sourceRevision": "1ae51fdfd696a74f737b96048379a0b7eb64f7cd",
+  "artifacts": [
+    { "name": "accepted-GS2-07.7-receipt", "sha256": "2cd764adfab89480a1272c329a2ed06101766ee92a6be98f76498c5380440e87" },
+    { "name": "runtime-operations-contract", "sha256": "db57a8b87edbcce5da79578e3e87eb80e394a514747d6effafe9e30267fb5a7a" },
+    { "name": "qualification-report", "sha256": "24059ada36dfc95df0deac03e0bbd4a649085238df74461a5490dcf0cddf6dc8" },
+    { "name": "comprehensive-cold-closure", "sha256": "adbbd1519d39014ad1f0dc644a3a27b0ba595e5783eef116a1c62f713f86e82b" },
+    { "name": "generated-controls", "sha256": "d083dd992c20c0865790b2cafaddd94fe535fa2d988973e1b5d07a4e00b60c79" },
+    { "name": "independent-controls", "sha256": "df22c80b3473f0b91fa4a5ac1c30d523da4c8bb57a5cc6880f17bb631c469586" },
+    { "name": "roadmap-contract", "sha256": "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c" },
+    { "name": "formal-model-identity", "sha256": "486e1a956d53f9809f183d336bb97824785b4937f9627e34c558a8c0ef548bc2" }
+  ],
+  "acceptedAt": "2026-09-08T08:41:14Z",
+  "digest": "daf215f425227509b99df5068cbffe352bda4da61fb278efbcf2d9a6ae8f5679"
+}

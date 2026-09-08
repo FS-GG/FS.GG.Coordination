@@ -76,4 +76,18 @@ if text "sourceRevision" closureRoot <> "b9a78c71dff89e7502e9b1ccdfbd95828fd9d79
 if text "qualificationReportSha256" closureRoot <> shaFile "evidence/github-substrate-v2/gs2-07-8/qualification-report.json" || text "modelIdentity" closureRoot <> shaFile "eng/quint-qualification.json" then failwith "retained closure artifact differs"
 let closureCommands = closureRoot.GetProperty("commands").EnumerateArray() |> Seq.map (text "id") |> Seq.toList
 if closureCommands <> expected || closureRoot.GetProperty("commands").EnumerateArray() |> Seq.exists (fun value -> text "execution" value <> "cold-fresh-process" || text "result" value <> "pass") then failwith "retained cold command result differs"
+let currentReceipt = json "evidence/github-substrate-v2/accepted/GS2-07.8.json"
+let currentReceiptRoot = currentReceipt.RootElement
+let currentArtifacts = currentReceiptRoot.GetProperty("artifacts").EnumerateArray() |> Seq.toList
+let hasArtifact name digest =
+    currentArtifacts |> List.exists (fun artifact -> text "name" artifact = name && text "sha256" artifact = digest)
+if text "schema" currentReceiptRoot <> "fsgg.coordination.unit-acceptance/1"
+   || text "unitId" currentReceiptRoot <> "GS2-07.8"
+   || text "state" currentReceiptRoot <> "accepted"
+   || text "unitContractSha256" currentReceiptRoot <> "34e0a41c1a379916d87af62dc19f51cba89ebcfb123461543b5974e65b907286"
+   || text "sourceRevision" currentReceiptRoot <> "1ae51fdfd696a74f737b96048379a0b7eb64f7cd"
+   || text "digest" currentReceiptRoot <> "daf215f425227509b99df5068cbffe352bda4da61fb278efbcf2d9a6ae8f5679"
+   || not(hasArtifact "qualification-report" (shaFile "evidence/github-substrate-v2/gs2-07-8/qualification-report.json"))
+   || not(hasArtifact "comprehensive-cold-closure" (shaFile "evidence/github-substrate-v2/gs2-07-8/comprehensive-closure.json")) then
+    failwith "accepted GS2-07.8 result differs"
 printfn "GITHUB_RUNTIME_RECOVERY_OK children=%d commands=%d cold=%b model=%s" accepted.Length selected.Length (not skipCold) (shaFile "eng/quint-qualification.json")

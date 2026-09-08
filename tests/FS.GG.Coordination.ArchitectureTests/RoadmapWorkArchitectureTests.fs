@@ -904,6 +904,18 @@ let ``GS2-07-8 stale roadmap substituted command and omitted child refuse`` () =
     Assert.False(gs2078GateCatalogAgrees omitted catalogText)
 
 [<Fact>]
+let ``GS2-07-8 accepted result binds qualified source and comprehensive closure`` () =
+    use receipt = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-07.8.json")))
+    let value = receipt.RootElement
+    Assert.Equal("accepted", value.GetProperty("state").GetString())
+    Assert.Equal("34e0a41c1a379916d87af62dc19f51cba89ebcfb123461543b5974e65b907286", value.GetProperty("unitContractSha256").GetString())
+    Assert.Equal("1ae51fdfd696a74f737b96048379a0b7eb64f7cd", value.GetProperty("sourceRevision").GetString())
+    Assert.Equal("daf215f425227509b99df5068cbffe352bda4da61fb278efbcf2d9a6ae8f5679", value.GetProperty("digest").GetString())
+    let artifacts = value.GetProperty("artifacts").EnumerateArray() |> Seq.toList
+    Assert.Contains(artifacts, fun artifact -> artifact.GetProperty("name").GetString() = "qualification-report" && artifact.GetProperty("sha256").GetString() = "24059ada36dfc95df0deac03e0bbd4a649085238df74461a5490dcf0cddf6dc8")
+    Assert.Contains(artifacts, fun artifact -> artifact.GetProperty("name").GetString() = "comprehensive-cold-closure" && artifact.GetProperty("sha256").GetString() = "adbbd1519d39014ad1f0dc644a3a27b0ba595e5783eef116a1c62f713f86e82b")
+
+[<Fact>]
 let ``roadmap unit index advances through GS2-07-7 event benefit`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
