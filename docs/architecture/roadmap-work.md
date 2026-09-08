@@ -10,8 +10,8 @@ the Coordination Project remains a visibility projection.
 `eng/github-substrate-v2-units.json` uses
 `fsgg.coordination.roadmap-index/1`. It pins the roadmap repository, exact commit,
 path, and SHA-256, then registers the accepted GS2-01 units, accepted GS2-02.1–02.9,
-the subsequently accepted GS2-02 through GS2-07.6 units, and the active GS2-07.7
-frontier with stable IDs, owner,
+the subsequently accepted GS2-02 through GS2-07.7 units, without registering GS2-07.8,
+with stable IDs, owner,
 prerequisites, permission ceiling, exit gate, Q-gate evidence lanes, closed
 command IDs, independently pinned command identities, and a canonical unit-contract SHA-256. Any roadmap byte change requires a reviewed pin update. The command
 also proves that every registered ID and title still has its exact roadmap heading.
@@ -410,9 +410,15 @@ claims work, writes GitHub settings, deploys, subscribes to events, or selects a
 successor. After gate results report the selected unit boundary, the invocation
 stops. A successor needs a new authority decision and invocation.
 
-The skill selects delivery separately from qualification. Source work explicitly admitted by the shared
-routine policy uses one accountable owner and one exact-head PR, without a second SDD, critique, receipt,
-or projection cycle. The immutable unit, prerequisite, manifest, and gate bindings remain. Migration,
-cutover, settings, credentials, deployment, publication, destructive effects, and external-contract
-acceptance remain on the strict path. Post-merge telemetry and receiver-adoption observation are
-asynchronous unless the selected unit's exact acceptance contract makes them synchronous evidence.
+The skill selects delivery separately from qualification. Under `.github` roadmap revision
+`68ae405e413aa40e6e44ade0c0e1db8fbfd74603`, routine is the default process for every registered GS2 unit.
+Only a recorded explicit human instruction selects heavyweight ceremony for named scope; absence or ambiguity
+selects routine. GS2 registration, protected paths, policy or modeled changes, protected operations and
+inherited strict state do not select heavyweight process. One accountable owner uses one routine branch and
+exact-head PR without a second issue/claim, SDD, critique, receipt, metadata-Done or projection cycle.
+
+The immutable unit, prerequisite, manifest, command/catalog, model and gate bindings remain. Migration,
+cutover, settings, credentials, deployment, publication, destructive effects and external acceptance retain
+their exact technical and permission safeguards. Missing or invalid authority blocks its affected effect,
+not source delivery. Post-merge telemetry and receiver-adoption observation are asynchronous unless the
+selected unit's exact external acceptance contract makes a fact substantive evidence for that effect.
