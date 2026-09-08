@@ -916,6 +916,48 @@ let ``GS2-07-8 accepted result binds qualified source and comprehensive closure`
     Assert.Contains(artifacts, fun artifact -> artifact.GetProperty("name").GetString() = "comprehensive-cold-closure" && artifact.GetProperty("sha256").GetString() = "adbbd1519d39014ad1f0dc644a3a27b0ba595e5783eef116a1c62f713f86e82b")
 
 [<Fact>]
+let ``GS2-08-1 acceptance binds repaired correspondence and protected delivery`` () =
+    use receipt = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.1.json")))
+    let value = receipt.RootElement
+    Assert.Equal("accepted", value.GetProperty("state").GetString())
+    Assert.Equal("135e1434490d9c358e32b957a2d68959fa12e703a73e27002c04b4ec0dba345d", value.GetProperty("unitContractSha256").GetString())
+    Assert.Equal("122ba68ed32cb63dad67beab78a00778ca39c41b", value.GetProperty("sourceRevision").GetString())
+    Assert.Equal("49c70359ebfbc00331ba90c7c5b100a292efa4cc95a5dfa8007867ceceec5c31", value.GetProperty("digest").GetString())
+
+    let artifacts =
+        value.GetProperty("artifacts").EnumerateArray()
+        |> Seq.map (fun artifact -> artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString())
+        |> Map.ofSeq
+
+    let expected =
+        [ "accepted-GS2-07.8-receipt", "daf215f425227509b99df5068cbffe352bda4da61fb278efbcf2d9a6ae8f5679"
+          "epoch-wire-protocol", "3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb"
+          "epoch-wire-contract", "3ec6ddcb0bb48798471e5762dcad646c8ae00b0ccfb58e4745cfe7a918aa385a"
+          "generated-controls", "0b88ff35d6c7b557fd22d8b14c66d1eeea796424b37bcb57462337a12fa5b379"
+          "independent-controls", "1da0a6dfda10878ef353552a839480aee5a19ae28a1a481d5086ecb37243c52f"
+          "adapter-known-answer-tests", "49dc95fdd128aee5d2db07d270d704866d278c9df8c28c9699ebf367b1f4401b"
+          "canonical-formal-qualification", "a03a48b9e290d7b1a4aefad3361477999630e0dfc7f57399f2fcd4911246b42f"
+          "unchanged-behavioral-identity", "39a90f7bfb03c4a517dc91f324e80c986e51191b16da92570e1e8c84e61d5125"
+          "unchanged-contract-identity", "c608c0d28ce5cbf36e70f102ffa979f4d06f27305e6da4551dce454901811c8e"
+          "native-candidate-manifest", "6e3b430a64b62866c8e29a742931b164d38ca67967a610a4701338436189a4db"
+          "native-q3-output", "d679c21f679cea93458586a4bdb4dfb0b08947a0cfff2f7d9bb2dfbbda97b94c"
+          "implementation-head-3c2ea87ca7593302f512441d5f0aa20e2f70c475", "ba5b823da66a3cea68cb459bbb7397ff2539e1a75ea429a546fe8f49896c822d"
+          "implementation-merge-51eea4b6b0cb0b5ffcb965ec00004de157406a2c", "5af41f435bb3368b6d979c555f9c4eeacc549571ecb57ff5b17656c149508992"
+          "implementation-bootstrap-run-34238244362", "6693a2b66f407171810169041d13e0ab7a00a2ae6f3569603bc4e321ad9b6263"
+          "implementation-codeql-run-34238242109", "01abedac48f4005714796b47c2b372a92c984d4ece8a774dc546844d662ff46d"
+          "implementation-protected-bootstrap-run-34240546151", "f89da5811e6a86f6e22b104d96304692e6a389b4cfd8463344c21a2414ccaa19"
+          "implementation-protected-codeql-run-34240546671", "0182ba16e9b260a7d80874e73a84a159fd871c1c0c43c1db9f3b00c372f10a7f"
+          "correspondence-repair-head-122ba68ed32cb63dad67beab78a00778ca39c41b", "fdf8924ef68ca029b60cce518bd50e3b2f0c489ce26b4629b855507c69a92711"
+          "correspondence-repair-merge-b8dcbb2a833a1ead7fca528c82304f4e33df5c61", "83af1a4eeadcc29b9e5d51b7cd109ff67119d0403ebc3537f2a59e0ce8efabf3"
+          "correspondence-repair-bootstrap-run-34244411984", "a1080fdd910795a19bb2ea3c0cf832d2229659fef588ed1b5805b78136af3c96"
+          "correspondence-repair-codeql-run-34244409085", "8aae019348d97daf6e4fb8639f14404527fa0c71de7a683b8c7888596aa87360"
+          "repair-protected-bootstrap-run-34246622402", "8b266173004749b5982c51e6f4581b9018831b8ad4d730b9d94ffdcc236e11b4"
+          "repair-protected-codeql-run-34246621900", "1a2fef6f5c6a2bc9bcf846eb0d6004572f78ce14a59586a221085f60e1f80431" ]
+        |> Map.ofList
+
+    Assert.Equal<Map<string, string>>(expected, artifacts)
+
+[<Fact>]
 let ``roadmap unit index advances through GS2-08-1 epoch wire`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
