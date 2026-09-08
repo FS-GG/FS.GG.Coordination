@@ -45,13 +45,13 @@ type EventBenefitReport =
 type EventBenefitFinding =
     | MissingField of string | MalformedField of string | ChangedPrerequisite | ChangedRoadmap | SubstitutedHead
     | UnboundedPopulation | UnboundedWindow | UnknownSourceCategory of string | IncompletePage of string
-    | IncompleteRunAttempt of string | MissingTimestamp of string | MissingCallAttempt of string
+    | IncompleteRunAttempt of string | MissingTimestamp of string | OutsideWindow of string | MissingCallAttempt of string
     | MissingRateOutcome of string | AlteredSourceDigest of string | ContradictoryRevision of string
     | UnsupportedHint of string | LostSemanticCommand of string | LostDistinctSubject of string
     | CancelledInFlightEffect of string | DroppedEventUnrepaired of string | HostedEvidenceIncomplete
     | ReplayAsInstalled | SandboxAsProduction | UnsealedReport | AlteredSeal | ReplayConflict
     | InvalidSerialization of string
-type EventBenefitControlResult = { ControlId: string; ControlPassed: bool; BaselineGreen: bool }
+type EventBenefitControlResult = { ControlId: string; ControlPassed: bool; BaselineGreen: bool; Evidence: string }
 
 module GitHubEventBenefitQualification =
     let prerequisiteReceiptSha256 = "eaf032038cc3ed1fb3f1a21db81a32f7af7969f84a0d9b77cd1d7eea68346bc6"
@@ -110,6 +110,11 @@ module GitHubEventBenefitQualification =
         match windowStart, windowEnd with
         | Some startAt, Some endAt when startAt < endAt && (endAt - startAt).TotalDays <= 31.0 -> ()
         | _ -> errors.Add EventBenefitFinding.UnboundedWindow
+        let withinWindow label value =
+            match windowStart, windowEnd, timestamp value with
+            | Some startAt, Some endAt, Some observed when startAt <= observed && observed <= endAt -> ()
+            | _, _, Some _ -> errors.Add(EventBenefitFinding.OutsideWindow label)
+            | _ -> errors.Add(EventBenefitFinding.MissingTimestamp label)
         if not(validMetric facts.FullScanApiCalls) then errors.Add(EventBenefitFinding.MalformedField "fullScanApiCalls")
         if not(validMetric facts.FullScanSchedules) then errors.Add(EventBenefitFinding.MalformedField "fullScanSchedules")
         if facts.Sources.IsEmpty then errors.Add(EventBenefitFinding.MissingField "sources")
@@ -120,6 +125,12 @@ module GitHubEventBenefitQualification =
             requireText "sourceId" source.SourceId
             requireText "repository" source.Repository
             if not(sourceCategories |> List.contains source.Category) then errors.Add(EventBenefitFinding.UnknownSourceCategory source.Category)
+            match source.TestedHead with
+            | Some head when not(shaPattern.IsMatch head) -> errors.Add EventBenefitFinding.SubstitutedHead
+            | Some head when source.Category <> "historical-provider-evidence" && head <> facts.CandidateHead -> errors.Add EventBenefitFinding.SubstitutedHead
+            | None when source.Category = "current-provider-observation" || source.Category = "executable-replay" || source.Category = "injected-negative-control" ->
+                errors.Add(EventBenefitFinding.MissingField $"testedHead:{source.SourceId}")
+            | _ -> ()
             if source.Page <= 0 || source.PageCount <= 0 || source.Page > source.PageCount then errors.Add(EventBenefitFinding.IncompletePage source.SourceId)
             if String.IsNullOrEmpty source.RawPayload then errors.Add(EventBenefitFinding.MissingField $"rawPayload:{source.SourceId}")
             if not(digestPattern.IsMatch source.RawPayloadSha256) || hashText source.RawPayload <> source.RawPayloadSha256 then errors.Add(EventBenefitFinding.AlteredSourceDigest source.SourceId)
@@ -133,7 +144,7 @@ module GitHubEventBenefitQualification =
                     if attempt.Attempt <= 0 || String.IsNullOrWhiteSpace attempt.Request then errors.Add(EventBenefitFinding.MissingCallAttempt source.SourceId)
                     if String.IsNullOrWhiteSpace attempt.RateOutcome then errors.Add(EventBenefitFinding.MissingRateOutcome source.SourceId)
             for name, value in [ "eventAt", source.EventAt; "ingestedAt", source.IngestedAt; "queuedAt", source.QueuedAt; "startedAt", source.StartedAt; "endedAt", source.EndedAt ] do
-                match value with Some raw when timestamp raw |> Option.isNone -> errors.Add(EventBenefitFinding.MissingTimestamp $"{source.SourceId}:{name}") | _ -> ()
+                match value with Some raw -> withinWindow $"{source.SourceId}:{name}" raw | None -> ()
         facts.Sources
         |> List.groupBy (fun source -> source.SourceId)
         |> List.iter (fun (sourceId, pages) ->
@@ -155,7 +166,7 @@ module GitHubEventBenefitQualification =
             if hint.Revision <= 0L || not(population |> List.contains hint.Subject) then errors.Add(EventBenefitFinding.ContradictoryRevision hint.Subject)
             if not(allowedKinds |> List.contains hint.Kind) then errors.Add(EventBenefitFinding.UnsupportedHint hint.HintId)
             if not(sourceIds.Contains hint.SourceId) then errors.Add(EventBenefitFinding.MissingField $"hintSource:{hint.HintId}")
-            if timestamp hint.ArrivedAt |> Option.isNone then errors.Add(EventBenefitFinding.MissingTimestamp hint.HintId)
+            withinWindow hint.HintId hint.ArrivedAt
             if not([ "pending"; "applying"; "applied" ] |> List.contains hint.State) then errors.Add(EventBenefitFinding.MalformedField $"hintState:{hint.HintId}")
         facts.Hints
         |> List.groupBy (fun hint -> hint.Subject, hint.Revision)
@@ -169,6 +180,8 @@ module GitHubEventBenefitQualification =
             if not(sourceIds.Contains audit.SourceId) then errors.Add(EventBenefitFinding.MissingField $"auditSource:{audit.AuditId}")
             let times = [ timestamp audit.ScheduledAt; timestamp audit.DiscoveredAt; timestamp audit.ConvergedAt ]
             if times |> List.exists Option.isNone then errors.Add(EventBenefitFinding.MissingTimestamp audit.AuditId)
+            for name, value in [ "scheduledAt", audit.ScheduledAt; "discoveredAt", audit.DiscoveredAt; "convergedAt", audit.ConvergedAt ] do
+                withinWindow $"{audit.AuditId}:{name}" value
             match times with
             | [ Some scheduled; Some discovered; Some converged ] when scheduled <= discovered && discovered <= converged -> ()
             | _ -> errors.Add(EventBenefitFinding.DroppedEventUnrepaired audit.Subject)
@@ -295,7 +308,9 @@ module GitHubEventBenefitQualification =
     let validateControls generated independent =
         let validate label rows =
             [ if rows |> List.map _.ControlId <> requiredControls then yield $"{label} control inventory differs"
-              if rows |> List.exists (fun row -> not row.ControlPassed || not row.BaselineGreen) then yield $"{label} control failed" ]
+              if rows |> List.exists (fun row -> not row.ControlPassed || not row.BaselineGreen) then yield $"{label} control failed"
+              if rows |> List.exists (fun row -> String.IsNullOrWhiteSpace row.Evidence || not(row.Evidence.Contains(row.ControlId, StringComparison.Ordinal))) then yield $"{label} control evidence is unbound" ]
         let errors = validate "generated" generated @ validate "independent" independent
         if (generated |> List.map _.ControlId) <> (independent |> List.map _.ControlId) then Error [ "control identities differ" ]
+        elif List.zip generated independent |> List.exists (fun (left, right) -> left.Evidence = right.Evidence) then Error [ "control evidence is not independently identified" ]
         elif errors.IsEmpty then Ok () else Error errors

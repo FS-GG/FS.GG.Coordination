@@ -53,9 +53,9 @@ let historical = source "routine-burst" "historical-provider-evidence" 1 1 histo
 let replayPayload = "population=issue:A,issue:B,issue:C;full-scan-calls=8;narrow-calls=2;native=refused"
 let replaySource =
     { source "bounded-replay" "executable-replay" 1 1 replayPayload [ attempt 1 "reconcile issue:A" true; attempt 2 "reconcile issue:B" true ] with
-        EventAt = Some "2026-09-08T01:10:00Z"; IngestedAt = Some "2026-09-08T01:10:02Z" }
+        TestedHead = Some "a8b10e073eb7098014ea38ce6edadc35b784ff5c"; EventAt = Some "2026-09-08T01:10:00Z"; IngestedAt = Some "2026-09-08T01:10:02Z" }
 let negativePayload = "withheld=issue:C;audit=scheduled;native=unknown"
-let negativeSource = source "withheld-C" "injected-negative-control" 1 1 negativePayload []
+let negativeSource = { source "withheld-C" "injected-negative-control" 1 1 negativePayload [] with TestedHead = Some "a8b10e073eb7098014ea38ce6edadc35b784ff5c" }
 let facts =
     { Unit = "GS2-07.7"; PrerequisiteReceiptSha256 = prerequisiteReceiptSha256; RoadmapRevision = roadmapRevision
       RoadmapSha256 = roadmapSha256; CandidateHead = "a8b10e073eb7098014ea38ce6edadc35b784ff5c"
@@ -83,56 +83,97 @@ let baselineGreen = parse (serialize baseline) = Ok baseline && verify baseline.
 let sourceText = read "src/FS.GG.Coordination.Qualification.Contracts/GitHubEventBenefitQualification.fs"
 let cliText = read "src/FS.GG.Coordination.Cli/Program.fs"
 let noMutation (value: string) = not(Regex.IsMatch(value, "HttpClient|Octokit|GitHubClient|\\b(PATCH|POST|PUT|DELETE)\\b", RegexOptions.IgnoreCase))
-let mutation control variant =
-    match control, variant with
-    | "prerequisite", _ -> shaFile "evidence/github-substrate-v2/accepted/GS2-07.6.json" = text "prerequisiteFileSha256" c
-    | "roadmap", _ -> text "roadmapSha256" c = roadmapSha256
-    | "command-identity", _ -> let catalog = read "eng/github-substrate-v2-gates.json" in catalog.Contains("github-event-benefit-measurement-contract") && catalog.Contains("github-event-benefit-provider-observation-contract")
-    | "metric-provenance", _ -> baseline.SourceDigests.Length = 5 && baseline.SourceCount = 5
-    | "finite-population", 0 -> compile { facts with Population = List.rev facts.Population } |> has EventBenefitFinding.UnboundedPopulation
-    | "finite-population", _ -> compile { facts with Population = facts.Population @ [ facts.Population.Head ] } |> has EventBenefitFinding.UnboundedPopulation
-    | "finite-window", 0 -> compile { facts with WindowEnd = facts.WindowStart } |> has EventBenefitFinding.UnboundedWindow
-    | "finite-window", _ -> compile { facts with WindowEnd = "2026-10-10T02:00:00Z" } |> has EventBenefitFinding.UnboundedWindow
-    | "source-category", _ -> compile { facts with Sources = facts.Sources |> List.filter (fun value -> value.Category <> "injected-negative-control") } |> has (EventBenefitFinding.UnknownSourceCategory "injected-negative-control")
-    | "pagination", _ -> compile { facts with Sources = facts.Sources |> List.filter (fun value -> value.Page <> 2) } |> has (EventBenefitFinding.IncompletePage "current-registration-runs")
-    | "run-attempt", _ -> compile { facts with Sources = { provider1 with AttemptCount = Some 2 } :: facts.Sources.Tail } |> has (EventBenefitFinding.IncompleteRunAttempt provider1.SourceId)
-    | "timestamp", _ -> compile { facts with Sources = { provider1 with EndedAt = Some "not-time" } :: facts.Sources.Tail } |> has (EventBenefitFinding.MissingTimestamp $"{provider1.SourceId}:endedAt")
-    | "call-attempt", _ -> compile { facts with Sources = { provider1 with ApiAttempts = [] } :: facts.Sources.Tail } |> has (EventBenefitFinding.MissingCallAttempt provider1.SourceId)
-    | "rate-outcome", _ -> compile { facts with Sources = { provider1 with ApiAttempts = [ { provider1.ApiAttempts.Head with RateOutcome = "" } ] } :: facts.Sources.Tail } |> has (EventBenefitFinding.MissingRateOutcome provider1.SourceId)
-    | "latency", _ -> baseline.EventLatencyMilliseconds.Value = Some 2000L && baseline.UnknownOutcomes |> List.exists (fun value -> value.Contains("current-registration-runs:event-timestamp-unknown"))
-    | "api-cost", _ -> baseline.NarrowApiCallAttempts = 2 && baseline.CollectorApiCallAttempts = 3 && baseline.FullScanApiCalls.Value = Some 8L
-    | "schedule-count", _ -> baseline.ScheduleAdmissions = 1 && baseline.FullScanSchedules.Value = Some 3L
-    | "dropped-event-repair", _ -> baseline.RepairDelayMilliseconds.Value = Some 120000L && (compile { facts with AuditObservations = [] } |> has (EventBenefitFinding.DroppedEventUnrepaired "withheld-control"))
-    | "false-outcome", _ -> baseline.FalseOutcomes = [ "native-refused" ]
-    | "unknown-outcome", _ -> baseline.UnknownOutcomes |> List.exists (fun value -> value.Contains("native-outcome-unknown"))
-    | "coalescing", _ -> let a = baseline.Subjects |> List.find (fun value -> value.Subject = "issue:A") in a.ReconcileRevision = 2L && a.HintCount = 8
-    | "subject-isolation", _ -> baseline.Subjects |> List.exists (fun value -> value.Subject = "issue:B" && value.Outcome = "narrow-reconcile-admitted")
-    | "semantic-command-preservation", _ -> let a = baseline.Subjects.Head in a.OperationIds = [ "approval-A-2"; "command-A-2"; "dispatch-A-once"; "grant-A-2" ]
-    | "in-flight-effect", _ -> baseline.Subjects.Head.ApplyingOperationIds = [ "dispatch-A-once" ]
-    | "complete-audit-authority", _ -> baseline.CompleteAuditAuthority = "scheduled-complete-audit" && not baseline.OrdinaryMergeDependency
-    | "retained-polling", _ -> baseline.PollingDecision = "retain"
-    | "replay-distinction", _ -> not baseline.InstalledBenefit && baseline.Conclusion.Contains("no installed or production benefit")
-    | "sandbox-distinction", _ -> not baseline.ProductionBenefit
-    | "tamper", 0 -> compile { facts with Sources = { provider1 with RawPayloadSha256 = String.replicate 64 "0" } :: facts.Sources.Tail } |> has (EventBenefitFinding.AlteredSourceDigest provider1.SourceId)
-    | "tamper", _ -> verify baseline.Seal { baseline with CandidateHead = String.replicate 40 "b" } |> has EventBenefitFinding.AlteredSeal
-    | "exact-head-hosted-evidence", _ ->
-        let hosted = { Repository = "FS-GG/FS.GG.Coordination"; Workflow = "measurement"; RunId = 1L; RunAttempt = 1; TestedHead = String.replicate 40 "b"; WindowStart = facts.WindowStart; WindowEnd = facts.WindowEnd; PopulationDigest = baseline.PopulationDigest; SourceDigests = baseline.SourceDigests }
-        compile { facts with HostedClaim = Some hosted } |> has EventBenefitFinding.HostedEvidenceIncomplete
-    | "no-write-permission", _ -> noMutation sourceText
-    | "no-production-mutation", _ -> noMutation sourceText && not(cliText.Contains("event-benefit"))
-    | "no-acceptance-claim", _ -> text "acceptanceReceiptPhase" c = "post-protected-merge" && baseline.HostedIdentity.IsNone
-    | "no-successor-authority", _ -> not(sourceText.Contains("GS2-07.8")) && not(cliText.Contains("GS2-07.8"))
-    | _ -> false
-let executeGenerated control = mutation control 0
-let executeIndependent control = mutation control 1
-let generated: EventBenefitControlResult list = requiredControls |> List.map (fun control -> { ControlId = control; ControlPassed = executeGenerated control; BaselineGreen = baselineGreen })
-let independent: EventBenefitControlResult list = requiredControls |> List.map (fun control -> { ControlId = control; ControlPassed = executeIndependent control; BaselineGreen = baselineGreen })
 let retained relative = let doc = json relative in strings "controls" doc.RootElement, strings "cases" doc.RootElement, text "caseContract" doc.RootElement
 let generatedIds, generatedCases, generatedContract = retained "evidence/github-substrate-v2/gs2-07-7/generated-controls.json"
 let independentIds, independentCases, independentContract = retained "evidence/github-substrate-v2/gs2-07-7/independent-controls.json"
 if generatedIds <> requiredControls || independentIds <> requiredControls then failwith "retained control identities differ"
 if generatedCases.Length <> requiredControls.Length || independentCases.Length <> requiredControls.Length then failwith "retained control cases incomplete"
 if generatedCases = independentCases || generatedContract = independentContract then failwith "control authorship not independent"
+let replaceSource original replacement = facts.Sources |> List.map (fun source -> if obj.ReferenceEquals(source, original) then replacement else source)
+let hostedIdentity head windowStart windowEnd =
+    { Repository = "FS-GG/FS.GG.Coordination"; Workflow = "measurement"; RunId = 1L; RunAttempt = 1; TestedHead = head
+      WindowStart = windowStart; WindowEnd = windowEnd; PopulationDigest = baseline.PopulationDigest; SourceDigests = baseline.SourceDigests }
+let generatedMutation control =
+    match control with
+    | "prerequisite" -> shaFile "evidence/github-substrate-v2/accepted/GS2-07.6.json" = text "prerequisiteFileSha256" c
+    | "roadmap" -> text "roadmapSha256" c = roadmapSha256
+    | "command-identity" -> let catalog = read "eng/github-substrate-v2-gates.json" in catalog.Contains("github-event-benefit-measurement-contract") && catalog.Contains("github-event-benefit-provider-observation-contract")
+    | "metric-provenance" -> baseline.SourceDigests.Length = 5 && baseline.SourceCount = 5
+    | "finite-population" -> compile { facts with Population = List.rev facts.Population } |> has EventBenefitFinding.UnboundedPopulation
+    | "finite-window" -> compile { facts with WindowEnd = facts.WindowStart } |> has EventBenefitFinding.UnboundedWindow
+    | "source-category" -> compile { facts with Sources = facts.Sources |> List.filter (fun value -> value.Category <> "injected-negative-control") } |> has (EventBenefitFinding.UnknownSourceCategory "injected-negative-control")
+    | "pagination" -> compile { facts with Sources = facts.Sources |> List.filter (fun value -> value.Page <> 2) } |> has (EventBenefitFinding.IncompletePage "current-registration-runs")
+    | "run-attempt" -> compile { facts with Sources = replaceSource provider1 { provider1 with AttemptCount = Some 2 } } |> has (EventBenefitFinding.IncompleteRunAttempt provider1.SourceId)
+    | "timestamp" -> compile { facts with Sources = replaceSource provider1 { provider1 with EndedAt = Some "not-time" } } |> has (EventBenefitFinding.MissingTimestamp $"{provider1.SourceId}:endedAt")
+    | "call-attempt" -> compile { facts with Sources = replaceSource provider1 { provider1 with ApiAttempts = [] } } |> has (EventBenefitFinding.MissingCallAttempt provider1.SourceId)
+    | "rate-outcome" -> compile { facts with Sources = replaceSource provider1 { provider1 with ApiAttempts = [ { provider1.ApiAttempts.Head with RateOutcome = "" } ] } } |> has (EventBenefitFinding.MissingRateOutcome provider1.SourceId)
+    | "latency" -> baseline.EventLatencyMilliseconds.Value = Some 2000L && baseline.UnknownOutcomes |> List.exists (fun value -> value.Contains("current-registration-runs:event-timestamp-unknown"))
+    | "api-cost" -> baseline.NarrowApiCallAttempts = 2 && baseline.CollectorApiCallAttempts = 3 && baseline.FullScanApiCalls.Value = Some 8L
+    | "schedule-count" -> baseline.ScheduleAdmissions = 1 && baseline.FullScanSchedules.Value = Some 3L
+    | "dropped-event-repair" -> baseline.RepairDelayMilliseconds.Value = Some 120000L && (compile { facts with AuditObservations = [] } |> has (EventBenefitFinding.DroppedEventUnrepaired "withheld-control"))
+    | "false-outcome" -> baseline.FalseOutcomes = [ "native-refused" ]
+    | "unknown-outcome" -> baseline.UnknownOutcomes |> List.exists (fun value -> value.Contains("native-outcome-unknown"))
+    | "coalescing" -> let a = baseline.Subjects |> List.find (fun value -> value.Subject = "issue:A") in a.ReconcileRevision = 2L && a.HintCount = 8
+    | "subject-isolation" -> baseline.Subjects |> List.exists (fun value -> value.Subject = "issue:B" && value.Outcome = "narrow-reconcile-admitted")
+    | "semantic-command-preservation" -> baseline.Subjects.Head.OperationIds = [ "approval-A-2"; "command-A-2"; "dispatch-A-once"; "grant-A-2" ]
+    | "in-flight-effect" -> baseline.Subjects.Head.ApplyingOperationIds = [ "dispatch-A-once" ]
+    | "complete-audit-authority" -> baseline.CompleteAuditAuthority = "scheduled-complete-audit" && not baseline.OrdinaryMergeDependency
+    | "retained-polling" -> baseline.PollingDecision = "retain"
+    | "replay-distinction" -> not baseline.InstalledBenefit && baseline.Conclusion.Contains("no installed or production benefit")
+    | "sandbox-distinction" -> not baseline.ProductionBenefit
+    | "tamper" -> compile { facts with Sources = replaceSource provider1 { provider1 with RawPayloadSha256 = String.replicate 64 "0" } } |> has (EventBenefitFinding.AlteredSourceDigest provider1.SourceId)
+    | "exact-head-hosted-evidence" -> compile { facts with HostedClaim = Some(hostedIdentity (String.replicate 40 "b") facts.WindowStart facts.WindowEnd) } |> has EventBenefitFinding.HostedEvidenceIncomplete
+    | "no-write-permission" -> noMutation sourceText
+    | "no-production-mutation" -> noMutation sourceText && not(cliText.Contains("event-benefit"))
+    | "no-acceptance-claim" -> text "acceptanceReceiptPhase" c = "post-protected-merge" && baseline.HostedIdentity.IsNone
+    | "no-successor-authority" -> not(sourceText.Contains("GS2-07.8")) && not(cliText.Contains("GS2-07.8"))
+    | _ -> false
+let independentMutation control =
+    match control with
+    | "prerequisite" -> let receipt = json "evidence/github-substrate-v2/accepted/GS2-07.6.json" in text "unitId" receipt.RootElement = "GS2-07.6" && shaFile "evidence/github-substrate-v2/accepted/GS2-07.6.json" = text "prerequisiteFileSha256" c
+    | "roadmap" -> roadmapSha256.Length = 64 && text "roadmapRevision" c = roadmapRevision
+    | "command-identity" ->
+        let units = json "eng/github-substrate-v2-units.json"
+        let unit = units.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> text "id" value = "GS2-07.7")
+        let expected = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.map (fun value -> text "commandSha256" value) |> Seq.toList
+        expected = [ "746c067ecddac460e8424d104c78946a7ffc4f7bc1c143e2ff19897415eb6f8b"; "7c4ba2dd11e32f1431a1e313141fa6c6c4bf569d900311b08bc0f926e8f78bfc" ]
+    | "metric-provenance" -> (compile { facts with Sources = List.rev facts.Sources } |> get).Seal <> baseline.Seal
+    | "finite-population" -> compile { facts with Population = facts.Population @ [ facts.Population.Head ] } |> has EventBenefitFinding.UnboundedPopulation
+    | "finite-window" -> compile { facts with WindowEnd = "2026-10-10T02:00:00Z" } |> has EventBenefitFinding.UnboundedWindow
+    | "source-category" -> compile { facts with Sources = facts.Sources |> List.filter (fun value -> value.Category <> "historical-provider-evidence") } |> has (EventBenefitFinding.UnknownSourceCategory "historical-provider-evidence")
+    | "pagination" -> compile { facts with Sources = facts.Sources |> List.filter (fun value -> value.Page <> 1 || value.SourceId <> provider1.SourceId) } |> has (EventBenefitFinding.IncompletePage provider1.SourceId)
+    | "run-attempt" -> compile { facts with Sources = replaceSource provider2 { provider2 with RunAttempt = Some 2; AttemptCount = Some 2 } } |> has (EventBenefitFinding.IncompleteRunAttempt provider2.SourceId)
+    | "timestamp" -> compile { facts with Sources = replaceSource provider2 { provider2 with EndedAt = Some "2026-09-08T02:00:01Z" } } |> has (EventBenefitFinding.OutsideWindow $"{provider2.SourceId}:endedAt")
+    | "call-attempt" -> compile { facts with Sources = replaceSource provider2 { provider2 with ApiAttempts = [] } } |> has (EventBenefitFinding.MissingCallAttempt provider2.SourceId)
+    | "rate-outcome" -> compile { facts with Sources = replaceSource provider2 { provider2 with ApiAttempts = [ { provider2.ApiAttempts.Head with RateOutcome = "" } ] } } |> has (EventBenefitFinding.MissingRateOutcome provider2.SourceId)
+    | "latency" -> (DateTimeOffset.Parse("2026-09-08T01:10:02Z") - DateTimeOffset.Parse("2026-09-08T01:10:00Z")).TotalMilliseconds = 2000.0
+    | "api-cost" -> facts.Sources |> List.sumBy (fun source -> source.ApiAttempts |> List.filter _.WorkloadCall |> List.length) = 2
+    | "schedule-count" -> facts.AuditObservations |> List.filter _.InjectedWithheldHint |> List.length = 1
+    | "dropped-event-repair" -> let collision = hint "C-collision" "issue:C" 1L "reconcile" "reconcile-C-1" "2026-09-08T01:29:00Z" "pending" "bounded-replay" in compile { facts with Hints = collision :: facts.Hints } |> has (EventBenefitFinding.DroppedEventUnrepaired "issue:C")
+    | "false-outcome" -> facts.Sources |> List.exists (fun source -> source.RawPayload.Contains("native=refused", StringComparison.Ordinal))
+    | "unknown-outcome" -> let cleared = { provider1 with EventAt = None; IngestedAt = None; QueuedAt = None } in (compile { facts with Sources = replaceSource provider1 cleared } |> get).UnknownOutcomes |> List.exists (fun value -> value.Contains("event-timestamp-unknown"))
+    | "coalescing" -> let reversed = compile { facts with Hints = List.rev facts.Hints } |> get in reversed.Subjects.Head.ReconcileRevision = 2L && reversed.Subjects.Head.HintCount = 8
+    | "subject-isolation" -> let withoutB = compile { facts with Hints = facts.Hints |> List.filter (fun hint -> hint.Subject <> "issue:B") } |> get in withoutB.Subjects |> List.exists (fun subject -> subject.Subject = "issue:B" && subject.Outcome = "unknown-no-observation")
+    | "semantic-command-preservation" -> (compile { facts with Hints = List.rev facts.Hints } |> get).Subjects.Head.OperationIds = baseline.Subjects.Head.OperationIds
+    | "in-flight-effect" -> let newer = hint "A-3" "issue:A" 3L "reconcile" "reconcile-A-3" "2026-09-08T01:14:00Z" "pending" "bounded-replay" in (compile { facts with Hints = newer :: facts.Hints } |> get).Subjects.Head.ApplyingOperationIds = [ "dispatch-A-once" ]
+    | "complete-audit-authority" -> verify baseline.Seal { baseline with CompleteAuditAuthority = "ordinary-merge" } |> has EventBenefitFinding.UnsealedReport
+    | "retained-polling" -> verify baseline.Seal { baseline with PollingDecision = "remove" } |> has EventBenefitFinding.UnsealedReport
+    | "replay-distinction" -> verify baseline.Seal { baseline with InstalledBenefit = true } |> has EventBenefitFinding.ReplayAsInstalled
+    | "sandbox-distinction" -> verify baseline.Seal { baseline with ProductionBenefit = true } |> has EventBenefitFinding.SandboxAsProduction
+    | "tamper" -> [ { baseline with CandidateHead = String.replicate 40 "b" }; { baseline with SourceDigests = baseline.SourceDigests.Tail }; { baseline with Seal = String.replicate 64 "0" } ] |> List.forall (fun altered -> verify baseline.Seal altered |> has EventBenefitFinding.AlteredSeal)
+    | "exact-head-hosted-evidence" -> compile { facts with HostedClaim = Some(hostedIdentity facts.CandidateHead "2026-09-08T01:00:01Z" facts.WindowEnd) } |> has EventBenefitFinding.HostedEvidenceIncomplete
+    | "no-write-permission" -> Regex.Matches(sourceText, "HttpClient|Octokit|GitHubClient|\\b(PATCH|POST|PUT|DELETE)\\b", RegexOptions.IgnoreCase).Count = 0
+    | "no-production-mutation" -> not(cliText.Contains("event-benefit", StringComparison.OrdinalIgnoreCase)) && noMutation sourceText
+    | "no-acceptance-claim" -> not(File.Exists(path "evidence/github-substrate-v2/accepted/GS2-07.7.json")) && text "acceptanceReceiptPhase" c = "post-protected-merge"
+    | "no-successor-authority" ->
+        let index = json "eng/github-substrate-v2-units.json"
+        let ids = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.map (fun value -> text "id" value) |> Seq.toList
+        ids |> List.last = "GS2-07.7" && not(List.contains "GS2-07.8" ids)
+    | _ -> false
+let generated: EventBenefitControlResult list =
+    List.map2 (fun control caseName -> { ControlId = control; ControlPassed = generatedMutation control; BaselineGreen = baselineGreen; Evidence = $"generated:{control}:{caseName}" }) requiredControls generatedCases
+let independent: EventBenefitControlResult list =
+    List.map2 (fun control caseName -> { ControlId = control; ControlPassed = independentMutation control; BaselineGreen = baselineGreen; Evidence = $"independent:{control}:{caseName}" }) requiredControls independentCases
 match validateControls generated independent with Ok () -> () | Error errors -> failwithf "Q3 controls failed: %A\ngenerated=%A\nindependent=%A" errors generated independent
 let reportPath = path "evidence/github-substrate-v2/gs2-07-7/measurement-report.json"
 let bytes = serialize baseline

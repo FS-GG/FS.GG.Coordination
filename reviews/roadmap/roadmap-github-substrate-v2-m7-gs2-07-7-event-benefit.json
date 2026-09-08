@@ -1,0 +1,65 @@
+{
+  "schema_version": 3,
+  "cycle_id": "roadmap-github-substrate-v2-m7-gs2-07-7-event-benefit",
+  "milestone": "GS2-07.7 — Measure event benefit",
+  "critic": "dunlin-5832",
+  "initial_reviewed_commit": "a53fc3907788f9c119851ab07cb00d2fd5aed308",
+  "scope": [
+    "requirements",
+    "diff",
+    "tests",
+    "architecture",
+    "roadmap-evidence"
+  ],
+  "initial_verdict": "changes-required",
+  "repair_rounds": 0,
+  "reviewed_commits": [
+    "a53fc3907788f9c119851ab07cb00d2fd5aed308"
+  ],
+  "findings": [
+    {
+      "id": "GS2-07.7-M1",
+      "severity": "major",
+      "summary": "The qualification accepts source heads and otherwise valid observation timestamps outside the declared measurement boundary, so altered-head and finite-window guarantees are not enforced by the pure contract.",
+      "evidence": [
+        "Verification: `src/FS.GG.Coordination.Qualification.Contracts/GitHubEventBenefitQualification.fs:109-112` validates only the two window endpoints, while lines 135-136, 158, and 170-174 validate timestamp shape/order but never membership in that window.",
+        "Verification: `rg -n 'TestedHead|WindowStart|WindowEnd|optionTimestamp|timestamp ' src/FS.GG.Coordination.Qualification.Contracts/GitHubEventBenefitQualification.fs tests/FS.GG.Coordination.UnitTests/GitHubEventBenefitTests.fs` shows `EventBenefitSource.TestedHead` is read only for type construction; only the optional hosted identity is compared with `CandidateHead` at source lines 182-189.",
+        "Verification: `tests/FS.GG.Coordination.UnitTests/GitHubEventBenefitTests.fs:84-145` covers an invalid window endpoint and hosted-claim head mismatch, but has no non-hosted source-head mutation or valid out-of-window source/hint/audit timestamp case.",
+        "Verification: accepted `docs/roadmaps/gs2-07-7-event-benefit.md` phase 2 says tampered timestamps and heads fail, and `work/326-gs2-07-7-event-benefit/spec.md` FR-001/FR-004 require a finite declared window and altered heads to refuse."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Unresolved: bind every applicable source tested head to the declared candidate/observation head, constrain source/hint/audit timestamps to the declared window with an explicit policy for end inclusivity, make those fields affect replay identity, and add negative boundary tests. Verification: unverified."
+      ]
+    },
+    {
+      "id": "GS2-07.7-M2",
+      "severity": "major",
+      "summary": "The retained independent-control inventory claims distinct adversarial executions that the Q3 gate does not perform, making the roadmap evidence materially inaccurate.",
+      "evidence": [
+        "Verification: `eng/validate-github-event-benefit-measurement.fsx:86-129` sends generated and independent rows through one `mutation control variant` function; only finite-population, finite-window, and tamper distinguish variant 0 from variant 1, while the remaining wildcard branches execute the same predicate.",
+        "Verification: `evidence/github-substrate-v2/gs2-07-7/independent-controls.json:6` claims cases including source reorder, hint collision, reversed hint arrival, B removal, and wrong hosted window, but `rg -n 'recompile after source reorder|inject hint collision|reverse hint arrival|remove B|wrong hosted window' eng/validate-github-event-benefit-measurement.fsx` returns no executable case for those descriptions.",
+        "Verification: `eng/validate-github-event-benefit-measurement.fsx:130-136` establishes independence only by requiring different retained description strings and then validates the identically shaped result rows; it does not bind each description to a distinct executed case.",
+        "Verification: `dotnet fsi eng/validate-github-event-benefit-measurement.fsx -- .` passes with `controls=32`, demonstrating that the current gate cannot detect the description/execution mismatch."
+      ],
+      "disposition": "unresolved",
+      "resolution_evidence": [
+        "Unresolved: implement and execute a genuinely separate independent predicate for every advertised case (or correct the inventory to the cases actually executed), bind case identity to result evidence, and add a failure that proves a description cannot pass through the generated predicate. Verification: unverified."
+      ]
+    }
+  ],
+  "confirmation": {
+    "reviewed_commit": "a53fc3907788f9c119851ab07cb00d2fd5aed308",
+    "verdict": "changes-required",
+    "unresolved_blocker_major": [
+      "GS2-07.7-M1",
+      "GS2-07.7-M2"
+    ]
+  },
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}

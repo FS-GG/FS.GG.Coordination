@@ -27,7 +27,7 @@ GitHub's run response did not expose event-delivery, ingestion, or distinct queu
 
 ## §4 Findings
 
-No new board finding is warranted. The missing feedback skill is already owned by `.github#2366`; the provider limitations are represented as bounded evidence limits rather than defects.
+Independent critique found that applicable non-hosted heads and valid out-of-window timestamps were under-constrained, and that nominally independent cases reused a wildcard predicate. Both causes were repaired in the owning branch with inclusive-window/head enforcement, explicit boundary tests, separate per-case predicates, and result-to-case evidence binding. No new board row is warranted. The missing feedback skill is already owned by `.github#2366`; the provider limitations are represented as bounded evidence limits rather than defects.
 
 ## §5 Did not exercise
 

@@ -26,8 +26,8 @@ let private baselineFacts () =
             QueuedAt = Some "2026-09-08T00:00:03Z"; StartedAt = Some "2026-09-08T00:00:04Z"; EndedAt = Some "2026-09-08T00:01:00Z" }
     let current2 = { current1 with Page = 2; RawPayload = "page=2;native=delivered"; RawPayloadSha256 = sha "page=2;native=delivered" }
     let historical = source "routine-burst" "historical-provider-evidence" 1 1 "routine-burst;native=delivered" [ attempt 1 "GET retained routine-burst" false ]
-    let replay = source "bounded-replay" "executable-replay" 1 1 "same-workload;native=refused" [ attempt 1 "replay reconcile A" true; attempt 2 "replay reconcile B" true ]
-    let injected = source "withheld-C" "injected-negative-control" 1 1 "withheld=C;native=unknown" []
+    let replay = { source "bounded-replay" "executable-replay" 1 1 "same-workload;native=refused" [ attempt 1 "replay reconcile A" true; attempt 2 "replay reconcile B" true ] with TestedHead = Some(String.replicate 40 "a") }
+    let injected = { source "withheld-C" "injected-negative-control" 1 1 "withheld=C;native=unknown" [] with TestedHead = Some(String.replicate 40 "a") }
     { Unit = "GS2-07.7"; PrerequisiteReceiptSha256 = prerequisiteReceiptSha256; RoadmapRevision = roadmapRevision
       RoadmapSha256 = roadmapSha256; CandidateHead = String.replicate 40 "a"; Population = [ "issue:A"; "issue:B"; "issue:C" ]
       WindowStart = "2026-09-08T00:00:00Z"; WindowEnd = "2026-09-08T01:00:00Z"
@@ -90,6 +90,9 @@ let ``population window pages attempts digests and provider accounting fail clos
     let first = facts.Sources.Head
     Assert.True(compile { facts with Sources = { first with AttemptCount = Some 2 } :: facts.Sources.Tail } |> has (EventBenefitFinding.IncompleteRunAttempt first.SourceId))
     Assert.True(compile { facts with Sources = { first with RawPayloadSha256 = String.replicate 64 "0" } :: facts.Sources.Tail } |> has (EventBenefitFinding.AlteredSourceDigest first.SourceId))
+    Assert.True(compile { facts with Sources = { first with TestedHead = Some(String.replicate 40 "b") } :: facts.Sources.Tail } |> has EventBenefitFinding.SubstitutedHead)
+    Assert.True(compile { facts with Sources = { first with EndedAt = Some facts.WindowEnd } :: facts.Sources.Tail } |> Result.isOk)
+    Assert.True(compile { facts with Sources = { first with EndedAt = Some "2026-09-08T01:00:01Z" } :: facts.Sources.Tail } |> has (EventBenefitFinding.OutsideWindow $"{first.SourceId}:endedAt"))
     Assert.True(compile { facts with Sources = { first with ApiAttempts = [] } :: facts.Sources.Tail } |> has (EventBenefitFinding.MissingCallAttempt first.SourceId))
     let noRate = { first.ApiAttempts.Head with RateOutcome = "" }
     Assert.True(compile { facts with Sources = { first with ApiAttempts = [ noRate ] } :: facts.Sources.Tail } |> has (EventBenefitFinding.MissingRateOutcome first.SourceId))
@@ -153,7 +156,9 @@ let ``tampered policy and seal cannot be accepted`` () =
 
 [<Fact>]
 let ``control validator requires exact independently executed inventory`` () =
-    let rows: EventBenefitControlResult list = requiredControls |> List.map (fun id -> { ControlId = id; ControlPassed = true; BaselineGreen = true })
-    Assert.Equal(Ok (), validateControls rows rows)
-    Assert.True(validateControls rows.Tail rows |> Result.isError)
-    Assert.True(validateControls ({ rows.Head with ControlPassed = false } :: rows.Tail) rows |> Result.isError)
+    let generated: EventBenefitControlResult list = requiredControls |> List.map (fun id -> { ControlId = id; ControlPassed = true; BaselineGreen = true; Evidence = $"generated:{id}" })
+    let independent: EventBenefitControlResult list = requiredControls |> List.map (fun id -> { ControlId = id; ControlPassed = true; BaselineGreen = true; Evidence = $"independent:{id}" })
+    Assert.Equal(Ok (), validateControls generated independent)
+    Assert.True(validateControls generated generated |> Result.isError)
+    Assert.True(validateControls generated.Tail independent |> Result.isError)
+    Assert.True(validateControls ({ generated.Head with ControlPassed = false } :: generated.Tail) independent |> Result.isError)

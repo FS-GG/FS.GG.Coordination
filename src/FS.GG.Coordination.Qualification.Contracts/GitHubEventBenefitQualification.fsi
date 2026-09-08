@@ -140,6 +140,7 @@ type EventBenefitFinding =
     | IncompletePage of string
     | IncompleteRunAttempt of string
     | MissingTimestamp of string
+    | OutsideWindow of string
     | MissingCallAttempt of string
     | MissingRateOutcome of string
     | AlteredSourceDigest of string
@@ -160,7 +161,8 @@ type EventBenefitFinding =
 type EventBenefitControlResult =
     { ControlId: string
       ControlPassed: bool
-      BaselineGreen: bool }
+      BaselineGreen: bool
+      Evidence: string }
 
 module GitHubEventBenefitQualification =
     val prerequisiteReceiptSha256: string

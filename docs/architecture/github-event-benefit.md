@@ -11,7 +11,7 @@ Every run declares its finite population and UTC observation window before colle
 - `executable-replay`; or
 - `injected-negative-control`.
 
-The input binds source bytes by SHA-256 and records complete pages, complete run attempts, available event/ingestion/queue/start/end timestamps, API call attempts and rate outcomes. Missing provider counters, prices, timestamps, revisions, or native outcomes are explicit unknowns. Collector calls are separate from workload calls.
+The input binds source bytes by SHA-256 and records complete pages, complete run attempts, available event/ingestion/queue/start/end timestamps, API call attempts and rate outcomes. Every present timestamp must fall inside the inclusive declared window. Current-provider, replay, and injected-control sources bind the declared observation head; historical aggregate evidence may omit a singular head, but any head it supplies must be a valid immutable SHA. Missing provider counters, prices, timestamps, revisions, or native outcomes are explicit unknowns. Collector calls are separate from workload calls.
 
 The current provider observation covers two predeclared successful registration-push runs at protected head `a8b10e073eb7098014ea38ce6edadc35b784ff5c`. It establishes read-only run identity, attempt, start/end, HTTP and rate facts. GitHub's run response does not expose native event delivery, ingestion, or a distinct queue time, so it establishes neither provider dispatch latency nor installed event benefit.
 
@@ -31,6 +31,6 @@ The decision is `retain` polling. A later operational change would require separ
 
 ## Tamper and hosted claims
 
-Compilation rejects changed prerequisite or roadmap identity, an unbounded or reordered population, an invalid window, unknown categories, incomplete pages or attempts, malformed timestamps, missing call/rate facts, contradictory revisions, unsupported hints, an unrepaired withheld event, or altered source digests. Canonical serialization seals the derived report; changes to head, timestamps, population, metrics, policy, or result invalidate it.
+Compilation rejects changed prerequisite or roadmap identity, an unbounded or reordered population, an invalid window, unknown categories, incomplete pages or attempts, missing or substituted applicable heads, malformed or out-of-window timestamps, missing call/rate facts, contradictory revisions, unsupported hints, an unrepaired withheld event, or altered source digests. Canonical serialization seals the derived report; changes to head, timestamps, population, metrics, policy, or result invalidate it. Generated and independent control paths execute separate predicates for every advertised case and bind each result to its control ID and retained case description.
 
 If a future input claims hosted measurement, it must bind a retained typed identity to the exact repository, workflow, run and attempt, tested head, observation window, population digest, and every source digest. Local emulation and replay cannot satisfy that field.
