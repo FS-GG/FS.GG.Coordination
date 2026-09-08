@@ -255,6 +255,54 @@ let private hasExactGs2076SandboxRecoveryContract (indexText: string) =
     && exitGate.Contains("independently authored", StringComparison.Ordinal)
     && exitGate.Contains("no-successor-authority", StringComparison.Ordinal)
 
+let private hasExactGs2077RoadmapAuthority (indexText: string) =
+    use document = JsonDocument.Parse(indexText)
+    let roadmap = document.RootElement.GetProperty("roadmap")
+    roadmap.GetProperty("revision").GetString() = roadmapRevision
+    && roadmap.GetProperty("sha256").GetString() = roadmapSha256
+
+let private gs2077GateCatalogAgrees (indexText: string) (catalogText: string) =
+    use index = JsonDocument.Parse(indexText)
+    use catalog = JsonDocument.Parse(catalogText)
+    let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.7")
+    let contracts = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+    let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
+    contracts.Length = 2
+    && (contracts |> List.forall (fun contract ->
+        commands
+        |> List.tryFind (fun command -> command.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
+        |> Option.exists (fun command -> command.GetProperty("qGate").GetString() = contract.GetProperty("qGate").GetString() && gateCommandSha256 command = contract.GetProperty("commandSha256").GetString())))
+
+let private hasExactGs2077MeasurementBoundary (indexText: string) =
+    use index = JsonDocument.Parse(indexText)
+    let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.7")
+    let ceiling = unit.GetProperty("permissionCeiling").EnumerateArray() |> Seq.map _.GetString() |> String.concat " "
+    let exitGate = unit.GetProperty("exitGate").GetString()
+    unit.GetProperty("owner").GetString() = "FS.GG.Coordination"
+    && (unit.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList) = [ "GS2-07.6" ]
+    && (unit.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList) = [ "Q3"; "Q4" ]
+    && (unit.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList) = [ "github-event-benefit-measurement-contract"; "github-event-benefit-provider-observation-contract" ]
+    && ceiling.Contains("bounded read-only provider observation", StringComparison.Ordinal)
+    && ceiling.Contains("no production write", StringComparison.Ordinal)
+    && ceiling.Contains("no production write, polling change, visibility or settings change, deployment, secret access or change, publication", StringComparison.Ordinal)
+    && ceiling.Contains("performs no measurement or provider observation", StringComparison.Ordinal)
+    && ceiling.Contains("no GS2-07.8 inspection", StringComparison.Ordinal)
+    && exitGate.Contains("narrow reconciliation, same-subject hint coalescing, scheduled complete-audit repair, and subject isolation", StringComparison.Ordinal)
+    && exitGate.Contains("latency, API cost, schedule count, dropped-event repair, false outcomes, unknown outcomes", StringComparison.Ordinal)
+    && exitGate.Contains("finite declared population and observation window", StringComparison.Ordinal)
+    && exitGate.Contains("derived from retained inputs rather than caller-supplied success booleans", StringComparison.Ordinal)
+    && exitGate.Contains("current provider observation, historical provider evidence, executable replay, or injected negative control", StringComparison.Ordinal)
+    && exitGate.Contains("complete pagination and run-attempt coverage", StringComparison.Ordinal)
+    && exitGate.Contains("actual call attempts and response/rate outcomes", StringComparison.Ordinal)
+    && exitGate.Contains("missing provider counters/prices/timestamps/revisions retained as unknown rather than zero", StringComparison.Ordinal)
+    && exitGate.Contains("complete scheduled audits remain authoritative", StringComparison.Ordinal)
+    && exitGate.Contains("polling is retained by default", StringComparison.Ordinal)
+    && exitGate.Contains("replay or sandbox evidence never claims installed or production benefit", StringComparison.Ordinal)
+    && exitGate.Contains("missing-provenance", StringComparison.Ordinal)
+    && exitGate.Contains("added-write-permission", StringComparison.Ordinal)
+    && exitGate.Contains("hosted claim binds a retained typed artifact", StringComparison.Ordinal)
+    && exitGate.Contains("registration alone claims neither measurement nor GS2-07.7 acceptance", StringComparison.Ordinal)
+
 let private hasClosedStagedIntakeVocabulary (source: string) =
     let lines = source.Replace("\r", "", StringComparison.Ordinal).Split('\n') |> Set.ofArray
     lines.Contains "type CaptureAuthorityRead = IssueIdentity | NativeTypeAndFields | ProjectMembership | Relations | RepositoryScope | ProtocolState"
@@ -729,10 +777,10 @@ let ``GS2-07-6 sandbox capability recovery and rollback contract refuses adversa
         Assert.False(hasExactGs2076SandboxRecoveryContract mutated)
 
 [<Fact>]
-let ``GS2-07-6 registration grants no fleet production or successor authority`` () =
+let ``GS2-07-6 contract retains its fleet production and successor ceiling after successor registration`` () =
     use index = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
     let units = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.toList
-    Assert.DoesNotContain(units, fun value -> value.GetProperty("id").GetString() = "GS2-07.7")
+    Assert.Contains(units, fun value -> value.GetProperty("id").GetString() = "GS2-07.7")
     let unit = units |> List.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.6")
     let ceiling = unit.GetProperty("permissionCeiling").EnumerateArray() |> Seq.map _.GetString() |> String.concat " "
     Assert.Contains("registration itself is repository-local and read-only", ceiling)
@@ -747,7 +795,70 @@ let ``GS2-07-6 prerequisite is the exact accepted GS2-07-5 receipt`` () =
     Assert.Equal("dd321136fe28e135ba5ee29a3b81a2041b81c8eb29126762cf893bb98ece34d8", receipt.RootElement.GetProperty("digest").GetString())
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-07-6 queue sandbox pilot`` () =
+let ``GS2-07-7 inspection refuses stale roadmap bytes`` () =
+    let index = File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")) |> ReadOnlyMemory<byte>
+    let staleRoadmap = Encoding.UTF8.GetBytes("# stale GS2-07.7 roadmap\n") |> ReadOnlyMemory<byte>
+    match RoadmapWork.inspect index staleRoadmap "GS2-07.7" with
+    | Ok _ -> Assert.Fail("stale roadmap bytes were accepted")
+    | Error findings -> Assert.Contains(findings, fun finding -> finding.Code = "RW-ROADMAP-DIGEST")
+
+[<Fact>]
+let ``GS2-07-7 authority and gate identities refuse stale or altered inputs`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
+    Assert.True(hasExactGs2077RoadmapAuthority indexText)
+    Assert.True(gs2077GateCatalogAgrees indexText catalogText)
+    Assert.False(hasExactGs2077RoadmapAuthority (indexText.Replace(roadmapRevision, "a460923ccef2f6ef30d9457967e717bec0e084ed", StringComparison.Ordinal)))
+    Assert.False(gs2077GateCatalogAgrees indexText (catalogText.Replace("eng/validate-github-event-benefit-measurement.fsx", "eng/validate-github-narrow-reconciliation.fsx", StringComparison.Ordinal)))
+    Assert.False(gs2077GateCatalogAgrees indexText (catalogText.Replace("eng/validate-github-event-benefit-provider-observation.fsx", "eng/validate-github-queue-sandbox-pilot.fsx", StringComparison.Ordinal)))
+
+[<Fact>]
+let ``GS2-07-7 measurement provenance and permission contract refuses adversarial omissions`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    Assert.True(hasExactGs2077MeasurementBoundary indexText)
+    let mutations =
+        [ "GS2-07.6", "GS2-07.5"
+          "bounded read-only provider observation", "provider observation"
+          "no production write", "production writes permitted"
+          "narrow reconciliation, same-subject hint coalescing, scheduled complete-audit repair, and subject isolation", "event benefit"
+          "latency, API cost, schedule count, dropped-event repair, false outcomes, unknown outcomes", "metrics"
+          "finite declared population and observation window", "sample"
+          "derived from retained inputs rather than caller-supplied success booleans", "reported by caller"
+          "current provider observation, historical provider evidence, executable replay, or injected negative control", "evidence"
+          "complete pagination and run-attempt coverage", "provider coverage"
+          "actual call attempts and response/rate outcomes", "API outcomes"
+          "missing provider counters/prices/timestamps/revisions retained as unknown rather than zero", "missing facts handled"
+          "complete scheduled audits remain authoritative", "audits are useful"
+          "polling is retained by default", "polling may change"
+          "replay or sandbox evidence never claims installed or production benefit", "evidence proves benefit"
+          "hosted claim binds a retained typed artifact", "hosted claim succeeds"
+          "registration alone claims neither measurement nor GS2-07.7 acceptance", "registration accepts GS2-07.7" ]
+    for original, replacement in mutations do
+        let mutated = indexText.Replace(original, replacement, StringComparison.Ordinal)
+        Assert.NotEqual(indexText, mutated)
+        Assert.False(hasExactGs2077MeasurementBoundary mutated)
+
+[<Fact>]
+let ``GS2-07-7 prerequisite is the exact accepted GS2-07-6 receipt`` () =
+    use receipt = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-07.6.json")))
+    Assert.Equal("GS2-07.6", receipt.RootElement.GetProperty("unitId").GetString())
+    Assert.Equal("accepted", receipt.RootElement.GetProperty("state").GetString())
+    Assert.Equal("67c780c5b396e85caaf853cb2c985351e9644d39adcd23ced12f3d2405f2a1bd", receipt.RootElement.GetProperty("unitContractSha256").GetString())
+    Assert.Equal("eaf032038cc3ed1fb3f1a21db81a32f7af7969f84a0d9b77cd1d7eea68346bc6", receipt.RootElement.GetProperty("digest").GetString())
+
+[<Fact>]
+let ``GS2-07-7 subroadmap is an outline rather than a completion ledger`` () =
+    let subroadmap = File.ReadAllText(Path.Combine(root, "docs/roadmaps/gs2-07-7-event-benefit.md"))
+    Assert.Contains("not a second completion ledger", subroadmap)
+    Assert.Contains("remain the sole completion authority", subroadmap)
+    Assert.Contains("### 1. Register the measurement contract", subroadmap)
+    Assert.Contains("### 2. Implement and exercise bounded measurement", subroadmap)
+    Assert.Contains("### 3. Accept the measured result", subroadmap)
+    Assert.Contains("Stop this first window after protected merge", subroadmap)
+    Assert.Contains("Registration does not claim measurement or GS2-07.7 acceptance", subroadmap)
+
+[<Fact>]
+let ``roadmap unit index advances through GS2-07-7 event benefit`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -821,7 +932,8 @@ let ``roadmap unit index advances through GS2-07-6 queue sandbox pilot`` () =
              "GS2-07.3"
              "GS2-07.4"
              "GS2-07.5"
-             "GS2-07.6" ]
+             "GS2-07.6"
+             "GS2-07.7" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -2053,7 +2165,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(42, commands.Length)
+    Assert.Equal(44, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())
@@ -2132,6 +2244,17 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     Assert.Equal<string list>([ "fsi"; "eng/validate-github-merge-group-support.fsx"; "--"; "." ], mergeGroupCommand.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
     Assert.Equal(mergeGroupCommand.GetProperty("id").GetString(), mergeGroupContract.GetProperty("id").GetString())
     Assert.Equal(gateCommandSha256 mergeGroupCommand, mergeGroupContract.GetProperty("commandSha256").GetString())
+
+    let eventBenefitUnit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun unitValue -> unitValue.GetProperty("id").GetString() = "GS2-07.7")
+    let eventBenefitContracts = eventBenefitUnit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+    let eventBenefitCommands =
+        eventBenefitContracts
+        |> List.map (fun contract -> commands |> List.find (fun command -> command.GetProperty("id").GetString() = contract.GetProperty("id").GetString()))
+    Assert.Equal<string list>([ "Q3"; "Q4" ], eventBenefitCommands |> List.map (fun command -> command.GetProperty("qGate").GetString()))
+    Assert.Equal<string list>([ "fsi"; "eng/validate-github-event-benefit-measurement.fsx"; "--"; "." ], eventBenefitCommands[0].GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Equal<string list>([ "fsi"; "eng/validate-github-event-benefit-provider-observation.fsx"; "--"; "." ], eventBenefitCommands[1].GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    for command, contract in List.zip eventBenefitCommands eventBenefitContracts do
+        Assert.Equal(gateCommandSha256 command, contract.GetProperty("commandSha256").GetString())
 
     Assert.Equal<string list>(
         [ "fsi"; "eng/validate-github-workflow-selection.fsx"; "--"; "." ],
