@@ -39,16 +39,41 @@ if shaFile "eng/quint-qualification.json" <> "486e1a956d53f9809f183d336bb9782478
 let catalog = json "eng/github-substrate-v2-gates.json"
 let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 let selected = expected |> List.map (fun id -> commands |> List.find (fun value -> text "id" value = id))
+let runAt workingDirectory executable arguments =
+    let info = ProcessStartInfo(executable)
+    info.WorkingDirectory <- workingDirectory; info.UseShellExecute <- false; info.RedirectStandardOutput <- true; info.RedirectStandardError <- true
+    for argument in arguments do info.ArgumentList.Add argument
+    use child = Process.Start info
+    let output, error = child.StandardOutput.ReadToEnd(), child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    child.ExitCode, output, error
 if not skipCold then
+    let historicalRoot = Path.Combine(Path.GetTempPath(), $"gs2-07-8-gs2-07-7-{Guid.NewGuid():N}")
+    let mutable failure: string option = None
+    let setupCode, setupOutput, setupError = runAt root "git" [ "worktree"; "add"; "--detach"; historicalRoot; "32985e9b62a287cb8854dad8da5d1f8561b3a5ee" ]
+    if setupCode <> 0 then failwithf "historical GS2-07.7 checkout failed: %s %s" setupOutput setupError
+    let restoreCode, restoreOutput, restoreError = runAt historicalRoot "dotnet" [ "restore"; "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"; "--locked-mode" ]
+    if restoreCode <> 0 then failure <- Some $"historical restore failed: {restoreOutput} {restoreError}"
+    if failure.IsNone then
+        let buildCode, buildOutput, buildError = runAt historicalRoot "dotnet" [ "build"; "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"; "-c"; "Release"; "--no-restore" ]
+        if buildCode <> 0 then failure <- Some $"historical build failed: {buildOutput} {buildError}"
     for command in selected do
-        let executable = text "executable" command
-        let info = ProcessStartInfo(executable)
-        info.WorkingDirectory <- root; info.UseShellExecute <- false; info.RedirectStandardOutput <- true; info.RedirectStandardError <- true
-        for argument in command.GetProperty("args").EnumerateArray() do info.ArgumentList.Add(argument.GetString())
-        use child = Process.Start info
-        let output, error = child.StandardOutput.ReadToEnd(), child.StandardError.ReadToEnd()
-        child.WaitForExit()
-        if child.ExitCode <> 0 then failwithf "cold command %s failed (%d): %s %s" (text "id" command) child.ExitCode output error
+        if failure.IsNone then
+            let id = text "id" command
+            let commandRoot = if id.StartsWith("github-event-benefit-", StringComparison.Ordinal) then historicalRoot else root
+            let commandArgs = command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+            let code, output, error = runAt commandRoot (text "executable" command) commandArgs
+            if code <> 0 then failure <- Some $"cold command {id} failed ({code}): {output} {error}"
+    let cleanupCode, cleanupOutput, cleanupError = runAt root "git" [ "worktree"; "remove"; "--force"; historicalRoot ]
+    if cleanupCode <> 0 && failure.IsNone then failure <- Some $"historical checkout cleanup failed: {cleanupOutput} {cleanupError}"
+    match failure with Some message -> failwith message | None -> ()
 let contract = json "evidence/github-substrate-v2/gs2-07-8/contract.json"
 if text "closureMode" contract.RootElement <> "comprehensive-cold" then failwith "closure mode differs"
+let closure = json "evidence/github-substrate-v2/gs2-07-8/comprehensive-closure.json"
+let closureRoot = closure.RootElement
+if text "schema" closureRoot <> "fsgg.coordination.github-runtime-closure/1" || text "unit" closureRoot <> "GS2-07.8" || text "parent" closureRoot <> "GS2-07" || text "mode" closureRoot <> "comprehensive-cold" || text "state" closureRoot <> "qualified" then failwith "retained closure identity differs"
+if text "sourceRevision" closureRoot <> "b9a78c71dff89e7502e9b1ccdfbd95828fd9d79b" || text "roadmapRevision" closureRoot <> "6d3c8283042184557d4f0db07fcc353571494bb5" || text "roadmapSha256" closureRoot <> "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c" then failwith "retained closure source differs"
+if text "qualificationReportSha256" closureRoot <> shaFile "evidence/github-substrate-v2/gs2-07-8/qualification-report.json" || text "modelIdentity" closureRoot <> shaFile "eng/quint-qualification.json" then failwith "retained closure artifact differs"
+let closureCommands = closureRoot.GetProperty("commands").EnumerateArray() |> Seq.map (text "id") |> Seq.toList
+if closureCommands <> expected || closureRoot.GetProperty("commands").EnumerateArray() |> Seq.exists (fun value -> text "execution" value <> "cold-fresh-process" || text "result" value <> "pass") then failwith "retained cold command result differs"
 printfn "GITHUB_RUNTIME_RECOVERY_OK children=%d commands=%d cold=%b model=%s" accepted.Length selected.Length (not skipCold) (shaFile "eng/quint-qualification.json")

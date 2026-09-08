@@ -4,7 +4,7 @@
   "roadmapRevision": "6d3c8283042184557d4f0db07fcc353571494bb5",
   "roadmapSha256": "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c",
   "prerequisiteFileSha256": "aca767f445f0feb5db6d9034d5c3e40f60924727f2c340fff771f3dafe12e646",
-  "candidateHead": "0000000000000000000000000000000000000000",
+  "candidateHead": "b9a78c71dff89e7502e9b1ccdfbd95828fd9d79b",
   "closureMode": "comprehensive-cold",
   "parentClosureCommands": [
     "github-event-envelope-contract",

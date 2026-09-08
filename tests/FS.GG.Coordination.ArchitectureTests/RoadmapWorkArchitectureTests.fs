@@ -308,8 +308,10 @@ let private gs2078GateCatalogAgrees (indexText: string) (catalogText: string) =
     use catalog = JsonDocument.Parse(catalogText)
     let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.8")
     let contracts = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+    let gateCommands = unit.GetProperty("gateCommands").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
     let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
     contracts.Length = 12
+    && gateCommands = (contracts |> List.map (fun contract -> contract.GetProperty("id").GetString()))
     && (contracts |> List.forall (fun contract ->
         commands
         |> List.tryFind (fun command -> command.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
