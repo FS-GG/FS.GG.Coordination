@@ -12,9 +12,10 @@
     "roadmap-evidence"
   ],
   "initial_verdict": "changes-required",
-  "repair_rounds": 0,
+  "repair_rounds": 1,
   "reviewed_commits": [
-    "a53fc3907788f9c119851ab07cb00d2fd5aed308"
+    "a53fc3907788f9c119851ab07cb00d2fd5aed308",
+    "348529a275f2cf62bdc539042cb8e19ff1ce3120"
   ],
   "findings": [
     {
@@ -27,9 +28,12 @@
         "Verification: `tests/FS.GG.Coordination.UnitTests/GitHubEventBenefitTests.fs:84-145` covers an invalid window endpoint and hosted-claim head mismatch, but has no non-hosted source-head mutation or valid out-of-window source/hint/audit timestamp case.",
         "Verification: accepted `docs/roadmaps/gs2-07-7-event-benefit.md` phase 2 says tampered timestamps and heads fail, and `work/326-gs2-07-7-event-benefit/spec.md` FR-001/FR-004 require a finite declared window and altered heads to refuse."
       ],
-      "disposition": "unresolved",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Unresolved: bind every applicable source tested head to the declared candidate/observation head, constrain source/hint/audit timestamps to the declared window with an explicit policy for end inclusivity, make those fields affect replay identity, and add negative boundary tests. Verification: unverified."
+        "Verification: `src/FS.GG.Coordination.Qualification.Contracts/GitHubEventBenefitQualification.fs:109-133` defines an inclusive `withinWindow` check, requires exact candidate heads for current-provider/replay/injected sources, requires their heads to be present, and validates any supplied historical head as a lowercase immutable SHA.",
+        "Verification: `src/FS.GG.Coordination.Qualification.Contracts/GitHubEventBenefitQualification.fs:146-147,164-184` applies the window check to every present source timestamp, every hint arrival, and all three audit timestamps.",
+        "Verification: `tests/FS.GG.Coordination.UnitTests/GitHubEventBenefitTests.fs:84-103` exercises a substituted non-hosted source head, the inclusive end boundary, and a one-second out-of-window source timestamp.",
+        "Verification: confirmation-turn `dotnet fsi --quiet` inversion harness returned true for inclusive-boundary, changed-source-head, missing-replay-head, malformed-historical-head, source-outside-window, hint-outside-window, and audit-outside-window against repaired commit `348529a275f2cf62bdc539042cb8e19ff1ce3120`."
       ]
     },
     {
@@ -42,19 +46,19 @@
         "Verification: `eng/validate-github-event-benefit-measurement.fsx:130-136` establishes independence only by requiring different retained description strings and then validates the identically shaped result rows; it does not bind each description to a distinct executed case.",
         "Verification: `dotnet fsi eng/validate-github-event-benefit-measurement.fsx -- .` passes with `controls=32`, demonstrating that the current gate cannot detect the description/execution mismatch."
       ],
-      "disposition": "unresolved",
+      "disposition": "resolved",
       "resolution_evidence": [
-        "Unresolved: implement and execute a genuinely separate independent predicate for every advertised case (or correct the inventory to the cases actually executed), bind case identity to result evidence, and add a failure that proves a description cannot pass through the generated predicate. Verification: unverified."
+        "Verification: `eng/validate-github-event-benefit-measurement.fsx:96-176` now contains separate exhaustive `generatedMutation` and `independentMutation` functions with explicit predicates for all 32 registered control IDs and maps each retained case description into its result evidence.",
+        "Verification: `src/FS.GG.Coordination.Qualification.Contracts/GitHubEventBenefitQualification.fs:308-315` requires each evidence string to contain its control ID and rejects equal generated/independent evidence for any paired control.",
+        "Verification: confirmation-turn `dotnet fsi --quiet` inversion harness accepted distinct generated/independent evidence and rejected the same generated rows supplied as both inventories.",
+        "Verification: `dotnet fsi eng/validate-github-event-benefit-measurement.fsx -- .` passed all 32 repaired controls with seal `509dac81407720e780ebcf7c9c075f9295d1d25dad4f480c8a78f2b2dbe148b5`."
       ]
     }
   ],
   "confirmation": {
-    "reviewed_commit": "a53fc3907788f9c119851ab07cb00d2fd5aed308",
-    "verdict": "changes-required",
-    "unresolved_blocker_major": [
-      "GS2-07.7-M1",
-      "GS2-07.7-M2"
-    ]
+    "reviewed_commit": "348529a275f2cf62bdc539042cb8e19ff1ce3120",
+    "verdict": "pass",
+    "unresolved_blocker_major": []
   },
   "human_escalation": null,
   "game_functionality": false,
