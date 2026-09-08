@@ -54,6 +54,10 @@ unreadable workflow input, missing protected-history binding, route owner/packag
 substitution, query/fragment/segment smuggling, and detached channel/source binding are red. The validator reads
 the production workflow itself, and its positive and negative controls execute in the architecture suite.
 
+Hosted setup installs the latest LTS runtime beside the requested SDK. Candidate verifier
+launches therefore disable runtime roll-forward so the verifier itself executes on the SDK's
+pinned runtime; the verifier clears that process selector before invoking ordinary child builds.
+
 After publication, the workflow downloads the package through GitHub Packages' authenticated
 flat-container surface into a separate directory. Two isolated fixture consumers restore
 only that downloaded package for `FS.GG.Coordination.*`, use fresh .NET and NuGet homes,

@@ -34,6 +34,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
+          dotnet-version: 10.0.400
           global-json-file: global.json
       - name: Bind the exact prerelease identity
         id: identity
@@ -48,6 +49,8 @@ jobs:
           version="0.0.0-gs2-03-7.${actual:0:12}"
           printf 'candidate=%s\nversion=%s\n' "$actual" "$version" >> "$GITHUB_OUTPUT"
       - name: Pack once and generate supply-chain evidence
+        env:
+          DOTNET_ROLL_FORWARD: Disable
         run: >-
           dotnet fsi eng/supply-chain-candidate.fsx -- prepare
           --repo .
@@ -56,6 +59,8 @@ jobs:
           --protected-ref refs/remotes/origin/main
           --output "$CANDIDATE_OUTPUT"
       - name: Verify prepared evidence before publication
+        env:
+          DOTNET_ROLL_FORWARD: Disable
         run: >-
           dotnet fsi eng/supply-chain-candidate.fsx -- verify
           --manifest "$CANDIDATE_OUTPUT/candidate.json"
@@ -84,6 +89,8 @@ jobs:
             --output "$SERVED_OUTPUT/$file" "$url"
           printf 'url=%s\npath=%s\n' "$url" "$SERVED_OUTPUT/$file" >> "$GITHUB_OUTPUT"
       - name: Compare bytes and execute two clean consumers
+        env:
+          DOTNET_ROLL_FORWARD: Disable
         run: >-
           dotnet fsi eng/supply-chain-candidate.fsx -- verify-served
           --repo .

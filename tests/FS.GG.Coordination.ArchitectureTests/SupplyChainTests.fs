@@ -3,6 +3,7 @@ module FS.GG.Coordination.SupplyChainTests
 open System
 open System.Diagnostics
 open System.IO
+open System.Text.Json
 open Xunit
 
 let private root =
@@ -14,6 +15,7 @@ let private runSelfTest () =
     info.UseShellExecute <- false
     info.RedirectStandardOutput <- true
     info.RedirectStandardError <- true
+    info.Environment["DOTNET_ROLL_FORWARD"] <- "Disable"
     for argument in [ "fsi"; "eng/supply-chain-candidate.fsx"; "--"; "selftest"; "--repo"; "." ] do
         info.ArgumentList.Add argument
     use child = Process.Start info
@@ -28,6 +30,7 @@ let private runReproducibilityTest () =
     info.UseShellExecute <- false
     info.RedirectStandardOutput <- true
     info.RedirectStandardError <- true
+    info.Environment["DOTNET_ROLL_FORWARD"] <- "Disable"
     for argument in [ "fsi"; "eng/supply-chain-candidate.fsx"; "--"; "reprotest"; "--repo"; "." ] do
         info.ArgumentList.Add argument
     use child = Process.Start info
@@ -35,6 +38,27 @@ let private runReproducibilityTest () =
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     child.ExitCode, output.Trim(), error.Trim()
+
+[<Fact>]
+let ``repository SDK selection matches the exact candidate supply-chain pin`` () =
+    use globalJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "global.json")))
+    let sdk = globalJson.RootElement.GetProperty("sdk")
+    let sdkVersion = sdk.GetProperty("version").GetString()
+    let rollForward = sdk.GetProperty("rollForward").GetString()
+    let implementation = File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
+    Assert.Equal("10.0.400", sdkVersion)
+    Assert.Equal("disable", rollForward)
+    Assert.Contains($"let pinnedDotnetSdkVersion = \"{sdkVersion}\"", implementation)
+    Assert.Contains("Environment.SetEnvironmentVariable(\"DOTNET_ROLL_FORWARD\", null)", implementation)
+    for relativePath in
+        [ ".github/actions/coordination-setup/action.yml"
+          ".github/workflows/bootstrap-qualification.yml"
+          ".github/workflows/candidate-supply-chain.yml" ] do
+        let setup = File.ReadAllText(Path.Combine(root, relativePath))
+        let setupCount = setup.Split("uses: actions/setup-dotnet@", StringSplitOptions.None).Length - 1
+        let exactPinCount = setup.Split($"dotnet-version: {sdkVersion}", StringSplitOptions.None).Length - 1
+        Assert.True(setupCount > 0, $"{relativePath} must contain a setup-dotnet invocation")
+        Assert.Equal(setupCount, exactPinCount)
 
 [<Fact>]
 let ``candidate supply chain proves positive and independent negative controls`` () =
@@ -60,6 +84,7 @@ let ``candidate workflow is manual exact-sha and pre-production only`` () =
     Assert.Contains("expected_sha:", workflow)
     Assert.Contains("permissions:\n  contents: read\n  packages: write", workflow)
     Assert.Contains("dotnet fsi eng/supply-chain-candidate.fsx -- prepare", workflow)
+    Assert.Equal(3, workflow.Split("DOTNET_ROLL_FORWARD: Disable", StringSplitOptions.None).Length - 1)
     Assert.Contains("git merge-base --is-ancestor", workflow)
     Assert.Contains("--protected-ref refs/remotes/origin/main", workflow)
     Assert.Contains("https://nuget.pkg.github.com/FS-GG/index.json", workflow)
