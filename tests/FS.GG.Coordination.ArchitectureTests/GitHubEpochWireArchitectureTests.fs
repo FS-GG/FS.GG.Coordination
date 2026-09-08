@@ -3,6 +3,8 @@ module FS.GG.Coordination.GitHubEpochWireArchitectureTests
 open System
 open System.Diagnostics
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open Xunit
 
@@ -21,6 +23,36 @@ let private run executable arguments =
     use child = Process.Start info
     let output, error = child.StandardOutput.ReadToEnd(), child.StandardError.ReadToEnd()
     child.WaitForExit(); child.ExitCode, output, error
+let private commandSha256 (command: JsonElement) =
+    seq {
+        command.GetProperty("executable").GetString()
+        yield! command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString()
+    }
+    |> String.concat "\u0000"
+    |> Encoding.UTF8.GetBytes
+    |> SHA256.HashData
+    |> Convert.ToHexString
+    |> _.ToLowerInvariant()
+
+[<Fact>]
+let ``native unit binds the exact landed roadmap prerequisite and Q3 command`` () =
+    use index = JsonDocument.Parse(read "eng/github-substrate-v2-units.json")
+    use catalog = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
+    let roadmap = index.RootElement.GetProperty("roadmap")
+    Assert.Equal("e3dcd3cde5416a620cf59989c203b11e82c90294", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("20450bccb71d8656330960cfade25150d370255ac58094523492c98f049e58c1", roadmap.GetProperty("sha256").GetString())
+    let unit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-08.1")
+    Assert.Equal<string list>([ "GS2-07.8" ], unit.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Equal<string list>([ "Q3" ], unit.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    let contract = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
+    let command =
+        catalog.RootElement.GetProperty("commands").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("id").GetString() = "github-epoch-wire-contract")
+    Assert.Equal("Q3", command.GetProperty("qGate").GetString())
+    Assert.Equal<string list>([ "fsi"; "eng/validate-github-epoch-wire.fsx"; "--"; "." ], command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Equal(commandSha256 command, contract.GetProperty("commandSha256").GetString())
 
 [<Fact>]
 let ``wire qualification has no network writer or orchestration service`` () =

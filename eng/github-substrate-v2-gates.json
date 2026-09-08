@@ -276,6 +276,12 @@
       "qGate": "Q6",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-runtime-recovery.fsx", "--", "."]
+    },
+    {
+      "id": "github-epoch-wire-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-epoch-wire.fsx", "--", "."]
     }
   ]
 }

@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "6d3c8283042184557d4f0db07fcc353571494bb5",
+    "revision": "e3dcd3cde5416a620cf59989c203b11e82c90294",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c"
+    "sha256": "20450bccb71d8656330960cfade25150d370255ac58094523492c98f049e58c1"
   },
   "units": [
     {
@@ -919,6 +919,20 @@
         { "id": "github-runtime-recovery-contract", "qGate": "Q6", "commandSha256": "6fa1e294f32688b45d9b4116b29ea5725e4faf9458a257cdf7173603f46d8a2c" }
       ],
       "contractSha256": "34e0a41c1a379916d87af62dc19f51cba89ebcfb123461543b5974e65b907286"
+    },
+    {
+      "id": "GS2-08.1",
+      "title": "Freeze the epoch wire contract",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-07.8"],
+      "permissionCeiling": ["repository-local additive canonical Protocol.md wire semantics, generated bindings and compiled outputs, pure epoch-wire qualification contracts, generated and independently authored controls, formal evidence refresh, validation, and tests", "read-only consumption of accepted GS2-07.8 and exact landed roadmap bytes is allowed; no live ref or tag creation, GitHub App or environment mutation, control-issue projection, credential change, package publication, receiver adoption, cutover transition, ordinary production write, or GS2-08.2 inspection, preparation, or implementation authority"],
+      "exitGate": "the Q3 github-epoch-wire contract begins from the exact accepted GS2-07.8 receipt and exact landed roadmap revision; versioned content-addressed schema fsgg.github-substrate.epoch-wire/1 binds the canonical fs-gg-production fleet aggregate in Authority to exact ref, immutable phase tag, genesis, trust anchor, manifest, commit ancestry, phase and generation; the complete legal sequence is OperatingV1, Preparing, FreezeRequested, Frozen, SwitchedV2, VerifiedV2, OpenV2, ObservingV2, ContractingV1 and OperatingV2, with closed pre-open RollingBack recovery, no independent writer reopening from RollingBack and no v1 restoration after OpenV2; OperatingV1 admits eligible ordinary v1 work, Preparing admits only eligible incumbents already admitted under the matching manifest and exact epoch, claim and operation generations, while FreezeRequested and every later phase refuse ordinary v1 effects; caches never authorize effects and stale, missing-parent/tag, rewind, wrong-manifest, unknown-field, duplicate-field, unreadable, partial and contradictory inputs remain refused or explicitly indeterminate; lost responses settle through exact authoritative reread as known-applied, proven-absent-may-retry, partial or indeterminate without repeating a known effect; issue projection is exact and explicitly non-authoritative; generated and independently authored state, transition, rollback, no-post-open-v1, admission, fencing, generation, manifest, fleet-layout, genesis/trust, parent/tag, fresh-read, cache, strict-field, unreadable/contradictory, lost-response and issue-projection controls pass against the same contract; canonical Quint Q1/Q2, generated structural and fault-injection evidence remain source-bound, prior accepted receipts remain byte-identical, and no live ref, tag, App, environment, control issue, credential, package, publication, adoption or cutover effect occurs",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-epoch-wire-contract"],
+      "gateContracts": [
+        { "id": "github-epoch-wire-contract", "qGate": "Q3", "commandSha256": "5ed458d212ba480d74bf64e014893461605811d74ec35335c9a8fecc2b7f935b" }
+      ],
+      "contractSha256": "135e1434490d9c358e32b957a2d68959fa12e703a73e27002c04b4ec0dba345d"
     }
   ]
 }
