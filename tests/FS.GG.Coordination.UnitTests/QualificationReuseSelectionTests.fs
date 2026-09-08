@@ -78,7 +78,7 @@ let ``partition aggregation is complete deterministic and order independent`` ()
     let plan = createPartitionPlan (candidate "b" "6") (digest "7") 6 [ "unit"; "architecture"; "formal"; "security"; "package"; "recovery"; "projection" ]
     let processChanged = createPartitionPlan plan.Candidate (digest "8") 6 plan.Obligations
     Assert.Equal(plan.Candidate.ObligationSha256, processChanged.Candidate.ObligationSha256)
-    Assert.NotEqual(plan.PlanSha256, processChanged.PlanSha256)
+    Assert.NotEqual<string>(plan.PlanSha256, processChanged.PlanSha256)
     let receipts = plan.Partitions |> List.map (fun (index, obligations) -> createPartitionReceipt plan index obligations true)
     Assert.Equal(6, plan.PartitionCount)
     Assert.Equal(Ok true, aggregatePartitions plan (List.rev receipts))
