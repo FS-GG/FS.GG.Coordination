@@ -1,0 +1,20 @@
+{
+  "schema": "fsgg.coordination.optimistic-qualification-plan/1",
+  "selection": {
+    "maxConcurrentCandidates": 2,
+    "requiredIdentity": ["behavioralSha256", "compiledContractSha256", "toolchainProfileSha256", "verificationBoundsSha256", "formalCorpusSha256", "harnessSha256"],
+    "changedBindingRequiresCorrespondence": true,
+    "priorExecutionRequires": ["authentic", "complete", "current"],
+    "dispositions": ["current", "reused", "deferred", "failed"]
+  },
+  "coherent": {
+    "maxPartitionsPerCandidate": 6,
+    "failFast": false,
+    "cancelInProgress": false,
+    "scratch": "isolated-per-partition",
+    "phases": ["prepare", "run-partition", "aggregate"],
+    "nightly": "17 3 * * *",
+    "nightlyEnumeration": "complete-protected-main-ancestry-and-pending-candidates"
+  },
+  "obligations": ["unit", "architecture", "formal", "security", "package", "recovery"]
+}

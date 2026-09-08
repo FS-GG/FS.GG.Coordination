@@ -53,6 +53,66 @@ type Decision =
       Prior: PriorRun option
       SelfSha256: string }
 
+type ReuseIdentity =
+    { BehavioralSha256: string
+      CompiledContractSha256: string
+      ToolchainProfileSha256: string
+      VerificationBoundsSha256: string
+      FormalCorpusSha256: string
+      HarnessSha256: string
+      BindingSha256: string }
+
+type CandidateObligation =
+    { Candidate: string
+      BaseRevision: string
+      TreeSha256: string
+      SourceSha256: string
+      Identity: ReuseIdentity
+      ObligationSha256: string }
+
+type PriorExecution =
+    { Candidate: CandidateObligation
+      RunId: int64
+      Attempt: int
+      ExecutedReceiptSha256: string
+      CompletedAt: string
+      ExpiresAt: string
+      Authentic: bool
+      Complete: bool }
+
+type SemanticDelta =
+    { EvaluatorSha256: string
+      DeltaSha256: string
+      IsEmpty: bool }
+
+type ReuseDisposition = Current | Reused | Deferred | Failed
+type CoherentState = Pending | Running | Passed | Blocked | Disputed
+
+type ReuseSelection =
+    { Candidate: CandidateObligation
+      Disposition: ReuseDisposition
+      Reason: string
+      Prior: PriorExecution option
+      SemanticDelta: SemanticDelta
+      BindingCorrespondenceSha256: string option
+      CoherentRunPending: bool
+      CoherentState: CoherentState
+      SelectionSha256: string }
+
+type PartitionPlan =
+    { Candidate: CandidateObligation
+      Obligations: string list
+      PartitionCount: int
+      Partitions: (int * string list) list
+      PlanSha256: string }
+
+type PartitionReceipt =
+    { PlanSha256: string
+      Partition: int
+      Obligations: string list
+      Passed: bool
+      ReceiptSha256: string }
+
 let sha256 (bytes: byte array) =
     SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -344,3 +404,193 @@ let parseDecision (bytes: byte array) =
             elif bytes <> decisionBytes final then Error "reuse receipt bytes are not canonical"
             else Ok final
     with exceptionValue -> Error exceptionValue.Message
+
+let private requireDigest (name: string) (value: string) =
+    if not (isLowerSha256 value) then invalidArg name $"{name} must be a lowercase SHA-256"
+
+let private identityFields (identity: ReuseIdentity) =
+    [ "behavioralSha256", identity.BehavioralSha256
+      "compiledContractSha256", identity.CompiledContractSha256
+      "toolchainProfileSha256", identity.ToolchainProfileSha256
+      "verificationBoundsSha256", identity.VerificationBoundsSha256
+      "formalCorpusSha256", identity.FormalCorpusSha256
+      "harnessSha256", identity.HarnessSha256
+      "bindingSha256", identity.BindingSha256 ]
+
+let private obligationPayload (candidate: string) (baseRevision: string) (tree: string) (source: string) (identity: ReuseIdentity) =
+    compactBytes (fun writer ->
+        writer.WriteStartObject()
+        writer.WriteString("schema", "fsgg.coordination.candidate-obligation/1")
+        writer.WriteString("candidate", candidate)
+        writer.WriteString("baseRevision", baseRevision)
+        writer.WriteString("treeSha256", tree)
+        writer.WriteString("sourceSha256", source)
+        for name, value in identityFields identity do writer.WriteString(name, value)
+        writer.WriteEndObject())
+
+let createCandidateObligation (candidate: string) (baseRevision: string) (treeSha256: string) (sourceSha256: string) (identity: ReuseIdentity) =
+    if not (isHead candidate) || not (isHead baseRevision) then invalidArg (nameof candidate) "candidate and base must be exact 40-hex revisions"
+    requireDigest (nameof treeSha256) treeSha256
+    requireDigest (nameof sourceSha256) sourceSha256
+    identityFields identity |> List.iter (fun (name, value) -> requireDigest name value)
+    let normalizedCandidate = candidate.ToLowerInvariant()
+    let normalizedBase = baseRevision.ToLowerInvariant()
+    { Candidate = normalizedCandidate
+      BaseRevision = normalizedBase
+      TreeSha256 = treeSha256
+      SourceSha256 = sourceSha256
+      Identity = identity
+      ObligationSha256 = obligationPayload normalizedCandidate normalizedBase treeSha256 sourceSha256 identity |> sha256 }
+
+let candidateObligationBytes (obligation: CandidateObligation) =
+    let payload = obligationPayload obligation.Candidate obligation.BaseRevision obligation.TreeSha256 obligation.SourceSha256 obligation.Identity
+    if sha256 payload <> obligation.ObligationSha256 then invalidArg (nameof obligation) "candidate obligation digest is stale"
+    Array.append
+        (compactBytes (fun writer ->
+            use document = JsonDocument.Parse payload
+            writer.WriteStartObject(); document.RootElement.EnumerateObject() |> Seq.iter (fun property -> property.WriteTo writer)
+            writer.WriteString("obligationSha256", obligation.ObligationSha256); writer.WriteEndObject())) [| byte '\n' |]
+
+let private dispositionText = function Current -> "current" | Reused -> "reused" | Deferred -> "deferred" | Failed -> "failed"
+let private coherentText = function Pending -> "pending" | Running -> "running" | Passed -> "passed" | Blocked -> "blocked" | Disputed -> "disputed"
+
+let private selectionPayload (candidate: CandidateObligation) (disposition: ReuseDisposition) (reason: string) (prior: PriorExecution option) (semantic: SemanticDelta) (correspondence: string option) (pending: bool) (state: CoherentState) =
+    compactBytes (fun writer ->
+        writer.WriteStartObject()
+        writer.WriteString("schema", "fsgg.coordination.qualification-selection/1")
+        writer.WriteString("candidateObligationSha256", candidate.ObligationSha256)
+        writer.WriteString("disposition", dispositionText disposition)
+        writer.WriteString("reason", reason)
+        match prior with
+        | Some value ->
+            writer.WriteStartObject("prior")
+            writer.WriteString("candidateObligationSha256", value.Candidate.ObligationSha256)
+            writer.WriteNumber("runId", value.RunId)
+            writer.WriteNumber("attempt", value.Attempt)
+            writer.WriteString("executedReceiptSha256", value.ExecutedReceiptSha256)
+            writer.WriteString("completedAt", value.CompletedAt)
+            writer.WriteString("expiresAt", value.ExpiresAt)
+            writer.WriteBoolean("authentic", value.Authentic)
+            writer.WriteBoolean("complete", value.Complete)
+            writer.WriteEndObject()
+        | None -> writer.WriteNull("prior")
+        writer.WriteStartObject("semanticDelta")
+        writer.WriteString("evaluatorSha256", semantic.EvaluatorSha256)
+        writer.WriteString("deltaSha256", semantic.DeltaSha256)
+        writer.WriteBoolean("empty", semantic.IsEmpty)
+        writer.WriteEndObject()
+        match correspondence with Some value -> writer.WriteString("bindingCorrespondenceSha256", value) | None -> writer.WriteNull("bindingCorrespondenceSha256")
+        writer.WriteBoolean("coherentRunPending", pending)
+        writer.WriteString("coherentState", coherentText state)
+        writer.WriteEndObject())
+
+let private makeSelection (candidate: CandidateObligation) disposition reason prior semantic correspondence pending state : ReuseSelection =
+    let payload = selectionPayload candidate disposition reason prior semantic correspondence pending state
+    { Candidate = candidate; Disposition = disposition; Reason = reason; Prior = prior
+      SemanticDelta = semantic; BindingCorrespondenceSha256 = correspondence
+      CoherentRunPending = pending; CoherentState = state; SelectionSha256 = sha256 payload }
+
+let selectReusable (now: DateTimeOffset) (candidate: CandidateObligation) (prior: PriorExecution option) (semanticDelta: SemanticDelta) (bindingCorrespondenceSha256: string option) =
+    requireDigest "semantic evaluator" semanticDelta.EvaluatorSha256
+    requireDigest "semantic delta" semanticDelta.DeltaSha256
+    bindingCorrespondenceSha256 |> Option.iter (requireDigest "binding correspondence")
+    match prior with
+    | None -> makeSelection candidate Current "no-prior-execution" None semanticDelta None true Pending
+    | Some previous ->
+        let identity = candidate.Identity
+        let old = previous.Candidate.Identity
+        let sameSemanticIdentity =
+            identity.BehavioralSha256 = old.BehavioralSha256
+            && identity.CompiledContractSha256 = old.CompiledContractSha256
+            && identity.ToolchainProfileSha256 = old.ToolchainProfileSha256
+            && identity.VerificationBoundsSha256 = old.VerificationBoundsSha256
+            && identity.FormalCorpusSha256 = old.FormalCorpusSha256
+            && identity.HarnessSha256 = old.HarnessSha256
+        let bindingValid =
+            identity.BindingSha256 = old.BindingSha256 || Option.isSome bindingCorrespondenceSha256
+        let temporal =
+            match DateTimeOffset.TryParse previous.CompletedAt, DateTimeOffset.TryParse previous.ExpiresAt with
+            | (true, completed), (true, expires) -> completed <= now && now < expires
+            | _ -> false
+        let receiptValid =
+            previous.RunId > 0L && previous.Attempt > 0 && isLowerSha256 previous.ExecutedReceiptSha256
+            && previous.Authentic && previous.Complete && temporal
+        if not receiptValid then makeSelection candidate Current "prior-execution-incomplete-inauthentic-or-expired" None semanticDelta None true Pending
+        elif not semanticDelta.IsEmpty then makeSelection candidate Current "semantic-delta-nonempty" None semanticDelta None true Pending
+        elif not sameSemanticIdentity then makeSelection candidate Current "semantic-tool-bounds-corpus-or-harness-mismatch" None semanticDelta None true Pending
+        elif not bindingValid then makeSelection candidate Current "changed-binding-correspondence-missing" None semanticDelta None true Pending
+        else makeSelection candidate Reused "independently-equivalent-prior-execution" (Some previous) semanticDelta bindingCorrespondenceSha256 true Pending
+
+let applyCoherentOutcome merged passed (selection: ReuseSelection) =
+    if passed then makeSelection selection.Candidate selection.Disposition selection.Reason selection.Prior selection.SemanticDelta selection.BindingCorrespondenceSha256 false Passed
+    elif merged then makeSelection selection.Candidate Failed "post-merge-coherent-failure" selection.Prior selection.SemanticDelta selection.BindingCorrespondenceSha256 false Disputed
+    else makeSelection selection.Candidate Failed "pre-merge-coherent-failure" selection.Prior selection.SemanticDelta selection.BindingCorrespondenceSha256 false Blocked
+
+let selectionBytes (selection: ReuseSelection) =
+    let expected = selectionPayload selection.Candidate selection.Disposition selection.Reason selection.Prior selection.SemanticDelta selection.BindingCorrespondenceSha256 selection.CoherentRunPending selection.CoherentState |> sha256
+    if expected <> selection.SelectionSha256 then invalidArg (nameof selection) "selection self digest is stale"
+    Array.append
+        (compactBytes (fun writer ->
+            use document = JsonDocument.Parse(selectionPayload selection.Candidate selection.Disposition selection.Reason selection.Prior selection.SemanticDelta selection.BindingCorrespondenceSha256 selection.CoherentRunPending selection.CoherentState)
+            writer.WriteStartObject()
+            for property in document.RootElement.EnumerateObject() do property.WriteTo writer
+            writer.WriteString("selectionSha256", selection.SelectionSha256)
+            writer.WriteEndObject()))
+        [| byte '\n' |]
+
+let private partitionPayload (obligationSha: string) (obligations: string list) (partitions: (int * string list) list) =
+    compactBytes (fun writer ->
+        writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.coherent-partition-plan/1")
+        writer.WriteString("candidateObligationSha256", obligationSha)
+        writer.WriteStartArray("obligations"); obligations |> List.iter writer.WriteStringValue; writer.WriteEndArray()
+        writer.WriteStartArray("partitions")
+        for index, values in partitions do
+            writer.WriteStartObject(); writer.WriteNumber("index", index); writer.WriteStartArray("obligations")
+            values |> List.iter writer.WriteStringValue; writer.WriteEndArray(); writer.WriteEndObject()
+        writer.WriteEndArray(); writer.WriteEndObject())
+
+let createPartitionPlan (candidate: CandidateObligation) maxPartitions (obligations: string list) =
+    if maxPartitions < 1 || maxPartitions > 6 then invalidArg (nameof maxPartitions) "partition count must be between one and six"
+    let ordered = obligations |> List.sort
+    if ordered.IsEmpty || ordered <> List.distinct ordered || ordered |> List.exists String.IsNullOrWhiteSpace then invalidArg (nameof obligations) "obligations must be non-empty and distinct"
+    let count = min maxPartitions ordered.Length
+    let partitions = [ for index in 0 .. count - 1 -> index, (ordered |> List.mapi (fun i value -> i, value) |> List.choose (fun (i, value) -> if i % count = index then Some value else None)) ]
+    { Candidate = candidate; Obligations = ordered; PartitionCount = count; Partitions = partitions
+      PlanSha256 = partitionPayload candidate.ObligationSha256 ordered partitions |> sha256 }
+
+let partitionPlanBytes (plan: PartitionPlan) =
+    let payload = partitionPayload plan.Candidate.ObligationSha256 plan.Obligations plan.Partitions
+    if sha256 payload <> plan.PlanSha256 then invalidArg (nameof plan) "partition plan digest is stale"
+    Array.append
+        (compactBytes (fun writer ->
+            use document = JsonDocument.Parse payload
+            writer.WriteStartObject(); document.RootElement.EnumerateObject() |> Seq.iter (fun property -> property.WriteTo writer)
+            writer.WriteString("planSha256", plan.PlanSha256); writer.WriteEndObject())) [| byte '\n' |]
+
+let private receiptPayload (planSha: string) (partition: int) (obligations: string list) passed =
+    compactBytes (fun writer ->
+        writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.coherent-partition-receipt/1")
+        writer.WriteString("planSha256", planSha); writer.WriteNumber("partition", partition)
+        writer.WriteStartArray("obligations"); obligations |> List.iter writer.WriteStringValue; writer.WriteEndArray()
+        writer.WriteBoolean("passed", passed); writer.WriteEndObject())
+
+let createPartitionReceipt (plan: PartitionPlan) partition obligations passed =
+    let expected = plan.Partitions |> List.tryFind (fst >> (=) partition) |> Option.map snd |> Option.defaultWith (fun () -> invalidArg (nameof partition) "partition is not in plan")
+    if obligations <> expected then invalidArg (nameof obligations) "partition obligations differ from immutable plan"
+    { PlanSha256 = plan.PlanSha256; Partition = partition; Obligations = obligations; Passed = passed
+      ReceiptSha256 = receiptPayload plan.PlanSha256 partition obligations passed |> sha256 }
+
+let aggregatePartitions (plan: PartitionPlan) (receipts: PartitionReceipt list) =
+    let ordered = receipts |> List.sortBy _.Partition
+    if ordered.Length <> plan.PartitionCount then Error "partition coverage incomplete"
+    elif ordered |> List.map _.Partition <> [ 0 .. plan.PartitionCount - 1 ] then Error "partition indexes are missing or duplicated"
+    else
+        let invalid =
+            ordered
+            |> List.tryFind (fun receipt ->
+                let expected = plan.Partitions |> List.find (fst >> (=) receipt.Partition) |> snd
+                receipt.PlanSha256 <> plan.PlanSha256 || receipt.Obligations <> expected
+                || receipt.ReceiptSha256 <> (receiptPayload receipt.PlanSha256 receipt.Partition receipt.Obligations receipt.Passed |> sha256))
+        match invalid with
+        | Some _ -> Error "partition receipt is substituted or stale"
+        | None -> Ok(ordered |> List.forall _.Passed)

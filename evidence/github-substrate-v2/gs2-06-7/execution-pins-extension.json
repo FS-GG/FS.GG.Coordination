@@ -13,6 +13,17 @@
     },
     {
       "kind": "workflow",
+      "path": ".github/workflows/optimistic-parallel-validation.yml",
+      "sha256": "0f54b2b4c16482167bd3f0e49f2c119e68d393800b7aba1005095d90ceafdfdf",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
       "path": ".github/workflows/reusable-obligation-selection.yml",
       "sha256": "022db9b59719c4d533a6a06c4c240e6041a5fc10da4439c2b80e1de8bec25891",
       "externalReferences": [

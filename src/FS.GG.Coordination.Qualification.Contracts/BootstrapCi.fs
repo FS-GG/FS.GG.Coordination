@@ -308,6 +308,29 @@ let private isSha value =
     && value.Length = 40
     && value |> Seq.forall Uri.IsHexDigit
 
+let private inspectOptimisticProjection root =
+    let planPath = Path.Combine(root, "eng/optimistic-qualification-plan.json")
+    let workflowPath = Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml")
+    if not (File.Exists planPath) || not (File.Exists workflowPath) then
+        [ violation "optimistic-projection-missing" "plan or generated workflow is absent" ]
+    else
+        try
+            use plan = JsonDocument.Parse(File.ReadAllBytes planPath)
+            let selection = plan.RootElement.GetProperty("selection")
+            let coherent = plan.RootElement.GetProperty("coherent")
+            let workflow = File.ReadAllText workflowPath
+            [ if stringProperty "schema" plan.RootElement <> Some "fsgg.coordination.optimistic-qualification-plan/1" then
+                  yield violation "optimistic-plan-schema" "unsupported"
+              if selection.GetProperty("maxConcurrentCandidates").GetInt32() <> 2 then
+                  yield violation "optimistic-candidate-bound" "must equal two"
+              if coherent.GetProperty("maxPartitionsPerCandidate").GetInt32() <> 6 then
+                  yield violation "optimistic-partition-bound" "must equal six"
+              if boolProperty "failFast" coherent <> Some false || boolProperty "cancelInProgress" coherent <> Some false then
+                  yield violation "optimistic-continuation" "coherent validation must continue completely"
+              for token in [ "cancel-in-progress: false"; "fail-fast: false"; "max-parallel: 6"; "cron: '17 3 * * *'"; "  prepare:"; "  run-partition:"; "  aggregate:" ] do
+                  if not (workflow.Contains token) then yield violation "optimistic-workflow-projection" token ]
+        with error -> [ violation "optimistic-plan-invalid" error.Message ]
+
 let private optionValue name (arguments: string list) =
     arguments
     |> List.tryFindIndex ((=) name)
@@ -1051,6 +1074,7 @@ let execute (arguments: string list) =
                 File.WriteAllText(output, renderWorkflow contract, UTF8Encoding(false))
                 []
             | "workflow" -> inspectWorkflow root contract
+            | "optimistic-projection" -> inspectOptimisticProjection root
             | "subject" ->
                 match optionValue "--output" arguments with
                 | Some output ->
