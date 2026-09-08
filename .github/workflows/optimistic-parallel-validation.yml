@@ -59,6 +59,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 0 }
       - name: Independently classify selective reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FSGG_RUNNER_TEMP: ${{ runner.temp }}/reuse-decision
+          FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}
+          FSGG_CURRENT_RUN_ID: ${{ github.run_id }}
+          FSGG_REPOSITORY: ${{ github.repository }}
         run: bash eng/bootstrap-gates/reuse-decision.sh
 
   shared-build:
