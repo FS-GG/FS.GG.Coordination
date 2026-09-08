@@ -85,6 +85,15 @@ let ``partition aggregation is complete deterministic and order independent`` ()
     let failed = { receipts.Head with Passed = false; ReceiptSha256 = "" }
     let failed = createPartitionReceipt plan failed.Partition failed.Obligations false
     Assert.Equal(Ok false, aggregatePartitions plan (failed :: List.tail receipts))
+    Assert.Equal(Error "partition indexes are missing or duplicated", aggregatePartitions plan (receipts.Head :: List.take 5 receipts))
+    Assert.True(parsePartitionPlan plan.Candidate (partitionPlanBytes plan) |> Result.isOk)
+    Assert.True(parsePartitionReceipt (partitionReceiptBytes receipts.Head) |> Result.isOk)
+    let stale = partitionReceiptBytes receipts.Head |> Text.Encoding.UTF8.GetString |> fun text -> text.Replace(plan.PlanSha256, digest "9") |> Text.Encoding.UTF8.GetBytes
+    Assert.True(parsePartitionReceipt stale |> Result.isError)
+    let aggregate = createCoherentAggregateReceipt plan receipts |> Result.defaultWith failwith
+    Assert.True(parseCoherentAggregateReceipt (coherentAggregateReceiptBytes aggregate) |> Result.isOk)
+    let aggregateStale = coherentAggregateReceiptBytes aggregate |> Text.Encoding.UTF8.GetString |> fun text -> text.Replace(receipts.Head.ReceiptSha256, digest "9") |> Text.Encoding.UTF8.GetBytes
+    Assert.True(parseCoherentAggregateReceipt aggregateStale |> Result.isError)
 
 [<Fact>]
 let ``optimistic workflow projection retains recovery and continuation bounds`` () =
@@ -115,11 +124,32 @@ let ``squash tree identity is explicit while equal behavior can still reuse`` ()
 let ``workflow recovery is paginated non mutating and never cancels coherent validation`` () =
     let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
     let workflow = File.ReadAllText(Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml"))
+    let template = File.ReadAllText(Path.Combine(root, "eng/optimistic-parallel-validation.yml.template"))
     let recovery = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-recovery.sh"))
     Assert.Contains("cancel-in-progress: false", workflow)
     Assert.Contains("fail-fast: false", workflow)
     Assert.Contains("cron: '17 3 * * *'", workflow)
+    Assert.True(String.Equals(workflow, template, StringComparison.Ordinal))
     Assert.Contains("gh api --paginate", recovery)
     Assert.Contains("git rev-list origin/main", recovery)
+    Assert.Contains("sort -k1,1 -k2,2", recovery)
+    Assert.Contains("active-candidates.txt", recovery)
+    Assert.Contains("passed-candidates.txt", recovery)
+    Assert.Contains("coherentRunPending:true", recovery)
+    Assert.Contains("max-parallel: 6", workflow)
+    Assert.Contains("optimistic-dispatch-recovery.sh", workflow)
+    Assert.Contains("coherent-aggregate-", workflow)
     for forbidden in [ "git commit"; "git push"; "gh release"; "npm publish"; "dotnet nuget push" ] do
         Assert.DoesNotContain(forbidden, workflow + recovery)
+
+[<Fact>]
+let ``hosted partition scripts use typed receipts and complete suites`` () =
+    let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+    let run = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-run-partition.sh"))
+    let aggregate = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-aggregate.sh"))
+    Assert.Contains("FS.GG.Coordination.UnitTests.fsproj -c Release --no-restore --no-build", run)
+    Assert.Contains("FS.GG.Coordination.ArchitectureTests.fsproj -c Release --no-restore --no-build", run)
+    Assert.DoesNotContain("--filter", run)
+    Assert.Contains("eng/optimistic-validation.fsx -- run-partition", run)
+    Assert.Contains("eng/optimistic-validation.fsx -- aggregate", aggregate)
+    Assert.DoesNotContain("jq -e", aggregate)

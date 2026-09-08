@@ -14,7 +14,8 @@
     "scratch": "isolated-per-partition",
     "phases": ["prepare", "run-partition", "aggregate"],
     "nightly": "17 3 * * *",
-    "nightlyEnumeration": "complete-protected-main-ancestry-and-pending-candidates"
+    "nightlyEnumeration": "complete-protected-main-ancestry-and-pending-candidates",
+    "nightlyRecovery": "dispatch-up-to-available-two-candidate-capacity"
   },
   "obligations": ["unit", "architecture", "formal", "security", "package", "recovery"]
 }

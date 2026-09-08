@@ -120,6 +120,13 @@ type PartitionReceipt =
       Passed: bool
       ReceiptSha256: string }
 
+type CoherentAggregateReceipt =
+    { CandidateObligationSha256: string
+      PlanSha256: string
+      PartitionReceiptSha256: string list
+      Passed: bool
+      ReceiptSha256: string }
+
 val sha256: byte array -> string
 val createSubject: TrackedFile list -> byte array -> byte array -> byte array -> byte array -> QualificationSubject
 val createFormalSubject: TrackedFile list -> FormalSubjectSelector list -> policyBytes: byte array -> FormalSubject
@@ -131,10 +138,17 @@ val decisionBytes: Decision -> byte array
 val parseDecision: byte array -> Result<Decision, string>
 val createCandidateObligation: candidate: string -> baseRevision: string -> treeSha256: string -> sourceSha256: string -> identity: ReuseIdentity -> CandidateObligation
 val candidateObligationBytes: CandidateObligation -> byte array
+val parseCandidateObligation: byte array -> Result<CandidateObligation, string>
 val selectReusable: now: System.DateTimeOffset -> candidate: CandidateObligation -> prior: PriorExecution option -> semanticDelta: SemanticDelta -> bindingCorrespondenceSha256: string option -> ReuseSelection
 val applyCoherentOutcome: merged: bool -> passed: bool -> ReuseSelection -> ReuseSelection
 val selectionBytes: ReuseSelection -> byte array
 val createPartitionPlan: candidate: CandidateObligation -> maxPartitions: int -> obligations: string list -> PartitionPlan
 val partitionPlanBytes: PartitionPlan -> byte array
+val parsePartitionPlan: candidate: CandidateObligation -> byte array -> Result<PartitionPlan, string>
 val createPartitionReceipt: plan: PartitionPlan -> partition: int -> obligations: string list -> passed: bool -> PartitionReceipt
+val partitionReceiptBytes: PartitionReceipt -> byte array
+val parsePartitionReceipt: byte array -> Result<PartitionReceipt, string>
 val aggregatePartitions: PartitionPlan -> PartitionReceipt list -> Result<bool, string>
+val createCoherentAggregateReceipt: PartitionPlan -> PartitionReceipt list -> Result<CoherentAggregateReceipt, string>
+val coherentAggregateReceiptBytes: CoherentAggregateReceipt -> byte array
+val parseCoherentAggregateReceipt: byte array -> Result<CoherentAggregateReceipt, string>

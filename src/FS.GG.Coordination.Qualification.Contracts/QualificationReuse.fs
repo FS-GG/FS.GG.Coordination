@@ -113,6 +113,13 @@ type PartitionReceipt =
       Passed: bool
       ReceiptSha256: string }
 
+type CoherentAggregateReceipt =
+    { CandidateObligationSha256: string
+      PlanSha256: string
+      PartitionReceiptSha256: string list
+      Passed: bool
+      ReceiptSha256: string }
+
 let sha256 (bytes: byte array) =
     SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -538,6 +545,22 @@ let selectionBytes (selection: ReuseSelection) =
             writer.WriteEndObject()))
         [| byte '\n' |]
 
+let parseCandidateObligation (bytes: byte array) =
+    try
+        use document = JsonDocument.Parse bytes
+        let root = document.RootElement
+        let text name = stringProperty name root |> Option.defaultWith (fun () -> failwith $"candidate obligation is missing {name}")
+        let identity =
+            { BehavioralSha256 = text "behavioralSha256"; CompiledContractSha256 = text "compiledContractSha256"
+              ToolchainProfileSha256 = text "toolchainProfileSha256"; VerificationBoundsSha256 = text "verificationBoundsSha256"
+              FormalCorpusSha256 = text "formalCorpusSha256"; HarnessSha256 = text "harnessSha256"; BindingSha256 = text "bindingSha256" }
+        let value = createCandidateObligation (text "candidate") (text "baseRevision") (text "treeSha256") (text "sourceSha256") identity
+        if text "schema" <> "fsgg.coordination.candidate-obligation/1" then Error "candidate obligation schema is unsupported"
+        elif text "obligationSha256" <> value.ObligationSha256 then Error "candidate obligation digest differs"
+        elif bytes <> candidateObligationBytes value then Error "candidate obligation bytes are not canonical"
+        else Ok value
+    with error -> Error error.Message
+
 let private partitionPayload (obligationSha: string) (obligations: string list) (partitions: (int * string list) list) =
     compactBytes (fun writer ->
         writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.coherent-partition-plan/1")
@@ -567,6 +590,24 @@ let partitionPlanBytes (plan: PartitionPlan) =
             writer.WriteStartObject(); document.RootElement.EnumerateObject() |> Seq.iter (fun property -> property.WriteTo writer)
             writer.WriteString("planSha256", plan.PlanSha256); writer.WriteEndObject())) [| byte '\n' |]
 
+let parsePartitionPlan (candidate: CandidateObligation) (bytes: byte array) =
+    try
+        use document = JsonDocument.Parse bytes
+        let root = document.RootElement
+        let strings (element: JsonElement) = element.EnumerateArray() |> Seq.map (_.GetString()) |> Seq.toList
+        let obligations = strings (root.GetProperty "obligations")
+        let partitions =
+            root.GetProperty("partitions").EnumerateArray()
+            |> Seq.map (fun item -> item.GetProperty("index").GetInt32(), strings (item.GetProperty "obligations")) |> Seq.toList
+        let count = partitions.Length
+        let value = { Candidate = candidate; Obligations = obligations; PartitionCount = count; Partitions = partitions; PlanSha256 = root.GetProperty("planSha256").GetString() }
+        if root.GetProperty("schema").GetString() <> "fsgg.coordination.coherent-partition-plan/1" then Error "partition plan schema is unsupported"
+        elif root.GetProperty("candidateObligationSha256").GetString() <> candidate.ObligationSha256 then Error "partition plan candidate differs"
+        elif value.PlanSha256 <> (partitionPayload candidate.ObligationSha256 obligations partitions |> sha256) then Error "partition plan digest differs"
+        elif bytes <> partitionPlanBytes value then Error "partition plan bytes are not canonical"
+        else Ok value
+    with error -> Error error.Message
+
 let private receiptPayload (planSha: string) (partition: int) (obligations: string list) passed =
     compactBytes (fun writer ->
         writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.coherent-partition-receipt/1")
@@ -579,6 +620,29 @@ let createPartitionReceipt (plan: PartitionPlan) partition obligations passed =
     if obligations <> expected then invalidArg (nameof obligations) "partition obligations differ from immutable plan"
     { PlanSha256 = plan.PlanSha256; Partition = partition; Obligations = obligations; Passed = passed
       ReceiptSha256 = receiptPayload plan.PlanSha256 partition obligations passed |> sha256 }
+
+let partitionReceiptBytes (receipt: PartitionReceipt) =
+    let payload = receiptPayload receipt.PlanSha256 receipt.Partition receipt.Obligations receipt.Passed
+    if sha256 payload <> receipt.ReceiptSha256 then invalidArg (nameof receipt) "partition receipt digest is stale"
+    Array.append
+        (compactBytes (fun writer ->
+            use document = JsonDocument.Parse payload
+            writer.WriteStartObject(); document.RootElement.EnumerateObject() |> Seq.iter (fun property -> property.WriteTo writer)
+            writer.WriteString("receiptSha256", receipt.ReceiptSha256); writer.WriteEndObject())) [| byte '\n' |]
+
+let parsePartitionReceipt (bytes: byte array) =
+    try
+        use document = JsonDocument.Parse bytes
+        let root = document.RootElement
+        let obligations = root.GetProperty("obligations").EnumerateArray() |> Seq.map (_.GetString()) |> Seq.toList
+        let receipt =
+            { PlanSha256 = root.GetProperty("planSha256").GetString(); Partition = root.GetProperty("partition").GetInt32()
+              Obligations = obligations; Passed = root.GetProperty("passed").GetBoolean(); ReceiptSha256 = root.GetProperty("receiptSha256").GetString() }
+        if root.GetProperty("schema").GetString() <> "fsgg.coordination.coherent-partition-receipt/1" then Error "partition receipt schema is unsupported"
+        elif receipt.ReceiptSha256 <> (receiptPayload receipt.PlanSha256 receipt.Partition receipt.Obligations receipt.Passed |> sha256) then Error "partition receipt digest differs"
+        elif bytes <> partitionReceiptBytes receipt then Error "partition receipt bytes are not canonical"
+        else Ok receipt
+    with error -> Error error.Message
 
 let aggregatePartitions (plan: PartitionPlan) (receipts: PartitionReceipt list) =
     let ordered = receipts |> List.sortBy _.Partition
@@ -594,3 +658,46 @@ let aggregatePartitions (plan: PartitionPlan) (receipts: PartitionReceipt list) 
         match invalid with
         | Some _ -> Error "partition receipt is substituted or stale"
         | None -> Ok(ordered |> List.forall _.Passed)
+
+let private aggregatePayload (candidate: string) (plan: string) (receipts: string list) passed =
+    compactBytes (fun writer ->
+        writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.coherent-aggregate-receipt/1")
+        writer.WriteString("candidateObligationSha256", candidate); writer.WriteString("planSha256", plan)
+        writer.WriteStartArray("partitionReceiptSha256"); receipts |> List.iter writer.WriteStringValue; writer.WriteEndArray()
+        writer.WriteBoolean("passed", passed); writer.WriteEndObject())
+
+let createCoherentAggregateReceipt (plan: PartitionPlan) (receipts: PartitionReceipt list) =
+    match aggregatePartitions plan receipts with
+    | Error error -> Error error
+    | Ok passed ->
+        let digests = receipts |> List.sortBy _.Partition |> List.map _.ReceiptSha256
+        let payload = aggregatePayload plan.Candidate.ObligationSha256 plan.PlanSha256 digests passed
+        Ok { CandidateObligationSha256 = plan.Candidate.ObligationSha256; PlanSha256 = plan.PlanSha256
+             PartitionReceiptSha256 = digests; Passed = passed; ReceiptSha256 = sha256 payload }
+
+let coherentAggregateReceiptBytes (receipt: CoherentAggregateReceipt) =
+    let payload = aggregatePayload receipt.CandidateObligationSha256 receipt.PlanSha256 receipt.PartitionReceiptSha256 receipt.Passed
+    if sha256 payload <> receipt.ReceiptSha256 then invalidArg (nameof receipt) "aggregate receipt digest is stale"
+    Array.append
+        (compactBytes (fun writer ->
+            use document = JsonDocument.Parse payload
+            writer.WriteStartObject(); document.RootElement.EnumerateObject() |> Seq.iter (fun property -> property.WriteTo writer)
+            writer.WriteString("receiptSha256", receipt.ReceiptSha256); writer.WriteEndObject())) [| byte '\n' |]
+
+let parseCoherentAggregateReceipt (bytes: byte array) =
+    try
+        use document = JsonDocument.Parse bytes
+        let root = document.RootElement
+        let receipt =
+            { CandidateObligationSha256 = root.GetProperty("candidateObligationSha256").GetString()
+              PlanSha256 = root.GetProperty("planSha256").GetString()
+              PartitionReceiptSha256 = root.GetProperty("partitionReceiptSha256").EnumerateArray() |> Seq.map (_.GetString()) |> Seq.toList
+              Passed = root.GetProperty("passed").GetBoolean(); ReceiptSha256 = root.GetProperty("receiptSha256").GetString() }
+        if root.GetProperty("schema").GetString() <> "fsgg.coordination.coherent-aggregate-receipt/1" then Error "aggregate receipt schema is unsupported"
+        elif not receipt.Passed || receipt.PartitionReceiptSha256.Length <> 6
+             || (receipt.PartitionReceiptSha256 |> List.distinct |> List.length) <> 6
+             || receipt.PartitionReceiptSha256 |> List.exists (isLowerSha256 >> not) then Error "aggregate receipt is incomplete or failed"
+        elif receipt.ReceiptSha256 <> (aggregatePayload receipt.CandidateObligationSha256 receipt.PlanSha256 receipt.PartitionReceiptSha256 receipt.Passed |> sha256) then Error "aggregate receipt digest differs"
+        elif bytes <> coherentAggregateReceiptBytes receipt then Error "aggregate receipt bytes are not canonical"
+        else Ok receipt
+    with error -> Error error.Message

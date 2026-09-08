@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root="${1:?partition receipt root required}"
-for partition in 0 1 2 3 4 5; do
-  test -s "$root/partition-$partition/receipt.json"
-  jq -e --argjson partition "$partition" '.schema == "fsgg.coordination.coherent-partition-receipt/1" and .partition == $partition and .passed == true' "$root/partition-$partition/receipt.json" >/dev/null
-done
+plan_root="${2:?candidate plan root required}"
+dotnet fsi eng/optimistic-validation.fsx -- aggregate \
+  --obligation "$plan_root/candidate-obligation.json" --plan "$plan_root/partition-plan.json" --receipts "$root" \
+  --output "$plan_root/coherent-aggregate-receipt.json"
