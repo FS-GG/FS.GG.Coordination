@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "repository": "FS-GG/FS.GG.Coordination",
+  "repositoryId": 849557450,
+  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "observedAt": "2026-09-08T12:00:00Z",
+  "pagesComplete": true,
+  "pageSha256": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+  "pageDigestSha256": "78700acf3b3d42f416e19b9ca0b40b5e2f217bbd3d6930cff1e96901cc482a6e",
+  "previousObservationSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "dedicatedWriterApp": { "status": "proven-absent", "id": null },
+  "environment": { "status": "proven-absent" },
+  "controlIssue": { "status": "proven-absent" },
+  "phaseTags": { "status": "proven-absent", "values": [] },
+  "note": "Sanitized deterministic qualification fixture; not a provider readback."
+}
