@@ -1,0 +1,10 @@
+{
+  "schema": "fsgg.gate-inversion/v1",
+  "gate": "github-event-benefit-measurement-contract",
+  "mutation": "invert the exact retained-control identity predicate so the known-good generated and independent inventories are rejected",
+  "command": "dotnet fsi eng/validate-github-event-benefit-measurement.fsx -- .",
+  "observedExitCode": 1,
+  "observedFailure": "INVERTED: exact retained control identities rejected",
+  "restoration": "predicate restored to require both exact inventories; the same command returned zero",
+  "scope": "candidate source only; no provider or production mutation"
+}

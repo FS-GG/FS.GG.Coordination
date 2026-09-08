@@ -1,0 +1,126 @@
+schemaVersion: 1
+work:
+  id: 326-gs2-07-7-event-benefit
+  title: "Gs2 07 7 Event Benefit"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/326-gs2-07-7-event-benefit/spec.md
+  sourceClarifications: work/326-gs2-07-7-event-benefit/clarifications.md
+  sourceChecklist: work/326-gs2-07-7-event-benefit/checklist.md
+  sourcePlan: work/326-gs2-07-7-event-benefit/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/326-gs2-07-7-event-benefit/spec.md
+    digest: 0ffc8213acadf41a655d6f52898215583803bc697f5c8056b8c5266865ea61c5
+    schemaVersion: 1
+  - label: clarifications
+    path: work/326-gs2-07-7-event-benefit/clarifications.md
+    digest: 6f96745ffa2ecf6d7f094b7e0aa5f319f4adc9ca7fe60c4d88b4ba6d54c6fa9d
+    schemaVersion: 1
+  - label: checklist
+    path: work/326-gs2-07-7-event-benefit/checklist.md
+    digest: d8756734ef326966e37c8e6affac2e22682d678809193cbf35cf332ebccf4c51
+    schemaVersion: 1
+  - label: plan
+    path: work/326-gs2-07-7-event-benefit/plan.md
+    digest: cc29cbdaa64199ac88b2b2296eb245ee5929790b5cbf5c8230d98abfe966fb00
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: curlew-51e6
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: curlew-51e6
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: done
+    owner: curlew-51e6
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: done
+    owner: curlew-51e6
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: done
+    owner: curlew-51e6
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-005, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Update contract surface PC-001
+    status: done
+    owner: curlew-51e6
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Record verification evidence VO-001
+    status: done
+    owner: curlew-51e6
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Handle migration posture PM-001
+    status: done
+    owner: curlew-51e6
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: curlew-51e6
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV009]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 326-gs2-07-7-event-benefit."

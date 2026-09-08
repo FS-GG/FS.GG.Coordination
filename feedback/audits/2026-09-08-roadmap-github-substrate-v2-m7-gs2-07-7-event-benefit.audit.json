@@ -1,0 +1,8 @@
+{
+  "auditSchema": 1,
+  "report": "feedback/2026-09-08-roadmap-github-substrate-v2-m7-gs2-07-7-event-benefit.md",
+  "reportSha256": "5c1ed73e7460b5f91a4a12da1ddcfef6df0e803a522000e6a7c65e8d2f7a68d3",
+  "criticMode": "zero-event-contract-validation",
+  "criticPromptVersion": "actionability-v1",
+  "findings": []
+}

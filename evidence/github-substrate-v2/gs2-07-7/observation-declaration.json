@@ -1,0 +1,21 @@
+{
+  "schema": "fsgg.github-event-benefit-observation-declaration/v1",
+  "declaredAt": "2026-09-08T02:08:55Z",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "window": {
+    "start": "2026-09-08T01:00:00Z",
+    "end": "2026-09-08T02:00:00Z"
+  },
+  "population": [
+    { "workflow": "bootstrap-qualification", "runId": 34176802894, "attempts": [1] },
+    { "workflow": "CodeQL", "runId": 34176802484, "attempts": [1] }
+  ],
+  "pagination": {
+    "endpointPerRun": true,
+    "expectedPages": 2,
+    "terminal": "one exact run response per declared run id"
+  },
+  "purpose": "current read-only provider observation of run/attempt/timestamp/rate facts; not an event worker, provider dispatch latency, installed coverage, or production benefit claim",
+  "writePermission": false,
+  "pollingDecision": "retain"
+}

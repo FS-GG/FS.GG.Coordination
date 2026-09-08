@@ -1,0 +1,74 @@
+{
+  "schema": "fsgg.github-event-benefit-provider-observation/v1",
+  "sourceCategory": "current-provider-observation",
+  "declaration": "evidence/github-substrate-v2/gs2-07-7/observation-declaration.json",
+  "observedAt": "2026-09-08T02:09:24Z",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "window": { "start": "2026-09-08T01:00:00Z", "end": "2026-09-08T02:00:00Z" },
+  "pages": [
+    {
+      "page": 1,
+      "pageCount": 2,
+      "endpoint": "GET /repos/FS-GG/FS.GG.Coordination/actions/runs/34176802894",
+      "httpStatus": 200,
+      "rate": { "resource": "core", "limit": 5000, "remaining": 4995, "used": 5, "reset": 1788836938 },
+      "responseSha256": "e22eb16db127e9779e18efd3d4e54c05e08c640bc2185503b09cd560651b5223",
+      "projection": {
+        "id": 34176802894,
+        "attempt": 1,
+        "workflow": "Bootstrap qualification",
+        "path": ".github/workflows/bootstrap-qualification.yml",
+        "event": "push",
+        "headSha": "a8b10e073eb7098014ea38ce6edadc35b784ff5c",
+        "createdAt": "2026-09-08T01:29:10Z",
+        "startedAt": "2026-09-08T01:29:10Z",
+        "endedAt": "2026-09-08T01:30:21Z",
+        "providerConclusion": "success",
+        "nativeDeliveryOutcome": "unknown"
+      }
+    },
+    {
+      "page": 2,
+      "pageCount": 2,
+      "endpoint": "GET /repos/FS-GG/FS.GG.Coordination/actions/runs/34176802484",
+      "httpStatus": 200,
+      "rate": { "resource": "core", "limit": 5000, "remaining": 4994, "used": 6, "reset": 1788836938 },
+      "responseSha256": "e61acf227f4b4bd641ae64041e783dc1a32f6dd5f699b76a0031c3aa1c35edb9",
+      "projection": {
+        "id": 34176802484,
+        "attempt": 1,
+        "workflow": "Push on main",
+        "path": "dynamic/github-code-scanning/codeql",
+        "event": "dynamic",
+        "headSha": "a8b10e073eb7098014ea38ce6edadc35b784ff5c",
+        "createdAt": "2026-09-08T01:29:10Z",
+        "startedAt": "2026-09-08T01:29:10Z",
+        "endedAt": "2026-09-08T01:29:52Z",
+        "providerConclusion": "success",
+        "nativeDeliveryOutcome": "unknown"
+      }
+    }
+  ],
+  "pagination": { "complete": true, "terminal": true, "observedPages": [1, 2], "declaredPages": 2 },
+  "runAttempts": [
+    { "runId": 34176802894, "declared": [1], "observed": [1], "complete": true },
+    { "runId": 34176802484, "declared": [1], "observed": [1], "complete": true }
+  ],
+  "callAttempts": 2,
+  "workloadCalls": 0,
+  "collectorCalls": 2,
+  "timestamps": {
+    "event": "unknown: GitHub Actions run response does not expose event delivery time",
+    "ingestion": "unknown: GitHub Actions run response does not expose webhook ingestion time",
+    "queue": "unknown: these push/dynamic runs expose no distinct queue timestamp",
+    "startEnd": "available per run"
+  },
+  "limits": [
+    "read-only observation of registration push runs, not event worker dispatch",
+    "provider request prices unavailable",
+    "provider response does not establish native event delivery",
+    "no installed or production benefit claim"
+  ],
+  "pollingDecision": "retain",
+  "writesAttempted": 0
+}
