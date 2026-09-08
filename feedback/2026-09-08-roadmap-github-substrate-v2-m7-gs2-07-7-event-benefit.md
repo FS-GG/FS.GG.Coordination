@@ -45,9 +45,11 @@ No production workaround was introduced. Scheduled complete audits remain correc
 
 Exact clean-checkout qualification necessarily follows the first candidate commit. Provider APIs also require separate calls per retained run, so observer calls are counted independently from replay workload attempts.
 
+The structured reviewer correctly found a PR-body-only acceptance-obligation defect. The protected `fsgg-coord` 0.86.1 epoch cannot represent an accountable same-head comment repair: `review assert-repair` exists only on an unmerged branch, while [FS-GG/.github#3068](https://github.com/FS-GG/.github/issues/3068) remains open/In review. We did not execute that unmerged authority. A tracked feedback correction supplied the current epoch's review-visible head transition and keeps this limitation deduplicated to #3068.
+
 ## §9 Skill value and gaps
 
-`work-roadmap`, `github-substrate-v2-work`, `pnext-item`, and the SDD lifecycle kept the population, window, source categories, permissions, and receipt boundary explicit. The absent feedback reporter is the only materialization gap.
+`work-roadmap`, `github-substrate-v2-work`, `pnext-item`, and the SDD lifecycle kept the population, window, source categories, permissions, and receipt boundary explicit. The absent feedback reporter remains a materialization gap; protected same-head repair assertion authority is separately tracked by `.github#3068`.
 
 ## §10 Outcome markers
 
