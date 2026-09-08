@@ -209,8 +209,8 @@ else
         | ExactReplay -> RulesetPlanAdapter.verify report.Seal asOf maxAge snapshot = Ok report
         | QuintUnchanged ->
             let bytes = File.ReadAllBytes(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
-            sha256Bytes bytes = "52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90"
-            && sha256Bytes (Array.append bytes [| 0uy |]) <> "52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90"
+            sha256Bytes bytes = "3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb"
+            && sha256Bytes (Array.append bytes [| 0uy |]) <> "3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb"
         | NoApplySurface ->
             let surface = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/RulesetPlanAdapter.fsi"))
             let forbidden (value: string) = value.Contains("val apply") || value.Contains("HttpClient") || value.Contains("GITHUB_TOKEN")

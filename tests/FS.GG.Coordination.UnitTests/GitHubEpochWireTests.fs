@@ -2,6 +2,7 @@ module FS.GG.Coordination.GitHubEpochWireTests
 
 open Xunit
 open FS.GG.Coordination.Qualification.Contracts
+open FS.GG.Coordination.GitHub
 module Q = GitHubEpochWireQualification
 
 let digest c = String.replicate 64 c
@@ -17,6 +18,16 @@ let fence writer eligible =
       ExpectedOperationGeneration = 13L; CurrentOperationGeneration = 13L; OperationId = "operation-17"
       EligibleIncumbent = eligible }
 let refused = function AdmissionRefused _ -> true | _ -> false
+
+[<Fact>]
+let ``fleet epoch ref is derived by the canonical Cutover journal address`` () =
+    let aggregateId = "fleet-cutover:" + Q.fleetId
+    let address = ShardedJournalAdapter.address JournalKind.Cutover aggregateId |> Result.defaultWith (failwithf "%A")
+    Assert.Equal(30, System.Text.Encoding.UTF8.GetByteCount address.CanonicalId)
+    Assert.Equal("d546289f29b34a4967e27425acba1c9ad2feb4f4b2110f5db41a5544976cb363", address.Digest)
+    Assert.Equal("d5", address.Shard)
+    Assert.Equal("refs/heads/fsgg/v2/journal/cutover/d5", address.Ref)
+    Assert.Equal(address.Ref, Q.epochRef)
 
 [<Fact>]
 let ``state and transition catalogues are complete and exclude obsolete retirement`` () =

@@ -1208,8 +1208,11 @@ history until the retention window and independent digest audit have passed; rep
 full ancestry or the retained terminal snapshot must produce the same aggregate digest.
 
 GS2-08.1 reserves exactly one fleet aggregate, `fleet-cutover:fs-gg-production`, in the Authority
-repository. Its canonical lower-case length-framed digest has shard `9f`, so the only epoch ref is
-`refs/heads/fsgg/v2/journal/fleet-cutover/9f`; phase tags are immutable descendants of
+repository. Its canonical lower-case 30-byte identity is framed as
+`30:fleet-cutover:fs-gg-production`; the resulting SHA-256 is
+`d546289f29b34a4967e27425acba1c9ad2feb4f4b2110f5db41a5544976cb363` and has shard `d5`, so the
+existing `Cutover` journal kind yields the only epoch ref
+`refs/heads/fsgg/v2/journal/cutover/d5`; phase tags are immutable descendants of
 `refs/tags/fsgg/v2/fleet-cutover/`. The root record binds schema `fsgg.github-substrate.epoch-wire/1`,
 fleet id, genesis commit, trust-anchor digest, and manifest digest. Every later record repeats that identity,
 has exactly one expected parent, increases generation by one, and carries the matching protected phase tag.

@@ -60,7 +60,7 @@ let generatedMutation = function
     | GitHubReviewDeliveryControl.ExactReplay -> DeliveryReplayed Unchecked.defaultof<DeliveryReceipt> <> DeliveryPlanned Unchecked.defaultof<DeliveryPlan>
     | GitHubReviewDeliveryControl.DivergentReplay -> DivergentDeliveryReplay <> DeliveryPredecessorMismatch
     | GitHubReviewDeliveryControl.BoundedCost -> ({ AuthorityReads = 3; MaximumEffects = 1 }: ReviewDeliveryCost) = { AuthorityReads = 3; MaximumEffects = 1 }
-    | GitHubReviewDeliveryControl.QuintAndPrerequisite -> receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.5" && sha256 quintPath = "52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90"
+    | GitHubReviewDeliveryControl.QuintAndPrerequisite -> receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.5" && sha256 quintPath = "3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb"
 
 let independentMutation control =
     match control with
