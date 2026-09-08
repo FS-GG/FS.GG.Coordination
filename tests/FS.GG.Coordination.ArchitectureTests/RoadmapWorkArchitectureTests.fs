@@ -13,8 +13,8 @@ open Xunit
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
-let private roadmapRevision = "68ae405e413aa40e6e44ade0c0e1db8fbfd74603"
-let private roadmapSha256 = "1b9077ff132652849ed2143824c5291d6700cbfd7b009f24d073cd2b02ead05c"
+let private roadmapRevision = "6d3c8283042184557d4f0db07fcc353571494bb5"
+let private roadmapSha256 = "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c"
 
 let private runAt workingDirectory executable arguments =
     let startInfo = ProcessStartInfo(executable)
@@ -302,6 +302,18 @@ let private hasExactGs2077MeasurementBoundary (indexText: string) =
     && exitGate.Contains("added-write-permission", StringComparison.Ordinal)
     && exitGate.Contains("hosted claim binds a retained typed artifact", StringComparison.Ordinal)
     && exitGate.Contains("registration alone claims neither measurement nor GS2-07.7 acceptance", StringComparison.Ordinal)
+
+let private gs2078GateCatalogAgrees (indexText: string) (catalogText: string) =
+    use index = JsonDocument.Parse(indexText)
+    use catalog = JsonDocument.Parse(catalogText)
+    let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.8")
+    let contracts = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
+    let commands = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
+    contracts.Length = 12
+    && (contracts |> List.forall (fun contract ->
+        commands
+        |> List.tryFind (fun command -> command.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
+        |> Option.exists (fun command -> command.GetProperty("qGate").GetString() = contract.GetProperty("qGate").GetString() && gateCommandSha256 command = contract.GetProperty("commandSha256").GetString())))
 
 let private hasClosedStagedIntakeVocabulary (source: string) =
     let lines = source.Replace("\r", "", StringComparison.Ordinal).Split('\n') |> Set.ofArray
@@ -863,6 +875,33 @@ let ``GS2-07-7 subroadmap is an outline rather than a completion ledger`` () =
     Assert.Contains("Registration does not claim measurement or GS2-07.7 acceptance", subroadmap)
 
 [<Fact>]
+let ``GS2-07-8 binds no-host applicability recovery and comprehensive closure`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
+    Assert.True(gs2078GateCatalogAgrees indexText catalogText)
+    use index = JsonDocument.Parse(indexText)
+    let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-07.8")
+    Assert.Equal("FS.GG.Coordination", unit.GetProperty("owner").GetString())
+    Assert.Equal<string list>([ "GS2-07.7" ], unit.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Equal<string list>([ "Q3"; "Q4"; "Q6" ], unit.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    let ceiling = unit.GetProperty("permissionCeiling").EnumerateArray() |> Seq.map _.GetString() |> String.concat " "
+    let exitGate = unit.GetProperty("exitGate").GetString()
+    for expected in [ "no hosted deploy"; "no hosted deploy, rollback"; "no hosted deploy, rollback, webhook subscription"; "no hosted deploy, rollback, webhook subscription, credential or secret mutation"; "no hosted deploy, rollback, webhook subscription, credential or secret mutation, regional failover"; "no hosted deploy, rollback, webhook subscription, credential or secret mutation, regional failover, alert-route mutation"; "no hosted deploy, rollback, webhook subscription, credential or secret mutation, regional failover, alert-route mutation, package publication"; "no hosted deploy, rollback, webhook subscription, credential or secret mutation, regional failover, alert-route mutation, package publication, fleet setting or visibility change"; "no hosted deploy, rollback, webhook subscription, credential or secret mutation, regional failover, alert-route mutation, package publication, fleet setting or visibility change, destructive cutover"; "no hosted deploy, rollback, webhook subscription, credential or secret mutation, regional failover, alert-route mutation, package publication, fleet setting or visibility change, destructive cutover, production write" ] do Assert.Contains(expected, ceiling)
+    for expected in [ "evaluated MSBuild and runtime inputs"; "inapplicable rather than successful exercises"; "event absence, provider unavailability, incomplete audit, backlog replay, and interruption"; "preserving every subject and page"; "genuinely unsettled outcomes"; "diagnostic redaction"; "leaked synthetic secret"; "runs every declared GS2-07 Q3/Q4/Q6 command cold"; "claims neither production v2, installed audit execution, GS2-08, polling reduction" ] do Assert.Contains(expected, exitGate)
+
+[<Fact>]
+let ``GS2-07-8 stale roadmap substituted command and omitted child refuse`` () =
+    let indexText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))
+    let catalogText = File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json"))
+    Assert.False(gs2078GateCatalogAgrees indexText (catalogText.Replace("eng/validate-github-runtime-recovery.fsx", "eng/validate-github-audit-repair.fsx", StringComparison.Ordinal)))
+    use index = JsonDocument.Parse(indexText)
+    let roadmap = index.RootElement.GetProperty("roadmap")
+    Assert.Equal(roadmapRevision, roadmap.GetProperty("revision").GetString())
+    Assert.Equal(roadmapSha256, roadmap.GetProperty("sha256").GetString())
+    let omitted = indexText.Replace("\"github-runtime-operations-contract\", \"github-runtime-recovery-contract\"", "\"github-runtime-recovery-contract\"", StringComparison.Ordinal)
+    Assert.False(gs2078GateCatalogAgrees omitted catalogText)
+
+[<Fact>]
 let ``roadmap unit index advances through GS2-07-7 event benefit`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
@@ -938,7 +977,8 @@ let ``roadmap unit index advances through GS2-07-7 event benefit`` () =
              "GS2-07.4"
              "GS2-07.5"
              "GS2-07.6"
-             "GS2-07.7" ]
+             "GS2-07.7"
+             "GS2-07.8" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
