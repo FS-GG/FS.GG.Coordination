@@ -75,6 +75,8 @@
     <Compile Include="GitHubQueueSandbox.fs" />
     <Compile Include="GitHubEventBenefitQualification.fsi" />
     <Compile Include="GitHubEventBenefitQualification.fs" />
+    <Compile Include="GitHubRuntimeOperationsQualification.fsi" />
+    <Compile Include="GitHubRuntimeOperationsQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />

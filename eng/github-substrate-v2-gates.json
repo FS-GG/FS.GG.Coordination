@@ -264,6 +264,18 @@
       "qGate": "Q4",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-event-benefit-provider-observation.fsx", "--", "."]
+    },
+    {
+      "id": "github-runtime-operations-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-runtime-operations.fsx", "--", "."]
+    },
+    {
+      "id": "github-runtime-recovery-contract",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-runtime-recovery.fsx", "--", "."]
     }
   ]
 }

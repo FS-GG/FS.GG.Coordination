@@ -1,0 +1,28 @@
+{
+  "schema": "fsgg.coordination.github-runtime-closure/1",
+  "unit": "GS2-07.8",
+  "parent": "GS2-07",
+  "mode": "comprehensive-cold",
+  "state": "qualified",
+  "sourceRevision": "b9a78c71dff89e7502e9b1ccdfbd95828fd9d79b",
+  "roadmapRevision": "6d3c8283042184557d4f0db07fcc353571494bb5",
+  "roadmapSha256": "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c",
+  "qualificationReportSha256": "24059ada36dfc95df0deac03e0bbd4a649085238df74461a5490dcf0cddf6dc8",
+  "modelIdentity": "486e1a956d53f9809f183d336bb97824785b4937f9627e34c558a8c0ef548bc2",
+  "acceptedChildren": ["GS2-07.1", "GS2-07.2", "GS2-07.3", "GS2-07.4", "GS2-07.5", "GS2-07.6", "GS2-07.7"],
+  "currentResult": "GS2-07.8@b9a78c71dff89e7502e9b1ccdfbd95828fd9d79b",
+  "commands": [
+    {"id": "github-event-envelope-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-narrow-reconciliation-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-audit-repair-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-event-security-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-merge-group-support-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-queue-sandbox-pilot-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-queue-sandbox-recovery-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-queue-routine-burst-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-event-benefit-measurement-contract", "source": "accepted-GS2-07.7@32985e9b62a287cb8854dad8da5d1f8561b3a5ee", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-event-benefit-provider-observation-contract", "source": "accepted-GS2-07.7@32985e9b62a287cb8854dad8da5d1f8561b3a5ee", "execution": "cold-fresh-process", "result": "pass"},
+    {"id": "github-runtime-operations-contract", "source": "current-candidate", "execution": "cold-fresh-process", "result": "pass"}
+  ],
+  "limits": ["historical GS2-07.7 gates execute from their exact accepted source and remain historical", "native exact-head repository checks remain separate observable evidence until pull-request acceptance", "no production, deployment, credential, publication, settings, visibility, or cutover effect was performed"]
+}

@@ -1,0 +1,6 @@
+{
+  "schema": "fsgg.coordination.github-runtime-operations-controls/1",
+  "author": "qualification-generator",
+  "controls": ["prerequisite", "roadmap", "command-identity", "evaluated-build-inputs", "host-activation", "runtime-disposition", "clause-inventory", "event-absence", "provider-unavailability", "incomplete-audit", "backlog-replay", "interruption", "subject-completeness", "page-completeness", "replay-authority", "unsettled-outcome", "diagnostic-redaction", "synthetic-secret", "child-receipts", "comprehensive-command-set", "cold-execution", "model-identity", "no-production-v2", "no-installed-audit", "retained-polling", "no-gs2-08", "no-host-writer", "tamper", "replay"],
+  "cases": ["mutate-predecessor", "mutate-roadmap", "substitute-command", "evaluate-msbuild", "enable-listener", "alter-disposition", "omit-clause", "drop-event", "provider-outage", "partial-audit", "replay-backlog", "interrupt-effect", "omit-subject", "omit-page", "stale-authority", "invent-settlement", "redact-diagnostic", "leak-secret", "omit-child", "omit-command", "reuse-warm-result", "alter-model", "claim-production", "claim-installed", "reduce-polling", "claim-next-unit", "enable-writer", "alter-seal", "replay-exact"]
+}

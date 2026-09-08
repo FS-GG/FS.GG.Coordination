@@ -1,0 +1,6 @@
+{
+  "schema": "fsgg.coordination.github-runtime-operations-controls/1",
+  "author": "independent-fixture",
+  "controls": ["prerequisite", "roadmap", "command-identity", "evaluated-build-inputs", "host-activation", "runtime-disposition", "clause-inventory", "event-absence", "provider-unavailability", "incomplete-audit", "backlog-replay", "interruption", "subject-completeness", "page-completeness", "replay-authority", "unsettled-outcome", "diagnostic-redaction", "synthetic-secret", "child-receipts", "comprehensive-command-set", "cold-execution", "model-identity", "no-production-v2", "no-installed-audit", "retained-polling", "no-gs2-08", "no-host-writer", "tamper", "replay"],
+  "cases": ["wrong-receipt-digest", "wrong-roadmap-bytes", "replace-Q6", "inspect-output-type", "set-production-authority", "enable-host", "rename-clause", "missing-delivery", "unavailable-read", "missing-third-page", "drop-distinct-subject", "unknown-effect", "lose-subject", "lose-page", "resume-old-revision", "assert-complete", "project-sanitized", "expose-sentinel", "change-child-digest", "drop-Q4", "reuse-artifact", "replace-quint-pin", "assert-v2", "assert-schedule", "remove-schedule", "assert-GS2-08", "add-command", "rewrite-report", "change-input"]
+}

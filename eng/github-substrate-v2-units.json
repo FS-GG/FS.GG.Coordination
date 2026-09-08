@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "68ae405e413aa40e6e44ade0c0e1db8fbfd74603",
+    "revision": "6d3c8283042184557d4f0db07fcc353571494bb5",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "1b9077ff132652849ed2143824c5291d6700cbfd7b009f24d073cd2b02ead05c"
+    "sha256": "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c"
   },
   "units": [
     {
@@ -894,6 +894,31 @@
         { "id": "github-event-benefit-provider-observation-contract", "qGate": "Q4", "commandSha256": "7c4ba2dd11e32f1431a1e313141fa6c6c4bf569d900311b08bc0f926e8f78bfc" }
       ],
       "contractSha256": "9a95bfaea95586912a8906ccd2aaa11f83f0a118839d8fc251333f17d950ecb5"
+    },
+    {
+      "id": "GS2-07.8",
+      "title": "Qualify runtime operations",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-07.7"],
+      "permissionCeiling": ["repository-local additive runtime-applicability and recovery qualification contracts, evaluated build-input inspection, deterministic failure exercises, diagnostic redaction, comprehensive cold GS2-07 closure, validation, and retained evidence", "read-only consumption of accepted GS2-07.1 through GS2-07.7 receipts and exact accepted roadmap bytes is allowed; no hosted deploy, rollback, webhook subscription, credential or secret mutation, regional failover, alert-route mutation, package publication, fleet setting or visibility change, destructive cutover, production write, installed-audit claim, polling reduction, GS2-08 claim, or host/writer enablement authority"],
+      "exitGate": "the Q3 github-runtime-operations and Q6 github-runtime-recovery contracts begin from the exact accepted GS2-07.7 receipt and exact amended roadmap; evaluated MSBuild and runtime inputs prove that the App remains an unpackable library with no publish profile, runtime identifier, self-contained executable, listener, deployment configuration, or production authority; every original runtime clause is exercised, inherited with exact evidence, or explicitly inapplicable under accepted GS2-00.9, and no-host deployment, rollback, secret rotation, regional host failover, alert routing, and emergency disable are inapplicable rather than successful exercises; event absence, provider unavailability, incomplete audit, backlog replay, and interruption execute at the implemented scheduled-audit and shared-reconciler boundary while preserving every subject and page, current replay authority, semantic commands, and genuinely unsettled outcomes; diagnostic redaction is qualified only at that implemented boundary and no hosted logging or alerting claim is made; independently identified mutations reject host activation, missing recovery, omitted subject or page, stale replay authority, invented settlement, leaked synthetic secret, changed predecessor or roadmap, substituted command, omitted child, changed model identity, and unsupported production, installation, polling, GS2-08, host, or writer claims; comprehensive closure binds the ordered GS2-07.1 through GS2-07.8 contract set, accepted GS2-07.1 through GS2-07.7 receipts and the GS2-07.8 exact result, preserves model identity, and runs every declared GS2-07 Q3/Q4/Q6 command cold; the result claims neither production v2, installed audit execution, GS2-08, polling reduction, deployment, nor host/writer authority",
+      "qGates": ["Q3", "Q4", "Q6"],
+      "gateCommands": ["github-event-envelope-contract", "github-narrow-reconciliation-contract", "github-audit-repair-contract", "github-event-security-contract", "github-merge-group-support-contract", "github-queue-sandbox-pilot-contract", "github-queue-sandbox-recovery-contract", "github-queue-routine-burst-contract", "github-event-benefit-measurement-contract", "github-event-benefit-provider-observation-contract", "github-runtime-operations-contract", "github-runtime-recovery-contract"],
+      "gateContracts": [
+        { "id": "github-event-envelope-contract", "qGate": "Q3", "commandSha256": "3fe755f4adfd45e0f2ca56dba2cbd60ed6cf119c0680c99df5a292bf9a15fcbc" },
+        { "id": "github-narrow-reconciliation-contract", "qGate": "Q3", "commandSha256": "4814f39e64af6ae6394ebf4b8e4f9012a1ad2ad0018af121bfe5d7ca549a85e3" },
+        { "id": "github-audit-repair-contract", "qGate": "Q3", "commandSha256": "62be2f02680c983d0e813fb4fc83a28b8ba6b7a368478cf7807b1b61840a8f1a" },
+        { "id": "github-event-security-contract", "qGate": "Q3", "commandSha256": "4a2eadf2992eb919b0196009dec1f85a8a7be5d109c5b8f31403407b5a994a2d" },
+        { "id": "github-merge-group-support-contract", "qGate": "Q3", "commandSha256": "ff20b32c73325e185e6ee072253ceb02b8657ee4f6281652acf187f16a703937" },
+        { "id": "github-queue-sandbox-pilot-contract", "qGate": "Q4", "commandSha256": "90320b3cd537670096cc0567ef78026c4511a3a0355926810f188266e2c438f7" },
+        { "id": "github-queue-sandbox-recovery-contract", "qGate": "Q6", "commandSha256": "9acb5fb82e526dda24ef0961ad66e0508aea4a620867b6c9cfcf0a81cb489fea" },
+        { "id": "github-queue-routine-burst-contract", "qGate": "Q4", "commandSha256": "38469bd200c23f1df36a6942901fa212ef565cec41512b863ce27ee7536f502a" },
+        { "id": "github-event-benefit-measurement-contract", "qGate": "Q3", "commandSha256": "746c067ecddac460e8424d104c78946a7ffc4f7bc1c143e2ff19897415eb6f8b" },
+        { "id": "github-event-benefit-provider-observation-contract", "qGate": "Q4", "commandSha256": "7c4ba2dd11e32f1431a1e313141fa6c6c4bf569d900311b08bc0f926e8f78bfc" },
+        { "id": "github-runtime-operations-contract", "qGate": "Q3", "commandSha256": "71caf28f72d1a85665db0e736e908d5f9427bbd467fd0086e28d0a3a542834e2" },
+        { "id": "github-runtime-recovery-contract", "qGate": "Q6", "commandSha256": "6fa1e294f32688b45d9b4116b29ea5725e4faf9458a257cdf7173603f46d8a2c" }
+      ],
+      "contractSha256": "34e0a41c1a379916d87af62dc19f51cba89ebcfb123461543b5974e65b907286"
     }
   ]
 }
