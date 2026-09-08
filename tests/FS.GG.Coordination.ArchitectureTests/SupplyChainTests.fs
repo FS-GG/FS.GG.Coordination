@@ -3,6 +3,7 @@ module FS.GG.Coordination.SupplyChainTests
 open System
 open System.Diagnostics
 open System.IO
+open System.Text.Json
 open Xunit
 
 let private root =
@@ -35,6 +36,17 @@ let private runReproducibilityTest () =
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     child.ExitCode, output.Trim(), error.Trim()
+
+[<Fact>]
+let ``repository SDK selection matches the exact candidate supply-chain pin`` () =
+    use globalJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "global.json")))
+    let sdk = globalJson.RootElement.GetProperty("sdk")
+    let sdkVersion = sdk.GetProperty("version").GetString()
+    let rollForward = sdk.GetProperty("rollForward").GetString()
+    let implementation = File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
+    Assert.Equal("10.0.400", sdkVersion)
+    Assert.Equal("disable", rollForward)
+    Assert.Contains($"let pinnedDotnetSdkVersion = \"{sdkVersion}\"", implementation)
 
 [<Fact>]
 let ``candidate supply chain proves positive and independent negative controls`` () =
