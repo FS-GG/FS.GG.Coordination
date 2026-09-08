@@ -282,7 +282,7 @@ else
         | RenovateOwnership -> refused { snapshot with RequiredManagers = [ "github-actions"; "regex" ] }
         | ExactPinsSeal -> GitHubImmutableExecutionPinsQualification.verify (String.replicate 64 "0") snapshot |> Result.isError
         | ExactPinsReplay -> GitHubImmutableExecutionPinsQualification.verify report.Seal snapshot = Ok report
-        | QuintPinsUnchanged -> sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
+        | QuintPinsUnchanged -> sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) = "52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90"
         | NoPinsMutationSurface | NoWorkflowPublicationSurface ->
             let surface = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/GitHubImmutableExecutionPinsQualification.fsi"))
             [ "HttpClient"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "api.github.com"; "val apply"; "val publish"; "PATCH"; "POST"; "DELETE" ] |> List.forall (surface.Contains >> not)

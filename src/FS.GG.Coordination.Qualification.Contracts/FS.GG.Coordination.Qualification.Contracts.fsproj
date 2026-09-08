@@ -77,6 +77,8 @@
     <Compile Include="GitHubEventBenefitQualification.fs" />
     <Compile Include="GitHubRuntimeOperationsQualification.fsi" />
     <Compile Include="GitHubRuntimeOperationsQualification.fs" />
+    <Compile Include="GitHubEpochWireQualification.fsi" />
+    <Compile Include="GitHubEpochWireQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />

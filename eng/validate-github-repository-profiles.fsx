@@ -112,7 +112,7 @@ else
                 let receipt = JsonNode.Parse(File.ReadAllText(Path.Combine(root, $"evidence/github-substrate-v2/accepted/{unitId}.json")))
                 receipt["digest"].GetValue<string>() = digest)
         | QuintUnchanged ->
-            File.ReadAllBytes(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant() = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
+            File.ReadAllBytes(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant() = "52ce513dee6a7e0fbc99d97ea72e19095720894940bc02cc22686b37ecc58c90"
         | NoApplySurface -> not (File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/RepositoryProfileAdapter.fsi")).Contains("val apply"))
 
     let independentMutation = function

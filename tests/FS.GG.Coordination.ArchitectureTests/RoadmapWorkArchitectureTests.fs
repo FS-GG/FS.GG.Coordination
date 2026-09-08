@@ -13,8 +13,8 @@ open Xunit
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
-let private roadmapRevision = "6d3c8283042184557d4f0db07fcc353571494bb5"
-let private roadmapSha256 = "04bad334e0a48ed119bcd0df2b40a6db5333c06b1475c9ce52d078513ce8311c"
+let private roadmapRevision = "e3dcd3cde5416a620cf59989c203b11e82c90294"
+let private roadmapSha256 = "20450bccb71d8656330960cfade25150d370255ac58094523492c98f049e58c1"
 
 let private runAt workingDirectory executable arguments =
     let startInfo = ProcessStartInfo(executable)
@@ -916,7 +916,7 @@ let ``GS2-07-8 accepted result binds qualified source and comprehensive closure`
     Assert.Contains(artifacts, fun artifact -> artifact.GetProperty("name").GetString() = "comprehensive-cold-closure" && artifact.GetProperty("sha256").GetString() = "adbbd1519d39014ad1f0dc644a3a27b0ba595e5783eef116a1c62f713f86e82b")
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-07-7 event benefit`` () =
+let ``roadmap unit index advances through GS2-08-1 epoch wire`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -992,7 +992,8 @@ let ``roadmap unit index advances through GS2-07-7 event benefit`` () =
              "GS2-07.5"
              "GS2-07.6"
              "GS2-07.7"
-             "GS2-07.8" ]
+             "GS2-07.8"
+             "GS2-08.1" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -2224,7 +2225,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(46, commands.Length)
+    Assert.Equal(47, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())

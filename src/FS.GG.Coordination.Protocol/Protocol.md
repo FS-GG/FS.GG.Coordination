@@ -330,7 +330,7 @@ module CoordinationProtocol {
   )
 
   pure val compatibilityCatalogue = Set(
-    { id: "COMPAT-Profile2", kind: "compatibility", surface: "fsgg-quint-profile/2", requirement: "exact", detail: "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, fencing generations, full snapshot review epochs, shared reconciliation with audit repair, and OpenV2>ObservingV2>ContractingV1>OperatingV2; profile 1 remains frozen." }
+    { id: "COMPAT-Profile2", kind: "compatibility", surface: "fsgg-quint-profile/2", requirement: "exact", detail: "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1>Preparing>FreezeRequested>Frozen>SwitchedV2>VerifiedV2>OpenV2>ObservingV2>ContractingV1>OperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen." }
   )
 
   pure val propertyCatalogue = Set(
@@ -1150,7 +1150,7 @@ module CoordinationProtocol {
 The executable witness records evidence before accepting the subject vocabulary identity. Removing
 the evidence guard must make the invariant red in the bounded negative control.
 
-### Protected journal storage and mutation contract (GS2-03.10)
+### Protected journal storage and mutation contract (GS2-03.10, amended by GS2-08.1)
 
 The journal is an append-only Git object graph; issues, pull-request comments, labels, workflow
 runs, and webhooks are projections or wake-up hints. An aggregate identifier is encoded as
@@ -1206,6 +1206,33 @@ effect and requires its grant's journal commit and generation to equal that head
 reject new ordinary events. Compaction may append a terminal checkpoint but may not delete reachable
 history until the retention window and independent digest audit have passed; replay from either the
 full ancestry or the retained terminal snapshot must produce the same aggregate digest.
+
+GS2-08.1 reserves exactly one fleet aggregate, `fleet-cutover:fs-gg-production`, in the Authority
+repository. Its canonical lower-case length-framed digest has shard `9f`, so the only epoch ref is
+`refs/heads/fsgg/v2/journal/fleet-cutover/9f`; phase tags are immutable descendants of
+`refs/tags/fsgg/v2/fleet-cutover/`. The root record binds schema `fsgg.github-substrate.epoch-wire/1`,
+fleet id, genesis commit, trust-anchor digest, and manifest digest. Every later record repeats that identity,
+has exactly one expected parent, increases generation by one, and carries the matching protected phase tag.
+Unknown or duplicate JSON fields, a missing parent/tag, a rewind, wrong manifest, unreadable, incomplete,
+stale, or contradictory authority are refusals (or explicitly indeterminate where no authoritative read can
+settle the result). A cache may schedule a fresh read but never authorize an effect.
+
+The complete state sequence is `OperatingV1`, `Preparing`, `FreezeRequested`, `Frozen`, `SwitchedV2`,
+`VerifiedV2`, `OpenV2`, `ObservingV2`, `ContractingV1`, and `OperatingV2`, plus the closed pre-open recovery
+state `RollingBack`. Legal forward edges follow that order, `ObservingV2` may append observation checkpoints,
+and `Preparing`, `FreezeRequested`, `Frozen`, `SwitchedV2`, or `VerifiedV2` may enter `RollingBack`, whose only
+successor is verified `OperatingV1`. `RollingBack` itself admits no ordinary effect. No post-`OpenV2` edge can
+restore v1, and the obsolete `RetiringV1` name is not on the wire.
+
+`OperatingV1` admits eligible new and incumbent v1 work. `Preparing` refuses new ordinary admission but may
+complete an eligible incumbent effect already admitted under the same manifest when the freshly read epoch,
+claim, and operation generations all match at the external effect boundary. `FreezeRequested` and every later
+phase refuse ordinary v1 effects. From `OpenV2`, ordinary v2 effects require the same fresh generation fence.
+A lost provider response never triggers blind replay: the client rereads the fleet aggregate and exact operation
+receipt, treats an exact matching known effect as applied, retries only proven absence, preserves partial as
+partial, and otherwise reports indeterminate. The control issue is generated only after this reread and carries
+the fleet, manifest, epoch commit, generation, phase, and source ref while explicitly declaring itself a
+non-authoritative projection.
 
 A command touching multiple aggregates first sorts `(journal-kind, shard, aggregate-digest)` and
 acquires grants in that total order. It persists the entire touch set and expected generations in
@@ -1281,6 +1308,16 @@ module CoordinationProtocolTests {
     state.observationSnapshotSha256 == state.currentSnapshotSha256,
   }
   pure def cutoverTransitionIsLegal(current: CutoverState, proposed: CutoverState): bool = or {
+    and { current.phase == "OperatingV1", proposed.phase == "Preparing",
+      not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "Preparing", proposed.phase == "FreezeRequested",
+      not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "FreezeRequested", proposed.phase == "Frozen",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "Frozen", proposed.phase == "SwitchedV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "SwitchedV2", proposed.phase == "VerifiedV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
     and { current.phase == "VerifiedV2", proposed.phase == "OpenV2",
       proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
     and { current.phase == "OpenV2", proposed.phase == "ObservingV2",
@@ -1303,6 +1340,19 @@ module CoordinationProtocolTests {
       proposed.destructiveDeletionStarted },
     and { current.phase == "ContractingV1", proposed.phase == "OperatingV2",
       proposed.v1WritersFenced, proposed.destructiveDeletionStarted },
+    and { Set("Preparing", "FreezeRequested", "Frozen", "SwitchedV2", "VerifiedV2").contains(current.phase),
+      proposed.phase == "RollingBack", proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "RollingBack", proposed.phase == "OperatingV1",
+      not(proposed.v1WritersFenced), not(proposed.destructiveDeletionStarted) },
+  }
+  pure def v1EffectMayProceed(phase: str, newAdmission: bool, eligibleIncumbent: bool,
+      freshAuthority: bool, manifestMatches: bool, epochGenerationMatches: bool,
+      claimGenerationMatches: bool, operationGenerationMatches: bool): bool = and {
+    freshAuthority, manifestMatches, epochGenerationMatches, claimGenerationMatches, operationGenerationMatches,
+    or {
+      phase == "OperatingV1",
+      and { phase == "Preparing", not(newAdmission), eligibleIncumbent },
+    },
   }
 
   pure val claimJournalHead: JournalHead = {
@@ -1456,6 +1506,24 @@ module CoordinationProtocolTests {
         freshObservationDays: Set(0, 7, 14, 30), currentSnapshotSha256: "cutover-snapshot",
         observationSnapshotSha256: "cutover-snapshot", observationClockDay: 30,
         destructiveDeletionStarted: true }),
+    cutoverTransitionIsLegal(
+      { ...observingDay30, phase: "Preparing", successfulObservationDays: Set(), freshObservationDays: Set(),
+        observationSnapshotSha256: "", observationClockDay: 0 },
+      { ...observingDay30, phase: "RollingBack", successfulObservationDays: Set(), freshObservationDays: Set(),
+        observationSnapshotSha256: "", observationClockDay: 0 }),
+    not(cutoverTransitionIsLegal(
+      { ...observingDay30, phase: "OpenV2" },
+      { ...observingDay30, phase: "OperatingV1", v1WritersFenced: false })),
+  }
+
+  run testMutationEpochAdmissionAndGenerationFence = and {
+    v1EffectMayProceed("OperatingV1", true, true, true, true, true, true, true),
+    v1EffectMayProceed("Preparing", false, true, true, true, true, true, true),
+    not(v1EffectMayProceed("Preparing", true, true, true, true, true, true, true)),
+    not(v1EffectMayProceed("RollingBack", false, true, true, true, true, true, true)),
+    not(v1EffectMayProceed("FreezeRequested", false, true, true, true, true, true, true)),
+    not(v1EffectMayProceed("OperatingV1", true, true, false, true, true, true, true)),
+    not(v1EffectMayProceed("OperatingV1", true, true, true, true, true, false, true)),
   }
 
   type DeterministicVersionTuple = {

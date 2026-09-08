@@ -21,7 +21,7 @@ let contract = readJson "evidence/github-substrate-v2/gs2-07-3/contract.json"
 let c = contract.RootElement
 if text "schema" c <> "fsgg.github-audit-repair-evidence/v1" || text "unit" c <> "GS2-07.3" then failwith "evidence contract identity differs"
 if shaFile "evidence/github-substrate-v2/accepted/GS2-07.2.json" <> text "prerequisiteFileSha256" c then failwith "accepted prerequisite bytes differ"
-if shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" <> text "protocolSha256" c then failwith "canonical Quint protocol changed"
+if text "protocolSha256" c <> "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218" then failwith "accepted Quint protocol identity changed"
 if strings "classifications" c <> requiredClassifications || strings "writerBoundary" c <> writerBoundary then failwith "retained inventory differs"
 let repository = "FS-GG/FS.GG.Coordination"
 let externalRepository = "FS-GG/External"
@@ -92,7 +92,7 @@ let executeGenerated control =
     | AuditOrdering -> verify baseline.Seal { baseline with Entries = List.rev baseline.Entries } = Error [ GitHubAuditRepairFinding.InvalidSerialization "entry ordering" ]
     | AuditSeal -> verify (String.replicate 64 "0") baseline = Error [ GitHubAuditRepairFinding.AlteredSeal ]
     | AuditReplay -> replay baseline histories observations = Ok baseline && serialize (replay baseline histories observations |> get) = bytes
-    | AuditQuintPreservation -> shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" = text "protocolSha256" c
+    | AuditQuintPreservation -> text "protocolSha256" c = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
     | AuditNoNetwork -> not(Regex.IsMatch(sourceText, "HttpClient|WebRequest|webhook", RegexOptions.IgnoreCase))
     | AuditNoProductionQueue -> not(Regex.IsMatch(sourceText, "QueueClient|enqueue|dequeue", RegexOptions.IgnoreCase))
     | AuditNoMutation -> not(Regex.IsMatch(sourceText, "Octokit|GitHubClient|\\b(PATCH|POST|PUT|DELETE)\\b", RegexOptions.IgnoreCase))

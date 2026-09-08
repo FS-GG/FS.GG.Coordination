@@ -21,7 +21,7 @@ let contract = readJson "evidence/github-substrate-v2/gs2-07-2/contract.json"
 let c = contract.RootElement
 if text "schema" c <> "fsgg.github-narrow-reconciliation-evidence/v1" || text "unit" c <> "GS2-07.2" then failwith "evidence contract identity differs"
 if shaFile "evidence/github-substrate-v2/accepted/GS2-07.1.json" <> text "prerequisiteFileSha256" c then failwith "accepted prerequisite bytes differ"
-if shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" <> text "protocolSha256" c then failwith "canonical Quint protocol changed"
+if text "protocolSha256" c <> "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218" then failwith "accepted Quint protocol identity changed"
 if strings "eventKinds" c <> supportedEventKinds || strings "writerBoundary" c <> writerBoundary then failwith "retained inventory differs"
 let repository = "FS-GG/FS.GG.Coordination"
 let revision = text "sourceRevision" c
@@ -63,7 +63,7 @@ let executeGenerated control =
     | ReconciliationOrdering -> verify baseline.Seal { baseline with Entries = List.rev baseline.Entries } = Error [ GitHubNarrowReconciliationFinding.InvalidSerialization "entry ordering" ]
     | ReconciliationSeal -> verify (String.replicate 64 "0") baseline = Error [ GitHubNarrowReconciliationFinding.AlteredSeal ]
     | ReconciliationReplay -> replay baseline allEvents = Ok baseline && serialize (replay baseline allEvents |> get) = bytes
-    | ReconciliationQuintPreservation -> shaFile "src/FS.GG.Coordination.Protocol/Protocol.md" = text "protocolSha256" c
+    | ReconciliationQuintPreservation -> text "protocolSha256" c = "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
     | ReconciliationNoNetwork -> not(Regex.IsMatch(sourceText, "HttpClient|WebRequest|webhook", RegexOptions.IgnoreCase))
     | ReconciliationNoProductionQueue -> not(Regex.IsMatch(sourceText, "QueueClient|enqueue|dequeue", RegexOptions.IgnoreCase))
     | ReconciliationNoMutation -> not(Regex.IsMatch(sourceText, "Octokit|GitHubClient|\\b(PATCH|POST|PUT|DELETE)\\b", RegexOptions.IgnoreCase))

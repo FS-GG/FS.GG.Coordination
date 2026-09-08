@@ -1,0 +1,6 @@
+{
+  "schema": "fsgg.github-substrate.epoch-wire-controls/1",
+  "authorship": "independent",
+  "controls": ["state-inventory","forward-transition","rollback-transition","no-post-open-v1","operating-admission","preparing-table","freeze-fence","epoch-generation","claim-generation","operation-generation","manifest","fleet-layout","genesis-trust","parent-tag","fresh-read","cache","strict-fields","unreadable-contradictory","lost-response","issue-projection"],
+  "cases": ["closed-enum-count","ordered-architecture-amendment","rollback-is-closed","open-is-irreversible","incumbent-operation","pre-freeze-admission-matrix","ordinary-v1-denial-matrix","epoch-cas-fence","claim-effect-fence","operation-effect-fence","content-addressed-manifest","canonical-aggregate-only","genesis-trust-binding","ancestry-and-phase-anchor","effect-boundary-reread","discovery-cache-only","strict-decoder","authority-read-outcomes","authoritative-receipt-settlement","human-view-only"]
+}
