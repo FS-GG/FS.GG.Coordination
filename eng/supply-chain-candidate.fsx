@@ -26,6 +26,13 @@ let versionPattern = Regex("^0\\.0\\.0-gs2-03-7\\.([0-9a-f]{12})$", RegexOptions
 let shaPattern = Regex("^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
 let jsonOptions = JsonSerializerOptions(WriteIndented = false)
 
+// setup-dotnet installs the latest LTS runtime beside the requested SDK. The
+// entry point is launched with roll-forward disabled so this verifier itself
+// uses the SDK's pinned runtime; ordinary child builds must not inherit that
+// host-selection override.
+if String.Equals(Environment.GetEnvironmentVariable("DOTNET_ROLL_FORWARD"), "Disable", StringComparison.OrdinalIgnoreCase) then
+    Environment.SetEnvironmentVariable("DOTNET_ROLL_FORWARD", null)
+
 let fail message = raise (InvalidOperationException message)
 
 let sha256Bytes (bytes: byte array) =

@@ -36,7 +36,7 @@
   ],
   "automatedUpdater": "renovate",
   "managers": ["github-actions"],
-  "expectedSeal": "a3aa9af6c20c035ceda40d638757c82adf98a712dc28b7d713aebc13c5f1e936",
+  "expectedSeal": "1f749755a9f3440dde7762f3e15a1f30c54a0c9377b6f78c19250bb45ce7df89",
   "controls": [
     "prerequisite-receipt",
     "corpus-completeness",

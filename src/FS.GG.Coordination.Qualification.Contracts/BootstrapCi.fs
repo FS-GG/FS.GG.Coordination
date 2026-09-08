@@ -387,6 +387,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "      - name: Set up the pinned .NET SDK"
     line $"        uses: actions/setup-dotnet@%s{contract.Actions.SetupDotnet}"
     line "        with:"
+    line "          dotnet-version: 10.0.400"
     line "          global-json-file: global.json"
     line "      - name: Select the exact-head qualification route"
     line "        id: decide"
@@ -428,6 +429,7 @@ let private renderWorkflow (contract: BootstrapContract) =
         line "      - name: Set up the pinned .NET SDK"
         line $"        uses: actions/setup-dotnet@%s{contract.Actions.SetupDotnet}"
         line "        with:"
+        line "          dotnet-version: 10.0.400"
         line "          global-json-file: global.json"
         if gate.DownloadArtifacts then
             line "      - name: Download the current route receipt"
@@ -495,6 +497,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "      - name: Set up the pinned .NET SDK"
     line $"        uses: actions/setup-dotnet@%s{contract.Actions.SetupDotnet}"
     line "        with:"
+    line "          dotnet-version: 10.0.400"
     line "          global-json-file: global.json"
     line "      - name: Evaluate observed qualification economics"
     line $"        run: %s{contract.Economics.EntryPoint}"

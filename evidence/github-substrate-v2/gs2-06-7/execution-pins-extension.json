@@ -5,7 +5,7 @@
     {
       "kind": "action",
       "path": ".github/actions/coordination-setup/action.yml",
-      "sha256": "745cd757cb4654ca393c72b6d1a1a8c7c6012046bea13c0270eeb4b92bd83ead",
+      "sha256": "9a279b92a9f7f0f0590c6eece4fa9da7e0fddecadc02a49165a6ae9830371b2b",
       "externalReferences": [
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68"
       ],
