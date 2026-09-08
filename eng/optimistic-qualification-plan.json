@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.optimistic-qualification-plan/1",
   "selection": {
-    "maxConcurrentCandidates": 2,
+    "nightlyRecoveryMaxConcurrentCandidates": 2,
     "requiredIdentity": ["behavioralSha256", "compiledContractSha256", "toolchainProfileSha256", "verificationBoundsSha256", "formalCorpusSha256", "harnessSha256"],
     "changedBindingRequiresCorrespondence": true,
     "priorExecutionRequires": ["authentic", "complete", "current"],

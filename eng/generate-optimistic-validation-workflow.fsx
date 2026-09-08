@@ -7,7 +7,7 @@ let planPath = Path.Combine(root, "eng/optimistic-qualification-plan.json")
 let document = JsonDocument.Parse(File.ReadAllBytes planPath)
 let plan = document.RootElement
 if plan.GetProperty("schema").GetString() <> "fsgg.coordination.optimistic-qualification-plan/1" then failwith "unsupported plan"
-if plan.GetProperty("selection").GetProperty("maxConcurrentCandidates").GetInt32() <> 2 then failwith "candidate bound must be two"
+if plan.GetProperty("selection").GetProperty("nightlyRecoveryMaxConcurrentCandidates").GetInt32() <> 2 then failwith "nightly recovery candidate bound must be two"
 if plan.GetProperty("coherent").GetProperty("maxPartitionsPerCandidate").GetInt32() <> 6 then failwith "partition bound must be six"
 if plan.GetProperty("coherent").GetProperty("cancelInProgress").GetBoolean() then failwith "coherent runs cannot be cancelled"
 let workflow = Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml")

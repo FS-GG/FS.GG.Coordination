@@ -321,8 +321,8 @@ let private inspectOptimisticProjection root =
             let workflow = File.ReadAllText workflowPath
             [ if stringProperty "schema" plan.RootElement <> Some "fsgg.coordination.optimistic-qualification-plan/1" then
                   yield violation "optimistic-plan-schema" "unsupported"
-              if selection.GetProperty("maxConcurrentCandidates").GetInt32() <> 2 then
-                  yield violation "optimistic-candidate-bound" "must equal two"
+              if selection.GetProperty("nightlyRecoveryMaxConcurrentCandidates").GetInt32() <> 2 then
+                  yield violation "optimistic-nightly-recovery-candidate-bound" "must equal two"
               if coherent.GetProperty("maxPartitionsPerCandidate").GetInt32() <> 6 then
                   yield violation "optimistic-partition-bound" "must equal six"
               if boolProperty "failFast" coherent <> Some false || boolProperty "cancelInProgress" coherent <> Some false then
