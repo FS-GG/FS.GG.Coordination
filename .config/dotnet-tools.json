@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "fs.gg.coord.cli": {
+      "version": "0.87.0",
+      "commands": [
+        "fsgg-coord-engine"
+      ],
+      "rollForward": false
+    }
+  }
+}
