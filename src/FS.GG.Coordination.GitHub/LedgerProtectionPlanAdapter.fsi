@@ -34,6 +34,8 @@ type LedgerProtectionObservation =
       PreviousObservationSha256: string option
       PreviousObservationEvidenceSha256: string option
       ProviderEnvelopeSha256: string option
+      ProviderRawSetSha256: string option
+      ProviderNormalizedSetSha256: string option
       Rulesets: LedgerObservation<EffectiveLedgerRuleset list>
       PhaseTags: LedgerObservation<string list>
       Environment: LedgerObservation<string>

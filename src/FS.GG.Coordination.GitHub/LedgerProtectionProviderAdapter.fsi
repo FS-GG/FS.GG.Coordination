@@ -38,6 +38,8 @@ type LedgerProviderObservation =
       Revision: string
       PreviousObservationSha256: string option
       PreviousObservationEvidenceSha256: string option
+      RawSetSha256: string option
+      NormalizedSetSha256: string option
       DedicatedWriterAppId: int64 option
       ControlIssueNumber: int64 option
       Pages: LedgerProviderPage list }

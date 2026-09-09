@@ -12,7 +12,7 @@ let private read path = File.ReadAllText(Path.Combine(root,path))
 [<Fact>]
 let ``provider adapter is pure read model with no transport credential or apply surface`` () =
     let text = read "src/FS.GG.Coordination.GitHub/LedgerProtectionProviderAdapter.fsi" + read "src/FS.GG.Coordination.GitHub/LedgerProtectionProviderAdapter.fs"
-    for required in [ "PayloadSha256"; "PreviousObservationEvidenceSha256"; "ProviderEnvelopeSha256"; "IsTerminal"; "Pages"; "HttpStatus"; "ObservedAt"; "LedgerProtectionPlanAdapter.compile"; "/orgs/FS-GG/installations"; "/user/installations/"; "FS-GG/.github/environments"; "FS.GG.Coordination.Authority/issues" ] do
+    for required in [ "PayloadSha256"; "PreviousObservationEvidenceSha256"; "ProviderEnvelopeSha256"; "RawSetSha256"; "NormalizedSetSha256"; "IsTerminal"; "Pages"; "HttpStatus"; "ObservedAt"; "LedgerProtectionPlanAdapter.compile"; "/orgs/FS-GG/installations"; "/user/installations/"; "FS-GG/.github/environments"; "FS.GG.Coordination.Authority/issues" ] do
         Assert.Contains(required,text)
     for forbidden in [ "HttpClient"; "api.github.com"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "let apply"; "val apply"; "PATCH "; "POST "; "DELETE " ] do
         Assert.DoesNotContain(forbidden,text)
@@ -25,6 +25,22 @@ let ``provider corpus is explicitly sanitized and non operational`` () =
     Assert.Equal(0, value.GetProperty("writesAttempted").GetInt32())
     Assert.False(value.GetProperty("providerReadbackClaimed").GetBoolean())
     Assert.False(value.GetProperty("applyAuthorized").GetBoolean())
+
+[<Fact>]
+let ``capture transport is fixed read only and retained evidence is sanitized`` () =
+    let script = read "eng/capture-github-ledger-protection.py"
+    for required in ["AUTHORITY = \"FS-GG/FS.GG.Coordination.Authority\"";"GRAPHQL =";"subprocess.run([\"gh\", \"api\", *args]";"rawSha256";"normalizedSha256";"continuity = \"uninitialized\"";"continuity = \"matched\""] do Assert.Contains(required,script)
+    for forbidden in ["shell=True";"--method";"GITHUB_TOKEN";"Authorization";"cookie";"private_key";"client_secret"] do Assert.DoesNotContain(forbidden,script,StringComparison.OrdinalIgnoreCase)
+    for name,pass,continuity in [("live-capture-pass1.json",1,"uninitialized");("live-capture-pass2.json",2,"matched")] do
+        use document = JsonDocument.Parse(read ("evidence/github-substrate-v2/gs2-08-2/"+name))
+        let value = document.RootElement
+        Assert.Equal(pass,value.GetProperty("capturePass").GetInt32())
+        Assert.Equal(continuity,value.GetProperty("continuity").GetString())
+        Assert.Equal(0,value.GetProperty("writesAttempted").GetInt32())
+        Assert.False(value.GetProperty("applyAuthorized").GetBoolean())
+        Assert.Empty(value.GetProperty("gaps").EnumerateArray())
+        Assert.NotEqual(value.GetProperty("rawSetSha256").GetString(), value.GetProperty("normalizedSetSha256").GetString())
+        Assert.Equal(11, value.GetProperty("resources").GetArrayLength())
 
 [<Fact>]
 let ``independent provider validator passes from a fresh process`` () =
