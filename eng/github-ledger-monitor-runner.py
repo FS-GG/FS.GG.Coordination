@@ -71,6 +71,17 @@ def invoke_capture(config, output, previous=None):
         os.close(cutover)
 
 
+def capture_observed_at(path):
+    value = json.loads(pathlib.Path(path).read_bytes())
+    observed = value.get("capturedAt")
+    if not isinstance(observed, str):
+        raise Refused("capture-observed-at")
+    parsed = dt.datetime.fromisoformat(observed.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise Refused("capture-observed-at")
+    return parsed.astimezone(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def monitor_once(config, now):
     store = pathlib.Path(config["store"])
     with tempfile.TemporaryDirectory(prefix="fsgg-ledger-capture-", dir=store) as scratch:
@@ -79,10 +90,11 @@ def monitor_once(config, now):
         first, second = private / "pass1.json", private / "pass2.json"
         invoke_capture(config, first)
         invoke_capture(config, second, first)
+        observed_at = capture_observed_at(second)
         command = [sys.executable, str(pathlib.Path(config["sourceRoot"]) / "eng/monitor-github-ledger-protection.py"),
-                   "--store", str(store), "--capture-file", str(second), "--now", now]
+                   "--store", str(store), "--capture-file", str(second), "--now", observed_at]
         completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
-    deliver(config, "monitor", now)
+    deliver(config, "monitor", observed_at)
     sys.stdout.buffer.write(completed.stdout)
     return completed.returncode
 
