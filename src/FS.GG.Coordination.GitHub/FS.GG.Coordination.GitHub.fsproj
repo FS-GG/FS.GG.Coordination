@@ -21,6 +21,8 @@
     <Compile Include="LedgerProtectionPlanAdapter.fs" />
     <Compile Include="LedgerProtectionProviderAdapter.fsi" />
     <Compile Include="LedgerProtectionProviderAdapter.fs" />
+    <Compile Include="LedgerProtectionConformance.fsi" />
+    <Compile Include="LedgerProtectionConformance.fs" />
     <Compile Include="LedgerProtectionProviderCodec.fsi" />
     <Compile Include="LedgerProtectionProviderCodec.fs" />
     <Compile Include="ClaimTouchSetAdapter.fsi" />

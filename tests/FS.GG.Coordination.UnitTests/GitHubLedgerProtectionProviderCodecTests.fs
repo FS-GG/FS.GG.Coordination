@@ -18,6 +18,7 @@ let ``first capture is explicitly uninitialized and second binds its actual byte
     Assert.Equal(Some "e119eb24a1e6567e78887684fd0b990302bb45add1a98e9090b0f081f6206cc5", second.PreviousEvidenceSha256)
     Assert.Equal(first.NormalizedSetSha256, second.NormalizedSetSha256)
     Assert.Equal(first.RawSetSha256, second.RawSetSha256)
+    Assert.Equal(CurrentPreInstall, LedgerProtectionConformance.classify second.CapturedAt (TimeSpan.FromMinutes 5.0) second.Conformance)
 
 [<Fact>]
 let ``matched live capture compiles through the provider adapter without apply authority`` () =

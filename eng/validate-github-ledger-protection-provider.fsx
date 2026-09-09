@@ -1,6 +1,7 @@
 #load "../src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs"
 #load "../src/FS.GG.Coordination.GitHub/LedgerProtectionPlanAdapter.fs"
 #load "../src/FS.GG.Coordination.GitHub/LedgerProtectionProviderAdapter.fs"
+#load "../src/FS.GG.Coordination.GitHub/LedgerProtectionConformance.fs"
 #load "../src/FS.GG.Coordination.GitHub/LedgerProtectionProviderCodec.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/GitHubLedgerProtectionProviderQualification.fs"
 
@@ -16,6 +17,11 @@ let secondCapture = File.ReadAllBytes(Path.Combine(root,"evidence/github-substra
 if LedgerProtectionProviderCodec.qualifiedObservation firstCapture |> Result.isOk then failwith "uninitialized first capture was treated as continuous"
 let liveObservation = LedgerProtectionProviderCodec.qualifiedObservation secondCapture |> Result.defaultWith (failwithf "%A")
 let livePlan = LedgerProtectionProviderAdapter.compile secondCapture.CapturedAt (TimeSpan.FromMinutes 5.0) liveObservation |> Result.defaultWith (failwithf "%A")
+let liveState = LedgerProtectionConformance.classify secondCapture.CapturedAt (TimeSpan.FromMinutes 5.0) secondCapture.Conformance
+let preparation = LedgerProtectionConformance.prepare secondCapture.CapturedAt (TimeSpan.FromMinutes 5.0) secondCapture.Conformance
+if liveState<>CurrentPreInstall || preparation.ApplyAuthorized || preparation.Seal.Length<>64 then failwith "live conformance or sealed preparation differs"
+let conformanceEvidence = JsonDocument.Parse(File.ReadAllText(Path.Combine(root,"evidence/github-substrate-v2/gs2-08-2/post-install-conformance.json")))
+if conformanceEvidence.RootElement.GetProperty("currentState").GetString()<>string liveState || conformanceEvidence.RootElement.GetProperty("administrativePreparation").GetProperty("sealSha256").GetString()<>preparation.Seal then failwith "retained conformance evidence differs"
 if livePlan.ApplyAuthorized || firstCapture.NormalizedSetSha256<>secondCapture.NormalizedSetSha256 || firstCapture.RawSetSha256<>secondCapture.RawSetSha256 then failwith "two-pass live observation did not remain stable and no-apply"
 if liveObservation.RawSetSha256<>Some secondCapture.RawSetSha256 || liveObservation.NormalizedSetSha256<>Some secondCapture.NormalizedSetSha256 then failwith "capture set digests were not bound into provider observation"
 let at = DateTimeOffset.Parse("2026-09-08T18:00:00Z")
@@ -73,4 +79,4 @@ let expected = JsonDocument.Parse(File.ReadAllText(Path.Combine(root,"evidence/g
 let expectedIds = expected.RootElement.GetProperty("controls").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq
 let independent : GitHubLedgerProtectionProviderControlResult list = GitHubLedgerProtectionProviderQualification.requiredControls |> List.map (fun control -> { Control=control; Passed=expectedIds.Contains(GitHubLedgerProtectionProviderQualification.controlId control) && passes control })
 GitHubLedgerProtectionProviderQualification.validate generated independent |> Result.defaultWith (failwithf "%A")
-printfn "GITHUB_LEDGER_PROTECTION_PROVIDER_OK pages=%d controls=%d fleetRef=%s applyAuthorized=%b seal=%s" normalized.PageSha256.Length generated.Length plan.FleetRef plan.ApplyAuthorized plan.Seal
+printfn "GITHUB_LEDGER_PROTECTION_PROVIDER_OK pages=%d controls=%d fleetRef=%s state=%A applyAuthorized=%b seal=%s preparationSeal=%s" normalized.PageSha256.Length generated.Length plan.FleetRef liveState plan.ApplyAuthorized plan.Seal preparation.Seal

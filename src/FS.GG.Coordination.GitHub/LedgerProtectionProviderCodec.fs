@@ -10,7 +10,7 @@ type LedgerCaptureContinuity = Uninitialized | Matched | Drift
 type LedgerProtectionCapture =
     { CapturePass: int; CapturedAt: DateTimeOffset; Continuity: LedgerCaptureContinuity
       PreviousEvidenceSha256: string option; RawSetSha256: string; NormalizedSetSha256: string
-      Gaps: string list; Observation: LedgerProviderObservation }
+      Gaps: string list; Observation: LedgerProviderObservation; Conformance: LedgerProtectionConformanceSnapshot }
 
 module LedgerProtectionProviderCodec =
     let private sha (bytes:byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -77,14 +77,27 @@ module LedgerProtectionProviderCodec =
             let find id = resources |> List.find (fun value -> requiredString "id" value=id) |> _.GetProperty("normalized")
             let ruleResults = find "rulesets" |> _.EnumerateArray() |> Seq.map ruleset |> Seq.toList
             for result in ruleResults do match result with Error code -> errors.Add code | _ -> ()
-            let tags = find "phase-tags" |> _.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
-            let environmentNames = find "environments" |> _.GetProperty("names").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+            let gitRefs id =
+                find id |> _.EnumerateArray() |> Seq.map (fun value ->
+                    if value.ValueKind=JsonValueKind.String then {Name=value.GetString();ObjectSha=""}
+                    else {Name=requiredString "name" value;ObjectSha=requiredString "objectSha" value}) |> Seq.toList
+            let fleetHeads = gitRefs "fleet-head-refs"
+            let phaseRefs = gitRefs "phase-tags"
+            let tags = phaseRefs |> List.map _.Name
+            let environmentValue = find "environments"
+            let environmentNames = environmentValue.GetProperty("names").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
             let installationValues =
                 find "organization-installations" |> _.EnumerateArray()
                 |> Seq.map (fun value ->
                     let permissions = value.GetProperty("permissions").EnumerateObject() |> Seq.map (fun p -> p.Name,p.Value.GetString()) |> Seq.toList
-                    { InstallationId=value.GetProperty("installationId").GetInt64(); AppId=value.GetProperty("appId").GetInt64(); Slug=requiredString "slug" value; RepositorySelection=requiredString "repositorySelection" value
-                      Permissions=permissions; SelectedRepositoriesEndpoint=None; SelectedRepositoriesPagesComplete=false; SelectedRepositories=Unknown "selected-repositories-unbound" }) |> Seq.toList
+                    let installationId = value.GetProperty("installationId").GetInt64()
+                    let selected = value.GetProperty("selectedRepositories")
+                    let endpoint,complete,repositories =
+                        if selected.ValueKind=JsonValueKind.Array then
+                            Some(LedgerProtectionProviderAdapter.selectedRepositoriesEndpoint installationId),true,Observed(selected.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+                        else None,false,Unknown "selected-repositories-unbound"
+                    { InstallationId=installationId; AppId=value.GetProperty("appId").GetInt64(); Slug=requiredString "slug" value; RepositorySelection=requiredString "repositorySelection" value
+                      Permissions=permissions; SelectedRepositoriesEndpoint=endpoint; SelectedRepositoriesPagesComplete=complete; SelectedRepositories=repositories }) |> Seq.toList
             let issueValues = find "authority-issues" |> _.EnumerateArray() |> Seq.map (fun value -> {Number=value.GetProperty("number").GetInt64();IsPullRequest=value.GetProperty("isPullRequest").GetBoolean()}) |> Seq.toList
             let capturedAt = DateTimeOffset.Parse(requiredString "capturedAt" root)
             let pass = root.GetProperty("capturePass").GetInt32()
@@ -95,9 +108,29 @@ module LedgerProtectionProviderCodec =
                 { SchemaVersion=1; Repository=LedgerProtectionPlanAdapter.authorityRepository; RepositoryId=LedgerProtectionPlanAdapter.authorityRepositoryId; Revision=requiredString "revision" root
                   PreviousObservationSha256=previous; PreviousObservationEvidenceSha256=previous; RawSetSha256=Some rawSet; NormalizedSetSha256=Some normalizedSet; DedicatedWriterAppId=None; ControlIssueNumber=None
                   Pages=[mkPage LedgerProtectionProviderAdapter.rulesetsEndpoint (RulesetsPage(ruleResults |> List.choose Result.toOption));mkPage LedgerProtectionProviderAdapter.phaseTagsEndpoint (PhaseTagsPage tags);mkPage LedgerProtectionProviderAdapter.environmentEndpoint (EnvironmentsPage environmentNames);mkPage LedgerProtectionProviderAdapter.installationsEndpoint (OrganizationInstallationsPage installationValues);mkPage LedgerProtectionProviderAdapter.controlIssuesEndpoint (ControlIssuesPage issueValues)] }
+            let effectiveRules = find "effective-branch-rules" |> _.EnumerateArray() |> Seq.map (requiredString "type" >> rule) |> Seq.toList
+            if effectiveRules |> List.exists Option.isNone then errors.Add "capture-effective-rule-enum"
+            let classicResource = resources |> List.find (fun value -> requiredString "id" value="classic-branch-protection")
+            let classic = if requiredString "state" classicResource="proven-absent" then ProvenAbsent else Observed true
+            let fleetEnvironment =
+                let detail = environmentValue.GetProperty("fleetCutover")
+                if detail.ValueKind=JsonValueKind.Null then ProvenAbsent
+                else
+                    Observed
+                        { Repository="FS-GG/.github"; Name=requiredString "name" detail
+                          ReviewerIds=detail.GetProperty("reviewerIds").EnumerateArray() |> Seq.map _.GetInt64() |> Seq.toList
+                          PreventSelfReview=detail.GetProperty("preventSelfReview").GetBoolean();CanAdminsBypass=detail.GetProperty("canAdminsBypass").GetBoolean()
+                          ProtectedBranches=detail.GetProperty("protectedBranches").GetBoolean();CustomBranchPolicies=detail.GetProperty("customBranchPolicies").GetBoolean()
+                          DeploymentBranchPatterns=detail.GetProperty("deploymentBranchPatterns").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList }
+            let branchPatterns = find "branch-protection-rules" |> _.EnumerateArray() |> Seq.map (requiredString "pattern") |> Seq.toList
+            let conformance =
+                { Provider=observation;FleetHeads=Observed fleetHeads;PhaseTags=Observed phaseRefs
+                  EffectiveRules=Observed(effectiveRules |> List.choose id);ClassicProtection=classic;FleetEnvironment=fleetEnvironment
+                  BranchProtectionRulePatterns=Observed branchPatterns;Bindings={OrdinaryWriterAppId=None;CutoverWriterAppId=None;ControlIssueNumber=None}
+                  Operational={SettingsApplied=Unknown "not-observed";AppCustodyReady=Unknown "not-observed";FleetInitialized=Unknown "not-observed";MonitoringReady=Unknown "not-observed"} }
             let gaps = root.GetProperty("gaps").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
             if not gaps.IsEmpty then errors.AddRange(gaps |> List.map (fun value -> "capture-gap:"+value))
-            if errors.Count>0 then Error(List.ofSeq errors) else Ok {CapturePass=pass;CapturedAt=capturedAt;Continuity=continuity;PreviousEvidenceSha256=previous;RawSetSha256=rawSet;NormalizedSetSha256=normalizedSet;Gaps=gaps;Observation=observation}
+            if errors.Count>0 then Error(List.ofSeq errors) else Ok {CapturePass=pass;CapturedAt=capturedAt;Continuity=continuity;PreviousEvidenceSha256=previous;RawSetSha256=rawSet;NormalizedSetSha256=normalizedSet;Gaps=gaps;Observation=observation;Conformance=conformance}
         with error -> Error ["capture-unreadable:"+error.GetType().Name]
     let qualifiedObservation capture =
         match capture.CapturePass,capture.Continuity,capture.PreviousEvidenceSha256 with

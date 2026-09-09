@@ -76,3 +76,13 @@ let ``provider qualification is registered as the GS2-08-2 Q4 continuation`` () 
     let command = gates.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString()="github-ledger-protection-provider-contract")
     Assert.Equal("Q4", command.GetProperty("qGate").GetString())
     Assert.Equal<string list>(["fsi";"eng/validate-github-ledger-protection-provider.fsx";"--";"."], command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+
+[<Fact>]
+let ``post-install conformance remains sealed symbolic preparation`` () =
+    let source = read "src/FS.GG.Coordination.GitHub/LedgerProtectionConformance.fs"
+    for state in ["CurrentPreInstall";"InstalledFleetProtection";"InstalledProductionProtection";"IncompleteOrUnknown";"DriftOrTamper"] do Assert.Contains(state,source)
+    for required in ["ApplyAuthorized=false";"provider administration is not authorized";"credential custody is not established";"fleet initialization is pending";"monitoring is pending"] do Assert.Contains(required,source)
+    use evidence = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-08-2/post-install-conformance.json")
+    Assert.Equal("CurrentPreInstall",evidence.RootElement.GetProperty("currentState").GetString())
+    Assert.False(evidence.RootElement.GetProperty("administrativePreparation").GetProperty("applyAuthorized").GetBoolean())
+    Assert.Equal(0,evidence.RootElement.GetProperty("administrativePreparation").GetProperty("providerWritesAttempted").GetInt32())

@@ -60,6 +60,7 @@ module LedgerProtectionProviderAdapter =
     val environmentEndpoint: string
     val installationsEndpoint: string
     val controlIssuesEndpoint: string
+    val selectedRepositoriesEndpoint: installationId: int64 -> string
     val payloadSha256: LedgerProviderPayload -> string
     val normalize: asOf: DateTimeOffset -> maxAge: TimeSpan -> LedgerProviderObservation -> Result<LedgerProtectionObservation, LedgerProviderFinding list>
     val compile: asOf: DateTimeOffset -> maxAge: TimeSpan -> LedgerProviderObservation -> Result<LedgerProtectionPlan, LedgerProviderFinding list>
