@@ -1,0 +1,39 @@
+{
+  "schema": "fsgg.v1-receiver-census-independent-expectations/1",
+  "receiverCount": 7,
+  "sourceIdentityCount": 555,
+  "deduplicatedBlobCount": 460,
+  "routeCount": 615,
+  "dependencyCount": 95,
+  "toolSourceCount": 3,
+  "effectCounts": {
+    "conditional": 197,
+    "inert": 353,
+    "protected-admin": 27,
+    "read-only": 38
+  },
+  "controls": [
+    "schema-binding",
+    "accepted-epoch-prerequisite",
+    "producer-source-binding",
+    "census-byte-binding",
+    "manifest-byte-binding",
+    "source-blob-byte-binding",
+    "complete-receiver-roster",
+    "complete-source-population",
+    "complete-route-population",
+    "complete-dependency-population",
+    "stable-unique-ordering",
+    "source-identity-binding",
+    "route-effect-classification",
+    "delegated-writer-closure",
+    "callable-dependency-closure",
+    "legacy-tool-correspondence",
+    "unknown-source-refusal",
+    "offline-validation",
+    "local-telemetry-boundary",
+    "no-installation-claim",
+    "no-fence-claim",
+    "no-acceptance-claim"
+  ]
+}

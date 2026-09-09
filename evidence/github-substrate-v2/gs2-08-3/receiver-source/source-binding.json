@@ -1,0 +1,18 @@
+{
+  "schema": "fsgg.v1-receiver-census-source-binding/1",
+  "producerRepository": "FS-GG/.github",
+  "producerCandidateRevision": "7bb93466dc3f7e0f70d419137e34e2a76c7356fa",
+  "producerLandedRevision": "3719b6cfc6f2d766ad56f930b56f025e20c4b2cc",
+  "producerTree": "d20205d921f5ce128385d2a9ba6361c47d3f9a49",
+  "censusSha256": "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db",
+  "sourceManifestsSha256": "45da2ddfae4f81abff268cd8dbf1a9037b6b8f484c1086ab84cdc184523012d0",
+  "sourceBlobsSha256": "a15009850d121004aa77ad88507e8bae2ecf190077184c350facaf606b290db9",
+  "collectorSha256": "c7c1d06e69fc6ba7a525e5d229f2e113763a1f109d9ea428eaba35473e03bfb5",
+  "checkerSha256": "bd79a20595c810d45802de773d264ab01b78db1374dd41d63ebbda1ecf7709b7",
+  "fixtureRunnerSha256": "095c7cf071404f3b7a687635542c825db676ccbf853128dc2669d0297ff899ba",
+  "subroadmapSha256": "713e2e2139d5dffbc7ca2e57ec9f08d032e4324708d38ab2dd691c5fba1049e5",
+  "nativeRoadmapSha256": "9c49a0efd1440d8a71130758be39394ae4cdd67f3d10b9cb6cb71998154c1a17",
+  "unifiedRoadmapSha256": "4395b126e262e103bad70fecb6b4c154c513d45548efdbb570b08f8d27739731",
+  "acceptedEpochReceiptDigest": "49c70359ebfbc00331ba90c7c5b100a292efa4cc95a5dfa8007867ceceec5c31",
+  "qualificationScope": "producer and receiver source coverage only; no installed ledger, effect fence, provider mutation, package publication, receiver adoption, acceptance, or GS2-08.4 authority"
+}

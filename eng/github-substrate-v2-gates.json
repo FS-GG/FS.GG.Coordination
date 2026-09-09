@@ -188,6 +188,12 @@
       "args": ["fsi", "eng/validate-github-v1-writer-census.fsx", "--", "."]
     },
     {
+      "id": "github-v1-receiver-census-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-v1-receiver-census.fsx", "--", "."]
+    },
+    {
       "id": "github-immutable-execution-pins-contract",
       "qGate": "Q3",
       "executable": "dotnet",

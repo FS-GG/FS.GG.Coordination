@@ -46,6 +46,7 @@
     <Compile Include="GitHubLedgerProtectionArchitectureTests.fs" />
     <Compile Include="GitHubLedgerProtectionProviderArchitectureTests.fs" />
     <Compile Include="GitHubV1WriterCensusArchitectureTests.fs" />
+    <Compile Include="GitHubV1ReceiverCensusArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubCommentProjectionTests.fs" Link="GitHubCommentProjectionUnitTests.fs" />
     <Compile Include="GitHubCommentProjectionArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubShardedJournalTests.fs" Link="GitHubShardedJournalUnitTests.fs" />
