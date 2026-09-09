@@ -92,15 +92,16 @@ may use an external five-minute timer, but this source window intentionally does
 
 ```ini
 [Timer]
-OnBootSec=5m
-OnUnitActiveSec=5m
+OnCalendar=*:0/5
 Persistent=true
 ```
 
-The associated service must first create a fresh, complete capture and then invoke the one-shot monitor. A separate
-watchdog must query `heartbeat.observed_at` and alert if it is more than 15 minutes old; successful process exit alone
-does not prove monitoring freshness. Alert delivery updates `outbox.delivered_at` only after the destination confirms
-delivery. Neither the monitor nor the watchdog performs automatic repair.
+Use a wall-clock calendar trigger because a `Type=oneshot` service need not enter an active state that can anchor
+`OnUnitActiveSec`. Stagger a separate watchdog at `OnCalendar=*:2/5` so it does not race the monitor's capture or
+store transaction. The associated service must first create a fresh, complete capture and then invoke the one-shot
+monitor. The watchdog must query `heartbeat.observed_at` and alert if it is more than 15 minutes old; successful
+process exit alone does not prove monitoring freshness. Alert delivery updates `outbox.delivered_at` only after the
+destination confirms delivery. Neither the monitor nor the watchdog performs automatic repair.
 
 `eng/github-ledger-monitor-runner.py` is the systemd-independent runner boundary. Its mode-0600 private config names
 an absolute source checkout, durable mode-0700 store, stable runner identity, explicit credential commands, and an

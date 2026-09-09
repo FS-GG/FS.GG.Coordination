@@ -247,6 +247,12 @@ class LiveOperationTests(unittest.TestCase):
                 self.assertEqual(0, runner.watchdog(config, "2026-09-09T13:00:00Z"))
             self.assertEqual("fresh", json.loads(stream.getvalue())["outcome"])
 
+    def test_operating_recipe_uses_staggered_wall_clock_timers(self):
+        recipe = (ROOT.parent / "docs/operations/github-ledger-operational-completeness.md").read_text()
+        self.assertIn("OnCalendar=*:0/5", recipe)
+        self.assertIn("OnCalendar=*:2/5", recipe)
+        self.assertNotIn("\nOnUnitActiveSec=", recipe)
+
     def test_operation_scripts_never_print_secret_or_token_fields(self):
         for name in ("github-ledger-operation.py", "github-ledger-initialization-transport.py", "github-ledger-monitor-runner.py"):
             source = (ROOT / name).read_text().lower()
