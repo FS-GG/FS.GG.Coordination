@@ -119,13 +119,15 @@ let generatedMutation = function
     | CandidateCommandContract -> contractCommands = censusPairs && contractCommands @ [ ("unknown", "always") ] <> censusPairs
     | CheckerBinding -> snapshot.CheckerSha256 = "2b90d16f7d4b1a4ea1f9afd78eed306655f32f60470b20370d9e895f3c999619"
     | CompleteCommandRoots -> refused { snapshot with Commands = snapshot.Commands.Tail }
-    | CompleteSourcePopulation -> refused { snapshot with Sources = [] }
+    | CompleteSourcePopulation -> refused { snapshot with Sources = snapshot.Sources.Tail }
     | StableUniqueOrdering -> refused { snapshot with Commands = List.rev snapshot.Commands }
     | ExactWriteClassification -> refused { snapshot with Commands = { snapshot.Commands.Head with Writes = "never" } :: snapshot.Commands.Tail }
     | SourceIdentity -> refused { snapshot with Sources = { snapshot.Sources.Head with Sha256 = "main" } :: snapshot.Sources.Tail }
     | SinkDisposition -> refused { snapshot with Sources = { snapshot.Sources.Head with Disposition = "unknown" } :: snapshot.Sources.Tail }
     | UnknownCommandRefusal -> refused { snapshot with Commands = snapshot.Commands @ [ { Name = "unknown"; Writes = "always" } ] }
-    | DynamicWriterRefusal -> sourceByPath.ContainsKey mandatoryPath && not ((sourceByPath.Remove mandatoryPath).ContainsKey mandatoryPath)
+    | DynamicWriterRefusal ->
+        sourceByPath.ContainsKey mandatoryPath
+        && refused { snapshot with Sources = snapshot.Sources |> List.filter (_.Path >> (<>) mandatoryPath) }
     | NoFenceClaim -> scope.Contains("no installed ledger") && scope.Contains("effect fence")
     | NoReceiverClaim -> scope.Contains("no installed ledger") && scope.Contains("receiver") && scope.Contains("publication")
 

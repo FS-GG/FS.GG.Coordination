@@ -10,16 +10,23 @@ let private commands =
         { Name = $"command-{index:D2}"
           Writes = if index < 20 then "always" elif index < 26 then "conditional" else "never" } ]
 let private sources =
-    [ { Path = "tests/fixture.sh"
-        Disposition = "test-only"
-        SinkKinds = [ "git-push" ]
-        Sha256 = digest 'b'
-        NonWriterJustification = Some "Isolated fixture has no production authority." }
-      { Path = "tools/routine-delivery.py"
-        Disposition = "remote-writer"
-        SinkKinds = [ "dynamic-process" ]
-        Sha256 = digest 'a'
-        NonWriterJustification = None } ]
+    [ for index in 0 .. 59 do
+          yield
+              { Path = $"src/source-{index:D2}.fs"
+                Disposition = "read-only"
+                SinkKinds = []
+                Sha256 = digest 'c'
+                NonWriterJustification = None }
+      yield { Path = "tests/fixture.sh"
+              Disposition = "test-only"
+              SinkKinds = [ "git-push" ]
+              Sha256 = digest 'b'
+              NonWriterJustification = Some "Isolated fixture has no production authority." }
+      yield { Path = "tools/routine-delivery.py"
+              Disposition = "remote-writer"
+              SinkKinds = [ "dynamic-process" ]
+              Sha256 = digest 'a'
+              NonWriterJustification = None } ]
 let private snapshot =
     { Schema = "fsgg.v1-writer-census-qualification/1"
       ProducerRevision = revision 'a'; ProducerTree = revision 'b'
@@ -43,14 +50,16 @@ let ``unknown command and changed write class refuse`` () =
 
 [<Fact>]
 let ``dynamic source omission and malformed source identity refuse`` () =
-    Assert.True(GitHubV1WriterCensusQualification.validateSnapshot { snapshot with Sources = [] } |> Result.isError)
+    Assert.True(GitHubV1WriterCensusQualification.validateSnapshot { snapshot with Sources = sources.Tail } |> Result.isError)
     let malformed = { sources.Head with Sha256 = "main" }
     Assert.True(GitHubV1WriterCensusQualification.validateSnapshot { snapshot with Sources = malformed :: sources.Tail } |> Result.isError)
 
 [<Fact>]
 let ``non-writer sink requires an explicit justification`` () =
-    let unjustified = { sources.Head with NonWriterJustification = None }
-    Assert.True(GitHubV1WriterCensusQualification.validateSnapshot { snapshot with Sources = unjustified :: sources.Tail } |> Result.isError)
+    let fixture = sources |> List.find (_.Path >> (=) "tests/fixture.sh")
+    let unjustified = { fixture with NonWriterJustification = None }
+    let changed = sources |> List.map (fun source -> if source.Path = fixture.Path then unjustified else source)
+    Assert.True(GitHubV1WriterCensusQualification.validateSnapshot { snapshot with Sources = changed } |> Result.isError)
 
 [<Fact>]
 let ``generated and independent controls must both close every mutation`` () =

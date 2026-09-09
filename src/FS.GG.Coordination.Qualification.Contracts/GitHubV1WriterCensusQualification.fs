@@ -128,7 +128,7 @@ module GitHubV1WriterCensusQualification =
         let writerDispositions = Set [ "remote-writer"; "conditional-remote-writer"; "protected-admin-writer"; "publish-writer" ]
         let otherDispositions = Set [ "local-only"; "read-only"; "declaration-only"; "build-only"; "guard-only"; "instruction-only"; "test-only"; "typed-command-catalogue" ]
         let sourcePaths = snapshot.Sources |> List.map _.Path
-        if snapshot.Sources.IsEmpty then findings.Add(finding "WC-SOURCE-EMPTY" "sources" "source population must not be empty")
+        if snapshot.Sources.Length <> 62 then findings.Add(finding "WC-SOURCE-COUNT" "sources" "expected all 62 discovered source identities")
         if sourcePaths <> List.sort sourcePaths || sourcePaths.Length <> (sourcePaths |> List.distinct |> List.length) then
             findings.Add(finding "WC-SOURCE-ORDER" "sources" "source paths must be unique and ordinally sorted")
         for source in snapshot.Sources do
