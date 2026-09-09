@@ -136,6 +136,47 @@ def ruleset(value):
             "include": refs.get("include") or [], "exclude": refs.get("exclude") or [],
             "rules": sorted([rule.get("type") for rule in value.get("rules") or []]), "bypassActors": sorted(bypass, key=lambda x: (x["actorType"] or "", x["actorId"] or 0, x["bypassMode"] or ""))}
 
+def environment_detail(value, policy_values):
+    gaps = []
+    protection_rules = value.get("protection_rules")
+    if not isinstance(protection_rules, list):
+        gaps.append("fleet-cutover-protection-rules")
+        protection_rules = []
+    if any(not isinstance(rule, dict) for rule in protection_rules):
+        gaps.append("fleet-cutover-protection-rules")
+    protection_rules = [rule for rule in protection_rules if isinstance(rule, dict)]
+    required_reviewers = [rule for rule in protection_rules if rule.get("type") == "required_reviewers"]
+    reviewer_rule = required_reviewers[0] if len(required_reviewers) == 1 else None
+    if reviewer_rule is None:
+        gaps.append("fleet-cutover-required-reviewers-rule")
+    prevent_self_review = reviewer_rule.get("prevent_self_review") if reviewer_rule is not None else None
+    if not isinstance(prevent_self_review, bool):
+        gaps.append("fleet-cutover-prevent-self-review")
+        prevent_self_review = None
+    reviewers = reviewer_rule.get("reviewers") if reviewer_rule is not None else None
+    if not isinstance(reviewers, list):
+        gaps.append("fleet-cutover-reviewers")
+        reviewers = []
+    reviewer_ids = []
+    for reviewer in reviewers:
+        subject = reviewer.get("reviewer") if isinstance(reviewer, dict) else None
+        identifier = subject.get("id") if isinstance(subject, dict) else None
+        if type(identifier) is not int or identifier <= 0:
+            gaps.append("fleet-cutover-reviewer-id")
+        else:
+            reviewer_ids.append(identifier)
+    branch_policy = value.get("deployment_branch_policy") or {}
+    normalized = {
+        "name": value.get("name"),
+        "protectionRuleTypes": sorted([rule.get("type") for rule in protection_rules]),
+        "reviewerIds": sorted(reviewer_ids),
+        "preventSelfReview": prevent_self_review,
+        "canAdminsBypass": bool(value.get("can_admins_bypass")),
+        "protectedBranches": bool(branch_policy.get("protected_branches")),
+        "customBranchPolicies": bool(branch_policy.get("custom_branch_policies")),
+        "deploymentBranchPatterns": sorted([policy.get("name") for policy in policy_values])}
+    return normalized, sorted(set(gaps))
+
 def resource(identifier, raw, normalized, complete=True, state="observed"):
     normalized_bytes = canonical(normalized)
     return {"id": identifier, "state": state, "pagesComplete": complete, "rawSha256": sha(raw), "normalizedSha256": sha(normalized_bytes), "normalized": normalized}
@@ -195,15 +236,14 @@ def capture(app_key_fds, control_issue_number):
     if "fleet-cutover" in names:
         raw_detail, detail = rest("repos/FS-GG/.github/environments/fleet-cutover")
         env_raw.extend(raw_detail)
-        protection_rules = detail.get("protection_rules") or []
-        reviewers = [reviewer for rule in protection_rules for reviewer in (rule.get("reviewers") or [])]
-        branch_policy = detail.get("deployment_branch_policy") or {}
         raw_policies, policies = rest("repos/FS-GG/.github/environments/fleet-cutover/deployment-branch-policies?per_page=100", True)
         env_raw.extend(raw_policies)
         if refused(policies): gaps.append("fleet-cutover-deployment-branch-policies")
         policy_values = [policy for page in flatten_pages(policies) for policy in (page.get("branch_policies") or [])] if flatten_pages(policies) and isinstance(flatten_pages(policies)[0], dict) else []
-        env_normalized["fleetCutover"] = {"name": detail.get("name"), "protectionRuleTypes": sorted([value.get("type") for value in protection_rules]), "reviewerIds": sorted([(value.get("reviewer") or {}).get("id") for value in reviewers]), "preventSelfReview": bool(detail.get("prevent_self_review")), "canAdminsBypass": bool(detail.get("can_admins_bypass")), "protectedBranches": bool(branch_policy.get("protected_branches")), "customBranchPolicies": bool(branch_policy.get("custom_branch_policies")), "deploymentBranchPatterns": sorted([value.get("name") for value in policy_values])}
-    resources.append(resource("environments", bytes(env_raw), env_normalized, not refused(env_pages), "unknown" if refused(env_pages) else "observed"))
+        env_normalized["fleetCutover"], environment_gaps = environment_detail(detail, policy_values)
+        gaps.extend(environment_gaps)
+    environment_unknown = refused(env_pages) or any(value.startswith("fleet-cutover-") for value in gaps)
+    resources.append(resource("environments", bytes(env_raw), env_normalized, not environment_unknown, "unknown" if environment_unknown else "observed"))
 
     raw_installations, installation_pages = rest("orgs/FS-GG/installations?per_page=100", True)
     if refused(installation_pages): gaps.append("organization-installations")
