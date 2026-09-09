@@ -10,7 +10,7 @@ type V1EpochPhase =
 type V1EpochEvidence =
     { Schema: string; FleetId: string; Repository: string; RepositoryId: int64; Ref: string; Tag: string
       GenesisCommit: string; TrustAnchorSha256: string; ManifestSha256: string; Phase: V1EpochPhase
-      Commit: string; Parent: string; Generation: int64; Complete: bool; Fresh: bool; CacheUsedAsAuthority: bool }
+      Commit: string; Parent: string option; Generation: int64; Complete: bool; Fresh: bool; CacheUsedAsAuthority: bool }
 type FreshEpochRead = FreshEpochBytes of byte array | EpochUnreadable of string | EpochPartial of string | EpochContradictory of string
 type V1EffectExpectation =
     { EffectClass: V1EffectClass; EligibleIncumbent: bool; ManifestSha256: string; EpochCommit: string
@@ -64,7 +64,8 @@ module V1EffectFenceAdapter =
                          RepositoryId = root.GetProperty("repositoryId").GetInt64(); Ref = getString "ref"; Tag = getString "tag"
                          GenesisCommit = getString "genesisCommit"; TrustAnchorSha256 = getString "trustAnchorSha256"
                          ManifestSha256 = getString "manifestSha256"; Phase = parsedPhase; Commit = getString "commit"
-                         Parent = getString "parent"; Generation = root.GetProperty("generation").GetInt64()
+                         Parent = (if root.GetProperty("parent").ValueKind=JsonValueKind.Null then None else Some(getString "parent"))
+                         Generation = root.GetProperty("generation").GetInt64()
                          Complete = root.GetProperty("complete").GetBoolean(); Fresh = root.GetProperty("fresh").GetBoolean()
                          CacheUsedAsAuthority = root.GetProperty("cacheUsedAsAuthority").GetBoolean() }
             with :? InvalidOperationException as error -> Error [ error.Message ]
@@ -85,7 +86,8 @@ module V1EffectFenceAdapter =
           if not evidence.Fresh then "authority-stale"
           if evidence.CacheUsedAsAuthority then "cache-cannot-authorize"
           if evidence.Generation < 1L then "invalid-generation"
-          if not (validDigest evidence.GenesisCommit) || not (validDigest evidence.Commit) || not (validDigest evidence.Parent) then "missing-parent-or-genesis"
+          if not (validDigest evidence.GenesisCommit) || not (validDigest evidence.Commit) then "missing-parent-or-genesis"
+          match evidence.Generation,evidence.Parent with | 1L,None -> () | generation,Some parent when generation>1L && validDigest parent -> () | _ -> "missing-parent-or-genesis"
           if not (validDigest evidence.TrustAnchorSha256) then "wrong-trust-anchor"
           if not (validDigest evidence.ManifestSha256) || evidence.ManifestSha256 <> expectation.ManifestSha256 then "manifest-mismatch"
           if evidence.Commit <> expectation.EpochCommit || evidence.Generation <> expectation.EpochGeneration then "stale-epoch-generation"

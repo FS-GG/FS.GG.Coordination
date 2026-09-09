@@ -12,7 +12,7 @@ type Settlement = SettlementKnownApplied | SettlementProvenAbsentMayRetry | Sett
 type EpochAuthority = {
     Schema: string; FleetId: string; Repository: string; RepositoryId: int64; Ref: string
     Tag: string; GenesisCommit: string; TrustAnchorSha256: string; ManifestSha256: string
-    Phase: EpochPhase; Commit: string; Parent: string; Generation: int64
+    Phase: EpochPhase; Commit: string; Parent: string option; Generation: int64
     Complete: bool; Fresh: bool; CacheUsedAsAuthority: bool; UnknownFields: string list; DuplicateFields: string list }
 type EffectFence = {
     Writer: WriterClass; ExpectedManifestSha256: string; ExpectedEpochCommit: string
@@ -61,7 +61,8 @@ module GitHubEpochWireQualification =
           if authority.Repository <> repository || authority.RepositoryId <> repositoryId then "wrong-authority-repository"
           if authority.Ref <> epochRef then "wrong-ref"
           if not(authority.Tag.StartsWith(tagPrefix, StringComparison.Ordinal)) then "missing-or-wrong-tag"
-          if authority.GenesisCommit = "" || authority.Parent = "" || authority.Commit = "" then "missing-parent-or-genesis"
+          if authority.GenesisCommit = "" || authority.Commit = "" then "missing-parent-or-genesis"
+          match authority.Generation,authority.Parent with | 1L,None -> () | generation,Some parent when generation>1L && digest parent -> () | _ -> "missing-parent-or-genesis"
           if authority.Generation < 1L then "invalid-generation"
           if not(digest authority.ManifestSha256) then "wrong-manifest"
           if not(digest authority.TrustAnchorSha256) then "wrong-trust-anchor"

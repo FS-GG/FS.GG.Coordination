@@ -27,7 +27,7 @@ type V1EpochEvidence =
       ManifestSha256: string
       Phase: V1EpochPhase
       Commit: string
-      Parent: string
+      Parent: string option
       Generation: int64
       Complete: bool
       Fresh: bool

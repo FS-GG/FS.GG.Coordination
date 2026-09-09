@@ -182,6 +182,12 @@
       "args": ["fsi", "eng/validate-github-ledger-protection-provider.fsx", "--", "."]
     },
     {
+      "id": "github-ledger-operational-contract",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-ledger-operations.fsx", "--", "."]
+    },
+    {
       "id": "github-v1-writer-census-contract",
       "qGate": "Q3",
       "executable": "dotnet",
