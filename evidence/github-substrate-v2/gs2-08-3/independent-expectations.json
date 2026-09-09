@@ -1,0 +1,44 @@
+{
+  "schema": "fsgg.github-substrate.v1-writer-census-independent/1",
+  "commandRootCount": 54,
+  "alwaysCount": 20,
+  "conditionalCount": 6,
+  "neverCount": 28,
+  "sourceIdentityCount": 62,
+  "trackedExecutableCount": 213,
+  "controls": [
+    "schema-binding",
+    "accepted-epoch-prerequisite",
+    "roadmap-binding",
+    "historical-q0-binding",
+    "producer-source-binding",
+    "census-byte-binding",
+    "candidate-command-contract",
+    "checker-binding",
+    "complete-command-roots",
+    "complete-source-population",
+    "stable-unique-ordering",
+    "exact-write-classification",
+    "source-identity",
+    "sink-disposition",
+    "unknown-command-refusal",
+    "dynamic-writer-refusal",
+    "no-fence-claim",
+    "no-receiver-claim"
+  ],
+  "mandatorySources": {
+    ".github/workflows/dispatch-sender.yml": "conditional-remote-writer",
+    ".github/workflows/github-substrate-v2-authority-qualification.yml": "protected-admin-writer",
+    ".github/workflows/release-coord-engine.yml": "publish-writer",
+    "scripts/NewSddWorkspace/Program.fs": "protected-admin-writer",
+    "src/FS.GG.Coord.Cli.Kernel/Options.fs": "typed-command-catalogue",
+    "src/FS.GG.Coord.Cli/Program.fs": "typed-command-catalogue",
+    "src/FS.GG.Coord.GitHub/Transport.fs": "typed-command-catalogue",
+    "tools/routine-delivery.py": "remote-writer"
+  },
+  "telemetryLocalOnly": [
+    "src/FS.GG.Coord.Cli/TelemetryApplication.fs",
+    "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs",
+    "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs"
+  ]
+}
