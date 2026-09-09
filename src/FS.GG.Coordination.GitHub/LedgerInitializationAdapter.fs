@@ -8,10 +8,11 @@ open System.Text.Json.Nodes
 
 type ExpectedLedgerRef = ExpectedAbsent | ExpectedParent of string
 type LedgerObject = { Kind: string; Oid: string; Bytes: byte array }
-type LedgerInitializationAuthority = { KeyId:string;PublicKeyPem:string;PublicKeySha256:string;Payload:byte array;Signature:byte array;AuthorizedAt:DateTimeOffset;ExpiresAt:DateTimeOffset }
+type LedgerInitializationAuthority = { KeyId:string;PublicKeyPem:string;PublicKeySpkiSha256:string;Payload:byte array;Signature:byte array;AuthorizedAt:DateTimeOffset;ExpiresAt:DateTimeOffset }
 type LedgerInitializationInput =
     { RepositoryId:int64;Repository:string;FleetId:string;Ref:string;Tag:string;ManifestSha256:string;TrustAnchorSha256:string
-      SourceSha256:string;DesiredPolicySha256:string;FirstCaptureSha256:string;SecondCaptureSha256:string;AuthorizationKeyId:string;AuthorizationKeySha256:string
+      SourceSha256:string;DesiredPolicySha256:string;FirstCaptureSha256:string;SecondCaptureSha256:string;AuthorizationKeyId:string;AuthorizationKeySpkiSha256:string
+      AuthorizationWorkflowRevision:string;AuthorizationWorkflowSha256:string
       CutoverAppId:int64;CutoverInstallationId:int64;ControlIssueNumber:int64;ExpectedRef:ExpectedLedgerRef;CreatedAt:DateTimeOffset;AuthorName:string;AuthorEmail:string }
 type LedgerInitializationPlan =
     { InputSha256:string;AuthorizationSha256:string;Event:LedgerObject;Head:LedgerObject;Tree:LedgerObject;Commit:LedgerObject
@@ -36,7 +37,7 @@ module LedgerInitializationAdapter =
         root.ToJsonString() |> ShardedJournalAdapter.canonicalJson |> Result.defaultWith invalidOp
     let private lease = function ExpectedAbsent -> "absent" | ExpectedParent x -> "parent:"+x
     let canonicalInput input =
-        json ["authorEmail",JsonValue.Create input.AuthorEmail;"authorName",JsonValue.Create input.AuthorName;"authorizationKeyId",JsonValue.Create input.AuthorizationKeyId;"authorizationKeySha256",JsonValue.Create input.AuthorizationKeySha256;"controlIssueNumber",JsonValue.Create input.ControlIssueNumber
+        json ["authorEmail",JsonValue.Create input.AuthorEmail;"authorName",JsonValue.Create input.AuthorName;"authorizationKeyId",JsonValue.Create input.AuthorizationKeyId;"authorizationKeySpkiSha256",JsonValue.Create input.AuthorizationKeySpkiSha256;"authorizationWorkflowRevision",JsonValue.Create input.AuthorizationWorkflowRevision;"authorizationWorkflowSha256",JsonValue.Create input.AuthorizationWorkflowSha256;"controlIssueNumber",JsonValue.Create input.ControlIssueNumber
               "createdAt",JsonValue.Create(input.CreatedAt.ToUniversalTime().ToString("O"));"cutoverAppId",JsonValue.Create input.CutoverAppId;"cutoverInstallationId",JsonValue.Create input.CutoverInstallationId
               "desiredPolicySha256",JsonValue.Create input.DesiredPolicySha256;"expectedRef",JsonValue.Create(lease input.ExpectedRef);"firstCaptureSha256",JsonValue.Create input.FirstCaptureSha256
               "fleetId",JsonValue.Create input.FleetId;"manifestSha256",JsonValue.Create input.ManifestSha256;"ref",JsonValue.Create input.Ref;"repository",JsonValue.Create input.Repository
@@ -44,10 +45,9 @@ module LedgerInitializationAdapter =
               "tag",JsonValue.Create input.Tag;"trustAnchorSha256",JsonValue.Create input.TrustAnchorSha256]
     let private authorityValid asOf (authority:LedgerInitializationAuthority) expected =
         try
-            let pemBytes=utf8 authority.PublicKeyPem
             use rsa=RSA.Create()
             rsa.ImportFromPem(authority.PublicKeyPem)
-            authority.KeyId.Length>0 && sha256 pemBytes=authority.PublicKeySha256 && authority.Payload=expected
+            authority.KeyId.Length>0 && sha256(rsa.ExportSubjectPublicKeyInfo())=authority.PublicKeySpkiSha256 && authority.Payload=expected
             && authority.AuthorizedAt<=asOf && asOf<authority.ExpiresAt && authority.ExpiresAt-authority.AuthorizedAt<=TimeSpan.FromHours 2.
             && rsa.VerifyData(authority.Payload,authority.Signature,HashAlgorithmName.SHA256,RSASignaturePadding.Pss)
         with _ -> false
@@ -66,7 +66,8 @@ module LedgerInitializationAdapter =
               if not(input.Tag.StartsWith("refs/tags/fsgg/v2/fleet-cutover/operating-v1/",StringComparison.Ordinal)) then "tag"
               for value in [input.ManifestSha256;input.TrustAnchorSha256;input.SourceSha256;input.DesiredPolicySha256;input.FirstCaptureSha256;input.SecondCaptureSha256] do if not(digestLike value) then "digest"
               if input.CutoverAppId<=0L || input.CutoverInstallationId<=0L || input.ControlIssueNumber<>2L then "binding"
-              if authority.KeyId<>input.AuthorizationKeyId || authority.PublicKeySha256<>input.AuthorizationKeySha256 || not(digestLike input.AuthorizationKeySha256) then "authorization-key"
+              if authority.KeyId<>input.AuthorizationKeyId || authority.PublicKeySpkiSha256<>input.AuthorizationKeySpkiSha256 || not(digestLike input.AuthorizationKeySpkiSha256) then "authorization-key"
+              if input.AuthorizationWorkflowRevision.Length<>40 || not(input.AuthorizationWorkflowRevision|>Seq.forall(fun c->c>='0'&&c<='9'||c>='a'&&c<='f')) || not(digestLike input.AuthorizationWorkflowSha256) then "authorization-workflow"
               match input.ExpectedRef with ExpectedAbsent -> () | ExpectedParent _ -> "genesis-must-expect-absence"
               if not(authorityValid asOf authority expected) then "authorization" ] |> List.distinct
         if not errors.IsEmpty then Error errors else

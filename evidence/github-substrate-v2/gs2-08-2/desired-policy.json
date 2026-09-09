@@ -11,7 +11,7 @@
   "namespaceIntegrity": { "target": "refs/heads/fsgg/v2/journal/**/*", "retain": true },
   "phaseTag": { "target": "refs/tags/fsgg/v2/fleet-cutover/**/*", "allowCreate": true, "immutableAfterCreate": true },
   "environment": { "repository": "FS-GG/.github", "name": "fleet-cutover", "reviewerIds": [1645484, 4456104], "reviewers": ["EHotwagner", "nuklearwanze"], "preventSelfReview": true, "canAdminsBypass": false, "deploymentBranches": { "protectedBranches": false, "customBranchPolicies": true, "patterns": ["main"] } },
-  "controlIssue": { "repository": "FS-GG/FS.GG.Coordination.Authority", "number": null, "status": "unbound" },
+  "controlIssue": { "repository": "FS-GG/FS.GG.Coordination.Authority", "number": 2, "status": "bound-observed" },
   "applyAuthorized": false,
-  "sharedAppProductionBlocker": true
+  "sharedAppProductionBlocker": false
 }

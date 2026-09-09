@@ -34,7 +34,9 @@ module LedgerProtectionCommand =
           FirstCaptureSha256 = text "firstCaptureSha256" root
           SecondCaptureSha256 = text "secondCaptureSha256" root
           AuthorizationKeyId = text "authorizationKeyId" root
-          AuthorizationKeySha256 = text "authorizationKeySha256" root
+          AuthorizationKeySpkiSha256 = text "authorizationKeySpkiSha256" root
+          AuthorizationWorkflowRevision = text "authorizationWorkflowRevision" root
+          AuthorizationWorkflowSha256 = text "authorizationWorkflowSha256" root
           CutoverAppId = root.GetProperty("cutoverAppId").GetInt64()
           CutoverInstallationId = root.GetProperty("cutoverInstallationId").GetInt64()
           ControlIssueNumber = root.GetProperty("controlIssueNumber").GetInt64()
@@ -48,7 +50,7 @@ module LedgerProtectionCommand =
         let root = document.RootElement
         { KeyId = text "keyId" root
           PublicKeyPem = File.ReadAllText keyPath
-          PublicKeySha256 = text "publicKeySha256" root
+          PublicKeySpkiSha256 = text "publicKeySpkiSha256" root
           Payload = Convert.FromBase64String(text "payloadBase64" root)
           Signature = Convert.FromBase64String(text "signatureBase64" root)
           AuthorizedAt = root.GetProperty("authorizedAt").GetDateTimeOffset()
@@ -74,6 +76,15 @@ module LedgerProtectionCommand =
             with error -> eprintfn "%s" error.Message; 3
         | _ -> eprintfn "plan requires --input --authorization --public-key --output"; 2
 
+    let private payloadCommand values =
+        match required "--input" values, required "--output" values with
+        | Ok inputPath, Ok outputPath ->
+            try
+                File.WriteAllBytes(outputPath, LedgerInitializationAdapter.canonicalInput (readInput inputPath))
+                0
+            with error -> eprintfn "%s" error.Message; 3
+        | _ -> eprintfn "payload requires --input --output"; 2
+
     let private delegated mode values credentialFd =
         match required "--plan" values, required "--transport" values with
         | Ok planPath, Ok transport when File.Exists planPath ->
@@ -93,10 +104,11 @@ module LedgerProtectionCommand =
 
     let run arguments =
         match arguments |> Array.toList with
+        | "initialize" :: "payload" :: rest -> match options rest with Ok values -> payloadCommand values | Error error -> eprintfn "%s" error; 2
         | "initialize" :: "plan" :: rest -> match options rest with Ok values -> planCommand values | Error error -> eprintfn "%s" error; 2
         | "initialize" :: "apply" :: rest ->
             match options rest with
             | Error error -> eprintfn "%s" error; 2
             | Ok values -> match required "--credential-fd" values with Ok value -> delegated "apply" values (Some(Int32.Parse value)) | Error error -> eprintfn "%s" error; 2
         | "initialize" :: "verify" :: rest -> match options rest with Ok values -> delegated "verify" values None | Error error -> eprintfn "%s" error; 2
-        | _ -> eprintfn "ledger-protection initialize <plan|apply|verify>"; 2
+        | _ -> eprintfn "ledger-protection initialize <payload|plan|apply|verify>"; 2
