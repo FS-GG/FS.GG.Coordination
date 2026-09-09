@@ -136,10 +136,10 @@ let independentMutation = function
     | AcceptedEpochPrerequisite -> snapshot.AcceptedEpochReceiptSha256 = "49c70359ebfbc00331ba90c7c5b100a292efa4cc95a5dfa8007867ceceec5c31"
     | RoadmapBinding -> snapshot.RoadmapSha256 = "20f4f2bcdcd6e2bfdd787edc66efbe30a21289f7ddf2030a8b1b3ae2150b7c52"
     | HistoricalQ0Binding -> snapshot.Q0EvidenceSha256 = "ef07c245e4ab3dd0b97d997a32940cdd70485070bfedc9c44e5b4ed2422078c5" && snapshot.Q0CorpusSha256 = "5c94fa3ee60e02b7fbee80918b45e5e2046a152a2342f6b88044ac169c1dc67b"
-    | ProducerSourceBinding -> snapshot.ProducerTree = "491aca1eb0d26597663ffa75702151af83706e5f" && snapshot.ProducerRevision.Length = 40
-    | CensusByteBinding -> sha256 censusBytes = "5ffec43baacf0624a24d74045c540b20dbedbc38af5548f101d71a5b684fb71b"
+    | ProducerSourceBinding -> snapshot.ProducerTree = "6c6b084df2fab729034828183b9ba4a373501d9e" && snapshot.ProducerRevision.Length = 40
+    | CensusByteBinding -> sha256 censusBytes = "589ab3d20bbdfb78d4863e9fd11bc48dbbd0b222d47b635a7fe13fec02239812"
     | CandidateCommandContract -> sha256 contractBytes = "780b3a8779b9e91358b2200f8d696de54b4e76341f0e3ddf2962d5b0ddd8a441" && contractCommands = censusPairs
-    | CheckerBinding -> snapshot.CheckerSha256 = "2b90d16f7d4b1a4ea1f9afd78eed306655f32f60470b20370d9e895f3c999619" && snapshot.FixtureRunnerSha256 = "8bee2587b2d22c7b792c3af13597a646e5cf731533a3a03db9bf1fed22067607"
+    | CheckerBinding -> snapshot.CheckerSha256 = "2b90d16f7d4b1a4ea1f9afd78eed306655f32f60470b20370d9e895f3c999619" && snapshot.FixtureRunnerSha256 = "11aa3f00627dfa9fe10a2c5994659deb82f93a93abcc4c3a41a01ad389fac754"
     | CompleteCommandRoots -> censusCommands.Length = 54
     | CompleteSourcePopulation -> sources.Length = 62
     | StableUniqueOrdering -> censusCommands |> List.map _.Name = (censusCommands |> List.map _.Name |> List.sort)

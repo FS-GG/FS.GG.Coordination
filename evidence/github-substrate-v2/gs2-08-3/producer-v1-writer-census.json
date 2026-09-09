@@ -42,7 +42,7 @@
     {"path":".claude/skills/check-board/references/deep-detail.md","disposition":"instruction-only","sinkKinds":["rest-write"],"sha256":"a9cb0df37ef8d3fc833fe48668160adc075f72a9ce6f79dc6d82afaa1713319f","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
     {"path":".claude/skills/pnext-item/references/deep-detail.md","disposition":"instruction-only","sinkKinds":["gh-pr-merge","rest-write"],"sha256":"5b3a4db7369741c6e4b90b244ecc78ba680210c90c2961b436a591ea526bdf3c","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
     {"path":".claude/skills/publishing-and-deployment/SKILL.md","disposition":"instruction-only","sinkKinds":["workflow-dispatch"],"sha256":"5dba1846fa80e0f8a8797dc109f8f73fc2a75752878f3a9fcba787a9b11d807e","nonWriterJustification":"Documented operator command; the skill text is not an installed automation sink."},
-    {"path":".github/workflows/coord-engine.yml","disposition":"build-only","sinkKinds":[],"sha256":"4556f565815c66eadf9ec545a8e008b525dda93f5c44957c1f26828d4043f2f3"},
+    {"path":".github/workflows/coord-engine.yml","disposition":"build-only","sinkKinds":[],"sha256":"1201a3d7819dacb7bf3896b804bcbae91370570dee399be4002c514a35471d39"},
     {"path":".github/workflows/dispatch-sender.yml","disposition":"conditional-remote-writer","sinkKinds":["rest-write"],"sha256":"0874e00420ec87d22885860257ccc731e5c7b4b0dc2ef6ae94318ad80d32cbbe"},
     {"path":".github/workflows/feed-autofix.yml","disposition":"conditional-remote-writer","sinkKinds":["git-push","rest-write"],"sha256":"f8aeb6384928f6791557dfe37ec6c2795c18e2cfed3ed896e99f1040e858f6c5"},
     {"path":".github/workflows/fsgg-dispatch-broker.yml","disposition":"conditional-remote-writer","sinkKinds":["dynamic-process"],"sha256":"6da0f197d97129fbb9b43f931879779d4a3b4b0af38b2ef7634eb945eaf6b05c"},
@@ -95,7 +95,7 @@
     {"path":"tests/recipe-pagination/run.sh","disposition":"test-only","sinkKinds":["rest-write"],"sha256":"c658a44da40659b6e170f3cacd5075a1f2eb87e031d7fdfc7a544e9d7634bac8","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/review-critic-succession-wire/run.sh","disposition":"test-only","sinkKinds":["curl-write"],"sha256":"72220f2c9d26c638d96485dd6232053248fe5f56eb0acbf6ba280186818c12e8","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/skill-registry/run.sh","disposition":"test-only","sinkKinds":["git-push"],"sha256":"542ae5044fec3d5a940cacaf53a79d21b92c45a98bf48f11ceb37bd7c421528c","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
-    {"path":"tests/v1-writer-census/run.py","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"8bee2587b2d22c7b792c3af13597a646e5cf731533a3a03db9bf1fed22067607","nonWriterJustification":"Mutation fixture reads release workflow text and never executes a package publish."},
+    {"path":"tests/v1-writer-census/run.py","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"11aa3f00627dfa9fe10a2c5994659deb82f93a93abcc4c3a41a01ad389fac754","nonWriterJustification":"Mutation fixture reads release workflow text and never executes a package publish."},
     {"path":"tools/routine-delivery.py","disposition":"remote-writer","sinkKinds":["dynamic-process"],"sha256":"1c3025769e0fb4a9a2a90a5ac02e87d7943c3d24c3de2bf0985ec2c7d4e8cfd9"}
   ]
 }
