@@ -16,7 +16,7 @@ let private writer =
 let private baseline =
     { SchemaVersion=1; Repository=LedgerProtectionPlanAdapter.authorityRepository; RepositoryId=LedgerProtectionPlanAdapter.authorityRepositoryId
       Revision=String.replicate 40 "a"; ObservedAt=at; PagesComplete=true; PageSha256=[String.replicate 64 "b"]; PageDigestSha256="78700acf3b3d42f416e19b9ca0b40b5e2f217bbd3d6930cff1e96901cc482a6e"
-      PreviousObservationSha256=Some(String.replicate 64 "c"); PreviousObservationEvidenceSha256=Some(String.replicate 64 "c"); ProviderEnvelopeSha256=None; Rulesets=LedgerObservation.Observed [writer; integrity]
+      PreviousObservationSha256=Some(String.replicate 64 "c"); PreviousObservationEvidenceSha256=Some(String.replicate 64 "c"); ProviderEnvelopeSha256=None; ProviderRawSetSha256=None; ProviderNormalizedSetSha256=None; Rulesets=LedgerObservation.Observed [writer; integrity]
       PhaseTags=LedgerObservation.ProvenAbsent; Environment=LedgerObservation.ProvenAbsent; DedicatedWriterApp=LedgerObservation.ProvenAbsent; ControlIssue=LedgerObservation.ProvenAbsent }
 
 [<Fact>]

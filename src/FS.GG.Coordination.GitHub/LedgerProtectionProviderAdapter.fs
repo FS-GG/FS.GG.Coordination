@@ -20,7 +20,7 @@ type LedgerProviderPage =
       PayloadSha256: string; Payload: LedgerProviderPayload }
 type LedgerProviderObservation =
     { SchemaVersion: int; Repository: string; RepositoryId: int64; Revision: string
-      PreviousObservationSha256: string option; PreviousObservationEvidenceSha256: string option
+      PreviousObservationSha256: string option; PreviousObservationEvidenceSha256: string option; RawSetSha256: string option; NormalizedSetSha256: string option
       DedicatedWriterAppId: int64 option; ControlIssueNumber: int64 option; Pages: LedgerProviderPage list }
 type LedgerProviderFinding =
     | UnsupportedLedgerProviderSchema of int | InvalidLedgerProviderBinding of string
@@ -78,6 +78,8 @@ module LedgerProtectionProviderAdapter =
               match observation.PreviousObservationSha256, observation.PreviousObservationEvidenceSha256 with
               | Some declared, Some evidence when digestLike declared && String.Equals(declared,evidence,StringComparison.OrdinalIgnoreCase) -> ()
               | _ -> InvalidLedgerProviderBinding "previousObservationContinuity"
+              match observation.RawSetSha256 with Some value when digestLike value -> () | _ -> InvalidLedgerProviderBinding "rawSetSha256"
+              match observation.NormalizedSetSha256 with Some value when digestLike value -> () | _ -> InvalidLedgerProviderBinding "normalizedSetSha256"
               for endpoint in expected do
                   match Map.tryFind endpoint groups with
                   | None -> IncompleteLedgerProviderPagination endpoint
@@ -136,11 +138,12 @@ module LedgerProtectionProviderAdapter =
         let aggregate = pageDigests |> List.map frame |> String.concat "" |> digest
         let envelope =
             let pageText page = String.concat "|" [page.Endpoint;string page.Page;string page.LastPage;string page.IsTerminal;string page.HttpStatus;page.ObservedAt.ToUniversalTime().ToString("O");page.PayloadSha256]
-            [ observation.Repository; string observation.RepositoryId; observation.Revision; defaultArg observation.PreviousObservationSha256 ""; defaultArg observation.PreviousObservationEvidenceSha256 ""; observation.DedicatedWriterAppId |> Option.map string |> Option.defaultValue ""; observation.ControlIssueNumber |> Option.map string |> Option.defaultValue ""
+            [ observation.Repository; string observation.RepositoryId; observation.Revision; defaultArg observation.PreviousObservationSha256 ""; defaultArg observation.PreviousObservationEvidenceSha256 ""; defaultArg observation.RawSetSha256 ""; defaultArg observation.NormalizedSetSha256 ""; observation.DedicatedWriterAppId |> Option.map string |> Option.defaultValue ""; observation.ControlIssueNumber |> Option.map string |> Option.defaultValue ""
               yield! ordered |> List.map pageText ] |> List.map frame |> String.concat "" |> digest
         Ok { SchemaVersion=1; Repository=observation.Repository; RepositoryId=observation.RepositoryId; Revision=observation.Revision
              ObservedAt=ordered |> List.map _.ObservedAt |> List.max; PagesComplete=true; PageSha256=pageDigests
              PageDigestSha256=aggregate; PreviousObservationSha256=observation.PreviousObservationSha256; PreviousObservationEvidenceSha256=observation.PreviousObservationEvidenceSha256; ProviderEnvelopeSha256=Some envelope
+             ProviderRawSetSha256=observation.RawSetSha256; ProviderNormalizedSetSha256=observation.NormalizedSetSha256
              Rulesets=Observed rulesets; PhaseTags=if tags.IsEmpty then ProvenAbsent else Observed tags
              Environment=environment; DedicatedWriterApp=app; ControlIssue=issue }
     let compile asOf maxAge observation =

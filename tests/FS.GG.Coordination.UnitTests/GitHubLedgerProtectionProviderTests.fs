@@ -18,7 +18,7 @@ let private page endpoint page last payload =
       PayloadSha256=LedgerProtectionProviderAdapter.payloadSha256 payload; Payload=payload }
 let private baseline =
     { SchemaVersion=1; Repository=LedgerProtectionPlanAdapter.authorityRepository; RepositoryId=LedgerProtectionPlanAdapter.authorityRepositoryId
-      Revision=String.replicate 40 "a"; PreviousObservationSha256=Some(String.replicate 64 "c"); PreviousObservationEvidenceSha256=Some(String.replicate 64 "c"); DedicatedWriterAppId=None; ControlIssueNumber=None
+      Revision=String.replicate 40 "a"; PreviousObservationSha256=Some(String.replicate 64 "c"); PreviousObservationEvidenceSha256=Some(String.replicate 64 "c"); RawSetSha256=Some(String.replicate 64 "d"); NormalizedSetSha256=Some(String.replicate 64 "e"); DedicatedWriterAppId=None; ControlIssueNumber=None
       Pages=
         [ page LedgerProtectionProviderAdapter.rulesetsEndpoint 2 2 (RulesetsPage [integrity])
           page LedgerProtectionProviderAdapter.rulesetsEndpoint 1 2 (RulesetsPage [writer])

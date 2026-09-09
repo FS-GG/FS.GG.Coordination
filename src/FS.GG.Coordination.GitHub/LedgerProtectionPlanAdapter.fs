@@ -19,6 +19,7 @@ type LedgerProtectionObservation =
     { SchemaVersion: int; Repository: string; RepositoryId: int64; Revision: string; ObservedAt: DateTimeOffset
       PagesComplete: bool; PageSha256: string list; PageDigestSha256: string; PreviousObservationSha256: string option
       PreviousObservationEvidenceSha256: string option; ProviderEnvelopeSha256: string option
+      ProviderRawSetSha256: string option; ProviderNormalizedSetSha256: string option
       Rulesets: LedgerObservation<EffectiveLedgerRuleset list>; PhaseTags: LedgerObservation<string list>
       Environment: LedgerObservation<string>; DedicatedWriterApp: LedgerObservation<DedicatedLedgerApp>; ControlIssue: LedgerObservation<int64> }
 type LedgerProtectionIntent = { Kind: string; Target: string; Rules: LedgerRule list; Bypass: LedgerBypass list }
@@ -59,7 +60,7 @@ module LedgerProtectionPlanAdapter =
         let rules = match observation.Rulesets with Observed xs -> xs |> List.sortBy _.Id |> List.map ruleSetText |> String.concat ";" | ProvenAbsent -> "absent" | Unknown why -> "unknown:" + why
         let tags = match observation.PhaseTags with Observed xs -> xs |> List.sort |> String.concat "," | ProvenAbsent -> "absent" | Unknown why -> "unknown:" + why
         let state render = function Observed x -> "observed:" + render x | ProvenAbsent -> "absent" | Unknown why -> "unknown:" + why
-        String.concat "\n" [ observation.Repository; string observation.RepositoryId; observation.Revision; observation.ObservedAt.ToUniversalTime().ToString("O"); string observation.PagesComplete; String.concat "," observation.PageSha256; observation.PageDigestSha256; defaultArg observation.PreviousObservationSha256 ""; defaultArg observation.PreviousObservationEvidenceSha256 ""; defaultArg observation.ProviderEnvelopeSha256 ""; rules; tags
+        String.concat "\n" [ observation.Repository; string observation.RepositoryId; observation.Revision; observation.ObservedAt.ToUniversalTime().ToString("O"); string observation.PagesComplete; String.concat "," observation.PageSha256; observation.PageDigestSha256; defaultArg observation.PreviousObservationSha256 ""; defaultArg observation.PreviousObservationEvidenceSha256 ""; defaultArg observation.ProviderEnvelopeSha256 ""; defaultArg observation.ProviderRawSetSha256 ""; defaultArg observation.ProviderNormalizedSetSha256 ""; rules; tags
                              state id observation.Environment; state (fun (x:DedicatedLedgerApp) -> sprintf "%d:%s:%s" x.Id x.ContentsPermission (String.concat "," x.AdditionalWritePermissions)) observation.DedicatedWriterApp; state string observation.ControlIssue ]
     let private supportedPatternMatches (value:string) pattern =
         if pattern = journalPattern then Some(value.StartsWith("refs/heads/fsgg/v2/journal/", StringComparison.Ordinal))
@@ -89,6 +90,10 @@ module LedgerProtectionPlanAdapter =
               | Some declared, Some evidence when digestLike declared && String.Equals(declared,evidence,StringComparison.OrdinalIgnoreCase) -> ()
               | _ -> LedgerProtectionContinuityFailure
               match observation.ProviderEnvelopeSha256 with Some x when digestLike x -> () | Some _ -> InvalidLedgerProtectionBinding "providerEnvelopeSha256" | None -> ()
+              match observation.ProviderRawSetSha256, observation.ProviderNormalizedSetSha256 with
+              | None, None -> ()
+              | Some raw, Some normalized when digestLike raw && digestLike normalized -> ()
+              | _ -> InvalidLedgerProtectionBinding "provider-set-digests"
               match observation.Rulesets with Unknown _ -> IncompleteLedgerProtectionObservation "rulesets" | ProvenAbsent -> ContradictoryLedgerProtectionRules "namespace-integrity-absent" | _ -> ()
               match observation.PhaseTags with Unknown _ -> IncompleteLedgerProtectionObservation "phaseTags" | _ -> ()
               match observation.Environment with Unknown _ -> IncompleteLedgerProtectionObservation "environment" | _ -> ()

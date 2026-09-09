@@ -34,7 +34,7 @@ let ``GS2-08-2 registration binds accepted predecessor roadmap and exact Q3 and 
     Assert.Equal("20450bccb71d8656330960cfade25150d370255ac58094523492c98f049e58c1", roadmap.GetProperty("sha256").GetString())
     let unitValue = units.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("id").GetString()="GS2-08.2")
     Assert.Equal<string list>(["GS2-08.1"], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
-    Assert.Equal("0ac523a4b7600bd22562ab78dd1db34ab90ba66749c573aa645e25cb2f446d8f", unitValue.GetProperty("contractSha256").GetString())
+    Assert.Equal("652db9715464d2b9b9e4b8ccac4768dc946dab830305fe381dcf2880f87d2d25", unitValue.GetProperty("contractSha256").GetString())
     let contracts = unitValue.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
     let commands =
         contracts

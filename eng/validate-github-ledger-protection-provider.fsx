@@ -1,6 +1,7 @@
 #load "../src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs"
 #load "../src/FS.GG.Coordination.GitHub/LedgerProtectionPlanAdapter.fs"
 #load "../src/FS.GG.Coordination.GitHub/LedgerProtectionProviderAdapter.fs"
+#load "../src/FS.GG.Coordination.GitHub/LedgerProtectionProviderCodec.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/GitHubLedgerProtectionProviderQualification.fs"
 
 open System
@@ -10,6 +11,13 @@ open FS.GG.Coordination.GitHub
 open FS.GG.Coordination.Qualification.Contracts
 
 let root = fsi.CommandLineArgs |> Array.tryItem 1 |> Option.defaultValue "." |> Path.GetFullPath
+let firstCapture = File.ReadAllBytes(Path.Combine(root,"evidence/github-substrate-v2/gs2-08-2/live-capture-pass1.json")) |> ReadOnlyMemory<byte> |> LedgerProtectionProviderCodec.decode |> Result.defaultWith (failwithf "%A")
+let secondCapture = File.ReadAllBytes(Path.Combine(root,"evidence/github-substrate-v2/gs2-08-2/live-capture-pass2.json")) |> ReadOnlyMemory<byte> |> LedgerProtectionProviderCodec.decode |> Result.defaultWith (failwithf "%A")
+if LedgerProtectionProviderCodec.qualifiedObservation firstCapture |> Result.isOk then failwith "uninitialized first capture was treated as continuous"
+let liveObservation = LedgerProtectionProviderCodec.qualifiedObservation secondCapture |> Result.defaultWith (failwithf "%A")
+let livePlan = LedgerProtectionProviderAdapter.compile secondCapture.CapturedAt (TimeSpan.FromMinutes 5.0) liveObservation |> Result.defaultWith (failwithf "%A")
+if livePlan.ApplyAuthorized || firstCapture.NormalizedSetSha256<>secondCapture.NormalizedSetSha256 || firstCapture.RawSetSha256<>secondCapture.RawSetSha256 then failwith "two-pass live observation did not remain stable and no-apply"
+if liveObservation.RawSetSha256<>Some secondCapture.RawSetSha256 || liveObservation.NormalizedSetSha256<>Some secondCapture.NormalizedSetSha256 then failwith "capture set digests were not bound into provider observation"
 let at = DateTimeOffset.Parse("2026-09-08T18:00:00Z")
 let integrity = { Id=21872115L; Name="v2-journal-integrity"; Target=LedgerRulesetTarget.Branch; Enforcement=LedgerRulesetEnforcement.Active; Inherited=false; Includes=[LedgerProtectionPlanAdapter.journalPattern]; Excludes=[]; Rules=[LedgerRule.Deletion;LedgerRule.NonFastForward]; Bypass=[] }
 let writer = { Id=21872113L; Name="v2-journal-writer"; Target=LedgerRulesetTarget.Branch; Enforcement=LedgerRulesetEnforcement.Active; Inherited=false; Includes=[LedgerProtectionPlanAdapter.journalPattern]; Excludes=[]; Rules=[LedgerRule.Creation;LedgerRule.Update]; Bypass=[{Actor=LedgerActor.App 4166418L;Mode=LedgerBypassMode.Always}] }
@@ -18,7 +26,7 @@ let page endpoint number last payload =
       PayloadSha256=LedgerProtectionProviderAdapter.payloadSha256 payload; Payload=payload }
 let baseline =
     { SchemaVersion=1; Repository=LedgerProtectionPlanAdapter.authorityRepository; RepositoryId=LedgerProtectionPlanAdapter.authorityRepositoryId; Revision=String.replicate 40 "a"
-      PreviousObservationSha256=Some(String.replicate 64 "c"); PreviousObservationEvidenceSha256=Some(String.replicate 64 "c"); DedicatedWriterAppId=None; ControlIssueNumber=None
+      PreviousObservationSha256=Some(String.replicate 64 "c"); PreviousObservationEvidenceSha256=Some(String.replicate 64 "c"); RawSetSha256=Some(String.replicate 64 "d"); NormalizedSetSha256=Some(String.replicate 64 "e"); DedicatedWriterAppId=None; ControlIssueNumber=None
       Pages=
         [ page LedgerProtectionProviderAdapter.rulesetsEndpoint 2 2 (RulesetsPage [integrity])
           page LedgerProtectionProviderAdapter.rulesetsEndpoint 1 2 (RulesetsPage [writer])

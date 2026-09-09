@@ -14,7 +14,7 @@ let integrity = { Id=21872115L; Name="v2-journal-integrity"; Target=Branch; Enfo
 let writer = { Id=21872113L; Name="v2-journal-writer"; Target=Branch; Enforcement=Active; Inherited=false; Includes=[LedgerProtectionPlanAdapter.journalPattern]; Excludes=[]; Rules=[Creation;Update]; Bypass=[{Actor=App 4166418L;Mode=Always}] }
 let snapshot =
     { SchemaVersion=1; Repository=LedgerProtectionPlanAdapter.authorityRepository; RepositoryId=LedgerProtectionPlanAdapter.authorityRepositoryId; Revision=String.replicate 40 "a"; ObservedAt=at
-      PagesComplete=true; PageSha256=[String.replicate 64 "b"]; PageDigestSha256="78700acf3b3d42f416e19b9ca0b40b5e2f217bbd3d6930cff1e96901cc482a6e"; PreviousObservationSha256=Some(String.replicate 64 "c"); PreviousObservationEvidenceSha256=Some(String.replicate 64 "c"); ProviderEnvelopeSha256=None
+      PagesComplete=true; PageSha256=[String.replicate 64 "b"]; PageDigestSha256="78700acf3b3d42f416e19b9ca0b40b5e2f217bbd3d6930cff1e96901cc482a6e"; PreviousObservationSha256=Some(String.replicate 64 "c"); PreviousObservationEvidenceSha256=Some(String.replicate 64 "c"); ProviderEnvelopeSha256=None; ProviderRawSetSha256=None; ProviderNormalizedSetSha256=None
       Rulesets=Observed [writer;integrity]; PhaseTags=ProvenAbsent; Environment=ProvenAbsent; DedicatedWriterApp=ProvenAbsent; ControlIssue=ProvenAbsent }
 let plan = LedgerProtectionPlanAdapter.compile at (TimeSpan.FromHours 24) snapshot |> Result.defaultWith (failwithf "%A")
 if plan.ApplyAuthorized then failwith "source-only plan authorized application"
