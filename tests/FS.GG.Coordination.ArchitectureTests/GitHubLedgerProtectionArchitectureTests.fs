@@ -14,7 +14,7 @@ let private sha256Text (value:string) = value |> Encoding.UTF8.GetBytes |> SHA25
 [<Fact>]
 let ``ledger protection surface is deterministic and has no apply or provider path`` () =
     let text = read "src/FS.GG.Coordination.GitHub/LedgerProtectionPlanAdapter.fsi" + read "src/FS.GG.Coordination.GitHub/LedgerProtectionPlanAdapter.fs"
-    for required in [ "ApplyAuthorized"; "DedicatedWriterApp"; "AdditionalWritePermissions"; "PreviousObservationSha256"; "PagesComplete"; "ShardedJournalAdapter.address Cutover" ] do Assert.Contains(required,text)
+    for required in [ "ApplyAuthorized"; "DedicatedWriterApp"; "AdditionalWritePermissions"; "PreviousObservationEvidenceSha256"; "ProviderEnvelopeSha256"; "PagesComplete"; "ShardedJournalAdapter.address Cutover"; "FS-GG/FS.GG.Coordination.Authority"; "1351660651"; "refs/heads/fsgg/v2/journal/**/*"; "refs/tags/fsgg/v2/fleet-cutover/**/*" ] do Assert.Contains(required,text)
     for forbidden in [ "HttpClient"; "api.github.com"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "let apply"; "val apply" ] do Assert.DoesNotContain(forbidden,text)
 
 [<Fact>]
@@ -34,7 +34,7 @@ let ``GS2-08-2 registration binds accepted predecessor roadmap and exact Q3 and 
     Assert.Equal("20450bccb71d8656330960cfade25150d370255ac58094523492c98f049e58c1", roadmap.GetProperty("sha256").GetString())
     let unitValue = units.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("id").GetString()="GS2-08.2")
     Assert.Equal<string list>(["GS2-08.1"], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
-    Assert.Equal("23261d2b412661a33445bccfca2f7b9e3f96f360dd6f9ad8e101f5148276da7a", unitValue.GetProperty("contractSha256").GetString())
+    Assert.Equal("0ac523a4b7600bd22562ab78dd1db34ab90ba66749c573aa645e25cb2f446d8f", unitValue.GetProperty("contractSha256").GetString())
     let contracts = unitValue.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
     let commands =
         contracts

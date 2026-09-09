@@ -1,0 +1,18 @@
+{
+  "schema": "fsgg.github-ledger-protection-provider-correspondence/v1",
+  "sourceCategory": "sanitized-deterministic-fixture",
+  "authorityRepository": "FS-GG/FS.GG.Coordination.Authority",
+  "authorityRepositoryId": 1351660651,
+  "fleetDigest": "d546289f29b34a4967e27425acba1c9ad2feb4f4b2110f5db41a5544976cb363",
+  "fleetRef": "refs/heads/fsgg/v2/journal/cutover/d5",
+  "journalPattern": "refs/heads/fsgg/v2/journal/**/*",
+  "phaseTagPattern": "refs/tags/fsgg/v2/fleet-cutover/**/*",
+  "writerRuleset": { "id": 21872113, "target": "branch", "enforcement": "active", "inherited": false, "rules": ["creation", "update"], "bypass": { "actorType": "Integration", "actorId": 4166418, "mode": "always" } },
+  "integrityRuleset": { "id": 21872115, "target": "branch", "enforcement": "active", "inherited": false, "rules": ["deletion", "non_fast_forward"], "bypass": [] },
+  "environment": { "repository": "FS-GG/.github", "name": "fleet-cutover", "status": "proven-absent" },
+  "dedicatedWriterApp": { "status": "unbound", "appId": null, "requiredPermissions": { "contents": "write" }, "selectedRepositoryEndpointTemplate": "GET /user/installations/{installation_id}/repositories?per_page=100" },
+  "controlIssue": { "repository": "FS-GG/FS.GG.Coordination.Authority", "status": "unbound", "number": null },
+  "observedAuthorityIssues": [{ "number": 1, "isPullRequest": false }],
+  "providerReadbackClaimed": false,
+  "applyAuthorized": false
+}

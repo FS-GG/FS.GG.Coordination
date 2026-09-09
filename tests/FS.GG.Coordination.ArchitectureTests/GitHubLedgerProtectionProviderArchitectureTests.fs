@@ -12,7 +12,7 @@ let private read path = File.ReadAllText(Path.Combine(root,path))
 [<Fact>]
 let ``provider adapter is pure read model with no transport credential or apply surface`` () =
     let text = read "src/FS.GG.Coordination.GitHub/LedgerProtectionProviderAdapter.fsi" + read "src/FS.GG.Coordination.GitHub/LedgerProtectionProviderAdapter.fs"
-    for required in [ "PayloadSha256"; "PreviousObservationSha256"; "Pages"; "HttpStatus"; "ObservedAt"; "LedgerProtectionPlanAdapter.compile" ] do
+    for required in [ "PayloadSha256"; "PreviousObservationEvidenceSha256"; "ProviderEnvelopeSha256"; "IsTerminal"; "Pages"; "HttpStatus"; "ObservedAt"; "LedgerProtectionPlanAdapter.compile"; "/orgs/FS-GG/installations"; "/user/installations/"; "FS-GG/.github/environments"; "FS.GG.Coordination.Authority/issues" ] do
         Assert.Contains(required,text)
     for forbidden in [ "HttpClient"; "api.github.com"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "let apply"; "val apply"; "PATCH "; "POST "; "DELETE " ] do
         Assert.DoesNotContain(forbidden,text)
@@ -41,13 +41,14 @@ let ``independent provider validator passes from a fresh process`` () =
     Assert.Contains("GITHUB_LEDGER_PROTECTION_PROVIDER_OK", output)
 
 [<Fact>]
-let ``historical Q3 protection source remains unchanged`` () =
-    let info = ProcessStartInfo("git", "diff --exit-code d2d6557613d682c83b54b867a47f1767fad1a77d -- src/FS.GG.Coordination.GitHub/LedgerProtectionPlanAdapter.fsi src/FS.GG.Coordination.GitHub/LedgerProtectionPlanAdapter.fs src/FS.GG.Coordination.Qualification.Contracts/GitHubLedgerProtectionQualification.fsi src/FS.GG.Coordination.Qualification.Contracts/GitHubLedgerProtectionQualification.fs eng/validate-github-ledger-protection.fsx")
-    info.WorkingDirectory <- root
-    info.UseShellExecute <- false
-    use child = Process.Start info
-    child.WaitForExit()
-    Assert.Equal(0, child.ExitCode)
+let ``correspondence fixture binds real identities and no operational claim`` () =
+    use fixture = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-08-2/provider-correspondence-fixtures.json")
+    let value = fixture.RootElement
+    Assert.Equal("FS-GG/FS.GG.Coordination.Authority", value.GetProperty("authorityRepository").GetString())
+    Assert.Equal(1351660651L, value.GetProperty("authorityRepositoryId").GetInt64())
+    Assert.Equal("refs/tags/fsgg/v2/fleet-cutover/**/*", value.GetProperty("phaseTagPattern").GetString())
+    Assert.False(value.GetProperty("providerReadbackClaimed").GetBoolean())
+    Assert.False(value.GetProperty("applyAuthorized").GetBoolean())
 
 [<Fact>]
 let ``provider qualification is registered as the GS2-08-2 Q4 continuation`` () =

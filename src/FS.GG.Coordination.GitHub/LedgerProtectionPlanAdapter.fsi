@@ -5,15 +5,22 @@ open System
 type LedgerObservation<'a> = Observed of 'a | ProvenAbsent | Unknown of string
 type LedgerRule = Creation | Update | Deletion | NonFastForward
 type LedgerActor = App of int64 | OrganizationAdmin
+type LedgerRulesetTarget = Branch | Tag
+type LedgerRulesetEnforcement = Active | Evaluate | Disabled
+type LedgerBypassMode = Always | PullRequest
+type LedgerBypass = { Actor: LedgerActor; Mode: LedgerBypassMode }
 type DedicatedLedgerApp = { Id: int64; ContentsPermission: string; AdditionalWritePermissions: string list }
 
 type EffectiveLedgerRuleset =
     { Id: int64
       Name: string
+      Target: LedgerRulesetTarget
+      Enforcement: LedgerRulesetEnforcement
+      Inherited: bool
       Includes: string list
       Excludes: string list
       Rules: LedgerRule list
-      Bypass: LedgerActor list }
+      Bypass: LedgerBypass list }
 
 type LedgerProtectionObservation =
     { SchemaVersion: int
@@ -25,6 +32,8 @@ type LedgerProtectionObservation =
       PageSha256: string list
       PageDigestSha256: string
       PreviousObservationSha256: string option
+      PreviousObservationEvidenceSha256: string option
+      ProviderEnvelopeSha256: string option
       Rulesets: LedgerObservation<EffectiveLedgerRuleset list>
       PhaseTags: LedgerObservation<string list>
       Environment: LedgerObservation<string>
@@ -35,7 +44,7 @@ type LedgerProtectionIntent =
     { Kind: string
       Target: string
       Rules: LedgerRule list
-      Bypass: LedgerActor list }
+      Bypass: LedgerBypass list }
 
 type LedgerProtectionPlan =
     { Repository: string
@@ -59,8 +68,11 @@ type LedgerProtectionFinding =
     | AlteredLedgerProtectionSeal
 
 module LedgerProtectionPlanAdapter =
+    val authorityRepository: string
+    val authorityRepositoryId: int64
     val fleetIdentity: string
     val fleetRef: string
+    val journalPattern: string
     val phaseTagPattern: string
     val compile: asOf: DateTimeOffset -> maxAge: TimeSpan -> LedgerProtectionObservation -> Result<LedgerProtectionPlan, LedgerProtectionFinding list>
     val verify: expectedSeal: string -> asOf: DateTimeOffset -> maxAge: TimeSpan -> LedgerProtectionObservation -> Result<LedgerProtectionPlan, LedgerProtectionFinding list>
