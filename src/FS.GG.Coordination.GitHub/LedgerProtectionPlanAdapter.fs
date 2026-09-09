@@ -42,6 +42,9 @@ module LedgerProtectionPlanAdapter =
         | Error _ -> invalidOp "the canonical fleet identity must be addressable"
     let journalPattern = "refs/heads/fsgg/v2/journal/**/*"
     let phaseTagPattern = "refs/tags/fsgg/v2/fleet-cutover/**/*"
+    let ordinaryWriterRole = "dedicated-ordinary-contents-only"
+    let cutoverWriterRole = "dedicated-cutover-contents-only"
+    let environmentReviewerIds = [1645484L;4456104L]
     let private digest (value:string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
     let private frame (value:string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
     let private digestLike (value:string) = value.Length = 64 && Seq.forall Uri.IsHexDigit value

@@ -1,0 +1,12 @@
+{
+  "schema": "fsgg.github-ledger-protection-post-install-conformance/v1",
+  "sourceRevision": "2d57ed30db425a990e9336ef853f867e0f715710",
+  "observationEvidenceSha256": "d1f298adf47bba26b74e60b4992cbc30d49fbdd838ea0d7c885541ac077bb618",
+  "rawSetSha256": "2684f8a6d3e2530d62a62f8d49127c7e61e9f389cf6c416edd8a80ba2d9cdfe5",
+  "normalizedSetSha256": "fea2f4ddf7074c9fbf7b34d7afbbb9796f344bea0e8321226152eba5982911a3",
+  "currentState": "CurrentPreInstall",
+  "recognizedStates": ["CurrentPreInstall", "InstalledFleetProtection", "InstalledProductionProtection", "IncompleteOrUnknown", "DriftOrTamper"],
+  "desiredBindings": { "ordinaryWriterAppId": null, "cutoverWriterAppId": null, "authorityControlIssueNumber": null },
+  "administrativePreparation": { "sealed": true, "sealSha256": "96266c52e486ffc89a17b1e7a6d8c55f10a83d3a2bf6a10a0affeb484a3fe03a", "applyAuthorized": false, "providerWritesAttempted": 0 },
+  "dimensions": { "settings": "pending", "custody": "pending", "fleetInitialization": "pending", "monitoring": "pending", "acceptance": "pending" }
+}

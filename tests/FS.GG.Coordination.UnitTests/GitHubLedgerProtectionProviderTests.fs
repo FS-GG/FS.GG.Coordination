@@ -88,13 +88,16 @@ let ``provider envelope metadata and explicit selected repository evidence are s
     Assert.Equal(Error [AlteredLedgerProtectionSeal], LedgerProtectionPlanAdapter.verify plan.Seal at (TimeSpan.FromHours 1) retimedNormalized)
     let installation =
         { InstallationId=77L; AppId=9001L; Slug="dedicated-ledger-writer"; RepositorySelection="selected"
-          Permissions=[("contents","write")]; SelectedRepositoriesEndpoint=Some "GET /user/installations/77/repositories?per_page=100"; SelectedRepositoriesPagesComplete=true
+          Permissions=[("contents","write");("metadata","read")]; SelectedRepositoriesEndpoint=Some(LedgerProtectionProviderAdapter.selectedRepositoriesEndpoint 77L); SelectedRepositoriesPagesComplete=true
           SelectedRepositories=LedgerObservation.Observed [LedgerProtectionPlanAdapter.authorityRepository] }
     let bound =
         { baseline with DedicatedWriterAppId=Some 9001L
                         Pages=baseline.Pages |> List.map (fun value -> if value.Endpoint=LedgerProtectionProviderAdapter.installationsEndpoint then page value.Endpoint 1 1 (OrganizationInstallationsPage [installation]) else value) }
     let boundPlan = LedgerProtectionProviderAdapter.compile at (TimeSpan.FromHours 1) bound |> Result.defaultWith (failwithf "%A")
     Assert.DoesNotContain(boundPlan.ProductionBlockers, fun value -> value.Contains("identity is missing"))
+    let overprivileged = {installation with Permissions=("issues","write")::installation.Permissions}
+    let refused = {bound with Pages=bound.Pages |> List.map (fun value -> if value.Endpoint=LedgerProtectionProviderAdapter.installationsEndpoint then page value.Endpoint 1 1 (OrganizationInstallationsPage [overprivileged]) else value)}
+    Assert.True(LedgerProtectionProviderAdapter.compile at (TimeSpan.FromHours 1) refused |> Result.isError)
 
 [<Fact>]
 let ``generated and independent provider controls are exact`` () =

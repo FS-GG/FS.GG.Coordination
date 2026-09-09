@@ -12,7 +12,8 @@ type LedgerProtectionCapture =
       RawSetSha256: string
       NormalizedSetSha256: string
       Gaps: string list
-      Observation: LedgerProviderObservation }
+      Observation: LedgerProviderObservation
+      Conformance: LedgerProtectionConformanceSnapshot }
 
 module LedgerProtectionProviderCodec =
     val decode: bytes: ReadOnlyMemory<byte> -> Result<LedgerProtectionCapture, string list>

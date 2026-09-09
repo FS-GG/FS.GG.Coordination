@@ -15,7 +15,6 @@ AUTHORITY = "FS-GG/FS.GG.Coordination.Authority"
 AUTHORITY_ID = 1351660651
 FLEET_BRANCH = "fsgg/v2/journal/cutover/d5"
 TAG_PREFIX = "tags/fsgg/v2/fleet-cutover/"
-DEDICATED_APP_ID = None
 CONTROL_ISSUE_NUMBER = None
 
 GRAPHQL = """query($cursor:String){repository(owner:\"FS-GG\",name:\"FS.GG.Coordination.Authority\"){branchProtectionRules(first:100,after:$cursor){nodes{id pattern allowsDeletions allowsForcePushes isAdminEnforced requiresApprovingReviews requiresCodeOwnerReviews requiredApprovingReviewCount}pageInfo{hasNextPage endCursor}}}}"""
@@ -113,10 +112,10 @@ def capture():
 
     raw_heads, heads = rest(f"repos/{AUTHORITY}/git/matching-refs/heads/{FLEET_BRANCH}?per_page=100", True)
     if refused(heads): gaps.append("fleet-head-refs")
-    resources.append(resource("fleet-head-refs", raw_heads, sorted([x.get("ref") for x in flatten_pages(heads)]), not refused(heads), "unknown" if refused(heads) else "observed"))
+    resources.append(resource("fleet-head-refs", raw_heads, sorted([{"name":x.get("ref"),"objectSha":(x.get("object") or {}).get("sha")} for x in flatten_pages(heads)], key=lambda x: (x["name"] or "",x["objectSha"] or "")), not refused(heads), "unknown" if refused(heads) else "observed"))
     raw_tags, tags = rest(f"repos/{AUTHORITY}/git/matching-refs/{TAG_PREFIX}?per_page=100", True)
     if refused(tags): gaps.append("phase-tags")
-    resources.append(resource("phase-tags", raw_tags, sorted([x.get("ref") for x in flatten_pages(tags)]), not refused(tags), "unknown" if refused(tags) else "observed"))
+    resources.append(resource("phase-tags", raw_tags, sorted([{"name":x.get("ref"),"objectSha":(x.get("object") or {}).get("sha")} for x in flatten_pages(tags)], key=lambda x: (x["name"] or "",x["objectSha"] or "")), not refused(tags), "unknown" if refused(tags) else "observed"))
 
     raw_envs, env_pages = rest("repos/FS-GG/.github/environments?per_page=100", True)
     if refused(env_pages): gaps.append("environments")
@@ -127,15 +126,32 @@ def capture():
     if "fleet-cutover" in names:
         raw_detail, detail = rest("repos/FS-GG/.github/environments/fleet-cutover")
         env_raw.extend(raw_detail)
-        env_normalized["fleetCutover"] = {"name": detail.get("name"), "protectionRuleTypes": sorted([value.get("type") for value in detail.get("protection_rules") or []]), "reviewers": sorted([{"type": value.get("type"), "id": (value.get("reviewer") or {}).get("id")} for value in detail.get("reviewers") or []], key=lambda value: (value["type"] or "", value["id"] or 0))}
+        protection_rules = detail.get("protection_rules") or []
+        reviewers = [reviewer for rule in protection_rules for reviewer in (rule.get("reviewers") or [])]
+        branch_policy = detail.get("deployment_branch_policy") or {}
+        raw_policies, policies = rest("repos/FS-GG/.github/environments/fleet-cutover/deployment-branch-policies?per_page=100", True)
+        env_raw.extend(raw_policies)
+        if refused(policies): gaps.append("fleet-cutover-deployment-branch-policies")
+        policy_values = [policy for page in flatten_pages(policies) for policy in (page.get("branch_policies") or [])] if flatten_pages(policies) and isinstance(flatten_pages(policies)[0], dict) else []
+        env_normalized["fleetCutover"] = {"name": detail.get("name"), "protectionRuleTypes": sorted([value.get("type") for value in protection_rules]), "reviewerIds": sorted([(value.get("reviewer") or {}).get("id") for value in reviewers]), "preventSelfReview": bool(detail.get("prevent_self_review")), "canAdminsBypass": bool(detail.get("can_admins_bypass")), "protectedBranches": bool(branch_policy.get("protected_branches")), "customBranchPolicies": bool(branch_policy.get("custom_branch_policies")), "deploymentBranchPatterns": sorted([value.get("name") for value in policy_values])}
     resources.append(resource("environments", bytes(env_raw), env_normalized, not refused(env_pages), "unknown" if refused(env_pages) else "observed"))
 
     raw_installations, installation_pages = rest("orgs/FS-GG/installations?per_page=100", True)
     if refused(installation_pages): gaps.append("organization-installations")
     installations = []
+    desired = json.loads((pathlib.Path(__file__).resolve().parent.parent / "evidence/github-substrate-v2/gs2-08-2/desired-policy.json").read_bytes())
+    desired_apps = {desired.get("ordinaryWriter", {}).get("appId"), desired.get("cutoverWriter", {}).get("appId")} - {None}
     installation_values = [installation for page in flatten_pages(installation_pages) for installation in (page.get("installations") or [])] if flatten_pages(installation_pages) and isinstance(flatten_pages(installation_pages)[0], dict) and "installations" in flatten_pages(installation_pages)[0] else flatten_pages(installation_pages)
     for value in installation_values:
-        installations.append({"installationId": value.get("id"), "appId": value.get("app_id"), "slug": value.get("app_slug"), "repositorySelection": value.get("repository_selection"), "permissions": value.get("permissions") or {}, "selectedRepositories": None})
+        selected = None
+        if value.get("app_id") in desired_apps:
+            raw_selected, selected_pages = rest(f"user/installations/{value.get('id')}/repositories?per_page=100", True)
+            raw_installations += raw_selected
+            if refused(selected_pages): gaps.append(f"selected-repositories:{value.get('app_id')}")
+            else:
+                selected_values = [repo for page in flatten_pages(selected_pages) for repo in (page.get("repositories") or [])] if flatten_pages(selected_pages) and isinstance(flatten_pages(selected_pages)[0], dict) else []
+                selected = sorted([repo.get("full_name") for repo in selected_values])
+        installations.append({"installationId": value.get("id"), "appId": value.get("app_id"), "slug": value.get("app_slug"), "repositorySelection": value.get("repository_selection"), "permissions": value.get("permissions") or {}, "selectedRepositories": selected})
     resources.append(resource("organization-installations", raw_installations, sorted(installations, key=lambda x: x["installationId"] or 0), not refused(installation_pages), "unknown" if refused(installation_pages) else "observed"))
 
     raw_issues, issue_pages = rest(f"repos/{AUTHORITY}/issues?state=all&per_page=100", True)

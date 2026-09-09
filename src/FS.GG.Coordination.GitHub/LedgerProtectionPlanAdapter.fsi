@@ -76,5 +76,8 @@ module LedgerProtectionPlanAdapter =
     val fleetRef: string
     val journalPattern: string
     val phaseTagPattern: string
+    val ordinaryWriterRole: string
+    val cutoverWriterRole: string
+    val environmentReviewerIds: int64 list
     val compile: asOf: DateTimeOffset -> maxAge: TimeSpan -> LedgerProtectionObservation -> Result<LedgerProtectionPlan, LedgerProtectionFinding list>
     val verify: expectedSeal: string -> asOf: DateTimeOffset -> maxAge: TimeSpan -> LedgerProtectionObservation -> Result<LedgerProtectionPlan, LedgerProtectionFinding list>
