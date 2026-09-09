@@ -62,9 +62,35 @@ class AppCaptureTests(unittest.TestCase):
         self.assertEqual("drift", continuity)
         self.assertEqual(["binding-drift"], gaps)
 
+    def test_prevent_self_review_comes_from_exact_required_reviewers_rule(self):
+        detail = {
+            "name": "fleet-cutover", "can_admins_bypass": False,
+            "deployment_branch_policy": {"protected_branches": False, "custom_branch_policies": True},
+            "protection_rules": [{"type": "wait_timer", "wait_timer": 0}, {"type": "required_reviewers", "prevent_self_review": True, "reviewers": [{"reviewer": {"id": 4456104}}, {"reviewer": {"id": 1645484}}]}]}
+        normalized, gaps = CAPTURE.environment_detail(detail, [{"name": "main"}])
+        self.assertEqual([], gaps)
+        self.assertTrue(normalized["preventSelfReview"])
+        self.assertEqual([1645484, 4456104], normalized["reviewerIds"])
+
+    def test_missing_or_duplicate_required_reviewers_rule_refuses(self):
+        baseline = {"name": "fleet-cutover", "protection_rules": []}
+        normalized, gaps = CAPTURE.environment_detail(baseline, [])
+        self.assertIsNone(normalized["preventSelfReview"])
+        self.assertIn("fleet-cutover-required-reviewers-rule", gaps)
+        duplicate = {"name": "fleet-cutover", "protection_rules": [{"type": "required_reviewers", "prevent_self_review": True, "reviewers": []}, {"type": "required_reviewers", "prevent_self_review": True, "reviewers": []}]}
+        _, gaps = CAPTURE.environment_detail(duplicate, [])
+        self.assertIn("fleet-cutover-required-reviewers-rule", gaps)
+
+    def test_invalid_prevent_self_review_refuses_instead_of_coercing_false(self):
+        detail = {"name": "fleet-cutover", "protection_rules": [{"type": "required_reviewers", "prevent_self_review": "true", "reviewers": [{"reviewer": {"id": True}}, {"reviewer": "unreadable"}]}]}
+        normalized, gaps = CAPTURE.environment_detail(detail, [])
+        self.assertIsNone(normalized["preventSelfReview"])
+        self.assertIn("fleet-cutover-prevent-self-review", gaps)
+        self.assertIn("fleet-cutover-reviewer-id", gaps)
+
 
 if __name__ == "__main__":
     result = unittest.main(exit=False, verbosity=0).result
     if result.wasSuccessful():
-        print("CAPTURE_APP_AUTH_TESTS_OK tests=5 secrets_retained=0")
+        print("CAPTURE_APP_AUTH_TESTS_OK tests=8 secrets_retained=0")
     raise SystemExit(0 if result.wasSuccessful() else 1)

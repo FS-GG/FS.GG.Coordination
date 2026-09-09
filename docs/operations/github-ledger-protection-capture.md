@@ -56,6 +56,12 @@ back to the existing user-token endpoint; denial, missing pagination, a wrong
 installation id, an unexpected repository set, or token-mint failure becomes a
 gap and returns exit code 2.
 
+Environment normalization requires exactly one `required_reviewers` protection
+rule. Reviewer identities and `prevent_self_review` are read from that rule,
+not from the environment root. A missing or duplicate rule, a non-Boolean
+`prevent_self_review`, or an unreadable reviewer id makes the environment
+resource unknown and the capture fail closed.
+
 ## Binding the control issue and sealing a dry plan
 
 After the ordinary, non-PR Authority control issue exists, supply its positive
