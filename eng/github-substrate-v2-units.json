@@ -963,6 +963,20 @@
         { "id": "github-v1-receiver-census-contract", "qGate": "Q3", "commandSha256": "fbff7ac12feadedf1fc5a440848bfecfd4ac799e1c8bc45cc15fed666b68d0e9" }
       ],
       "contractSha256": "686482156555baf835958726ab3750c06c6df5d7ca2ff90bec6dadd83e6cf8ea"
+    },
+    {
+      "id": "GS2-08.4",
+      "title": "Add one common precondition",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-08.1"],
+      "permissionCeiling": ["repository-local additive common v1 first-effect runtime boundary with injected fresh epoch read and single effect ports, strict epoch-wire parsing, deterministic admission and generation verification, pure qualification contracts, independent evidence, validators and tests", "read-only consumption of the accepted GS2-08.1 receipt and both exact landed GS2-08.3 writer and receiver source-census gate contracts and retained artifacts is mandatory; no production caller, receiver execution, provider or HTTP implementation, live reader, credential access, ledger installation, effect-fence activation, package publication, adoption, acceptance receipt, completion claim, or GS2-08.5 authority"],
+      "exitGate": "the Q3 github-v1-effect-fence contract begins from the exact accepted GS2-08.1 receipt and exact landed writer and receiver source-census commands and artifacts from GS2-08.3 without inventing a GS2-08.3 receipt or requiring GS2-08.2 installation; the common runtime boundary parses only the complete closed fsgg.github-substrate.epoch-wire/1 field set, derives the canonical fleet cutover ref through ShardedJournalAdapter, performs one injected fresh authoritative read then verifies exact authority repository, fleet, ref, tag, genesis, trust anchor, manifest, parent, epoch commit/generation, claim generation, operation generation, admission class and payload identity before its first and only injected effect; OperatingV1 admits new and eligible incumbent v1 effects, Preparing admits only eligible incumbents, and FreezeRequested, Frozen, SwitchedV2, VerifiedV2, OpenV2, ObservingV2, ContractingV1, OperatingV2 and RollingBack refuse ordinary v1 effects; unreadable, partial, contradictory, stale, cached, malformed, unknown-field, duplicate-field, wrong-manifest or generation evidence refuses before effect with zero mutations; an attempted effect returns exactly applied, proven-absent, partial or indeterminate and is never blindly retried; runtime and independently authored ordering, admission, phase, freshness, cache, authority, manifest, generation, strict-field, zero-mutation refusal, one-effect and outcome-algebra controls pass; no production caller, provider, live authority read, installed fence, receiver integration, package, publication, adoption, acceptance or successor authority is claimed",
+      "qGates": ["Q3"],
+      "gateCommands": ["github-v1-effect-fence-contract"],
+      "gateContracts": [
+        { "id": "github-v1-effect-fence-contract", "qGate": "Q3", "commandSha256": "357f7d81987885ebdb198fa18f8590862591f2ae6b1a484db469fce25bf53a98" }
+      ],
+      "contractSha256": "ceb6164cd8dfd21a2cb0efe6010dcfc843b382b894de337d63d0d4ef155e50a0"
     }
   ]
 }
