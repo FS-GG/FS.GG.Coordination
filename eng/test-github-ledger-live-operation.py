@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import base64
 import contextlib
+import gzip
 import hashlib
 import importlib.util
 import io
@@ -229,6 +230,44 @@ class LiveOperationTests(unittest.TestCase):
             write(capture, {"capturedAt": "2026-09-09T13:16:42"})
             with self.assertRaisesRegex(runner.Refused, "capture-observed-at"):
                 runner.capture_observed_at(capture)
+
+    def test_runner_retries_incoherent_capture_and_retains_private_evidence(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            store = root / "store"; store.mkdir(mode=0o700)
+            private = root / "private"; private.mkdir(mode=0o700)
+            calls = []
+            original_invoke, original_sleep = runner.invoke_capture, runner.time.sleep
+            def invoke(_config, output, previous=None):
+                calls.append(previous)
+                value = {"capturedAt": "2026-09-09T14:00:00Z", "gaps": ["bound-control-issue"] if len(calls) == 1 else []}
+                write(output, value)
+                return 2 if len(calls) == 1 else 0
+            runner.invoke_capture = invoke
+            runner.time.sleep = lambda _: None
+            try:
+                result = runner.coherent_capture({}, store, private)
+            finally:
+                runner.invoke_capture, runner.time.sleep = original_invoke, original_sleep
+            self.assertEqual(3, len(calls))
+            self.assertEqual([], json.loads(result.read_bytes())["gaps"])
+            retained = list((store / "capture-failures").glob("*.json.gz"))
+            self.assertEqual(1, len(retained))
+            self.assertEqual(0, retained[0].stat().st_mode & 0o077)
+            self.assertEqual(["bound-control-issue"], json.loads(gzip.decompress(retained[0].read_bytes()))["gaps"])
+            persistent_calls = []
+            def refuse(_config, output, previous=None):
+                persistent_calls.append(previous)
+                write(output, {"gaps": ["provider-read"]})
+                return 2
+            runner.invoke_capture = refuse
+            runner.time.sleep = lambda _: None
+            try:
+                with self.assertRaisesRegex(runner.Refused, "capture-refused:attempts=3"):
+                    runner.coherent_capture({}, store, private)
+            finally:
+                runner.invoke_capture, runner.time.sleep = original_invoke, original_sleep
+            self.assertEqual(3, len(persistent_calls))
 
     def test_watchdog_reads_the_monitor_heartbeat_schema(self):
         with tempfile.TemporaryDirectory() as scratch:

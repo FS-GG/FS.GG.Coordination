@@ -108,6 +108,10 @@ an absolute source checkout, durable mode-0700 store, stable runner identity, ex
 alert executable plus destination. `preview` performs no credential or provider access. An external scheduler
 invokes `once` every 300 seconds and `watchdog` often enough to enforce the 900-second freshness ceiling. The runner
 hands a sanitized alert envelope to the configured executable and acknowledges an outbox row only after exit zero.
+Each invocation permits at most three complete two-pass capture attempts, separated by two seconds, so a transient
+inconsistent provider listing does not create a monitoring gap. Every refused capture is retained as canonical-input
+SHA-256-addressed private gzip evidence (at most 64 files). Three failed attempts still refuse the invocation; the
+watchdog then exposes a persistent capture failure through the unchanged heartbeat rather than masking it.
 
 The runner deliberately does not pretend an ephemeral container is durable. Installation evidence must name the
 external scheduler/host, prove it survives container recreation, exercise the configured alert destination, and
