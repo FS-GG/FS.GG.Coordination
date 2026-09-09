@@ -2,11 +2,14 @@
   "schemaVersion": 1,
   "fleetIdentity": "fleet-cutover:fs-gg-production",
   "fleetRef": "refs/heads/fsgg/v2/journal/cutover/d5",
+  "authorityRepository": "FS-GG/FS.GG.Coordination.Authority",
+  "authorityRepositoryId": 1351660651,
   "sharedWriterAction": "exclude-fleet-ref",
   "dedicatedWriter": { "permission": "contents-only", "appId": null, "status": "blocked-missing-real-id" },
-  "namespaceIntegrity": { "target": "refs/heads/fsgg/v2/journal/**", "retain": true },
-  "phaseTag": { "target": "refs/tags/fsgg/v2/epoch/fs-gg-production/phase/*", "allowCreate": true, "immutableAfterCreate": true },
-  "environment": "fleet-cutover",
+  "namespaceIntegrity": { "target": "refs/heads/fsgg/v2/journal/**/*", "retain": true },
+  "phaseTag": { "target": "refs/tags/fsgg/v2/fleet-cutover/**/*", "allowCreate": true, "immutableAfterCreate": true },
+  "environment": { "repository": "FS-GG/.github", "name": "fleet-cutover" },
+  "controlIssue": { "repository": "FS-GG/FS.GG.Coordination.Authority", "number": null, "status": "unbound" },
   "applyAuthorized": false,
   "sharedAppProductionBlocker": true
 }

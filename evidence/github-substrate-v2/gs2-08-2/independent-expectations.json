@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "controls": [
-    "exact-fleet-ref", "shared-writer-carve-out", "dedicated-writer-identity", "namespace-integrity",
+    "authority-identity", "exact-fleet-ref", "selector-semantics", "ruleset-semantics", "shared-writer-carve-out", "dedicated-writer-identity", "namespace-integrity",
     "phase-tag-creation", "phase-tag-immutability", "effective-composition", "unknown-vs-absent",
-    "observation-freshness", "pagination", "observation-digest", "continuity", "tamper",
+    "observation-freshness", "pagination", "observation-digest", "continuity", "complete-seal", "tamper",
     "protected-environment", "control-issue", "no-apply"
   ],
   "expectedFleetDigest": "d546289f29b34a4967e27425acba1c9ad2feb4f4b2110f5db41a5544976cb363",

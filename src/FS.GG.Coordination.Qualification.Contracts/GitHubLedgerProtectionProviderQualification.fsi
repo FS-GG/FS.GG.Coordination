@@ -3,7 +3,8 @@ namespace FS.GG.Coordination.Qualification.Contracts
 type GitHubLedgerProtectionProviderControl =
     | ProviderBinding | PageOrdering | CompletePagination | PayloadDigest | ProviderFreshness
     | ProviderUnknownVsAbsent | ProviderEffectiveComposition | ProviderContinuity | ProviderExactFleetRef
-    | DryOperationSeal | DedicatedWriterBlocker | ProviderNoApply
+    | ProviderEndpointCorrespondence | ProviderRulesetSemantics | ProviderBindingState
+    | DryOperationSeal | ProviderCompleteSeal | DedicatedWriterBlocker | ProviderNoApply
 
 type GitHubLedgerProtectionProviderControlResult =
     { Control: GitHubLedgerProtectionProviderControl

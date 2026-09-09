@@ -10,7 +10,11 @@
     "provider-effective-composition",
     "provider-continuity",
     "provider-exact-fleet-ref",
+    "provider-endpoint-correspondence",
+    "provider-ruleset-semantics",
+    "provider-binding-state",
     "dry-operation-seal",
+    "provider-complete-seal",
     "dedicated-writer-blocker",
     "provider-no-apply"
   ]

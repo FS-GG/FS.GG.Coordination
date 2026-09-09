@@ -3,7 +3,8 @@ namespace FS.GG.Coordination.Qualification.Contracts
 type GitHubLedgerProtectionProviderControl =
     | ProviderBinding | PageOrdering | CompletePagination | PayloadDigest | ProviderFreshness
     | ProviderUnknownVsAbsent | ProviderEffectiveComposition | ProviderContinuity | ProviderExactFleetRef
-    | DryOperationSeal | DedicatedWriterBlocker | ProviderNoApply
+    | ProviderEndpointCorrespondence | ProviderRulesetSemantics | ProviderBindingState
+    | DryOperationSeal | ProviderCompleteSeal | DedicatedWriterBlocker | ProviderNoApply
 type GitHubLedgerProtectionProviderControlResult = { Control: GitHubLedgerProtectionProviderControl; Passed: bool }
 type GitHubLedgerProtectionProviderFinding = { Code: string; ControlId: string }
 
@@ -11,13 +12,16 @@ module GitHubLedgerProtectionProviderQualification =
     let requiredControls =
         [ ProviderBinding; PageOrdering; CompletePagination; PayloadDigest; ProviderFreshness
           ProviderUnknownVsAbsent; ProviderEffectiveComposition; ProviderContinuity; ProviderExactFleetRef
-          DryOperationSeal; DedicatedWriterBlocker; ProviderNoApply ]
+          ProviderEndpointCorrespondence; ProviderRulesetSemantics; ProviderBindingState
+          DryOperationSeal; ProviderCompleteSeal; DedicatedWriterBlocker; ProviderNoApply ]
     let controlId = function
         | ProviderBinding -> "provider-binding" | PageOrdering -> "page-ordering"
         | CompletePagination -> "complete-pagination" | PayloadDigest -> "payload-digest"
         | ProviderFreshness -> "provider-freshness" | ProviderUnknownVsAbsent -> "provider-unknown-vs-absent"
         | ProviderEffectiveComposition -> "provider-effective-composition" | ProviderContinuity -> "provider-continuity"
         | ProviderExactFleetRef -> "provider-exact-fleet-ref" | DryOperationSeal -> "dry-operation-seal"
+        | ProviderEndpointCorrespondence -> "provider-endpoint-correspondence" | ProviderRulesetSemantics -> "provider-ruleset-semantics"
+        | ProviderBindingState -> "provider-binding-state" | ProviderCompleteSeal -> "provider-complete-seal"
         | DedicatedWriterBlocker -> "dedicated-writer-blocker" | ProviderNoApply -> "provider-no-apply"
     let validate generated independent =
         let validateSet source values =

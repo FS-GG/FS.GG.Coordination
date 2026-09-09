@@ -1,6 +1,6 @@
 namespace FS.GG.Coordination.Qualification.Contracts
 
-type GitHubLedgerProtectionControl = ExactFleetRef | SharedWriterCarveOut | DedicatedWriterIdentity | NamespaceIntegrity | PhaseTagCreation | PhaseTagImmutability | EffectiveComposition | UnknownVsAbsent | ObservationFreshness | Pagination | ObservationDigest | Continuity | Tamper | ProtectedEnvironment | ControlIssue | NoApply
+type GitHubLedgerProtectionControl = AuthorityIdentity | ExactFleetRef | SelectorSemantics | RulesetSemantics | SharedWriterCarveOut | DedicatedWriterIdentity | NamespaceIntegrity | PhaseTagCreation | PhaseTagImmutability | EffectiveComposition | UnknownVsAbsent | ObservationFreshness | Pagination | ObservationDigest | Continuity | CompleteSeal | Tamper | ProtectedEnvironment | ControlIssue | NoApply
 type GitHubLedgerProtectionControlResult = { Control: GitHubLedgerProtectionControl; Passed: bool }
 type GitHubLedgerProtectionFinding = { Code: string; ControlId: string }
 module GitHubLedgerProtectionQualification =
