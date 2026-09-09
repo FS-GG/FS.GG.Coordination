@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import importlib.util, json, os, pathlib, tempfile, threading, unittest
+import importlib.util, json, os, pathlib, sys, tempfile, threading, unittest
 ROOT=pathlib.Path(__file__).resolve().parent
+sys.dont_write_bytecode=True
 spec=importlib.util.spec_from_file_location("monitor",ROOT/"monitor-github-ledger-protection.py"); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 class MonitorTests(unittest.TestCase):
   def capture(self,path,normalized="a"*64,gaps=None):
