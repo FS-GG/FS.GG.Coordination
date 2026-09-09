@@ -1,0 +1,18 @@
+{
+  "schema": "fsgg.github-substrate.v1-effect-fence-source-binding/1",
+  "roadmapRepository": "FS-GG/.github",
+  "roadmapRevision": "3719b6cfc6f2d766ad56f930b56f025e20c4b2cc",
+  "roadmapSha256": "9c49a0efd1440d8a71130758be39394ae4cdd67f3d10b9cb6cb71998154c1a17",
+  "acceptedEpochReceiptDigest": "49c70359ebfbc00331ba90c7c5b100a292efa4cc95a5dfa8007867ceceec5c31",
+  "writerCensusGate": {
+    "commandSha256": "4e22685574c841ad50ed600497e8174832374964cff62ba6d25440d52467521b",
+    "sourceBindingSha256": "47e5e5736bb3e8c9cb74e127493cf4c885c53c0c8d43b5516b7df259a874c708",
+    "censusSha256": "589ab3d20bbdfb78d4863e9fd11bc48dbbd0b222d47b635a7fe13fec02239812"
+  },
+  "receiverCensusGate": {
+    "commandSha256": "fbff7ac12feadedf1fc5a440848bfecfd4ac799e1c8bc45cc15fed666b68d0e9",
+    "sourceBindingSha256": "e177d95df0fabc8fc9644453a1b9ad582abc3d3dd85245bc2d391eeccc19f332",
+    "censusSha256": "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db"
+  },
+  "scope": "common injected runtime boundary only; no production caller, provider, installation, publication, activation, acceptance, or GS2-08.5 authority"
+}

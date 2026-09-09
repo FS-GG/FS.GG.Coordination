@@ -1,0 +1,26 @@
+{
+  "schema": "fsgg.github-substrate.v1-effect-fence-cases/1",
+  "cases": [
+    {"name":"operating-v1-new-applied","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":1,"outcome":"applied"},
+    {"name":"operating-v1-incumbent-applied","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":1,"outcome":"applied"},
+    {"name":"preparing-incumbent-applied","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":1,"outcome":"applied"},
+    {"name":"preparing-new-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"preparing-ineligible-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"freeze-requested-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"rolling-back-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"open-v2-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"stale-authority-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"cache-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"manifest-mismatch-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"epoch-generation-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"claim-generation-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"operation-generation-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"unknown-field-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"duplicate-field-refused","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"unreadable-refused","freshReadCount":1,"verifiedBeforeEffect":false,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"contradictory-refused","freshReadCount":1,"verifiedBeforeEffect":false,"effectCount":0,"outcome":"refused-before-effect"},
+    {"name":"effect-proven-absent","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":1,"outcome":"proven-absent"},
+    {"name":"effect-partial","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":1,"outcome":"partial"},
+    {"name":"effect-indeterminate","freshReadCount":1,"verifiedBeforeEffect":true,"effectCount":1,"outcome":"indeterminate"}
+  ]
+}

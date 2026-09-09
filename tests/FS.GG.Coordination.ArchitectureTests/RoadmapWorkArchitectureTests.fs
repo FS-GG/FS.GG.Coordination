@@ -958,7 +958,7 @@ let ``GS2-08-1 acceptance binds repaired correspondence and protected delivery``
     Assert.Equal<Map<string, string>>(expected, artifacts)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-08-3 writer and receiver census`` () =
+let ``roadmap unit index advances through GS2-08-4 common effect fence`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -1037,7 +1037,8 @@ let ``roadmap unit index advances through GS2-08-3 writer and receiver census`` 
              "GS2-07.8"
              "GS2-08.1"
              "GS2-08.2"
-             "GS2-08.3" ]
+             "GS2-08.3"
+             "GS2-08.4" ]
     then
         Assert.Fail("roadmap unit inventory differs")
 
@@ -2269,7 +2270,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(51, commands.Length)
+    Assert.Equal(52, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())

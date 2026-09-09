@@ -17,6 +17,8 @@
     <Compile Include="CommentProjectionAdapter.fs" />
     <Compile Include="ShardedJournalAdapter.fsi" />
     <Compile Include="ShardedJournalAdapter.fs" />
+    <Compile Include="V1EffectFenceAdapter.fsi" />
+    <Compile Include="V1EffectFenceAdapter.fs" />
     <Compile Include="LedgerProtectionPlanAdapter.fsi" />
     <Compile Include="LedgerProtectionPlanAdapter.fs" />
     <Compile Include="LedgerProtectionProviderAdapter.fsi" />
