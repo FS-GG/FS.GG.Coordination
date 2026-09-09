@@ -221,6 +221,15 @@ class LiveOperationTests(unittest.TestCase):
             with self.assertRaisesRegex(runner.Refused, "config-must-be-private"):
                 runner.load_config(config)
 
+    def test_runner_uses_completed_capture_clock_and_refuses_invalid_clock(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            capture = pathlib.Path(scratch) / "capture.json"
+            write(capture, {"capturedAt": "2026-09-09T13:16:42Z"})
+            self.assertEqual("2026-09-09T13:16:42Z", runner.capture_observed_at(capture))
+            write(capture, {"capturedAt": "2026-09-09T13:16:42"})
+            with self.assertRaisesRegex(runner.Refused, "capture-observed-at"):
+                runner.capture_observed_at(capture)
+
     def test_operation_scripts_never_print_secret_or_token_fields(self):
         for name in ("github-ledger-operation.py", "github-ledger-initialization-transport.py", "github-ledger-monitor-runner.py"):
             source = (ROOT / name).read_text().lower()
