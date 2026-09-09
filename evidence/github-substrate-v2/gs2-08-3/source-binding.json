@@ -2,7 +2,7 @@
   "schema": "fsgg.github-substrate.v1-writer-census-source/1",
   "producerRepository": "FS-GG/.github",
   "producerCandidateRevision": "7045ca44b160380b3474e2b5bc0304ca873c70b8",
-  "producerLandedRevision": "7045ca44b160380b3474e2b5bc0304ca873c70b8",
+  "producerLandedRevision": "c1ad41e059c18376685b5c71256149c35c341652",
   "producerTree": "6c6b084df2fab729034828183b9ba4a373501d9e",
   "sourceBaseRevision": "95de1c77674b9dd8d7a9ce568d1ee175a7797e5e",
   "q0EvidenceSha256": "ef07c245e4ab3dd0b97d997a32940cdd70485070bfedc9c44e5b4ed2422078c5",
