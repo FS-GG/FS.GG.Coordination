@@ -2,7 +2,7 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "31ba3c20df8a27227993f481684b66fc94c1dadc",
+    "revision": "d1165d71b6d545f9dee62623663c452c5b96dd02",
     "path": "docs/github-substrate-v2-roadmap.md",
     "sha256": "20f4f2bcdcd6e2bfdd787edc66efbe30a21289f7ddf2030a8b1b3ae2150b7c52"
   },
@@ -952,7 +952,7 @@
     {
       "id": "GS2-08.3",
       "title": "Map every v1 writer",
-      "owner": "FS.GG.Coordination",
+      "owner": ".github",
       "prerequisites": ["GS2-08.1"],
       "permissionCeiling": ["repository-local additive producer-independent v1 writer-census qualification contracts, exact retained producer census and candidate-built command-contract bytes, historical Q0/source bindings, unknown and dynamic entry-point refusal controls, validation, tests, evidence, and prospective registration", "read-only consumption of the accepted GS2-08.1 receipt and exact landed FS-GG/.github GS2-08.3 producer/roadmap bytes is allowed; no live provider call or mutation, ledger installation, effect fence, bridge implementation, receiver coverage or adoption, package publication, cutover transition, acceptance receipt, completion claim, or GS2-08.4 authority"],
       "exitGate": "the Q3 github-v1-writer-census contract begins from the exact accepted GS2-08.1 receipt and exact landed FS-GG/.github roadmap, producer revision and tree; historical source base 95de1c77674b9dd8d7a9ce568d1ee175a7797e5e, Q0 evidence and original-corpus digests remain explicit inputs rather than an invented GS2-00.4 receipt; exact producer census, checker, fixture runner and candidate-built fsgg.coord.commands/1 bytes are content-addressed; all 54 typed command roots join by exact ordered name and write classification as 20 always, 6 conditional and 28 never, while all 62 discovered source identities cover the retained 213 tracked executables with exact source digest, sink kind, writer or specific non-writer disposition; tools/routine-delivery.py, administrative and publication workflows, NewSddWorkspace, typed catalogues and local-only telemetry routes retain explicit classifications; duplicate, omitted, reordered, malformed, misclassified, unknown or newly dynamically discovered commands and source sinks refuse; generated and independently authored schema, prerequisite, roadmap, historical-Q0, producer-source, byte, command-contract, checker, complete-root, complete-source, ordering, write-classification, source-identity, sink-disposition, unknown-command, dynamic-writer, no-fence-claim and no-receiver-claim controls pass; this source census qualification neither installs the ledger nor implements the effect fence and claims no receiver coverage, bridge publication, provider mutation, acceptance, GS2-08.3 completion or successor authority",
@@ -961,7 +961,7 @@
       "gateContracts": [
         { "id": "github-v1-writer-census-contract", "qGate": "Q3", "commandSha256": "4e22685574c841ad50ed600497e8174832374964cff62ba6d25440d52467521b" }
       ],
-      "contractSha256": "fcb6181bd33e5c7f59dd3e2027c681d7495182348b504fbedc65df83e60bdde9"
+      "contractSha256": "fc1f991cf378e83674b92130c212493a9546ebcc6a26d6791338bf5dec19caf6"
     }
   ]
 }

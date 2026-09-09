@@ -95,7 +95,7 @@
     {"path":"tests/recipe-pagination/run.sh","disposition":"test-only","sinkKinds":["rest-write"],"sha256":"c658a44da40659b6e170f3cacd5075a1f2eb87e031d7fdfc7a544e9d7634bac8","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/review-critic-succession-wire/run.sh","disposition":"test-only","sinkKinds":["curl-write"],"sha256":"72220f2c9d26c638d96485dd6232053248fe5f56eb0acbf6ba280186818c12e8","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
     {"path":"tests/skill-registry/run.sh","disposition":"test-only","sinkKinds":["git-push"],"sha256":"542ae5044fec3d5a940cacaf53a79d21b92c45a98bf48f11ceb37bd7c421528c","nonWriterJustification":"Isolated test fixture targets only local stubs or throwaway repositories."},
-    {"path":"tests/v1-writer-census/run.py","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"85764d713331ae43b6093be8f2a9a2291c17c02251bce9804aee1e6855a17653","nonWriterJustification":"Mutation fixture reads release workflow text and never executes a package publish."},
+    {"path":"tests/v1-writer-census/run.py","disposition":"test-only","sinkKinds":["package-publish"],"sha256":"8bee2587b2d22c7b792c3af13597a646e5cf731533a3a03db9bf1fed22067607","nonWriterJustification":"Mutation fixture reads release workflow text and never executes a package publish."},
     {"path":"tools/routine-delivery.py","disposition":"remote-writer","sinkKinds":["dynamic-process"],"sha256":"1c3025769e0fb4a9a2a90a5ac02e87d7943c3d24c3de2bf0985ec2c7d4e8cfd9"}
   ]
 }

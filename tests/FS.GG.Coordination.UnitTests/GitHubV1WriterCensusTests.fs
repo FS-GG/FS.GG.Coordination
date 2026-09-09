@@ -1,4 +1,4 @@
-module FS.GG.Coordination.GitHubV1WriterCensusQualificationTests
+module FS.GG.Coordination.GitHubV1WriterCensusTests
 
 open Xunit
 open FS.GG.Coordination.Qualification.Contracts

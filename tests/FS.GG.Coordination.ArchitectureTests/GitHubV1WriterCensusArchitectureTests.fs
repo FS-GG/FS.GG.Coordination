@@ -66,8 +66,9 @@ let ``GS2-08-3 registration uses accepted epoch prerequisite and one Q3 census g
     let unitValue =
         units.RootElement.GetProperty("units").EnumerateArray()
         |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-08.3")
+    Assert.Equal(".github", unitValue.GetProperty("owner").GetString())
     Assert.Equal<string list>([ "GS2-08.1" ], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
-    Assert.Equal("fcb6181bd33e5c7f59dd3e2027c681d7495182348b504fbedc65df83e60bdde9", unitValue.GetProperty("contractSha256").GetString())
+    Assert.Equal("fc1f991cf378e83674b92130c212493a9546ebcc6a26d6791338bf5dec19caf6", unitValue.GetProperty("contractSha256").GetString())
     Assert.Equal<string list>([ "Q3" ], unitValue.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
     let command =
         gates.RootElement.GetProperty("commands").EnumerateArray()

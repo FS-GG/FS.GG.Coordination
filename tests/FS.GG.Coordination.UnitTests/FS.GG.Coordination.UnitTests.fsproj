@@ -34,7 +34,7 @@
     <Compile Include="GitHubLedgerProtectionProviderTests.fs" />
     <Compile Include="GitHubLedgerProtectionProviderCodecTests.fs" />
     <Compile Include="GitHubLedgerProtectionConformanceTests.fs" />
-    <Compile Include="GitHubV1WriterCensusQualificationTests.fs" />
+    <Compile Include="GitHubV1WriterCensusTests.fs" />
     <Compile Include="GitHubCommentProjectionTests.fs" />
     <Compile Include="GitHubTransportTests.fs" />
     <Compile Include="GitHubShardedJournalTests.fs" />
