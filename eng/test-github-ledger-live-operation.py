@@ -230,6 +230,23 @@ class LiveOperationTests(unittest.TestCase):
             with self.assertRaisesRegex(runner.Refused, "capture-observed-at"):
                 runner.capture_observed_at(capture)
 
+    def test_watchdog_reads_the_monitor_heartbeat_schema(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            store = pathlib.Path(scratch)
+            database = sqlite3.connect(store / "monitor.sqlite3")
+            database.executescript("""
+                create table heartbeat(id integer primary key, observed_at text not null, outcome text not null, run_id text not null);
+                create table incidents(id text primary key, kind text not null, opened_at text not null);
+                create table outbox(id text primary key, incident_id text not null, created_at text not null, delivered_at text, attempts integer not null default 0);
+                insert into heartbeat values(1,'2026-09-09T12:55:00Z','green','run-1');
+            """)
+            database.close()
+            config = {"store": str(store), "runnerId": "host-1", "alertCommand": ["unused"], "alertTarget": "ops-primary"}
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                self.assertEqual(0, runner.watchdog(config, "2026-09-09T13:00:00Z"))
+            self.assertEqual("fresh", json.loads(stream.getvalue())["outcome"])
+
     def test_operation_scripts_never_print_secret_or_token_fields(self):
         for name in ("github-ledger-operation.py", "github-ledger-initialization-transport.py", "github-ledger-monitor-runner.py"):
             source = (ROOT / name).read_text().lower()

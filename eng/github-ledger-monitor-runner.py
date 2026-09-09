@@ -134,7 +134,7 @@ def watchdog(config, now_text):
     now = dt.datetime.fromisoformat(now_text.replace("Z", "+00:00"))
     connection = db(config)
     try:
-        row = connection.execute("SELECT observed_at FROM heartbeat WHERE singleton=1").fetchone()
+        row = connection.execute("SELECT observed_at FROM heartbeat WHERE id=1").fetchone()
     finally:
         connection.close()
     stale = row is None or now - dt.datetime.fromisoformat(row[0].replace("Z", "+00:00")) > dt.timedelta(minutes=15)
