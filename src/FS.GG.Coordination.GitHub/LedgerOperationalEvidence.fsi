@@ -6,11 +6,11 @@ type LedgerOperationalDimension = SettingsAppliedEvidence | AppCustodyEvidence |
 type LedgerOperationalEvidenceContext =
     { RepositoryId: int64; FleetRef: string; ControlIssueNumber: int64; DesiredPolicySha256: string
       ProviderObservationSha256: string; InitializationSeal: string option; MonitorStoreId: string option
-      SignerPublicKeySha256: string }
+      SignerPublicKeySpkiSha256: string }
 type LedgerOperationalEvidence =
     { Dimension: LedgerOperationalDimension; Context: LedgerOperationalEvidenceContext; RunId: string
       InputSha256: string; ObservedAt: DateTimeOffset; ExpiresAt: DateTimeOffset; Authority: string
-      SignerKeyId: string; PublicKeyPem: string; PublicKeySha256: string; Payload: byte array; Signature: byte array }
+      SignerKeyId: string; PublicKeyPem: string; PublicKeySpkiSha256: string; Payload: byte array; Signature: byte array }
 
 [<RequireQualifiedAccess>]
 module LedgerOperationalEvidence =

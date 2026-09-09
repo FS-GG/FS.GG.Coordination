@@ -21,6 +21,46 @@ dotnet run --project src/FS.GG.Coordination.Cli -c Release --no-build -- \
   --public-key trusted-authorizer.pem --output plan.json
 ```
 
+Generate the exact bytes that protected authorization must bind before requesting approval:
+
+```bash
+dotnet run --project src/FS.GG.Coordination.Cli -c Release --no-build -- \
+  ledger-protection initialize payload --input input.json --output initializer-payload.json
+sha256sum initializer-payload.json
+```
+
+`eng/github-ledger-operation.py derive` produces reviewable canonical `initial-manifest/v1`, `initial-trust/v1`,
+and initializer-input bytes. The manifest is derived from the accepted GS2-08.1 receipt and epoch-wire digest,
+exact source commit/tree, bound desired policy, fleet address, and the independent authorizer's canonical public-key
+SPKI fingerprint. The trust document binds that manifest and the same public signer identity. It contains no private
+key. Neither digest may be selected ad hoc.
+
+Protected authorization is the manual-dispatch workflow in `FS-GG/.github` anchored by merge
+`c00b4636688f95024b80c588d2410ca40e11f6e6`; its canonical workflow bytes have SHA-256
+`a778801d66751c3890826b0ca015a81758f7733ff09e5b9c5bde55e1f86c3b8f`. The initializer binds both values.
+The workflow's only job targets the existing `fleet-cutover` environment. Its artifact binds the exact Coordination source and canonical initializer-payload
+SHA-256. `github-ledger-operation.py authorize` rereads the final Actions run and approval history, accepts only an
+eligible configured reviewer, enforces the two-hour ceiling, and then uses a distinct authorizer key supplied on an
+inherited descriptor to sign those exact bytes with RSA-PSS. The command also requires the same bounded operation ID
+recorded by the protected receipt and the canonical SPKI SHA-256 of the supplied public key. General user authorization, a successful unrelated
+run, or an artifact without native approval readback is insufficient.
+The verifier also requires the workflow-run head to descend from that anchor and rereads the workflow file at the
+run head; changed workflow bytes refuse authorization even when the environment approval itself succeeded.
+
+The reviewed transport is `eng/github-ledger-initialization-transport.py`. It mints a repository-scoped cutover-App
+token from an inherited key descriptor, never prints or retains the token, recomputes every Git object ID, refuses
+competing refs, and independently rereads objects, branch, and tag. Verification is anonymous/read-only and refuses
+a credential argument:
+
+```bash
+dotnet run --project src/FS.GG.Coordination.Cli -c Release --no-build -- \
+  ledger-protection initialize apply --plan plan.json \
+  --transport "$PWD/eng/github-ledger-initialization-transport.py" --credential-fd 4
+dotnet run --project src/FS.GG.Coordination.Cli -c Release --no-build -- \
+  ledger-protection initialize verify --plan plan.json \
+  --transport "$PWD/eng/github-ledger-initialization-transport.py"
+```
+
 ```bash
 python3 eng/capture-github-ledger-protection.py --output "$private_dir/capture.json"
 python3 eng/monitor-github-ledger-protection.py --store "$private_dir/monitor" \
@@ -61,6 +101,17 @@ The associated service must first create a fresh, complete capture and then invo
 watchdog must query `heartbeat.observed_at` and alert if it is more than 15 minutes old; successful process exit alone
 does not prove monitoring freshness. Alert delivery updates `outbox.delivered_at` only after the destination confirms
 delivery. Neither the monitor nor the watchdog performs automatic repair.
+
+`eng/github-ledger-monitor-runner.py` is the systemd-independent runner boundary. Its mode-0600 private config names
+an absolute source checkout, durable mode-0700 store, stable runner identity, explicit credential commands, and an
+alert executable plus destination. `preview` performs no credential or provider access. An external scheduler
+invokes `once` every 300 seconds and `watchdog` often enough to enforce the 900-second freshness ceiling. The runner
+hands a sanitized alert envelope to the configured executable and acknowledges an outbox row only after exit zero.
+
+The runner deliberately does not pretend an ephemeral container is durable. Installation evidence must name the
+external scheduler/host, prove it survives container recreation, exercise the configured alert destination, and
+record a `fsgg.github-ledger-external-runner-receipt/1` with `durable:true`, interval 300, watchdog 900, store ID,
+runner ID, and `alertExercise:"delivered"`. Until that receipt exists, `MonitoringReady` remains unknown.
 
 `LedgerOperationalEvidence.derive` is the only path from signed run evidence to SettingsApplied,
 AppCustodyReady, FleetInitialized and MonitoringReady. Evidence binds exact inputs, authority, signer, run, time and

@@ -5,13 +5,14 @@ open System
 type ExpectedLedgerRef = ExpectedAbsent | ExpectedParent of string
 type LedgerObject = { Kind: string; Oid: string; Bytes: byte array }
 type LedgerInitializationAuthority =
-    { KeyId: string; PublicKeyPem: string; PublicKeySha256: string
+    { KeyId: string; PublicKeyPem: string; PublicKeySpkiSha256: string
       Payload: byte array; Signature: byte array; AuthorizedAt: DateTimeOffset; ExpiresAt: DateTimeOffset }
 type LedgerInitializationInput =
     { RepositoryId: int64; Repository: string; FleetId: string; Ref: string; Tag: string
       ManifestSha256: string; TrustAnchorSha256: string; SourceSha256: string
       DesiredPolicySha256: string; FirstCaptureSha256: string; SecondCaptureSha256: string
-      AuthorizationKeyId: string; AuthorizationKeySha256: string
+      AuthorizationKeyId: string; AuthorizationKeySpkiSha256: string
+      AuthorizationWorkflowRevision: string; AuthorizationWorkflowSha256: string
       CutoverAppId: int64; CutoverInstallationId: int64; ControlIssueNumber: int64
       ExpectedRef: ExpectedLedgerRef; CreatedAt: DateTimeOffset; AuthorName: string; AuthorEmail: string }
 type LedgerInitializationPlan =

@@ -6,10 +6,10 @@ open System.Text
 open System.Text.Json.Nodes
 
 type LedgerOperationalDimension = SettingsAppliedEvidence | AppCustodyEvidence | FleetInitializedEvidence | MonitoringEvidence
-type LedgerOperationalEvidenceContext = { RepositoryId:int64;FleetRef:string;ControlIssueNumber:int64;DesiredPolicySha256:string;ProviderObservationSha256:string;InitializationSeal:string option;MonitorStoreId:string option;SignerPublicKeySha256:string }
+type LedgerOperationalEvidenceContext = { RepositoryId:int64;FleetRef:string;ControlIssueNumber:int64;DesiredPolicySha256:string;ProviderObservationSha256:string;InitializationSeal:string option;MonitorStoreId:string option;SignerPublicKeySpkiSha256:string }
 type LedgerOperationalEvidence =
     { Dimension:LedgerOperationalDimension;Context:LedgerOperationalEvidenceContext;RunId:string;InputSha256:string;ObservedAt:DateTimeOffset;ExpiresAt:DateTimeOffset
-      Authority:string;SignerKeyId:string;PublicKeyPem:string;PublicKeySha256:string;Payload:byte array;Signature:byte array }
+      Authority:string;SignerKeyId:string;PublicKeyPem:string;PublicKeySpkiSha256:string;Payload:byte array;Signature:byte array }
 
 [<RequireQualifiedAccess>]
 module LedgerOperationalEvidence =
@@ -33,7 +33,7 @@ module LedgerOperationalEvidence =
               "providerObservationSha256",JsonValue.Create(c.ProviderObservationSha256)
               "repositoryId",JsonValue.Create(c.RepositoryId)
               "runId",JsonValue.Create(evidence.RunId) ]
-        root.Add("signerPublicKeySha256",JsonValue.Create(c.SignerPublicKeySha256))
+        root.Add("signerPublicKeySpkiSha256",JsonValue.Create(c.SignerPublicKeySpkiSha256))
         values |> List.sortBy fst |> List.iter(fun(k,v)->root.Add(k,v))
         root.ToJsonString() |> ShardedJournalAdapter.canonicalJson |> Result.defaultWith invalidOp
     let private valid asOf (expected:LedgerOperationalEvidenceContext) (evidence:LedgerOperationalEvidence) =
@@ -41,8 +41,8 @@ module LedgerOperationalEvidence =
             use rsa=RSA.Create()
             rsa.ImportFromPem evidence.PublicKeyPem
             evidence.Context=expected && evidence.Payload=canonicalPayload evidence && evidence.ObservedAt<=asOf && asOf<evidence.ExpiresAt
-            && evidence.ExpiresAt-evidence.ObservedAt<=TimeSpan.FromMinutes 15. && sha(Encoding.UTF8.GetBytes evidence.PublicKeyPem)=evidence.PublicKeySha256
-            && evidence.PublicKeySha256=expected.SignerPublicKeySha256 && evidence.Authority="FS-GG/fleet-cutover" && not(String.IsNullOrWhiteSpace evidence.RunId) && evidence.InputSha256.Length=64
+            && evidence.ExpiresAt-evidence.ObservedAt<=TimeSpan.FromMinutes 15. && sha(rsa.ExportSubjectPublicKeyInfo())=evidence.PublicKeySpkiSha256
+            && evidence.PublicKeySpkiSha256=expected.SignerPublicKeySpkiSha256 && evidence.Authority="FS-GG/fleet-cutover" && not(String.IsNullOrWhiteSpace evidence.RunId) && evidence.InputSha256.Length=64
             && rsa.VerifyData(evidence.Payload,evidence.Signature,HashAlgorithmName.SHA256,RSASignaturePadding.Pss)
         with _->false
     let derive asOf expected (evidence:LedgerOperationalEvidence list) =
