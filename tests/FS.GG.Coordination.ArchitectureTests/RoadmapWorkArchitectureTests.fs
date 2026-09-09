@@ -13,8 +13,8 @@ open Xunit
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
-let private roadmapRevision = "c1ad41e059c18376685b5c71256149c35c341652"
-let private roadmapSha256 = "20f4f2bcdcd6e2bfdd787edc66efbe30a21289f7ddf2030a8b1b3ae2150b7c52"
+let private roadmapRevision = "3719b6cfc6f2d766ad56f930b56f025e20c4b2cc"
+let private roadmapSha256 = "9c49a0efd1440d8a71130758be39394ae4cdd67f3d10b9cb6cb71998154c1a17"
 
 let private runAt workingDirectory executable arguments =
     let startInfo = ProcessStartInfo(executable)
@@ -958,7 +958,7 @@ let ``GS2-08-1 acceptance binds repaired correspondence and protected delivery``
     Assert.Equal<Map<string, string>>(expected, artifacts)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-08-3 writer census`` () =
+let ``roadmap unit index advances through GS2-08-3 writer and receiver census`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -2269,7 +2269,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(50, commands.Length)
+    Assert.Equal(51, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())

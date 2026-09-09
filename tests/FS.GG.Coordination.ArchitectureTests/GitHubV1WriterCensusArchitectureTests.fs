@@ -60,7 +60,7 @@ let ``retained command contract and census join by exact ordered name and write 
     Assert.Equal(62, census.RootElement.GetProperty("sources").GetArrayLength())
 
 [<Fact>]
-let ``GS2-08-3 registration uses accepted epoch prerequisite and one Q3 census gate`` () =
+let ``GS2-08-3 registration preserves accepted epoch prerequisite and writer Q3 gate`` () =
     use units = JsonDocument.Parse(read "eng/github-substrate-v2-units.json")
     use gates = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
     let unitValue =
@@ -68,7 +68,7 @@ let ``GS2-08-3 registration uses accepted epoch prerequisite and one Q3 census g
         |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-08.3")
     Assert.Equal(".github", unitValue.GetProperty("owner").GetString())
     Assert.Equal<string list>([ "GS2-08.1" ], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
-    Assert.Equal("fc1f991cf378e83674b92130c212493a9546ebcc6a26d6791338bf5dec19caf6", unitValue.GetProperty("contractSha256").GetString())
+    Assert.Equal("686482156555baf835958726ab3750c06c6df5d7ca2ff90bec6dadd83e6cf8ea", unitValue.GetProperty("contractSha256").GetString())
     Assert.Equal<string list>([ "Q3" ], unitValue.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
     let command =
         gates.RootElement.GetProperty("commands").EnumerateArray()
