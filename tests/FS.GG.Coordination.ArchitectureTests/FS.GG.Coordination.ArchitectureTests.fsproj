@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="QuintSubprocessValidatorCollection.fs" />
     <Compile Include="OrganizationIssueFieldsArchitectureTests.fs" />
     <Compile Include="WorkTaxonomyArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/Tests.fs" Link="BoundaryTests.fs" />

@@ -1,3 +1,4 @@
+[<Xunit.Collection("Quint subprocess validators")>]
 module FS.GG.Coordination.WorkTaxonomyArchitectureTests
 
 open System
@@ -70,6 +71,6 @@ let ``registered work taxonomy Q2 command passes repository local evidence`` () 
     let output = child.StandardOutput.ReadToEnd()
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
-    Assert.Equal(0, child.ExitCode)
+    Assert.True(child.ExitCode = 0, $"work taxonomy Q2 exited {child.ExitCode}\nstdout:\n{output}\nstderr:\n{error}")
     Assert.Equal("", error.Trim())
     Assert.Contains("github-work-taxonomy-contract OK cases=32 accepted=18 refused=14 q=Q2 network=offline inversions=17", output, StringComparison.Ordinal)
