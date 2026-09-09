@@ -1,3 +1,4 @@
+[<Xunit.Collection("Quint subprocess validators")>]
 module FS.GG.Coordination.OrganizationIssueFieldsArchitectureTests
 
 open System
@@ -51,6 +52,6 @@ let ``registered organization issue field Q2 command passes local evidence`` () 
     let output = child.StandardOutput.ReadToEnd()
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
-    Assert.Equal(0, child.ExitCode)
+    Assert.True(child.ExitCode = 0, $"organization issue field Q2 exited {child.ExitCode}\nstdout:\n{output}\nstderr:\n{error}")
     Assert.Equal("", error.Trim())
     Assert.Contains("github-organization-issue-fields-contract OK fields=12 cases=4 accepted=4 q=Q2 network=offline inversions=38", output, StringComparison.Ordinal)
