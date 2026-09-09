@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import gzip
+import hashlib
 import json
 import os
 import pathlib
@@ -12,10 +14,16 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 
 
 class Refused(RuntimeError):
     pass
+
+
+CAPTURE_ATTEMPTS = 3
+CAPTURE_RETRY_SECONDS = 2
+CAPTURE_FAILURE_LIMIT = 64
 
 
 def load_config(path):
@@ -64,11 +72,70 @@ def invoke_capture(config, output, previous=None):
             command += ["--previous", str(previous)]
         completed = subprocess.run(command, pass_fds=(ordinary, cutover), stdout=subprocess.PIPE,
                                    stderr=subprocess.DEVNULL, check=False)
-        if completed.returncode != 0:
-            raise Refused("capture-refused")
+        return completed.returncode
     finally:
         os.close(ordinary)
         os.close(cutover)
+
+
+def retain_capture_failure(store, output):
+    source = pathlib.Path(output)
+    if not source.is_file() or source.is_symlink():
+        return "missing-capture"
+    raw = source.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    failures = pathlib.Path(store) / "capture-failures"
+    if failures.is_symlink():
+        raise Refused("capture-failure-store-symlink")
+    failures.mkdir(mode=0o700, exist_ok=True)
+    failures.chmod(0o700)
+    target = failures / (digest + ".json.gz")
+    compressed = gzip.compress(raw, compresslevel=9, mtime=0)
+    if target.exists():
+        if target.is_symlink():
+            raise Refused("capture-failure-content-conflict")
+        try:
+            existing = gzip.decompress(target.read_bytes())
+        except (OSError, EOFError):
+            raise Refused("capture-failure-content-conflict")
+        if existing != raw:
+            raise Refused("capture-failure-content-conflict")
+    else:
+        with tempfile.NamedTemporaryFile(dir=failures, prefix="capture-failure-", delete=False) as temporary:
+            temporary.write(compressed)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path = pathlib.Path(temporary.name)
+        temporary_path.chmod(0o600)
+        os.replace(temporary_path, target)
+    retained = sorted((item for item in failures.glob("*.json.gz") if item.is_file() and not item.is_symlink()),
+                      key=lambda item: (item.stat().st_mtime_ns, item.name), reverse=True)
+    for expired in retained[CAPTURE_FAILURE_LIMIT:]:
+        expired.unlink()
+    try:
+        gaps = json.loads(raw).get("gaps") or []
+        summary = ",".join(str(item) for item in gaps[:8]) or "unspecified"
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        summary = "unreadable"
+    return digest + ":" + summary
+
+
+def coherent_capture(config, store, private):
+    last = "missing-capture"
+    for attempt in range(1, CAPTURE_ATTEMPTS + 1):
+        first = private / f"pass1-{attempt}.json"
+        second = private / f"pass2-{attempt}.json"
+        first_status = invoke_capture(config, first)
+        if first_status == 0:
+            second_status = invoke_capture(config, second, first)
+            if second_status == 0:
+                return second
+            last = retain_capture_failure(store, second)
+        else:
+            last = retain_capture_failure(store, first)
+        if attempt < CAPTURE_ATTEMPTS:
+            time.sleep(CAPTURE_RETRY_SECONDS)
+    raise Refused(f"capture-refused:attempts={CAPTURE_ATTEMPTS}:last={last}")
 
 
 def capture_observed_at(path):
@@ -87,9 +154,7 @@ def monitor_once(config, now):
     with tempfile.TemporaryDirectory(prefix="fsgg-ledger-capture-", dir=store) as scratch:
         private = pathlib.Path(scratch)
         private.chmod(0o700)
-        first, second = private / "pass1.json", private / "pass2.json"
-        invoke_capture(config, first)
-        invoke_capture(config, second, first)
+        second = coherent_capture(config, store, private)
         observed_at = capture_observed_at(second)
         command = [sys.executable, str(pathlib.Path(config["sourceRoot"]) / "eng/monitor-github-ledger-protection.py"),
                    "--store", str(store), "--capture-file", str(second), "--now", observed_at]
