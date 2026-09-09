@@ -36,6 +36,7 @@ module LedgerProtectionProviderAdapter =
     let installationsEndpoint = "GET /orgs/FS-GG/installations?per_page=100"
     let controlIssuesEndpoint = "GET /repos/FS-GG/FS.GG.Coordination.Authority/issues?state=all&per_page=100"
     let selectedRepositoriesEndpoint (installationId:int64) = $"GET /user/installations/{installationId}/repositories?per_page=100"
+    let appSelectedRepositoriesEndpoint = "GET /installation/repositories?per_page=100"
     let private digest (value:string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
     let private frame (value:string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
     let private ruleText = function Creation -> "creation" | Update -> "update" | Deletion -> "deletion" | NonFastForward -> "non-fast-forward"
@@ -119,9 +120,9 @@ module LedgerProtectionProviderAdapter =
             | None -> Unknown "dedicated-writer-unbound"
             | Some id ->
                 match installations |> List.filter (fun value -> value.AppId=id) with
-                | [value] when value.RepositorySelection="selected" && (value.Permissions |> List.filter (fun (name,_) -> name<>"metadata")) = [("contents","write")] && (value.Permissions |> List.forall (fun (name,access) -> name<>"metadata" || access="read")) && value.SelectedRepositoriesPagesComplete && value.SelectedRepositoriesEndpoint=Some(selectedRepositoriesEndpoint value.InstallationId) ->
+                | [value] when value.RepositorySelection="selected" && (value.Permissions |> List.filter (fun (name,_) -> name<>"metadata")) = [("contents","write")] && (value.Permissions |> List.forall (fun (name,access) -> name<>"metadata" || access="read")) && value.SelectedRepositoriesPagesComplete && (value.SelectedRepositoriesEndpoint=Some(selectedRepositoriesEndpoint value.InstallationId) || value.SelectedRepositoriesEndpoint=Some appSelectedRepositoriesEndpoint) ->
                     match value.SelectedRepositories with
-                    | Observed repositories when List.contains LedgerProtectionPlanAdapter.authorityRepository repositories -> Observed {Id=id;ContentsPermission="write";AdditionalWritePermissions=[]}
+                    | Observed [repository] when repository=LedgerProtectionPlanAdapter.authorityRepository -> Observed {Id=id;ContentsPermission="write";AdditionalWritePermissions=[]}
                     | Unknown why -> Unknown why
                     | _ -> ProvenAbsent
                 | [] -> ProvenAbsent

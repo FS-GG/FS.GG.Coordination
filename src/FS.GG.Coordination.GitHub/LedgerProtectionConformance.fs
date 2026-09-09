@@ -70,6 +70,7 @@ module LedgerProtectionConformance =
         match LedgerProtectionProviderAdapter.normalize asOf maxAge snapshot.Provider with
         | Error _ -> DriftOrTamper
         | Ok normalized when currentComposition snapshot normalized -> CurrentPreInstall
+        | Ok _ when snapshot.Bindings.OrdinaryWriterAppId.IsNone || snapshot.Bindings.CutoverWriterAppId.IsNone || snapshot.Bindings.ControlIssueNumber.IsNone -> IncompleteOrUnknown
         | Ok _ when installedComposition snapshot && environmentMatches snapshot.FleetEnvironment && snapshot.ClassicProtection=ProvenAbsent ->
             let operational = [snapshot.Operational.SettingsApplied;snapshot.Operational.AppCustodyReady;snapshot.Operational.FleetInitialized;snapshot.Operational.MonitoringReady]
             if operational |> List.forall known |> not then IncompleteOrUnknown

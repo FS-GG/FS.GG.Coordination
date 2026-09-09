@@ -2,6 +2,7 @@
 """Capture the fixed GS2-08.2 read-only GitHub observation surface."""
 
 import argparse
+import base64
 import datetime as dt
 import hashlib
 import json
@@ -9,13 +10,16 @@ import pathlib
 import re
 import subprocess
 import sys
+import time
 import urllib.parse
+import urllib.error
+import urllib.request
 
 AUTHORITY = "FS-GG/FS.GG.Coordination.Authority"
 AUTHORITY_ID = 1351660651
 FLEET_BRANCH = "fsgg/v2/journal/cutover/d5"
 TAG_PREFIX = "tags/fsgg/v2/fleet-cutover/"
-CONTROL_ISSUE_NUMBER = None
+API_ROOT = "https://api.github.com"
 
 GRAPHQL = """query($cursor:String){repository(owner:\"FS-GG\",name:\"FS.GG.Coordination.Authority\"){branchProtectionRules(first:100,after:$cursor){nodes{id pattern allowsDeletions allowsForcePushes isAdminEnforced requiresApprovingReviews requiresCodeOwnerReviews requiredApprovingReviewCount}pageInfo{hasNextPage endCursor}}}}"""
 
@@ -29,13 +33,19 @@ def frame(value):
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
+def b64url(value):
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+def provider_refusal(code=None, reason="provider-read-refused"):
+    state = "proven-absent" if code == 404 else "unknown"
+    return {"state": state, "httpStatus": code, "reason": reason}
+
 def invoke(args):
     completed = subprocess.run(["gh", "api", *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if completed.returncode != 0:
         status = re.search(rb"(?:HTTP |status code: )(\d{3})", completed.stderr)
         code = int(status.group(1)) if status else None
-        state = "proven-absent" if code == 404 else "unknown"
-        return completed.stdout, {"state": state, "httpStatus": code, "reason": "provider-read-refused"}
+        return completed.stdout, provider_refusal(code)
     try:
         return completed.stdout, json.loads(completed.stdout)
     except json.JSONDecodeError:
@@ -46,6 +56,65 @@ def rest(path, paginate=False):
     if paginate:
         args += ["--paginate", "--slurp"]
     return invoke(args)
+
+def app_request(path, token, method="GET", body=None, retain_raw=True):
+    request = urllib.request.Request(
+        API_ROOT + path,
+        data=canonical(body) if body is not None else None,
+        method=method,
+        headers={"Accept": "application/vnd.github+json", "Authorization": "Bearer " + token,
+                 "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "fsgg-ledger-protection-capture"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read()
+        return raw if retain_raw else b"", json.loads(raw)
+    except urllib.error.HTTPError as error:
+        return b"", provider_refusal(error.code)
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return b"", provider_refusal()
+
+def mint_installation_token(app_id, installation_id, key_fd):
+    now = int(time.time())
+    header = b64url(canonical({"alg":"RS256", "typ":"JWT"}))
+    payload = b64url(canonical({"iat":now-60, "exp":now+540, "iss":app_id}))
+    signing_input = (header + "." + payload).encode("ascii")
+    try:
+        signed = subprocess.run(
+            ["openssl", "dgst", "-sha256", "-sign", f"/proc/self/fd/{key_fd}"],
+            input=signing_input, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            pass_fds=(key_fd,), check=False)
+    except (OSError, ValueError):
+        return None
+    if signed.returncode != 0 or not signed.stdout:
+        return None
+    jwt = header + "." + payload + "." + b64url(signed.stdout)
+    _, response = app_request(
+        f"/app/installations/{installation_id}/access_tokens", jwt, "POST",
+        {"repository_ids":[AUTHORITY_ID], "permissions":{"contents":"read"}}, retain_raw=False)
+    token = response.get("token") if isinstance(response, dict) else None
+    return token if isinstance(token, str) and token else None
+
+def app_selected_repositories(app_id, installation_id, key_fd):
+    token = mint_installation_token(app_id, installation_id, key_fd)
+    if token is None:
+        return b"", provider_refusal(reason="app-installation-token-refused")
+    raw = bytearray()
+    pages = []
+    page = 1
+    while True:
+        page_raw, value = app_request(f"/installation/repositories?per_page=100&page={page}", token)
+        raw.extend(page_raw)
+        if refused(value):
+            return bytes(raw), value
+        repositories = value.get("repositories") if isinstance(value, dict) else None
+        if not isinstance(repositories, list):
+            return bytes(raw), provider_refusal(reason="provider-json-unreadable")
+        pages.append(value)
+        total = value.get("total_count")
+        observed = sum(len(item.get("repositories") or []) for item in pages)
+        if (isinstance(total, int) and observed >= total) or (not isinstance(total, int) and len(repositories) < 100):
+            return bytes(raw), pages
+        page += 1
 
 def flatten_pages(value):
     if isinstance(value, list) and (not value or isinstance(value[0], list)):
@@ -71,7 +140,7 @@ def resource(identifier, raw, normalized, complete=True, state="observed"):
     normalized_bytes = canonical(normalized)
     return {"id": identifier, "state": state, "pagesComplete": complete, "rawSha256": sha(raw), "normalizedSha256": sha(normalized_bytes), "normalized": normalized}
 
-def capture():
+def capture(app_key_fds, control_issue_number):
     resources = []
     gaps = []
 
@@ -140,23 +209,42 @@ def capture():
     if refused(installation_pages): gaps.append("organization-installations")
     installations = []
     desired = json.loads((pathlib.Path(__file__).resolve().parent.parent / "evidence/github-substrate-v2/gs2-08-2/desired-policy.json").read_bytes())
-    desired_apps = {desired.get("ordinaryWriter", {}).get("appId"), desired.get("cutoverWriter", {}).get("appId")} - {None}
+    desired_roles = {role: desired.get(role, {}) for role in ("ordinaryWriter", "cutoverWriter")}
+    desired_apps = {value.get("appId") for value in desired_roles.values()} - {None}
+    expected_installations = {value.get("appId"): value.get("installationId") for value in desired_roles.values() if value.get("appId") is not None}
+    observed_desired_apps = set()
     installation_values = [installation for page in flatten_pages(installation_pages) for installation in (page.get("installations") or [])] if flatten_pages(installation_pages) and isinstance(flatten_pages(installation_pages)[0], dict) and "installations" in flatten_pages(installation_pages)[0] else flatten_pages(installation_pages)
     for value in installation_values:
         selected = None
         if value.get("app_id") in desired_apps:
-            raw_selected, selected_pages = rest(f"user/installations/{value.get('id')}/repositories?per_page=100", True)
+            app_id = value.get("app_id")
+            observed_desired_apps.add(app_id)
+            if value.get("id") != expected_installations.get(app_id):
+                gaps.append(f"installation-id:{app_id}")
+            key_fd = app_key_fds.get(app_id)
+            if key_fd is None:
+                raw_selected, selected_pages = rest(f"user/installations/{value.get('id')}/repositories?per_page=100", True)
+                selected_endpoint = f"GET /user/installations/{value.get('id')}/repositories?per_page=100"
+            else:
+                raw_selected, selected_pages = app_selected_repositories(app_id, value.get("id"), key_fd)
+                selected_endpoint = "GET /installation/repositories?per_page=100"
             raw_installations += raw_selected
             if refused(selected_pages): gaps.append(f"selected-repositories:{value.get('app_id')}")
             else:
                 selected_values = [repo for page in flatten_pages(selected_pages) for repo in (page.get("repositories") or [])] if flatten_pages(selected_pages) and isinstance(flatten_pages(selected_pages)[0], dict) else []
                 selected = sorted([repo.get("full_name") for repo in selected_values])
-        installations.append({"installationId": value.get("id"), "appId": value.get("app_id"), "slug": value.get("app_slug"), "repositorySelection": value.get("repository_selection"), "permissions": value.get("permissions") or {}, "selectedRepositories": selected})
+        else:
+            selected_endpoint = None
+        installations.append({"installationId": value.get("id"), "appId": value.get("app_id"), "slug": value.get("app_slug"), "repositorySelection": value.get("repository_selection"), "permissions": value.get("permissions") or {}, "selectedRepositoriesEndpoint": selected_endpoint, "selectedRepositories": selected})
+    for role,value in desired_roles.items():
+        if value.get("appId") not in observed_desired_apps: gaps.append(f"desired-installation-missing:{role}")
     resources.append(resource("organization-installations", raw_installations, sorted(installations, key=lambda x: x["installationId"] or 0), not refused(installation_pages), "unknown" if refused(installation_pages) else "observed"))
 
     raw_issues, issue_pages = rest(f"repos/{AUTHORITY}/issues?state=all&per_page=100", True)
     if refused(issue_pages): gaps.append("authority-issues")
     issues = [{"number": x.get("number"), "isPullRequest": "pull_request" in x} for x in flatten_pages(issue_pages)]
+    if control_issue_number is not None and not any(value["number"] == control_issue_number and not value["isPullRequest"] for value in issues):
+        gaps.append("bound-control-issue")
     resources.append(resource("authority-issues", raw_issues, sorted(issues, key=lambda x: x["number"] or 0), not refused(issue_pages), "unknown" if refused(issue_pages) else "observed"))
 
     cursor = None
@@ -178,17 +266,43 @@ def capture():
             gaps.append("branch-protection-rules")
             break
     resources.append(resource("branch-protection-rules", bytes(graphql_raw), sorted(graphql_nodes, key=lambda x: x.get("id") or ""), "branch-protection-rules" not in gaps))
-    return revision, resources, sorted(set(gaps))
+    bindings = {
+        "ordinaryWriterAppId": desired_roles["ordinaryWriter"].get("appId"),
+        "ordinaryWriterInstallationId": desired_roles["ordinaryWriter"].get("installationId"),
+        "cutoverWriterAppId": desired_roles["cutoverWriter"].get("appId"),
+        "cutoverWriterInstallationId": desired_roles["cutoverWriter"].get("installationId"),
+        "controlIssueNumber": control_issue_number}
+    return revision, resources, sorted(set(gaps)), bindings
 
 def aggregate(resources, field):
     return sha(b"".join(frame(value["id"]) + frame(value[field]) for value in sorted(resources, key=lambda x: x["id"])))
+
+def compare_continuity(previous, normalized_set, bindings):
+    gaps = []
+    continuity = "matched" if previous.get("normalizedSetSha256") == normalized_set else "drift"
+    if previous.get("bindings") != bindings:
+        continuity = "drift"
+        gaps.append("binding-drift")
+    return continuity, gaps
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--previous")
+    parser.add_argument("--ordinary-app-key-fd", type=int)
+    parser.add_argument("--cutover-app-key-fd", type=int)
+    parser.add_argument("--control-issue-number", type=int)
     args = parser.parse_args()
-    revision, resources, gaps = capture()
+    if args.control_issue_number is not None and args.control_issue_number <= 0:
+        parser.error("the control issue number must be positive")
+    desired = json.loads((pathlib.Path(__file__).resolve().parent.parent / "evidence/github-substrate-v2/gs2-08-2/desired-policy.json").read_bytes())
+    app_key_fds = {}
+    for role,fd in (("ordinaryWriter",args.ordinary_app_key_fd),("cutoverWriter",args.cutover_app_key_fd)):
+        if fd is not None:
+            if fd < 3:
+                parser.error("App private keys must be supplied on inherited file descriptors >= 3")
+            app_key_fds[desired[role]["appId"]] = fd
+    revision, resources, gaps, bindings = capture(app_key_fds, args.control_issue_number)
     raw_set = aggregate(resources, "rawSha256")
     normalized_set = aggregate(resources, "normalizedSha256")
     previous_sha = None
@@ -200,7 +314,8 @@ def main():
         previous_sha = sha(previous_bytes)
         previous = json.loads(previous_bytes)
         previous_normalized = previous.get("normalizedSetSha256")
-        continuity = "matched" if previous_normalized == normalized_set else "drift"
+        continuity, continuity_gaps = compare_continuity(previous, normalized_set, bindings)
+        gaps.extend(continuity_gaps)
         capture_pass = 2
         if continuity != "matched": gaps.append("normalized-set-drift")
     evidence = {"schema":"fsgg.github-ledger-protection-live-capture/v1", "capturePass":capture_pass,
@@ -208,8 +323,11 @@ def main():
                 "capturedAt":dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
                 "continuity":continuity, "previousEvidenceSha256":previous_sha, "previousNormalizedSetSha256":previous_normalized,
                 "rawSetSha256":raw_set, "normalizedSetSha256":normalized_set, "resources":resources,
+                "bindings":bindings,
                 "gaps":sorted(set(gaps)), "providerReadbackClaimed":True, "writesAttempted":0, "applyAuthorized":False}
-    pathlib.Path(args.output).write_bytes(canonical(evidence) + b"\n")
+    output = pathlib.Path(args.output)
+    output.write_bytes(canonical(evidence) + b"\n")
+    output.chmod(0o600)
     print(f"GITHUB_LEDGER_CAPTURE pass={capture_pass} continuity={continuity} resources={len(resources)} gaps={len(evidence['gaps'])} raw={raw_set} normalized={normalized_set}")
     return 0 if not gaps and (capture_pass == 1 or continuity == "matched") else 2
 

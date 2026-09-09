@@ -52,3 +52,12 @@ let ``capture gaps refuse qualification`` () =
     let bytes = File.ReadAllText(Path.Combine(root,"evidence/github-substrate-v2/gs2-08-2/live-capture-pass2.json"))
     let tampered = bytes.Replace("\"gaps\":[]", "\"gaps\":[\"provider-read-refused\"]") |> Text.Encoding.UTF8.GetBytes |> ReadOnlyMemory<byte>
     Assert.True(LedgerProtectionProviderCodec.decode tampered |> Result.isError)
+
+[<Fact>]
+let ``bound App identities refuse when installation identities are absent or wrong`` () =
+    let bytes = File.ReadAllText(Path.Combine(root,"evidence/github-substrate-v2/gs2-08-2/live-capture-pass2.json"))
+    let bindings = "\"bindings\":{\"ordinaryWriterAppId\":4882140,\"ordinaryWriterInstallationId\":160261608,\"cutoverWriterAppId\":4882399,\"cutoverWriterInstallationId\":160261436,\"controlIssueNumber\":null},"
+    let tampered = bytes.Replace("{\"applyAuthorized\":false,", "{\"applyAuthorized\":false,"+bindings) |> Text.Encoding.UTF8.GetBytes |> ReadOnlyMemory<byte>
+    let errors = match LedgerProtectionProviderCodec.decode tampered with Error values -> values | Ok _ -> []
+    Assert.Contains("capture-ordinary-installation-binding", errors)
+    Assert.Contains("capture-cutover-installation-binding", errors)

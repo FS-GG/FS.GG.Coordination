@@ -95,6 +95,13 @@ let ``provider envelope metadata and explicit selected repository evidence are s
                         Pages=baseline.Pages |> List.map (fun value -> if value.Endpoint=LedgerProtectionProviderAdapter.installationsEndpoint then page value.Endpoint 1 1 (OrganizationInstallationsPage [installation]) else value) }
     let boundPlan = LedgerProtectionProviderAdapter.compile at (TimeSpan.FromHours 1) bound |> Result.defaultWith (failwithf "%A")
     Assert.DoesNotContain(boundPlan.ProductionBlockers, fun value -> value.Contains("identity is missing"))
+    let appAuthenticated =
+        { bound with Pages=bound.Pages |> List.map (fun value -> if value.Endpoint=LedgerProtectionProviderAdapter.installationsEndpoint then page value.Endpoint 1 1 (OrganizationInstallationsPage [{installation with SelectedRepositoriesEndpoint=Some LedgerProtectionProviderAdapter.appSelectedRepositoriesEndpoint}]) else value) }
+    Assert.True(LedgerProtectionProviderAdapter.compile at (TimeSpan.FromHours 1) appAuthenticated |> Result.isOk)
+    let extraRepository = {installation with SelectedRepositories=LedgerObservation.Observed [LedgerProtectionPlanAdapter.authorityRepository;"FS-GG/another-repository"]}
+    let notExact = {bound with Pages=bound.Pages |> List.map (fun value -> if value.Endpoint=LedgerProtectionProviderAdapter.installationsEndpoint then page value.Endpoint 1 1 (OrganizationInstallationsPage [extraRepository]) else value)}
+    let notExactNormalized = LedgerProtectionProviderAdapter.normalize at (TimeSpan.FromHours 1) notExact |> Result.defaultWith (failwithf "%A")
+    Assert.Equal(LedgerObservation.ProvenAbsent,notExactNormalized.DedicatedWriterApp)
     let overprivileged = {installation with Permissions=("issues","write")::installation.Permissions}
     let refused = {bound with Pages=bound.Pages |> List.map (fun value -> if value.Endpoint=LedgerProtectionProviderAdapter.installationsEndpoint then page value.Endpoint 1 1 (OrganizationInstallationsPage [overprivileged]) else value)}
     Assert.True(LedgerProtectionProviderAdapter.compile at (TimeSpan.FromHours 1) refused |> Result.isError)

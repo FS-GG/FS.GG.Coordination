@@ -94,11 +94,36 @@ module LedgerProtectionProviderCodec =
                     let selected = value.GetProperty("selectedRepositories")
                     let endpoint,complete,repositories =
                         if selected.ValueKind=JsonValueKind.Array then
-                            Some(LedgerProtectionProviderAdapter.selectedRepositoriesEndpoint installationId),true,Observed(selected.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+                            let mutable endpointValue = Unchecked.defaultof<JsonElement>
+                            let endpoint =
+                                if value.TryGetProperty("selectedRepositoriesEndpoint",&endpointValue) && endpointValue.ValueKind=JsonValueKind.String then Some(endpointValue.GetString())
+                                else Some(LedgerProtectionProviderAdapter.selectedRepositoriesEndpoint installationId)
+                            endpoint,true,Observed(selected.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
                         else None,false,Unknown "selected-repositories-unbound"
                     { InstallationId=installationId; AppId=value.GetProperty("appId").GetInt64(); Slug=requiredString "slug" value; RepositorySelection=requiredString "repositorySelection" value
                       Permissions=permissions; SelectedRepositoriesEndpoint=endpoint; SelectedRepositoriesPagesComplete=complete; SelectedRepositories=repositories }) |> Seq.toList
             let issueValues = find "authority-issues" |> _.EnumerateArray() |> Seq.map (fun value -> {Number=value.GetProperty("number").GetInt64();IsPullRequest=value.GetProperty("isPullRequest").GetBoolean()}) |> Seq.toList
+            let mutable bindingsValue = Unchecked.defaultof<JsonElement>
+            let hasBindings = root.TryGetProperty("bindings",&bindingsValue) && bindingsValue.ValueKind=JsonValueKind.Object
+            let binding name = if hasBindings then optionalInt64 name bindingsValue else None
+            let ordinaryAppId = binding "ordinaryWriterAppId"
+            let ordinaryInstallationId = binding "ordinaryWriterInstallationId"
+            let cutoverAppId = binding "cutoverWriterAppId"
+            let cutoverInstallationId = binding "cutoverWriterInstallationId"
+            let controlIssueNumber = binding "controlIssueNumber"
+            if ordinaryAppId.IsSome <> ordinaryInstallationId.IsSome then errors.Add "capture-ordinary-binding-incomplete"
+            if cutoverAppId.IsSome <> cutoverInstallationId.IsSome then errors.Add "capture-cutover-binding-incomplete"
+            match ordinaryAppId,cutoverAppId with
+            | Some ordinary,Some cutover when ordinary<=0L || cutover<=0L || ordinary=cutover -> errors.Add "capture-app-binding-invalid"
+            | Some ordinary,Some cutover when ordinary<>4882140L || cutover<>4882399L -> errors.Add "capture-app-binding-unexpected"
+            | _ -> ()
+            match ordinaryInstallationId,cutoverInstallationId with
+            | Some ordinary,Some cutover when ordinary<>160261608L || cutover<>160261436L -> errors.Add "capture-installation-binding-unexpected"
+            | _ -> ()
+            let installationMatches appId installationId =
+                installationValues |> List.exists (fun value -> value.AppId=appId && value.InstallationId=installationId)
+            match ordinaryAppId,ordinaryInstallationId with Some appId,Some installationId when not (installationMatches appId installationId) -> errors.Add "capture-ordinary-installation-binding" | _ -> ()
+            match cutoverAppId,cutoverInstallationId with Some appId,Some installationId when not (installationMatches appId installationId) -> errors.Add "capture-cutover-installation-binding" | _ -> ()
             let capturedAt = DateTimeOffset.Parse(requiredString "capturedAt" root)
             let pass = root.GetProperty("capturePass").GetInt32()
             let continuity = match requiredString "continuity" root with "uninitialized" -> Uninitialized | "matched" -> Matched | _ -> Drift
@@ -106,7 +131,7 @@ module LedgerProtectionProviderCodec =
             let mkPage endpoint payload = {Endpoint=endpoint;Page=1;LastPage=1;IsTerminal=true;HttpStatus=200;ObservedAt=capturedAt;PayloadSha256=LedgerProtectionProviderAdapter.payloadSha256 payload;Payload=payload}
             let observation =
                 { SchemaVersion=1; Repository=LedgerProtectionPlanAdapter.authorityRepository; RepositoryId=LedgerProtectionPlanAdapter.authorityRepositoryId; Revision=requiredString "revision" root
-                  PreviousObservationSha256=previous; PreviousObservationEvidenceSha256=previous; RawSetSha256=Some rawSet; NormalizedSetSha256=Some normalizedSet; DedicatedWriterAppId=None; ControlIssueNumber=None
+                  PreviousObservationSha256=previous; PreviousObservationEvidenceSha256=previous; RawSetSha256=Some rawSet; NormalizedSetSha256=Some normalizedSet; DedicatedWriterAppId=cutoverAppId; ControlIssueNumber=controlIssueNumber
                   Pages=[mkPage LedgerProtectionProviderAdapter.rulesetsEndpoint (RulesetsPage(ruleResults |> List.choose Result.toOption));mkPage LedgerProtectionProviderAdapter.phaseTagsEndpoint (PhaseTagsPage tags);mkPage LedgerProtectionProviderAdapter.environmentEndpoint (EnvironmentsPage environmentNames);mkPage LedgerProtectionProviderAdapter.installationsEndpoint (OrganizationInstallationsPage installationValues);mkPage LedgerProtectionProviderAdapter.controlIssuesEndpoint (ControlIssuesPage issueValues)] }
             let effectiveRules = find "effective-branch-rules" |> _.EnumerateArray() |> Seq.map (requiredString "type" >> rule) |> Seq.toList
             if effectiveRules |> List.exists Option.isNone then errors.Add "capture-effective-rule-enum"
@@ -126,7 +151,7 @@ module LedgerProtectionProviderCodec =
             let conformance =
                 { Provider=observation;FleetHeads=Observed fleetHeads;PhaseTags=Observed phaseRefs
                   EffectiveRules=Observed(effectiveRules |> List.choose id);ClassicProtection=classic;FleetEnvironment=fleetEnvironment
-                  BranchProtectionRulePatterns=Observed branchPatterns;Bindings={OrdinaryWriterAppId=None;CutoverWriterAppId=None;ControlIssueNumber=None}
+                  BranchProtectionRulePatterns=Observed branchPatterns;Bindings={OrdinaryWriterAppId=ordinaryAppId;CutoverWriterAppId=cutoverAppId;ControlIssueNumber=controlIssueNumber}
                   Operational={SettingsApplied=Unknown "not-observed";AppCustodyReady=Unknown "not-observed";FleetInitialized=Unknown "not-observed";MonitoringReady=Unknown "not-observed"} }
             let gaps = root.GetProperty("gaps").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
             if not gaps.IsEmpty then errors.AddRange(gaps |> List.map (fun value -> "capture-gap:"+value))
