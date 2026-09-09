@@ -83,6 +83,8 @@
     <Compile Include="GitHubLedgerProtectionQualification.fs" />
     <Compile Include="GitHubLedgerProtectionProviderQualification.fsi" />
     <Compile Include="GitHubLedgerProtectionProviderQualification.fs" />
+    <Compile Include="GitHubV1WriterCensusQualification.fsi" />
+    <Compile Include="GitHubV1WriterCensusQualification.fs" />
     <Compile Include="GitHubCommentProjectionQualification.fsi" />
     <Compile Include="GitHubCommentProjectionQualification.fs" />
     <Compile Include="GitHubShardedJournalQualification.fsi" />

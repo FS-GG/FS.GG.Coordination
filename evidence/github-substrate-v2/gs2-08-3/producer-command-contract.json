@@ -1,0 +1,604 @@
+{
+  "schema": "fsgg.coord.commands/1",
+  "commands": [
+    {
+      "name": "add",
+      "flags": [
+        "--repo",
+        "--status",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "adopt",
+      "flags": [
+        "--json",
+        "--lease",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "batch",
+      "flags": [
+        "--explain",
+        "--include-backlog",
+        "--json",
+        "--repo",
+        "--text",
+        "--worker",
+        "-n"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "board",
+      "flags": [
+        "--json",
+        "--repo",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "body-edits",
+      "flags": [
+        "--json",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "bootstrap",
+      "flags": [
+        "--fresh",
+        "--refresh",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "budget",
+      "flags": [
+        "--json",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "child",
+      "flags": [
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "claim",
+      "flags": [
+        "--force",
+        "--json",
+        "--lease",
+        "--refuse-overlap",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "command-contract",
+      "flags": [
+        "--json",
+        "--repo",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "comment",
+      "flags": [
+        "--json",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "cycle",
+      "flags": [
+        "--json",
+        "--repo",
+        "--snapshot",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "decide",
+      "flags": [
+        "--json",
+        "--repo",
+        "--snapshot",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "delivery",
+      "flags": [
+        "--apply",
+        "--flip",
+        "--json",
+        "--pr",
+        "--repo",
+        "--snapshot",
+        "--text",
+        "--worker"
+      ],
+      "writes": "conditional",
+      "writesWhen": {
+        "argvCannotSay": "PATCHes the PR authorization marker from runtime claim and merge state; --apply additionally gates landing"
+      }
+    },
+    {
+      "name": "delivery-route",
+      "flags": [
+        "--json",
+        "--repo",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "diff-audit",
+      "flags": [
+        "--json",
+        "--paths",
+        "--repo",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "done",
+      "flags": [
+        "--evidence",
+        "--flip",
+        "--partial",
+        "--pr",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "driver",
+      "flags": [
+        "--cursor",
+        "--events",
+        "--json",
+        "--repo",
+        "--snapshot",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "facts",
+      "flags": [
+        "--json",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "field-id",
+      "flags": [
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "flush",
+      "flags": [
+        "--dry-run",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "conditional",
+      "writesWhen": {
+        "flagAbsent": "--dry-run"
+      }
+    },
+    {
+      "name": "followup",
+      "flags": [
+        "--apply",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "graphql",
+      "flags": [
+        "--json",
+        "--repo",
+        "--worker"
+      ],
+      "writes": "conditional",
+      "writesWhen": {
+        "argvCannotSay": "archive-items mutates; every other subcommand is a typed read"
+      }
+    },
+    {
+      "name": "heartbeat",
+      "flags": [
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "inbox",
+      "flags": [
+        "--json",
+        "--peek",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "intake",
+      "flags": [
+        "--json",
+        "--repo",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "issues",
+      "flags": [
+        "--fresh",
+        "--json",
+        "--label",
+        "--refresh",
+        "--repo",
+        "--state",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "item-id",
+      "flags": [
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "landable",
+      "flags": [
+        "--interval",
+        "--repo",
+        "--require",
+        "--sha",
+        "--text",
+        "--tries",
+        "--wait",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "lanes",
+      "flags": [
+        "--json",
+        "--repo",
+        "--snapshot",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "lint",
+      "flags": [
+        "--json",
+        "--repo",
+        "--strict",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "next",
+      "flags": [
+        "--include-backlog",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "conditional",
+      "writesWhen": {
+        "argvCannotSay": "after printing its answer it may post the chore offer"
+      }
+    },
+    {
+      "name": "op-lock acquire",
+      "flags": [
+        "--json",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "op-lock release",
+      "flags": [
+        "--json",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "option-id",
+      "flags": [
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "overlap",
+      "flags": [
+        "--active",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "packet",
+      "flags": [
+        "--json",
+        "--repo",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "predicate",
+      "flags": [
+        "--json",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "ready",
+      "flags": [
+        "--all",
+        "--json",
+        "--repo",
+        "--status",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "reap",
+      "flags": [
+        "--apply",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "conditional",
+      "writesWhen": {
+        "flagGiven": "--apply"
+      }
+    },
+    {
+      "name": "reconcile",
+      "flags": [
+        "--apply",
+        "--json",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "conditional",
+      "writesWhen": {
+        "flagGiven": "--apply"
+      }
+    },
+    {
+      "name": "release",
+      "flags": [
+        "--blocked-by",
+        "--repo",
+        "--status",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "review",
+      "flags": [
+        "--json",
+        "--pr",
+        "--repo",
+        "--snapshot",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "room open",
+      "flags": [
+        "--over",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "say",
+      "flags": [
+        "--message",
+        "--repo",
+        "--text",
+        "--to",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "scan",
+      "flags": [
+        "--fresh",
+        "--include-backlog",
+        "--json",
+        "--lease",
+        "--refresh",
+        "--repo",
+        "--worker",
+        "-n"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "self-host",
+      "flags": [
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "set-field",
+      "flags": [
+        "--add",
+        "--batch",
+        "--clear",
+        "--remove",
+        "--replace",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "set-paths",
+      "flags": [
+        "--json",
+        "--paths",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "take",
+      "flags": [
+        "--include-backlog",
+        "--json",
+        "--lease",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    },
+    {
+      "name": "verify-paths",
+      "flags": [
+        "--issue",
+        "--pr",
+        "--repo",
+        "--text",
+        "--warn",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "who",
+      "flags": [
+        "--all-repos",
+        "--json",
+        "--local",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "whoami",
+      "flags": [
+        "--mint",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "never"
+    },
+    {
+      "name": "widen",
+      "flags": [
+        "--json",
+        "--paths",
+        "--repo",
+        "--text",
+        "--worker"
+      ],
+      "writes": "always"
+    }
+  ]
+}
