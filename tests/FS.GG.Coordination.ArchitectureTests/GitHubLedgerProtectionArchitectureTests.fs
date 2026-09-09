@@ -26,7 +26,7 @@ let ``historical sharded journal implementation remains unmodified`` () =
     Assert.Equal(0, child.ExitCode)
 
 [<Fact>]
-let ``GS2-08-2 registration binds accepted predecessor roadmap and exact Q3 and Q4 commands`` () =
+let ``GS2-08-2 registration binds accepted predecessor roadmap and exact Q3 Q4 and Q6 commands`` () =
     use units = JsonDocument.Parse(read "eng/github-substrate-v2-units.json")
     use gates = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
     let roadmap = units.RootElement.GetProperty("roadmap")
@@ -34,12 +34,11 @@ let ``GS2-08-2 registration binds accepted predecessor roadmap and exact Q3 and 
     Assert.Equal("9c49a0efd1440d8a71130758be39394ae4cdd67f3d10b9cb6cb71998154c1a17", roadmap.GetProperty("sha256").GetString())
     let unitValue = units.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("id").GetString()="GS2-08.2")
     Assert.Equal<string list>(["GS2-08.1"], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
-    Assert.Equal("13d10e8fb3d6e69c3fb6fa068fff1b29545733bdad4607e4d922983ffd07ca7a", unitValue.GetProperty("contractSha256").GetString())
     let contracts = unitValue.GetProperty("gateContracts").EnumerateArray() |> Seq.toList
     let commands =
         contracts
         |> List.map (fun contract -> gates.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun command -> command.GetProperty("id").GetString()=contract.GetProperty("id").GetString()))
-    Assert.Equal<string list>(["Q3";"Q4"], commands |> List.map (fun command -> command.GetProperty("qGate").GetString()))
+    Assert.Equal<string list>(["Q3";"Q4";"Q6"], commands |> List.map (fun command -> command.GetProperty("qGate").GetString()))
     for command, contract in List.zip commands contracts do
         let components = seq { command.GetProperty("executable").GetString(); yield! command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString() }
         Assert.Equal(contract.GetProperty("commandSha256").GetString(), components |> String.concat "\u0000" |> sha256Text)

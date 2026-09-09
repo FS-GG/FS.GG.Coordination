@@ -23,7 +23,7 @@ let authority phase =
     { Schema = Q.schema; FleetId = Q.fleetId; Repository = Q.repository; RepositoryId = Q.repositoryId
       Ref = Q.epochRef; Tag = Q.tagPrefix + Q.phaseName phase + "/" + digest "a"; GenesisCommit = digest "1"
       TrustAnchorSha256 = digest "2"; ManifestSha256 = digest "3"; Phase = phase; Commit = digest "4"
-      Parent = digest "5"; Generation = 7L; Complete = true; Fresh = true; CacheUsedAsAuthority = false
+      Parent = Some(digest "5"); Generation = 7L; Complete = true; Fresh = true; CacheUsedAsAuthority = false
       UnknownFields = []; DuplicateFields = [] }
 let fence writer =
     { Writer = writer; ExpectedManifestSha256 = digest "3"; ExpectedEpochCommit = digest "4"; ExpectedEpochGeneration = 7L
@@ -47,7 +47,7 @@ let check = function
     | "manifest" -> Q.admit AuthorityObserved (authority OperatingV1) { fence NewOrdinaryV1 with ExpectedManifestSha256 = digest "9" } |> refused
     | "fleet-layout" -> Q.validateAuthority AuthorityObserved { authority OperatingV1 with FleetId = "caller" } |> List.contains "wrong-fleet"
     | "genesis-trust" -> Q.validateAuthority AuthorityObserved { authority OperatingV1 with TrustAnchorSha256 = "" } |> List.contains "wrong-trust-anchor"
-    | "parent-tag" -> Q.validateAuthority AuthorityObserved { authority OperatingV1 with Parent = ""; Tag = "" } |> List.contains "missing-parent-or-genesis"
+    | "parent-tag" -> Q.validateAuthority AuthorityObserved { authority OperatingV1 with Parent = None; Tag = "" } |> List.contains "missing-parent-or-genesis"
     | "fresh-read" -> Q.admit AuthorityObserved { authority OperatingV1 with Fresh = false } (fence NewOrdinaryV1) |> refused
     | "cache" -> Q.admit AuthorityObserved { authority OperatingV1 with CacheUsedAsAuthority = true } (fence NewOrdinaryV1) |> refused
     | "strict-fields" -> Q.validateAuthority AuthorityObserved { authority OperatingV1 with UnknownFields = ["x"]; DuplicateFields = ["phase"] } |> List.contains "unknown-fields"

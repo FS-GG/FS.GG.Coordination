@@ -91,7 +91,7 @@ let ``semantic input changes manifest identity`` () =
     let changedSource = { input.Sources.Head with Sha256 = digest '9' }
     let before = generated input
     let after = generated { input with Sources = changedSource :: input.Sources.Tail }
-    Assert.NotEqual<byte>(before, after)
+    Assert.NotEqual<byte array>(before, after)
     use beforeDocument = JsonDocument.Parse before
     use afterDocument = JsonDocument.Parse after
     Assert.NotEqual<string>(

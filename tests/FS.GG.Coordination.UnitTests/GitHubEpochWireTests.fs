@@ -10,7 +10,7 @@ let authority phase =
     { Schema = Q.schema; FleetId = Q.fleetId; Repository = Q.repository; RepositoryId = Q.repositoryId
       Ref = Q.epochRef; Tag = Q.tagPrefix + Q.phaseName phase + "/" + digest "a"
       GenesisCommit = digest "1"; TrustAnchorSha256 = digest "2"; ManifestSha256 = digest "3"
-      Phase = phase; Commit = digest "4"; Parent = digest "5"; Generation = 7L; Complete = true; Fresh = true
+      Phase = phase; Commit = digest "4"; Parent = Some(digest "5"); Generation = 7L; Complete = true; Fresh = true
       CacheUsedAsAuthority = false; UnknownFields = []; DuplicateFields = [] }
 let fence writer eligible =
     { Writer = writer; ExpectedManifestSha256 = digest "3"; ExpectedEpochCommit = digest "4"
@@ -58,7 +58,7 @@ let ``fresh exact content addressed authority is mandatory`` () =
     let current = authority OperatingV1
     Assert.True(Q.admit AuthorityObserved { current with Fresh = false } (fence NewOrdinaryV1 true) |> refused)
     Assert.True(Q.admit AuthorityObserved { current with CacheUsedAsAuthority = true } (fence NewOrdinaryV1 true) |> refused)
-    Assert.True(Q.admit AuthorityObserved { current with Parent = "" } (fence NewOrdinaryV1 true) |> refused)
+    Assert.True(Q.admit AuthorityObserved { current with Parent = None } (fence NewOrdinaryV1 true) |> refused)
     Assert.True(Q.admit AuthorityObserved { current with Tag = "" } (fence NewOrdinaryV1 true) |> refused)
     Assert.True(Q.admit AuthorityObserved { current with UnknownFields = [ "future" ] } (fence NewOrdinaryV1 true) |> refused)
     Assert.True(Q.admit AuthorityObserved { current with DuplicateFields = [ "phase" ] } (fence NewOrdinaryV1 true) |> refused)

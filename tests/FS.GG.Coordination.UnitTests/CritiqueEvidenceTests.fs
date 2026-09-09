@@ -131,4 +131,4 @@ let ``candidate evidence and finding content change bundle identity`` () =
         [ { input with Candidate = { input.Candidate with TreeSha256 = digest '9' } }
           { input with Evidence = { input.Evidence.Head with Sha256 = digest '9' } :: input.Evidence.Tail }
           { input with Findings = { input.Findings.Head with ContentSha256 = digest '9' } :: input.Findings.Tail } ]
-    for variant in variants do Assert.NotEqual<byte>(baseline, generated variant)
+    for variant in variants do Assert.NotEqual<byte array>(baseline, generated variant)

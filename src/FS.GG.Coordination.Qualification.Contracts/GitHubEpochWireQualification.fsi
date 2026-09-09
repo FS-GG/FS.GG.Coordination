@@ -12,7 +12,7 @@ type Settlement = SettlementKnownApplied | SettlementProvenAbsentMayRetry | Sett
 type EpochAuthority = {
     Schema: string; FleetId: string; Repository: string; RepositoryId: int64; Ref: string
     Tag: string; GenesisCommit: string; TrustAnchorSha256: string; ManifestSha256: string
-    Phase: EpochPhase; Commit: string; Parent: string; Generation: int64
+    Phase: EpochPhase; Commit: string; Parent: string option; Generation: int64
     Complete: bool; Fresh: bool; CacheUsedAsAuthority: bool; UnknownFields: string list; DuplicateFields: string list }
 
 type EffectFence = {
