@@ -29,8 +29,8 @@ let ``provider corpus is explicitly sanitized and non operational`` () =
 [<Fact>]
 let ``capture transport is fixed read only and retained evidence is sanitized`` () =
     let script = read "eng/capture-github-ledger-protection.py"
-    for required in ["AUTHORITY = \"FS-GG/FS.GG.Coordination.Authority\"";"GRAPHQL =";"subprocess.run([\"gh\", \"api\", *args]";"rawSha256";"normalizedSha256";"continuity = \"uninitialized\"";"continuity = \"matched\""] do Assert.Contains(required,script)
-    for forbidden in ["shell=True";"--method";"GITHUB_TOKEN";"Authorization";"cookie";"private_key";"client_secret"] do Assert.DoesNotContain(forbidden,script,StringComparison.OrdinalIgnoreCase)
+    for required in ["AUTHORITY = \"FS-GG/FS.GG.Coordination.Authority\"";"GRAPHQL =";"subprocess.run([\"gh\", \"api\", *args]";"GET /installation/repositories?per_page=100";"pass_fds=(key_fd,)";"stderr=subprocess.DEVNULL";"rawSha256";"normalizedSha256";"continuity = \"uninitialized\"";"continuity = \"matched\""] do Assert.Contains(required,script)
+    for forbidden in ["shell=True";"--method";"GITHUB_TOKEN";"cookie";"client_secret";"print(token";"print(jwt";"write_bytes(token";"write_bytes(jwt"] do Assert.DoesNotContain(forbidden,script,StringComparison.OrdinalIgnoreCase)
     for name,pass,continuity in [("live-capture-pass1.json",1,"uninitialized");("live-capture-pass2.json",2,"matched")] do
         use document = JsonDocument.Parse(read ("evidence/github-substrate-v2/gs2-08-2/"+name))
         let value = document.RootElement
@@ -41,6 +41,26 @@ let ``capture transport is fixed read only and retained evidence is sanitized`` 
         Assert.Empty(value.GetProperty("gaps").EnumerateArray())
         Assert.NotEqual(value.GetProperty("rawSetSha256").GetString(), value.GetProperty("normalizedSetSha256").GetString())
         Assert.Equal(11, value.GetProperty("resources").GetArrayLength())
+
+[<Fact>]
+let ``App identities are distinct and capture tests prove the private transport boundary`` () =
+    use desired = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-08-2/desired-policy.json")
+    let desiredRoot = desired.RootElement
+    Assert.Equal(4882140L,desiredRoot.GetProperty("ordinaryWriter").GetProperty("appId").GetInt64())
+    Assert.Equal(160261608L,desiredRoot.GetProperty("ordinaryWriter").GetProperty("installationId").GetInt64())
+    Assert.Equal(4882399L,desiredRoot.GetProperty("cutoverWriter").GetProperty("appId").GetInt64())
+    Assert.Equal(160261436L,desiredRoot.GetProperty("cutoverWriter").GetProperty("installationId").GetInt64())
+    let info = ProcessStartInfo("python3", "eng/test-capture-github-ledger-protection.py")
+    info.WorkingDirectory <- root
+    info.UseShellExecute <- false
+    info.RedirectStandardOutput <- true
+    info.RedirectStandardError <- true
+    use child = Process.Start info
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.True(child.ExitCode=0, error)
+    Assert.Contains("CAPTURE_APP_AUTH_TESTS_OK",output)
 
 [<Fact>]
 let ``independent provider validator passes from a fresh process`` () =
