@@ -177,6 +177,9 @@ type PostgreSqlStoreTests() =
     member _.``native delivery readback and appended effect kinds survive recovery``() = task {
         let! dataSource, identity = Fixture.reset()
         use dataSource = dataSource
+        let! _ = Fixture.sql "orchestration_o0" "ALTER TABLE fsgg_orchestration.event DROP CONSTRAINT ck_effect_shape; ALTER TABLE fsgg_orchestration.event ADD CONSTRAINT ck_effect_shape CHECK (effect_kind BETWEEN 0 AND 4)"
+        let! migratedIdentity = PostgreSqlSchema.migrate dataSource cancellationToken
+        Assert.Equal(identity,migratedIdentity)
         let store = PostgreSqlStore(Fixture.options dataSource identity 0L) :> IJournalStore
         let persistenceId = "work-item-v1-hosted-delivery"
         let operationId = Id.operation(Guid.NewGuid())
