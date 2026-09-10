@@ -17,7 +17,7 @@ let budget={TokenLimit=100L;RuntimeSecondsLimit=200L;CostMicrosLimit=300L;Deadli
 let apply decision state = List.fold evolve state decision.Events
 let decide now state commandId _ command =
     FS.GG.Coordination.Core.Orchestration.decide now state
-        {CommandId=commandId;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation
+        {CommandId=commandId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation
          PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=command}
 let admit () = decide now initial (command "20000000-0000-0000-0000-000000000001") (digest "1") (Admit(snapshot ["board-a"],budget)) |> fun d -> apply d initial
 
@@ -32,7 +32,7 @@ module Cases =
     [<Fact>]
     let ``duplicate command is idempotent and changed content conflicts`` () =
         let cid=command "20000000-0000-0000-0000-000000000002"
-        let envelope={CommandId=cid;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=Admit(snapshot [],budget)}
+        let envelope={CommandId=cid;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=Admit(snapshot [],budget)}
         let first=FS.GG.Coordination.Core.Orchestration.decide now initial envelope
         let state=apply first initial
         let duplicate=FS.GG.Coordination.Core.Orchestration.decide now state envelope
@@ -44,12 +44,25 @@ module Cases =
     let ``command envelope computes stable lowercase digest inside boundary`` () =
         let cid=command "20000000-0000-0000-0000-000000000016"
         let body=Admit(snapshot [],budget)
-        let envelope={CommandId=cid;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=body}
+        let envelope={CommandId=cid;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=body}
         let accepted=FS.GG.Coordination.Core.Orchestration.decide now initial envelope
         let state=apply accepted initial
         let stored=(Map.find cid state.CommandReceipts).BodySha256
         Assert.Equal(stored,stored.ToLowerInvariant())
         Assert.Equal(Duplicate,(FS.GG.Coordination.Core.Orchestration.decide now state envelope).Receipt.Disposition)
+
+    [<Fact>]
+    let ``stale generation revision and expired envelopes refuse before state change`` () =
+        let state=admit()
+        let baseEnvelope={CommandId=command "20000000-0000-0000-0000-000000000017";ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=Pause "maintenance"}
+        let staleRevision={baseEnvelope with ExpectedRevision=Id.revision 0L}
+        let staleGeneration={baseEnvelope with CommandId=command "20000000-0000-0000-0000-000000000018";ExpectedGeneration=Id.generation 0L}
+        let expired={baseEnvelope with CommandId=command "20000000-0000-0000-0000-000000000019";ExpiresAt=now.AddTicks(-1L)}
+        Assert.Equal("stale-workflow-revision",(FS.GG.Coordination.Core.Orchestration.decide now state staleRevision).Receipt.Detail)
+        Assert.Equal("stale-generation",(FS.GG.Coordination.Core.Orchestration.decide now state staleGeneration).Receipt.Detail)
+        Assert.Equal("invalid-or-expired-command-envelope",(FS.GG.Coordination.Core.Orchestration.decide now state expired).Receipt.Detail)
+        let unsupported={baseEnvelope with CommandId=command "20000000-0000-0000-0000-000000000020";ProtocolVersion=Id.protocolVersion 2 0}
+        Assert.Equal("unsupported-command-version",(FS.GG.Coordination.Core.Orchestration.decide now state unsupported).Receipt.Detail)
 
     [<Fact>]
     let ``reservation or claim alone cannot dispatch and current pair can`` () =

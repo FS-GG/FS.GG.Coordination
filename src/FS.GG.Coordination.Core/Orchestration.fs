@@ -17,6 +17,7 @@ module Orchestration =
     type RunnerId = private RunnerId of Guid
     type Generation = private Generation of int64
     type WorkflowRevision = private WorkflowRevision of int64
+    type ProtocolVersion = private ProtocolVersion of major:int * minor:int
 
     [<RequireQualifiedAccess>]
     module Id =
@@ -30,8 +31,10 @@ module Orchestration =
         let runner value = RunnerId value
         let generation value = if value < 0L then invalidArg (nameof value) "negative generation" else Generation value
         let revision value = if value < 0L then invalidArg (nameof value) "negative revision" else WorkflowRevision value
+        let protocolVersion major minor = if major<0 || minor<0 then invalidArg "version" "negative protocol version" else ProtocolVersion(major,minor)
         let generationValue (Generation value) = value
         let revisionValue (WorkflowRevision value) = value
+        let protocolVersionValue (ProtocolVersion(major,minor)) = major,minor
         let projectValue (ProjectId value) = value
         let operationValue (OperationId value) = value
         let commandValue (CommandId value) = value
@@ -105,7 +108,7 @@ module Orchestration =
     type ReceiptDisposition = Accepted | Duplicate | Conflict | Rejected
     type CommandReceipt =
         { CommandId: CommandId; BodySha256: string; Disposition: ReceiptDisposition
-          Revision: WorkflowRevision; Detail: string }
+          Revision: WorkflowRevision; ProtocolVersion: ProtocolVersion; Detail: string }
     type State =
         { WorkItemId: WorkItemId option; Snapshot: PlanningSnapshot option; Revision: WorkflowRevision
           Generation: Generation; Control: ControlState; Budget: Budget option; Used: BudgetUse
@@ -124,7 +127,8 @@ module Orchestration =
         | RecordEffectIntent of EffectIntent | MarkEffectDispatching of OperationId
         | ObserveEffect of OperationId * EffectOutcome | AuthorizeEffectRetry of OperationId
     type CommandEnvelope =
-        { CommandId: CommandId; ExpectedRevision: WorkflowRevision; ExpectedGeneration: Generation
+        { CommandId: CommandId; ProtocolVersion: ProtocolVersion
+          ExpectedRevision: WorkflowRevision; ExpectedGeneration: Generation
           PrincipalId: string; SessionId: SessionId option; IssuedAt: DateTimeOffset
           ExpiresAt: DateTimeOffset; Command: Command }
     type Event =
@@ -231,7 +235,7 @@ module Orchestration =
 
     let replay events = List.fold evolve initial events
     let private mkReceipt state id digest disposition detail =
-        {CommandId=id;BodySha256=digest;Disposition=disposition;Revision=state.Revision;Detail=detail}
+        {CommandId=id;BodySha256=digest;Disposition=disposition;Revision=state.Revision;ProtocolVersion=ProtocolVersion(1,0);Detail=detail}
     let private decideNew now state id digest command =
         let accept events effects detail =
             let projected=List.fold evolve state events
@@ -335,8 +339,9 @@ module Orchestration =
         frame parts |> Encoding.UTF8.GetBytes
     let canonicalCommandSha256 command = canonicalCommandBytes command |> SHA256.HashData |> Convert.ToHexString |> fun x -> x.ToLowerInvariant()
     let canonicalEnvelopeBytes envelope =
+        let major,minor=Id.protocolVersionValue envelope.ProtocolVersion
         frame
-            [ Id.commandValue envelope.CommandId |> string; revisionText envelope.ExpectedRevision
+            [ Id.commandValue envelope.CommandId |> string; string major; string minor; revisionText envelope.ExpectedRevision
               generationText envelope.ExpectedGeneration; envelope.PrincipalId
               envelope.SessionId |> Option.map(Id.sessionValue >> string) |> Option.defaultValue ""
               timeText envelope.IssuedAt; timeText envelope.ExpiresAt
@@ -350,6 +355,8 @@ module Orchestration =
         match Map.tryFind envelope.CommandId state.CommandReceipts with
         | Some prior when prior.BodySha256=digest -> {Events=[];Effects=[];Receipt={prior with Disposition=Duplicate;Detail="duplicate-command"}}
         | Some prior -> {Events=[];Effects=[];Receipt={prior with Disposition=Conflict;Detail="command-identity-conflict"}}
+        | None when envelope.ProtocolVersion<>ProtocolVersion(1,0) ->
+            {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "unsupported-command-version"}
         | None when String.IsNullOrWhiteSpace envelope.PrincipalId || envelope.ExpiresAt<now || envelope.IssuedAt>now ->
             {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "invalid-or-expired-command-envelope"}
         | None when envelope.ExpectedRevision<>state.Revision ->
