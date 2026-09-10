@@ -26,10 +26,9 @@ activate a permit, or qualify a Main deployment. Those require a sealed provider
 adapter, released bytes, explicit permit and ownership evidence, and the Main
 storage and service qualification described by the pilot boundary.
 
-The current host and pilot do not yet execute this route. `Pilot.validatePermit`
-admits the earlier `routine-implementation` class, while `HOSTED-WriterV1` is
-bound to `routine-documentation-delivery`; the host recovers pilot state rather
-than a WorkItem command aggregate and has no provider-effect adapter for these
-seven operations. Host startup also does not yet persist the modeled restart
-transition that pauses work and invalidates readback currency. A later executor
-integration must close all three gaps before it can qualify or activate a writer.
+The pilot permit is aligned to the route's `routine-documentation-delivery`
+class. The current host still recovers pilot state rather than a WorkItem command
+aggregate and has no provider-effect adapter for these seven operations. Host
+startup also does not yet persist the modeled restart transition that pauses work
+and invalidates readback currency. A later executor integration must close those
+two gaps before it can qualify or activate a writer.
