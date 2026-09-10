@@ -44,6 +44,18 @@
       "localReferences": [
         "./.github/actions/coordination-setup"
       ]
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/orchestration-host-candidate.yml",
+      "sha256": "81d23b9d6640bb1f247b6f6096a68692ca4c126e2a20987d2af5ac635279f54d",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+      ],
+      "localReferences": []
     }
   ]
 }
