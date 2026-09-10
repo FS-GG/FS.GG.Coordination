@@ -60,6 +60,7 @@
     <Compile Include="GitHubSandboxClosureArchitectureTests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
     <Compile Include="OrchestrationObserverArchitectureTests.fs" />
+    <Compile Include="OrchestrationHostArchitectureTests.fs" />
     <Compile Include="RoadmapWorkArchitectureTests.fs" />
     <Compile Include="EvidenceStorageTests.fs" />
     <Compile Include="QualificationManifestArchitectureTests.fs" />
