@@ -31,6 +31,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FS.GG.Coordination.Orchestr
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FS.GG.Coordination.Orchestration.Observer.Tests", "tests\FS.GG.Coordination.Orchestration.Observer.Tests\FS.GG.Coordination.Orchestration.Observer.Tests.fsproj", "{09F0AE25-FB46-447A-AFCD-113A0D6BF944}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests", "tests\FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests\FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests.fsproj", "{6851CD4D-E46D-426F-BE42-619C7F78B481}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -185,6 +187,18 @@ Global
 		{09F0AE25-FB46-447A-AFCD-113A0D6BF944}.Release|x64.Build.0 = Release|Any CPU
 		{09F0AE25-FB46-447A-AFCD-113A0D6BF944}.Release|x86.ActiveCfg = Release|Any CPU
 		{09F0AE25-FB46-447A-AFCD-113A0D6BF944}.Release|x86.Build.0 = Release|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Debug|x64.Build.0 = Debug|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Debug|x86.Build.0 = Debug|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Release|x64.ActiveCfg = Release|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Release|x64.Build.0 = Release|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Release|x86.ActiveCfg = Release|Any CPU
+		{6851CD4D-E46D-426F-BE42-619C7F78B481}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -202,5 +216,6 @@ Global
 		{984EBCE2-016D-4DE3-9B8E-DAA6B35E7555} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{3A9E59EA-32C8-4F3D-A7CC-24AE77328AB4} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{09F0AE25-FB46-447A-AFCD-113A0D6BF944} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{6851CD4D-E46D-426F-BE42-619C7F78B481} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

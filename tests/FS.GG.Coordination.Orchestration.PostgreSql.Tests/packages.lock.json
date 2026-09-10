@@ -296,12 +296,30 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.coordination.github": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.Protocol": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.coordination.orchestration.observer": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.GitHub": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )",
+          "FSharp.SystemTextJson": "[1.4.36, )"
+        }
+      },
       "fs.gg.coordination.orchestration.postgresql": {
         "type": "Project",
         "dependencies": {
           "Akka": "[1.5.71, )",
           "Akka.Persistence.Sql": "[1.5.70, )",
           "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Observer": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )",
           "FSharp.SystemTextJson": "[1.4.36, )",
           "Npgsql": "[10.0.3, )"
