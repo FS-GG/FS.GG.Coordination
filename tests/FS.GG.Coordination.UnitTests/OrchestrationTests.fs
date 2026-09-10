@@ -42,6 +42,9 @@ module Cases =
         let start=StartAttempt(Id.attempt(guid "50000000-0000-0000-0000-000000000001"),Id.session(guid "60000000-0000-0000-0000-000000000001"),runner)
         Assert.Equal(Rejected,(decide now reserved (command "20000000-0000-0000-0000-000000000004") (digest "4") start).Receipt.Disposition)
         let claim={ClaimId="claim";Generation=reserved.Generation;WorkflowRevision=Id.revision 8L;ObservedAt=now}
+        let staleClaim={claim with WorkflowRevision=Id.revision 7L}
+        let stale=decide now reserved (command "20000000-0000-0000-0000-000000000014") (digest "e") (ObserveClaim staleClaim) |> fun d -> apply d reserved
+        Assert.Equal(Rejected,(decide now stale (command "20000000-0000-0000-0000-000000000015") (digest "f") start).Receipt.Disposition)
         let claimed=decide now reserved (command "20000000-0000-0000-0000-000000000005") (digest "5") (ObserveClaim claim) |> fun d -> apply d reserved
         Assert.Equal(Accepted,(decide now claimed (command "20000000-0000-0000-0000-000000000006") (digest "6") start).Receipt.Disposition)
 
@@ -62,6 +65,8 @@ module Cases =
         Assert.Equal(Rejected,(decide now unknown (command "25000000-0000-0000-0000-000000000006") (digest "6") replacement).Receipt.Disposition)
         let terminal=decide now unknown (command "25000000-0000-0000-0000-000000000007") (digest "7") (ObserveAttempt(firstId,ReconciledAbsent "runner-and-provider-observed")) |> fun d -> apply d unknown
         Assert.Equal(Accepted,(decide now terminal (command "25000000-0000-0000-0000-000000000008") (digest "8") replacement).Receipt.Disposition)
+        let reusedId=StartAttempt(firstId,Id.session(guid "60000000-0000-0000-0000-000000000004"),runner)
+        Assert.Equal(Rejected,(decide now terminal (command "25000000-0000-0000-0000-000000000009") (digest "9") reusedId).Receipt.Disposition)
 
     [<Fact>]
     let ``partial multi-touch claim release retains recovery capacity after compensation failure`` () =
@@ -80,7 +85,7 @@ module Cases =
     let ``unknown external effect requires observation before retry`` () =
         let state=admit()
         let oid=Id.operation(guid "70000000-0000-0000-0000-000000000001")
-        let intent={OperationId=oid;Kind=InspectExternalOperation;Generation=state.Generation;WorkflowRevision=Id.revision 8L;PayloadSha256=digest "7"}
+        let intent={OperationId=oid;Kind=InspectExternalOperation;Generation=state.Generation;WorkflowRevision=Id.revision 8L;ResourceId="external-operation";PayloadSha256=digest "7"}
         let recorded=decide now state (command "20000000-0000-0000-0000-000000000007") (digest "7") (RecordEffectIntent intent) |> fun d -> apply d state
         let dispatch=decide now recorded (command "20000000-0000-0000-0000-000000000008") (digest "8") (MarkEffectDispatching oid)
         Assert.Single dispatch.Effects |> ignore
@@ -95,7 +100,7 @@ module Cases =
     let ``dispatch effect cannot bypass work authorization guards`` () =
         let state=admit()
         let oid=Id.operation(guid "70000000-0000-0000-0000-000000000002")
-        let intent={OperationId=oid;Kind=DispatchRunner;Generation=state.Generation;WorkflowRevision=Id.revision 8L;PayloadSha256=digest "e"}
+        let intent={OperationId=oid;Kind=DispatchRunner;Generation=state.Generation;WorkflowRevision=Id.revision 8L;ResourceId="attempt";PayloadSha256=digest "e"}
         let recorded=decide now state (command "23000000-0000-0000-0000-000000000001") (digest "e") (RecordEffectIntent intent) |> fun d -> apply d state
         Assert.Equal("effect-not-authorized",(decide now recorded (command "23000000-0000-0000-0000-000000000002") (digest "f") (MarkEffectDispatching oid)).Receipt.Detail)
 
@@ -106,6 +111,15 @@ module Cases =
         let claimed=canonicalCommandSha256 original
         let invalid=FS.GG.Coordination.Core.Orchestration.decide now (admit()) cid claimed (Pause "changed")
         Assert.Equal("invalid-command-digest",invalid.Receipt.Detail)
+        let accepted=decide now (admit()) cid (digest "a") original
+        let persisted=apply accepted (admit())
+        let forgedDuplicate=FS.GG.Coordination.Core.Orchestration.decide now persisted cid claimed (Pause "changed")
+        Assert.Equal(Rejected,forgedDuplicate.Receipt.Disposition)
+        Assert.Equal("invalid-command-digest",forgedDuplicate.Receipt.Detail)
+
+    [<Fact>]
+    let ``work item node framing rejects delimiter injection`` () =
+        Assert.Throws<ArgumentException>(fun () -> WorkItemIdentity.create "repo\nissue-node:forged" 42L "issue" 17L |> ignore) |> ignore
 
     [<Fact>]
     let ``budget arithmetic refuses signed overflow`` () =

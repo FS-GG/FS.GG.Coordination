@@ -41,8 +41,8 @@ module Orchestration =
         let candidateValue (CandidateId value) = value
         let runnerValue (RunnerId value) = value
 
-    type RepositoryIdentity = { NodeId: string; DatabaseId: int64 }
-    type WorkItemId = { Repository: RepositoryIdentity; IssueNodeId: string; IssueNumber: int64 }
+    type RepositoryIdentity = private { NodeId: string; DatabaseId: int64 }
+    type WorkItemId = private { Repository: RepositoryIdentity; IssueNodeId: string; IssueNumber: int64 }
 
     [<RequireQualifiedAccess>]
     module WorkItemIdentity =
@@ -87,7 +87,7 @@ module Orchestration =
     type EffectKind = AcquireExternalClaim | ReleaseExternalClaim | DispatchRunner | CancelRunner | InspectExternalOperation
     type EffectIntent =
         { OperationId: OperationId; Kind: EffectKind; Generation: Generation
-          WorkflowRevision: WorkflowRevision; PayloadSha256: string }
+          WorkflowRevision: WorkflowRevision; ResourceId: string; PayloadSha256: string }
     type EffectOutcome = Applied of providerRevision: string | ProvenAbsent | Refused of string | Unknown of string
     type ControlState = Running | Paused of string | CancelPending of string | Cancelled of string | Revoked of string
     type Reservation =
@@ -155,7 +155,12 @@ module Orchestration =
         && used.RuntimeSeconds <= budget.RuntimeSecondsLimit && used.CostMicros <= budget.CostMicrosLimit
     let private hasCurrentClaims state reservation =
         reservation.RequiredClaimIds
-        |> Set.forall(fun claimId -> state.ExternalClaims |> Map.tryFind claimId |> Option.exists(fun claim -> sameGeneration claim.Generation state.Generation))
+        |> Set.forall(fun claimId ->
+            state.ExternalClaims
+            |> Map.tryFind claimId
+            |> Option.exists(fun claim ->
+                sameGeneration claim.Generation state.Generation
+                && state.Snapshot |> Option.exists(fun snapshot -> claim.WorkflowRevision=snapshot.WorkflowRevision)))
     let private effectAuthorized now state intent =
         let currentRevision = state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=intent.WorkflowRevision)
         let currentGeneration = sameGeneration intent.Generation state.Generation
@@ -170,8 +175,8 @@ module Orchestration =
             state.Control=Running && currentGeneration && currentRevision && budgetAvailable
             && Set.isEmpty state.RecoveryObligations
             && (state.Reservation |> Option.exists(fun reservation -> reservation.ExpiresAt>now && sameGeneration reservation.Generation state.Generation))
-        | ReleaseExternalClaim -> currentRevision && (not(Set.isEmpty state.RecoveryObligations) || not(Map.isEmpty state.ExternalClaims))
-        | CancelRunner -> currentRevision && not(Map.isEmpty state.Attempts) && (match state.Control with CancelPending _|Cancelled _|Revoked _ -> true | _ -> false)
+        | ReleaseExternalClaim -> currentRevision && (Set.contains intent.ResourceId state.RecoveryObligations || Map.containsKey intent.ResourceId state.ExternalClaims)
+        | CancelRunner -> currentRevision && (state.Attempts |> Map.exists(fun _ attempt -> Id.runnerValue attempt.Runner.RunnerId |> string = intent.ResourceId && (match attempt.Status with Active|OutcomeUnknown _ -> true | _ -> false))) && (match state.Control with CancelPending _|Cancelled _|Revoked _ -> true | _ -> false)
         | InspectExternalOperation -> currentRevision
 
     let evolve state event =
@@ -248,7 +253,7 @@ module Orchestration =
         | RecordCompensationFailure _ -> reject "no-compensation-obligation"
         | StartAttempt(a,s,r) ->
             match state.Control,state.Budget,state.Reservation with
-            | Running,Some b,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && within now b state.Used && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && (reservation.RequiredClaimIds |> Set.forall(fun claimId -> state.ExternalClaims |> Map.tryFind claimId |> Option.exists(fun claim -> sameGeneration claim.Generation state.Generation))) ->
+            | Running,Some b,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && within now b state.Used && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && not(Map.containsKey a state.Attempts) && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation ->
                 accept [AttemptStarted{AttemptId=a;SessionId=s;Runner=r;Generation=state.Generation;StartedAt=now;Status=Active}] [] "attempt-started"
             | _ -> reject "dispatch-requires-current-reservation-claim-runner-and-budget"
         | ObserveAttempt(attemptId,status) ->
@@ -304,7 +309,7 @@ module Orchestration =
             | Pause reason -> ["pause";reason] | Resume -> ["resume"] | RequestCancel reason -> ["request-cancel";reason]
             | ConfirmCancelled reason -> ["confirm-cancel";reason] | Revoke reason -> ["revoke";reason]
             | RecordCandidate(c,proof) -> "candidate"::candidateParts c @ [Id.candidateValue proof.CandidateId |> string;proof.ContentSha256;proof.ManifestSha256;invariant proof.SizeBytes;sprintf "%A" proof.Location;proof.StoreId;string proof.StoreSchemaVersion;proof.StorageReceiptSha256;timeText proof.VerifiedAt]
-            | RecordEffectIntent i -> ["effect";Id.operationValue i.OperationId |> string;string i.Kind;generationText i.Generation;revisionText i.WorkflowRevision;i.PayloadSha256]
+            | RecordEffectIntent i -> ["effect";Id.operationValue i.OperationId |> string;string i.Kind;generationText i.Generation;revisionText i.WorkflowRevision;i.ResourceId;i.PayloadSha256]
             | MarkEffectDispatching id -> ["dispatch-effect";Id.operationValue id |> string]
             | ObserveEffect(id,outcome) -> ["observe-effect";Id.operationValue id |> string;sprintf "%A" outcome]
             | AuthorizeEffectRetry id -> ["authorize-effect-retry";Id.operationValue id |> string]
@@ -312,11 +317,14 @@ module Orchestration =
     let canonicalCommandSha256 command = canonicalCommandBytes command |> SHA256.HashData |> Convert.ToHexString |> fun x -> x.ToLowerInvariant()
 
     let decide now state commandId bodySha256 command =
-        match Map.tryFind commandId state.CommandReceipts with
-        | Some prior when prior.BodySha256=bodySha256 -> {Events=[];Effects=[];Receipt={prior with Disposition=Duplicate;Detail="duplicate-command"}}
-        | Some prior -> {Events=[];Effects=[];Receipt={prior with Disposition=Conflict;Detail="command-identity-conflict"}}
-        | None when not(validSha bodySha256) || not(bodySha256.Equals(canonicalCommandSha256 command,StringComparison.OrdinalIgnoreCase)) -> {Events=[];Effects=[];Receipt=mkReceipt state commandId bodySha256 Rejected "invalid-command-digest"}
-        | None -> decideNew now state commandId bodySha256 command
+        let canonicalDigest=canonicalCommandSha256 command
+        if not(validSha bodySha256) || not(bodySha256.Equals(canonicalDigest,StringComparison.OrdinalIgnoreCase)) then
+            {Events=[];Effects=[];Receipt=mkReceipt state commandId bodySha256 Rejected "invalid-command-digest"}
+        else
+            match Map.tryFind commandId state.CommandReceipts with
+            | Some prior when prior.BodySha256=bodySha256 -> {Events=[];Effects=[];Receipt={prior with Disposition=Duplicate;Detail="duplicate-command"}}
+            | Some prior -> {Events=[];Effects=[];Receipt={prior with Disposition=Conflict;Detail="command-identity-conflict"}}
+            | None -> decideNew now state commandId bodySha256 command
 
     [<RequireQualifiedAccess>]
     module CandidateArtifact =
