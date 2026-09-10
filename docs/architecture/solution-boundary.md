@@ -8,11 +8,12 @@ The production dependency graph is:
 ```text
 Protocol
 ├──> Core
-│    ├──> GitHub
-│    │    ├──> Orchestration.Observer (read/plan/readback capabilities only)
-│    │    │    └──> CLI ──> Qualification.Contracts
-│    │    └──> App (inert class library)
-│    └──> Orchestration.PostgreSql (inert execution and observer persistence adapter)
+│    ├──> GitHub ──> Orchestration.Observer (read/plan/readback capabilities only)
+│    │                 ├──> CLI ──> Qualification.Contracts
+│    │                 └──> Orchestration.PostgreSql (typed observer persistence)
+│    ├──> Orchestration.Observer
+│    ├──> Orchestration.PostgreSql (O0 execution persistence)
+│    └──> App (inert class library)
 └──> Qualification.Contracts
 ```
 
