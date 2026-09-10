@@ -27,8 +27,9 @@ adapter, released bytes, explicit permit and ownership evidence, and the Main
 storage and service qualification described by the pilot boundary.
 
 The pilot permit is aligned to the route's `routine-documentation-delivery`
-class. The current host still recovers pilot state rather than a WorkItem command
-aggregate and has no provider-effect adapter for these seven operations. Host
-startup also does not yet persist the modeled restart transition that pauses work
-and invalidates readback currency. A later executor integration must close those
-two gaps before it can qualify or activate a writer.
+class. The host recovers the immutable WorkItem command aggregate and exposes a
+sealed provider adapter for only the seven route effects. Every process startup
+first appends a pause event to that WorkItem journal and invalidates readback
+currency. Resume and effect dispatch remain refused until a fresh provider
+readback, bound to the selected route and current generation and workflow
+revision, is durably accepted.

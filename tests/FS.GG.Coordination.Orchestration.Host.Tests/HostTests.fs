@@ -179,7 +179,9 @@ let ``serve configuration requires private files loopback and explicit identitie
             [| "--connection-file"; connection; "--token-file"; token; "--prefix"; "http://127.0.0.1:5109/"
                "--store-id"; "main-pilot"; "--backup-identity"; Guid.NewGuid().ToString()
                "--minimum-generation-fence"; "3"; "--permit-id"; Fixture.permitId.ToString()
-               "--pilot-principal"; "pilot-route" |]
+               "--pilot-principal"; "pilot-route"
+               "--repository-node-id"; "R_host"; "--repository-database-id"; "8"
+               "--issue-node-id"; "I_host"; "--issue-database-id"; "21" |]
         Assert.True(HostConfiguration.parseServe arguments |> Result.isOk)
         Assert.Equal(Error "duplicate-option", HostConfiguration.parseServe (Array.append arguments [| "--permit-id"; Fixture.permitId.ToString() |]))
         let publicArguments = arguments |> Array.copy
@@ -208,7 +210,8 @@ let ``http host bounds malformed and slow control requests without stopping stat
     let configuration =
         { ConnectionString = "unused"; Token = token; Prefix = prefix; StoreId = "fixture"
           BackupIdentity = Guid.NewGuid().ToString(); MinimumGenerationFence = 0L; PermitId = Fixture.permitId
-          PilotPrincipalId = "pilot-route"; RequestTimeout = TimeSpan.FromMilliseconds 150.; MaximumConcurrentRequests = 2 }
+          PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.permit.SubjectId
+          RequestTimeout = TimeSpan.FromMilliseconds 150.; MaximumConcurrentRequests = 2 }
     let store, _ = Fixture.durableStore { Fixture.pilotOwned with ReadbackCurrent = false }
     use shutdown = new CancellationTokenSource()
     let server = HostRuntime.serve (Fixture.FixedClock()) configuration store shutdown.Token

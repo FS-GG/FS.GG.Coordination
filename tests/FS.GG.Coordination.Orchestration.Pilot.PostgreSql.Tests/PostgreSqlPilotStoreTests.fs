@@ -340,7 +340,8 @@ type PostgreSqlPilotStoreTests() =
         let configuration =
             { ConnectionString = Fixture.connectionString; Token = String.replicate 32 "x"; Prefix = "http://127.0.0.1:5110/"
               StoreId = "pilot-pg18-lab"; BackupIdentity = identity; MinimumGenerationFence = 0L
-              PermitId = Fixture.permitId; PilotPrincipalId = "pilot-route"; RequestTimeout = TimeSpan.FromSeconds 1.
+              PermitId = Fixture.permitId; PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.subject
+              RequestTimeout = TimeSpan.FromSeconds 1.
               MaximumConcurrentRequests = 1 }
         let hostSource, hostStore = HostRuntime.createStore configuration
         use hostSource = hostSource

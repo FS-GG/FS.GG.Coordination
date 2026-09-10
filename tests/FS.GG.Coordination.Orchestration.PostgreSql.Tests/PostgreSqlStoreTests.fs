@@ -215,6 +215,34 @@ type PostgreSqlStoreTests() =
     }
 
     [<Fact>]
+    member _.``startup pause and hosted route readback survive PostgreSQL recovery``() = task {
+        let! dataSource, identity = Fixture.reset()
+        use dataSource = dataSource
+        let store = PostgreSqlStore(Fixture.options dataSource identity 0L) :> IJournalStore
+        let persistenceId = "work-item-v1-startup-readback"
+        let workItem = WorkItemIdentity.create "R_repo_node" 17L "I_issue_node" 42L
+        let readback =
+            { RouteId=Guid.NewGuid();WorkItemId=workItem;RepositoryNodeId="R_repo_node"
+              ProviderRevision="github-route-revision-1";EvidenceSha256=String.replicate 64 "f"
+              Generation=Id.generation 1L;WorkflowRevision=Id.revision 8L;ObservedAt=DateTimeOffset.UtcNow }
+        let pauseEvent = Fixture.coreEvent persistenceId 1L (StartupPausedEvent "process-startup")
+        let readbackEvent = Fixture.coreEvent persistenceId 2L (HostedRouteReadbackAccepted readback)
+        let body = Fixture.sha(Encoding.UTF8.GetBytes "startup-readback")
+        let! appended = store.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [pauseEvent;readbackEvent], cancellationToken)
+        Assert.Equal<AppendOutcome>(Appended 2L,appended)
+        let! recovered = store.Recover(persistenceId,cancellationToken)
+        match recovered with
+        | Error failures -> failwithf "startup readback did not recover: %A" failures
+        | Ok result ->
+            let events = result.Events |> List.map(fun value -> EventEnvelope.tryDecode value.Payload |> Result.defaultWith failwith)
+            Assert.Equal<Event list>([StartupPausedEvent "process-startup";HostedRouteReadbackAccepted readback],events)
+            let afterPause = evolve initial events[0]
+            Assert.False(afterPause.ReadbackCurrent)
+            Assert.Equal(Paused "process-startup",afterPause.Control)
+            Assert.True((evolve afterPause events[1]).ReadbackCurrent)
+    }
+
+    [<Fact>]
     member _.``migration and exact readiness succeed``() = task {
         let! dataSource, identity = Fixture.reset()
         use dataSource = dataSource

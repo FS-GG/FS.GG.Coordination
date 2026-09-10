@@ -169,3 +169,26 @@ module HostedWriterJournal =
             | Conflict -> return Error "command-identity-conflict"
             | WrongExpectedSequence sequence -> return Error($"wrong-expected-sequence:{sequence}")
             | InvalidAppend reason -> return Error reason }
+
+    let persistStartupPause (clock: TimeProvider) (store: IJournalStore) workItemId principalId cancellationToken = task {
+        let! recovered = recover store workItemId cancellationToken
+        match recovered with
+        | Error failures -> return Error(sprintf "%A" failures)
+        | Ok recovery when recovery.State.WorkItemId <> Some workItemId -> return Error "configured-work-item-not-admitted"
+        | Ok recovery ->
+            let now = clock.GetUtcNow()
+            let envelope =
+                { CommandId = Id.command(Guid.NewGuid())
+                  ProtocolVersion = Id.protocolVersion 1 0
+                  ExpectedRevision = recovery.State.Revision
+                  ExpectedGeneration = recovery.State.Generation
+                  PrincipalId = principalId
+                  SessionId = None
+                  IssuedAt = now
+                  ExpiresAt = now.AddMinutes 1.
+                  Command = RecordStartupPause "process-startup" }
+            let! appended = decideAndAppend clock store workItemId envelope cancellationToken
+            match appended with
+            | Ok(decision, sequence) when decision.Receipt.Disposition = Accepted -> return Ok sequence
+            | Ok(decision, _) -> return Error decision.Receipt.Detail
+            | Error reason -> return Error reason }
