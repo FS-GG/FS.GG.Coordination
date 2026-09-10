@@ -8,6 +8,7 @@ if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
 fi
 results="$RUNNER_TEMP/orchestration-postgresql"
 mkdir -p "$results"
+dotnet restore tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests.fsproj --locked-mode
 (
   cd tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests
   bash run-private-postgres.sh \
