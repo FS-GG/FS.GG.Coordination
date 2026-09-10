@@ -376,7 +376,7 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
         File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/canonical-quint.sh"))
 
     Assert.Contains("  canonical-quint:", workflow)
-    Assert.Contains("needs: [reuse-decision, deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, orchestration-postgresql, bootstrap-recovery]", workflow)
+    Assert.Contains("needs: [reuse-decision, deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, orchestration-postgresql, orchestration-observer-postgresql, bootstrap-recovery]", workflow)
     Assert.Contains("run: bash eng/bootstrap-gates/canonical-quint.sh", workflow)
     Assert.Contains("bash eng/qualify-canonical-quint.sh", gate)
     let validatorInvocation = "dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output"
