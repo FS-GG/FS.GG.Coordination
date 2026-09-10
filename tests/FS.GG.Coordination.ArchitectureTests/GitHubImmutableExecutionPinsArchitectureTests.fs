@@ -159,9 +159,9 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, $"immutable execution pin validator failed with exit code {child.ExitCode}: {error}{output}")
-    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=9bad801ec1d19c4704b8d6598b57118741375cf4bdaa0bf2987935cfa7d828e5", output)
+    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=67a77b99c29ba9056eb9b34f720f04bcb52244c70ef6e4de7f752bbabb619447", output)
     Assert.Equal("", error)
 
 [<Fact>]
 let ``immutable execution pins preserve canonical Quint source`` () =
-    Assert.Equal("3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb", sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md"))
+    Assert.Equal("226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b", sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md"))

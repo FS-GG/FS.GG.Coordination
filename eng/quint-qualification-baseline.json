@@ -1,31 +1,202 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb",
-  "configurationSha256": "3c2db2f3191437fe961d06504eda76a053fc74b6d7173777152f738e0a150339",
-  "assembledQuintSha256": "941d0d87c594949a81a453f5f2089bdbba3eba345dd55d5b4fc40604d155acd2",
+  "sourceSha256": "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b",
+  "configurationSha256": "5449a18f6eae53f8364ebfcfaa223e9ee21329fbd05a8bd94307ad20be73b909",
+  "assembledQuintSha256": "e3a955d18822c18ac9c05c4545a722954bcac2c856994ac9ece7bd4a3d56c2ca",
   "runnerClass": "linux-x64-local-calibration",
-  "measuredAt": "2026-08-30T03:30:00Z",
+  "measuredAt": "2026-09-10T07:55:00Z",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v1",
   "measurements": [
-    { "root": "authority", "dependencyDepth": 2, "stateCount": 2, "sampleCount": 100, "elapsedMs": 1575, "peakMiB": 251, "artifactBytes": 5084525 },
-    { "root": "lifecycle", "dependencyDepth": 3, "stateCount": 2, "sampleCount": 100, "elapsedMs": 1507, "peakMiB": 252, "artifactBytes": 5084771 },
-    { "root": "relations", "dependencyDepth": 2, "stateCount": 4, "sampleCount": 100, "elapsedMs": 1503, "peakMiB": 252, "artifactBytes": 5086230 },
-    { "root": "protocol-streams", "dependencyDepth": 2, "stateCount": 8, "sampleCount": 100, "elapsedMs": 1510, "peakMiB": 254, "artifactBytes": 5108480 },
-    { "root": "mutation-saga", "dependencyDepth": 3, "stateCount": 11, "sampleCount": 11, "elapsedMs": 2039, "peakMiB": 271, "artifactBytes": 5081517 },
-    { "root": "desired-state", "dependencyDepth": 4, "stateCount": 5, "sampleCount": 5, "elapsedMs": 1712, "peakMiB": 254, "artifactBytes": 5081284 },
-    { "root": "qualification", "dependencyDepth": 5, "stateCount": 9, "sampleCount": 9, "elapsedMs": 1946, "peakMiB": 267, "artifactBytes": 5081554 }
+    {
+      "root": "authority",
+      "dependencyDepth": 2,
+      "stateCount": 2,
+      "sampleCount": 100,
+      "elapsedMs": 2474,
+      "peakMiB": 312,
+      "artifactBytes": 8807637
+    },
+    {
+      "root": "lifecycle",
+      "dependencyDepth": 3,
+      "stateCount": 2,
+      "sampleCount": 100,
+      "elapsedMs": 2473,
+      "peakMiB": 313,
+      "artifactBytes": 8807888
+    },
+    {
+      "root": "relations",
+      "dependencyDepth": 2,
+      "stateCount": 4,
+      "sampleCount": 100,
+      "elapsedMs": 2455,
+      "peakMiB": 313,
+      "artifactBytes": 8809337
+    },
+    {
+      "root": "protocol-streams",
+      "dependencyDepth": 2,
+      "stateCount": 8,
+      "sampleCount": 100,
+      "elapsedMs": 2508,
+      "peakMiB": 313,
+      "artifactBytes": 8831591
+    },
+    {
+      "root": "mutation-saga",
+      "dependencyDepth": 3,
+      "stateCount": 11,
+      "sampleCount": 11,
+      "elapsedMs": 4097,
+      "peakMiB": 462,
+      "artifactBytes": 8804886
+    },
+    {
+      "root": "desired-state",
+      "dependencyDepth": 4,
+      "stateCount": 5,
+      "sampleCount": 5,
+      "elapsedMs": 2926,
+      "peakMiB": 462,
+      "artifactBytes": 8804364
+    },
+    {
+      "root": "qualification",
+      "dependencyDepth": 5,
+      "stateCount": 9,
+      "sampleCount": 9,
+      "elapsedMs": 3311,
+      "peakMiB": 462,
+      "artifactBytes": 8804634
+    }
   ],
   "formalMeasurements": [
-    { "id": "claim-election", "stateCount": 3, "transitionCount": 3, "sampleCount": 100, "elapsedMs": 28926, "peakMiB": 1094, "artifactBytes": 5674 },
-    { "id": "relation-mutation", "stateCount": 3, "transitionCount": 3, "sampleCount": 100, "elapsedMs": 28794, "peakMiB": 1103, "artifactBytes": 4919 },
-    { "id": "lifecycle", "stateCount": 3, "transitionCount": 3, "sampleCount": 100, "elapsedMs": 28705, "peakMiB": 1115, "artifactBytes": 4586 },
-    { "id": "operation-saga", "stateCount": 3, "transitionCount": 3, "sampleCount": 100, "elapsedMs": 28870, "peakMiB": 1100, "artifactBytes": 4559 },
-    { "id": "epoch", "stateCount": 4, "transitionCount": 4, "sampleCount": 100, "elapsedMs": 28882, "peakMiB": 1108, "artifactBytes": 9392 },
-    { "id": "rollback", "stateCount": 3, "transitionCount": 3, "sampleCount": 100, "elapsedMs": 29253, "peakMiB": 1123, "artifactBytes": 4582 },
-    { "id": "journal-reconciliation", "stateCount": 20, "transitionCount": 48, "sampleCount": 100, "elapsedMs": 28378, "peakMiB": 878, "artifactBytes": 7536 },
-    { "id": "journal-fencing", "stateCount": 20, "transitionCount": 48, "sampleCount": 100, "elapsedMs": 28553, "peakMiB": 902, "artifactBytes": 9097 },
-    { "id": "authority-reconciliation", "stateCount": 51, "transitionCount": 163, "sampleCount": 1000, "elapsedMs": 28554, "peakMiB": 911, "artifactBytes": 4615 },
-    { "id": "review-epoch", "stateCount": 10, "transitionCount": 22, "sampleCount": 100, "elapsedMs": 28588, "peakMiB": 892, "artifactBytes": 7322 },
-    { "id": "cutover-observation", "stateCount": 136, "transitionCount": 532, "sampleCount": 10000, "elapsedMs": 28991, "peakMiB": 936, "artifactBytes": 3412 }
+    {
+      "id": "claim-election",
+      "stateCount": 3,
+      "transitionCount": 3,
+      "sampleCount": 100,
+      "elapsedMs": 26450,
+      "peakMiB": 729,
+      "artifactBytes": 5674
+    },
+    {
+      "id": "relation-mutation",
+      "stateCount": 3,
+      "transitionCount": 3,
+      "sampleCount": 100,
+      "elapsedMs": 27145,
+      "peakMiB": 730,
+      "artifactBytes": 4919
+    },
+    {
+      "id": "lifecycle",
+      "stateCount": 3,
+      "transitionCount": 3,
+      "sampleCount": 100,
+      "elapsedMs": 26459,
+      "peakMiB": 730,
+      "artifactBytes": 4586
+    },
+    {
+      "id": "operation-saga",
+      "stateCount": 3,
+      "transitionCount": 3,
+      "sampleCount": 100,
+      "elapsedMs": 26386,
+      "peakMiB": 726,
+      "artifactBytes": 4559
+    },
+    {
+      "id": "epoch",
+      "stateCount": 4,
+      "transitionCount": 4,
+      "sampleCount": 100,
+      "elapsedMs": 26549,
+      "peakMiB": 723,
+      "artifactBytes": 9392
+    },
+    {
+      "id": "rollback",
+      "stateCount": 3,
+      "transitionCount": 3,
+      "sampleCount": 100,
+      "elapsedMs": 26364,
+      "peakMiB": 754,
+      "artifactBytes": 4582
+    },
+    {
+      "id": "journal-reconciliation",
+      "stateCount": 20,
+      "transitionCount": 48,
+      "sampleCount": 100,
+      "elapsedMs": 26075,
+      "peakMiB": 622,
+      "artifactBytes": 7536
+    },
+    {
+      "id": "journal-fencing",
+      "stateCount": 20,
+      "transitionCount": 48,
+      "sampleCount": 100,
+      "elapsedMs": 25979,
+      "peakMiB": 628,
+      "artifactBytes": 9097
+    },
+    {
+      "id": "authority-reconciliation",
+      "stateCount": 51,
+      "transitionCount": 163,
+      "sampleCount": 1000,
+      "elapsedMs": 25658,
+      "peakMiB": 619,
+      "artifactBytes": 4615
+    },
+    {
+      "id": "review-epoch",
+      "stateCount": 10,
+      "transitionCount": 22,
+      "sampleCount": 100,
+      "elapsedMs": 26000,
+      "peakMiB": 608,
+      "artifactBytes": 7322
+    },
+    {
+      "id": "cutover-observation",
+      "stateCount": 136,
+      "transitionCount": 532,
+      "sampleCount": 10000,
+      "elapsedMs": 26155,
+      "peakMiB": 625,
+      "artifactBytes": 3412
+    },
+    {
+      "id": "pilot-permit-transfer",
+      "stateCount": 5,
+      "transitionCount": 5,
+      "sampleCount": 10000,
+      "elapsedMs": 29352,
+      "peakMiB": 640,
+      "artifactBytes": 9669
+    },
+    {
+      "id": "pilot-permit-fault-safety",
+      "stateCount": 3032,
+      "transitionCount": 8002,
+      "sampleCount": 10000,
+      "elapsedMs": 30238,
+      "peakMiB": 686,
+      "artifactBytes": 9678
+    },
+    {
+      "id": "pilot-permit-major-action-coverage",
+      "stateCount": 14,
+      "transitionCount": 14,
+      "sampleCount": 10000,
+      "elapsedMs": 30373,
+      "peakMiB": 617,
+      "artifactBytes": 9697
+    }
   ]
 }

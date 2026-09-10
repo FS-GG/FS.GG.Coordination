@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup><Compile Include="AssemblyInfo.fs" /><Compile Include="PostgreSqlPilotStoreTests.fs" /></ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="Npgsql" />
+    <PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.PostgreSql\FS.GG.Coordination.Orchestration.PostgreSql.fsproj" />
+    <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.Pilot\FS.GG.Coordination.Orchestration.Pilot.fsproj" />
+  </ItemGroup>
+</Project>

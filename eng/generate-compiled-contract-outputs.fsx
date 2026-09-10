@@ -261,7 +261,7 @@ let desiredState =
 
 let settingsContent = JsonObject()
 settingsContent.Add("specification", desiredState)
-settingsContent.Add("requiredPermissions", permissions.DeepClone())
+settingsContent.Add("requiredPermissions", JsonNode.Parse(permissions.ToJsonString()))
 
 let projectionContent = JsonObject()
 projectionContent.Add("catalogue", contract.GetProperty("catalogue") |> clone)

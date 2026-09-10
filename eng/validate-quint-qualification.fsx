@@ -56,10 +56,11 @@ let validateDocument root (document: JsonObject) =
         let requiredFormalTestIds =
             Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback"
                   "journal-reconciliation"; "journal-fencing"; "authority-reconciliation"; "review-epoch"
-                  "cutover-observation" ]
+                  "cutover-observation"; "pilot-permit-transfer"; "pilot-permit-fault-safety"
+                  "pilot-permit-major-action-coverage" ]
         let allowedFormalMains =
             Set [ "CoordinationProtocolTests"; "GS20310JournalModel"; "GS20310ReconcileModel"
-                  "GS20310ReviewEpochModel"; "GS20310CutoverModel" ]
+                  "GS20310ReviewEpochModel"; "GS20310CutoverModel"; "O2PilotPermitModel" ]
         let requiredFormalFields =
             Set [ "id"; "main"; "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"
                   "removedStep"; "violatedTemporal"; "blockedInvariant"; "backend"; "counterexample"; "counterexampleTrace"
@@ -461,7 +462,7 @@ let validateBaseline root configBytes (document: JsonObject) =
                 |> function None -> Ok() | Some(code, id) -> fail code id)
     with error -> fail "QQ-BASELINE-MALFORMED" error.Message
 
-let clone (node: JsonObject) = node.DeepClone().AsObject()
+let clone (node: JsonObject) = JsonNode.Parse(node.ToJsonString()).AsObject()
 
 let runSelfTests root original =
     let firstObject (collection: string) (value: JsonObject) = ((value[collection].AsArray())[0]).AsObject()

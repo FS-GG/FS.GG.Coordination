@@ -31,13 +31,13 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb"
+    "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
 
 let expectedContract =
-    "c608c0d28ce5cbf36e70f102ffa979f4d06f27305e6da4551dce454901811c8e"
+    "a77921dadee641e12fd20929ffebd2b396c68847a969b0ce8e1cd9c3e4f4795c"
 
 let expectedBehavior =
-    "39a90f7bfb03c4a517dc91f324e80c986e51191b16da92570e1e8c84e61d5125"
+    "66618eb8a45c1cea91eb74408d0f2d9851be53695af8383e3617cb12807fd648"
 
 let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
@@ -130,8 +130,7 @@ let fail code detail =
     exit 1
 
 let sha256 path =
-    use stream = File.OpenRead path
-    SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+    File.ReadAllBytes path |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
 let sha256Text (value: string) =
     value
@@ -562,7 +561,7 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 134 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 135 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
@@ -1035,17 +1034,17 @@ try
         executedEquivalentVariants.Add name
 
     let canonicalText = File.ReadAllText(source, Encoding.UTF8)
-    let triviaFixture = "}\n```\n\nThe executable witness"
+    let triviaFixture = "}\n```\n\n### Prospective trusted pilot permit"
     if not (canonicalText.Contains(triviaFixture, StringComparison.Ordinal)) then fail "EQUIVALENT-AUTHORING" "trivia fixture absent"
-    let equivalentText = canonicalText.Replace(triviaFixture, "  // semantically inert authoring trivia\n}\n```\n\nThe executable witness")
+    let equivalentText = canonicalText.Replace(triviaFixture, "}\n// semantically inert authoring trivia\n```\n\n### Prospective trusted pilot permit")
     requireEquivalentVariant "equivalent-quint-trivia" equivalentText
 
-    let partitionFixture = "\n}\n```\n\nThe executable witness"
+    let partitionFixture = "\n}\n```\n\n### Prospective trusted pilot permit"
     if not (canonicalText.Contains(partitionFixture, StringComparison.Ordinal)) then fail "EQUIVALENT-AUTHORING" "partition fixture absent"
     let partitionedText =
         canonicalText.Replace(
             partitionFixture,
-            "\n```\n\n```quint protocol.qnt +=\n}\n```\n\nThe executable witness"
+            "\n```\n\n```quint protocol.qnt +=\n}\n```\n\n### Prospective trusted pilot permit"
         )
     requireEquivalentVariant "equivalent-named-block-partition" partitionedText
 
@@ -1055,7 +1054,7 @@ try
     let indentedFenceText =
         canonicalText
             .Replace(openingFence, "  ```quint protocol.qnt +=\n", StringComparison.Ordinal)
-            .Replace(partitionFixture, "\n}\n  ```\n\nThe executable witness", StringComparison.Ordinal)
+            .Replace(partitionFixture, "\n}\n  ```\n\n### Prospective trusted pilot permit", StringComparison.Ordinal)
     requireEquivalentVariant "equivalent-fence-indentation" indentedFenceText
 
     let crlfText = canonicalText.Replace("\n", "\r\n", StringComparison.Ordinal)
@@ -1531,7 +1530,7 @@ try
         let traceNode = JsonObject()
         traceNode["schema"] <- JsonValue.Create("fsgg.coordination.quint-counterexample-trace/1")
         traceNode["temporalDiagnostic"] <- JsonValue.Create(firstDiagnostic)
-        traceNode["states"] <- itfNode["states"].DeepClone()
+        traceNode["states"] <- JsonNode.Parse(itfNode["states"].ToJsonString())
         let traceText = traceNode.ToJsonString(JsonSerializerOptions(WriteIndented = false))
         let tracePath = Path.Combine(formalArtifactDirectory, $"%s{formalId}.quint-trace.json")
         File.WriteAllText(tracePath, traceText, UTF8Encoding(false))
