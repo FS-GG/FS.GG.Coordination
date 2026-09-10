@@ -115,6 +115,10 @@ module Orchestration =
           CandidateHeadSha: string option; ResultSha: string option; ProviderRevision: string
           Generation: Generation; WorkflowRevision: WorkflowRevision; ObservedAt: DateTimeOffset
           Exists: bool }
+    type HostedRouteReadback =
+        { RouteId: Guid; WorkItemId: WorkItemId; RepositoryNodeId: string
+          ProviderRevision: string; EvidenceSha256: string
+          Generation: Generation; WorkflowRevision: WorkflowRevision; ObservedAt: DateTimeOffset }
     type ControlState = Running | Paused of string | CancelPending of string | Cancelled of string | Revoked of string
     type Reservation =
         { ReservationId: ReservationId; Generation: Generation; ExpiresAt: DateTimeOffset
@@ -132,7 +136,7 @@ module Orchestration =
           Revision: WorkflowRevision; ProtocolVersion: ProtocolVersion; Detail: string }
     type State =
         { WorkItemId: WorkItemId option; Snapshot: PlanningSnapshot option; Revision: WorkflowRevision
-          Generation: Generation; Control: ControlState; Budget: Budget option; Used: BudgetUse
+          Generation: Generation; Control: ControlState; ReadbackCurrent: bool; Budget: Budget option; Used: BudgetUse
           Reservation: Reservation option; ExternalClaims: Map<string,ExternalClaim>
           RecoveryObligations: Set<string>; CompensationFailures: Map<string,string>
           Attempts: Map<AttemptId, Attempt>; Candidates: Map<CandidateId, CandidateArtifact>
@@ -147,6 +151,7 @@ module Orchestration =
         | SelectHostedRoute of HostedRoutePlan | StartAttempt of AttemptId * SessionId * RunnerEnrollment
         | ObserveAttempt of AttemptId * AttemptStatus
         | ChargeBudget of BudgetUse | Pause of string | Resume | RequestCancel of string
+        | RecordStartupPause of string | RecordHostedRouteReadback of HostedRouteReadback
         | ConfirmCancelled of string | Revoke of string | RecordCandidate of CandidateArtifact * CandidateStorageReceipt
         | RecordEffectIntent of EffectIntent | MarkEffectDispatching of OperationId
         | ObserveEffect of OperationId * EffectOutcome
@@ -164,6 +169,7 @@ module Orchestration =
         | ClaimObserved of ExternalClaim | ClaimReleased of string | CompensationFailed of string * string
         | HostedRouteSelected of HostedRoutePlan | AttemptStarted of Attempt | AttemptObserved of AttemptId * AttemptStatus | BudgetCharged of BudgetUse
         | PausedEvent of string | ResumedEvent | CancelRequestedEvent of string | CancelledEvent of string
+        | StartupPausedEvent of string | HostedRouteReadbackAccepted of HostedRouteReadback
         | RevokedEvent of string | CandidateAccepted of CandidateArtifact | EffectIntentRecorded of EffectIntent
         | EffectDispatchStarted of OperationId | EffectObservationRequired of OperationId * string
         | EffectSettled of OperationId * EffectOutcome | HostedEffectReadbackAccepted of HostedEffectReadback
@@ -174,7 +180,7 @@ module Orchestration =
 
     let initial =
         { WorkItemId=None; Snapshot=None; Revision=WorkflowRevision 0L; Generation=Generation 0L
-          Control=Paused "not-admitted"; Budget=None; Used={Tokens=0L;RuntimeSeconds=0L;CostMicros=0L}
+          Control=Paused "not-admitted"; ReadbackCurrent=true; Budget=None; Used={Tokens=0L;RuntimeSeconds=0L;CostMicros=0L}
           Reservation=None; ExternalClaims=Map.empty; RecoveryObligations=Set.empty;CompensationFailures=Map.empty
           Attempts=Map.empty; Candidates=Map.empty
           Operations=Map.empty; HostedRoute=None; HostedEffectReadbacks=Map.empty
@@ -297,7 +303,7 @@ module Orchestration =
             |> Option.exists(fun reservation ->
                 let claimReady = intent.Kind=AcquireExternalClaim || hasCurrentClaims state reservation
                 reservation.ExpiresAt>now && sameGeneration reservation.Generation route.Generation && claimReady)
-        state.Control=Running && currentGeneration && currentRevision && budgetAvailable
+        state.Control=Running && state.ReadbackCurrent && currentGeneration && currentRevision && budgetAvailable
         && state.WorkItemId=Some route.WorkItemId && routeIntentMatches route intent
         && Set.isEmpty state.RecoveryObligations && not(conflictingUnsettledOperation intent.OperationId state)
         && (not requireAttempt || state.Attempts |> Map.tryFind route.AttemptId |> Option.exists(fun attempt -> attempt.Status=Active && sameGeneration attempt.Generation route.Generation))
@@ -351,6 +357,10 @@ module Orchestration =
             | None -> invalidOp "persisted budget event overflows"
         | PausedEvent r -> {state with Control=Paused r;Revision=revision}
         | ResumedEvent -> {state with Control=Running;Revision=revision}
+        | StartupPausedEvent r ->
+            let control = match state.Control with Running | Paused _ -> Paused r | existing -> existing
+            {state with Control=control;ReadbackCurrent=false;Revision=revision}
+        | HostedRouteReadbackAccepted _ -> {state with ReadbackCurrent=true;Revision=revision}
         | CancelRequestedEvent r -> {state with Control=CancelPending r;Revision=revision}
         | CancelledEvent r -> {state with Control=Cancelled r;Reservation=None;RecoveryObligations=Set.union state.RecoveryObligations (state.ExternalClaims |> Map.keys |> Set.ofSeq);Revision=revision}
         | RevokedEvent r -> {state with Control=Revoked r;Reservation=None;RecoveryObligations=Set.union state.RecoveryObligations (state.ExternalClaims |> Map.keys |> Set.ofSeq);Revision=revision}
@@ -455,7 +465,24 @@ module Orchestration =
             | _ -> reject "budget-exceeded-or-expired"
         | Pause r when state.Control=Running -> accept [PausedEvent r] [] "paused"
         | Pause _ -> reject "not-running"
-        | Resume -> match state.Control,state.Budget with | Paused _,Some b when within now b state.Used -> accept [ResumedEvent] [] "resumed" | _ -> reject "resume-refused"
+        | Resume -> match state.Control,state.Budget with | Paused _,Some b when state.ReadbackCurrent && within now b state.Used -> accept [ResumedEvent] [] "resumed" | _ -> reject "resume-refused"
+        | RecordStartupPause reason when not(String.IsNullOrWhiteSpace reason) && reason=reason.Trim() ->
+            accept [StartupPausedEvent reason] [] "startup-paused-readback-invalidated"
+        | RecordStartupPause _ -> reject "invalid-startup-pause"
+        | RecordHostedRouteReadback readback ->
+            let paused = match state.Control with Paused _ -> true | _ -> false
+            let valid =
+                paused && state.HostedRoute
+                   |> Option.exists(fun route ->
+                       readback.RouteId=route.RouteId && readback.WorkItemId=route.WorkItemId
+                       && readback.RepositoryNodeId=route.RepositoryNodeId
+                       && readback.Generation=route.Generation && readback.Generation=state.Generation
+                       && readback.WorkflowRevision=route.WorkflowRevision
+                       && readback.ObservedAt>=route.SelectedAt && readback.ObservedAt<=now
+                       && not(String.IsNullOrWhiteSpace readback.ProviderRevision)
+                       && validSha readback.EvidenceSha256)
+            if valid then accept [HostedRouteReadbackAccepted readback] [] "hosted-route-readback-reconnected"
+            else reject "hosted-route-readback-invalid-or-stale"
         | RequestCancel r -> match state.Control with | Running|Paused _ -> accept [CancelRequestedEvent r] [] "cancel-requested" | _ -> reject "cancel-refused"
         | ConfirmCancelled r -> match state.Control with | CancelPending _ -> accept [CancelledEvent r;GenerationAdvanced(nextGeneration state.Generation)] [] "cancelled" | _ -> reject "cancel-not-pending"
         | Revoke r -> accept [RevokedEvent r;GenerationAdvanced(nextGeneration state.Generation)] [] "revoked"
@@ -576,6 +603,11 @@ module Orchestration =
             | ObserveAttempt(a,status) -> ["observe-attempt";Id.attemptValue a |> string;sprintf "%A" status]
             | ChargeBudget b -> ["charge";invariant b.Tokens;invariant b.RuntimeSeconds;invariant b.CostMicros]
             | Pause reason -> ["pause";reason] | Resume -> ["resume"] | RequestCancel reason -> ["request-cancel";reason]
+            | RecordStartupPause reason -> ["startup-pause";reason]
+            | RecordHostedRouteReadback readback ->
+                ["hosted-route-readback";string readback.RouteId;Convert.ToBase64String(WorkItemIdentity.canonicalBytes readback.WorkItemId)
+                 readback.RepositoryNodeId;readback.ProviderRevision;readback.EvidenceSha256
+                 generationText readback.Generation;revisionText readback.WorkflowRevision;timeText readback.ObservedAt]
             | ConfirmCancelled reason -> ["confirm-cancel";reason] | Revoke reason -> ["revoke";reason]
             | RecordCandidate(c,proof) -> "candidate"::candidateParts c @ [Id.candidateValue proof.CandidateId |> string;proof.ContentSha256;proof.ManifestSha256;invariant proof.SizeBytes;sprintf "%A" proof.Location;proof.StoreId;string proof.StoreSchemaVersion;proof.StorageReceiptSha256;timeText proof.VerifiedAt]
             | RecordEffectIntent i -> ["effect";Id.operationValue i.OperationId |> string;string i.Kind;generationText i.Generation;revisionText i.WorkflowRevision;i.ResourceId;i.PayloadSha256]

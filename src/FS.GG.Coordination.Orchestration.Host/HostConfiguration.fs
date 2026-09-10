@@ -5,6 +5,7 @@ open System.IO
 open System.Net
 open System.Runtime.InteropServices
 open Microsoft.Win32.SafeHandles
+open FS.GG.Coordination.Core.Orchestration
 
 type HostConfiguration =
     { ConnectionString: string
@@ -15,6 +16,7 @@ type HostConfiguration =
       MinimumGenerationFence: int64
       PermitId: Guid
       PilotPrincipalId: string
+      WorkItemId: WorkItemId
       RequestTimeout: TimeSpan
       MaximumConcurrentRequests: int }
 
@@ -102,7 +104,7 @@ module HostConfiguration =
 
     let parseServe arguments =
         result {
-            do! validateArguments (set [ "--connection-file"; "--token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal" ]) arguments
+            do! validateArguments (set [ "--connection-file"; "--token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id" ]) arguments
             let! connectionPath = value "--connection-file" arguments
             let! tokenPath = value "--token-file" arguments
             let! connection = privateFile 16384 connectionPath
@@ -115,13 +117,25 @@ module HostConfiguration =
             let! fenceText = value "--minimum-generation-fence" arguments
             let! permitText = value "--permit-id" arguments
             let! principal = value "--pilot-principal" arguments
-            match Int64.TryParse fenceText, Guid.TryParse backupIdentity, Guid.TryParse permitText with
-            | (true, fence), (true, backup), (true, permit) when fence >= 0L && backup <> Guid.Empty && permit <> Guid.Empty && principal = principal.Trim() && principal.Length <= 128 ->
+            let! repositoryNodeId = value "--repository-node-id" arguments
+            let! repositoryDatabaseText = value "--repository-database-id" arguments
+            let! issueNodeId = value "--issue-node-id" arguments
+            let! issueDatabaseText = value "--issue-database-id" arguments
+            match Int64.TryParse fenceText, Guid.TryParse backupIdentity, Guid.TryParse permitText,
+                  Int64.TryParse repositoryDatabaseText, Int64.TryParse issueDatabaseText with
+            | (true, fence), (true, backup), (true, permit), (true, repositoryDatabaseId), (true, issueDatabaseId)
+                when fence >= 0L && backup <> Guid.Empty && permit <> Guid.Empty
+                     && repositoryDatabaseId > 0L && issueDatabaseId > 0L
+                     && principal = principal.Trim() && principal.Length <= 128
+                     && repositoryNodeId = repositoryNodeId.Trim() && repositoryNodeId.Length <= 128
+                     && issueNodeId = issueNodeId.Trim() && issueNodeId.Length <= 128 ->
                 return
                     { ConnectionString = connection; Token = token; Prefix = prefix; StoreId = storeId
                       BackupIdentity = backup.ToString(); MinimumGenerationFence = fence; PermitId = permit
-                      PilotPrincipalId = principal; RequestTimeout = TimeSpan.FromSeconds 5.; MaximumConcurrentRequests = 4 }
-            | _ -> return! Error "invalid-fence-backup-or-permit-identity"
+                      PilotPrincipalId = principal
+                      WorkItemId = WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
+                      RequestTimeout = TimeSpan.FromSeconds 5.; MaximumConcurrentRequests = 4 }
+            | _ -> return! Error "invalid-fence-backup-permit-or-work-item-identity"
         }
 
     let parseInit arguments =

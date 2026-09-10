@@ -181,6 +181,28 @@ module Cases =
         Assert.Equal(Accepted,(decide now recorded (command "27200000-0000-0000-0000-000000000002") "" (MarkEffectDispatching storeIntent.OperationId)).Receipt.Disposition)
 
     [<Fact>]
+    let ``startup persists pause and invalidates hosted route until exact readback`` () =
+        let active,_,_,route = hostedReady()
+        let candidateIntent = routeEffect route.CandidateOperationId StoreCandidate (Id.candidateValue route.CandidateId |> string) route
+        let primed = { active with Operations=Map.add candidateIntent.OperationId (IntentRecorded candidateIntent) active.Operations }
+        let startup = decide now primed (command "27800000-0000-0000-0000-000000000001") "" (RecordStartupPause "process-startup")
+        Assert.Equal(Accepted,startup.Receipt.Disposition)
+        let paused = apply startup primed
+        Assert.Equal(Paused "process-startup",paused.Control)
+        Assert.False(paused.ReadbackCurrent)
+        Assert.Equal("resume-refused",(decide now paused (command "27800000-0000-0000-0000-000000000002") "" Resume).Receipt.Detail)
+        Assert.Equal("effect-not-authorized",(decide now paused (command "27800000-0000-0000-0000-000000000006") "" (MarkEffectDispatching candidateIntent.OperationId)).Receipt.Detail)
+        let readback =
+            { RouteId=route.RouteId;WorkItemId=route.WorkItemId;RepositoryNodeId=route.RepositoryNodeId
+              ProviderRevision="github-route-revision-1";EvidenceSha256=digest "f"
+              Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=now }
+        let reconnected = decide now paused (command "27800000-0000-0000-0000-000000000004") "" (RecordHostedRouteReadback readback)
+        Assert.Equal(Accepted,reconnected.Receipt.Disposition)
+        let current = apply reconnected paused
+        Assert.True(current.ReadbackCurrent)
+        Assert.Equal(Accepted,(decide now current (command "27800000-0000-0000-0000-000000000005") "" Resume).Receipt.Disposition)
+
+    [<Fact>]
     let ``unknown hosted effect blocks replacement and later effects until proven absent`` () =
         let active,attemptId,candidateId,route = hostedReady()
         let processIntent = routeEffect route.ProcessOperationId DispatchRunner (Id.attemptValue attemptId |> string) route
