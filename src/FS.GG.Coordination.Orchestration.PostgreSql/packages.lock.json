@@ -213,6 +213,23 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.coordination.github": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.Protocol": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.coordination.orchestration.observer": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.GitHub": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )",
+          "FSharp.SystemTextJson": "[1.4.36, )"
+        }
+      },
       "fs.gg.coordination.protocol": {
         "type": "Project",
         "dependencies": {

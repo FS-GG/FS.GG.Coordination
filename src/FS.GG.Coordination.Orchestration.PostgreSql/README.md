@@ -30,9 +30,15 @@ Candidate bytes and metadata commit together. `Put` permits only
 reads the `bytea` value back and verifies identity, size, and SHA-256 before it
 returns a receipt. A caller-created receipt is never an input to this adapter.
 
+O1 adds a separate closed observer journal in `observer_stream`, `observer_event`,
+and `observer_inbox`. Its own schema metadata must match the shared backup identity,
+and every append and recovery transaction also enforces the O0 schema, generation,
+and read-only fences. The adapter derives the full command-envelope digest and typed
+event bytes itself, checks stream head against the event tail, and replays through
+the observer reducer. These tables cannot satisfy an O0 command or effect receipt.
+
 Versions are locked locally: Akka 1.5.71, Akka.Persistence.Sql 1.5.70,
 FSharp.SystemTextJson 1.4.36, and Npgsql 10.0.3. The design follows the
 [Akka.NET persistence architecture](https://getakka.net/articles/persistence/architecture.html),
 [Npgsql transaction guidance](https://www.npgsql.org/doc/basic-usage.html#transactions),
 and the [PostgreSQL 18 `pg_dump` documentation](https://www.postgresql.org/docs/18/app-pgdump.html).
-

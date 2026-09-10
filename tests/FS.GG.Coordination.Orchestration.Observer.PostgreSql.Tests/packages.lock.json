@@ -2,18 +2,6 @@
   "version": 2,
   "dependencies": {
     "net10.0": {
-      "Akka": {
-        "type": "Direct",
-        "requested": "[1.5.71, )",
-        "resolved": "1.5.71",
-        "contentHash": "HMeKCZeOYzv5sqRq0mNPFqaV3QAn3XbiwCMJbkFbqjT4TouuKPX6OPfv6TG55M8mXic8u330S9zwCtIaeJFzqQ==",
-        "dependencies": {
-          "Akka.Analyzers": "0.3.3",
-          "Microsoft.Extensions.ObjectPool": "6.0.36",
-          "Newtonsoft.Json": "13.0.1",
-          "System.Configuration.ConfigurationManager": "6.0.1"
-        }
-      },
       "FSharp.Core": {
         "type": "Direct",
         "requested": "[10.1.302, )",
@@ -55,6 +43,17 @@
         "requested": "[3.1.5, )",
         "resolved": "3.1.5",
         "contentHash": "tKi7dSTwP4m5m9eXPM2Ime4Kn7xNf4x4zT9sdLO/G4hZVnQCRiMTWoSZqI/pYTVeI27oPPqHBKYI/DjJ9GsYgA=="
+      },
+      "Akka": {
+        "type": "Transitive",
+        "resolved": "1.5.71",
+        "contentHash": "HMeKCZeOYzv5sqRq0mNPFqaV3QAn3XbiwCMJbkFbqjT4TouuKPX6OPfv6TG55M8mXic8u330S9zwCtIaeJFzqQ==",
+        "dependencies": {
+          "Akka.Analyzers": "0.3.3",
+          "Microsoft.Extensions.ObjectPool": "6.0.36",
+          "Newtonsoft.Json": "13.0.1",
+          "System.Configuration.ConfigurationManager": "6.0.1"
+        }
       },
       "Akka.Analyzers": {
         "type": "Transitive",

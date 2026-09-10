@@ -59,6 +59,7 @@
     <Compile Include="GitHubActionsReleaseFeedArchitectureTests.fs" />
     <Compile Include="GitHubSandboxClosureArchitectureTests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
+    <Compile Include="OrchestrationObserverArchitectureTests.fs" />
     <Compile Include="RoadmapWorkArchitectureTests.fs" />
     <Compile Include="EvidenceStorageTests.fs" />
     <Compile Include="QualificationManifestArchitectureTests.fs" />
@@ -84,6 +85,7 @@
     <ProjectReference Include="../../src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj" />
     <ProjectReference Include="../../src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj" />
     <ProjectReference Include="../../src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj" />
     <ProjectReference Include="../../src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 

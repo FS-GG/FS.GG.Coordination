@@ -7,9 +7,10 @@ let main arguments =
     | "qualification-manifest" :: rest -> QualificationManifestCommand.run (List.toArray rest)
     | "workflow-select" :: rest -> WorkflowSelectionCommand.run (List.toArray rest)
     | "ledger-protection" :: rest -> LedgerProtectionCommand.run (List.toArray rest)
+    | "observer-view" :: rest -> ObserverViewCommand.run (List.toArray rest)
     | [] ->
         printfn "FS.GG.Coordination CLI boundary is installed; no production commands are enabled."
         0
     | _ ->
-        eprintfn "unknown command; available commands: workflow-select, roadmap-work, qualification-manifest, ledger-protection"
+        eprintfn "unknown command; available commands: workflow-select, roadmap-work, qualification-manifest, ledger-protection, observer-view"
         2
