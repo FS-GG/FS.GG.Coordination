@@ -1143,6 +1143,22 @@ module CoordinationProtocol {
       activationContract: "inert-prospective-no-host-no-provider-writer" }
   )
 
+  // O2 hosted-writer amendment. This closes one finite supported route; it does not grant a
+  // general command surface, expand the immutable subject, renew a permit, or activate Main.
+  pure val hostedWriterSpecificationCatalogue = Set(
+    { id: "HOSTED-WriterV1", kind: "hostedWriterSpecification",
+      schemaContract: "fsgg.coordination.hosted-writer/1",
+      scopeContract: "one-immutable-work-item|routine-documentation-delivery",
+      budgetContract: "finite-positive-no-renewal",
+      capacityContract: "one-ordinary-assignment",
+      startupContract: "manual-default-paused-no-automatic-resume",
+      runnerContract: "exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner",
+      operationContract: "stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence",
+      candidateContract: "owner-controlled-content-addressed-bytes-before-branch-publication",
+      completionContract: "native-provider-merged-pr-and-exact-head-readback",
+      activationContract: "accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit" }
+  )
+
 }
 ```
 
@@ -1179,6 +1195,37 @@ qualified Main configuration, and authenticated pilot evidence remain separate a
 
 The executable witness records evidence before accepting the subject vocabulary identity. Removing
 the evidence guard must make the invariant red in the bounded negative control.
+
+### Hosted writer amendment (O2 source boundary)
+
+`HOSTED-WriterV1` accepts the separately recorded sequencing decision for one reversible mutation
+canary before OperatingV2. That decision admits only one immutable WorkItem and the
+`routine-documentation-delivery` job class. Capacity is one ordinary assignment. Permit, attempt,
+token, runtime, cost, and wall-clock bounds remain finite and cannot be renewed by restart,
+reconnect, image update, timer, or orchestration command. Startup and every replacement remain
+paused until the current permit generation, runner fingerprint, stable-route exclusion, and native
+provider readback are re-established.
+
+The supported route has seven ordered external stages: claim, process creation, durable candidate
+storage, candidate-branch publication, pull-request creation, merge, and native delivery readback.
+Every stage uses a stable operation identity and records intent before invoking the effect. A lost
+response records `OutcomeUnknown` and blocks the next stage, replacement work, and a new operation
+identity for the same resource. The same operation can be retried only after current provider
+readback proves it absent. Applied readback advances the stage only when it comes from the selected
+provider capability and binds the immutable repository and pull request identities, exact candidate
+head, merge commit, workflow revision, permit generation, and observation time. Runner or adapter
+claims are diagnostic and cannot complete delivery.
+
+Candidate bytes are acknowledged in the owner-controlled content-addressed store before branch
+publication. A Git ref created before that acknowledgement is not durable candidate authority.
+Completion requires a provider-native merged pull-request observation whose head equals the stored
+candidate head. Telemetry remains advisory and cannot authorize, settle, or block an otherwise safe
+orchestration transition.
+
+This amendment defines source authority only. It does not install a provider credential, publish an
+artifact, activate the host, transfer a subject, or dispatch the canary. Qualified Main storage and
+service lifecycle, an exact released binary, explicit permit issuance/transfer/reconnect evidence,
+and the sealed provider adapter remain independent activation evidence.
 
 ### Protected journal storage and mutation contract (GS2-03.10, amended by GS2-08.1)
 
@@ -3242,6 +3289,192 @@ module O2PilotPermitModel {
       phase: "PilotOwned", assignedOwnerId: "pilot-route",
       transferAcknowledgementObserved: false } },
   }
+}
+
+// O2 hosted-writer model. Seven is deliberately small and closed: claim, process, durable
+// candidate, branch, pull request, merge, and provider-native completion readback.
+module O2HostedWriterModel {
+  type HostedWriterState = {
+    subjectId: str, jobClass: str, capacity: int, activeAssignments: int,
+    budgetLimit: int, budgetUsed: int, permitGeneration: int, currentGeneration: int,
+    paused: bool, readbackCurrent: bool, restarted: bool,
+    stage: int, operationId: str, operationStatus: str,
+    routeId: str, attemptId: str, candidateId: str, repositoryId: str,
+    evidenceRouteId: str, evidenceAttemptId: str, evidenceCandidateId: str,
+    evidenceRepositoryId: str, evidenceGeneration: int,
+    candidateDurable: bool, branchPublished: bool, pullRequestObserved: bool,
+    mergeObserved: bool, nativeReadbackObserved: bool, adapterClaimedComplete: bool,
+    unknownObserved: bool, sameOperationRetried: bool,
+  }
+  pure def operationFor(stage: int): str =
+    if (stage == 0) "op-claim"
+    else if (stage == 1) "op-process"
+    else if (stage == 2) "op-candidate"
+    else if (stage == 3) "op-branch"
+    else if (stage == 4) "op-pr"
+    else if (stage == 5) "op-merge"
+    else if (stage == 6) "op-readback"
+    else ""
+  pure def statusExists(status: str): bool =
+    Set("none", "intent", "dispatching", "unknown", "absent").contains(status)
+  pure def writerStateIsValid(s: HostedWriterState): bool = and {
+    s.subjectId == "MDU6SXNzdWUx", s.jobClass == "routine-documentation-delivery",
+    s.capacity == 1, s.activeAssignments >= 0, s.activeAssignments <= s.capacity,
+    s.budgetLimit == 1, s.budgetUsed >= 0, s.budgetUsed <= s.budgetLimit,
+    s.permitGeneration == 1, s.currentGeneration >= s.permitGeneration,
+    s.stage >= 0, s.stage <= 7, statusExists(s.operationStatus),
+    s.routeId == "route-1", s.attemptId == "attempt-1",
+    s.candidateId == "candidate-1", s.repositoryId == "repository-1",
+    if (s.operationStatus == "none") s.operationId == ""
+      else s.operationId == operationFor(s.stage),
+    s.stage < 3 implies not(s.candidateDurable),
+    s.branchPublished implies s.candidateDurable,
+    s.pullRequestObserved implies s.branchPublished,
+    s.mergeObserved implies s.pullRequestObserved,
+    s.nativeReadbackObserved implies s.mergeObserved,
+    s.stage > 0 implies and {
+      s.evidenceRouteId == s.routeId, s.evidenceAttemptId == s.attemptId,
+      s.evidenceCandidateId == s.candidateId, s.evidenceRepositoryId == s.repositoryId,
+      s.evidenceGeneration == s.permitGeneration,
+    },
+    s.stage == 7 implies and { s.nativeReadbackObserved, s.activeAssignments == 0 },
+  }
+  pure def mayRecordIntent(s: HostedWriterState): bool = and {
+    writerStateIsValid(s), not(s.paused), s.readbackCurrent,
+    s.currentGeneration == s.permitGeneration, s.stage < 7,
+    s.operationStatus == "none", s.activeAssignments == 1,
+    s.budgetUsed == 1,
+  }
+  pure def mayDispatch(s: HostedWriterState): bool = and {
+    writerStateIsValid(s), not(s.paused), s.readbackCurrent,
+    s.currentGeneration == s.permitGeneration,
+    s.operationStatus == "intent", s.operationId == operationFor(s.stage),
+  }
+  pure def appliedStage(s: HostedWriterState): HostedWriterState = {
+    ...s, stage: s.stage + 1, operationId: "", operationStatus: "none",
+    candidateDurable: s.candidateDurable or s.stage == 2,
+    branchPublished: s.branchPublished or s.stage == 3,
+    pullRequestObserved: s.pullRequestObserved or s.stage == 4,
+    mergeObserved: s.mergeObserved or s.stage == 5,
+    nativeReadbackObserved: s.nativeReadbackObserved or s.stage == 6,
+    evidenceRouteId: s.routeId, evidenceAttemptId: s.attemptId,
+    evidenceCandidateId: s.candidateId, evidenceRepositoryId: s.repositoryId,
+    evidenceGeneration: s.permitGeneration,
+    activeAssignments: if (s.stage == 6) 0 else s.activeAssignments,
+  }
+
+  var state: HostedWriterState
+  action init = state' = {
+    subjectId: "MDU6SXNzdWUx", jobClass: "routine-documentation-delivery",
+    capacity: 1, activeAssignments: 0, budgetLimit: 1, budgetUsed: 0,
+    permitGeneration: 1, currentGeneration: 1,
+    paused: true, readbackCurrent: true, restarted: false,
+    stage: 0, operationId: "", operationStatus: "none",
+    routeId: "route-1", attemptId: "attempt-1", candidateId: "candidate-1",
+    repositoryId: "repository-1", evidenceRouteId: "", evidenceAttemptId: "",
+    evidenceCandidateId: "", evidenceRepositoryId: "", evidenceGeneration: 0,
+    candidateDurable: false, branchPublished: false, pullRequestObserved: false,
+    mergeObserved: false, nativeReadbackObserved: false, adapterClaimedComplete: false,
+    unknownObserved: false, sameOperationRetried: false,
+  }
+  action manualStart = all {
+    state.paused, state.readbackCurrent, state.activeAssignments == 0,
+    state.budgetUsed < state.budgetLimit,
+    state' = { ...state, paused: false, activeAssignments: 1, budgetUsed: state.budgetUsed + 1 },
+  }
+  action recordIntent = all {
+    mayRecordIntent(state),
+    state' = { ...state, operationId: operationFor(state.stage), operationStatus: "intent" },
+  }
+  action dispatch = all {
+    mayDispatch(state), state' = { ...state, operationStatus: "dispatching" },
+  }
+  action observeApplied = all {
+    state.operationStatus == "dispatching", state.stage < 7,
+    state' = appliedStage(state),
+  }
+  action loseResponse = all {
+    state.operationStatus == "dispatching",
+    state' = { ...state, operationStatus: "unknown", unknownObserved: true },
+  }
+  action reconcileApplied = all {
+    state.operationStatus == "unknown", state.readbackCurrent,
+    state.currentGeneration == state.permitGeneration,
+    state' = appliedStage(state),
+  }
+  action observeProvenAbsent = all {
+    state.operationStatus == "unknown", state.readbackCurrent,
+    state.currentGeneration == state.permitGeneration,
+    state' = { ...state, operationStatus: "absent" },
+  }
+  action retrySameOperation = all {
+    state.operationStatus == "absent", state.operationId == operationFor(state.stage),
+    state' = { ...state, operationStatus: "intent", sameOperationRetried: true },
+  }
+  action adapterClaimsCompletion = all {
+    state.stage == 6, not(state.adapterClaimedComplete),
+    state' = { ...state, adapterClaimedComplete: true },
+  }
+  action restartPaused = all {
+    not(state.restarted), state.stage < 7,
+    state' = { ...state, paused: true, readbackCurrent: false, restarted: true },
+  }
+  action reconnect = all {
+    state.restarted, not(state.readbackCurrent),
+    state.currentGeneration == state.permitGeneration,
+    state' = { ...state, readbackCurrent: true },
+  }
+  action resume = all {
+    state.restarted, state.paused, state.readbackCurrent,
+    state.currentGeneration == state.permitGeneration,
+    state' = { ...state, paused: false },
+  }
+  action hold = state' = state
+  action step = any {
+    manualStart, recordIntent, dispatch, observeApplied, loseResponse,
+    reconcileApplied, observeProvenAbsent, retrySameOperation,
+    adapterClaimsCompletion, restartPaused, reconnect, resume, hold,
+  }
+  action normalProgressStep =
+    if (state.paused) manualStart
+    else if (state.stage == 7) hold
+    else if (state.operationStatus == "none") recordIntent
+    else if (state.operationStatus == "intent") dispatch
+    else observeApplied
+  action withoutNativeReadback =
+    if (state.paused) manualStart
+    else if (state.stage < 6 and state.operationStatus == "none") recordIntent
+    else if (state.stage < 6 and state.operationStatus == "intent") dispatch
+    else if (state.stage < 6) observeApplied
+    else if (not(state.adapterClaimedComplete)) adapterClaimsCompletion
+    else hold
+  action unsafeAdapterCompletion = all {
+    state' = { ...state, stage: 7, activeAssignments: 0,
+      mergeObserved: true, nativeReadbackObserved: false,
+      adapterClaimedComplete: true, operationId: "", operationStatus: "none" },
+  }
+  action unsafeOtherRouteReceipt = state' = {
+    ...state, paused: false, activeAssignments: 1, budgetUsed: 1, stage: 1,
+    evidenceRouteId: "route-other", evidenceAttemptId: state.attemptId,
+    evidenceCandidateId: state.candidateId, evidenceRepositoryId: state.repositoryId,
+    evidenceGeneration: state.permitGeneration,
+  }
+  val safety = and {
+    writerStateIsValid(state),
+    state.stage == 7 implies state.nativeReadbackObserved,
+    state.adapterClaimedComplete and not(state.nativeReadbackObserved) implies state.stage < 7,
+    state.operationStatus == "unknown" implies not(mayDispatch(state)),
+    state.restarted and not(state.readbackCurrent) implies state.paused,
+  }
+  val reached = state.stage == 7 and state.nativeReadbackObserved
+  val unknownReached = state.unknownObserved
+  // The removed-readback control must expose the attempted adapter substitution itself.
+  // Waiting for stage 7 would make the control vacuous because the safe model never advances
+  // beyond stage 6 without the native provider observation.
+  val blockedInvariant = not(state.adapterClaimedComplete)
+  temporal progress: bool = normalProgressStep.weakFair(Set(state)).implies(eventually(reached))
+  temporal faultSafety: bool = always(safety)
+  temporal eventuallyReached: bool = eventually(reached)
 }
 
 // GS2-03.10 model 1: two workers race sibling commits on shard 0 while shard 1 progresses

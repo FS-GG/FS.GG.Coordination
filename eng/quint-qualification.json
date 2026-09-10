@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b",
+  "sourceSha256": "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
@@ -909,7 +909,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -935,7 +935,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -956,6 +956,58 @@
       "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/pilot-permit-major-action-coverage.itf.json",
       "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/pilot-permit-major-action-coverage.quint-trace.json",
       "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/pilot-permit-major-action-coverage.manifest.json",
+      "budget": {
+        "depth": 20,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 10000,
+        "elapsedMs": 75000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "hosted-writer-progress",
+      "main": "O2HostedWriterModel",
+      "init": "init",
+      "step": "normalProgressStep",
+      "invariant": "safety",
+      "witness": "reached",
+      "temporal": "progress",
+      "invalid": "unsafeOtherRouteReceipt",
+      "removedStep": "withoutNativeReadback",
+      "violatedTemporal": "eventuallyReached",
+      "blockedInvariant": "blockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-progress.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-progress.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-progress.manifest.json",
+      "budget": {
+        "depth": 20,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 10000,
+        "elapsedMs": 60000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "hosted-writer-fault-safety",
+      "main": "O2HostedWriterModel",
+      "init": "init",
+      "step": "step",
+      "invariant": "safety",
+      "witness": "unknownReached",
+      "temporal": "faultSafety",
+      "invalid": "unsafeAdapterCompletion",
+      "removedStep": "withoutNativeReadback",
+      "violatedTemporal": "eventuallyReached",
+      "blockedInvariant": "blockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-fault-safety.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-fault-safety.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-fault-safety.manifest.json",
       "budget": {
         "depth": 20,
         "states": 10000,

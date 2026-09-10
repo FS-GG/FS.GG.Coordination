@@ -41,13 +41,13 @@ let private execute selfTest = executeWith selfTest []
 let ``bounded roots classifications selection and admission are complete`` () =
     let exitCode, output, error = execute false
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=14 oracles=11 negativeControls=0", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=16 oracles=11 negativeControls=0", output)
 
 [<Fact>]
 let ``independent oracles and qualification contracts reject every focused mutation`` () =
     let exitCode, output, error = execute true
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=14 oracles=11 negativeControls=27", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=16 oracles=11 negativeControls=27", output)
 
 [<Fact>]
 let ``native formal catalogue covers all domains and retains normalized ITF counterexamples`` () =
@@ -67,7 +67,8 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback"
               "journal-reconciliation"; "journal-fencing"; "authority-reconciliation"; "review-epoch"
               "cutover-observation"; "pilot-permit-transfer"; "pilot-permit-fault-safety"
-              "pilot-permit-major-action-coverage" ]
+              "pilot-permit-major-action-coverage"; "hosted-writer-progress"
+              "hosted-writer-fault-safety" ]
     if ids <> expectedIds then failwithf "unexpected formal-test catalogue: %A" ids
     for item in tests do
         Assert.Equal("tlc", item["backend"].GetValue<string>())
@@ -113,16 +114,16 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
 
     let receipt =
         JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "work/96-gs2-03-5-native-quint-formal-tests/qualification.json"))).AsObject()
-    Assert.Equal(141, receipt["negativeControlCount"].GetValue<int>())
-    Assert.Equal(207, (receipt["processCounts"].AsObject()["external"]).GetValue<int>())
-    Assert.Equal(182, (receipt["processCounts"].AsObject()["quintCli"]).GetValue<int>())
-    Assert.Equal(56, (receipt["processCounts"].AsObject()["apalacheVerify"]).GetValue<int>())
+    Assert.Equal(151, receipt["negativeControlCount"].GetValue<int>())
+    Assert.Equal(221, (receipt["processCounts"].AsObject()["external"]).GetValue<int>())
+    Assert.Equal(196, (receipt["processCounts"].AsObject()["quintCli"]).GetValue<int>())
+    Assert.Equal(62, (receipt["processCounts"].AsObject()["apalacheVerify"]).GetValue<int>())
     let receiptRows =
         receipt["formalCounterexamples"].AsArray()
         |> Seq.map _.AsObject()
         |> Seq.map (fun row -> row["id"].GetValue<string>(), row)
         |> Map.ofSeq
-    Assert.Equal(14, receiptRows.Count)
+    Assert.Equal(16, receiptRows.Count)
     for item in tests do
         let id = item["id"].GetValue<string>()
         let row = receiptRows[id]

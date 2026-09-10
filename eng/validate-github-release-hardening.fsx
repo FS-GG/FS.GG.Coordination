@@ -116,7 +116,7 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
         | ReleaseDigestAgreement -> refused (mutateFeed (fun value -> if value.Feed = "nuget-org" then { value with PackageSha256 = zero } else value))
         | ExactReleaseSeal -> GitHubReleaseHardeningQualification.verify zero snapshot |> Result.isError
         | ExactReleaseReplay -> GitHubReleaseHardeningQualification.verify report.Seal snapshot = Ok report
-        | QuintReleaseUnchanged -> sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) = "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
+        | QuintReleaseUnchanged -> sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) = "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
         | NoReleaseMutationSurface ->
             let surface = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/GitHubReleaseHardeningQualification.fsi"))
             [ "HttpClient"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "api.github.com"; "val apply"; "val publish"; "PATCH"; "POST"; "DELETE" ] |> List.forall (surface.Contains >> not)
@@ -150,8 +150,8 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
             let protocolPath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
             let protocol = File.ReadAllText protocolPath
             let alteredDigest = protocol + "\nattacker-change" |> Text.Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
-            sha256File protocolPath = "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
-            && alteredDigest <> "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
+            sha256File protocolPath = "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
+            && alteredDigest <> "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
         | NoReleaseMutationSurface, "forbidden-http-client-surface" ->
             let forbidden = [ "HttpClient"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "api.github.com"; "val apply"; "val publish"; "PATCH"; "POST"; "DELETE" ]
             let surface = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/GitHubReleaseHardeningQualification.fsi"))

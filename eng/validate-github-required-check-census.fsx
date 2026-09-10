@@ -177,7 +177,7 @@ else
         | StableAggregates -> not ((string aggregate).Contains("compiler-and-tests")) && aggregate.RequiredCount = report.Entries.Length
         | ExactSeal -> RequiredCheckCensusAdapter.verify (String.replicate 64 "0") asOf (TimeSpan.FromHours 1) snapshot |> Result.isError
         | ExactReplay -> RequiredCheckCensusAdapter.verify report.Seal asOf (TimeSpan.FromHours 1) snapshot = Ok report
-        | QuintUnchanged -> File.ReadAllBytes(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant() = "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
+        | QuintUnchanged -> File.ReadAllBytes(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant() = "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
         | NoPlanSurface -> not (File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/RequiredCheckCensusAdapter.fsi")).Contains("val plan"))
         | NoApplySurface -> not (File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/RequiredCheckCensusAdapter.fsi")).Contains("val apply"))
 

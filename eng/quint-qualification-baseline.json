@@ -1,10 +1,10 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b",
-  "configurationSha256": "5449a18f6eae53f8364ebfcfaa223e9ee21329fbd05a8bd94307ad20be73b909",
+  "sourceSha256": "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f",
+  "configurationSha256": "721078ba74f18c41e7943b1582161f0501182f1c52d841e164247076f2c71d59",
   "assembledQuintSha256": "e3a955d18822c18ac9c05c4545a722954bcac2c856994ac9ece7bd4a3d56c2ca",
   "runnerClass": "linux-x64-local-calibration",
-  "measuredAt": "2026-09-10T07:55:00Z",
+  "measuredAt": "2026-09-10T15:51:30Z",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v1",
   "measurements": [
     {
@@ -197,6 +197,24 @@
       "elapsedMs": 30373,
       "peakMiB": 617,
       "artifactBytes": 9697
+    },
+    {
+      "id": "hosted-writer-progress",
+      "stateCount": 23,
+      "transitionCount": 23,
+      "sampleCount": 10000,
+      "elapsedMs": 29729,
+      "peakMiB": 680,
+      "artifactBytes": 67460
+    },
+    {
+      "id": "hosted-writer-fault-safety",
+      "stateCount": 428,
+      "transitionCount": 1231,
+      "sampleCount": 10000,
+      "elapsedMs": 29510,
+      "peakMiB": 682,
+      "artifactBytes": 67480
     }
   ]
 }

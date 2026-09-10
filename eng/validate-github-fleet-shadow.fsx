@@ -126,7 +126,7 @@ if text independence "highestReached" <> "value-independent" || independence.Get
 if text v1Source "command" <> "fsgg-coord ready --all --json" || text v2Source "command" <> "gh api graphql --paginate --slurp" then failwith "live commands are not independently bound"
 if observation.Roster.Length <> report.RepositoryCount || observation.Repositories |> List.exists (fun repository -> not repository.TerminalPageObserved) then failwith "fleet completeness proof failed"
 let quint = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
-if sha256 quint <> "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b" then failwith "canonical Quint source changed"
+if sha256 quint <> "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f" then failwith "canonical Quint source changed"
 
 let baselineGreen = report.UnexplainedDivergenceCount = 0 && report.ItemCount = 180 && report.RepositoryCount = 10
 let classify classificationValue =
@@ -163,7 +163,7 @@ let generatedMutation control =
     | ExactReplay -> FleetShadowAdapter.compare asOf (TimeSpan.FromHours 1) observation = Ok report
     | CrossSubject -> let first = observation.Repositories.Head in FleetShadowAdapter.compare asOf (TimeSpan.FromHours 1) { observation with Repositories = { first with Items = [ { first.Items.Head with Repository = "other/repo" } ] } :: observation.Repositories.Tail } |> Result.isError
     | PartialUnreadable -> FleetShadowAdapter.compare asOf (TimeSpan.FromHours 1) { observation with Complete = false } |> Result.isError
-    | QuintAndPrerequisite -> sha256 quint = "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
+    | QuintAndPrerequisite -> sha256 quint = "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
     | LiveEvidence -> text v1Source "command" = "fsgg-coord ready --all --json" && text v2Source "command" = "gh api graphql --paginate --slurp" && v1Rows = evidenceV1Rows && v2Rows = evidenceV2Rows
 let independentMutation control =
     match control with

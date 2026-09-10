@@ -174,6 +174,47 @@ type PostgreSqlStoreTests() =
     let cancellationToken = CancellationToken.None
 
     [<Fact>]
+    member _.``native delivery readback and appended effect kinds survive recovery``() = task {
+        let! dataSource, identity = Fixture.reset()
+        use dataSource = dataSource
+        let! _ = Fixture.sql "orchestration_o0" "ALTER TABLE fsgg_orchestration.event DROP CONSTRAINT ck_effect_shape; ALTER TABLE fsgg_orchestration.event ADD CONSTRAINT ck_effect_shape CHECK (effect_kind BETWEEN 0 AND 4)"
+        let! migratedIdentity = PostgreSqlSchema.migrate dataSource cancellationToken
+        Assert.Equal(identity,migratedIdentity)
+        let store = PostgreSqlStore(Fixture.options dataSource identity 0L) :> IJournalStore
+        let persistenceId = "work-item-v1-hosted-delivery"
+        let operationId = Id.operation(Guid.NewGuid())
+        let routeId = Guid.NewGuid()
+        let attemptId = Id.attempt(Guid.NewGuid())
+        let candidateId = Id.candidate(Guid.NewGuid())
+        let intent =
+            { OperationId=operationId; Kind=ReadNativeDelivery; Generation=Id.generation 1L
+              WorkflowRevision=Id.revision 8L; ResourceId="github-pr-node"; PayloadSha256=String.replicate 64 "a" }
+        let readback =
+            { OperationId=operationId; RouteId=routeId; AttemptId=attemptId; CandidateId=candidateId
+              RepositoryNodeId="R_repo"; PullRequestNodeId="PR_node"
+              CandidateHeadSha=String.replicate 40 "b"; ObservedPullRequestHeadSha=String.replicate 40 "b"
+              MergeCommitSha=String.replicate 40 "c"; ProviderRevision="github-pr-revision-1"
+              Generation=Id.generation 1L; WorkflowRevision=Id.revision 8L
+              ObservedAt=DateTimeOffset.UtcNow; Merged=true }
+        let intentEvent = Fixture.event persistenceId 1L (IntentAdded intent) "intent"
+        let readbackEvent = Fixture.coreEvent persistenceId 2L (NativeDeliveryReadbackAccepted readback)
+        let settledBase = Fixture.coreEvent persistenceId 3L (EffectSettled(operationId,Applied readback.ProviderRevision))
+        let settledEvent = { settledBase with EffectChange=Settled operationId }
+        let body = Fixture.sha(Encoding.UTF8.GetBytes "hosted-delivery-command")
+        let! appended = store.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [intentEvent;readbackEvent;settledEvent], cancellationToken)
+        Assert.Equal<AppendOutcome>(Appended 3L, appended)
+        let! recovered = store.Recover(persistenceId, cancellationToken)
+        match recovered with
+        | Error failures -> failwithf "hosted delivery did not recover: %A" failures
+        | Ok result ->
+            let state = result.Events |> List.map(fun value -> EventEnvelope.tryDecode value.Payload |> Result.defaultWith failwith) |> replay
+            Assert.Equal(readback, state.NativeDeliveryReadbacks[operationId])
+            match state.Operations[operationId] with
+            | OperationState.Settled(stored,Applied revision) -> Assert.Equal(ReadNativeDelivery,stored.Kind); Assert.Equal(readback.ProviderRevision,revision)
+            | other -> failwithf "unexpected recovered operation: %A" other
+    }
+
+    [<Fact>]
     member _.``migration and exact readiness succeed``() = task {
         let! dataSource, identity = Fixture.reset()
         use dataSource = dataSource

@@ -92,9 +92,17 @@ CREATE TABLE IF NOT EXISTS fsgg_orchestration.event (
     CONSTRAINT uq_event_id UNIQUE (persistence_id, event_id),
     CONSTRAINT ck_effect_shape CHECK (
         (effect_change = 0 AND effect_operation_id IS NULL AND effect_kind IS NULL AND effect_generation IS NULL AND effect_workflow_revision IS NULL AND effect_resource_id IS NULL AND effect_payload_sha256 IS NULL)
-        OR (effect_change = 1 AND effect_operation_id IS NOT NULL AND effect_kind IS NOT NULL AND effect_kind BETWEEN 0 AND 4 AND effect_generation IS NOT NULL AND effect_generation >= 0 AND effect_workflow_revision IS NOT NULL AND effect_workflow_revision >= 0 AND effect_resource_id IS NOT NULL AND length(effect_resource_id) BETWEEN 1 AND 256 AND effect_payload_sha256 IS NOT NULL AND effect_payload_sha256 ~ '^[0-9a-f]{64}$')
+        OR (effect_change = 1 AND effect_operation_id IS NOT NULL AND effect_kind IS NOT NULL AND effect_kind BETWEEN 0 AND 9 AND effect_generation IS NOT NULL AND effect_generation >= 0 AND effect_workflow_revision IS NOT NULL AND effect_workflow_revision >= 0 AND effect_resource_id IS NOT NULL AND length(effect_resource_id) BETWEEN 1 AND 256 AND effect_payload_sha256 IS NOT NULL AND effect_payload_sha256 ~ '^[0-9a-f]{64}$')
         OR (effect_change = 2 AND effect_operation_id IS NOT NULL AND effect_kind IS NULL AND effect_generation IS NULL AND effect_workflow_revision IS NULL AND effect_resource_id IS NULL AND effect_payload_sha256 IS NULL)
     )
+);
+-- The hosted-writer amendment appends effect kinds 5 through 9 without changing the
+-- event row shape. Replace the version-1 constraint when upgrading an existing store.
+ALTER TABLE fsgg_orchestration.event DROP CONSTRAINT IF EXISTS ck_effect_shape;
+ALTER TABLE fsgg_orchestration.event ADD CONSTRAINT ck_effect_shape CHECK (
+    (effect_change = 0 AND effect_operation_id IS NULL AND effect_kind IS NULL AND effect_generation IS NULL AND effect_workflow_revision IS NULL AND effect_resource_id IS NULL AND effect_payload_sha256 IS NULL)
+    OR (effect_change = 1 AND effect_operation_id IS NOT NULL AND effect_kind IS NOT NULL AND effect_kind BETWEEN 0 AND 9 AND effect_generation IS NOT NULL AND effect_generation >= 0 AND effect_workflow_revision IS NOT NULL AND effect_workflow_revision >= 0 AND effect_resource_id IS NOT NULL AND length(effect_resource_id) BETWEEN 1 AND 256 AND effect_payload_sha256 IS NOT NULL AND effect_payload_sha256 ~ '^[0-9a-f]{64}$')
+    OR (effect_change = 2 AND effect_operation_id IS NOT NULL AND effect_kind IS NULL AND effect_generation IS NULL AND effect_workflow_revision IS NULL AND effect_resource_id IS NULL AND effect_payload_sha256 IS NULL)
 );
 CREATE INDEX IF NOT EXISTS ix_event_effect ON fsgg_orchestration.event (persistence_id, effect_operation_id, sequence_number)
     WHERE effect_operation_id IS NOT NULL;

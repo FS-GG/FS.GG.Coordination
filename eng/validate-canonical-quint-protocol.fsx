@@ -31,13 +31,13 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
+    "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
 
 let expectedContract =
-    "a77921dadee641e12fd20929ffebd2b396c68847a969b0ce8e1cd9c3e4f4795c"
+    "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
 
 let expectedBehavior =
-    "66618eb8a45c1cea91eb74408d0f2d9851be53695af8383e3617cb12807fd648"
+    "0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715"
 
 let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
@@ -561,7 +561,7 @@ then
 if contractRoot.GetProperty("profile").GetString() <> expectedProfile then
     fail "CONTRACT-PROFILE" "wrong"
 
-if contractRoot.GetProperty("catalogue").GetArrayLength() <> 135 then
+if contractRoot.GetProperty("catalogue").GetArrayLength() <> 136 then
     fail "CATALOGUE" "wrong-cardinality"
 
 if contractRoot.GetProperty("relationships").GetArrayLength() <> 17 then
