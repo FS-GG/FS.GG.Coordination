@@ -141,7 +141,7 @@ let private createArtifacts root =
             let quintDigest = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
             let apalacheDigest = "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
             let formalRows =
-                [ "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "journal-fencing"
+                [ "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
                   "journal-reconciliation"; "lifecycle"; "operation-saga"; "pilot-permit-fault-safety"; "pilot-permit-major-action-coverage"; "pilot-permit-transfer"; "relation-mutation"; "review-epoch"; "rollback" ]
                 |> List.mapi (fun index id ->
                     let suffix = (index + 1).ToString("x2")
@@ -157,12 +157,12 @@ let private createArtifacts root =
                     $"{{\"id\":\"%s{id}\",\"manifestSha256\":\"%s{manifest}\",\"traceSha256\":\"%s{trace}\",\"itfSha256\":\"%s{itf}\"}}")
                 |> String.concat ","
             let resultDigest =
-                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|141|207|182|56|%s{preparationDigest}|%s{formalIdentity}|none|none"))
+                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|151|221|196|62|%s{preparationDigest}|%s{formalIdentity}|none|none"))
                 |> Convert.ToHexString
                 |> _.ToLowerInvariant()
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":141,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":207,\"quintCli\":182,\"apalacheVerify\":56}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":151,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":221,\"quintCli\":196,\"apalacheVerify\":62}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
 
@@ -920,12 +920,12 @@ let private mutateCanonicalQuintReceipt mutate =
 [<Theory>]
 [<InlineData("\"q1Outcome\":\"passed\"", "\"q1Outcome\":\"failed\"", "quint-receipt-outcome")>]
 [<InlineData("\"positiveInvariantCount\":8", "\"positiveInvariantCount\":7", "quint-receipt-inventory")>]
-[<InlineData("\"negativeControlCount\":141", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
+[<InlineData("\"negativeControlCount\":151", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
 [<InlineData("\"totalDurationMs\":300", "\"totalDurationMs\":301", "quint-receipt-timing")>]
-[<InlineData("\"external\":207", "\"external\":185", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":182", "\"quintCli\":160", "quint-receipt-process-count")>]
-[<InlineData("\"apalacheVerify\":56", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":182", "\"quintCli\":0", "quint-receipt-process-count")>]
+[<InlineData("\"external\":221", "\"external\":185", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":196", "\"quintCli\":160", "quint-receipt-process-count")>]
+[<InlineData("\"apalacheVerify\":62", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":196", "\"quintCli\":0", "quint-receipt-process-count")>]
 [<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
 let ``canonical Quint receipt rejects incomplete or contradictory evidence`` (original: string) (replacement: string) (rule: string) =
     let exitCode, _, error =
