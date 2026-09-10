@@ -52,7 +52,8 @@ module ObserverViewCommand =
             value["recordedAt"] <- JsonValue.Create(row.RecordedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture))
             rows.Add value
         let root = JsonObject()
-        root["schema"] <- JsonValue.Create("fsgg.orchestration.observer-view/1")
+        root["schema"] <- JsonValue.Create("fsgg.orchestration.observer-export-view/1")
+        root["authority"] <- JsonValue.Create("unverified-event-export")
         root["sessionId"] <- view.SessionId |> Option.map (fun value -> JsonValue.Create(value) :> JsonNode) |> Option.defaultValue null
         root["sequence"] <- JsonValue.Create(view.Sequence)
         root["observationRevision"] <- view.ObservationRevision |> Option.map (fun value -> JsonValue.Create(value) :> JsonNode) |> Option.defaultValue null
@@ -63,7 +64,7 @@ module ObserverViewCommand =
         seq {
             let session = view.SessionId |> Option.defaultValue "unopened"
             let observation = view.ObservationRevision |> Option.defaultValue "none"
-            yield $"observer session={session} sequence={view.Sequence} observation={observation}"
+            yield $"observer authority=unverified-event-export session={session} sequence={view.Sequence} observation={observation}"
             for row in view.Rows do
                 yield $"{stage row.Stage}\t{row.Identity}\t{row.Detail}\t{row.RecordedAt.ToUniversalTime():O}"
         }

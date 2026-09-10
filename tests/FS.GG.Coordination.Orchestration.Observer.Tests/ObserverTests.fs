@@ -41,11 +41,22 @@ let proposalInput observationSha =
     { ProposalId = proposalId; AttemptId = attemptId; ObservationSha256 = observationSha; WorkflowRevision = Id.revision 7L; Generation = Id.generation 3L
       Scope = "repo:123/issues"; NarrativeSha256 = sha "d"; Actions = [ { Kind = InspectWorkItem; WorkItem = workItem; ParametersSha256 = sha "e" } ]; ProposedAt = now }
 
+let approvedState () =
+    let state0 = observed()
+    let state1 = apply state0 (StartPlanningAttempt(attemptId, usage 10L 10L 10L, now.AddSeconds -5.))
+    let state2 = apply state1 (CompletePlanningAttempt(attemptId, usage 5L 5L 5L, proposalInput state1.Observation.Value.ObservationSha256))
+    let proposal = state2.Proposals[proposalId]
+    let commandId = Id.command(Guid.Parse "50000000-0000-0000-0000-000000000005")
+    let approval =
+        { ProposalId = proposalId; PlanSha256 = proposal.PlanSha256; PlanningBudgetSha256 = Observer.budgetSha256 budget; PrincipalId = "planner-owner"; Scope = proposal.Scope
+          ExpectedWorkflowRevision = proposal.WorkflowRevision; ExpectedGeneration = proposal.Generation; CommandId = commandId; CommandBodySha256 = sha "f"; Kind = ExplicitApproval; ApprovedAt = now }
+    apply state2 (ApproveProposal approval), commandId
+
 [<Fact>]
 let ``complete typed lifecycle keeps every presentation stage distinct`` () =
     let state0 = observed()
     let state1 = apply state0 (RecordConversation { EntryId = Guid.NewGuid(); Role = Operator; BodySha256 = sha "1"; RecordedAt = now.AddMinutes -1. })
-    let state2 = apply state1 (StartPlanningAttempt(attemptId, usage 40L 20L 400L, now.AddSeconds -30.))
+    let state2 = apply state1 (StartPlanningAttempt(attemptId, usage 40L 20L 400L, now.AddSeconds -5.))
     let input = proposalInput state2.Observation.Value.ObservationSha256
     let state3 = apply state2 (CompletePlanningAttempt(attemptId, usage 25L 10L 250L, input))
     let proposal = state3.Proposals[proposalId]
@@ -61,11 +72,12 @@ let ``complete typed lifecycle keeps every presentation stage distinct`` () =
     let view = ObserverProjection.render state6
     Assert.Equal<ProjectionStage list>([ Conversation; Proposed; Approved; DurableAcceptance; EffectComplete ], view.Rows |> List.map _.Stage)
     Assert.Equal(Some(usage 75L 50L 750L), view.Remaining)
+    Assert.Equal(view, ObserverProjection.fromRecovery { Events = []; State = state6 })
 
 [<Fact>]
 let ``stale planning output cannot replace newer observation`` () =
     let state0 = observed()
-    let state1 = apply state0 (StartPlanningAttempt(attemptId, usage 40L 20L 400L, now.AddSeconds -30.))
+    let state1 = apply state0 (StartPlanningAttempt(attemptId, usage 40L 20L 400L, now.AddSeconds -5.))
     let stale = proposalInput state1.Observation.Value.ObservationSha256
     let state2 = apply state1 (RecordProjectObservation(observation "project-rev-2" now))
     let refused = decide state2 (CompletePlanningAttempt(attemptId, usage 1L 1L 1L, stale))
@@ -100,6 +112,10 @@ let ``budget deadline capacity and overflow refuse before planning`` () =
     let started = apply hugeState (StartPlanningAttempt(attemptId, usage Int64.MaxValue 1L 1L, now))
     let overflow = decide started (StartPlanningAttempt(Id.attempt(Guid.NewGuid()), usage 1L 0L 0L, now))
     Assert.Equal("planning-attempt-not-authorized", overflow.Receipt.Detail)
+    let hugeRuntimeBudget = { budget with RuntimeSecondsLimit = Int64.MaxValue }
+    let runtimeState = apply Observer.initial (OpenSession(sessionId, projectId, hugeRuntimeBudget)) |> fun state -> apply state (RecordProjectObservation(observation "runtime" now))
+    let runtimeOverflow = decide runtimeState (StartPlanningAttempt(attemptId, usage 0L Int64.MaxValue 0L, now))
+    Assert.Equal("planning-attempt-not-authorized", runtimeOverflow.Receipt.Detail)
 
 [<Fact>]
 let ``approval binds exact proposal budget principal scope revision generation and command body`` () =
@@ -193,6 +209,10 @@ type private ReadbackCapability() =
     interface ICommandReadbackCapability with
         member _.ReadCommandAcceptance(_, _) = Task.FromResult(Error "not-run")
         member _.ReadEffectCompletions(_, _) = Task.FromResult(Error "not-run")
+type private FixedReadbackCapability(acceptance: DurableCommandAcceptance, effects: DurableEffectCompletion list) =
+    interface ICommandReadbackCapability with
+        member _.ReadCommandAcceptance(_, _) = Task.FromResult(Ok acceptance)
+        member _.ReadEffectCompletions(_, _) = Task.FromResult(Ok effects)
 type private Journal() =
     interface IObserverJournalStore with
         member _.AppendObserver(_, _) = Task.FromResult(ObserverInvalidAppend "not-run")
@@ -227,6 +247,33 @@ type private RecordingPlanner(beforeLaunch: unit -> unit, result: Result<Plannin
             calls <- calls + 1
             Task.FromResult result
 
+type private ManualTimeProvider(initial: DateTimeOffset) =
+    inherit TimeProvider()
+    let mutable current = initial
+    override _.GetUtcNow() = current
+    member _.Advance(duration: TimeSpan) = current <- current.Add duration
+
+type private DelayedReservationJournal(clock: ManualTimeProvider) =
+    let requests = ResizeArray<ObserverAppendRequest>()
+    interface IObserverJournalStore with
+        member _.AppendObserver(request, _) =
+            requests.Add request
+            if requests.Count = 1 then clock.Advance(TimeSpan.FromSeconds 2.)
+            Task.FromResult(ObserverAppended(request.Events |> List.last |> _.Sequence))
+        member _.RecoverObserver(_, _) = Task.FromResult(Error [ ObserverStoreUnavailable "not-run" ])
+
+type private NonCooperativePlanner() =
+    let pending = TaskCompletionSource<Result<PlanningResult, string>>(TaskCreationOptions.RunContinuationsAsynchronously)
+    interface IBoundedPlanningCapability with
+        member _.CreateProposal(_, _) = pending.Task
+
+type private SynchronouslyBlockingPlanner(entered: ManualResetEventSlim, release: ManualResetEventSlim) =
+    interface IBoundedPlanningCapability with
+        member _.CreateProposal(_, _) =
+            entered.Set()
+            release.Wait()
+            Task.FromResult(Error "released-after-observer-timeout")
+
 let executionRequest state =
     { ObserverId = ObserverJournal.observerId sessionId; State = state; AttemptId = attemptId; Reservation = usage 10L 10L 10L
       StartCommandId = Id.command(Guid.NewGuid()); CompletionCommandId = Id.command(Guid.NewGuid()); UnknownCommandId = Id.command(Guid.NewGuid())
@@ -239,7 +286,7 @@ let ``runtime persists reservation before invoking bounded planner and persists 
     let input = proposalInput state.Observation.Value.ObservationSha256
     let planner = RecordingPlanner((fun () -> Assert.Single(journal.Requests) |> ignore), Ok { Proposal = input; ActualUse = usage 5L 5L 5L })
     let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
-    let! outcome = ObserverRuntime.executePlanning now composition (executionRequest state) CancellationToken.None
+    let! outcome = ObserverRuntime.executePlanning (ManualTimeProvider now) composition (executionRequest state) CancellationToken.None
     match outcome with PlanningResultPersisted(finalState, proposal) -> Assert.Equal(3L, finalState.Sequence - state.Sequence); Assert.Equal(proposalId, proposal.ProposalId) | other -> failwithf "unexpected %A" other
     Assert.Equal(2, journal.Requests.Length)
     Assert.Equal(1, planner.Calls)
@@ -251,7 +298,7 @@ let ``duplicate reservation never relaunches planning agent`` () = task {
     let journal = RecordingJournal([ ObserverDuplicate(state.Sequence + 1L) ])
     let planner = RecordingPlanner((fun () -> ()), Error "must-not-run")
     let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
-    let! outcome = ObserverRuntime.executePlanning now composition (executionRequest state) CancellationToken.None
+    let! outcome = ObserverRuntime.executePlanning (ManualTimeProvider now) composition (executionRequest state) CancellationToken.None
     match outcome with PlanningAlreadyRecorded _ -> () | other -> failwithf "unexpected %A" other
     Assert.Equal(0, planner.Calls)
 }
@@ -262,10 +309,119 @@ let ``planner loss persists unknown state without releasing reservation`` () = t
     let journal = RecordingJournal([ ObserverAppended(state.Sequence + 1L); ObserverAppended(state.Sequence + 2L) ])
     let planner = RecordingPlanner((fun () -> Assert.Single(journal.Requests) |> ignore), Error "agent-died")
     let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
-    let! outcome = ObserverRuntime.executePlanning now composition (executionRequest state) CancellationToken.None
+    let! outcome = ObserverRuntime.executePlanning (ManualTimeProvider now) composition (executionRequest state) CancellationToken.None
     match outcome with
     | PlanningOutcomePersistedUnknown(finalState, "agent-died") ->
         Assert.Equal(usage 10L 10L 10L, finalState.Reserved)
         Assert.Equal(PlanningOutcomeUnknown "agent-died", finalState.Attempts[attemptId].Status)
     | other -> failwithf "unexpected %A" other
+}
+
+[<Fact>]
+let ``runtime reads fresh time after a delayed successful planner`` () = task {
+    let state = observed()
+    let clock = ManualTimeProvider now
+    let journal = RecordingJournal([ ObserverAppended(state.Sequence + 1L); ObserverAppended(state.Sequence + 3L) ])
+    let input = proposalInput state.Observation.Value.ObservationSha256
+    let planner = RecordingPlanner((fun () -> clock.Advance(TimeSpan.FromSeconds 1.)), Ok { Proposal = input; ActualUse = usage 1L 1L 1L })
+    let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
+    let! outcome = ObserverRuntime.executePlanning clock composition (executionRequest state) CancellationToken.None
+    match outcome with PlanningResultPersisted _ -> () | other -> failwithf "unexpected %A" other
+    let completionEnvelope = journal.Requests[1].Command
+    Assert.Equal(now.AddSeconds 1., completionEnvelope.IssuedAt)
+}
+
+[<Fact>]
+let ``result after command expiry becomes durable unknown and retains reservation`` () = task {
+    let state = observed()
+    let clock = ManualTimeProvider now
+    let journal = RecordingJournal([ ObserverAppended(state.Sequence + 1L); ObserverAppended(state.Sequence + 2L) ])
+    let input = proposalInput state.Observation.Value.ObservationSha256
+    let planner = RecordingPlanner((fun () -> clock.Advance(TimeSpan.FromSeconds 2.)), Ok { Proposal = input; ActualUse = usage 1L 1L 1L })
+    let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
+    let request = { executionRequest state with ExpiresAt = now.AddSeconds 1. }
+    let! outcome = ObserverRuntime.executePlanning clock composition request CancellationToken.None
+    match outcome with
+    | PlanningOutcomePersistedUnknown(finalState, "planning-window-expired") -> Assert.Equal(request.Reservation, finalState.Reserved)
+    | other -> failwithf "unexpected %A" other
+}
+
+[<Fact>]
+let ``reservation append consuming deadline prevents planner launch`` () = task {
+    let state = observed()
+    let clock = ManualTimeProvider now
+    let journal = DelayedReservationJournal(clock)
+    let input = proposalInput state.Observation.Value.ObservationSha256
+    let planner = RecordingPlanner((fun () -> ()), Ok { Proposal = input; ActualUse = usage 1L 1L 1L })
+    let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
+    let request = { executionRequest state with ExpiresAt = now.AddSeconds 1. }
+    let! outcome = ObserverRuntime.executePlanning clock composition request CancellationToken.None
+    match outcome with
+    | PlanningOutcomePersistedUnknown(finalState, "planning-window-expired") -> Assert.Equal(request.Reservation, finalState.Reserved)
+    | other -> failwithf "unexpected %A" other
+    Assert.Equal(0, planner.Calls)
+}
+
+[<Fact>]
+let ``noncooperative planner is bounded by command expiry and cannot release reservation`` () = task {
+    let state = observed()
+    let current = TimeProvider.System.GetUtcNow()
+    let journal = RecordingJournal([ ObserverAppended(state.Sequence + 1L); ObserverAppended(state.Sequence + 2L) ])
+    let planner = NonCooperativePlanner()
+    let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
+    let request = { executionRequest state with IssuedAt = current.AddMilliseconds -10.; ExpiresAt = current.AddMilliseconds 75. }
+    let! outcome = ObserverRuntime.executePlanning TimeProvider.System composition request CancellationToken.None
+    match outcome with
+    | PlanningOutcomePersistedUnknown(finalState, "planning-window-expired") -> Assert.Equal(request.Reservation, finalState.Reserved)
+    | other -> failwithf "unexpected %A" other
+}
+
+[<Fact>]
+let ``synchronously blocking planner entry is bounded off the observer caller`` () = task {
+    let state = observed()
+    let current = TimeProvider.System.GetUtcNow()
+    let journal = RecordingJournal([ ObserverAppended(state.Sequence + 1L); ObserverAppended(state.Sequence + 2L) ])
+    use entered = new ManualResetEventSlim(false)
+    use release = new ManualResetEventSlim(false)
+    let planner = SynchronouslyBlockingPlanner(entered, release)
+    let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
+    let request = { executionRequest state with IssuedAt = current.AddMilliseconds -10.; ExpiresAt = current.AddMilliseconds 100. }
+    try
+        let! outcome = ObserverRuntime.executePlanning TimeProvider.System composition request CancellationToken.None
+        Assert.True(entered.IsSet)
+        match outcome with
+        | PlanningOutcomePersistedUnknown(finalState, "planning-window-expired") -> Assert.Equal(request.Reservation, finalState.Reserved)
+        | other -> failwithf "unexpected %A" other
+    finally
+        release.Set()
+}
+
+[<Fact>]
+let ``authoritative projection records acceptance and effect only through bound readback`` () = task {
+    let approved, commandId = approvedState()
+    let approval = approved.Approvals[proposalId]
+    let acceptance =
+        { ProposalId = proposalId
+          ApprovalSha256 = approval.ApprovalSha256
+          Receipt = { CommandId = commandId; BodySha256 = sha "f"; Disposition = ReceiptDisposition.Accepted; Revision = Id.revision 8L; ProtocolVersion = Id.protocolVersion 1 0; Detail = "accepted" }
+          Provenance = readback
+          AcceptedAt = now }
+    let operationId = Id.operation(Guid.Parse "60000000-0000-0000-0000-000000000006")
+    let completion = { CommandId = commandId; OperationId = operationId; Result = EffectApplied "provider-rev"; Provenance = readback; CompletedAt = now }
+    let journal = RecordingJournal([ ObserverAppended(approved.Sequence + 1L); ObserverAppended(approved.Sequence + 2L) ])
+    let capability = FixedReadbackCapability(acceptance, [ completion ])
+    let composition = ObserverComposition.create (ReadCapability()) (PlanningCapability()) capability journal
+    let acceptanceRequest =
+        { ObserverId = ObserverJournal.observerId sessionId; State = approved; ProposalId = proposalId; PersistenceCommandId = Id.command(Guid.NewGuid())
+          PrincipalId = "observer-reader"; IssuedAt = now.AddSeconds -1.; ExpiresAt = now.AddMinutes 1. }
+    let! acceptanceOutcome = ObserverRuntime.refreshCommandAcceptance (ManualTimeProvider now) composition acceptanceRequest CancellationToken.None
+    let accepted = match acceptanceOutcome with CommandAcceptanceRefreshed state -> state | other -> failwithf "unexpected %A" other
+    let effectRequest =
+        { ObserverId = ObserverJournal.observerId sessionId; State = accepted; AcceptedCommandId = commandId; OperationId = operationId
+          PersistenceCommandId = Id.command(Guid.NewGuid()); PrincipalId = "observer-reader"; IssuedAt = now.AddSeconds -1.; ExpiresAt = now.AddMinutes 1. }
+    let! effectOutcome = ObserverRuntime.refreshEffectCompletion (ManualTimeProvider now) composition effectRequest CancellationToken.None
+    let completed = match effectOutcome with EffectCompletionRefreshed state -> state | other -> failwithf "unexpected %A" other
+    let authoritative = ObserverProjection.fromRecovery { Events = []; State = completed }
+    Assert.Equal<ProjectionStage list>([ Proposed; Approved; DurableAcceptance; EffectComplete ], authoritative.Rows |> List.map _.Stage)
+    Assert.All(journal.Requests, fun request -> Assert.Contains(request.Events, fun stored -> match stored.Event with CommandAcceptanceRecorded _ | EffectCompletionRecorded _ -> true | _ -> false))
 }

@@ -273,6 +273,11 @@ module Observer =
         value.TokenLimit >= 0L && value.RuntimeSecondsLimit >= 0L && value.CostMicrosLimit >= 0L && value.Deadline > now
         && (value.TokenLimit > 0L || value.RuntimeSecondsLimit > 0L || value.CostMicrosLimit > 0L)
 
+    let internal tryAddRuntime (startedAt: DateTimeOffset) runtimeSeconds =
+        let availableTicks = (DateTimeOffset.MaxValue - startedAt).Ticks
+        if runtimeSeconds < 0L || runtimeSeconds > availableTicks / TimeSpan.TicksPerSecond then None
+        else Some(startedAt.AddTicks(runtimeSeconds * TimeSpan.TicksPerSecond))
+
     let private canonicalFields (fields: string list) =
         use stream = new IO.MemoryStream()
         use writer = new IO.BinaryWriter(stream, Encoding.UTF8, true)
@@ -432,6 +437,7 @@ module Observer =
                 match state.Budget, state.Observation with
                 | Some budget, Some observation when positiveUse reservation && within budget state.Used (addUse state.Reserved reservation |> Option.defaultValue { Tokens = Int64.MaxValue; RuntimeSeconds = Int64.MaxValue; CostMicros = Int64.MaxValue }) now
                                                      && startedAt <= now
+                                                     && tryAddRuntime startedAt reservation.RuntimeSeconds |> Option.isSome
                                                      && not (Map.containsKey attemptId state.Attempts)
                                                      && not (state.Attempts |> Map.exists (fun _ attempt -> match attempt.Status with PlanningActive | PlanningOutcomeUnknown _ -> true | _ -> false)) ->
                     let attempt = { AttemptId = attemptId; ObservationSha256 = observation.ObservationSha256; WorkflowRevision = observation.WorkflowRevision; Generation = observation.Generation; Reserved = reservation; StartedAt = startedAt; Status = PlanningActive }
@@ -442,9 +448,11 @@ module Observer =
                 | Some attempt when attempt.Status = PlanningActive && not (String.IsNullOrWhiteSpace reason) -> accept envelope body state [ PlanningAttemptBecameUnknown(attemptId, reason) ] "planning-outcome-unknown"
                 | _ -> reject envelope body state "planning-attempt-not-active"
             | CompletePlanningAttempt(attemptId, actual, input) ->
-                match Map.tryFind attemptId state.Attempts, state.Observation with
-                | Some attempt, Some observation when attempt.Status = PlanningActive && input.AttemptId = attemptId && validUse actual
+                match Map.tryFind attemptId state.Attempts, state.Observation, state.Budget with
+                | Some attempt, Some observation, Some budget when attempt.Status = PlanningActive && input.AttemptId = attemptId && validUse actual
                                                           && subtractUse attempt.Reserved actual |> Option.isSome
+                                                          && now <= budget.Deadline
+                                                          && (tryAddRuntime attempt.StartedAt attempt.Reserved.RuntimeSeconds |> Option.exists (fun deadline -> now <= deadline))
                                                           && input.ObservationSha256 = observation.ObservationSha256
                                                           && input.WorkflowRevision = observation.WorkflowRevision
                                                           && input.Generation = observation.Generation
@@ -728,12 +736,13 @@ module ObserverRuntime =
     let private append (journal: IObserverJournalStore) observerId receivedAt (envelope: ObserverCommandEnvelope) (decision: ObserverDecision) cancellationToken =
         journal.AppendObserver(ObserverJournal.appendRequest observerId receivedAt envelope decision, cancellationToken)
 
-    let refreshObservation now (ObserverComposition(projectRead, _, _, journal)) (request: ObservationRefreshRequest) cancellationToken =
+    let refreshObservation (clock: TimeProvider) (ObserverComposition(projectRead, _, _, journal)) (request: ObservationRefreshRequest) cancellationToken =
         task {
             let! read = projectRead.ObserveProject(request.ProjectRequest, cancellationToken)
             match read with
             | Error failure -> return ObservationReadRefused failure
             | Ok observation ->
+                let now = clock.GetUtcNow()
                 let envelope =
                     { CommandId = request.CommandId
                       ExpectedSequence = request.State.Sequence
@@ -750,14 +759,15 @@ module ObserverRuntime =
                     | other -> return ObservationPersistenceRefused other
         }
 
-    let private markUnknown now (journal: IObserverJournalStore) (request: PlanningExecutionRequest) (state: ObserverState) reason cancellationToken =
+    let private markUnknown (clock: TimeProvider) (journal: IObserverJournalStore) (request: PlanningExecutionRequest) (state: ObserverState) reason cancellationToken =
         task {
+            let now = clock.GetUtcNow()
             let envelope =
                 { CommandId = request.UnknownCommandId
                   ExpectedSequence = state.Sequence
                   PrincipalId = request.PrincipalId
-                  IssuedAt = request.IssuedAt
-                  ExpiresAt = request.ExpiresAt
+                  IssuedAt = now
+                  ExpiresAt = now.AddMinutes 1.
                   Command = MarkPlanningAttemptUnknown(request.AttemptId, reason) }
             let decision = Observer.decide now state envelope
             if decision.Receipt.Disposition = ObserverRejected then return PlanningOutcomePersistenceUncertain(state, reason, ObserverInvalidAppend decision.Receipt.Detail)
@@ -768,19 +778,20 @@ module ObserverRuntime =
                 | other -> return PlanningOutcomePersistenceUncertain(state, reason, other)
         }
 
-    let executePlanning now (ObserverComposition(_, planner, _, journal)) (request: PlanningExecutionRequest) cancellationToken =
+    let executePlanning (clock: TimeProvider) (ObserverComposition(_, planner, _, journal)) (request: PlanningExecutionRequest) cancellationToken =
         task {
+            let launchNow = clock.GetUtcNow()
             let startEnvelope =
                 { CommandId = request.StartCommandId
                   ExpectedSequence = request.State.Sequence
                   PrincipalId = request.PrincipalId
                   IssuedAt = request.IssuedAt
                   ExpiresAt = request.ExpiresAt
-                  Command = StartPlanningAttempt(request.AttemptId, request.Reservation, now) }
-            let startDecision = Observer.decide now request.State startEnvelope
+                  Command = StartPlanningAttempt(request.AttemptId, request.Reservation, launchNow) }
+            let startDecision = Observer.decide launchNow request.State startEnvelope
             if startDecision.Receipt.Disposition = ObserverRejected then return PlanningLaunchRefused startDecision.Receipt
             else
-                let! startStored = append journal request.ObserverId now startEnvelope startDecision cancellationToken
+                let! startStored = append journal request.ObserverId launchNow startEnvelope startDecision cancellationToken
                 match startStored with
                 | ObserverDuplicate sequence -> return PlanningAlreadyRecorded sequence
                 | ObserverAppended _ ->
@@ -790,35 +801,62 @@ module ObserverRuntime =
                           AttemptId = request.AttemptId
                           Observation = startedState.Observation.Value
                           Reservation = request.Reservation }
+                    let budgetDeadline = startedState.Budget.Value.Deadline
+                    // The reducer has already proved this exact integer-second addition safe.
+                    let runtimeDeadline = Observer.tryAddRuntime launchNow request.Reservation.RuntimeSeconds |> Option.get
+                    let hardDeadline = [ budgetDeadline; request.ExpiresAt; runtimeDeadline ] |> List.min
+                    let afterReservation = clock.GetUtcNow()
+                    let wait = hardDeadline - afterReservation
+                    use plannerCancellation = CancellationTokenSource.CreateLinkedTokenSource cancellationToken
                     let! planned =
                         task {
-                            try return! planner.CreateProposal(planningRequest, cancellationToken)
-                            with exceptionValue -> return Error $"planning-agent-exception:{exceptionValue.GetType().Name}"
+                            if wait <= TimeSpan.Zero then return Error "planning-window-expired"
+                            else
+                                try
+                                    // A capability may do synchronous work before returning its Task. Start it
+                                    // away from the observer caller so the same deadline bounds that work too.
+                                    let invocation =
+                                        Task.Factory
+                                            .StartNew<Task<Result<PlanningResult, string>>>(
+                                                (fun () -> planner.CreateProposal(planningRequest, plannerCancellation.Token)),
+                                                CancellationToken.None,
+                                                TaskCreationOptions.DenyChildAttach,
+                                                TaskScheduler.Default)
+                                            .Unwrap()
+                                    return! invocation.WaitAsync(wait, clock, cancellationToken)
+                                with
+                                | :? TimeoutException -> plannerCancellation.Cancel(); return Error "planning-window-expired"
+                                | :? OperationCanceledException when not cancellationToken.IsCancellationRequested -> return Error "planning-window-expired"
+                                | exceptionValue -> return Error $"planning-agent-exception:{exceptionValue.GetType().Name}"
                         }
                     match planned with
-                    | Error reason -> return! markUnknown now journal request startedState reason cancellationToken
+                    | Error reason -> return! markUnknown clock journal request startedState reason cancellationToken
                     | Ok result ->
-                        let completionEnvelope =
-                            { CommandId = request.CompletionCommandId
-                              ExpectedSequence = startedState.Sequence
-                              PrincipalId = request.PrincipalId
-                              IssuedAt = request.IssuedAt
-                              ExpiresAt = request.ExpiresAt
-                              Command = CompletePlanningAttempt(request.AttemptId, result.ActualUse, result.Proposal) }
-                        let completionDecision = Observer.decide now startedState completionEnvelope
-                        if completionDecision.Receipt.Disposition = ObserverRejected then
-                            return! markUnknown now journal request startedState $"planning-output-refused:{completionDecision.Receipt.Detail}" cancellationToken
+                        let completionNow = clock.GetUtcNow()
+                        if completionNow > hardDeadline then
+                            return! markUnknown clock journal request startedState "planning-window-expired" cancellationToken
                         else
-                            let! completionStored = append journal request.ObserverId now completionEnvelope completionDecision cancellationToken
-                            match completionStored with
-                            | ObserverAppended _ ->
-                                let completed = evolveDecision startedState completionDecision
-                                return PlanningResultPersisted(completed, completed.Proposals[result.Proposal.ProposalId])
-                            | other -> return PlanningOutcomePersistenceUncertain(startedState, "planning-result-append-unconfirmed", other)
+                            let completionEnvelope =
+                                { CommandId = request.CompletionCommandId
+                                  ExpectedSequence = startedState.Sequence
+                                  PrincipalId = request.PrincipalId
+                                  IssuedAt = completionNow
+                                  ExpiresAt = request.ExpiresAt
+                                  Command = CompletePlanningAttempt(request.AttemptId, result.ActualUse, result.Proposal) }
+                            let completionDecision = Observer.decide completionNow startedState completionEnvelope
+                            if completionDecision.Receipt.Disposition = ObserverRejected then
+                                return! markUnknown clock journal request startedState $"planning-output-refused:{completionDecision.Receipt.Detail}" cancellationToken
+                            else
+                                let! completionStored = append journal request.ObserverId completionNow completionEnvelope completionDecision cancellationToken
+                                match completionStored with
+                                | ObserverAppended _ ->
+                                    let completed = evolveDecision startedState completionDecision
+                                    return PlanningResultPersisted(completed, completed.Proposals[result.Proposal.ProposalId])
+                                | other -> return PlanningOutcomePersistenceUncertain(startedState, "planning-result-append-unconfirmed", other)
                 | other -> return PlanningPersistenceRefused other
         }
 
-    let refreshCommandAcceptance now (ObserverComposition(_, _, readback, journal)) (request: CommandReadbackRequest) cancellationToken =
+    let refreshCommandAcceptance (clock: TimeProvider) (ObserverComposition(_, _, readback, journal)) (request: CommandReadbackRequest) cancellationToken =
         task {
             match Map.tryFind request.ProposalId request.State.Approvals with
             | None -> return CommandReadbackRefused "proposal-not-approved"
@@ -827,6 +865,7 @@ module ObserverRuntime =
                 match observed with
                 | Error reason -> return CommandReadbackRefused reason
                 | Ok acceptance ->
+                    let now = clock.GetUtcNow()
                     let envelope =
                         { CommandId = request.PersistenceCommandId; ExpectedSequence = request.State.Sequence; PrincipalId = request.PrincipalId
                           IssuedAt = request.IssuedAt; ExpiresAt = request.ExpiresAt; Command = RecordCommandAcceptance acceptance }
@@ -839,7 +878,7 @@ module ObserverRuntime =
                         | other -> return CommandReadbackPersistenceRefused other
         }
 
-    let refreshEffectCompletion now (ObserverComposition(_, _, readback, journal)) (request: EffectReadbackRequest) cancellationToken =
+    let refreshEffectCompletion (clock: TimeProvider) (ObserverComposition(_, _, readback, journal)) (request: EffectReadbackRequest) cancellationToken =
         task {
             match Map.tryFind request.AcceptedCommandId request.State.Acceptances with
             | None -> return EffectReadbackRefused "command-not-durably-accepted"
@@ -848,6 +887,7 @@ module ObserverRuntime =
                 match observed with
                 | Error reason -> return EffectReadbackRefused reason
                 | Ok completions ->
+                    let now = clock.GetUtcNow()
                     match completions |> List.filter (fun completion -> completion.CommandId = request.AcceptedCommandId && completion.OperationId = request.OperationId) with
                     | [ completion ] ->
                         let envelope =
@@ -885,3 +925,6 @@ module ObserverProjection =
           Rows = [ conversations; proposals; approvals; acceptances; effects ] |> List.concat |> List.sortBy _.RecordedAt
           Remaining = state.Budget |> Option.bind (fun budget -> remaining budget state.Used state.Reserved)
           Reserved = state.Reserved }
+
+    /// Projects only a recovery already validated by the durable journal store.
+    let fromRecovery (recovery: ObserverRecovery) = render recovery.State
