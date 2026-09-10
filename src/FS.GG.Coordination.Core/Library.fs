@@ -11,6 +11,8 @@ module SolutionBoundary =
             AllowedDependencies = Set.empty }
           { AssemblyName = "FS.GG.Coordination.Core"
             AllowedDependencies = Set.singleton "FS.GG.Coordination.Protocol" }
+          { AssemblyName = "FS.GG.Coordination.Orchestration.PostgreSql"
+            AllowedDependencies = Set.singleton "FS.GG.Coordination.Core" }
           { AssemblyName = "FS.GG.Coordination.GitHub"
             AllowedDependencies =
               Set.ofList

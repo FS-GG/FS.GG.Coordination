@@ -225,9 +225,36 @@ jobs:
           path: ${{ runner.temp }}/bootstrap-recovery/result.json
           if-no-files-found: error
 
+  orchestration-postgresql:
+    name: orchestration-postgresql
+    needs: [reuse-decision]
+    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-orchestration-postgresql
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - name: Run the stable qualification gate
+        run: bash eng/bootstrap-gates/orchestration-postgresql.sh
+      - name: Upload qualification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: orchestration-postgresql
+          path: ${{ runner.temp }}/orchestration-postgresql/results.trx
+          if-no-files-found: error
+
   evidence-manifest:
     name: evidence-manifest
-    needs: [reuse-decision, deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, bootstrap-recovery]
+    needs: [reuse-decision, deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, orchestration-postgresql, bootstrap-recovery]
     if: ${{ always() && github.event_name != 'schedule' && needs.reuse-decision.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -8,9 +8,10 @@ The production dependency graph is:
 ```text
 Protocol
 ├──> Core
-│    └──> GitHub
-│         ├──> CLI ──> Qualification.Contracts
-│         └──> App (inert class library)
+│    ├──> GitHub
+│    │    ├──> CLI ──> Qualification.Contracts
+│    │    └──> App (inert class library)
+│    └──> Orchestration.PostgreSql (inert persistence adapter)
 └──> Qualification.Contracts
 ```
 
@@ -20,7 +21,7 @@ from policy/contracts toward adapters and hosts; no inward layer may reference a
 outward layer.
 
 `eng/verify-dependencies.fsx` is the executable policy. It reads project XML,
-requires the complete six-project production set, and rejects undeclared edges. Protocol
+requires the complete seven-project production set, and rejects undeclared edges. Protocol
 and Core fail closed on runtime dependencies: their only allowed package, assembly, and
 framework references are `FSharp.Core` and the SDK's implicit `Microsoft.NETCore.App`.
 This closed set rejects GitHub and ASP.NET dependencies, HTTP clients such as RestSharp,
@@ -36,6 +37,9 @@ GS2-01.4 adds one deliberate package edge from `Qualification.Contracts` to the
 published `FS.GG.SDD.Artifacts` kernel. That edge is governed by
 [Published Quint kernel](published-quint-kernel.md): it is not permitted in any
 other production project and does not change the one-way project graph.
+O0 adds the outward Core-to-Orchestration.PostgreSql edge for the durable journal, inbox,
+event-derived outbox, snapshot, and candidate-store adapter. The adapter remains an inert
+class library and has no host or listener.
 GS2-01.6 adds the outward CLI-to-Qualification.Contracts edge so the local-only
 roadmap command projects the same compiled validation contract that tests consume;
 the CLI still has no direct `FS.GG.SDD.Artifacts` package reference and no inward
