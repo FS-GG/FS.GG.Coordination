@@ -10,7 +10,7 @@
   "workflows": [
     {
       "path": ".github/workflows/bootstrap-qualification.yml",
-      "sha256": "594b3f0a3d0b9e08cdcb1b33804c3a0dfa1583e519ae4a2e9b59f1e653cc820c",
+      "sha256": "eb553ce5ced0aa684b7a11ef9131f4ee20ed76655067aa721eb069c9cbccf012",
       "references": [
         { "kind": "action", "repository": "actions/checkout", "path": null, "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1" },
         { "kind": "action", "repository": "actions/download-artifact", "path": null, "revision": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" },

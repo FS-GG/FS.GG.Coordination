@@ -186,7 +186,9 @@
       "alwaysUpload": false,
       "downloadArtifacts": false,
       "environment": {
-        "NUGET_PACKAGES": "/tmp/fsgg-${{ github.run_id }}-nuget-orchestration-postgresql"
+        "NUGET_PACKAGES": "/tmp/fsgg-${{ github.run_id }}-nuget-orchestration-postgresql",
+        "FSGG_PG_MODE": "docker",
+        "DOTNET_EXE": "dotnet"
       },
       "uploadName": "orchestration-postgresql",
       "uploadPath": "${{ runner.temp }}/orchestration-postgresql/results.trx",

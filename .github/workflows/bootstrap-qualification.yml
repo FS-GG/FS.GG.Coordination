@@ -233,6 +233,8 @@ jobs:
     timeout-minutes: 20
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-orchestration-postgresql
+      FSGG_PG_MODE: docker
+      DOTNET_EXE: dotnet
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

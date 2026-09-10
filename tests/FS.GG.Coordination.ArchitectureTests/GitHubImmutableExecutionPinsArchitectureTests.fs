@@ -159,7 +159,7 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, $"immutable execution pin validator failed with exit code {child.ExitCode}: {error}{output}")
-    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=1b9736dd7ea41cb2a00f259157bc44ce6b5330472cb9315521b1a27070e030b1", output)
+    Assert.Contains("GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=749f50eedd567f3927668fc1b7c175f628550972e6dcf96660af6179676d675b", output)
     Assert.Equal("", error)
 
 [<Fact>]
