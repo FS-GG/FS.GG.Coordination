@@ -185,7 +185,7 @@ module Pilot =
     let validatePermit (permit: PilotPermit) =
         let generated = CoordinationProtocolGenerated.Catalogue |> List.exists (fun row -> row.Id = "PILOT-PermitV1")
         generated && permit.SchemaVersion = 1 && permit.PermitId <> Guid.Empty
-        && permit.JobClass = "routine-implementation" && validText permit.StableOwnerId && validText permit.PilotOwnerId
+        && permit.JobClass = "routine-documentation-delivery" && validText permit.StableOwnerId && validText permit.PilotOwnerId
         && permit.StableOwnerId <> permit.PilotOwnerId && Id.generationValue permit.Generation > 0L
         && permit.AttemptLimit > 0L && permit.AttemptLimit <= 100L
         && permit.TokenLimit > 0L && permit.RuntimeSecondsLimit > 0L && permit.CostMicrosLimit > 0L

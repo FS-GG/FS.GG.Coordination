@@ -38,7 +38,7 @@ module private Fixture =
     let subject = WorkItemIdentity.create "R_kgDOPilot" 5L "I_kwDOPilot" 17L
     let generation = Id.generation 4L
     let permit () =
-        { SchemaVersion = 1; PermitId = permitId; SubjectId = subject; JobClass = "routine-implementation"
+        { SchemaVersion = 1; PermitId = permitId; SubjectId = subject; JobClass = "routine-documentation-delivery"
           StableOwnerId = "stable-route"; PilotOwnerId = "pilot-route"; Generation = generation
           AttemptLimit = 2L; TokenLimit = 100L; RuntimeSecondsLimit = 60L; CostMicrosLimit = 1000L
           ExpiresAt = now.AddMinutes 30.; Capacity = 2; RecoveryCapacity = 1

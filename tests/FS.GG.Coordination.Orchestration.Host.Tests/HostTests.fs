@@ -22,7 +22,7 @@ module private Fixture =
     let permit =
         { SchemaVersion = 1; PermitId = permitId
           SubjectId = WorkItemIdentity.create "R_host" 8L "I_host" 21L
-          JobClass = "routine-implementation"; StableOwnerId = "stable-route"; PilotOwnerId = "pilot-route"
+          JobClass = "routine-documentation-delivery"; StableOwnerId = "stable-route"; PilotOwnerId = "pilot-route"
           Generation = Id.generation 3L; AttemptLimit = 2L; TokenLimit = 100L; RuntimeSecondsLimit = 120L
           CostMicrosLimit = 1000L; ExpiresAt = now.AddHours 1.; Capacity = 2; RecoveryCapacity = 1
           StartupPolicy = "manual"; AutoResume = false }
@@ -66,6 +66,11 @@ module private Fixture =
                       appended.Add request
                       Task.FromResult(PilotAppended sequence) }
         store, appended
+
+[<Fact>]
+let ``pilot permit admits only the hosted writer job class`` () =
+    Assert.True(Pilot.validatePermit Fixture.permit)
+    Assert.False(Pilot.validatePermit { Fixture.permit with JobClass = "routine-implementation" })
 
 [<Fact>]
 let ``status is ready but remains default paused with dispatch disabled`` () = task {
