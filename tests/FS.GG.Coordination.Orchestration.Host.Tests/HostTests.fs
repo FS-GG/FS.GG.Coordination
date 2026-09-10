@@ -48,11 +48,20 @@ module private Fixture =
 
     type FixedClock() = inherit TimeProvider() override _.GetUtcNow() = now
 
+    let unusedWorkItems =
+        { new IJournalStore with
+            member _.CheckReadiness _ = Task.FromResult(Ok())
+            member _.Recover(_, _) = Task.FromResult(Error [ StoreUnavailable "unused" ])
+            member _.Append(_, _) = Task.FromResult(InvalidAppend "unused")
+            member _.SaveSnapshot(_, _) = Task.FromResult(Ok())
+            member _.SaveProjectionCheckpoint(_, _) = Task.FromResult(Ok()) }
+
     let durableStore state =
         let accepted = Dictionary<Guid, string * int64>()
         let appended = ResizeArray<PilotAppendRequest>()
         let store =
             { CheckReadiness = fun _ -> Task.FromResult(Ok())
+              WorkItems = unusedWorkItems
               Recover = fun _ _ -> Task.FromResult(Ok { Events = []; State = state })
               Append = fun request _ ->
                   let digest = PilotCodec.commandSha256 request.Command
@@ -76,6 +85,7 @@ let ``pilot permit admits only the hosted writer job class`` () =
 let ``status is ready but remains default paused with dispatch disabled`` () = task {
     let store =
         { CheckReadiness = fun _ -> Task.FromResult(Ok())
+          WorkItems = Fixture.unusedWorkItems
           Recover = fun _ _ -> Task.FromResult(Ok { Events = []; State = { Fixture.pilotOwned with ReadbackCurrent = false } })
           Append = fun _ _ -> Task.FromResult(PilotInvalidAppend "unused") }
     let! status = HostRuntime.status store Fixture.permitId CancellationToken.None
@@ -90,6 +100,7 @@ let ``storage readiness failure prevents pilot recovery`` () = task {
     let mutable recovered = false
     let store =
         { CheckReadiness = fun _ -> Task.FromResult(Error [ ReadOnlyStore ])
+          WorkItems = Fixture.unusedWorkItems
           Recover = fun _ _ -> recovered <- true; Task.FromResult(Ok { Events = []; State = Pilot.initial })
           Append = fun _ _ -> Task.FromResult(PilotInvalidAppend "unused") }
     let! status = HostRuntime.status store Fixture.permitId CancellationToken.None

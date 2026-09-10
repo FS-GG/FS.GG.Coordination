@@ -16,6 +16,7 @@ open FS.GG.Coordination.Orchestration.PostgreSql
 
 type HostStore =
     { CheckReadiness: CancellationToken -> Task<Result<unit, ReadinessFailure list>>
+      WorkItems: IJournalStore
       Recover: Guid -> CancellationToken -> Task<Result<PilotRecovery, PilotRecoveryFailure list>>
       Append: PilotAppendRequest -> CancellationToken -> Task<PilotAppendOutcome> }
 
@@ -62,6 +63,7 @@ module HostRuntime =
         let pilot = PostgreSqlPilotStore(options) :> IPilotJournalStore
         source,
         { CheckReadiness = root.CheckReadiness
+          WorkItems = root
           Recover = fun permit token -> pilot.RecoverPilot(permit, token)
           Append = fun request token -> pilot.AppendPilot(request, token) }
 
