@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="HostConfiguration.fs" />
     <Compile Include="HostInitialization.fs" />
+    <Compile Include="HostedWriterRuntime.fs" />
     <Compile Include="HostRuntime.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
