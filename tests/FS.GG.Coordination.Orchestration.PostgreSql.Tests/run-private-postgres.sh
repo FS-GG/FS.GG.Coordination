@@ -10,17 +10,41 @@ if [[ "$o0_mode" == docker ]]; then
   command -v docker >/dev/null
   o0_container="${FSGG_PG_CONTAINER:-fsgg-o0-pg18-${RANDOM}-$$}"
   o0_image="postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280"
-  cleanup() { docker rm -f "$o0_container" >/dev/null 2>&1 || true; }
+  cleanup() {
+    o0_status=$?
+    if (( o0_status != 0 )); then
+      docker inspect --format 'container={{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$o0_container" >&2 || true
+      docker logs "$o0_container" >&2 || true
+    fi
+    docker rm -f "$o0_container" >/dev/null 2>&1 || true
+    return "$o0_status"
+  }
   trap cleanup EXIT
   docker run -d --name "$o0_container" \
     -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_USER="$o0_user" \
     -e POSTGRES_DB=orchestration_o0 -p "127.0.0.1:${o0_port}:5432" \
     "$o0_image" -c fsync=on -c synchronous_commit=on -c full_page_writes=on >/dev/null
-  for _ in $(seq 1 100); do
-    docker exec "$o0_container" pg_isready -U "$o0_user" -d orchestration_o0 >/dev/null 2>&1 && break
-    sleep 0.1
+  o0_ready=false
+  o0_deadline=$((SECONDS + 90))
+  while (( SECONDS < o0_deadline )); do
+    if [[ "$(docker inspect --format '{{.State.Running}}' "$o0_container" 2>/dev/null || true)" != true ]]; then
+      echo "PostgreSQL container exited before readiness" >&2
+      docker inspect --format 'container={{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$o0_container" >&2 || true
+      docker logs "$o0_container" >&2 || true
+      exit 1
+    fi
+    if docker exec "$o0_container" pg_isready -U "$o0_user" -d orchestration_o0 >/dev/null 2>&1; then
+      o0_ready=true
+      break
+    fi
+    sleep 1
   done
-  docker exec "$o0_container" pg_isready -U "$o0_user" -d orchestration_o0 >/dev/null
+  if [[ "$o0_ready" != true ]]; then
+    echo "PostgreSQL container was not ready within 90 seconds" >&2
+    docker inspect --format 'container={{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$o0_container" >&2 || true
+    docker logs "$o0_container" >&2 || true
+    exit 1
+  fi
   export FSGG_PG_MODE=docker FSGG_PG_HOST=127.0.0.1 FSGG_PG_PORT="$o0_port"
   export FSGG_PG_USERNAME="$o0_user" FSGG_PG_CONTAINER="$o0_container" FSGG_PG_ROOT=/tmp
 else
