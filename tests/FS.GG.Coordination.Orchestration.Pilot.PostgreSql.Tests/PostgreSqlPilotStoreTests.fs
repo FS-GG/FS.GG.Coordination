@@ -10,6 +10,7 @@ open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Pilot
 open FS.GG.Coordination.Orchestration.PostgreSql
+open FS.GG.Coordination.Orchestration.Host
 
 module private Fixture =
     type FixedClock(value: DateTimeOffset) =
@@ -330,3 +331,23 @@ type PostgreSqlPilotStoreTests() =
         let replacement = PostgreSqlPilotStore(Fixture.options source identity 0L) :> IPilotJournalStore
         let! recovered = replacement.RecoverPilot(Fixture.permitId, token)
         match recovered with Ok value -> Assert.Equal(PilotPhase.StableOwned, value.State.Phase) | Error failures -> failwithf "%A" failures }
+
+    [<Fact>]
+    member _.``ordinary host startup refuses interrupted migration without repairing it``() = task {
+        let! source, identity = Fixture.reset()
+        use source = source
+        let! _ = Fixture.sql "UPDATE fsgg_orchestration.pilot_store_metadata SET migration_state='applying'"
+        let configuration =
+            { ConnectionString = Fixture.connectionString; Token = String.replicate 32 "x"; Prefix = "http://127.0.0.1:5110/"
+              StoreId = "pilot-pg18-lab"; BackupIdentity = identity; MinimumGenerationFence = 0L
+              PermitId = Fixture.permitId; PilotPrincipalId = "pilot-route"; RequestTimeout = TimeSpan.FromSeconds 1.
+              MaximumConcurrentRequests = 1 }
+        let hostSource, hostStore = HostRuntime.createStore configuration
+        use hostSource = hostSource
+        let! status = HostRuntime.status hostStore Fixture.permitId token
+        Assert.False(status.Ready)
+        Assert.Contains(status.Findings, fun value -> value.Contains("PilotMigrationInterrupted"))
+        use! connection = source.OpenConnectionAsync()
+        use command = new NpgsqlCommand("SELECT migration_state FROM fsgg_orchestration.pilot_store_metadata WHERE singleton", connection)
+        let! migrationState = command.ExecuteScalarAsync()
+        Assert.Equal("applying", string migrationState) }

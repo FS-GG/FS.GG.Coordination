@@ -8,5 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.PostgreSql\FS.GG.Coordination.Orchestration.PostgreSql.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.Pilot\FS.GG.Coordination.Orchestration.Pilot.fsproj" />
+    <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.Host\FS.GG.Coordination.Orchestration.Host.fsproj" />
   </ItemGroup>
 </Project>
