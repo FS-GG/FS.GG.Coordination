@@ -25,6 +25,8 @@ type StoreOptions =
       SupportedSerializerVersions: Set<string>
       MaximumCandidateBytes: int64 }
 
+exception private StoreGateException of ReadinessFailure list
+
 module private Hash =
     let bytes (value: byte array) =
         SHA256.HashData value |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
@@ -251,6 +253,24 @@ WHERE c.candidate_id=$1
             return match failure with Some reason -> Error reason | None -> Ok state
         }
 
+    let checkTransactionalGate (connection: NpgsqlConnection) (transaction: NpgsqlTransaction) (cancellationToken: CancellationToken) =
+        task {
+            use command = new NpgsqlCommand("SELECT schema_version,migration_state,backup_identity::text,generation_fence,current_setting('transaction_read_only') FROM fsgg_orchestration.store_metadata WHERE singleton FOR SHARE", connection, transaction)
+            use! reader = command.ExecuteReaderAsync cancellationToken
+            let! found = reader.ReadAsync cancellationToken
+            if not found then return [ MigrationInterrupted "metadata-missing" ]
+            else
+                let failures = ResizeArray<ReadinessFailure>()
+                let schemaVersion = reader.GetInt32 0
+                if schemaVersion > options.RuntimeSchemaVersion then failures.Add(IncompatibleDowngrade(schemaVersion, options.RuntimeSchemaVersion))
+                elif schemaVersion < options.RuntimeSchemaVersion then failures.Add(MigrationInterrupted $"database-v{schemaVersion}-runtime-v{options.RuntimeSchemaVersion}")
+                if reader.GetString 1 <> "ready" then failures.Add(MigrationInterrupted(reader.GetString 1))
+                if not (String.Equals(reader.GetString 2, options.BackupIdentity, StringComparison.OrdinalIgnoreCase)) then failures.Add(BackupRequiresReconciliation "backup-identity-mismatch")
+                if reader.GetInt64 3 < options.MinimumGenerationFence then failures.Add(BackupRequiresReconciliation "generation-fence-regressed")
+                if reader.GetString 4 = "on" then failures.Add ReadOnlyStore
+                return List.ofSeq failures
+        }
+
     interface IJournalStore with
         member _.CheckReadiness cancellationToken =
             task {
@@ -296,6 +316,8 @@ FROM fsgg_orchestration.store_metadata WHERE singleton
                     try
                         use! connection = options.DataSource.OpenConnectionAsync cancellationToken
                         use! transaction = connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+                        let! gateFailures = checkTransactionalGate connection transaction cancellationToken
+                        if not gateFailures.IsEmpty then invalidOp "semantic:store-not-ready"
                         use ensureStream = new NpgsqlCommand("INSERT INTO fsgg_orchestration.stream(persistence_id,last_sequence) VALUES($1,0) ON CONFLICT DO NOTHING", connection, transaction)
                         Sql.add ensureStream persistenceId
                         do! ensureStream.ExecuteNonQueryAsync cancellationToken |> TaskEx.discard
@@ -374,6 +396,8 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
                 try
                     use! connection = options.DataSource.OpenConnectionAsync cancellationToken
                     use! transaction = connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken)
+                    let! gateFailures = checkTransactionalGate connection transaction cancellationToken
+                    if not gateFailures.IsEmpty then raise (StoreGateException gateFailures)
                     use command = new NpgsqlCommand("""
 SELECT sequence_number,event_id,schema_version,serializer_version,payload,payload_sha256,effect_change,
        effect_operation_id,effect_kind,effect_generation,effect_workflow_revision,effect_resource_id,effect_payload_sha256,recorded_at
@@ -457,7 +481,9 @@ FROM fsgg_orchestration.event WHERE persistence_id=$1 ORDER BY sequence_number
                     else
                         let pending = intents.Values |> Seq.toList
                         return Ok { Events = List.ofSeq events; Snapshot = snapshot; UnsettledEffects = pending; RequiresExternalReconciliation = not pending.IsEmpty }
-                with exceptionValue -> return Error [ Sql.classifyReadiness exceptionValue ]
+                with
+                | StoreGateException failures -> return Error failures
+                | exceptionValue -> return Error [ Sql.classifyReadiness exceptionValue ]
             }
 
         member _.SaveSnapshot(snapshot, cancellationToken) =
@@ -541,7 +567,10 @@ WHERE fsgg_orchestration.projection_checkpoint.sequence_number <= excluded.seque
                 | Some objectKey ->
                     try
                         use! connection = options.DataSource.OpenConnectionAsync cancellationToken
-                        use existing = new NpgsqlCommand("SELECT receipt_sha256,verified_at FROM fsgg_orchestration.candidate WHERE candidate_id=$1", connection)
+                        use! transaction = connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+                        let! gateFailures = checkTransactionalGate connection transaction cancellationToken
+                        if not gateFailures.IsEmpty then invalidOp "candidate-store-not-ready"
+                        use existing = new NpgsqlCommand("SELECT receipt_sha256,verified_at FROM fsgg_orchestration.candidate WHERE candidate_id=$1", connection, transaction)
                         Sql.add existing (Id.candidateValue candidate.CandidateId)
                         use! existingReader = existing.ExecuteReaderAsync cancellationToken
                         let! found = existingReader.ReadAsync cancellationToken
@@ -553,15 +582,17 @@ WHERE fsgg_orchestration.projection_checkpoint.sequence_number <= excluded.seque
                             match verified with
                             | Ok stored when candidateEquivalent stored.Candidate candidate
                                              && receiptHash stored.Candidate (locationKey stored.Candidate.Location |> Option.get) verifiedAt = receiptSha ->
+                                do! transaction.RollbackAsync cancellationToken
                                 return Error(Existing
                                     { CandidateId = stored.Candidate.CandidateId; ContentSha256 = stored.Candidate.ContentSha256
                                       ManifestSha256 = stored.Candidate.ManifestSha256; SizeBytes = stored.Candidate.SizeBytes
                                       Location = stored.Candidate.Location; StoreId = options.StoreId; StoreSchemaVersion = options.RuntimeSchemaVersion
                                       StorageReceiptSha256 = receiptSha; VerifiedAt = verifiedAt })
-                            | _ -> return Error IdentityConflict
+                            | _ ->
+                                do! transaction.RollbackAsync cancellationToken
+                                return Error IdentityConflict
                         else
                             do! existingReader.DisposeAsync().AsTask()
-                            use! transaction = connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
                             let now = DateTimeOffset.UtcNow
                             let verifiedAt = DateTimeOffset(now.Ticks - now.Ticks % 10L, TimeSpan.Zero)
                             let receiptSha = receiptHash candidate objectKey verifiedAt
@@ -598,6 +629,7 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
                                       StorageReceiptSha256 = receiptSha; VerifiedAt = verifiedAt }
                             | _ -> return Error DigestConflict
                     with
+                    | :? InvalidOperationException as invalid when invalid.Message = "candidate-store-not-ready" -> return Error CapacityRefused
                     | :? PostgresException as pg when pg.SqlState.StartsWith("53", StringComparison.Ordinal) -> return Error CapacityRefused
                     | _ -> return Error CapacityRefused
             }

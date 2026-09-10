@@ -16,9 +16,22 @@ open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.PostgreSql
 
 module private Fixture =
-    let root = File.ReadAllText("/tmp/o0-postgresql-current-path").Trim()
+    let private environment name fallback =
+        match Environment.GetEnvironmentVariable name with
+        | null | "" -> fallback
+        | value -> value
+    let mode = environment "FSGG_PG_MODE" "binary"
+    let root =
+        match Environment.GetEnvironmentVariable "FSGG_PG_ROOT" with
+        | null | "" when mode = "binary" -> File.ReadAllText("/tmp/o0-postgresql-current-path").Trim()
+        | null | "" -> "/tmp"
+        | value -> value
     let socket = Path.Combine(root, "socket")
-    let connectionString database = $"Host={socket};Port=55439;Database={database};Username=developer;Pooling=false"
+    let host = environment "FSGG_PG_HOST" socket
+    let port = environment "FSGG_PG_PORT" "55439"
+    let username = environment "FSGG_PG_USERNAME" "developer"
+    let container = environment "FSGG_PG_CONTAINER" ""
+    let connectionString database = $"Host={host};Port={port};Database={database};Username={username};Pooling=false"
     let dataSource database = NpgsqlDataSource.Create(connectionString database)
     let sha (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
 
@@ -30,6 +43,46 @@ module private Fixture =
         child.WaitForExit(30_000) |> ignore
         if not child.HasExited || child.ExitCode <> 0 then
             failwith $"{executable} failed: {child.StandardError.ReadToEnd()}"
+
+    let private databaseTool tool arguments =
+        if mode = "docker" then run "docker" $"exec {container} {tool} -U {username} {arguments}"
+        else run $"/usr/bin/{tool}" $"-h {host} -p {port} -U {username} {arguments}"
+
+    let stopImmediate () =
+        if mode = "docker" then run "docker" $"kill {container}"
+        else run "/usr/bin/pg_ctl" $"-D {root}/data stop -m immediate"
+
+    let start () =
+        if mode = "docker" then run "docker" $"start {container}"
+        else run "/usr/bin/pg_ctl" $"-D {root}/data -l {root}/postgres.log -o \"-k {socket} -h '' -p {port} -c fsync=on -c synchronous_commit=on -c full_page_writes=on\" start"
+
+    let waitReady () =
+        task {
+            let mutable ready = false
+            let mutable attempt = 0
+            while not ready && attempt < 100 do
+                attempt <- attempt + 1
+                try
+                    use probe = dataSource "postgres"
+                    use! connection = probe.OpenConnectionAsync()
+                    ready <- true
+                with _ -> do! Task.Delay 100
+            if not ready then failwith "PostgreSQL did not become ready"
+        }
+
+    let dump () =
+        if mode = "docker" then
+            databaseTool "pg_dump" "-Fc -f /tmp/orchestration_o0.dump orchestration_o0"
+            "/tmp/orchestration_o0.dump"
+        else
+            let path = Path.Combine(root, "orchestration_o0.dump")
+            databaseTool "pg_dump" $"-Fc -f {path} orchestration_o0"
+            path
+
+    let restore dumpPath =
+        databaseTool "dropdb" "--if-exists orchestration_o0_restore"
+        databaseTool "createdb" "orchestration_o0_restore"
+        databaseTool "pg_restore" $"-d orchestration_o0_restore {dumpPath}"
 
     let sql database statement =
         task {
@@ -76,6 +129,12 @@ module private Fixture =
           PayloadSha256 = sha envelope
           EffectChange = effect
           RecordedAt = DateTimeOffset.UtcNow }
+
+    let coreEvent persistenceId sequence (eventValue: Event) =
+        let payload = EventEnvelope.encode eventValue
+        { PersistenceId = persistenceId; Sequence = sequence; EventId = Guid.NewGuid(); SchemaVersion = 1
+          SerializerVersion = EventEnvelope.serializerVersion; Payload = payload; PayloadSha256 = sha payload
+          EffectChange = NoEffect; RecordedAt = DateTimeOffset.UtcNow }
 
     let append persistenceId expected commandId bodyHash events =
         { Inbox =
@@ -273,6 +332,71 @@ type PostgreSqlStoreTests() =
     }
 
     [<Fact>]
+    member _.``Core decided lifecycle roundtrips private identities through PostgreSQL``() = task {
+        let! dataSource, identity = Fixture.reset()
+        use dataSource = dataSource
+        let journal = PostgreSqlStore(Fixture.options dataSource identity 0L) :> IJournalStore
+        let candidateStore = PostgreSqlStore(Fixture.options dataSource identity 0L) :> ICandidateStore
+        let workItem = WorkItemIdentity.create "R_repo_node" 17L "I_issue_node" 42L
+        let persistenceId = WorkItemIdentity.persistenceId workItem
+        let projectId = Id.project(Guid.NewGuid())
+        let workflowRevision = Id.revision 7L
+        let planning =
+            { ProjectId = projectId; WorkItemId = workItem; WorkflowRevision = workflowRevision
+              CanonicalSha256 = String.replicate 64 "a"; BoardMembershipIds = [ "PVTI_board" ]
+              CapturedAt = DateTimeOffset.UtcNow }
+        let budget =
+            { TokenLimit = 1000L; RuntimeSecondsLimit = 600L; CostMicrosLimit = 100000L
+              Deadline = DateTimeOffset.UtcNow.AddHours 1.0 }
+        let mutable state = FS.GG.Coordination.Core.Orchestration.initial
+        let mutable terminalSequence = 0L
+        let appendCommand command = task {
+            let now = DateTimeOffset.UtcNow
+            let envelope =
+                { CommandId = Id.command(Guid.NewGuid()); ProtocolVersion = Id.protocolVersion 1 0
+                  ExpectedRevision = state.Revision; ExpectedGeneration = state.Generation
+                  PrincipalId = "test:operator"; SessionId = None; IssuedAt = now; ExpiresAt = now.AddMinutes 5.0
+                  Command = command }
+            let decision = WorkItem.decide now state envelope
+            Assert.Equal<ReceiptDisposition>(Accepted, decision.Receipt.Disposition)
+            let firstSequence = terminalSequence + 1L
+            let serialized = decision.Events |> List.mapi (fun index value -> Fixture.coreEvent persistenceId (firstSequence + int64 index) value)
+            let request = Fixture.append persistenceId terminalSequence envelope.CommandId decision.Receipt.BodySha256 serialized
+            let! outcome = journal.Append(request, cancellationToken)
+            state <- decision.Events |> List.fold FS.GG.Coordination.Core.Orchestration.evolve state
+            match outcome with Appended sequence -> terminalSequence <- sequence | _ -> failwithf "append failed: %A" outcome
+        }
+        do! appendCommand (Admit(planning, budget))
+        let reservationId = Id.reservation(Guid.NewGuid())
+        do! appendCommand (Reserve(reservationId, DateTimeOffset.UtcNow.AddMinutes 30.0, Set [ "claim:repo" ]))
+        do! appendCommand (ObserveClaim { ClaimId = "claim:repo"; Generation = state.Generation; WorkflowRevision = workflowRevision; ObservedAt = DateTimeOffset.UtcNow })
+        let attemptId, sessionId = Id.attempt(Guid.NewGuid()), Id.session(Guid.NewGuid())
+        let runner =
+            { RunnerId = Id.runner(Guid.NewGuid()); PrincipalId = "runner:one"; FingerprintSha256 = String.replicate 64 "b"
+              Generation = state.Generation; ExpiresAt = DateTimeOffset.UtcNow.AddMinutes 30.0 }
+        do! appendCommand (StartAttempt(attemptId, sessionId, runner))
+        let candidate = Fixture.candidate "lifecycle-candidate"
+        let! stored = candidateStore.Put(candidate, cancellationToken)
+        let receipt = match stored with Ok value -> value | Error error -> failwithf "candidate put failed: %A" error
+        do! appendCommand (RecordCandidate(candidate.Candidate, receipt))
+        do! appendCommand (ObserveAttempt(attemptId, OutcomeUnknown "provider-response-lost"))
+        do! appendCommand (Pause "operator")
+        do! appendCommand (RequestCancel "cancel")
+        let! recovered = journal.Recover(persistenceId, cancellationToken)
+        match recovered with
+        | Error failures -> failwithf "lifecycle recovery failed: %A" failures
+        | Ok result ->
+            let decoded = result.Events |> List.map (fun value -> EventEnvelope.tryDecode value.Payload)
+            Assert.DoesNotContain(decoded, function Error _ -> true | _ -> false)
+            let replayed = decoded |> List.choose (function Ok value -> Some value | _ -> None) |> FS.GG.Coordination.Core.Orchestration.replay
+            Assert.Equal<State>(state, replayed)
+            Assert.True(Map.containsKey candidate.Candidate.CandidateId replayed.Candidates)
+            Assert.True(Map.containsKey attemptId replayed.Attempts)
+            Assert.Equal<ControlState>(CancelPending "cancel", replayed.Control)
+            Assert.Equal<Budget option>(Some budget, replayed.Budget)
+    }
+
+    [<Fact>]
     member _.``readiness refuses migration downgrade backup and read only``() = task {
         let! dataSource, identity = Fixture.reset()
         use dataSource = dataSource
@@ -353,11 +477,12 @@ type PostgreSqlStoreTests() =
         let candidate = Fixture.candidate "restart-candidate"
         let! acknowledged = candidateStore.Put(candidate, cancellationToken)
         match acknowledged with Ok _ -> () | Error error -> failwithf "candidate not acknowledged: %A" error
-        Fixture.run "/usr/bin/pg_ctl" $"-D {Fixture.root}/data stop -m immediate"
+        Fixture.stopImmediate ()
         NpgsqlConnection.ClearAllPools()
         let! unavailable = store.Recover(persistenceId, cancellationToken)
         match unavailable with Error failures -> Assert.Contains(failures, function StoreUnavailable _ -> true | _ -> false) | _ -> failwith "stopped database recovered"
-        Fixture.run "/usr/bin/pg_ctl" $"-D {Fixture.root}/data -l {Fixture.root}/postgres.log -o \"-k {Fixture.socket} -h '' -p 55439\" start"
+        Fixture.start ()
+        do! Fixture.waitReady ()
         let! recovered = store.Recover(persistenceId, cancellationToken)
         match recovered with Ok result -> Assert.Single result.Events |> ignore | Error failures -> failwithf "restart recovery failed: %A" failures
         let! recoveredCandidate = candidateStore.Read(candidate.Candidate.CandidateId, cancellationToken)
@@ -379,18 +504,20 @@ type PostgreSqlStoreTests() =
         let! _ = journal.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [ Fixture.event persistenceId 1L (IntentAdded intent) "pending" ], cancellationToken)
         let before = Fixture.candidate "before-backup"
         let! _ = candidates.Put(before, cancellationToken)
-        let dump = Path.Combine(Fixture.root, "orchestration_o0.dump")
-        Fixture.run "/usr/bin/pg_dump" $"-h {Fixture.socket} -p 55439 -Fc -f {dump} orchestration_o0"
+        let dump = Fixture.dump ()
         let after = Fixture.candidate "acknowledged-after-backup"
         let! afterReceipt = candidates.Put(after, cancellationToken)
         match afterReceipt with Ok _ -> () | Error error -> failwithf "post-backup put failed: %A" error
         let! _ = Fixture.sql "orchestration_o0" "UPDATE fsgg_orchestration.store_metadata SET generation_fence=2"
-        Fixture.run "/usr/bin/dropdb" $"-h {Fixture.socket} -p 55439 --if-exists orchestration_o0_restore"
-        Fixture.run "/usr/bin/createdb" $"-h {Fixture.socket} -p 55439 orchestration_o0_restore"
-        Fixture.run "/usr/bin/pg_restore" $"-h {Fixture.socket} -p 55439 -d orchestration_o0_restore {dump}"
+        Fixture.restore dump
         use restored = Fixture.dataSource "orchestration_o0_restore"
         let restoredOptions = Fixture.options restored identity 2L
         let restoredJournal = PostgreSqlStore(restoredOptions) :> IJournalStore
+        let! directRecovery = restoredJournal.Recover(persistenceId, cancellationToken)
+        match directRecovery with Error failures -> Assert.Contains(failures, function BackupRequiresReconciliation "generation-fence-regressed" -> true | _ -> false) | _ -> failwith "old backup recovered without gate"
+        let directEvent = Fixture.event persistenceId 2L NoEffect "must-not-write-old-backup"
+        let! directWrite = restoredJournal.Append(Fixture.append persistenceId 1L (Id.command(Guid.NewGuid())) body [ directEvent ], cancellationToken)
+        Assert.Equal<AppendOutcome>(InvalidAppend "store-not-ready", directWrite)
         let! fenced = restoredJournal.CheckReadiness cancellationToken
         match fenced with Error failures -> Assert.Contains(failures, function BackupRequiresReconciliation "generation-fence-regressed" -> true | _ -> false) | _ -> failwith "old backup was not fenced"
         let restoredCandidates = PostgreSqlStore(restoredOptions) :> ICandidateStore
@@ -420,4 +547,29 @@ type PostgreSqlStoreTests() =
         let! count = recovered.Ask<int>("count", TimeSpan.FromSeconds 10.0)
         Assert.Equal(1, count)
         do! second.Terminate()
+    }
+
+    [<Fact>]
+    member _.``two live ActorSystems cannot store two sequence-one markers``() = task {
+        let! dataSource, identity = Fixture.reset()
+        use dataSource = dataSource
+        let persistenceId = $"duplicate-runtime-marker-{Guid.NewGuid():N}"
+        let config = AkkaPersistence.configuration(Fixture.connectionString "orchestration_o0")
+        use leftSystem = ActorSystem.Create("o0-duplicate-left", config)
+        use rightSystem = ActorSystem.Create("o0-duplicate-right", config)
+        let left = leftSystem.ActorOf(Props.Create(fun () -> MarkerActor persistenceId))
+        let right = rightSystem.ActorOf(Props.Create(fun () -> MarkerActor persistenceId))
+        left.Tell "left"
+        right.Tell "right"
+        do! Task.Delay 1500
+        use! connection = dataSource.OpenConnectionAsync()
+        use command = new NpgsqlCommand("SELECT count(*) FROM fsgg_orchestration.journal WHERE persistence_id=$1 AND sequence_number=1", connection)
+        command.Parameters.AddWithValue(persistenceId) |> ignore
+        let! stored = command.ExecuteScalarAsync()
+        Assert.Equal(1L, Convert.ToInt64 stored)
+        let stale = PostgreSqlStore(Fixture.options dataSource identity 1L) :> IJournalStore
+        let! readiness = stale.CheckReadiness cancellationToken
+        match readiness with Error failures -> Assert.Contains(failures, function BackupRequiresReconciliation "generation-fence-regressed" -> true | _ -> false) | _ -> failwith "stale runtime became ready"
+        do! leftSystem.Terminate()
+        do! rightSystem.Terminate()
     }
