@@ -86,6 +86,17 @@ module private Fixture =
           ExpectedSequence = expected
           Events = events }
 
+    let candidate (label: string) =
+        let bytes = Encoding.UTF8.GetBytes label
+        let digest = sha bytes
+        let value =
+            { CandidateId = Id.candidate(Guid.NewGuid())
+              BaselineSha = String.replicate 40 "a"; HeadSha = String.replicate 40 "b"; TreeSha = String.replicate 40 "c"
+              ManifestSha256 = sha(Encoding.UTF8.GetBytes $"manifest:{label}"); ContentSha256 = digest
+              MediaType = "application/vnd.git.bundle"; SizeBytes = int64 bytes.LongLength; RetainUntil = DateTimeOffset.UtcNow.AddDays 1.0
+              Location = ContentAddressedObject($"sha256/{digest}") }
+        { Candidate = value; Bytes = bytes }
+
 type private MarkerActor(persistenceId: string) as this =
     inherit UntypedPersistentActor()
     let mutable count = 0
@@ -132,6 +143,20 @@ type PostgreSqlStoreTests() =
         Assert.Equal<AppendOutcome>(WrongExpectedSequence 1L, wrong)
         let! empty = store.Append(Fixture.append persistenceId 1L (Id.command(Guid.NewGuid())) body [], cancellationToken)
         Assert.Equal<AppendOutcome>(InvalidAppend "new-command-requires-events", empty)
+    }
+
+    [<Fact>]
+    member _.``lost append response is resolved by identical inbox retry``() = task {
+        let! dataSource, identity = Fixture.reset()
+        use dataSource = dataSource
+        let store = PostgreSqlStore(Fixture.options dataSource identity 0L) :> IJournalStore
+        let persistenceId = "work-item-v1-lost-response"
+        let commandId = Id.command(Guid.NewGuid())
+        let body = Fixture.sha(Encoding.UTF8.GetBytes "same-command")
+        let request = Fixture.append persistenceId 0L commandId body [ Fixture.event persistenceId 1L NoEffect "committed-before-client-lost-response" ]
+        let! _lostResponse = store.Append(request, cancellationToken)
+        let! observed = store.Append(Fixture.append persistenceId 99L commandId body [], cancellationToken)
+        Assert.Equal<AppendOutcome>(Duplicate 1L, observed)
     }
 
     [<Fact>]
@@ -196,6 +221,15 @@ type PostgreSqlStoreTests() =
         let! _ = store.Append(Fixture.append snapshot.PersistenceId 0L (Id.command(Guid.NewGuid())) body [ Fixture.event snapshot.PersistenceId 1L NoEffect "event" ], cancellationToken)
         let! saved = store.SaveSnapshot(snapshot, cancellationToken)
         Assert.Equal<Result<unit, ReadinessFailure>>(Ok(), saved)
+        let! identical = store.SaveSnapshot(snapshot, cancellationToken)
+        Assert.Equal<Result<unit, ReadinessFailure>>(Ok(), identical)
+        let changedPayload = Encoding.UTF8.GetBytes "changed-snapshot"
+        let changed = { snapshot with Payload = changedPayload; PayloadSha256 = Fixture.sha changedPayload }
+        let! conflict = store.SaveSnapshot(changed, cancellationToken)
+        Assert.Equal<Result<unit, ReadinessFailure>>(Error(CorruptRecord(snapshot.PersistenceId, 1L)), conflict)
+        let! _ = Fixture.sql "orchestration_o0" "UPDATE fsgg_orchestration.domain_snapshot SET schema_version=99 WHERE persistence_id='work-item-v1-snapshot'"
+        let! unknown = store.Recover(snapshot.PersistenceId, cancellationToken)
+        match unknown with Error failures -> Assert.Contains(failures, function UnknownEventVersion(_, 1L, 99) -> true | _ -> false) | _ -> failwith "future snapshot recovered"
     }
 
     [<Fact>]
@@ -214,6 +248,28 @@ type PostgreSqlStoreTests() =
             Assert.Contains(failures, function UnknownEventVersion(_, 1L, 99) -> true | _ -> false)
             Assert.Contains(failures, function UnknownSerializerVersion "future" -> true | _ -> false)
             Assert.Contains(failures, function CorruptRecord(_, 1L) -> true | _ -> false)
+    }
+
+    [<Fact>]
+    member _.``supported row schema versions replay the same Core event codec``() = task {
+        let! dataSource, identity = Fixture.reset()
+        use dataSource = dataSource
+        let store = PostgreSqlStore(Fixture.options dataSource identity 0L) :> IJournalStore
+        let persistenceId = "work-item-v1-schema-upgrade"
+        let first = Fixture.event persistenceId 1L NoEffect "v1"
+        let v2Payload = EventEnvelope.encode ResumedEvent
+        let second =
+            { Fixture.event persistenceId 2L NoEffect "placeholder" with
+                SchemaVersion = 2; Payload = v2Payload; PayloadSha256 = Fixture.sha v2Payload }
+        let body = Fixture.sha(Encoding.UTF8.GetBytes "upgrade")
+        let! outcome = store.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [ first; second ], cancellationToken)
+        Assert.Equal<AppendOutcome>(Appended 2L, outcome)
+        let! recovered = store.Recover(persistenceId, cancellationToken)
+        match recovered with
+        | Ok result ->
+            Assert.Equal<int list>([ 1; 2 ], result.Events |> List.map _.SchemaVersion)
+            Assert.Equal<Result<Event,string>>(Ok ResumedEvent, EventEnvelope.tryDecode result.Events[1].Payload)
+        | Error failures -> failwithf "upgrade recovery failed: %A" failures
     }
 
     [<Fact>]
@@ -244,29 +300,32 @@ type PostgreSqlStoreTests() =
         let! dataSource, identity = Fixture.reset()
         use dataSource = dataSource
         let store = PostgreSqlStore(Fixture.options dataSource identity 0L) :> ICandidateStore
-        let bytes = Encoding.UTF8.GetBytes "candidate archive"
-        let digest = Fixture.sha bytes
-        let candidate =
-            { CandidateId = Id.candidate(Guid.NewGuid())
-              BaselineSha = String.replicate 40 "a"; HeadSha = String.replicate 40 "b"; TreeSha = String.replicate 40 "c"
-              ManifestSha256 = Fixture.sha(Encoding.UTF8.GetBytes "manifest"); ContentSha256 = digest
-              MediaType = "application/vnd.git.bundle"; SizeBytes = int64 bytes.LongLength; RetainUntil = DateTimeOffset.UtcNow.AddDays 1.0
-              Location = ContentAddressedObject($"sha256/{digest}") }
-        let! stored = store.Put({ Candidate = candidate; Bytes = bytes }, cancellationToken)
+        let request = Fixture.candidate "candidate archive"
+        let candidate, bytes, digest = request.Candidate, request.Bytes, request.Candidate.ContentSha256
+        let! stored = store.Put(request, cancellationToken)
         let receipt = match stored with Ok value -> value | Error error -> failwithf "put failed: %A" error
         Assert.Equal(digest, receipt.ContentSha256)
         let! readBack = store.Read(candidate.CandidateId, cancellationToken)
         match readBack with Ok value -> Assert.Equal<byte array>(bytes, value.Bytes) | Error reason -> failwith reason
         let! existing = store.Put({ Candidate = candidate; Bytes = bytes }, cancellationToken)
         match existing with Error(Existing _) -> () | _ -> failwithf "expected existing, got %A" existing
+        let! changedHead = store.Put({ request with Candidate = { candidate with HeadSha = String.replicate 40 "d" } }, cancellationToken)
+        Assert.Equal<Result<CandidateStorageReceipt, CandidatePutOutcome>>(Error IdentityConflict, changedHead)
+        let! changedRetention = store.Put({ request with Candidate = { candidate with RetainUntil = candidate.RetainUntil.AddDays 1.0 } }, cancellationToken)
+        Assert.Equal<Result<CandidateStorageReceipt, CandidatePutOutcome>>(Error IdentityConflict, changedRetention)
         let! digestConflict = store.Put({ Candidate = { candidate with CandidateId = Id.candidate(Guid.NewGuid()); ContentSha256 = String.replicate 64 "0" }; Bytes = bytes }, cancellationToken)
         Assert.Equal<Result<CandidateStorageReceipt, CandidatePutOutcome>>(Error DigestConflict, digestConflict)
         let! fakeLocation = store.Put({ Candidate = { candidate with CandidateId = Id.candidate(Guid.NewGuid()); Location = ContentAddressedObject "host/path" }; Bytes = bytes }, cancellationToken)
         Assert.Equal<Result<CandidateStorageReceipt, CandidatePutOutcome>>(Error IdentityConflict, fakeLocation)
         let! remote = store.Put({ Candidate = { candidate with CandidateId = Id.candidate(Guid.NewGuid()); Location = ImmutableRemoteGitRef("repo", String.replicate 40 "d", "refs/fsgg/candidate") }; Bytes = bytes }, cancellationToken)
         Assert.Equal<Result<CandidateStorageReceipt, CandidatePutOutcome>>(Error InvalidArchive, remote)
+        let! _ = Fixture.sql "orchestration_o0" $"UPDATE fsgg_orchestration.candidate_object SET bytes=decode(repeat('00',size_bytes::integer),'hex') WHERE content_sha256='{digest}'"
+        let! corruptDuplicate = store.Put(request, cancellationToken)
+        Assert.Equal<Result<CandidateStorageReceipt, CandidatePutOutcome>>(Error IdentityConflict, corruptDuplicate)
         let! quarantined = store.Quarantine(candidate.CandidateId, "restore-check", cancellationToken)
         Assert.Equal<Result<unit,string>>(Ok(), quarantined)
+        let! quarantinedDuplicate = store.Put(request, cancellationToken)
+        Assert.Equal<Result<CandidateStorageReceipt, CandidatePutOutcome>>(Error IdentityConflict, quarantinedDuplicate)
         let! refusedRead = store.Read(candidate.CandidateId, cancellationToken)
         Assert.Equal<Result<CandidatePut,string>>(Error "candidate-quarantined", refusedRead)
     }
@@ -290,6 +349,10 @@ type PostgreSqlStoreTests() =
         let persistenceId = "work-item-v1-process-kill"
         let body = Fixture.sha(Encoding.UTF8.GetBytes "command")
         let! _ = store.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [ Fixture.event persistenceId 1L NoEffect "event" ], cancellationToken)
+        let candidateStore = PostgreSqlStore(Fixture.options dataSource identity 0L) :> ICandidateStore
+        let candidate = Fixture.candidate "restart-candidate"
+        let! acknowledged = candidateStore.Put(candidate, cancellationToken)
+        match acknowledged with Ok _ -> () | Error error -> failwithf "candidate not acknowledged: %A" error
         Fixture.run "/usr/bin/pg_ctl" $"-D {Fixture.root}/data stop -m immediate"
         NpgsqlConnection.ClearAllPools()
         let! unavailable = store.Recover(persistenceId, cancellationToken)
@@ -297,6 +360,48 @@ type PostgreSqlStoreTests() =
         Fixture.run "/usr/bin/pg_ctl" $"-D {Fixture.root}/data -l {Fixture.root}/postgres.log -o \"-k {Fixture.socket} -h '' -p 55439\" start"
         let! recovered = store.Recover(persistenceId, cancellationToken)
         match recovered with Ok result -> Assert.Single result.Events |> ignore | Error failures -> failwithf "restart recovery failed: %A" failures
+        let! recoveredCandidate = candidateStore.Read(candidate.Candidate.CandidateId, cancellationToken)
+        match recoveredCandidate with Ok stored -> Assert.Equal<byte array>(candidate.Bytes, stored.Bytes) | Error error -> failwith error
+    }
+
+    [<Fact>]
+    member _.``logical backup restore is fenced and exposes missing post-backup acknowledgement``() = task {
+        let! source, identity = Fixture.reset()
+        use source = source
+        let journal = PostgreSqlStore(Fixture.options source identity 0L) :> IJournalStore
+        let candidates = PostgreSqlStore(Fixture.options source identity 0L) :> ICandidateStore
+        let persistenceId = "work-item-v1-backup"
+        let operationId = Id.operation(Guid.NewGuid())
+        let intent =
+            { OperationId = operationId; Kind = InspectExternalOperation; Generation = Id.generation 0L
+              WorkflowRevision = Id.revision 0L; ResourceId = "provider:backup"; PayloadSha256 = String.replicate 64 "a" }
+        let body = Fixture.sha(Encoding.UTF8.GetBytes "backup-command")
+        let! _ = journal.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [ Fixture.event persistenceId 1L (IntentAdded intent) "pending" ], cancellationToken)
+        let before = Fixture.candidate "before-backup"
+        let! _ = candidates.Put(before, cancellationToken)
+        let dump = Path.Combine(Fixture.root, "orchestration_o0.dump")
+        Fixture.run "/usr/bin/pg_dump" $"-h {Fixture.socket} -p 55439 -Fc -f {dump} orchestration_o0"
+        let after = Fixture.candidate "acknowledged-after-backup"
+        let! afterReceipt = candidates.Put(after, cancellationToken)
+        match afterReceipt with Ok _ -> () | Error error -> failwithf "post-backup put failed: %A" error
+        let! _ = Fixture.sql "orchestration_o0" "UPDATE fsgg_orchestration.store_metadata SET generation_fence=2"
+        Fixture.run "/usr/bin/dropdb" $"-h {Fixture.socket} -p 55439 --if-exists orchestration_o0_restore"
+        Fixture.run "/usr/bin/createdb" $"-h {Fixture.socket} -p 55439 orchestration_o0_restore"
+        Fixture.run "/usr/bin/pg_restore" $"-h {Fixture.socket} -p 55439 -d orchestration_o0_restore {dump}"
+        use restored = Fixture.dataSource "orchestration_o0_restore"
+        let restoredOptions = Fixture.options restored identity 2L
+        let restoredJournal = PostgreSqlStore(restoredOptions) :> IJournalStore
+        let! fenced = restoredJournal.CheckReadiness cancellationToken
+        match fenced with Error failures -> Assert.Contains(failures, function BackupRequiresReconciliation "generation-fence-regressed" -> true | _ -> false) | _ -> failwith "old backup was not fenced"
+        let restoredCandidates = PostgreSqlStore(restoredOptions) :> ICandidateStore
+        let! beforeRead = restoredCandidates.Read(before.Candidate.CandidateId, cancellationToken)
+        match beforeRead with Ok stored -> Assert.Equal<byte array>(before.Bytes, stored.Bytes) | Error error -> failwith error
+        let! afterRead = restoredCandidates.Read(after.Candidate.CandidateId, cancellationToken)
+        Assert.Equal<Result<CandidatePut,string>>(Error "candidate-not-found", afterRead)
+        let! _ = Fixture.sql "orchestration_o0_restore" "UPDATE fsgg_orchestration.store_metadata SET generation_fence=2"
+        let reconciler = PostgreSqlStore(restoredOptions) :> IBackupReconciler
+        let! reconciliation = reconciler.ReconcileGenerationsRevocationsAndEffects cancellationToken
+        match reconciliation with Error failures -> Assert.Contains(failures, function BackupRequiresReconciliation "unsettled-external-effects" -> true | _ -> false) | _ -> failwith "pending restored effect was not gated"
     }
 
     [<Fact>]

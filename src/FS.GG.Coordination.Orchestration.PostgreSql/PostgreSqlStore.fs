@@ -171,6 +171,21 @@ type PostgreSqlStore(options: StoreOptions) =
         | ContentAddressedObject key -> Some key
         | ImmutableRemoteGitRef _ -> None
 
+    let sameInstant (left: DateTimeOffset) (right: DateTimeOffset) =
+        abs (left.ToUniversalTime().Ticks - right.ToUniversalTime().Ticks) <= 10L
+
+    let candidateEquivalent (left: CandidateArtifact) (right: CandidateArtifact) =
+        left.CandidateId = right.CandidateId
+        && String.Equals(left.ContentSha256, right.ContentSha256, StringComparison.OrdinalIgnoreCase)
+        && String.Equals(left.ManifestSha256, right.ManifestSha256, StringComparison.OrdinalIgnoreCase)
+        && left.BaselineSha = right.BaselineSha
+        && left.HeadSha = right.HeadSha
+        && left.TreeSha = right.TreeSha
+        && left.MediaType = right.MediaType
+        && left.SizeBytes = right.SizeBytes
+        && sameInstant left.RetainUntil right.RetainUntil
+        && left.Location = right.Location
+
     let readCandidate candidateId cancellationToken =
         task {
             try
@@ -388,15 +403,22 @@ FROM fsgg_orchestration.event WHERE persistence_id=$1 ORDER BY sequence_number
                                 match reader.GetInt16 6 with
                                 | 0s -> NoEffect
                                 | 1s ->
-                                    IntentAdded
-                                        { OperationId = Id.operation(reader.GetGuid 7)
-                                          Kind = Effect.byteToKind(byte(reader.GetInt16 8)) |> Option.defaultValue InspectExternalOperation
-                                          Generation = Id.generation(reader.GetInt64 9)
-                                          WorkflowRevision = Id.revision(reader.GetInt64 10)
-                                          ResourceId = reader.GetString 11
-                                          PayloadSha256 = reader.GetString 12 }
+                                    match Effect.byteToKind(byte(reader.GetInt16 8)) with
+                                    | Some kind ->
+                                        IntentAdded
+                                            { OperationId = Id.operation(reader.GetGuid 7)
+                                              Kind = kind
+                                              Generation = Id.generation(reader.GetInt64 9)
+                                              WorkflowRevision = Id.revision(reader.GetInt64 10)
+                                              ResourceId = reader.GetString 11
+                                              PayloadSha256 = reader.GetString 12 }
+                                    | None ->
+                                        failures.Add(CorruptRecord(persistenceId, sequence))
+                                        NoEffect
                                 | 2s -> Settled(Id.operation(reader.GetGuid 7))
-                                | _ -> NoEffect
+                                | _ ->
+                                    failures.Add(CorruptRecord(persistenceId, sequence))
+                                    NoEffect
                             match EventEnvelope.tryDecode payload with
                             | Ok coreEvent ->
                                 let derived = Effect.derive state coreEvent
@@ -422,10 +444,13 @@ FROM fsgg_orchestration.event WHERE persistence_id=$1 ORDER BY sequence_number
                         if not hasSnapshot then None
                         else
                             let sequence = snapshotReader.GetInt64 0
+                            let schemaVersion = snapshotReader.GetInt32 1
                             let payload = snapshotReader.GetFieldValue<byte array> 2
+                            if not (options.SupportedEventSchemaVersions.Contains schemaVersion) then
+                                failures.Add(UnknownEventVersion(persistenceId, sequence, schemaVersion))
                             if sequence >= expected || Hash.bytes payload <> snapshotReader.GetString 3 then
                                 failures.Add(SnapshotAheadOfJournal persistenceId)
-                            Some { PersistenceId = persistenceId; Sequence = sequence; SchemaVersion = snapshotReader.GetInt32 1; Payload = payload; PayloadSha256 = snapshotReader.GetString 3 }
+                            Some { PersistenceId = persistenceId; Sequence = sequence; SchemaVersion = schemaVersion; Payload = payload; PayloadSha256 = snapshotReader.GetString 3 }
                     do! snapshotReader.DisposeAsync().AsTask()
                     do! transaction.CommitAsync cancellationToken
                     if failures.Count > 0 then return Error(List.ofSeq failures)
@@ -457,9 +482,28 @@ INSERT INTO fsgg_orchestration.domain_snapshot(persistence_id,sequence_number,sc
 VALUES($1,$2,$3,$4,$5) ON CONFLICT(persistence_id,sequence_number) DO NOTHING
                             """, connection, transaction)
                             for value in [ snapshot.PersistenceId :> obj; snapshot.Sequence :> obj; snapshot.SchemaVersion :> obj; snapshot.Payload :> obj; snapshot.PayloadSha256.ToLowerInvariant() :> obj ] do Sql.add command value
-                            do! command.ExecuteNonQueryAsync cancellationToken |> TaskEx.discard
-                            do! transaction.CommitAsync cancellationToken
-                            return Ok()
+                            let! changed = command.ExecuteNonQueryAsync cancellationToken
+                            if changed = 1 then
+                                do! transaction.CommitAsync cancellationToken
+                                return Ok()
+                            else
+                                use existing = new NpgsqlCommand("SELECT schema_version,payload,payload_sha256 FROM fsgg_orchestration.domain_snapshot WHERE persistence_id=$1 AND sequence_number=$2", connection, transaction)
+                                Sql.add existing snapshot.PersistenceId
+                                Sql.add existing snapshot.Sequence
+                                use! reader = existing.ExecuteReaderAsync cancellationToken
+                                let! found = reader.ReadAsync cancellationToken
+                                let identical =
+                                    found
+                                    && reader.GetInt32 0 = snapshot.SchemaVersion
+                                    && reader.GetFieldValue<byte array> 1 = snapshot.Payload
+                                    && reader.GetString 2 = snapshot.PayloadSha256.ToLowerInvariant()
+                                do! reader.DisposeAsync().AsTask()
+                                if identical then
+                                    do! transaction.CommitAsync cancellationToken
+                                    return Ok()
+                                else
+                                    do! transaction.RollbackAsync cancellationToken
+                                    return Error(CorruptRecord(snapshot.PersistenceId, snapshot.Sequence))
                     with exceptionValue -> return Error(Sql.classifyReadiness exceptionValue)
             }
 
@@ -497,23 +541,29 @@ WHERE fsgg_orchestration.projection_checkpoint.sequence_number <= excluded.seque
                 | Some objectKey ->
                     try
                         use! connection = options.DataSource.OpenConnectionAsync cancellationToken
-                        use existing = new NpgsqlCommand("SELECT content_sha256,manifest_sha256,receipt_sha256,verified_at,size_bytes FROM fsgg_orchestration.candidate WHERE candidate_id=$1", connection)
+                        use existing = new NpgsqlCommand("SELECT receipt_sha256,verified_at FROM fsgg_orchestration.candidate WHERE candidate_id=$1", connection)
                         Sql.add existing (Id.candidateValue candidate.CandidateId)
                         use! existingReader = existing.ExecuteReaderAsync cancellationToken
                         let! found = existingReader.ReadAsync cancellationToken
                         if found then
-                            let same = existingReader.GetString 0 = candidate.ContentSha256.ToLowerInvariant() && existingReader.GetString 1 = candidate.ManifestSha256.ToLowerInvariant() && existingReader.GetInt64 4 = candidate.SizeBytes
-                            let receipt: CandidateStorageReceipt =
-                                { CandidateId = candidate.CandidateId; ContentSha256 = existingReader.GetString 0; ManifestSha256 = existingReader.GetString 1
-                                  SizeBytes = existingReader.GetInt64 4; Location = candidate.Location; StoreId = options.StoreId
-                                  StoreSchemaVersion = options.RuntimeSchemaVersion; StorageReceiptSha256 = existingReader.GetString 2
-                                  VerifiedAt = existingReader.GetFieldValue<DateTimeOffset> 3 }
+                            let receiptSha = existingReader.GetString 0
+                            let verifiedAt = existingReader.GetFieldValue<DateTimeOffset> 1
                             do! existingReader.DisposeAsync().AsTask()
-                            return if same then Error(Existing receipt) else Error IdentityConflict
+                            let! verified = readCandidate candidate.CandidateId cancellationToken
+                            match verified with
+                            | Ok stored when candidateEquivalent stored.Candidate candidate
+                                             && receiptHash stored.Candidate (locationKey stored.Candidate.Location |> Option.get) verifiedAt = receiptSha ->
+                                return Error(Existing
+                                    { CandidateId = stored.Candidate.CandidateId; ContentSha256 = stored.Candidate.ContentSha256
+                                      ManifestSha256 = stored.Candidate.ManifestSha256; SizeBytes = stored.Candidate.SizeBytes
+                                      Location = stored.Candidate.Location; StoreId = options.StoreId; StoreSchemaVersion = options.RuntimeSchemaVersion
+                                      StorageReceiptSha256 = receiptSha; VerifiedAt = verifiedAt })
+                            | _ -> return Error IdentityConflict
                         else
                             do! existingReader.DisposeAsync().AsTask()
                             use! transaction = connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
-                            let verifiedAt = DateTimeOffset.UtcNow
+                            let now = DateTimeOffset.UtcNow
+                            let verifiedAt = DateTimeOffset(now.Ticks - now.Ticks % 10L, TimeSpan.Zero)
                             let receiptSha = receiptHash candidate objectKey verifiedAt
                             use objectCommand = new NpgsqlCommand("INSERT INTO fsgg_orchestration.candidate_object(content_sha256,bytes,size_bytes,created_at,retain_until) VALUES($1,$2,$3,$4,$5) ON CONFLICT(content_sha256) DO NOTHING", connection, transaction)
                             for value in [ candidate.ContentSha256.ToLowerInvariant() :> obj; request.Bytes :> obj; candidate.SizeBytes :> obj; verifiedAt :> obj; candidate.RetainUntil.ToUniversalTime() :> obj ] do Sql.add objectCommand value
@@ -540,6 +590,7 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
                                 && stored.Candidate.TreeSha = candidate.TreeSha
                                 && stored.Candidate.MediaType = candidate.MediaType
                                 && stored.Candidate.SizeBytes = candidate.SizeBytes
+                                && sameInstant stored.Candidate.RetainUntil candidate.RetainUntil
                                 && stored.Candidate.Location = candidate.Location ->
                                 return Ok
                                     { CandidateId = candidate.CandidateId; ContentSha256 = candidate.ContentSha256.ToLowerInvariant(); ManifestSha256 = candidate.ManifestSha256.ToLowerInvariant()
