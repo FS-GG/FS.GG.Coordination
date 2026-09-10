@@ -47,7 +47,10 @@ Core-decided lifecycle roundtrips private identities, budgets, attempts, and an
 artifact proven through the candidate store. Two live ActorSystems with the same
 persistence ID store only one sequence-one marker; this demonstrates the SQL
 unique sequence limit, not exclusive actor ownership. The immediate-stop test demonstrates recovery of a transaction whose
-commit had already returned; it does not resolve an ambiguous commit response.
-Akka marker recovery does not prove exclusive actor ownership. The PostgreSQL
-expected-sequence CAS admits at most one competing append, while readiness and
-generation fences must still run before external effects.
+commit had already returned. A separate lost-response fixture proves that replaying
+the identical command envelope returns its original terminal sequence; it does not
+simulate a severed production network or provider-side effect ambiguity. The
+PostgreSQL expected-sequence CAS admits at most one competing append. Transactional
+identity, schema, read-only, and generation gates protect each authoritative recovery,
+append, and candidate acceptance call; effect release still applies the Core's current
+claims, revision, reservation, budget, and operation-state checks.
