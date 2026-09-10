@@ -64,8 +64,10 @@ type PlanningAttempt =
       StartedAt: DateTimeOffset
       Status: PlanningAttemptStatus }
 
+type ProposedActionKind = InspectWorkItem | CompareStatus | RecommendRoutineWork
+
 type ProposedAction =
-    { Kind: string
+    { Kind: ProposedActionKind
       WorkItem: WorkItemId
       ParametersSha256: string }
 
@@ -97,10 +99,17 @@ type ProposalApproval =
       ApprovalSha256: string
       ApprovedAt: DateTimeOffset }
 
+type ReadbackProvenance =
+    { Provider: string
+      SourceRevision: string
+      EvidenceSha256: string
+      ObservedAt: DateTimeOffset }
+
 type DurableCommandAcceptance =
     { ProposalId: ProposalId
       ApprovalSha256: string
       Receipt: CommandReceipt
+      Provenance: ReadbackProvenance
       AcceptedAt: DateTimeOffset }
 
 type KnownEffectResult = EffectApplied of providerRevision: string | EffectProvenAbsent | EffectRefused of reason: string
@@ -109,6 +118,7 @@ type DurableEffectCompletion =
     { CommandId: CommandId
       OperationId: OperationId
       Result: KnownEffectResult
+      Provenance: ReadbackProvenance
       CompletedAt: DateTimeOffset }
 
 type ConversationRole = Operator | PlanningAgent
@@ -227,6 +237,16 @@ module Observer =
     let private validSha value =
         not (String.IsNullOrWhiteSpace value) && value.Length = 64 && value |> Seq.forall Uri.IsHexDigit
 
+    let private validText value = not (String.IsNullOrWhiteSpace value) && value = value.Trim()
+
+    let private validReadback now value =
+        validText value.Provider && validText value.SourceRevision && validSha value.EvidenceSha256 && value.ObservedAt <= now
+
+    let private validEffectResult = function
+        | EffectApplied revision -> validText revision
+        | EffectProvenAbsent -> true
+        | EffectRefused reason -> validText reason
+
     let private add left right =
         if left < 0L || right < 0L || left > Int64.MaxValue - right then None else Some(left + right)
 
@@ -257,9 +277,11 @@ module Observer =
         use stream = new IO.MemoryStream()
         use writer = new IO.BinaryWriter(stream, Encoding.UTF8, true)
         for field in fields do
-            let bytes = Encoding.UTF8.GetBytes field
-            writer.Write bytes.Length
-            writer.Write bytes
+            if isNull field then writer.Write -1
+            else
+                let bytes = Encoding.UTF8.GetBytes field
+                writer.Write bytes.Length
+                writer.Write bytes
         writer.Flush()
         stream.ToArray()
 
@@ -271,10 +293,28 @@ module Observer =
               budget.Deadline.ToUniversalTime().ToString("O") ]
         |> digest
 
+    let observationSha256 (observation: ProjectObservationSnapshot) =
+        let workItems = observation.WorkItems |> List.sortBy (fun item -> WorkItemIdentity.persistenceId item.Identity, item.MembershipItemId)
+        let itemFields =
+            workItems
+            |> List.collect (fun item -> [ WorkItemIdentity.persistenceId item.Identity; item.MembershipItemId; string item.Archived ])
+        canonicalFields
+            ([ string (Id.projectValue observation.ProjectId)
+               observation.SourceRevision
+               string (Id.revisionValue observation.WorkflowRevision)
+               string (Id.generationValue observation.Generation)
+               observation.Provenance.Provider
+               observation.Provenance.QuerySha256.ToLowerInvariant()
+               observation.Provenance.EvidenceSha256.ToLowerInvariant()
+               observation.Provenance.CapturedAt.ToUniversalTime().ToString("O")
+               string workItems.Length
+               string observation.NonWorkItemCount ] @ itemFields)
+        |> digest
+
     let proposalSha256 (input: ProposalInput) =
         let actionFields =
             input.Actions
-            |> List.collect (fun action -> [ action.Kind; WorkItemIdentity.persistenceId action.WorkItem; action.ParametersSha256.ToLowerInvariant() ])
+            |> List.collect (fun action -> [ string action.Kind; WorkItemIdentity.persistenceId action.WorkItem; action.ParametersSha256.ToLowerInvariant() ])
         canonicalFields
             ([ string (ProposalId.value input.ProposalId)
                string (Id.attemptValue input.AttemptId)
@@ -343,10 +383,19 @@ module Observer =
         value.Converters.Add(JsonFSharpConverter())
         value
 
-    let commandSha256 (command: ObserverCommand) = JsonSerializer.SerializeToUtf8Bytes(command, options) |> digest
+    let commandSha256 (envelope: ObserverCommandEnvelope) =
+        let commandBytes = JsonSerializer.SerializeToUtf8Bytes(envelope.Command, options)
+        canonicalFields
+            [ string (Id.commandValue envelope.CommandId)
+              string envelope.ExpectedSequence
+              envelope.PrincipalId
+              envelope.IssuedAt.ToUniversalTime().ToString("O")
+              envelope.ExpiresAt.ToUniversalTime().ToString("O")
+              Convert.ToBase64String commandBytes ]
+        |> digest
 
     let decide now (state: ObserverState) (envelope: ObserverCommandEnvelope) =
-        let body = commandSha256 envelope.Command
+        let body = commandSha256 envelope
         if envelope.ExpectedSequence <> state.Sequence then reject envelope body state "stale-observer-sequence"
         elif String.IsNullOrWhiteSpace envelope.PrincipalId || envelope.IssuedAt > now || envelope.ExpiresAt < now || envelope.ExpiresAt < envelope.IssuedAt then reject envelope body state "invalid-or-expired-observer-command"
         else
@@ -361,11 +410,24 @@ module Observer =
                 elif state.Conversation |> List.exists (fun prior -> prior.EntryId = entry.EntryId) then reject envelope body state "duplicate-conversation-entry"
                 else accept envelope body state [ ConversationRecorded { entry with BodySha256 = entry.BodySha256.ToLowerInvariant() } ] "conversation-recorded"
             | RecordProjectObservation observation ->
-                if state.ProjectId <> Some observation.ProjectId || String.IsNullOrWhiteSpace observation.SourceRevision || not (validSha observation.ObservationSha256)
-                   || not (validSha observation.Provenance.QuerySha256) || not (validSha observation.Provenance.EvidenceSha256) || observation.Provenance.CapturedAt > now then
+                let canonicalObservation =
+                    try Some(observationSha256 observation)
+                    with _ -> None
+                let regressed =
+                    state.Observation
+                    |> Option.exists (fun prior ->
+                        observation.Provenance.CapturedAt < prior.Provenance.CapturedAt
+                        || Id.generationValue observation.Generation < Id.generationValue prior.Generation
+                        || Id.revisionValue observation.WorkflowRevision < Id.revisionValue prior.WorkflowRevision)
+                if state.ProjectId <> Some observation.ProjectId || not (validText observation.SourceRevision) || not (validSha observation.ObservationSha256)
+                   || not (validText observation.Provenance.Provider) || not (validSha observation.Provenance.QuerySha256) || not (validSha observation.Provenance.EvidenceSha256)
+                   || observation.Provenance.CapturedAt > now || observation.NonWorkItemCount < 0
+                   || observation.WorkItems |> List.exists (fun item -> not (validText item.MembershipItemId))
+                   || (observation.WorkItems |> List.groupBy _.MembershipItemId |> List.exists (fun (_, values) -> values.Length <> 1))
+                   || canonicalObservation <> Some(observation.ObservationSha256.ToLowerInvariant()) then
                     reject envelope body state "invalid-project-observation"
-                elif state.Observation |> Option.exists (fun prior -> prior.Provenance.CapturedAt > observation.Provenance.CapturedAt) then reject envelope body state "stale-project-observation"
-                else accept envelope body state [ ProjectObservationRecorded observation ] "project-observation-recorded"
+                elif regressed then reject envelope body state "stale-project-observation"
+                else accept envelope body state [ ProjectObservationRecorded { observation with ObservationSha256 = canonicalObservation.Value } ] "project-observation-recorded"
             | StartPlanningAttempt(attemptId, reservation, startedAt) ->
                 match state.Budget, state.Observation with
                 | Some budget, Some observation when positiveUse reservation && within budget state.Used (addUse state.Reserved reservation |> Option.defaultValue { Tokens = Int64.MaxValue; RuntimeSeconds = Int64.MaxValue; CostMicros = Int64.MaxValue }) now
@@ -389,11 +451,13 @@ module Observer =
                                                           && input.ObservationSha256 = attempt.ObservationSha256
                                                           && input.WorkflowRevision = attempt.WorkflowRevision
                                                           && input.Generation = attempt.Generation
-                                                          && not (String.IsNullOrWhiteSpace input.Scope)
+                                                          && validText input.Scope
                                                           && validSha input.NarrativeSha256
                                                           && input.ProposedAt >= attempt.StartedAt && input.ProposedAt <= now
                                                           && not input.Actions.IsEmpty
-                                                          && input.Actions |> List.forall (fun action -> not (String.IsNullOrWhiteSpace action.Kind) && validSha action.ParametersSha256)
+                                                          && input.Actions |> List.forall (fun action ->
+                                                              validSha action.ParametersSha256
+                                                              && observation.WorkItems |> List.exists (fun item -> WorkItemIdentity.persistenceId item.Identity = WorkItemIdentity.persistenceId action.WorkItem))
                                                           && not (Map.containsKey input.ProposalId state.Proposals) ->
                     let proposal = { ProposalId = input.ProposalId; AttemptId = input.AttemptId; ObservationSha256 = input.ObservationSha256.ToLowerInvariant(); WorkflowRevision = input.WorkflowRevision; Generation = input.Generation; Scope = input.Scope; NarrativeSha256 = input.NarrativeSha256.ToLowerInvariant(); Actions = input.Actions; PlanSha256 = proposalSha256 input; ProposedAt = input.ProposedAt }
                     accept envelope body state [ ProposalRecorded proposal; PlanningAttemptCompleted(attemptId, actual) ] "proposal-recorded"
@@ -405,11 +469,15 @@ module Observer =
             | ApproveProposal input ->
                 match state.Proposals |> Map.tryFind input.ProposalId, state.Budget, state.Observation with
                 | Some proposal, Some budget, Some observation when state.CurrentProposal = Some input.ProposalId
-                                                                  && input.PlanSha256.Equals(proposal.PlanSha256, StringComparison.OrdinalIgnoreCase)
-                                                                  && input.PlanningBudgetSha256.Equals(budgetSha256 budget, StringComparison.OrdinalIgnoreCase)
-                                                                  && input.Scope = proposal.Scope && not (String.IsNullOrWhiteSpace input.PrincipalId)
+                                                                  && String.Equals(input.PlanSha256, proposal.PlanSha256, StringComparison.OrdinalIgnoreCase)
+                                                                  && String.Equals(input.PlanningBudgetSha256, budgetSha256 budget, StringComparison.OrdinalIgnoreCase)
+                                                                  && input.Scope = proposal.Scope && validText input.PrincipalId
+                                                                  && input.PrincipalId = envelope.PrincipalId
+                                                                  && proposal.WorkflowRevision = observation.WorkflowRevision
+                                                                  && proposal.Generation = observation.Generation
                                                                   && input.ExpectedWorkflowRevision = observation.WorkflowRevision
                                                                   && input.ExpectedGeneration = observation.Generation
+                                                                  && now <= budget.Deadline
                                                                   && validSha input.CommandBodySha256
                                                                   && input.ApprovedAt <= now
                                                                   && not (Map.containsKey input.ProposalId state.Approvals)
@@ -419,16 +487,17 @@ module Observer =
                 | _ -> reject envelope body state "stale-or-unbound-approval"
             | RecordCommandAcceptance acceptance ->
                 match Map.tryFind acceptance.ProposalId state.Approvals with
-                | Some approval when acceptance.ApprovalSha256.Equals(approval.ApprovalSha256, StringComparison.OrdinalIgnoreCase)
+                | Some approval when String.Equals(acceptance.ApprovalSha256, approval.ApprovalSha256, StringComparison.OrdinalIgnoreCase)
                                      && acceptance.Receipt.CommandId = approval.CommandId
-                                     && acceptance.Receipt.BodySha256.Equals(approval.CommandBodySha256, StringComparison.OrdinalIgnoreCase)
+                                     && String.Equals(acceptance.Receipt.BodySha256, approval.CommandBodySha256, StringComparison.OrdinalIgnoreCase)
                                      && (acceptance.Receipt.Disposition = ReceiptDisposition.Accepted || acceptance.Receipt.Disposition = ReceiptDisposition.Duplicate)
+                                     && validReadback now acceptance.Provenance
                                      && acceptance.AcceptedAt <= now
                                      && not (Map.containsKey acceptance.Receipt.CommandId state.Acceptances) ->
                     accept envelope body state [ CommandAcceptanceRecorded acceptance ] "durable-command-acceptance-recorded"
                 | _ -> reject envelope body state "unbound-command-acceptance"
             | RecordEffectCompletion completion ->
-                if not (Map.containsKey completion.CommandId state.Acceptances) || Map.containsKey completion.OperationId state.Effects || completion.CompletedAt > now then reject envelope body state "unbound-or-duplicate-effect-completion"
+                if not (Map.containsKey completion.CommandId state.Acceptances) || Map.containsKey completion.OperationId state.Effects || completion.CompletedAt > now || not (validReadback now completion.Provenance) || not (validEffectResult completion.Result) then reject envelope body state "unbound-or-duplicate-effect-completion"
                 else accept envelope body state [ EffectCompletionRecorded completion ] "effect-completion-recorded"
 
     let replay (events: ObserverEvent list) = events |> List.fold evolve initial
@@ -466,7 +535,7 @@ type ObserverAppendRequest =
       ReceivedAt: DateTimeOffset
       Events: ObserverStoredEvent list }
 
-type ObserverAppendOutcome = ObserverAppended of int64 | ObserverDuplicate of int64 | ObserverConflict | ObserverWrongExpectedSequence of int64 | ObserverInvalidAppend of string
+type ObserverAppendOutcome = ObserverAppended of int64 | ObserverDuplicate of int64 | ObserverConflict | ObserverWrongExpectedSequence of int64 | ObserverInvalidAppend of string | ObserverAppendUnavailable of string
 
 type ObserverRecoveryFailure =
     | ObserverStoreUnavailable of string
@@ -554,35 +623,246 @@ module ProjectObservationBridge =
             | Some value -> Error value
             | None ->
                 let sorted = workItems |> Seq.sortBy (fun item -> WorkItemIdentity.persistenceId item.Identity) |> Seq.toList
-                let canonical =
-                    [ "fsgg.observer.project-observation/v1"; string (Id.projectValue projectId); snapshot.Revision; string (Id.revisionValue workflowRevision); string (Id.generationValue generation); provenance.Provider; provenance.QuerySha256.ToLowerInvariant(); provenance.EvidenceSha256.ToLowerInvariant(); string sorted.Length; string nonWork ]
-                    @ (sorted |> List.collect (fun item -> [ WorkItemIdentity.persistenceId item.Identity; item.MembershipItemId; string item.Archived ]))
-                    |> String.concat "\n" |> Encoding.UTF8.GetBytes |> digest
-                Ok
+                let draft =
                     { ProjectId = projectId
                       SourceRevision = snapshot.Revision
                       WorkflowRevision = workflowRevision
                       Generation = generation
-                      ObservationSha256 = canonical
+                      ObservationSha256 = String.replicate 64 "0"
                       Provenance = provenance
                       WorkItems = sorted
                       NonWorkItemCount = nonWork }
+                Ok { draft with ObservationSha256 = Observer.observationSha256 draft }
 
 type ProjectObservationRequest = { ProjectId: ProjectId; WorkflowRevision: WorkflowRevision; Generation: Generation }
 type PlanningRequest = { SessionId: SessionId; AttemptId: AttemptId; Observation: ProjectObservationSnapshot; Reservation: PlanningUse }
+type PlanningResult = { Proposal: ProposalInput; ActualUse: PlanningUse }
 
 type IProjectReadCapability =
     abstract ObserveProject: ProjectObservationRequest * CancellationToken -> Task<Result<ProjectObservationSnapshot, ObservationBridgeFailure>>
 
 type IBoundedPlanningCapability =
-    abstract CreateProposal: PlanningRequest * CancellationToken -> Task<Result<ProposalInput, string>>
+    abstract CreateProposal: PlanningRequest * CancellationToken -> Task<Result<PlanningResult, string>>
 
-type ObserverComposition = private ObserverComposition of IProjectReadCapability * IBoundedPlanningCapability * IObserverJournalStore
+type ICommandReadbackCapability =
+    abstract ReadCommandAcceptance: ProposalApproval * CancellationToken -> Task<Result<DurableCommandAcceptance, string>>
+    abstract ReadEffectCompletions: DurableCommandAcceptance * CancellationToken -> Task<Result<DurableEffectCompletion list, string>>
+
+type ObserverComposition = private ObserverComposition of IProjectReadCapability * IBoundedPlanningCapability * ICommandReadbackCapability * IObserverJournalStore
 
 [<RequireQualifiedAccess>]
 module ObserverComposition =
-    let create projectRead boundedPlanning journal = ObserverComposition(projectRead, boundedPlanning, journal)
-    let capabilities (ObserverComposition _) = [ "project-read"; "bounded-planning"; "observer-journal" ]
+    let create projectRead boundedPlanning commandReadback journal = ObserverComposition(projectRead, boundedPlanning, commandReadback, journal)
+    let capabilities (ObserverComposition _) = [ "project-read"; "bounded-planning"; "command-readback"; "observer-journal" ]
+
+type ObservationRefreshRequest =
+    { ObserverId: string
+      State: ObserverState
+      ProjectRequest: ProjectObservationRequest
+      CommandId: CommandId
+      PrincipalId: string
+      IssuedAt: DateTimeOffset
+      ExpiresAt: DateTimeOffset }
+
+type ObservationRefreshOutcome =
+    | ObservationRefreshed of ObserverState
+    | ObservationReadRefused of ObservationBridgeFailure
+    | ObservationCommandRefused of ObserverReceipt
+    | ObservationPersistenceRefused of ObserverAppendOutcome
+
+type PlanningExecutionRequest =
+    { ObserverId: string
+      State: ObserverState
+      AttemptId: AttemptId
+      Reservation: PlanningUse
+      StartCommandId: CommandId
+      CompletionCommandId: CommandId
+      UnknownCommandId: CommandId
+      PrincipalId: string
+      IssuedAt: DateTimeOffset
+      ExpiresAt: DateTimeOffset }
+
+type PlanningExecutionOutcome =
+    | PlanningResultPersisted of ObserverState * PlanProposal
+    | PlanningLaunchRefused of ObserverReceipt
+    | PlanningAlreadyRecorded of terminalSequence: int64
+    | PlanningPersistenceRefused of ObserverAppendOutcome
+    | PlanningOutcomePersistedUnknown of ObserverState * string
+    | PlanningOutcomePersistenceUncertain of ObserverState * string * ObserverAppendOutcome
+
+type CommandReadbackRequest =
+    { ObserverId: string
+      State: ObserverState
+      ProposalId: ProposalId
+      PersistenceCommandId: CommandId
+      PrincipalId: string
+      IssuedAt: DateTimeOffset
+      ExpiresAt: DateTimeOffset }
+
+type CommandReadbackOutcome =
+    | CommandAcceptanceRefreshed of ObserverState
+    | CommandReadbackRefused of string
+    | CommandReadbackCommandRefused of ObserverReceipt
+    | CommandReadbackPersistenceRefused of ObserverAppendOutcome
+
+type EffectReadbackRequest =
+    { ObserverId: string
+      State: ObserverState
+      AcceptedCommandId: CommandId
+      OperationId: OperationId
+      PersistenceCommandId: CommandId
+      PrincipalId: string
+      IssuedAt: DateTimeOffset
+      ExpiresAt: DateTimeOffset }
+
+type EffectReadbackOutcome =
+    | EffectCompletionRefreshed of ObserverState
+    | EffectReadbackRefused of string
+    | EffectReadbackCommandRefused of ObserverReceipt
+    | EffectReadbackPersistenceRefused of ObserverAppendOutcome
+
+[<RequireQualifiedAccess>]
+module ObserverRuntime =
+    let private evolveDecision (state: ObserverState) (decision: ObserverDecision) = decision.Events |> List.fold Observer.evolve state
+
+    let private append (journal: IObserverJournalStore) observerId receivedAt (envelope: ObserverCommandEnvelope) (decision: ObserverDecision) cancellationToken =
+        journal.AppendObserver(ObserverJournal.appendRequest observerId receivedAt envelope decision, cancellationToken)
+
+    let refreshObservation now (ObserverComposition(projectRead, _, _, journal)) (request: ObservationRefreshRequest) cancellationToken =
+        task {
+            let! read = projectRead.ObserveProject(request.ProjectRequest, cancellationToken)
+            match read with
+            | Error failure -> return ObservationReadRefused failure
+            | Ok observation ->
+                let envelope =
+                    { CommandId = request.CommandId
+                      ExpectedSequence = request.State.Sequence
+                      PrincipalId = request.PrincipalId
+                      IssuedAt = request.IssuedAt
+                      ExpiresAt = request.ExpiresAt
+                      Command = RecordProjectObservation observation }
+                let decision = Observer.decide now request.State envelope
+                if decision.Receipt.Disposition = ObserverRejected then return ObservationCommandRefused decision.Receipt
+                else
+                    let! stored = append journal request.ObserverId now envelope decision cancellationToken
+                    match stored with
+                    | ObserverAppended _ -> return ObservationRefreshed(evolveDecision request.State decision)
+                    | other -> return ObservationPersistenceRefused other
+        }
+
+    let private markUnknown now (journal: IObserverJournalStore) (request: PlanningExecutionRequest) (state: ObserverState) reason cancellationToken =
+        task {
+            let envelope =
+                { CommandId = request.UnknownCommandId
+                  ExpectedSequence = state.Sequence
+                  PrincipalId = request.PrincipalId
+                  IssuedAt = request.IssuedAt
+                  ExpiresAt = request.ExpiresAt
+                  Command = MarkPlanningAttemptUnknown(request.AttemptId, reason) }
+            let decision = Observer.decide now state envelope
+            if decision.Receipt.Disposition = ObserverRejected then return PlanningOutcomePersistenceUncertain(state, reason, ObserverInvalidAppend decision.Receipt.Detail)
+            else
+                let! stored = append journal request.ObserverId now envelope decision cancellationToken
+                match stored with
+                | ObserverAppended _ -> return PlanningOutcomePersistedUnknown(evolveDecision state decision, reason)
+                | other -> return PlanningOutcomePersistenceUncertain(state, reason, other)
+        }
+
+    let executePlanning now (ObserverComposition(_, planner, _, journal)) (request: PlanningExecutionRequest) cancellationToken =
+        task {
+            let startEnvelope =
+                { CommandId = request.StartCommandId
+                  ExpectedSequence = request.State.Sequence
+                  PrincipalId = request.PrincipalId
+                  IssuedAt = request.IssuedAt
+                  ExpiresAt = request.ExpiresAt
+                  Command = StartPlanningAttempt(request.AttemptId, request.Reservation, now) }
+            let startDecision = Observer.decide now request.State startEnvelope
+            if startDecision.Receipt.Disposition = ObserverRejected then return PlanningLaunchRefused startDecision.Receipt
+            else
+                let! startStored = append journal request.ObserverId now startEnvelope startDecision cancellationToken
+                match startStored with
+                | ObserverDuplicate sequence -> return PlanningAlreadyRecorded sequence
+                | ObserverAppended _ ->
+                    let startedState = evolveDecision request.State startDecision
+                    let planningRequest =
+                        { SessionId = startedState.SessionId.Value
+                          AttemptId = request.AttemptId
+                          Observation = startedState.Observation.Value
+                          Reservation = request.Reservation }
+                    let! planned =
+                        task {
+                            try return! planner.CreateProposal(planningRequest, cancellationToken)
+                            with exceptionValue -> return Error $"planning-agent-exception:{exceptionValue.GetType().Name}"
+                        }
+                    match planned with
+                    | Error reason -> return! markUnknown now journal request startedState reason cancellationToken
+                    | Ok result ->
+                        let completionEnvelope =
+                            { CommandId = request.CompletionCommandId
+                              ExpectedSequence = startedState.Sequence
+                              PrincipalId = request.PrincipalId
+                              IssuedAt = request.IssuedAt
+                              ExpiresAt = request.ExpiresAt
+                              Command = CompletePlanningAttempt(request.AttemptId, result.ActualUse, result.Proposal) }
+                        let completionDecision = Observer.decide now startedState completionEnvelope
+                        if completionDecision.Receipt.Disposition = ObserverRejected then
+                            return! markUnknown now journal request startedState $"planning-output-refused:{completionDecision.Receipt.Detail}" cancellationToken
+                        else
+                            let! completionStored = append journal request.ObserverId now completionEnvelope completionDecision cancellationToken
+                            match completionStored with
+                            | ObserverAppended _ ->
+                                let completed = evolveDecision startedState completionDecision
+                                return PlanningResultPersisted(completed, completed.Proposals[result.Proposal.ProposalId])
+                            | other -> return PlanningOutcomePersistenceUncertain(startedState, "planning-result-append-unconfirmed", other)
+                | other -> return PlanningPersistenceRefused other
+        }
+
+    let refreshCommandAcceptance now (ObserverComposition(_, _, readback, journal)) (request: CommandReadbackRequest) cancellationToken =
+        task {
+            match Map.tryFind request.ProposalId request.State.Approvals with
+            | None -> return CommandReadbackRefused "proposal-not-approved"
+            | Some approval ->
+                let! observed = readback.ReadCommandAcceptance(approval, cancellationToken)
+                match observed with
+                | Error reason -> return CommandReadbackRefused reason
+                | Ok acceptance ->
+                    let envelope =
+                        { CommandId = request.PersistenceCommandId; ExpectedSequence = request.State.Sequence; PrincipalId = request.PrincipalId
+                          IssuedAt = request.IssuedAt; ExpiresAt = request.ExpiresAt; Command = RecordCommandAcceptance acceptance }
+                    let decision = Observer.decide now request.State envelope
+                    if decision.Receipt.Disposition = ObserverRejected then return CommandReadbackCommandRefused decision.Receipt
+                    else
+                        let! stored = append journal request.ObserverId now envelope decision cancellationToken
+                        match stored with
+                        | ObserverAppended _ -> return CommandAcceptanceRefreshed(evolveDecision request.State decision)
+                        | other -> return CommandReadbackPersistenceRefused other
+        }
+
+    let refreshEffectCompletion now (ObserverComposition(_, _, readback, journal)) (request: EffectReadbackRequest) cancellationToken =
+        task {
+            match Map.tryFind request.AcceptedCommandId request.State.Acceptances with
+            | None -> return EffectReadbackRefused "command-not-durably-accepted"
+            | Some acceptance ->
+                let! observed = readback.ReadEffectCompletions(acceptance, cancellationToken)
+                match observed with
+                | Error reason -> return EffectReadbackRefused reason
+                | Ok completions ->
+                    match completions |> List.filter (fun completion -> completion.CommandId = request.AcceptedCommandId && completion.OperationId = request.OperationId) with
+                    | [ completion ] ->
+                        let envelope =
+                            { CommandId = request.PersistenceCommandId; ExpectedSequence = request.State.Sequence; PrincipalId = request.PrincipalId
+                              IssuedAt = request.IssuedAt; ExpiresAt = request.ExpiresAt; Command = RecordEffectCompletion completion }
+                        let decision = Observer.decide now request.State envelope
+                        if decision.Receipt.Disposition = ObserverRejected then return EffectReadbackCommandRefused decision.Receipt
+                        else
+                            let! stored = append journal request.ObserverId now envelope decision cancellationToken
+                            match stored with
+                            | ObserverAppended _ -> return EffectCompletionRefreshed(evolveDecision request.State decision)
+                            | other -> return EffectReadbackPersistenceRefused other
+                    | [] -> return EffectReadbackRefused "operation-completion-not-observed"
+                    | _ -> return EffectReadbackRefused "duplicate-operation-completion-observation"
+        }
 
 type ProjectionStage = Conversation | Proposed | Approved | DurableAcceptance | EffectComplete
 type ProjectionRow = { Stage: ProjectionStage; Identity: string; Detail: string; RecordedAt: DateTimeOffset }
