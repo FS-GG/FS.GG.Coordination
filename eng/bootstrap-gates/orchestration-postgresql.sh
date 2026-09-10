@@ -8,8 +8,11 @@ if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
 fi
 results="$RUNNER_TEMP/orchestration-postgresql"
 mkdir -p "$results"
-bash tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests/run-private-postgres.sh \
-  --no-restore \
-  --logger "trx;LogFileName=results.trx" \
-  --results-directory "$results"
+(
+  cd tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests
+  bash run-private-postgres.sh \
+    --no-restore \
+    --logger "trx;LogFileName=results.trx" \
+    --results-directory "$results"
+)
 test -s "$results/results.trx"
