@@ -49,7 +49,7 @@ module Orchestration =
         let private node value =
             if String.IsNullOrWhiteSpace value then invalidArg (nameof value) "immutable node id required"
             let normalized=value.Trim()
-            if normalized.Length>128 || not(normalized |> Seq.forall(fun c -> Char.IsAsciiLetterOrDigit c || c='_' || c='-' || c='.')) then invalidArg (nameof value) "invalid immutable node id"
+            if normalized.Length>128 || not(normalized |> Seq.forall(fun c -> Char.IsAsciiLetterOrDigit c || c='_' || c='-' || c='.' || c='+' || c='/' || c='=')) then invalidArg (nameof value) "invalid immutable node id"
             normalized
         let create repositoryNodeId repositoryDatabaseId issueNodeId issueNumber =
             if repositoryDatabaseId <= 0L || issueNumber <= 0L then invalidArg "identity" "numeric identities must be positive"
@@ -57,7 +57,9 @@ module Orchestration =
               IssueNodeId = node issueNodeId; IssueNumber = issueNumber }
         let canonicalBytes item =
             // Names, aliases, URLs, clone paths and board membership are projections, not identity.
-            $"fsgg.work-item/v1\nrepository-node:{item.Repository.NodeId}\nrepository-id:{item.Repository.DatabaseId}\nissue-node:{item.IssueNodeId}\nissue-number:{item.IssueNumber}\n"
+            // Database identity plus repository-local issue number survives repository rename/transfer
+            // and GitHub's legacy/new global-node-ID migration. Node IDs remain opaque readback facts.
+            $"fsgg.work-item/v1\nrepository-id:{item.Repository.DatabaseId}\nissue-number:{item.IssueNumber}\n"
             |> Encoding.UTF8.GetBytes
         let persistenceId item =
             canonicalBytes item |> SHA256.HashData |> Convert.ToHexString
@@ -234,9 +236,14 @@ module Orchestration =
         let reject detail =
             let receipt=mkReceipt state id digest Rejected detail
             {Events=[CommandRecorded receipt];Effects=[];Receipt=receipt}
+        let conflict detail =
+            let receipt=mkReceipt state id digest Conflict detail
+            {Events=[CommandRecorded receipt];Effects=[];Receipt=receipt}
         match command with
         | Admit(s,b) when state.WorkItemId.IsNone && within now b state.Used -> accept [WorkAdmitted(s,b);GenerationAdvanced(nextGeneration state.Generation)] [] "admitted"
         | Admit _ -> reject "already-admitted-or-invalid-budget"
+        | Reserve(r,e,claims) when state.Reservation |> Option.exists(fun existing -> existing.ReservationId=r && existing.ExpiresAt=e && existing.RequiredClaimIds=claims) -> accept [] [] "reservation-already-created"
+        | Reserve(r,_,_) when state.Reservation |> Option.exists(fun existing -> existing.ReservationId=r) -> conflict "reservation-identity-conflict"
         | Reserve(r,e,claims) when state.Control=Running && state.Reservation.IsNone && e>now && not(Set.isEmpty claims) && Set.forall (String.IsNullOrWhiteSpace >> not) claims -> accept [ReservationCreated{ReservationId=r;Generation=state.Generation;ExpiresAt=e;RequiredClaimIds=claims}] [] "reserved"
         | Reserve _ -> reject "reservation-not-available"
         | ObserveClaim c when sameGeneration c.Generation state.Generation -> accept [ClaimObserved c] [] "claim-observed"
@@ -252,10 +259,14 @@ module Orchestration =
         | RecordCompensationFailure(claimId,reason) when Set.contains claimId state.RecoveryObligations -> accept [CompensationFailed(claimId,reason)] [] "compensation-pending"
         | RecordCompensationFailure _ -> reject "no-compensation-obligation"
         | StartAttempt(a,s,r) ->
-            match state.Control,state.Budget,state.Reservation with
-            | Running,Some b,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && within now b state.Used && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && not(Map.containsKey a state.Attempts) && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation ->
-                accept [AttemptStarted{AttemptId=a;SessionId=s;Runner=r;Generation=state.Generation;StartedAt=now;Status=Active}] [] "attempt-started"
-            | _ -> reject "dispatch-requires-current-reservation-claim-runner-and-budget"
+            match Map.tryFind a state.Attempts with
+            | Some existing when existing.SessionId=s && existing.Runner=r -> accept [] [] "attempt-already-started"
+            | Some _ -> conflict "attempt-identity-conflict"
+            | None ->
+                match state.Control,state.Budget,state.Reservation with
+                | Running,Some b,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && within now b state.Used && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation ->
+                    accept [AttemptStarted{AttemptId=a;SessionId=s;Runner=r;Generation=state.Generation;StartedAt=now;Status=Active}] [] "attempt-started"
+                | _ -> reject "dispatch-requires-current-reservation-claim-runner-and-budget"
         | ObserveAttempt(attemptId,status) ->
             match Map.tryFind attemptId state.Attempts,status with
             | Some _,Active -> reject "observation-cannot-create-active-attempt"
@@ -272,10 +283,14 @@ module Orchestration =
         | ConfirmCancelled r -> match state.Control with | CancelPending _ -> accept [CancelledEvent r;GenerationAdvanced(nextGeneration state.Generation)] [] "cancelled" | _ -> reject "cancel-not-pending"
         | Revoke r -> accept [RevokedEvent r;GenerationAdvanced(nextGeneration state.Generation)] [] "revoked"
         | RecordCandidate(c,proof) when proof.CandidateId=c.CandidateId && proof.ContentSha256.Equals(c.ContentSha256,StringComparison.OrdinalIgnoreCase) && proof.ManifestSha256.Equals(c.ManifestSha256,StringComparison.OrdinalIgnoreCase) && proof.SizeBytes=c.SizeBytes && proof.Location=c.Location && proof.StoreSchemaVersion=1 && not(String.IsNullOrWhiteSpace proof.StoreId) && validSha proof.StorageReceiptSha256 && proof.VerifiedAt<=now && c.SizeBytes>=0L && c.SizeBytes<=104857600L && c.RetainUntil>now && c.RetainUntil<=now.AddDays 90. && validSha c.ContentSha256 && validSha c.ManifestSha256 && validGitObject c.BaselineSha && validGitObject c.HeadSha && validGitObject c.TreeSha && Set.contains c.MediaType (Set.ofList ["application/vnd.git.bundle";"application/zip";"application/zstd"]) && (match c.Location with | ContentAddressedObject key -> key=$"sha256/{c.ContentSha256.ToLowerInvariant()}" | ImmutableRemoteGitRef(repository,commit,qualifiedRef) -> not(String.IsNullOrWhiteSpace repository) && validGitObject commit && commit.Equals(c.HeadSha,StringComparison.OrdinalIgnoreCase) && qualifiedRef.StartsWith("refs/fsgg/candidates/",StringComparison.Ordinal)) ->
-            match Map.tryFind c.CandidateId state.Candidates with | Some x when x=c -> accept [] [] "candidate-already-accepted" | Some _ -> reject "candidate-identity-conflict" | None -> accept [CandidateAccepted c] [] "candidate-durably-accepted"
+            match Map.tryFind c.CandidateId state.Candidates with | Some x when x=c -> accept [] [] "candidate-already-accepted" | Some _ -> conflict "candidate-identity-conflict" | None -> accept [CandidateAccepted c] [] "candidate-durably-accepted"
         | RecordCandidate _ -> reject "candidate-not-recoverable-or-invalid"
-        | RecordEffectIntent i when sameGeneration i.Generation state.Generation && not(Map.containsKey i.OperationId state.Operations) -> accept [EffectIntentRecorded i] [] "effect-intent-recorded"
-        | RecordEffectIntent _ -> reject "effect-identity-conflict-or-stale-generation"
+        | RecordEffectIntent i when sameGeneration i.Generation state.Generation ->
+            match Map.tryFind i.OperationId state.Operations with
+            | None -> accept [EffectIntentRecorded i] [] "effect-intent-recorded"
+            | Some(IntentRecorded existing)|Some(Dispatching existing)|Some(NeedsObservation(existing,_))|Some(Settled(existing,_)) when existing=i -> accept [] [] "effect-intent-already-recorded"
+            | Some _ -> conflict "operation-identity-conflict"
+        | RecordEffectIntent _ -> reject "stale-effect-generation"
         | MarkEffectDispatching operationId ->
             match Map.tryFind operationId state.Operations with | Some(IntentRecorded i) when effectAuthorized now state i -> accept [EffectDispatchStarted operationId] [i] "effect-dispatching" | Some(NeedsObservation _) -> reject "observe-before-retry" | Some _ -> reject "effect-not-authorized" | _ -> reject "effect-not-dispatchable"
         | ObserveEffect(operationId,Unknown reason) ->
@@ -322,9 +337,9 @@ module Orchestration =
             {Events=[];Effects=[];Receipt=mkReceipt state commandId bodySha256 Rejected "invalid-command-digest"}
         else
             match Map.tryFind commandId state.CommandReceipts with
-            | Some prior when prior.BodySha256=bodySha256 -> {Events=[];Effects=[];Receipt={prior with Disposition=Duplicate;Detail="duplicate-command"}}
+            | Some prior when prior.BodySha256=canonicalDigest -> {Events=[];Effects=[];Receipt={prior with Disposition=Duplicate;Detail="duplicate-command"}}
             | Some prior -> {Events=[];Effects=[];Receipt={prior with Disposition=Conflict;Detail="command-identity-conflict"}}
-            | None -> decideNew now state commandId bodySha256 command
+            | None -> decideNew now state commandId canonicalDigest command
 
     [<RequireQualifiedAccess>]
     module CandidateArtifact =

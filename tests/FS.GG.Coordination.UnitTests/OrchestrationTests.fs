@@ -23,6 +23,9 @@ module Cases =
     [<Fact>]
     let ``canonical WorkItem ignores aliases urls and multi-board projection membership`` () =
         Assert.Equal(WorkItemIdentity.persistenceId (snapshot ["board-a"]).WorkItemId,WorkItemIdentity.persistenceId (snapshot ["board-z";"board-a"]).WorkItemId)
+        let legacy=WorkItemIdentity.create "MDQ6VXNlcjU4MzIzMQ==" 42L "MDU6SXNzdWUxNw==" 17L
+        let modern=WorkItemIdentity.create "R_new_global_id" 42L "I_new_global_id" 17L
+        Assert.Equal(WorkItemIdentity.persistenceId legacy,WorkItemIdentity.persistenceId modern)
 
     [<Fact>]
     let ``duplicate command is idempotent and changed content conflicts`` () =
@@ -32,6 +35,16 @@ module Cases =
         let conflict=decide now state cid (digest "3") (Pause "changed-body")
         Assert.Equal(Duplicate,duplicate.Receipt.Disposition); Assert.Empty duplicate.Events
         Assert.Equal(Conflict,conflict.Receipt.Disposition); Assert.Empty conflict.Events
+
+    [<Fact>]
+    let ``command digest case normalizes before durable deduplication`` () =
+        let cid=command "20000000-0000-0000-0000-000000000016"
+        let body=Admit(snapshot [],budget)
+        let upper=(canonicalCommandSha256 body).ToUpperInvariant()
+        let accepted=FS.GG.Coordination.Core.Orchestration.decide now initial cid upper body
+        let state=apply accepted initial
+        Assert.Equal((canonicalCommandSha256 body),(Map.find cid state.CommandReceipts).BodySha256)
+        Assert.Equal(Duplicate,(FS.GG.Coordination.Core.Orchestration.decide now state cid (canonicalCommandSha256 body) body).Receipt.Disposition)
 
     [<Fact>]
     let ``reservation or claim alone cannot dispatch and current pair can`` () =
@@ -66,7 +79,7 @@ module Cases =
         let terminal=decide now unknown (command "25000000-0000-0000-0000-000000000007") (digest "7") (ObserveAttempt(firstId,ReconciledAbsent "runner-and-provider-observed")) |> fun d -> apply d unknown
         Assert.Equal(Accepted,(decide now terminal (command "25000000-0000-0000-0000-000000000008") (digest "8") replacement).Receipt.Disposition)
         let reusedId=StartAttempt(firstId,Id.session(guid "60000000-0000-0000-0000-000000000004"),runner)
-        Assert.Equal(Rejected,(decide now terminal (command "25000000-0000-0000-0000-000000000009") (digest "9") reusedId).Receipt.Disposition)
+        Assert.Equal(Conflict,(decide now terminal (command "25000000-0000-0000-0000-000000000009") (digest "9") reusedId).Receipt.Disposition)
 
     [<Fact>]
     let ``partial multi-touch claim release retains recovery capacity after compensation failure`` () =
