@@ -92,7 +92,7 @@ if fsi.CommandLineArgs |> Array.contains "--mint" then printfn "%s" report.Seal 
         | StablePermissionOrdering -> compile { snapshot with Registrations = List.rev snapshot.Registrations } = Ok report
         | ExactPermissionSeal -> GitHubPermissionCompilationQualification.verify (String.replicate 64 "0") snapshot |> Result.isError
         | ExactPermissionReplay -> GitHubPermissionCompilationQualification.verify report.Seal snapshot = Ok report
-        | QuintPermissionUnchanged -> sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) = "3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb"
+        | QuintPermissionUnchanged -> sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) = "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
         | NoPermissionMutationSurface ->
             let surface = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/GitHubPermissionCompilationQualification.fsi"))
             [ "HttpClient"; "GITHUB_TOKEN"; "GetEnvironmentVariable"; "api.github.com"; "val apply"; "PATCH"; "POST"; "DELETE" ] |> List.forall (surface.Contains >> not)

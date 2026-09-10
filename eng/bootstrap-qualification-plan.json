@@ -19,8 +19,8 @@
     "group": "bootstrap-qualification-${{ github.ref }}",
     "cancelInProgress": true
   },
-  "requiredGateCount": 9,
-  "requiredProjectCount": 13,
+  "requiredGateCount": 10,
+  "requiredProjectCount": 15,
   "requiredVulnerabilitySources": ["https://api.nuget.org/v3/index.json"],
   "requiredProjects": [
     "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj",
@@ -29,13 +29,15 @@
     "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj",
     "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj",
     "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj",
+    "src/FS.GG.Coordination.Orchestration.Pilot/FS.GG.Coordination.Orchestration.Pilot.fsproj",
     "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj",
     "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj",
     "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj",
     "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj",
     "tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests.fsproj",
     "tests/FS.GG.Coordination.Orchestration.Observer.Tests/FS.GG.Coordination.Orchestration.Observer.Tests.fsproj",
-    "tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests.fsproj"
+    "tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests.fsproj",
+    "tests/FS.GG.Coordination.Orchestration.Pilot.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Pilot.PostgreSql.Tests.fsproj"
   ],
   "reuse": {
     "jobId": "reuse-decision",
@@ -215,6 +217,23 @@
       "needs": []
     },
     {
+      "id": "orchestration-pilot-postgresql",
+      "artifact": "orchestration-pilot-postgresql/results.trx",
+      "timeoutMinutes": 20,
+      "entryPoint": "bash eng/bootstrap-gates/orchestration-pilot-postgresql.sh",
+      "fetchDepth": 1,
+      "alwaysUpload": false,
+      "downloadArtifacts": false,
+      "environment": {
+        "NUGET_PACKAGES": "/tmp/fsgg-${{ github.run_id }}-nuget-orchestration-pilot-postgresql",
+        "FSGG_PG_MODE": "docker",
+        "DOTNET_EXE": "dotnet"
+      },
+      "uploadName": "orchestration-pilot-postgresql",
+      "uploadPath": "${{ runner.temp }}/orchestration-pilot-postgresql/results.trx",
+      "needs": []
+    },
+    {
       "id": "evidence-manifest",
       "artifact": "evidence-manifest/plan.json",
       "timeoutMinutes": 10,
@@ -231,7 +250,7 @@
       },
       "uploadName": "bootstrap-evidence-manifest-${{ needs.reuse-decision.outputs.subject-sha }}",
       "uploadPath": "${{ runner.temp }}/bootstrap-evidence.json",
-      "needs": ["deterministic-build", "compiler-and-tests", "canonical-quint", "dependency-and-security", "package-install-smoke", "orchestration-postgresql", "orchestration-observer-postgresql", "bootstrap-recovery"]
+      "needs": ["deterministic-build", "compiler-and-tests", "canonical-quint", "dependency-and-security", "package-install-smoke", "orchestration-postgresql", "orchestration-observer-postgresql", "orchestration-pilot-postgresql", "bootstrap-recovery"]
     }
   ]
 }

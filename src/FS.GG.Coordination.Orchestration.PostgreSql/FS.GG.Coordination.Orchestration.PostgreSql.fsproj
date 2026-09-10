@@ -9,8 +9,10 @@
     <Compile Include="PostgreSqlStore.fs" />
     <Compile Include="PostgreSqlObserverStore.fsi" />
     <Compile Include="PostgreSqlObserverStore.fs" />
+    <Compile Include="PostgreSqlPilotStore.fs" />
     <EmbeddedResource Include="Migration.sql" />
     <EmbeddedResource Include="ObserverMigration.sql" />
+    <EmbeddedResource Include="PilotMigration.sql" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Akka" />
@@ -21,5 +23,6 @@
   <ItemGroup>
     <ProjectReference Include="..\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Observer\FS.GG.Coordination.Orchestration.Observer.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Pilot\FS.GG.Coordination.Orchestration.Pilot.fsproj" />
   </ItemGroup>
 </Project>

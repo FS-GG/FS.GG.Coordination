@@ -191,6 +191,23 @@
       }
     },
     {
+      "id": "EXPORT-PilotPermitSpecification",
+      "module": "CoordinationProtocol",
+      "declaration": "pilotPermitSpecificationCatalogue",
+      "promoteCatalogueRows": true,
+      "source": {
+        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+        "start": {
+          "line": 1133,
+          "column": 1
+        },
+        "end": {
+          "line": 1145,
+          "column": 4
+        }
+      }
+    },
+    {
       "id": "EXPORT-Properties",
       "module": "CoordinationProtocol",
       "declaration": "propertyCatalogue",
@@ -301,11 +318,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 944,
+          "line": 926,
           "column": 1
         },
         "end": {
-          "line": 963,
+          "line": 945,
           "column": 4
         }
       }
@@ -317,11 +334,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 924,
+          "line": 906,
           "column": 1
         },
         "end": {
-          "line": 943,
+          "line": 925,
           "column": 4
         }
       }
@@ -333,11 +350,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 886,
+          "line": 868,
           "column": 1
         },
         "end": {
-          "line": 905,
+          "line": 887,
           "column": 4
         }
       }
@@ -349,11 +366,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1020,
+          "line": 1002,
           "column": 1
         },
         "end": {
-          "line": 1038,
+          "line": 1020,
           "column": 4
         }
       }
@@ -365,11 +382,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1058,
+          "line": 1040,
           "column": 1
         },
         "end": {
-          "line": 1078,
+          "line": 1060,
           "column": 4
         }
       }
@@ -381,11 +398,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1079,
+          "line": 1061,
           "column": 1
         },
         "end": {
-          "line": 1098,
+          "line": 1080,
           "column": 4
         }
       }
@@ -394,6 +411,54 @@
       "id": "ACT-Init",
       "module": "CoordinationProtocol",
       "declaration": "init",
+      "source": {
+        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+        "start": {
+          "line": 832,
+          "column": 1
+        },
+        "end": {
+          "line": 849,
+          "column": 4
+        }
+      }
+    },
+    {
+      "id": "ACT-ObserveAuthority",
+      "module": "CoordinationProtocol",
+      "declaration": "observeAuthority",
+      "source": {
+        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+        "start": {
+          "line": 888,
+          "column": 1
+        },
+        "end": {
+          "line": 905,
+          "column": 4
+        }
+      }
+    },
+    {
+      "id": "ACT-ObserveLifecycleFacts",
+      "module": "CoordinationProtocol",
+      "declaration": "observeLifecycleFacts",
+      "source": {
+        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+        "start": {
+          "line": 965,
+          "column": 1
+        },
+        "end": {
+          "line": 982,
+          "column": 4
+        }
+      }
+    },
+    {
+      "id": "ACT-ObserveProtocolEvidence",
+      "module": "CoordinationProtocol",
+      "declaration": "observeProtocolEvidence",
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
@@ -407,25 +472,9 @@
       }
     },
     {
-      "id": "ACT-ObserveAuthority",
+      "id": "ACT-RefreshLifecycleStatus",
       "module": "CoordinationProtocol",
-      "declaration": "observeAuthority",
-      "source": {
-        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-        "start": {
-          "line": 906,
-          "column": 1
-        },
-        "end": {
-          "line": 923,
-          "column": 4
-        }
-      }
-    },
-    {
-      "id": "ACT-ObserveLifecycleFacts",
-      "module": "CoordinationProtocol",
-      "declaration": "observeLifecycleFacts",
+      "declaration": "refreshLifecycleStatus",
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
@@ -433,39 +482,7 @@
           "column": 1
         },
         "end": {
-          "line": 1000,
-          "column": 4
-        }
-      }
-    },
-    {
-      "id": "ACT-ObserveProtocolEvidence",
-      "module": "CoordinationProtocol",
-      "declaration": "observeProtocolEvidence",
-      "source": {
-        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-        "start": {
-          "line": 868,
-          "column": 1
-        },
-        "end": {
-          "line": 885,
-          "column": 4
-        }
-      }
-    },
-    {
-      "id": "ACT-RefreshLifecycleStatus",
-      "module": "CoordinationProtocol",
-      "declaration": "refreshLifecycleStatus",
-      "source": {
-        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-        "start": {
           "line": 1001,
-          "column": 1
-        },
-        "end": {
-          "line": 1019,
           "column": 4
         }
       }
@@ -477,11 +494,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1039,
+          "line": 1021,
           "column": 1
         },
         "end": {
-          "line": 1057,
+          "line": 1039,
           "column": 4
         }
       }
@@ -493,11 +510,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 964,
+          "line": 946,
           "column": 1
         },
         "end": {
-          "line": 982,
+          "line": 964,
           "column": 4
         }
       }
@@ -509,11 +526,11 @@
       "source": {
         "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
         "start": {
-          "line": 1099,
+          "line": 1081,
           "column": 1
         },
         "end": {
-          "line": 1118,
+          "line": 1100,
           "column": 4
         }
       }

@@ -117,13 +117,13 @@ let ``committed generated suite is complete deterministic and source bound`` () 
     let generated = GeneratedStructuralTests.generate root |> Result.defaultWith failwith
     Assert.Equal<byte>(committed, generated)
     let summary = GeneratedStructuralTests.validate root committed |> Result.defaultWith failwith
-    Assert.Equal(221, summary.TotalCount)
+    Assert.Equal(223, summary.TotalCount)
     Assert.True(
         summary.CategoryCounts =
-            [ "vocabulary", 134; "transition", 14; "command", 14; "mutation", 16; "permission", 6; "schema", 28; "projection", 9 ],
+            [ "vocabulary", 135; "transition", 14; "command", 14; "mutation", 16; "permission", 6; "schema", 29; "projection", 9 ],
         $"unexpected category counts: %A{summary.CategoryCounts}")
-    Assert.Equal("b4557ce634bd6dc6cb7e10e805450522c83b81bf8930a306c648a38b6d3f2e1b", summary.SelfSha256)
-    Assert.Equal("842e9ab812eda0d900a53fa9737e54bc4fef8c0c64cac3f43e8a80cfff4eeee2", sha256 committed)
+    Assert.Equal("6f6463d94208ffbf20d5519d59741e94ba9e5712f933ca160aa8330a4429195b", summary.SelfSha256)
+    Assert.Equal("5d5aabc07914d49d0ca43bac61a3ec2491fc70a3428572d7c0dee8515eca773d", sha256 committed)
 
 [<Theory>]
 [<InlineData("missing", "GST-CASE-COUNT")>]
@@ -198,7 +198,7 @@ let ``schema and permission censuses agree with their independent producers`` ()
             match GeneratedStructuralTests.check scratch artifactRelative with
             | Ok _ -> failwith $"%s{family} producer omission unexpectedly validated"
             | Error error -> Assert.StartsWith(expectedCode, error))
-    assertProducerOmission "schemas.json" "COUT-Schemas" "recordShapes" 28 "GST-SCHEMA-REGISTRATION" (fun output ->
+    assertProducerOmission "schemas.json" "COUT-Schemas" "recordShapes" 29 "GST-SCHEMA-REGISTRATION" (fun output ->
         (output["content"]["recordShapes"]).AsArray().RemoveAt(0))
     assertProducerOmission "permission-census.json" "COUT-PermissionCensus" "requiredPermissions" 6 "GST-PERMISSION-REGISTRATION" (fun output ->
         (output["content"]["requiredPermissions"]).AsArray().RemoveAt(0))
@@ -236,13 +236,13 @@ let ``stable generator and validator adapters execute the committed artifact`` (
     let generatorExit, generatorOutput, generatorError =
         runScript "eng/generate-generated-structural-tests.fsx" [ "--root"; "."; "--check"; artifactRelative ]
     Assert.Equal(0, generatorExit)
-    Assert.Contains("GENERATED_STRUCTURAL_TESTS_OK total=221", generatorOutput)
+    Assert.Contains("GENERATED_STRUCTURAL_TESTS_OK total=223", generatorOutput)
     Assert.Equal("", generatorError)
     let validatorExit, validatorOutput, validatorError =
         runScript "eng/validate-generated-structural-tests.fsx" [ "--root"; "."; "--artifact"; artifactRelative ]
     Assert.Equal(0, validatorExit)
-    Assert.Contains("GENERATED_STRUCTURAL_TESTS_VALID total=221", validatorOutput)
-    Assert.Contains("vocabulary=134", validatorOutput)
+    Assert.Contains("GENERATED_STRUCTURAL_TESTS_VALID total=223", validatorOutput)
+    Assert.Contains("vocabulary=135", validatorOutput)
     Assert.Equal("", validatorError)
 
 [<Fact>]

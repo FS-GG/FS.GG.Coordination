@@ -230,6 +230,15 @@
           "FSharp.SystemTextJson": "[1.4.36, )"
         }
       },
+      "fs.gg.coordination.orchestration.pilot": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.Protocol": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )",
+          "FSharp.SystemTextJson": "[1.4.36, )"
+        }
+      },
       "fs.gg.coordination.protocol": {
         "type": "Project",
         "dependencies": {

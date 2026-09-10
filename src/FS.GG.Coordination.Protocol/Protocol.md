@@ -763,24 +763,6 @@ module CoordinationProtocol {
   pure def mutationOutcomeForRevision(expectedRevision: int, observedRevision: int): str =
     if (expectedRevision == observedRevision) "MOUT-Applied" else "MOUT-RevisionConflict"
 
-  pure val createIntent = {
-    operationId: "operation-create-1", subjectId: "subject-created", mutationKindId: "MUT-Create",
-    targetKind: "subject", payloadKind: "create", expectedRevision: 0,
-    idempotencyKey: "key-create-1", payloadDigest: "digest-create-1",
-    compensatesOperationId: "",
-  }
-
-  pure val createAppliedResult = {
-    intent: createIntent, outcomeId: "MOUT-Applied", resultingRevision: 1,
-  }
-
-  pure val compensateCreateIntent = {
-    operationId: "operation-compensate-1", subjectId: createIntent.subjectId, mutationKindId: "MUT-Compensate",
-    targetKind: "mutation", payloadKind: "compensation", expectedRevision: 1,
-    idempotencyKey: "key-compensate-1", payloadDigest: "digest-compensate-1",
-    compensatesOperationId: createIntent.operationId,
-  }
-
   pure val closedLifecycleIntentCatalogue = and {
     lifecycleIntentCatalogue.map(intent => intent.id) == Set(
       "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
@@ -1144,8 +1126,56 @@ module CoordinationProtocol {
   }
   val durableProtocolCheckpointsArePreserved =
     protocolStreamEvents.filter(event => event.durableCheckpoint) == authorizedDurableProtocolCheckpoints
+
+  // O2 prospective protocol amendment. This is an inert authority model: it defines when a
+  // cooperating hosted route could receive a finite pilot permit, but it does not provide a host,
+  // provider writer, runner dispatcher, credential, or activation decision.
+  pure val pilotPermitSpecificationCatalogue = Set(
+    { id: "PILOT-PermitV1", kind: "pilotPermitSpecification",
+      schemaContract: "fsgg.coordination.pilot-permit/1",
+      scopeContract: "one-canonical-work-item|routine-implementation",
+      budgetContract: "finite-positive-no-automatic-renewal",
+      capacityContract: "finite-with-reserved-recovery-capacity",
+      ownershipContract: "stable-until-durable-transfer-acknowledgement-and-readback",
+      recoveryContract: "generation-current|readback-current|unknown-outcome-blocks-dispatch",
+      lifecycleContract: "StableOwned>TransferIntended>PilotOwned>(OutcomeUnknown|Paused|Revoked|ReturnIntended)>StableOwned",
+      trustContract: "trusted-cooperating-runner-supported-route-only",
+      activationContract: "inert-prospective-no-host-no-provider-writer" }
+  )
+
 }
 ```
+
+### Prospective trusted pilot permit (O2 source boundary)
+
+`PILOT-PermitV1` is an inert, versioned prerequisite for a future hosted pilot. It grants no
+GitHub, runner, listener, deployment, or credential capability. Its subject is one immutable
+canonical WorkItem identity; repository names, paths, board membership, and heartbeats cannot
+substitute for that identity. The stable route stays accountable through `TransferIntended` and
+ownership changes only after a durable acknowledgement plus current readback proves the stable
+route quiesced and excluded at the exact permit generation.
+
+`budgetUnits` counts admitted O0 attempts. Each admitted attempt must separately bind the O0 token
+budget and deadline and, when planning is used, the O1 planning-session token/runtime/cost budgets.
+The scalar bound is therefore a further finite admission ceiling; it does not replace or combine
+those dimensions. The typed pilot journal records the O0 reservation identity and deadline plus
+the optional O1 planning-budget digest on every assignment. Its token, runtime, and cost
+reservations are monotonic and checked with overflow-safe arithmetic against the finite permit.
+`capacityUnits` counts concurrent assignment slots and
+`recoveryCapacityUnits` reserves slots that ordinary dispatch cannot consume. Permits expire,
+start manually, and never renew or resume automatically.
+
+Heartbeat loss changes knowledge to `OutcomeUnknown`; it does not transfer ownership or release an
+assignment. Current trusted readback must reconcile the operation before capacity can be released.
+Readback values become authority only after the selected read-only capability returns them and the
+pilot boundary validates purpose, operation identity, immutable subject, generation, provenance,
+and freshness. A reconstructed process marks historical readback non-current and requires a fresh,
+durably recorded reconnect before another assignment can be admitted.
+Pause and revoke block new supported-route dispatch while preserving existing ownership and
+reservations. Return to the stable route requires a durable return intent, no active or unknown
+work, and a current return acknowledgement/readback. These cooperative fences do not contain a
+runner that independently holds broader credentials. OperatingV2, a hosted-writer amendment,
+qualified Main configuration, and authenticated pilot evidence remain separate activation gates.
 
 The executable witness records evidence before accepting the subject vocabulary identity. Removing
 the evidence guard must make the invariant red in the bounded negative control.
@@ -1251,6 +1281,25 @@ inverts each material binding and preserves the earlier bounded invariants.
 ```quint-test
 module CoordinationProtocolTests {
   import CoordinationProtocol.*
+
+  pure val createIntent = {
+    operationId: "operation-create-1", subjectId: "subject-created", mutationKindId: "MUT-Create",
+    targetKind: "subject", payloadKind: "create", expectedRevision: 0,
+    idempotencyKey: "key-create-1", payloadDigest: "digest-create-1",
+    compensatesOperationId: "",
+  }
+
+  pure val createAppliedResult = {
+    intent: createIntent, outcomeId: "MOUT-Applied", resultingRevision: 1,
+  }
+
+  pure val compensateCreateIntent = {
+    operationId: "operation-compensate-1", subjectId: createIntent.subjectId, mutationKindId: "MUT-Compensate",
+    targetKind: "mutation", payloadKind: "compensation", expectedRevision: 1,
+    idempotencyKey: "key-compensate-1", payloadDigest: "digest-compensate-1",
+    compensatesOperationId: createIntent.operationId,
+  }
+
 
   // GS2-03.10 keeps the amendment's executable architecture types adjacent to the independent tests.
   // The compiled contract exposes the corresponding authority/retention strings without exceeding the
@@ -2792,6 +2841,407 @@ module CoordinationProtocolTests {
     formalRollbackWithoutCompensate, formalClaimStutter, formalRelationStutter,
     formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
   }
+
+
+}
+
+// O2 prospective pilot-permit model. The state transitions refine the canonical predicates above.
+// Environment actions can expire a permit, advance the authority generation, or drop readback on
+// restart; none of them transfers ownership. Deliberate stutter exists only after stable return.
+module O2PilotPermitModel {
+  type PilotPermit = {
+    schemaVersion: int, permitId: str, subjectId: str, jobClass: str,
+    stableOwnerId: str, pilotOwnerId: str, generation: int, budgetUnits: int,
+    capacityUnits: int, recoveryCapacityUnits: int, expiresAt: int,
+    startupPolicy: str, autoResume: bool,
+  }
+  type PilotOwnershipState = {
+    permit: PilotPermit, phase: str, assignedOwnerId: str,
+    transferIntentDurable: bool, transferAcknowledgementObserved: bool,
+    returnIntentDurable: bool, returnAcknowledgementObserved: bool,
+    stableRouteQuiesced: bool, stableRouteExcluded: bool, authorityEvidenceGeneration: int,
+    readbackCurrent: bool, outcomeKnown: bool,
+    consumedBudgetUnits: int, activeAssignments: int,
+  }
+  pure def pilotPhaseExists(phase: str): bool = Set(
+    "StableOwned", "TransferIntended", "PilotOwned", "OutcomeUnknown",
+    "Paused", "Revoked", "ReturnIntended"
+  ).contains(phase)
+  pure def pilotPermitIsValid(p: PilotPermit): bool = and {
+    p.schemaVersion == 1, p.permitId != "", p.subjectId != "",
+    p.jobClass == "routine-implementation", p.stableOwnerId != "", p.pilotOwnerId != "",
+    p.stableOwnerId != p.pilotOwnerId, p.generation > 0,
+    p.budgetUnits > 0, p.budgetUnits <= 100,
+    p.capacityUnits > 1, p.capacityUnits <= 4,
+    p.recoveryCapacityUnits > 0, p.recoveryCapacityUnits < p.capacityUnits,
+    p.expiresAt > 0, p.startupPolicy == "manual", not(p.autoResume),
+  }
+  pure def pilotOwnershipStateIsValid(s: PilotOwnershipState): bool = and {
+    pilotPermitIsValid(s.permit), pilotPhaseExists(s.phase),
+    s.consumedBudgetUnits >= 0, s.consumedBudgetUnits <= s.permit.budgetUnits,
+    s.activeAssignments >= 0,
+    s.activeAssignments <= s.permit.capacityUnits - s.permit.recoveryCapacityUnits,
+    if (Set("StableOwned", "TransferIntended").contains(s.phase))
+      s.assignedOwnerId == s.permit.stableOwnerId
+    else s.assignedOwnerId == s.permit.pilotOwnerId,
+    if (s.phase == "TransferIntended") and {
+      s.transferIntentDurable, not(s.transferAcknowledgementObserved),
+      s.stableRouteQuiesced, s.stableRouteExcluded,
+      s.authorityEvidenceGeneration == s.permit.generation,
+    } else true,
+    if (s.phase == "PilotOwned") and {
+      s.transferIntentDurable, s.transferAcknowledgementObserved,
+    } else true,
+    if (s.phase == "OutcomeUnknown") not(s.outcomeKnown) else true,
+    if (s.phase == "ReturnIntended") and {
+      s.returnIntentDurable, not(s.returnAcknowledgementObserved),
+    } else true,
+  }
+  pure def pilotTransferFramePreserved(c: PilotOwnershipState, p: PilotOwnershipState): bool = and {
+    p.permit == c.permit,
+    p.transferIntentDurable == c.transferIntentDurable,
+    p.transferAcknowledgementObserved == c.transferAcknowledgementObserved,
+    p.returnIntentDurable == c.returnIntentDurable,
+    p.returnAcknowledgementObserved == c.returnAcknowledgementObserved,
+    p.stableRouteQuiesced == c.stableRouteQuiesced,
+    p.stableRouteExcluded == c.stableRouteExcluded,
+    p.authorityEvidenceGeneration == c.authorityEvidenceGeneration,
+  }
+  pure def pilotOwnershipMayTransition(c: PilotOwnershipState, p: PilotOwnershipState): bool = and {
+    pilotOwnershipStateIsValid(c), pilotOwnershipStateIsValid(p), p.permit == c.permit,
+    p.consumedBudgetUnits == c.consumedBudgetUnits,
+    c.transferIntentDurable implies p.transferIntentDurable,
+    c.transferAcknowledgementObserved implies p.transferAcknowledgementObserved,
+    c.returnIntentDurable implies p.returnIntentDurable,
+    c.returnAcknowledgementObserved implies p.returnAcknowledgementObserved,
+    or {
+      and { c.phase == "StableOwned", p.phase == "TransferIntended",
+        p.transferIntentDurable, p.readbackCurrent, p.stableRouteQuiesced,
+        p.stableRouteExcluded, p.authorityEvidenceGeneration == c.permit.generation,
+        p.assignedOwnerId == c.permit.stableOwnerId,
+        p.activeAssignments == c.activeAssignments, p.outcomeKnown == c.outcomeKnown,
+        p.transferAcknowledgementObserved == c.transferAcknowledgementObserved,
+        p.returnIntentDurable == c.returnIntentDurable,
+        p.returnAcknowledgementObserved == c.returnAcknowledgementObserved },
+      and { c.phase == "TransferIntended", p.phase == "PilotOwned",
+        p.transferAcknowledgementObserved, p.readbackCurrent,
+        p.assignedOwnerId == c.permit.pilotOwnerId,
+        p.stableRouteQuiesced == c.stableRouteQuiesced,
+        p.stableRouteExcluded == c.stableRouteExcluded,
+        p.authorityEvidenceGeneration == c.authorityEvidenceGeneration,
+        p.activeAssignments == c.activeAssignments, p.outcomeKnown == c.outcomeKnown,
+        p.transferIntentDurable == c.transferIntentDurable,
+        p.returnIntentDurable == c.returnIntentDurable,
+        p.returnAcknowledgementObserved == c.returnAcknowledgementObserved },
+      and { c.phase == "PilotOwned", p.phase == "OutcomeUnknown", not(p.outcomeKnown),
+        p.assignedOwnerId == c.permit.pilotOwnerId, p.activeAssignments == c.activeAssignments,
+        pilotTransferFramePreserved(c, p) },
+      and { Set("PilotOwned", "OutcomeUnknown").contains(c.phase), p.phase == "Paused",
+        p.assignedOwnerId == c.permit.pilotOwnerId,
+        p.activeAssignments == c.activeAssignments, p.outcomeKnown == c.outcomeKnown,
+        pilotTransferFramePreserved(c, p) },
+      and { Set("PilotOwned", "OutcomeUnknown", "Paused").contains(c.phase),
+        p.phase == "Revoked",
+        p.assignedOwnerId == c.permit.pilotOwnerId,
+        p.activeAssignments == c.activeAssignments, p.outcomeKnown == c.outcomeKnown,
+        pilotTransferFramePreserved(c, p) },
+      and { Set("PilotOwned", "OutcomeUnknown", "Paused", "Revoked").contains(c.phase),
+        p.phase == "ReturnIntended", p.returnIntentDurable,
+        p.assignedOwnerId == c.permit.pilotOwnerId,
+        c.activeAssignments == 0, p.activeAssignments == 0, c.outcomeKnown, p.outcomeKnown,
+        p.transferIntentDurable == c.transferIntentDurable,
+        p.transferAcknowledgementObserved == c.transferAcknowledgementObserved,
+        p.returnAcknowledgementObserved == c.returnAcknowledgementObserved,
+        p.stableRouteQuiesced == c.stableRouteQuiesced,
+        p.stableRouteExcluded == c.stableRouteExcluded,
+        p.authorityEvidenceGeneration == c.authorityEvidenceGeneration },
+      and { c.phase == "ReturnIntended", p.phase == "StableOwned",
+        p.returnAcknowledgementObserved, p.readbackCurrent,
+        p.assignedOwnerId == c.permit.stableOwnerId,
+        p.activeAssignments == 0, p.outcomeKnown == c.outcomeKnown,
+        p.transferIntentDurable == c.transferIntentDurable,
+        p.transferAcknowledgementObserved == c.transferAcknowledgementObserved,
+        p.returnIntentDurable == c.returnIntentDurable,
+        p.stableRouteQuiesced == c.stableRouteQuiesced,
+        p.stableRouteExcluded == c.stableRouteExcluded,
+        p.authorityEvidenceGeneration == c.authorityEvidenceGeneration },
+    },
+  }
+  pure def pilotDispatchMayProceed(s: PilotOwnershipState, now: int, generation: int): bool = and {
+    pilotOwnershipStateIsValid(s), s.phase == "PilotOwned",
+    s.transferAcknowledgementObserved, s.readbackCurrent, s.outcomeKnown,
+    generation == s.permit.generation, now < s.permit.expiresAt,
+    s.consumedBudgetUnits < s.permit.budgetUnits,
+    s.activeAssignments < s.permit.capacityUnits - s.permit.recoveryCapacityUnits,
+  }
+  pure def pilotAssignmentMayStart(c: PilotOwnershipState, p: PilotOwnershipState,
+    now: int, generation: int): bool = and {
+    pilotDispatchMayProceed(c, now, generation), pilotOwnershipStateIsValid(p),
+    p.permit == c.permit, p.phase == c.phase, p.assignedOwnerId == c.assignedOwnerId,
+    pilotTransferFramePreserved(c, p), p.readbackCurrent == c.readbackCurrent,
+    p.consumedBudgetUnits == c.consumedBudgetUnits + 1,
+    p.activeAssignments == c.activeAssignments + 1, p.outcomeKnown == c.outcomeKnown,
+  }
+  pure def pilotAssignmentMaySettle(c: PilotOwnershipState, p: PilotOwnershipState): bool = and {
+    pilotOwnershipStateIsValid(c), pilotOwnershipStateIsValid(p),
+    c.assignedOwnerId == c.permit.pilotOwnerId, c.activeAssignments > 0,
+    p.permit == c.permit, p.phase == c.phase, p.assignedOwnerId == c.assignedOwnerId,
+    pilotTransferFramePreserved(c, p),
+    p.consumedBudgetUnits == c.consumedBudgetUnits,
+    p.activeAssignments == c.activeAssignments - 1, p.outcomeKnown,
+  }
+  pure def pilotOutcomeMayReconcile(c: PilotOwnershipState, p: PilotOwnershipState,
+    generation: int): bool = and {
+    pilotOwnershipStateIsValid(c), pilotOwnershipStateIsValid(p),
+    Set("OutcomeUnknown", "Paused", "Revoked").contains(c.phase), not(c.outcomeKnown),
+    generation == c.permit.generation, p.permit == c.permit,
+    p.phase == if (c.phase == "OutcomeUnknown") "PilotOwned" else c.phase,
+    p.assignedOwnerId == c.assignedOwnerId,
+    pilotTransferFramePreserved(c, p),
+    p.consumedBudgetUnits == c.consumedBudgetUnits,
+    p.activeAssignments == 0, p.outcomeKnown, p.readbackCurrent,
+  }
+
+
+  type PilotModelState = {
+    ownership: PilotOwnershipState,
+    now: int,
+    currentGeneration: int,
+    startedAssignments: int,
+    settledAssignments: int,
+    restarted: bool,
+    dispatched: bool,
+    settled: bool,
+    reconciled: bool,
+    paused: bool,
+    revoked: bool,
+    reconnected: bool,
+    staleGenerationObserved: bool,
+    deadlineObserved: bool,
+  }
+
+  pure val permit: PilotPermit = {
+    schemaVersion: 1, permitId: "permit-formal-1", subjectId: "MDU6SXNzdWUx",
+    jobClass: "routine-implementation", stableOwnerId: "stable-route",
+    pilotOwnerId: "pilot-route", generation: 1, budgetUnits: 2,
+    capacityUnits: 2, recoveryCapacityUnits: 1, expiresAt: 4,
+    startupPolicy: "manual", autoResume: false,
+  }
+  pure val initialOwnership: PilotOwnershipState = {
+    permit: permit, phase: "StableOwned", assignedOwnerId: "stable-route",
+    transferIntentDurable: false, transferAcknowledgementObserved: false,
+    returnIntentDurable: false, returnAcknowledgementObserved: false,
+    stableRouteQuiesced: false, stableRouteExcluded: false, authorityEvidenceGeneration: 0,
+    readbackCurrent: true, outcomeKnown: true, consumedBudgetUnits: 0, activeAssignments: 0,
+  }
+  pure val transferredOwnership: PilotOwnershipState = {
+    ...initialOwnership, phase: "PilotOwned", assignedOwnerId: "pilot-route",
+    transferIntentDurable: true, transferAcknowledgementObserved: true,
+    stableRouteQuiesced: true, stableRouteExcluded: true, authorityEvidenceGeneration: 1,
+  }
+  pure val frameForgeryRejected = not(pilotAssignmentMayStart(
+    transferredOwnership,
+    { ...transferredOwnership, consumedBudgetUnits: 1, activeAssignments: 1,
+      stableRouteExcluded: false }, 0, 1))
+  pure val reconciliationGenerationForgeryRejected = not(pilotOutcomeMayReconcile(
+    { ...transferredOwnership, phase: "OutcomeUnknown", outcomeKnown: false, activeAssignments: 1 },
+    { ...transferredOwnership, activeAssignments: 0, outcomeKnown: true }, 2))
+  pure val genericUnknownClearRejected = not(pilotOwnershipMayTransition(
+    { ...transferredOwnership, phase: "OutcomeUnknown", outcomeKnown: false, activeAssignments: 1 },
+    { ...transferredOwnership, activeAssignments: 0, outcomeKnown: true }))
+
+  var state: PilotModelState
+  action init = state' = {
+    ownership: initialOwnership, now: 0, currentGeneration: 1,
+    startedAssignments: 0, settledAssignments: 0, restarted: false,
+    dispatched: false, settled: false, reconciled: false,
+    paused: false, revoked: false, reconnected: false,
+    staleGenerationObserved: false, deadlineObserved: false,
+  }
+  action persistTransferIntent = all {
+    state.ownership.phase == "StableOwned",
+    val proposed = { ...state.ownership, phase: "TransferIntended",
+      transferIntentDurable: true, stableRouteQuiesced: true, stableRouteExcluded: true,
+      authorityEvidenceGeneration: state.currentGeneration }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action acknowledgeTransfer = all {
+    state.ownership.phase == "TransferIntended", state.currentGeneration == permit.generation,
+    val proposed = { ...state.ownership, phase: "PilotOwned", assignedOwnerId: "pilot-route",
+      transferAcknowledgementObserved: true, readbackCurrent: true }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action dispatch = all {
+    val proposed = { ...state.ownership,
+      consumedBudgetUnits: state.ownership.consumedBudgetUnits + 1,
+      activeAssignments: state.ownership.activeAssignments + 1 }
+    all {
+    pilotAssignmentMayStart(state.ownership, proposed, state.now, state.currentGeneration),
+    state' = { ...state, ownership: proposed, startedAssignments: state.startedAssignments + 1,
+      dispatched: true },    },
+  }
+  action settle = all {
+    val proposed = { ...state.ownership,
+      activeAssignments: state.ownership.activeAssignments - 1, outcomeKnown: true,
+      readbackCurrent: true }
+    all {
+    pilotAssignmentMaySettle(state.ownership, proposed),
+    state' = { ...state, ownership: proposed, settledAssignments: state.settledAssignments + 1,
+      settled: true },    },
+  }
+  action loseHeartbeat = all {
+    state.ownership.phase == "PilotOwned", state.ownership.assignedOwnerId == "pilot-route",
+    val proposed = { ...state.ownership, phase: "OutcomeUnknown", outcomeKnown: false }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action pause = all {
+    Set("PilotOwned", "OutcomeUnknown").contains(state.ownership.phase),
+    val proposed = { ...state.ownership, phase: "Paused" }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed, paused: true },    },
+  }
+  action revoke = all {
+    Set("PilotOwned", "OutcomeUnknown", "Paused").contains(state.ownership.phase),
+    val proposed = { ...state.ownership, phase: "Revoked" }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed, revoked: true },    },
+  }
+  action reconcileUnknown = all {
+    val proposed = { ...state.ownership,
+      phase: if (state.ownership.phase == "OutcomeUnknown") "PilotOwned" else state.ownership.phase,
+      activeAssignments: 0, outcomeKnown: true, readbackCurrent: true }
+    all {
+    pilotOutcomeMayReconcile(state.ownership, proposed, state.currentGeneration),
+    state' = { ...state, ownership: proposed,
+      settledAssignments: state.settledAssignments + state.ownership.activeAssignments,
+      reconciled: true },    },
+  }
+  action persistReturnIntent = all {
+    state.ownership.assignedOwnerId == "pilot-route",
+    state.ownership.activeAssignments == 0, state.ownership.outcomeKnown,
+    val proposed = { ...state.ownership, phase: "ReturnIntended", returnIntentDurable: true }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action acknowledgeReturn = all {
+    state.ownership.phase == "ReturnIntended", state.currentGeneration == permit.generation,
+    val proposed = { ...state.ownership, phase: "StableOwned", assignedOwnerId: "stable-route",
+      returnAcknowledgementObserved: true, readbackCurrent: true }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action disconnectForRestart = all {
+    state.ownership.phase == "PilotOwned", state.ownership.readbackCurrent,
+    state' = { ...state, ownership: { ...state.ownership, readbackCurrent: false }, restarted: true },
+  }
+  action reconnectReadback = all {
+    state.restarted, not(state.ownership.readbackCurrent),
+    state.currentGeneration == permit.generation,
+    state' = { ...state, ownership: { ...state.ownership, readbackCurrent: true },
+      reconnected: true },
+  }
+  action advanceClockToExpiry = all {
+    state.now < permit.expiresAt,
+    state' = { ...state, now: permit.expiresAt, deadlineObserved: true },
+  }
+  action observeNewGeneration = all {
+    state.currentGeneration == permit.generation,
+    state' = { ...state, currentGeneration: permit.generation + 1,
+      staleGenerationObserved: true },
+  }
+  action terminalStutter = all {
+    state.ownership.phase == "StableOwned", state.ownership.returnAcknowledgementObserved,
+    state' = state,
+  }
+  action step = any {
+    persistTransferIntent, acknowledgeTransfer, dispatch, settle, loseHeartbeat,
+    pause, revoke, reconcileUnknown, persistReturnIntent, acknowledgeReturn,
+    disconnectForRestart, reconnectReadback, advanceClockToExpiry, observeNewGeneration,
+    terminalStutter,
+  }
+  action normalProgressStep = any {
+    persistTransferIntent, acknowledgeTransfer, persistReturnIntent,
+    acknowledgeReturn, terminalStutter,
+  }
+  action majorActionCoverageStep =
+    if (not(state.ownership.transferIntentDurable)) persistTransferIntent
+    else if (not(state.ownership.transferAcknowledgementObserved)) acknowledgeTransfer
+    else if (state.startedAssignments == 0) dispatch
+    else if (not(state.settled)) settle
+    else if (state.startedAssignments == 1) dispatch
+    else if (state.ownership.outcomeKnown and not(state.reconciled)) loseHeartbeat
+    else if (not(state.reconciled)) reconcileUnknown
+    else if (not(state.restarted)) disconnectForRestart
+    else if (not(state.reconnected)) reconnectReadback
+    else if (not(state.paused)) pause
+    else if (not(state.revoked)) revoke
+    else if (not(state.ownership.returnIntentDurable)) persistReturnIntent
+    else if (not(state.ownership.returnAcknowledgementObserved)) acknowledgeReturn
+    else terminalStutter
+  val safety = and {
+    frameForgeryRejected, reconciliationGenerationForgeryRejected, genericUnknownClearRejected,
+    pilotOwnershipStateIsValid(state.ownership),
+    state.startedAssignments == state.settledAssignments + state.ownership.activeAssignments,
+    state.startedAssignments == state.ownership.consumedBudgetUnits,
+    state.ownership.assignedOwnerId == "pilot-route" implies
+      state.ownership.transferAcknowledgementObserved,
+    state.ownership.phase == "TransferIntended" implies
+      state.ownership.assignedOwnerId == "stable-route",
+    state.ownership.phase == "OutcomeUnknown" implies not(state.ownership.outcomeKnown),
+    state.ownership.phase == "StableOwned" and state.ownership.returnAcknowledgementObserved implies
+      state.ownership.activeAssignments == 0,
+    state.deadlineObserved implies not(pilotDispatchMayProceed(
+      state.ownership, state.now, state.currentGeneration)),
+    state.staleGenerationObserved implies not(pilotDispatchMayProceed(
+      state.ownership, state.now, state.currentGeneration)),
+  }
+  val reached = state.ownership.phase == "StableOwned"
+    and state.ownership.returnAcknowledgementObserved
+  val transferIntentReached = state.ownership.transferIntentDurable
+  val pilotOwnershipReached = state.ownership.assignedOwnerId == "pilot-route"
+  val unknownReached = not(state.ownership.outcomeKnown)
+  val dispatchReached = state.dispatched
+  val settleReached = state.settled
+  val reconcileReached = state.reconciled
+  val pausedReached = state.paused
+  val revokedReached = state.revoked
+  val reconnectReached = state.reconnected
+  val majorActionCoverageReached = and {
+    state.dispatched, state.settled, state.reconciled,
+    state.paused, state.revoked, state.reconnected,
+  }
+  val returnIntentReached = state.ownership.returnIntentDurable
+  val restartRefusalReached = state.restarted and not(state.ownership.readbackCurrent)
+    and not(pilotDispatchMayProceed(state.ownership, state.now, state.currentGeneration))
+  val deadlineRefusalReached = state.deadlineObserved
+  val staleGenerationRefusalReached = state.staleGenerationObserved
+  temporal progress: bool = and {
+    persistTransferIntent.weakFair(Set(state)), acknowledgeTransfer.weakFair(Set(state)),
+    settle.weakFair(Set(state)), reconcileUnknown.weakFair(Set(state)),
+    reconnectReadback.weakFair(Set(state)), persistReturnIntent.weakFair(Set(state)),
+    acknowledgeReturn.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal faultSafety: bool = always(safety)
+  temporal majorCoverageProgress: bool = eventually(majorActionCoverageReached)
+  temporal eventuallyReached: bool = eventually(reached)
+  val blockedInvariant = state.ownership.phase != "TransferIntended"
+  action withoutTransferAcknowledgement =
+    if (state.ownership.phase == "StableOwned") persistTransferIntent else terminalStutter
+  action unsafeTransferWithoutAcknowledgement = all {
+    state' = { ...state, ownership: { ...state.ownership,
+      phase: "PilotOwned", assignedOwnerId: "pilot-route",
+      transferAcknowledgementObserved: false } },
+  }
 }
 
 // GS2-03.10 model 1: two workers race sibling commits on shard 0 while shard 1 progresses
@@ -3130,7 +3580,7 @@ module GS20310CutoverModel {
 // therefore retains the used transitive closure instead of the all-actions integration root.
 module QualificationAuthorityRoot {
   import CoordinationProtocol.mutationIntentsConflict
-  import CoordinationProtocol.createIntent
+  import CoordinationProtocolTests.createIntent
 
   var attemptObserved: bool
   var conflictDetected: bool

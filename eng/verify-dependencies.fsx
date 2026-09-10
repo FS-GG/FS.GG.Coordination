@@ -119,8 +119,13 @@ let private allowedDependencies =
           "FS.GG.Coordination.Core", Set.singleton "FS.GG.Coordination.Protocol"
           "FS.GG.Coordination.Orchestration.Observer",
           Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.GitHub" ]
+          "FS.GG.Coordination.Orchestration.Pilot",
+          Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.Protocol" ]
           "FS.GG.Coordination.Orchestration.PostgreSql",
-          Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.Orchestration.Observer" ]
+          Set.ofList
+              [ "FS.GG.Coordination.Core"
+                "FS.GG.Coordination.Orchestration.Observer"
+                "FS.GG.Coordination.Orchestration.Pilot" ]
           "FS.GG.Coordination.GitHub",
           Set.ofList [ "FS.GG.Coordination.Protocol"; "FS.GG.Coordination.Core" ]
           "FS.GG.Coordination.Cli",

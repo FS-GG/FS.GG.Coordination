@@ -86,13 +86,15 @@ let private vulnerabilityJson projectCount vulnerable =
           "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj"
           "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
           "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj"
+          "src/FS.GG.Coordination.Orchestration.Pilot/FS.GG.Coordination.Orchestration.Pilot.fsproj"
           "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
           "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
           "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
           "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
           "tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests.fsproj"
           "tests/FS.GG.Coordination.Orchestration.Observer.Tests/FS.GG.Coordination.Orchestration.Observer.Tests.fsproj"
-          "tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests.fsproj" ]
+          "tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests.fsproj"
+          "tests/FS.GG.Coordination.Orchestration.Pilot.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Pilot.PostgreSql.Tests.fsproj" ]
     let projects =
         requiredProjects
         |> List.take projectCount
@@ -117,6 +119,7 @@ let private createArtifacts root =
           "bootstrap-recovery/result.json"
           "orchestration-postgresql/results.trx"
           "orchestration-observer-postgresql/results.trx"
+          "orchestration-pilot-postgresql/results.trx"
           "evidence-manifest/plan.json" ]
     for relative in paths do
         let target = Path.Combine(root, relative)
@@ -130,14 +133,14 @@ let private createArtifacts root =
                 $"{{\"schema\":\"fsgg.coordination.bootstrap-recovery/1\",\"candidate\":\"%s{exactHead}\",\"packageSha256\":\"%s{packageDigest}\",\"publishedSources\":[\"https://api.nuget.org/v3/index.json\"],\"stages\":[\"clone\",\"restore\",\"build\",\"unit-tests\",\"architecture-tests\",\"pack\",\"install\",\"execute\"]}}\n")
         elif relative = "canonical-quint/qualification.json" then
             let preparationDigest = String.replicate 64 "c"
-            let sourceDigest = "3bdcbe1ae4c3e3c9a9ca71b9c629106085034454781caf4bff8d9349cfc41aeb"
-            let contractDigest = "c608c0d28ce5cbf36e70f102ffa979f4d06f27305e6da4551dce454901811c8e"
+            let sourceDigest = "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
+            let contractDigest = "a77921dadee641e12fd20929ffebd2b396c68847a969b0ce8e1cd9c3e4f4795c"
             let toolchainDigest = "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
             let quintDigest = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
             let apalacheDigest = "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
             let formalRows =
                 [ "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "journal-fencing"
-                  "journal-reconciliation"; "lifecycle"; "operation-saga"; "relation-mutation"; "review-epoch"; "rollback" ]
+                  "journal-reconciliation"; "lifecycle"; "operation-saga"; "pilot-permit-fault-safety"; "pilot-permit-major-action-coverage"; "pilot-permit-transfer"; "relation-mutation"; "review-epoch"; "rollback" ]
                 |> List.mapi (fun index id ->
                     let suffix = (index + 1).ToString("x2")
                     id, String.replicate 62 "a" + suffix,
@@ -152,12 +155,12 @@ let private createArtifacts root =
                     $"{{\"id\":\"%s{id}\",\"manifestSha256\":\"%s{manifest}\",\"traceSha256\":\"%s{trace}\",\"itfSha256\":\"%s{itf}\"}}")
                 |> String.concat ","
             let resultDigest =
-                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|126|186|161|47|%s{preparationDigest}|%s{formalIdentity}|none|none"))
+                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|141|207|182|56|%s{preparationDigest}|%s{formalIdentity}|none|none"))
                 |> Convert.ToHexString
                 |> _.ToLowerInvariant()
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":126,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":186,\"quintCli\":161,\"apalacheVerify\":47}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":141,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":207,\"quintCli\":182,\"apalacheVerify\":56}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
 
@@ -456,7 +459,7 @@ let ``representative gate addition changes only the plan and its stable entry po
     withPlanMutation
         (fun path ->
             let plan = JsonNode.Parse(File.ReadAllText(path)).AsObject()
-            plan["requiredGateCount"] <- JsonValue.Create(10)
+            plan["requiredGateCount"] <- JsonValue.Create(11)
             let jobs = plan["jobs"].AsArray()
             let gate = JsonObject()
             gate["id"] <- JsonValue.Create("representative-gate")
@@ -549,8 +552,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     let core = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"))
     let reuseCore = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs"))
     let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
-    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 400)
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 250)
+    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 425)
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 275)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 1340)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 720)
@@ -754,14 +757,14 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 13 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 15 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
 
 [<Theory>]
-[<InlineData(12, false, "vulnerability-report-completeness")>]
-[<InlineData(13, true, "vulnerable-package")>]
+[<InlineData(14, false, "vulnerability-report-completeness")>]
+[<InlineData(15, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error = validateVulnerability (vulnerabilityJson projectCount vulnerable)
     Assert.NotEqual(0, exitCode)
@@ -775,28 +778,28 @@ let ``malformed vulnerability report is rejected`` () =
 
 [<Fact>]
 let ``unsafe vulnerability source is rejected`` () =
-    let report = (vulnerabilityJson 13 false).Replace("https://api.nuget.org", "http://api.nuget.org")
+    let report = (vulnerabilityJson 15 false).Replace("https://api.nuget.org", "http://api.nuget.org")
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-source", error)
 
 [<Fact>]
 let ``unexpected HTTPS vulnerability source is rejected`` () =
-    let report = (vulnerabilityJson 13 false).Replace("https://api.nuget.org/v3/index.json", "https://packages.example.invalid/v3/index.json")
+    let report = (vulnerabilityJson 15 false).Replace("https://api.nuget.org/v3/index.json", "https://packages.example.invalid/v3/index.json")
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-source", error)
 
 [<Fact>]
 let ``incomplete vulnerability parameters are rejected`` () =
-    let report = (vulnerabilityJson 13 false).Replace("--vulnerable --include-transitive", "--vulnerable")
+    let report = (vulnerabilityJson 15 false).Replace("--vulnerable --include-transitive", "--vulnerable")
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-parameters", error)
 
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
-    let report = (vulnerabilityJson 13 false).Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
+    let report = (vulnerabilityJson 15 false).Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-completeness", error)
@@ -915,12 +918,12 @@ let private mutateCanonicalQuintReceipt mutate =
 [<Theory>]
 [<InlineData("\"q1Outcome\":\"passed\"", "\"q1Outcome\":\"failed\"", "quint-receipt-outcome")>]
 [<InlineData("\"positiveInvariantCount\":8", "\"positiveInvariantCount\":7", "quint-receipt-inventory")>]
-[<InlineData("\"negativeControlCount\":126", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
+[<InlineData("\"negativeControlCount\":141", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
 [<InlineData("\"totalDurationMs\":300", "\"totalDurationMs\":301", "quint-receipt-timing")>]
-[<InlineData("\"external\":186", "\"external\":185", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":161", "\"quintCli\":160", "quint-receipt-process-count")>]
-[<InlineData("\"apalacheVerify\":47", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":161", "\"quintCli\":0", "quint-receipt-process-count")>]
+[<InlineData("\"external\":207", "\"external\":185", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":182", "\"quintCli\":160", "quint-receipt-process-count")>]
+[<InlineData("\"apalacheVerify\":56", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":182", "\"quintCli\":0", "quint-receipt-process-count")>]
 [<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
 let ``canonical Quint receipt rejects incomplete or contradictory evidence`` (original: string) (replacement: string) (rule: string) =
     let exitCode, _, error =
