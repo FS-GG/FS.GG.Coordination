@@ -76,8 +76,8 @@ duplicate may contain no new events and returns the original terminal sequence. 
 a wrong expected sequence are distinct results.
 
 Effect intent and settlement metadata are fields of the authoritative event row. Pending outbox work is
-derived from intent rows without a later settlement row; no separately committed outbox row is presented as
-atomic with actor persistence. Snapshots are disposable and may be saved only at or behind the journal head.
+derived by folding rows in sequence: an intent opens or reopens its operation and a later settlement closes it.
+No separately committed outbox row is presented as atomic with actor persistence. Snapshots are disposable and may be saved only at or behind the journal head.
 Projection checkpoints are independent read-side progress.
 
 Readiness fails closed for unavailable/read-only/capacity-limited storage, corrupt records, unknown event or

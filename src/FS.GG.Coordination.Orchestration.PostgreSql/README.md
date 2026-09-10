@@ -17,8 +17,9 @@ but uses the same serializer identifier and codec; this is replay compatibility,
 not an implemented payload upcast.
 
 Akka.Persistence.Sql stores only optional runtime markers in its journal and
-snapshot tables. Those markers can accelerate actor wake-up and expose mailbox
-progress to Akka tooling. Losing or staling them cannot authorize a domain
+snapshot tables. The current adapter uses them for runtime compatibility and recovery
+qualification; it does not implement a marker-based wake-up optimization. Losing or
+staling them cannot authorize a domain
 command or external effect: runtime recovery and expected-sequence ownership
 come from the SPI tables, and replies occur only after the SPI transaction
 commits. The plugin is configured without remoting/listeners and with an
