@@ -78,7 +78,7 @@ let generatedMutation (control: GitHubWorkflowSelectionControl) =
     | ExactWorkflowSeal -> expectVerifyError (String.replicate 64 "0") snapshot
     | ExactWorkflowReplay -> expectVerifyError expectedSeal (replaceCase "test" (fun value -> { value with ChangedSubjects = [ "tests/ReplayChanged.fs" ] }) snapshot)
     | QuintWorkflowUnchanged ->
-        sha256File protocolPath = "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
+        sha256File protocolPath = "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
         && SHA256.HashData(Array.append (File.ReadAllBytes protocolPath) [| 10uy |]) <> SHA256.HashData(File.ReadAllBytes protocolPath)
     | NoWorkflowMutationSurface ->
         let source = File.ReadAllText sourcePath
@@ -118,7 +118,7 @@ let independentMutation (control: GitHubWorkflowSelectionControl) fixture =
     | ExactWorkflowReplay, "post-seal-case-change" -> expectVerifyError expectedSeal (replaceCase "source" (fun value -> { value with ChangedSubjects = [ "src/Other.fs" ] }) snapshot)
     | QuintWorkflowUnchanged, "protocol-byte-append" ->
         let original = File.ReadAllBytes protocolPath
-        sha256File protocolPath = "226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b"
+        sha256File protocolPath = "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
         && SHA256.HashData(Array.append original [| 0uy |]) <> SHA256.HashData original
     | NoWorkflowMutationSurface, "forbidden-http-client-surface" ->
         let source = File.ReadAllText sourcePath

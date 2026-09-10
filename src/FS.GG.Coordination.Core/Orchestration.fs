@@ -89,11 +89,32 @@ module Orchestration =
           StorageReceiptSha256: string; VerifiedAt: DateTimeOffset }
     type ExternalClaim =
         { ClaimId: string; Generation: Generation; WorkflowRevision: WorkflowRevision; ObservedAt: DateTimeOffset }
-    type EffectKind = AcquireExternalClaim | ReleaseExternalClaim | DispatchRunner | CancelRunner | InspectExternalOperation
+    type EffectKind =
+        | AcquireExternalClaim | ReleaseExternalClaim | DispatchRunner | CancelRunner | InspectExternalOperation
+        | StoreCandidate | PublishCandidateBranch | CreatePullRequest | MergePullRequest | ReadNativeDelivery
     type EffectIntent =
         { OperationId: OperationId; Kind: EffectKind; Generation: Generation
           WorkflowRevision: WorkflowRevision; ResourceId: string; PayloadSha256: string }
     type EffectOutcome = Applied of providerRevision: string | ProvenAbsent | Refused of string | Unknown of string
+    type NativeDeliveryReadback =
+        { OperationId: OperationId; RouteId: Guid; AttemptId: AttemptId; CandidateId: CandidateId
+          RepositoryNodeId: string; PullRequestNodeId: string
+          CandidateHeadSha: string; ObservedPullRequestHeadSha: string; MergeCommitSha: string
+          ProviderRevision: string; Generation: Generation; WorkflowRevision: WorkflowRevision
+          ObservedAt: DateTimeOffset; Merged: bool }
+    type HostedRoutePlan =
+        { RouteId: Guid; WorkItemId: WorkItemId; JobClass: string; AttemptId: AttemptId
+          CandidateId: CandidateId; RepositoryNodeId: string; BranchRef: string; ClaimResourceId: string
+          ClaimOperationId: OperationId; ProcessOperationId: OperationId; CandidateOperationId: OperationId
+          BranchOperationId: OperationId; PullRequestOperationId: OperationId; MergeOperationId: OperationId
+          ReadbackOperationId: OperationId; Generation: Generation; WorkflowRevision: WorkflowRevision
+          SelectedAt: DateTimeOffset }
+    type HostedEffectReadback =
+        { OperationId: OperationId; RouteId: Guid; AttemptId: AttemptId; CandidateId: CandidateId
+          RepositoryNodeId: string; ProviderResourceId: string
+          CandidateHeadSha: string option; ResultSha: string option; ProviderRevision: string
+          Generation: Generation; WorkflowRevision: WorkflowRevision; ObservedAt: DateTimeOffset
+          Exists: bool }
     type ControlState = Running | Paused of string | CancelPending of string | Cancelled of string | Revoked of string
     type Reservation =
         { ReservationId: ReservationId; Generation: Generation; ExpiresAt: DateTimeOffset
@@ -115,17 +136,23 @@ module Orchestration =
           Reservation: Reservation option; ExternalClaims: Map<string,ExternalClaim>
           RecoveryObligations: Set<string>; CompensationFailures: Map<string,string>
           Attempts: Map<AttemptId, Attempt>; Candidates: Map<CandidateId, CandidateArtifact>
-          Operations: Map<OperationId, OperationState>; CommandReceipts: Map<CommandId, CommandReceipt> }
+          Operations: Map<OperationId, OperationState>; HostedRoute: HostedRoutePlan option
+          HostedEffectReadbacks: Map<OperationId, HostedEffectReadback>
+          NativeDeliveryReadbacks: Map<OperationId, NativeDeliveryReadback>
+          CommandReceipts: Map<CommandId, CommandReceipt> }
     type Command =
         | Admit of PlanningSnapshot * Budget | Reserve of ReservationId * DateTimeOffset * requiredClaimIds:Set<string>
         | ObserveClaim of ExternalClaim | ReleaseReservation of string | ObserveClaimReleased of string
         | RecordCompensationFailure of claimId:string * reason:string
-        | StartAttempt of AttemptId * SessionId * RunnerEnrollment
+        | SelectHostedRoute of HostedRoutePlan | StartAttempt of AttemptId * SessionId * RunnerEnrollment
         | ObserveAttempt of AttemptId * AttemptStatus
         | ChargeBudget of BudgetUse | Pause of string | Resume | RequestCancel of string
         | ConfirmCancelled of string | Revoke of string | RecordCandidate of CandidateArtifact * CandidateStorageReceipt
         | RecordEffectIntent of EffectIntent | MarkEffectDispatching of OperationId
-        | ObserveEffect of OperationId * EffectOutcome | AuthorizeEffectRetry of OperationId
+        | ObserveEffect of OperationId * EffectOutcome
+        | RecordHostedEffectReadback of OperationId * HostedEffectReadback
+        | RecordNativeDeliveryReadback of OperationId * NativeDeliveryReadback
+        | AuthorizeEffectRetry of OperationId
     type CommandEnvelope =
         { CommandId: CommandId; ProtocolVersion: ProtocolVersion
           ExpectedRevision: WorkflowRevision; ExpectedGeneration: Generation
@@ -135,11 +162,13 @@ module Orchestration =
         | WorkAdmitted of PlanningSnapshot * Budget | GenerationAdvanced of Generation
         | ReservationCreated of Reservation | ReservationReleased of ReservationId * string * claimsToCompensate:Set<string>
         | ClaimObserved of ExternalClaim | ClaimReleased of string | CompensationFailed of string * string
-        | AttemptStarted of Attempt | AttemptObserved of AttemptId * AttemptStatus | BudgetCharged of BudgetUse
+        | HostedRouteSelected of HostedRoutePlan | AttemptStarted of Attempt | AttemptObserved of AttemptId * AttemptStatus | BudgetCharged of BudgetUse
         | PausedEvent of string | ResumedEvent | CancelRequestedEvent of string | CancelledEvent of string
         | RevokedEvent of string | CandidateAccepted of CandidateArtifact | EffectIntentRecorded of EffectIntent
         | EffectDispatchStarted of OperationId | EffectObservationRequired of OperationId * string
-        | EffectSettled of OperationId * EffectOutcome | EffectRetryAuthorized of OperationId
+        | EffectSettled of OperationId * EffectOutcome | HostedEffectReadbackAccepted of HostedEffectReadback
+        | NativeDeliveryReadbackAccepted of NativeDeliveryReadback
+        | EffectRetryAuthorized of OperationId
         | CommandRecorded of CommandReceipt
     type Decision = { Events: Event list; Effects: EffectIntent list; Receipt: CommandReceipt }
 
@@ -148,7 +177,8 @@ module Orchestration =
           Control=Paused "not-admitted"; Budget=None; Used={Tokens=0L;RuntimeSeconds=0L;CostMicros=0L}
           Reservation=None; ExternalClaims=Map.empty; RecoveryObligations=Set.empty;CompensationFailures=Map.empty
           Attempts=Map.empty; Candidates=Map.empty
-          Operations=Map.empty; CommandReceipts=Map.empty }
+          Operations=Map.empty; HostedRoute=None; HostedEffectReadbacks=Map.empty
+          NativeDeliveryReadbacks=Map.empty; CommandReceipts=Map.empty }
     let private nextRevision (WorkflowRevision value) = WorkflowRevision(value + 1L)
     let private nextGeneration (Generation value) = Generation(value + 1L)
     let private sameGeneration (Generation left) (Generation right) = left = right
@@ -171,23 +201,133 @@ module Orchestration =
             |> Option.exists(fun claim ->
                 sameGeneration claim.Generation state.Generation
                 && state.Snapshot |> Option.exists(fun snapshot -> claim.WorkflowRevision=snapshot.WorkflowRevision)))
-    let private effectAuthorized now state intent =
+    let private intentOf (operation: OperationState) : EffectIntent =
+        match operation with
+        | IntentRecorded intent | Dispatching intent | NeedsObservation(intent, _) | Settled(intent, _) -> intent
+    let private routeOperations (route: HostedRoutePlan) =
+        [ AcquireExternalClaim,route.ClaimOperationId
+          DispatchRunner,route.ProcessOperationId
+          StoreCandidate,route.CandidateOperationId
+          PublishCandidateBranch,route.BranchOperationId
+          CreatePullRequest,route.PullRequestOperationId
+          MergePullRequest,route.MergeOperationId
+          ReadNativeDelivery,route.ReadbackOperationId ]
+    let private operationForKind kind (route: HostedRoutePlan) = routeOperations route |> List.tryFind(fst >> (=) kind) |> Option.map snd
+    let private routeKind operationId (route: HostedRoutePlan) = routeOperations route |> List.tryFind(snd >> (=) operationId) |> Option.map fst
+    let private routeIntentMatches (route: HostedRoutePlan) (intent: EffectIntent) =
+        operationForKind intent.Kind route = Some intent.OperationId
+        && intent.Generation=route.Generation && intent.WorkflowRevision=route.WorkflowRevision
+        && match intent.Kind with
+           | AcquireExternalClaim -> intent.ResourceId=route.ClaimResourceId
+           | DispatchRunner -> intent.ResourceId=(Id.attemptValue route.AttemptId |> string)
+           | StoreCandidate -> intent.ResourceId=(Id.candidateValue route.CandidateId |> string)
+           | PublishCandidateBranch | CreatePullRequest | MergePullRequest | ReadNativeDelivery -> intent.ResourceId=route.BranchRef
+           | _ -> false
+    let private predecessorReadbackPresent kind (route: HostedRoutePlan) (state: State) =
+        let present operationId =
+            state.HostedEffectReadbacks
+            |> Map.tryFind operationId
+            |> Option.exists(fun readback ->
+                readback.Exists && readback.RouteId=route.RouteId && readback.AttemptId=route.AttemptId
+                && readback.CandidateId=route.CandidateId && readback.Generation=route.Generation
+                && readback.WorkflowRevision=route.WorkflowRevision)
+        match kind with
+        | AcquireExternalClaim -> true
+        | DispatchRunner -> present route.ClaimOperationId
+        | StoreCandidate -> present route.ProcessOperationId
+        | PublishCandidateBranch -> present route.CandidateOperationId && Map.containsKey route.CandidateId state.Candidates
+        | CreatePullRequest -> present route.BranchOperationId
+        | MergePullRequest -> present route.PullRequestOperationId
+        | ReadNativeDelivery -> present route.MergeOperationId
+        | _ -> false
+    let private predecessorObservedAt kind (route: HostedRoutePlan) (state: State) =
+        let operationId =
+            match kind with
+            | DispatchRunner -> Some route.ClaimOperationId
+            | StoreCandidate -> Some route.ProcessOperationId
+            | PublishCandidateBranch -> Some route.CandidateOperationId
+            | CreatePullRequest -> Some route.BranchOperationId
+            | MergePullRequest -> Some route.PullRequestOperationId
+            | ReadNativeDelivery -> Some route.MergeOperationId
+            | _ -> None
+        operationId |> Option.bind(fun id -> Map.tryFind id state.HostedEffectReadbacks) |> Option.map _.ObservedAt
+    let private hostedReadbackMatchesRoute (route:HostedRoutePlan) operationId (readback:HostedEffectReadback) =
+        readback.OperationId=operationId && readback.RouteId=route.RouteId
+        && readback.AttemptId=route.AttemptId && readback.CandidateId=route.CandidateId
+        && readback.RepositoryNodeId=route.RepositoryNodeId
+        && readback.Generation=route.Generation && readback.WorkflowRevision=route.WorkflowRevision
+    let private nativeDeliveryProofMatches now (route:HostedRoutePlan) (readback:NativeDeliveryReadback) (state:State) =
+        let candidateMatches =
+            Map.tryFind route.CandidateId state.Candidates
+            |> Option.exists(fun candidate ->
+                candidate.HeadSha.Equals(readback.CandidateHeadSha,StringComparison.OrdinalIgnoreCase)
+                && candidate.HeadSha.Equals(readback.ObservedPullRequestHeadSha,StringComparison.OrdinalIgnoreCase))
+        let pullRequestMatches =
+            Map.tryFind route.PullRequestOperationId state.HostedEffectReadbacks
+            |> Option.exists(fun value ->
+                hostedReadbackMatchesRoute route route.PullRequestOperationId value
+                && value.Exists && value.ProviderResourceId=readback.PullRequestNodeId
+                && value.CandidateHeadSha |> Option.exists(fun head -> head.Equals(readback.CandidateHeadSha,StringComparison.OrdinalIgnoreCase)))
+        let mergeMatches =
+            Map.tryFind route.MergeOperationId state.HostedEffectReadbacks
+            |> Option.exists(fun value ->
+                hostedReadbackMatchesRoute route route.MergeOperationId value
+                && value.Exists && value.ProviderResourceId=readback.PullRequestNodeId
+                && value.CandidateHeadSha |> Option.exists(fun head -> head.Equals(readback.CandidateHeadSha,StringComparison.OrdinalIgnoreCase))
+                && value.ResultSha |> Option.exists(fun sha -> sha.Equals(readback.MergeCommitSha,StringComparison.OrdinalIgnoreCase))
+                && readback.ObservedAt>=value.ObservedAt)
+        readback.OperationId=route.ReadbackOperationId && readback.RouteId=route.RouteId
+        && readback.AttemptId=route.AttemptId && readback.CandidateId=route.CandidateId
+        && readback.RepositoryNodeId=route.RepositoryNodeId
+        && readback.Generation=route.Generation && readback.WorkflowRevision=route.WorkflowRevision
+        && readback.ObservedAt>=route.SelectedAt && readback.ObservedAt<=now && readback.Merged
+        && validGitObject readback.CandidateHeadSha && validGitObject readback.ObservedPullRequestHeadSha
+        && validGitObject readback.MergeCommitSha && candidateMatches && pullRequestMatches && mergeMatches
+    let private conflictingUnsettledOperation currentOperation (state: State) =
+        state.Operations
+        |> Map.exists(fun operationId operation ->
+            operationId<>currentOperation
+            && match operation with IntentRecorded _|Dispatching _|NeedsObservation _ -> true | Settled _ -> false)
+    let private currentRouteAuthorization now (state: State) (route: HostedRoutePlan) (intent: EffectIntent) requireAttempt =
+        let currentRevision = state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=intent.WorkflowRevision)
+        let currentGeneration = sameGeneration intent.Generation state.Generation
+        let budgetAvailable = match state.Budget with | Some budget -> within now budget state.Used | None -> false
+        let reservationReady =
+            state.Reservation
+            |> Option.exists(fun reservation ->
+                let claimReady = intent.Kind=AcquireExternalClaim || hasCurrentClaims state reservation
+                reservation.ExpiresAt>now && sameGeneration reservation.Generation route.Generation && claimReady)
+        state.Control=Running && currentGeneration && currentRevision && budgetAvailable
+        && state.WorkItemId=Some route.WorkItemId && routeIntentMatches route intent
+        && Set.isEmpty state.RecoveryObligations && not(conflictingUnsettledOperation intent.OperationId state)
+        && (not requireAttempt || state.Attempts |> Map.tryFind route.AttemptId |> Option.exists(fun attempt -> attempt.Status=Active && sameGeneration attempt.Generation route.Generation))
+        && reservationReady
+        && predecessorReadbackPresent intent.Kind route state
+    let private effectAuthorized now state (intent: EffectIntent) =
         let currentRevision = state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=intent.WorkflowRevision)
         let currentGeneration = sameGeneration intent.Generation state.Generation
         let budgetAvailable = match state.Budget with | Some budget -> within now budget state.Used | None -> false
         match intent.Kind with
         | DispatchRunner ->
-            state.Control=Running && currentGeneration && currentRevision && budgetAvailable
-            && Set.isEmpty state.RecoveryObligations
-            && (state.Attempts |> Map.exists(fun _ attempt -> attempt.Status=Active && sameGeneration attempt.Generation state.Generation))
-            && (state.Reservation |> Option.exists(fun reservation -> reservation.ExpiresAt>now && sameGeneration reservation.Generation state.Generation && hasCurrentClaims state reservation))
+            match state.HostedRoute with
+            | Some route -> currentRouteAuthorization now state route intent true
+            | None ->
+                state.Control=Running && currentGeneration && currentRevision && budgetAvailable
+                && Set.isEmpty state.RecoveryObligations
+                && (state.Attempts |> Map.exists(fun _ attempt -> attempt.Status=Active && sameGeneration attempt.Generation state.Generation))
+                && (state.Reservation |> Option.exists(fun reservation -> reservation.ExpiresAt>now && sameGeneration reservation.Generation state.Generation && hasCurrentClaims state reservation))
         | AcquireExternalClaim ->
-            state.Control=Running && currentGeneration && currentRevision && budgetAvailable
-            && Set.isEmpty state.RecoveryObligations
-            && (state.Reservation |> Option.exists(fun reservation -> reservation.ExpiresAt>now && sameGeneration reservation.Generation state.Generation))
+            match state.HostedRoute with
+            | Some route -> currentRouteAuthorization now state route intent false
+            | None ->
+                state.Control=Running && currentGeneration && currentRevision && budgetAvailable
+                && Set.isEmpty state.RecoveryObligations
+                && (state.Reservation |> Option.exists(fun reservation -> reservation.ExpiresAt>now && sameGeneration reservation.Generation state.Generation))
         | ReleaseExternalClaim -> currentRevision && (Set.contains intent.ResourceId state.RecoveryObligations || Map.containsKey intent.ResourceId state.ExternalClaims)
         | CancelRunner -> currentRevision && (state.Attempts |> Map.exists(fun _ attempt -> Id.runnerValue attempt.Runner.RunnerId |> string = intent.ResourceId && (match attempt.Status with Active|OutcomeUnknown _ -> true | _ -> false))) && (match state.Control with CancelPending _|Cancelled _|Revoked _ -> true | _ -> false)
         | InspectExternalOperation -> currentRevision
+        | StoreCandidate | PublishCandidateBranch | CreatePullRequest | MergePullRequest | ReadNativeDelivery ->
+            state.HostedRoute |> Option.exists(fun route -> currentRouteAuthorization now state route intent true)
 
     let evolve state event =
         let revision = nextRevision state.Revision
@@ -199,6 +339,7 @@ module Orchestration =
         | ClaimObserved c -> {state with ExternalClaims=Map.add c.ClaimId c state.ExternalClaims;Revision=revision}
         | ClaimReleased claimId -> {state with ExternalClaims=Map.remove claimId state.ExternalClaims;RecoveryObligations=Set.remove claimId state.RecoveryObligations;CompensationFailures=Map.remove claimId state.CompensationFailures;Revision=revision}
         | CompensationFailed(claimId,reason) -> {state with RecoveryObligations=Set.add claimId state.RecoveryObligations;CompensationFailures=Map.add claimId reason state.CompensationFailures;Revision=revision}
+        | HostedRouteSelected route -> {state with HostedRoute=Some route;Revision=revision}
         | AttemptStarted a -> {state with Attempts=Map.add a.AttemptId a state.Attempts;Revision=revision}
         | AttemptObserved(id,status) ->
             match Map.tryFind id state.Attempts with
@@ -227,6 +368,10 @@ module Orchestration =
             match Map.tryFind id state.Operations with
             | Some(IntentRecorded i)|Some(Dispatching i)|Some(NeedsObservation(i,_)) -> {state with Operations=Map.add id (Settled(i,o)) state.Operations;Revision=revision}
             | _ -> {state with Revision=revision}
+        | HostedEffectReadbackAccepted readback ->
+            {state with HostedEffectReadbacks=Map.add readback.OperationId readback state.HostedEffectReadbacks;Revision=revision}
+        | NativeDeliveryReadbackAccepted readback ->
+            {state with NativeDeliveryReadbacks=Map.add readback.OperationId readback state.NativeDeliveryReadbacks;Revision=revision}
         | EffectRetryAuthorized id ->
             match Map.tryFind id state.Operations with
             | Some(Settled(intent,ProvenAbsent)) -> {state with Operations=Map.add id (IntentRecorded intent) state.Operations;Revision=revision}
@@ -254,6 +399,9 @@ module Orchestration =
         | Reserve(r,_,_) when state.Reservation |> Option.exists(fun existing -> existing.ReservationId=r) -> conflict "reservation-identity-conflict"
         | Reserve(r,e,claims) when state.Control=Running && state.Reservation.IsNone && e>now && not(Set.isEmpty claims) && Set.forall (String.IsNullOrWhiteSpace >> not) claims -> accept [ReservationCreated{ReservationId=r;Generation=state.Generation;ExpiresAt=e;RequiredClaimIds=claims}] [] "reserved"
         | Reserve _ -> reject "reservation-not-available"
+        | ObserveClaim c when state.HostedRoute |> Option.exists(fun route -> c.ClaimId=route.ClaimResourceId)
+                              && not(state.HostedRoute |> Option.exists(fun route -> predecessorReadbackPresent DispatchRunner route state)) ->
+            reject "hosted-claim-readback-required"
         | ObserveClaim c when sameGeneration c.Generation state.Generation -> accept [ClaimObserved c] [] "claim-observed"
         | ObserveClaim _ -> reject "stale-claim-generation"
         | ReleaseReservation reason ->
@@ -266,18 +414,39 @@ module Orchestration =
         | ObserveClaimReleased _ -> reject "claim-not-held"
         | RecordCompensationFailure(claimId,reason) when Set.contains claimId state.RecoveryObligations -> accept [CompensationFailed(claimId,reason)] [] "compensation-pending"
         | RecordCompensationFailure _ -> reject "no-compensation-obligation"
+        | SelectHostedRoute route ->
+            let operations = routeOperations route |> List.map snd
+            let validText maximum value = not(String.IsNullOrWhiteSpace value) && value=value.Trim() && value.Length<=maximum
+            let valid =
+                route.RouteId<>Guid.Empty && state.HostedRoute.IsNone && state.WorkItemId=Some route.WorkItemId
+                && route.JobClass="routine-documentation-delivery" && route.Generation=state.Generation
+                && state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=route.WorkflowRevision)
+                && route.SelectedAt<=now && validText 128 route.RepositoryNodeId && validText 128 route.ClaimResourceId
+                && route.BranchRef.StartsWith("refs/heads/fsgg/pilot/",StringComparison.Ordinal)
+                && route.BranchRef.Length<=255 && Set.count(Set.ofList operations)=operations.Length
+                && operations |> List.forall(fun operation -> Id.operationValue operation<>Guid.Empty)
+                && state.Operations.IsEmpty && state.Attempts.IsEmpty
+            if valid then accept [HostedRouteSelected route] [] "hosted-route-selected"
+            else reject "invalid-hosted-route"
         | StartAttempt(a,s,r) ->
             match Map.tryFind a state.Attempts with
             | Some existing when existing.SessionId=s && existing.Runner=r -> accept [] [] "attempt-already-started"
             | Some _ -> conflict "attempt-identity-conflict"
             | None ->
                 match state.Control,state.Budget,state.Reservation with
-                | Running,Some b,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && within now b state.Used && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation ->
+                | Running,Some b,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && within now b state.Used && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation && (state.HostedRoute |> Option.forall(fun route -> route.AttemptId=a && predecessorReadbackPresent DispatchRunner route state)) ->
                     accept [AttemptStarted{AttemptId=a;SessionId=s;Runner=r;Generation=state.Generation;StartedAt=now;Status=Active}] [] "attempt-started"
                 | _ -> reject "dispatch-requires-current-reservation-claim-runner-and-budget"
         | ObserveAttempt(attemptId,status) ->
             match Map.tryFind attemptId state.Attempts,status with
             | Some _,Active -> reject "observation-cannot-create-active-attempt"
+            | Some _,Completed when state.HostedRoute |> Option.exists(fun route ->
+                route.AttemptId=attemptId
+                && not(state.NativeDeliveryReadbacks |> Map.tryFind route.ReadbackOperationId |> Option.exists(fun readback ->
+                    nativeDeliveryProofMatches now route readback state
+                    && state.Operations |> Map.tryFind route.ReadbackOperationId |> Option.exists(function
+                        | Settled(intent,Applied revision) -> routeIntentMatches route intent && revision=readback.ProviderRevision
+                        | _ -> false)))) -> reject "native-delivery-readback-required"
             | Some _,_ -> accept [AttemptObserved(attemptId,status)] [] (match status with OutcomeUnknown _ -> "attempt-awaits-reconciliation" | _ -> "attempt-terminal-observed")
             | None,_ -> reject "unknown-attempt"
         | ChargeBudget delta ->
@@ -290,21 +459,88 @@ module Orchestration =
         | RequestCancel r -> match state.Control with | Running|Paused _ -> accept [CancelRequestedEvent r] [] "cancel-requested" | _ -> reject "cancel-refused"
         | ConfirmCancelled r -> match state.Control with | CancelPending _ -> accept [CancelledEvent r;GenerationAdvanced(nextGeneration state.Generation)] [] "cancelled" | _ -> reject "cancel-not-pending"
         | Revoke r -> accept [RevokedEvent r;GenerationAdvanced(nextGeneration state.Generation)] [] "revoked"
-        | RecordCandidate(c,proof) when proof.CandidateId=c.CandidateId && proof.ContentSha256.Equals(c.ContentSha256,StringComparison.OrdinalIgnoreCase) && proof.ManifestSha256.Equals(c.ManifestSha256,StringComparison.OrdinalIgnoreCase) && proof.SizeBytes=c.SizeBytes && proof.Location=c.Location && proof.StoreSchemaVersion=1 && not(String.IsNullOrWhiteSpace proof.StoreId) && validSha proof.StorageReceiptSha256 && proof.VerifiedAt<=now && c.SizeBytes>=0L && c.SizeBytes<=104857600L && c.RetainUntil>now && c.RetainUntil<=now.AddDays 90. && validSha c.ContentSha256 && validSha c.ManifestSha256 && validGitObject c.BaselineSha && validGitObject c.HeadSha && validGitObject c.TreeSha && Set.contains c.MediaType (Set.ofList ["application/vnd.git.bundle";"application/zip";"application/zstd"]) && (match c.Location with | ContentAddressedObject key -> key=$"sha256/{c.ContentSha256.ToLowerInvariant()}" | ImmutableRemoteGitRef(repository,commit,qualifiedRef) -> not(String.IsNullOrWhiteSpace repository) && validGitObject commit && commit.Equals(c.HeadSha,StringComparison.OrdinalIgnoreCase) && qualifiedRef.StartsWith("refs/fsgg/candidates/",StringComparison.Ordinal)) ->
+        | RecordCandidate(c,proof) when proof.CandidateId=c.CandidateId && proof.ContentSha256.Equals(c.ContentSha256,StringComparison.OrdinalIgnoreCase) && proof.ManifestSha256.Equals(c.ManifestSha256,StringComparison.OrdinalIgnoreCase) && proof.SizeBytes=c.SizeBytes && proof.Location=c.Location && proof.StoreSchemaVersion=1 && not(String.IsNullOrWhiteSpace proof.StoreId) && validSha proof.StorageReceiptSha256 && proof.VerifiedAt<=now && c.SizeBytes>=0L && c.SizeBytes<=104857600L && c.RetainUntil>now && c.RetainUntil<=now.AddDays 90. && validSha c.ContentSha256 && validSha c.ManifestSha256 && validGitObject c.BaselineSha && validGitObject c.HeadSha && validGitObject c.TreeSha && Set.contains c.MediaType (Set.ofList ["application/vnd.git.bundle";"application/zip";"application/zstd"]) && (match c.Location with | ContentAddressedObject key -> key=$"sha256/{c.ContentSha256.ToLowerInvariant()}" | ImmutableRemoteGitRef(repository,commit,qualifiedRef) -> not(String.IsNullOrWhiteSpace repository) && validGitObject commit && commit.Equals(c.HeadSha,StringComparison.OrdinalIgnoreCase) && qualifiedRef.StartsWith("refs/fsgg/candidates/",StringComparison.Ordinal)) && (state.HostedRoute |> Option.forall(fun route -> route.CandidateId=c.CandidateId && state.HostedEffectReadbacks |> Map.tryFind route.CandidateOperationId |> Option.exists(fun readback -> readback.Exists && readback.CandidateHeadSha=Some c.HeadSha && readback.ResultSha=Some c.ContentSha256))) ->
             match Map.tryFind c.CandidateId state.Candidates with | Some x when x=c -> accept [] [] "candidate-already-accepted" | Some _ -> conflict "candidate-identity-conflict" | None -> accept [CandidateAccepted c] [] "candidate-durably-accepted"
         | RecordCandidate _ -> reject "candidate-not-recoverable-or-invalid"
         | RecordEffectIntent i when sameGeneration i.Generation state.Generation ->
-            match Map.tryFind i.OperationId state.Operations with
-            | None -> accept [EffectIntentRecorded i] [] "effect-intent-recorded"
-            | Some(IntentRecorded existing)|Some(Dispatching existing)|Some(NeedsObservation(existing,_))|Some(Settled(existing,_)) when existing=i -> accept [] [] "effect-intent-already-recorded"
-            | Some _ -> conflict "operation-identity-conflict"
+            let routeMismatch =
+                state.HostedRoute
+                |> Option.exists(fun route ->
+                    (operationForKind i.Kind route).IsSome && not(routeIntentMatches route i))
+            let routeOrderViolation =
+                state.HostedRoute
+                |> Option.exists(fun route ->
+                    operationForKind i.Kind route=Some i.OperationId
+                    && (not(predecessorReadbackPresent i.Kind route state)
+                        || conflictingUnsettledOperation i.OperationId state))
+            let resourceConflict =
+                state.Operations
+                |> Map.exists(fun operationId operation ->
+                    let existing = intentOf operation
+                    operationId <> i.OperationId
+                    && existing.Kind = i.Kind && existing.ResourceId = i.ResourceId
+                    && (existing.Generation=i.Generation || match operation with Settled _ -> false | _ -> true))
+            match Map.tryFind i.OperationId state.Operations, routeMismatch, routeOrderViolation, resourceConflict with
+            | None, true, _, _ -> reject "effect-outside-hosted-route"
+            | None, false, true, _ -> reject "hosted-effect-predecessor-required"
+            | None, false, false, true -> conflict "effect-resource-identity-conflict"
+            | None, false, false, false -> accept [EffectIntentRecorded i] [] "effect-intent-recorded"
+            | Some(IntentRecorded existing),_,_,_|Some(Dispatching existing),_,_,_|Some(NeedsObservation(existing,_)),_,_,_|Some(Settled(existing,_)),_,_,_ when existing=i -> accept [] [] "effect-intent-already-recorded"
+            | Some _,_,_,_ -> conflict "operation-identity-conflict"
         | RecordEffectIntent _ -> reject "stale-effect-generation"
         | MarkEffectDispatching operationId ->
             match Map.tryFind operationId state.Operations with | Some(IntentRecorded i) when effectAuthorized now state i -> accept [EffectDispatchStarted operationId] [i] "effect-dispatching" | Some(NeedsObservation _) -> reject "observe-before-retry" | Some _ -> reject "effect-not-authorized" | _ -> reject "effect-not-dispatchable"
         | ObserveEffect(operationId,Unknown reason) ->
             match Map.tryFind operationId state.Operations with | Some(IntentRecorded _)|Some(Dispatching _)|Some(NeedsObservation _) -> accept [EffectObservationRequired(operationId,reason)] [] "observe-before-retry" | _ -> reject "unknown-operation"
+        | ObserveEffect(operationId,(Applied _|ProvenAbsent)) when state.HostedRoute |> Option.exists(fun route -> routeKind operationId route |> Option.isSome) -> reject "hosted-effect-readback-required"
         | ObserveEffect(operationId,outcome) ->
             match Map.tryFind operationId state.Operations with | Some(IntentRecorded _)|Some(Dispatching _)|Some(NeedsObservation _) -> accept [EffectSettled(operationId,outcome)] [] "effect-settled" | _ -> reject "unknown-operation"
+        | RecordHostedEffectReadback(operationId,readback) ->
+            let validText maximum value = not(String.IsNullOrWhiteSpace value) && value=value.Trim() && value.Length<=maximum
+            let candidate (route:HostedRoutePlan) = Map.tryFind route.CandidateId state.Candidates
+            let common (route:HostedRoutePlan) intent =
+                readback.OperationId=operationId && routeIntentMatches route intent
+                && readback.RouteId=route.RouteId && readback.AttemptId=route.AttemptId
+                && readback.CandidateId=route.CandidateId
+                && readback.RepositoryNodeId=route.RepositoryNodeId
+                && readback.Generation=route.Generation && readback.Generation=state.Generation
+                && readback.WorkflowRevision=route.WorkflowRevision
+                && readback.ObservedAt>=route.SelectedAt && readback.ObservedAt<=now
+                && (predecessorObservedAt intent.Kind route state |> Option.forall(fun observedAt -> readback.ObservedAt>=observedAt))
+                && validText 128 readback.ProviderResourceId && validText 256 readback.ProviderRevision
+            let appliedShape (route:HostedRoutePlan) kind =
+                match kind with
+                | AcquireExternalClaim -> readback.ProviderResourceId=route.ClaimResourceId && readback.CandidateHeadSha.IsNone && readback.ResultSha.IsNone
+                | DispatchRunner -> readback.ProviderResourceId=(Id.attemptValue route.AttemptId |> string) && readback.CandidateHeadSha.IsNone && readback.ResultSha.IsNone
+                | StoreCandidate -> readback.ProviderResourceId=(Id.candidateValue route.CandidateId |> string) && readback.CandidateHeadSha |> Option.exists validGitObject && readback.ResultSha |> Option.exists validSha
+                | PublishCandidateBranch ->
+                    readback.ProviderResourceId=route.BranchRef && candidate route |> Option.exists(fun value -> readback.CandidateHeadSha=Some value.HeadSha && readback.ResultSha=Some value.HeadSha)
+                | CreatePullRequest -> candidate route |> Option.exists(fun value -> readback.CandidateHeadSha=Some value.HeadSha) && readback.ResultSha.IsNone
+                | MergePullRequest ->
+                    let pullRequest = Map.tryFind route.PullRequestOperationId state.HostedEffectReadbacks
+                    candidate route |> Option.exists(fun value -> readback.CandidateHeadSha=Some value.HeadSha)
+                    && pullRequest |> Option.exists(fun value -> value.Exists && value.ProviderResourceId=readback.ProviderResourceId)
+                    && readback.ResultSha |> Option.exists validGitObject
+                | _ -> false
+            match state.HostedRoute,Map.tryFind operationId state.Operations with
+            | Some route,(Some(Dispatching intent)|Some(NeedsObservation(intent,_))) when operationId<>route.ReadbackOperationId && common route intent && predecessorReadbackPresent intent.Kind route state ->
+                if readback.Exists && appliedShape route intent.Kind then
+                    accept [HostedEffectReadbackAccepted readback;EffectSettled(operationId,Applied readback.ProviderRevision)] [] "hosted-effect-readback-accepted"
+                elif not readback.Exists && readback.CandidateHeadSha.IsNone && readback.ResultSha.IsNone && readback.ProviderResourceId=intent.ResourceId then
+                    accept [HostedEffectReadbackAccepted readback;EffectSettled(operationId,ProvenAbsent)] [] "hosted-effect-absence-accepted"
+                else reject "hosted-effect-readback-invalid-or-stale"
+            | _ -> reject "hosted-effect-readback-invalid-or-stale"
+        | RecordNativeDeliveryReadback(operationId,readback) ->
+            let validNode value = not(String.IsNullOrWhiteSpace value) && value=value.Trim() && value.Length<=128
+            match state.HostedRoute,Map.tryFind operationId state.Operations with
+            | Some route,(Some(Dispatching intent)|Some(NeedsObservation(intent,_)))
+                when intent.Kind=ReadNativeDelivery && operationId=route.ReadbackOperationId
+                     && routeIntentMatches route intent && readback.OperationId=operationId
+                     && nativeDeliveryProofMatches now route readback state
+                     && readback.Generation=state.Generation && validNode readback.RepositoryNodeId
+                     && validNode readback.PullRequestNodeId && validNode readback.ProviderRevision ->
+                accept [NativeDeliveryReadbackAccepted readback;EffectSettled(operationId,Applied readback.ProviderRevision)] [] "native-delivery-readback-accepted"
+            | _ -> reject "native-delivery-readback-invalid-or-stale"
         | AuthorizeEffectRetry operationId ->
             match Map.tryFind operationId state.Operations with | Some(Settled(_,ProvenAbsent)) -> accept [EffectRetryAuthorized operationId] [] "same-operation-retry-authorized" | _ -> reject "retry-requires-proven-absent"
 
@@ -317,6 +553,15 @@ module Orchestration =
     let private candidateParts (candidate:CandidateArtifact) =
         let location = match candidate.Location with | ContentAddressedObject key -> frame["object";key] | ImmutableRemoteGitRef(repo,commit,reference) -> frame["git";repo;commit;reference]
         [Id.candidateValue candidate.CandidateId |> string;candidate.BaselineSha;candidate.HeadSha;candidate.TreeSha;candidate.ManifestSha256;candidate.ContentSha256;candidate.MediaType;invariant candidate.SizeBytes;timeText candidate.RetainUntil;location]
+    let private routeParts (route:HostedRoutePlan) =
+        [string route.RouteId;Convert.ToBase64String(WorkItemIdentity.canonicalBytes route.WorkItemId);route.JobClass
+         Id.attemptValue route.AttemptId |> string;Id.candidateValue route.CandidateId |> string
+         route.RepositoryNodeId;route.BranchRef;route.ClaimResourceId
+         Id.operationValue route.ClaimOperationId |> string;Id.operationValue route.ProcessOperationId |> string
+         Id.operationValue route.CandidateOperationId |> string;Id.operationValue route.BranchOperationId |> string
+         Id.operationValue route.PullRequestOperationId |> string;Id.operationValue route.MergeOperationId |> string
+         Id.operationValue route.ReadbackOperationId |> string;generationText route.Generation
+         revisionText route.WorkflowRevision;timeText route.SelectedAt]
     let canonicalCommandBytes command =
         let parts =
             match command with
@@ -326,6 +571,7 @@ module Orchestration =
             | ReleaseReservation reason -> ["release-reservation";reason]
             | ObserveClaimReleased claim -> ["claim-released";claim]
             | RecordCompensationFailure(claim,reason) -> ["compensation-failed";claim;reason]
+            | SelectHostedRoute route -> "select-hosted-route"::routeParts route
             | StartAttempt(a,s,r) -> ["start-attempt";Id.attemptValue a |> string;Id.sessionValue s |> string;Id.runnerValue r.RunnerId |> string;r.PrincipalId;r.FingerprintSha256;generationText r.Generation;timeText r.ExpiresAt]
             | ObserveAttempt(a,status) -> ["observe-attempt";Id.attemptValue a |> string;sprintf "%A" status]
             | ChargeBudget b -> ["charge";invariant b.Tokens;invariant b.RuntimeSeconds;invariant b.CostMicros]
@@ -335,6 +581,18 @@ module Orchestration =
             | RecordEffectIntent i -> ["effect";Id.operationValue i.OperationId |> string;string i.Kind;generationText i.Generation;revisionText i.WorkflowRevision;i.ResourceId;i.PayloadSha256]
             | MarkEffectDispatching id -> ["dispatch-effect";Id.operationValue id |> string]
             | ObserveEffect(id,outcome) -> ["observe-effect";Id.operationValue id |> string;sprintf "%A" outcome]
+            | RecordHostedEffectReadback(id,readback) ->
+                ["hosted-effect-readback";Id.operationValue id |> string;Id.operationValue readback.OperationId |> string
+                 string readback.RouteId;Id.attemptValue readback.AttemptId |> string;Id.candidateValue readback.CandidateId |> string
+                 readback.RepositoryNodeId;readback.ProviderResourceId;Option.defaultValue "" readback.CandidateHeadSha
+                 Option.defaultValue "" readback.ResultSha;readback.ProviderRevision;generationText readback.Generation
+                 revisionText readback.WorkflowRevision;timeText readback.ObservedAt;string readback.Exists]
+            | RecordNativeDeliveryReadback(id,readback) ->
+                ["native-delivery-readback";Id.operationValue id |> string;Id.operationValue readback.OperationId |> string
+                 string readback.RouteId;Id.attemptValue readback.AttemptId |> string;Id.candidateValue readback.CandidateId |> string
+                 readback.RepositoryNodeId;readback.PullRequestNodeId;readback.CandidateHeadSha
+                 readback.ObservedPullRequestHeadSha;readback.MergeCommitSha;readback.ProviderRevision
+                 generationText readback.Generation;revisionText readback.WorkflowRevision;timeText readback.ObservedAt;string readback.Merged]
             | AuthorizeEffectRetry id -> ["authorize-effect-retry";Id.operationValue id |> string]
         frame parts |> Encoding.UTF8.GetBytes
     let canonicalCommandSha256 command = canonicalCommandBytes command |> SHA256.HashData |> Convert.ToHexString |> fun x -> x.ToLowerInvariant()

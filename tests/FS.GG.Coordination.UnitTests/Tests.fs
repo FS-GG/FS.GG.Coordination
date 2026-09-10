@@ -16,7 +16,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "a77921dadee641e12fd20929ffebd2b396c68847a969b0ce8e1cd9c3e4f4795c",
+        "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -157,8 +157,8 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
 
     let outputRoot = outputManifest.RootElement
     Assert.Equal("fsgg.quint.compiled-output-manifest/1", outputRoot.GetProperty("schema").GetString())
-    Assert.Equal("226ddc49e59dd2f8e9c140e57da92dda7f5a00cd02ccfb07885753117d2bd95b", outputRoot.GetProperty("sourceSha256").GetString())
-    Assert.Equal("66618eb8a45c1cea91eb74408d0f2d9851be53695af8383e3617cb12807fd648", outputRoot.GetProperty("behavioralSha256").GetString())
+    Assert.Equal("d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f", outputRoot.GetProperty("sourceSha256").GetString())
+    Assert.Equal("0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715", outputRoot.GetProperty("behavioralSha256").GetString())
     Assert.Equal(CoordinationProtocolGenerated.ContractFingerprint, outputRoot.GetProperty("contractSha256").GetString())
 
     let identity = outputRoot.GetProperty("identity")

@@ -50,6 +50,11 @@ module private Effect =
         | DispatchRunner -> 2uy
         | CancelRunner -> 3uy
         | InspectExternalOperation -> 4uy
+        | StoreCandidate -> 5uy
+        | PublishCandidateBranch -> 6uy
+        | CreatePullRequest -> 7uy
+        | MergePullRequest -> 8uy
+        | ReadNativeDelivery -> 9uy
 
     let byteToKind = function
         | 0uy -> Some AcquireExternalClaim
@@ -57,6 +62,11 @@ module private Effect =
         | 2uy -> Some DispatchRunner
         | 3uy -> Some CancelRunner
         | 4uy -> Some InspectExternalOperation
+        | 5uy -> Some StoreCandidate
+        | 6uy -> Some PublishCandidateBranch
+        | 7uy -> Some CreatePullRequest
+        | 8uy -> Some MergePullRequest
+        | 9uy -> Some ReadNativeDelivery
         | _ -> None
 
     let equal left right =

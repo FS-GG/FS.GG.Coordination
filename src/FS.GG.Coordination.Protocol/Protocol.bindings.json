@@ -202,7 +202,24 @@
           "column": 1
         },
         "end": {
-          "line": 1145,
+          "line": 1147,
+          "column": 4
+        }
+      }
+    },
+    {
+      "id": "EXPORT-HostedWriterSpecification",
+      "module": "CoordinationProtocol",
+      "declaration": "hostedWriterSpecificationCatalogue",
+      "promoteCatalogueRows": true,
+      "source": {
+        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+        "start": {
+          "line": 1148,
+          "column": 1
+        },
+        "end": {
+          "line": 1161,
           "column": 4
         }
       }

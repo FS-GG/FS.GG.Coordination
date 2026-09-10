@@ -20,6 +20,48 @@ let decide now state commandId _ command =
         {CommandId=commandId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation
          PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=command}
 let admit () = decide now initial (command "20000000-0000-0000-0000-000000000001") (digest "1") (Admit(snapshot ["board-a"],budget)) |> fun d -> apply d initial
+let hostedRoute (state:State) attemptId candidateId : HostedRoutePlan =
+    { RouteId=guid "90000000-0000-0000-0000-000000000001"; WorkItemId=work
+      JobClass="routine-documentation-delivery"; AttemptId=attemptId; CandidateId=candidateId
+      RepositoryNodeId="R_repo"; BranchRef="refs/heads/fsgg/pilot/recovery-evidence"; ClaimResourceId="pilot-claim"
+      ClaimOperationId=Id.operation(guid "71000000-0000-0000-0000-000000000001")
+      ProcessOperationId=Id.operation(guid "71000000-0000-0000-0000-000000000002")
+      CandidateOperationId=Id.operation(guid "71000000-0000-0000-0000-000000000003")
+      BranchOperationId=Id.operation(guid "71000000-0000-0000-0000-000000000004")
+      PullRequestOperationId=Id.operation(guid "71000000-0000-0000-0000-000000000005")
+      MergeOperationId=Id.operation(guid "71000000-0000-0000-0000-000000000006")
+      ReadbackOperationId=Id.operation(guid "71000000-0000-0000-0000-000000000007")
+      Generation=state.Generation; WorkflowRevision=Id.revision 8L; SelectedAt=now.AddMinutes(-1.) }
+let effect operationId kind resource (state:State) =
+    { OperationId=Id.operation(guid operationId); Kind=kind; Generation=state.Generation
+      WorkflowRevision=Id.revision 8L; ResourceId=resource; PayloadSha256=digest "e" }
+let routeEffect operationId kind resource (route:HostedRoutePlan) =
+    { OperationId=operationId; Kind=kind; Generation=route.Generation
+      WorkflowRevision=route.WorkflowRevision; ResourceId=resource; PayloadSha256=digest "e" }
+let recordDispatchReadback commandStem (route:HostedRoutePlan) (intent:EffectIntent) providerResource candidateHead resultSha state =
+    let recorded = decide now state (command ($"%s{commandStem}1")) "" (RecordEffectIntent intent) |> fun d -> apply d state
+    let dispatched = decide now recorded (command ($"%s{commandStem}2")) "" (MarkEffectDispatching intent.OperationId) |> fun d -> apply d recorded
+    let readback =
+        { OperationId=intent.OperationId;RouteId=route.RouteId;AttemptId=route.AttemptId;CandidateId=route.CandidateId
+          RepositoryNodeId=route.RepositoryNodeId;ProviderResourceId=providerResource
+          CandidateHeadSha=candidateHead;ResultSha=resultSha;ProviderRevision=$"provider-%A{intent.Kind}"
+          Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=now;Exists=true }
+    decide now dispatched (command ($"%s{commandStem}3")) "" (RecordHostedEffectReadback(intent.OperationId,readback)) |> fun d -> apply d dispatched
+let hostedReady () =
+    let admitted = admit()
+    let reservationId = Id.reservation(guid "31000000-0000-0000-0000-000000000001")
+    let reserved = decide now admitted (command "26000000-0000-0000-0000-000000000001") "" (Reserve(reservationId,now.AddMinutes 5.,Set.singleton "pilot-claim")) |> fun d -> apply d admitted
+    let attemptId = Id.attempt(guid "51000000-0000-0000-0000-000000000001")
+    let candidateId = Id.candidate(guid "83000000-0000-0000-0000-000000000001")
+    let route = hostedRoute reserved attemptId candidateId
+    let selected = decide now reserved (command "26000000-0000-0000-0000-000000000002") "" (SelectHostedRoute route) |> fun d -> apply d reserved
+    let claimIntent = routeEffect route.ClaimOperationId AcquireExternalClaim route.ClaimResourceId route
+    let claimedEffect = recordDispatchReadback "26100000-0000-0000-0000-00000000000" route claimIntent route.ClaimResourceId None None selected
+    let claim = { ClaimId=route.ClaimResourceId; Generation=route.Generation; WorkflowRevision=route.WorkflowRevision; ObservedAt=now }
+    let claimed = decide now claimedEffect (command "26000000-0000-0000-0000-000000000003") "" (ObserveClaim claim) |> fun d -> apply d claimedEffect
+    let runner = { RunnerId=Id.runner(guid "41000000-0000-0000-0000-000000000001"); PrincipalId="runner"; FingerprintSha256=digest "4"; Generation=claimed.Generation; ExpiresAt=now.AddMinutes 5. }
+    let active = decide now claimed (command "26000000-0000-0000-0000-000000000004") "" (StartAttempt(attemptId,Id.session(guid "61000000-0000-0000-0000-000000000001"),runner)) |> fun d -> apply d claimed
+    active,attemptId,candidateId,route
 
 module Cases =
     [<Fact>]
@@ -126,6 +168,102 @@ module Cases =
         let absent=decide now unknown (command "22000000-0000-0000-0000-000000000001") (digest "b") (ObserveEffect(oid,ProvenAbsent)) |> fun d -> apply d unknown
         let authorized=decide now absent (command "22000000-0000-0000-0000-000000000002") (digest "c") (AuthorizeEffectRetry oid) |> fun d -> apply d absent
         Assert.Equal(Accepted,(decide now authorized (command "22000000-0000-0000-0000-000000000003") (digest "d") (MarkEffectDispatching oid)).Receipt.Disposition)
+
+    [<Fact>]
+    let ``hosted writer effects require ordered durable stages`` () =
+        let active,attemptId,candidateId,route = hostedReady()
+        let storeIntent = routeEffect route.CandidateOperationId StoreCandidate (Id.candidateValue candidateId |> string) route
+        let premature = decide now active (command "27000000-0000-0000-0000-000000000001") "" (RecordEffectIntent storeIntent)
+        Assert.Equal("hosted-effect-predecessor-required",premature.Receipt.Detail)
+        let processIntent = routeEffect route.ProcessOperationId DispatchRunner (Id.attemptValue attemptId |> string) route
+        let processed = recordDispatchReadback "27100000-0000-0000-0000-00000000000" route processIntent (Id.attemptValue attemptId |> string) None None active
+        let recorded = decide now processed (command "27200000-0000-0000-0000-000000000001") "" (RecordEffectIntent storeIntent) |> fun d -> apply d processed
+        Assert.Equal(Accepted,(decide now recorded (command "27200000-0000-0000-0000-000000000002") "" (MarkEffectDispatching storeIntent.OperationId)).Receipt.Disposition)
+
+    [<Fact>]
+    let ``unknown hosted effect blocks replacement and later effects until proven absent`` () =
+        let active,attemptId,candidateId,route = hostedReady()
+        let processIntent = routeEffect route.ProcessOperationId DispatchRunner (Id.attemptValue attemptId |> string) route
+        let processed = recordDispatchReadback "27300000-0000-0000-0000-00000000000" route processIntent (Id.attemptValue attemptId |> string) None None active
+        let storeIntent = routeEffect route.CandidateOperationId StoreCandidate (Id.candidateValue candidateId |> string) route
+        let recorded = decide now processed (command "27400000-0000-0000-0000-000000000001") "" (RecordEffectIntent storeIntent) |> fun d -> apply d processed
+        let dispatch = decide now recorded (command "27400000-0000-0000-0000-000000000002") "" (MarkEffectDispatching storeIntent.OperationId) |> fun d -> apply d recorded
+        let unknown = decide now dispatch (command "27400000-0000-0000-0000-000000000003") "" (ObserveEffect(storeIntent.OperationId,Unknown "response-lost")) |> fun d -> apply d dispatch
+        let replacement = effect "72000000-0000-0000-0000-000000000003" StoreCandidate (Id.candidateValue candidateId |> string) unknown
+        Assert.NotEqual(Accepted,(decide now unknown (command "27400000-0000-0000-0000-000000000004") "" (RecordEffectIntent replacement)).Receipt.Disposition)
+        let absence =
+            { OperationId=storeIntent.OperationId;RouteId=route.RouteId;AttemptId=attemptId;CandidateId=candidateId
+              RepositoryNodeId=route.RepositoryNodeId;ProviderResourceId=storeIntent.ResourceId;CandidateHeadSha=None;ResultSha=None
+              ProviderRevision="provider-store-absent";Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=now;Exists=false }
+        let absent = decide now unknown (command "27400000-0000-0000-0000-000000000005") "" (RecordHostedEffectReadback(storeIntent.OperationId,absence)) |> fun d -> apply d unknown
+        let retried = decide now absent (command "27400000-0000-0000-0000-000000000006") "" (AuthorizeEffectRetry storeIntent.OperationId) |> fun d -> apply d absent
+        Assert.Equal(Accepted,(decide now retried (command "27400000-0000-0000-0000-000000000007") "" (MarkEffectDispatching storeIntent.OperationId)).Receipt.Disposition)
+
+    [<Fact>]
+    let ``adapter claim cannot complete hosted delivery without native readback`` () =
+        let active,attemptId,candidateId,route = hostedReady()
+        let processed = recordDispatchReadback "27500000-0000-0000-0000-00000000000" route (routeEffect route.ProcessOperationId DispatchRunner (Id.attemptValue attemptId |> string) route) (Id.attemptValue attemptId |> string) None None active
+        let contentDigest = digest "d"
+        let candidate = { CandidateId=candidateId;BaselineSha=String.replicate 40 "a";HeadSha=String.replicate 40 "b";TreeSha=String.replicate 40 "c";ManifestSha256=digest "c";ContentSha256=contentDigest;MediaType="application/vnd.git.bundle";SizeBytes=10L;RetainUntil=now.AddDays 1.;Location=ContentAddressedObject $"sha256/{contentDigest}" }
+        let proof = { CandidateId=candidateId;ContentSha256=candidate.ContentSha256;ManifestSha256=candidate.ManifestSha256;SizeBytes=candidate.SizeBytes;Location=candidate.Location;StoreId="postgresql-object-store";StoreSchemaVersion=1;StorageReceiptSha256=digest "e";VerifiedAt=now }
+        let stored = recordDispatchReadback "27600000-0000-0000-0000-00000000000" route (routeEffect route.CandidateOperationId StoreCandidate (Id.candidateValue candidateId |> string) route) (Id.candidateValue candidateId |> string) (Some candidate.HeadSha) (Some candidate.ContentSha256) processed
+        let accepted = decide now stored (command "27700000-0000-0000-0000-000000000001") "" (RecordCandidate(candidate,proof)) |> fun d -> apply d stored
+        let published = recordDispatchReadback "27800000-0000-0000-0000-00000000000" route (routeEffect route.BranchOperationId PublishCandidateBranch route.BranchRef route) route.BranchRef (Some candidate.HeadSha) (Some candidate.HeadSha) accepted
+        let opened = recordDispatchReadback "27900000-0000-0000-0000-00000000000" route (routeEffect route.PullRequestOperationId CreatePullRequest route.BranchRef route) "PR_node" (Some candidate.HeadSha) None published
+        let mergeSha=String.replicate 40 "f"
+        let merged = recordDispatchReadback "28000000-0000-0000-0000-00000000000" route (routeEffect route.MergeOperationId MergePullRequest route.BranchRef route) "PR_node" (Some candidate.HeadSha) (Some mergeSha) opened
+        let readIntent = routeEffect route.ReadbackOperationId ReadNativeDelivery route.BranchRef route
+        let recorded = decide now merged (command "28100000-0000-0000-0000-000000000001") "" (RecordEffectIntent readIntent) |> fun d -> apply d merged
+        let dispatched = decide now recorded (command "28100000-0000-0000-0000-000000000002") "" (MarkEffectDispatching readIntent.OperationId) |> fun d -> apply d recorded
+        Assert.Equal("hosted-effect-readback-required",(decide now dispatched (command "28100000-0000-0000-0000-000000000003") "" (ObserveEffect(readIntent.OperationId,Applied "adapter-says-merged"))).Receipt.Detail)
+        Assert.Equal("native-delivery-readback-required",(decide now dispatched (command "28100000-0000-0000-0000-000000000004") "" (ObserveAttempt(attemptId,Completed))).Receipt.Detail)
+        let readback = { OperationId=readIntent.OperationId;RouteId=route.RouteId;AttemptId=attemptId;CandidateId=candidateId;RepositoryNodeId=route.RepositoryNodeId;PullRequestNodeId="PR_node";CandidateHeadSha=candidate.HeadSha;ObservedPullRequestHeadSha=candidate.HeadSha;MergeCommitSha=mergeSha;ProviderRevision="github-pr-revision-1";Generation=dispatched.Generation;WorkflowRevision=Id.revision 8L;ObservedAt=now;Merged=true }
+        let wrongAttempt = {readback with AttemptId=Id.attempt(guid "51000000-0000-0000-0000-000000000099")}
+        let wrongCandidate = {readback with CandidateId=Id.candidate(guid "83000000-0000-0000-0000-000000000099")}
+        let wrongRepository = {readback with RepositoryNodeId="R_other"}
+        let wrongHead = {readback with ObservedPullRequestHeadSha=String.replicate 40 "e"}
+        let wrongMerge = {readback with MergeCommitSha=String.replicate 40 "e"}
+        let wrongGeneration = {readback with Generation=Id.generation 2L}
+        let stale = {readback with ObservedAt=route.SelectedAt.AddTicks(-1L)}
+        Assert.Equal(Rejected,(decide now dispatched (command "28100000-0000-0000-0000-000000000007") "" (RecordNativeDeliveryReadback(readIntent.OperationId,wrongAttempt))).Receipt.Disposition)
+        Assert.Equal(Rejected,(decide now dispatched (command "28100000-0000-0000-0000-000000000010") "" (RecordNativeDeliveryReadback(readIntent.OperationId,wrongCandidate))).Receipt.Disposition)
+        Assert.Equal(Rejected,(decide now dispatched (command "28100000-0000-0000-0000-000000000008") "" (RecordNativeDeliveryReadback(readIntent.OperationId,wrongRepository))).Receipt.Disposition)
+        Assert.Equal(Rejected,(decide now dispatched (command "28100000-0000-0000-0000-000000000011") "" (RecordNativeDeliveryReadback(readIntent.OperationId,wrongHead))).Receipt.Disposition)
+        Assert.Equal(Rejected,(decide now dispatched (command "28100000-0000-0000-0000-000000000012") "" (RecordNativeDeliveryReadback(readIntent.OperationId,wrongMerge))).Receipt.Disposition)
+        Assert.Equal(Rejected,(decide now dispatched (command "28100000-0000-0000-0000-000000000013") "" (RecordNativeDeliveryReadback(readIntent.OperationId,wrongGeneration))).Receipt.Disposition)
+        Assert.Equal(Rejected,(decide now dispatched (command "28100000-0000-0000-0000-000000000009") "" (RecordNativeDeliveryReadback(readIntent.OperationId,stale))).Receipt.Disposition)
+        let forgedCompletion =
+            { dispatched with
+                NativeDeliveryReadbacks=Map.add readIntent.OperationId wrongHead dispatched.NativeDeliveryReadbacks
+                Operations=Map.add readIntent.OperationId (Settled(readIntent,Applied wrongHead.ProviderRevision)) dispatched.Operations }
+        Assert.Equal("native-delivery-readback-required",(decide now forgedCompletion (command "28100000-0000-0000-0000-000000000014") "" (ObserveAttempt(attemptId,Completed))).Receipt.Detail)
+        let acceptedReadback = decide now dispatched (command "28100000-0000-0000-0000-000000000005") "" (RecordNativeDeliveryReadback(readIntent.OperationId,readback)) |> fun d -> apply d dispatched
+        Assert.Equal(Accepted,(decide now acceptedReadback (command "28100000-0000-0000-0000-000000000006") "" (ObserveAttempt(attemptId,Completed))).Receipt.Disposition)
+
+    [<Fact>]
+    let ``hosted predecessor receipts cannot be borrowed from another route identity or generation`` () =
+        let active,attemptId,_,route = hostedReady()
+        let processIntent = routeEffect route.ProcessOperationId DispatchRunner (Id.attemptValue attemptId |> string) route
+        let claimReceipt = active.HostedEffectReadbacks[route.ClaimOperationId]
+        let otherAttempt = {claimReceipt with AttemptId=Id.attempt(guid "51000000-0000-0000-0000-000000000098")}
+        let oldGeneration = {claimReceipt with Generation=Id.generation 0L}
+        let assertBlocked receipt =
+            let state = {active with HostedEffectReadbacks=Map.add route.ClaimOperationId receipt active.HostedEffectReadbacks}
+            Assert.Equal("hosted-effect-predecessor-required",(decide now state (command "28200000-0000-0000-0000-000000000001") "" (RecordEffectIntent processIntent)).Receipt.Detail)
+        assertBlocked otherAttempt
+        assertBlocked oldGeneration
+
+    [<Fact>]
+    let ``settled prior generation permits later resource while unresolved prior work blocks`` () =
+        let admitted = admit()
+        let first = effect "74000000-0000-0000-0000-000000000001" InspectExternalOperation "provider-resource" admitted
+        let recorded = decide now admitted (command "28300000-0000-0000-0000-000000000001") "" (RecordEffectIntent first) |> fun d -> apply d admitted
+        let nextGeneration = Id.generation 2L
+        let unresolved = evolve recorded (GenerationAdvanced nextGeneration)
+        let later = {effect "74000000-0000-0000-0000-000000000002" InspectExternalOperation "provider-resource" unresolved with Generation=nextGeneration}
+        Assert.Equal(Conflict,(decide now unresolved (command "28300000-0000-0000-0000-000000000002") "" (RecordEffectIntent later)).Receipt.Disposition)
+        let settled = evolve recorded (EffectSettled(first.OperationId,Applied "provider-revision-1")) |> fun state -> evolve state (GenerationAdvanced nextGeneration)
+        Assert.Equal(Accepted,(decide now settled (command "28300000-0000-0000-0000-000000000003") "" (RecordEffectIntent later)).Receipt.Disposition)
 
     [<Fact>]
     let ``dispatch effect cannot bypass work authorization guards`` () =
