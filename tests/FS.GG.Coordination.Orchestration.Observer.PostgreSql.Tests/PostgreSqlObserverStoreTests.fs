@@ -158,7 +158,7 @@ type PostgreSqlObserverStoreTests() =
             do! append (OpenSession(Fixture.sessionId, Fixture.projectId, Fixture.budget))
             let observation = Fixture.observation()
             do! append (RecordProjectObservation observation)
-            do! append (StartPlanningAttempt(Fixture.attemptId, Fixture.usage 40L 20L 400L, Fixture.now.AddSeconds -30.))
+            do! append (StartPlanningAttempt(Fixture.attemptId, Fixture.usage 40L 20L 400L, Fixture.now.AddSeconds -5.))
             let proposal =
                 { ProposalId = Fixture.proposalId; AttemptId = Fixture.attemptId; ObservationSha256 = observation.ObservationSha256
                   WorkflowRevision = Id.revision 7L; Generation = Id.generation 3L; Scope = "repo:123/issues"
