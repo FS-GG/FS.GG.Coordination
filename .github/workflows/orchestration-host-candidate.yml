@@ -1,0 +1,97 @@
+name: Orchestration host candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact protected-main host candidate commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orchestration-host-candidate-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish-and-readback:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-host-candidate
+      SERVED_OUTPUT: /tmp/fsgg-${{ github.run_id }}-host-served
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-host-nuget
+    steps:
+      - name: Check out the exact protected candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - name: Bind exact protected-main authority
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+      - name: Build twice and prepare one canonical candidate
+        env:
+          DOTNET_ROLL_FORWARD: Disable
+        run: >-
+          python3 eng/orchestration-host-candidate.py prepare
+          --repo .
+          --candidate "${{ github.sha }}"
+          --protected-ref refs/remotes/origin/main
+          --output "$CANDIDATE_OUTPUT"
+      - name: Verify prepared candidate
+        run: >-
+          python3 eng/orchestration-host-candidate.py verify
+          --prepared "$CANDIDATE_OUTPUT/prepared.json"
+      - name: Upload the one immutable host candidate
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: orchestration-host-linux-x64-${{ github.sha }}
+          path: |
+            ${{ env.CANDIDATE_OUTPUT }}/fsgg-coord-orchestration-host-linux-x64-${{ github.sha }}.zip
+            ${{ env.CANDIDATE_OUTPUT }}/manifest.json
+            ${{ env.CANDIDATE_OUTPUT }}/prepared.json
+            ${{ env.CANDIDATE_OUTPUT }}/provenance.intoto.json
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Download the served candidate into a fresh directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: orchestration-host-linux-x64-${{ github.sha }}
+          path: ${{ env.SERVED_OUTPUT }}
+      - name: Rehash and execute the served candidate
+        run: >-
+          python3 eng/orchestration-host-candidate.py verify-served
+          --prepared "$CANDIDATE_OUTPUT/prepared.json"
+          --served "$SERVED_OUTPUT/fsgg-coord-orchestration-host-linux-x64-${{ github.sha }}.zip"
+          --artifact-id "${{ steps.upload.outputs.artifact-id }}"
+          --artifact-name "orchestration-host-linux-x64-${{ github.sha }}"
+          --artifact-url "${{ steps.upload.outputs.artifact-url }}"
+          --artifact-digest "${{ steps.upload.outputs.artifact-digest }}"
+          --output "$SERVED_OUTPUT/verification"
+      - name: Retain terminal served verification
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: orchestration-host-verification-${{ github.sha }}
+          path: ${{ env.SERVED_OUTPUT }}/verification/verification.json
+          if-no-files-found: error
+          retention-days: 90
