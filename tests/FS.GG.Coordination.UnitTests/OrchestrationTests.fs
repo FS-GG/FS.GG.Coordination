@@ -16,7 +16,9 @@ let snapshot boards =
 let budget={TokenLimit=100L;RuntimeSecondsLimit=200L;CostMicrosLimit=300L;Deadline=now.AddHours 1.}
 let apply decision state = List.fold evolve state decision.Events
 let decide now state commandId _ command =
-    FS.GG.Coordination.Core.Orchestration.decide now state commandId (canonicalCommandSha256 command) command
+    FS.GG.Coordination.Core.Orchestration.decide now state
+        {CommandId=commandId;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation
+         PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=command}
 let admit () = decide now initial (command "20000000-0000-0000-0000-000000000001") (digest "1") (Admit(snapshot ["board-a"],budget)) |> fun d -> apply d initial
 
 module Cases =
@@ -30,21 +32,24 @@ module Cases =
     [<Fact>]
     let ``duplicate command is idempotent and changed content conflicts`` () =
         let cid=command "20000000-0000-0000-0000-000000000002"
-        let state=decide now initial cid (digest "2") (Admit(snapshot [],budget)) |> fun d -> apply d initial
-        let duplicate=decide now state cid (digest "2") (Admit(snapshot [],budget))
-        let conflict=decide now state cid (digest "3") (Pause "changed-body")
+        let envelope={CommandId=cid;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=Admit(snapshot [],budget)}
+        let first=FS.GG.Coordination.Core.Orchestration.decide now initial envelope
+        let state=apply first initial
+        let duplicate=FS.GG.Coordination.Core.Orchestration.decide now state envelope
+        let conflict=FS.GG.Coordination.Core.Orchestration.decide now state {envelope with Command=Pause "changed-body"}
         Assert.Equal(Duplicate,duplicate.Receipt.Disposition); Assert.Empty duplicate.Events
         Assert.Equal(Conflict,conflict.Receipt.Disposition); Assert.Empty conflict.Events
 
     [<Fact>]
-    let ``command digest case normalizes before durable deduplication`` () =
+    let ``command envelope computes stable lowercase digest inside boundary`` () =
         let cid=command "20000000-0000-0000-0000-000000000016"
         let body=Admit(snapshot [],budget)
-        let upper=(canonicalCommandSha256 body).ToUpperInvariant()
-        let accepted=FS.GG.Coordination.Core.Orchestration.decide now initial cid upper body
+        let envelope={CommandId=cid;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=body}
+        let accepted=FS.GG.Coordination.Core.Orchestration.decide now initial envelope
         let state=apply accepted initial
-        Assert.Equal((canonicalCommandSha256 body),(Map.find cid state.CommandReceipts).BodySha256)
-        Assert.Equal(Duplicate,(FS.GG.Coordination.Core.Orchestration.decide now state cid (canonicalCommandSha256 body) body).Receipt.Disposition)
+        let stored=(Map.find cid state.CommandReceipts).BodySha256
+        Assert.Equal(stored,stored.ToLowerInvariant())
+        Assert.Equal(Duplicate,(FS.GG.Coordination.Core.Orchestration.decide now state envelope).Receipt.Disposition)
 
     [<Fact>]
     let ``reservation or claim alone cannot dispatch and current pair can`` () =
@@ -118,17 +123,14 @@ module Cases =
         Assert.Equal("effect-not-authorized",(decide now recorded (command "23000000-0000-0000-0000-000000000002") (digest "f") (MarkEffectDispatching oid)).Receipt.Detail)
 
     [<Fact>]
-    let ``changed command body cannot reuse a caller supplied digest`` () =
+    let ``changed command body cannot reuse a command identity`` () =
         let cid=command "24000000-0000-0000-0000-000000000001"
         let original=Pause "first"
-        let claimed=canonicalCommandSha256 original
-        let invalid=FS.GG.Coordination.Core.Orchestration.decide now (admit()) cid claimed (Pause "changed")
-        Assert.Equal("invalid-command-digest",invalid.Receipt.Detail)
-        let accepted=decide now (admit()) cid (digest "a") original
-        let persisted=apply accepted (admit())
-        let forgedDuplicate=FS.GG.Coordination.Core.Orchestration.decide now persisted cid claimed (Pause "changed")
-        Assert.Equal(Rejected,forgedDuplicate.Receipt.Disposition)
-        Assert.Equal("invalid-command-digest",forgedDuplicate.Receipt.Detail)
+        let state=admit()
+        let accepted=decide now state cid (digest "a") original
+        let persisted=apply accepted state
+        let changed=decide now persisted cid (digest "b") (Pause "changed")
+        Assert.Equal(Conflict,changed.Receipt.Disposition)
 
     [<Fact>]
     let ``work item node framing rejects delimiter injection`` () =

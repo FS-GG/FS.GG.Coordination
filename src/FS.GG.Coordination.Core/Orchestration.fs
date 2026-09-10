@@ -123,6 +123,10 @@ module Orchestration =
         | ConfirmCancelled of string | Revoke of string | RecordCandidate of CandidateArtifact * CandidateStorageReceipt
         | RecordEffectIntent of EffectIntent | MarkEffectDispatching of OperationId
         | ObserveEffect of OperationId * EffectOutcome | AuthorizeEffectRetry of OperationId
+    type CommandEnvelope =
+        { CommandId: CommandId; ExpectedRevision: WorkflowRevision; ExpectedGeneration: Generation
+          PrincipalId: string; SessionId: SessionId option; IssuedAt: DateTimeOffset
+          ExpiresAt: DateTimeOffset; Command: Command }
     type Event =
         | WorkAdmitted of PlanningSnapshot * Budget | GenerationAdvanced of Generation
         | ReservationCreated of Reservation | ReservationReleased of ReservationId * string * claimsToCompensate:Set<string>
@@ -330,16 +334,29 @@ module Orchestration =
             | AuthorizeEffectRetry id -> ["authorize-effect-retry";Id.operationValue id |> string]
         frame parts |> Encoding.UTF8.GetBytes
     let canonicalCommandSha256 command = canonicalCommandBytes command |> SHA256.HashData |> Convert.ToHexString |> fun x -> x.ToLowerInvariant()
+    let canonicalEnvelopeBytes envelope =
+        frame
+            [ Id.commandValue envelope.CommandId |> string; revisionText envelope.ExpectedRevision
+              generationText envelope.ExpectedGeneration; envelope.PrincipalId
+              envelope.SessionId |> Option.map(Id.sessionValue >> string) |> Option.defaultValue ""
+              timeText envelope.IssuedAt; timeText envelope.ExpiresAt
+              Convert.ToBase64String(canonicalCommandBytes envelope.Command) ]
+        |> Encoding.UTF8.GetBytes
+    let canonicalEnvelopeSha256 envelope =
+        canonicalEnvelopeBytes envelope |> SHA256.HashData |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
 
-    let decide now state commandId bodySha256 command =
-        let canonicalDigest=canonicalCommandSha256 command
-        if not(validSha bodySha256) || not(bodySha256.Equals(canonicalDigest,StringComparison.OrdinalIgnoreCase)) then
-            {Events=[];Effects=[];Receipt=mkReceipt state commandId bodySha256 Rejected "invalid-command-digest"}
-        else
-            match Map.tryFind commandId state.CommandReceipts with
-            | Some prior when prior.BodySha256=canonicalDigest -> {Events=[];Effects=[];Receipt={prior with Disposition=Duplicate;Detail="duplicate-command"}}
-            | Some prior -> {Events=[];Effects=[];Receipt={prior with Disposition=Conflict;Detail="command-identity-conflict"}}
-            | None -> decideNew now state commandId canonicalDigest command
+    let decide now state envelope =
+        let digest=canonicalEnvelopeSha256 envelope
+        match Map.tryFind envelope.CommandId state.CommandReceipts with
+        | Some prior when prior.BodySha256=digest -> {Events=[];Effects=[];Receipt={prior with Disposition=Duplicate;Detail="duplicate-command"}}
+        | Some prior -> {Events=[];Effects=[];Receipt={prior with Disposition=Conflict;Detail="command-identity-conflict"}}
+        | None when String.IsNullOrWhiteSpace envelope.PrincipalId || envelope.ExpiresAt<now || envelope.IssuedAt>now ->
+            {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "invalid-or-expired-command-envelope"}
+        | None when envelope.ExpectedRevision<>state.Revision ->
+            {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "stale-workflow-revision"}
+        | None when envelope.ExpectedGeneration<>state.Generation ->
+            {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "stale-generation"}
+        | None -> decideNew now state envelope.CommandId digest envelope.Command
 
     [<RequireQualifiedAccess>]
     module CandidateArtifact =
