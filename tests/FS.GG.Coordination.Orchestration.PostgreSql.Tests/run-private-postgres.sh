@@ -33,7 +33,7 @@ if [[ "$o0_mode" == docker ]]; then
       docker logs "$o0_container" >&2 || true
       exit 1
     fi
-    if docker exec "$o0_container" pg_isready -U "$o0_user" -d orchestration_o0 >/dev/null 2>&1; then
+    if docker exec "$o0_container" pg_isready -h 127.0.0.1 -p 5432 -U "$o0_user" -d orchestration_o0 >/dev/null 2>&1; then
       o0_ready=true
       break
     fi
@@ -45,6 +45,7 @@ if [[ "$o0_mode" == docker ]]; then
     docker logs "$o0_container" >&2 || true
     exit 1
   fi
+  docker exec "$o0_container" pg_isready -h 127.0.0.1 -p 5432 -U "$o0_user" -d orchestration_o0 >/dev/null
   export FSGG_PG_MODE=docker FSGG_PG_HOST=127.0.0.1 FSGG_PG_PORT="$o0_port"
   export FSGG_PG_USERNAME="$o0_user" FSGG_PG_CONTAINER="$o0_container" FSGG_PG_ROOT=/tmp
 else
