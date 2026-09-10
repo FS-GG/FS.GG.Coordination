@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Akka.Persistence" Version="1.5.71" />
+    <PackageVersion Include="FSharp.Core" Version="10.1.302" />
+    <PackageVersion Include="Temporalio" Version="1.18.0" />
+  </ItemGroup>
+</Project>

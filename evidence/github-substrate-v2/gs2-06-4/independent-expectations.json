@@ -35,8 +35,10 @@
     "renovate-container"
   ],
   "automatedUpdater": "renovate",
-  "managers": ["github-actions"],
-  "expectedSeal": "1f749755a9f3440dde7762f3e15a1f30c54a0c9377b6f78c19250bb45ce7df89",
+  "managers": [
+    "github-actions"
+  ],
+  "expectedSeal": "749f50eedd567f3927668fc1b7c175f628550972e6dcf96660af6179676d675b",
   "controls": [
     "prerequisite-receipt",
     "corpus-completeness",

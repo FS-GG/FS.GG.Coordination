@@ -4,6 +4,7 @@
     <Compile Include="QualificationReuseSelectionTests.fs" />
     <Compile Include="OrganizationIssueFieldsTests.fs" />
     <Compile Include="WorkTaxonomyTests.fs" />
+    <Compile Include="OrchestrationTests.fs" />
     <Compile Include="GitHubIssueFieldTests.fs" />
     <Compile Include="GitHubNativeRelationTests.fs" />
     <Compile Include="GitHubProjectAdapterTests.fs" />

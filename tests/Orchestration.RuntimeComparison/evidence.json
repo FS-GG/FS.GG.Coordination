@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-10",
+  "baseCommit": "5ac962e2b72eb9145163ae443d48e26b408e1059",
+  "environment": {
+    "os": "linux-x64",
+    "dotnetSdk": "10.0.400",
+    "dotnetHost": "/tmp/fsgg-dotnet-10.0.400/dotnet",
+    "akkaPersistence": "1.5.71",
+    "temporalio": "1.18.0",
+    "temporalCli": "1.8.3",
+    "temporalServer": "1.31.2",
+    "temporalUi": "2.50.1"
+  },
+  "commands": {
+    "restore": "/tmp/fsgg-dotnet-10.0.400/dotnet restore Orchestration.RuntimeComparison.csproj --use-lock-file --force-evaluate",
+    "build": "/tmp/fsgg-dotnet-10.0.400/dotnet build Orchestration.RuntimeComparison.csproj --configuration Release --no-restore",
+    "run": "/tmp/fsgg-dotnet-10.0.400/dotnet run --project Orchestration.RuntimeComparison.csproj --configuration Release --no-build",
+    "fsharpInterop": "/tmp/fsgg-dotnet-10.0.400/dotnet build FSharpInterop/FSharpInterop.fsproj --configuration Release --no-restore"
+  },
+  "measurements": {
+    "packageCacheWarmRestoreWallMs": 643,
+    "releaseBuildWallMs": 1474,
+    "fsharpInteropBuildWallMs": 1244,
+    "fiveRunWallMs": [1562, 1513, 1553, 1405, 1443],
+    "fiveRunMedianWallMs": 1513,
+    "akka": {
+      "startupMs": [121.0, 84.7, 93.2, 88.8, 88.1],
+      "medianStartupMs": 88.8,
+      "replayMs": [3.5, 3.2, 3.1, 2.9, 3.5],
+      "medianReplayMs": 3.2,
+      "scenarioChecks": 11,
+      "nonBlankCandidateLines": 119
+    },
+    "temporal": {
+      "startupMs": [150.8, 152.5, 163.4, 148.7, 150.9],
+      "medianStartupMs": 150.9,
+      "workerResumeMs": [12.9, 8.7, 9.7, 7.9, 8.9],
+      "medianWorkerResumeMs": 8.9,
+      "scenarioChecks": 8,
+      "nonBlankCandidateLines": 90
+    },
+    "sharedHarnessNonBlankLines": 59,
+    "fsharpInteropNonBlankLines": 14,
+    "packageCacheFootprint": {
+      "akkaAndAkkaPersistence": "3.96 MiB",
+      "temporalioAllBundledRuntimes": "327 MiB"
+    }
+  },
+  "executedCoverage": [
+    "duplicate workflow or command identity",
+    "same-identity changed-content conflict in the Akka application boundary",
+    "actor termination and same-system journal replay",
+    "Temporal worker shutdown and replacement-worker resume",
+    "unknown provider completion requiring observation before retry",
+    "cancellation",
+    "version 1 and version 2 application schema acceptance",
+    "unsupported application schema refusal",
+    "Temporal deterministic history replay",
+    "two concurrent child lifecycles with cancellation and completion",
+    "250 ms deliberately idle recovery interval"
+  ],
+  "limitations": [
+    "Akka used its documented non-durable in-memory journal; no CLR or host process crash was proved.",
+    "Temporal used the official local dev server with in-memory persistence; no Temporal server crash or restart was proved.",
+    "The 250 ms idle interval tests resumption after worker or actor absence, not calendar-scale downtime.",
+    "No PostgreSQL adapter, transaction semantics, backup restore, failover, migration, or production topology was exercised.",
+    "No external provider call was made; neither runtime received credit for atomic external effects.",
+    "Temporal workflow-ID rejection does not compare duplicate payload bytes; content conflicts still need an application receipt.",
+    "The lifecycle harness is C# because both SDKs document C# first; the separate F# project proves direct type and attribute compilation only."
+  ],
+  "recommendation": "akka-net",
+  "recommendationStatus": "bounded-runtime-selection-only"
+}
