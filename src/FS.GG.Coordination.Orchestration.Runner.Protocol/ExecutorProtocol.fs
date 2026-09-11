@@ -48,6 +48,9 @@ module ExecutorWire =
     let private responseProperties=set ["schema";"commandId";"bodySha256";"kind";"provider";"adapterVersion";"authenticationState";"authenticationProvenance";"supportsResume";"providerSessionReference";"lifecycle";"requestedModel";"requestedEffort";"resolvedModel";"resolvedEffort";"output";"lifecycleReferences";"usage";"invocationCostState";"invocationCostAmount";"invocationCostCurrency";"invocationCostProvenance";"broaderCostState";"broaderCostAmount";"broaderCostCurrency";"broaderCostProvenance";"candidateId";"candidateHeadSha";"candidateTreeSha";"observedAt";"detail"]
     let private validText maximum (value:string)=not(String.IsNullOrWhiteSpace value)&&value=value.Trim()&&value.Length<=maximum
     let private validGuid value=value<>Guid.Empty
+    let private validGitObject (value:string)=
+        not(isNull value) && (value.Length=40 || value.Length=64)
+        && value |> Seq.forall(fun character->Char.IsAsciiHexDigit character && not(Char.IsUpper character))
     let private closed<'T> properties maximumBytes bytes=RunnerWire.deserializeClosed<'T> properties maximumBytes bytes
     let commandDigest (value:ExecutorCommand)=RunnerWire.serialize {value with BodySha256=""}|>RunnerWire.sha256
     let encodeCommand (value:ExecutorCommand)=RunnerWire.serialize value
@@ -92,7 +95,8 @@ module ExecutorWire =
                     (set ["starting";"running";"cancelling";"succeeded";"failed";"cancelled";"deadline-exceeded";"outcome-unknown"]).Contains value.Lifecycle
                     && validText 512 value.ProviderSessionReference
                     && ((value.CandidateId=Guid.Empty && isNull value.CandidateHeadSha && isNull value.CandidateTreeSha)
-                        || (value.CandidateId<>Guid.Empty && RunnerWire.validSha256 value.CandidateHeadSha && RunnerWire.validSha256 value.CandidateTreeSha))
+                        || (value.CandidateId<>Guid.Empty && validGitObject value.CandidateHeadSha && validGitObject value.CandidateTreeSha
+                            && value.CandidateHeadSha.Length=value.CandidateTreeSha.Length))
                 | _ -> false
             if value.Schema = responseSchema
                && validGuid value.CommandId

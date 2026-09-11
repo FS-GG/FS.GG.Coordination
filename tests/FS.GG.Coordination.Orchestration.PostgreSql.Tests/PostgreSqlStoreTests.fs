@@ -805,7 +805,8 @@ type PostgreSqlStoreTests() =
         let nonSubscription=
             { response with Kind="session-observation";Provider="deepseek";AdapterVersion="http-fixture/1";ProviderSessionReference="opaque-session"
                             Lifecycle="succeeded";InvocationCostState="known";InvocationCostAmount=Nullable 0.125M;InvocationCostCurrency="USD";InvocationCostProvenance="provider-receipt"
-                            BroaderCostState="not-applicable";BroaderCostProvenance="no-broader-attribution" }
+                            BroaderCostState="not-applicable";BroaderCostProvenance="no-broader-attribution"
+                            CandidateId=Guid.NewGuid();CandidateHeadSha=String.replicate 40 "a";CandidateTreeSha=String.replicate 40 "b" }
         Assert.Equal(nonSubscription,ExecutorWire.parseResponse(ExecutorWire.encodeResponse nonSubscription) |> Result.defaultWith failwith)
         Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {nonSubscription with InvocationCostCurrency=null}) |> Result.isError)
         Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {nonSubscription with Lifecycle="complete-ish"}) |> Result.isError)
