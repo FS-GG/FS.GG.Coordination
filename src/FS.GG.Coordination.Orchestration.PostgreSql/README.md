@@ -18,6 +18,11 @@ attribution remains `unknown`. Late or over-limit accounting is retained and
 does not release capacity: only a later terminal/reconciliation boundary may
 do that. These tables are included by the existing whole-schema PostgreSQL
 backup, and the runner is never given database credentials.
+Admission receives independent ordinary and recovery capacities, so `(1, 1)`
+means one ordinary slot plus one reserved recovery slot; recovery capacity is
+not subtracted from the ordinary value. Execution schema 2 is an explicit
+shared-store upgrade, and a schema-1 runtime refuses that store rather than
+silently ignoring the new authority tables.
 
 This non-packable O0 adapter treats `fsgg_orchestration.event`, `stream`, and
 `inbox` as the only authoritative domain history. An append locks the stream
