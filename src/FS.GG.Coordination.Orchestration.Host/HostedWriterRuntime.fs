@@ -11,6 +11,7 @@ open FS.GG.Coordination.Orchestration.PostgreSql
 
 type WorkItemRecovery =
     { PersistenceId: string
+      Sequence: int64
       State: State
       UnsettledEffects: EffectIntent list
       RequiresExternalReconciliation: bool }
@@ -128,16 +129,17 @@ module HostedWriterJournal =
                 return
                     Ok
                         { PersistenceId = persistenceId
+                          Sequence = value.Events |> List.tryLast |> Option.map _.Sequence |> Option.defaultValue 0L
                           State = replay events
                           UnsettledEffects = value.UnsettledEffects
                           RequiresExternalReconciliation = value.RequiresExternalReconciliation } }
 
-    let appendRequest persistenceId receivedAt (state: State) (envelope: CommandEnvelope) (decision: Decision) =
+    let appendRequest persistenceId receivedAt expectedSequence (envelope: CommandEnvelope) (decision: Decision) =
         let bodySha256 = canonicalEnvelopeSha256 envelope
         let events =
             decision.Events
             |> List.mapi(fun index eventValue ->
-                let sequence = Id.revisionValue state.Revision + int64 index + 1L
+                let sequence = expectedSequence + int64 index + 1L
                 let payload = EventEnvelope.encode eventValue
                 { PersistenceId = persistenceId
                   Sequence = sequence
@@ -153,7 +155,7 @@ module HostedWriterJournal =
               CommandId = envelope.CommandId
               BodySha256 = bodySha256
               ReceivedAt = receivedAt }
-          ExpectedSequence = Id.revisionValue state.Revision
+          ExpectedSequence = expectedSequence
           Events = events }
 
     let decideAndAppend (clock: TimeProvider) (store: IJournalStore) workItemId envelope cancellationToken = task {
@@ -162,7 +164,7 @@ module HostedWriterJournal =
         | Error failures -> return Error(sprintf "%A" failures)
         | Ok recovery ->
             let decision = decide (clock.GetUtcNow()) recovery.State envelope
-            let request = appendRequest recovery.PersistenceId (clock.GetUtcNow()) recovery.State envelope decision
+            let request = appendRequest recovery.PersistenceId (clock.GetUtcNow()) recovery.Sequence envelope decision
             let! appended = store.Append(request, cancellationToken)
             match appended with
             | Appended sequence | Duplicate sequence -> return Ok(decision, sequence)

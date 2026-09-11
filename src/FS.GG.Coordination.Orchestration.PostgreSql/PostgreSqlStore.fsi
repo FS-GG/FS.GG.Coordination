@@ -20,6 +20,7 @@ type StoreOptions =
 
 [<RequireQualifiedAccess>]
 module EventEnvelope =
+    val legacySerializerVersion: string
     val serializerVersion: string
     val encode: Event -> byte array
     val tryDecode: byte array -> Result<Event,string>

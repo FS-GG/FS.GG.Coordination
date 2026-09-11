@@ -13,6 +13,7 @@
     <Compile Include="HostConfiguration.fs" />
     <Compile Include="HostInitialization.fs" />
     <Compile Include="HostedWriterRuntime.fs" />
+    <Compile Include="RunnerWireRuntime.fs" />
     <Compile Include="HostRuntime.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
@@ -20,5 +21,6 @@
     <ProjectReference Include="..\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Pilot\FS.GG.Coordination.Orchestration.Pilot.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.PostgreSql\FS.GG.Coordination.Orchestration.PostgreSql.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Runner.Protocol\FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj" />
   </ItemGroup>
 </Project>

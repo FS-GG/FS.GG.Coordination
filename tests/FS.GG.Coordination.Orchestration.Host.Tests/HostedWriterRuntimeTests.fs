@@ -110,8 +110,8 @@ let ``work item append binds deterministic event ids and effect metadata`` () =
         { Events = [ EffectIntentRecorded intent; EffectSettled(operationId, Applied "revision"); CommandRecorded receipt ]
           Effects = [ intent ]; Receipt = receipt }
     let persistenceId = WorkItemIdentity.persistenceId Fixture.workItem
-    let first = HostedWriterJournal.appendRequest persistenceId Fixture.now initial envelope decision
-    let replay = HostedWriterJournal.appendRequest persistenceId Fixture.now initial envelope decision
+    let first = HostedWriterJournal.appendRequest persistenceId Fixture.now 0L envelope decision
+    let replay = HostedWriterJournal.appendRequest persistenceId Fixture.now 0L envelope decision
     Assert.Equal(first, replay)
     Assert.Equal<EffectChange list>([ IntentAdded intent; Settled operationId; NoEffect ], first.Events |> List.map _.EffectChange)
     Assert.All(first.Events, fun stored -> Assert.NotEqual(Guid.Empty, stored.EventId))
@@ -160,7 +160,7 @@ let ``work item recovery replays typed events and retains unsettled provider wor
     let decision =
         { Events=[WorkAdmitted(snapshot,budget);EffectIntentRecorded intent;CommandRecorded receipt]
           Effects=[];Receipt=receipt }
-    let stored = HostedWriterJournal.appendRequest persistenceId Fixture.now initial envelope decision
+    let stored = HostedWriterJournal.appendRequest persistenceId Fixture.now 0L envelope decision
     let store = FixedStore
                     { Events=stored.Events;Snapshot=None;UnsettledEffects=[intent]
                       RequiresExternalReconciliation=true }

@@ -56,12 +56,20 @@ module private Fixture =
             member _.SaveSnapshot(_, _) = Task.FromResult(Ok())
             member _.SaveProjectionCheckpoint(_, _) = Task.FromResult(Ok()) }
 
+    let unusedCandidates =
+        { new ICandidateStore with
+            member _.Put(_,_) = Task.FromResult(Error CapacityRefused)
+            member _.Read(_,_) = Task.FromResult(Error "unused")
+            member _.Quarantine(_,_,_) = Task.FromResult(Error "unused")
+            member _.CleanupUnreferenced(_,_,_) = Task.FromResult 0 }
+
     let durableStore state =
         let accepted = Dictionary<Guid, string * int64>()
         let appended = ResizeArray<PilotAppendRequest>()
         let store =
             { CheckReadiness = fun _ -> Task.FromResult(Ok())
               WorkItems = unusedWorkItems
+              Candidates = unusedCandidates
               Recover = fun _ _ -> Task.FromResult(Ok { Events = []; State = state })
               Append = fun request _ ->
                   let digest = PilotCodec.commandSha256 request.Command
@@ -86,6 +94,7 @@ let ``status is ready but remains default paused with dispatch disabled`` () = t
     let store =
         { CheckReadiness = fun _ -> Task.FromResult(Ok())
           WorkItems = Fixture.unusedWorkItems
+          Candidates = Fixture.unusedCandidates
           Recover = fun _ _ -> Task.FromResult(Ok { Events = []; State = { Fixture.pilotOwned with ReadbackCurrent = false } })
           Append = fun _ _ -> Task.FromResult(PilotInvalidAppend "unused") }
     let! status = HostRuntime.status store Fixture.permitId CancellationToken.None
@@ -101,6 +110,7 @@ let ``storage readiness failure prevents pilot recovery`` () = task {
     let store =
         { CheckReadiness = fun _ -> Task.FromResult(Error [ ReadOnlyStore ])
           WorkItems = Fixture.unusedWorkItems
+          Candidates = Fixture.unusedCandidates
           Recover = fun _ _ -> recovered <- true; Task.FromResult(Ok { Events = []; State = Pilot.initial })
           Append = fun _ _ -> Task.FromResult(PilotInvalidAppend "unused") }
     let! status = HostRuntime.status store Fixture.permitId CancellationToken.None
@@ -169,14 +179,16 @@ let ``serve configuration requires private files loopback and explicit identitie
     let root = Path.Combine(Path.GetTempPath(), "fsgg-host-test-" + Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory root |> ignore
     try
-        let connection, token = Path.Combine(root, "connection"), Path.Combine(root, "token")
+        let connection, token, runnerToken = Path.Combine(root, "connection"), Path.Combine(root, "token"), Path.Combine(root,"runner-token")
         File.WriteAllText(connection, "Host=127.0.0.1;Database=fixture")
         File.WriteAllText(token, String.replicate 32 "t")
+        File.WriteAllText(runnerToken, String.replicate 32 "r")
         if OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() then
             File.SetUnixFileMode(connection, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
             File.SetUnixFileMode(token, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            File.SetUnixFileMode(runnerToken, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
         let arguments =
-            [| "--connection-file"; connection; "--token-file"; token; "--prefix"; "http://127.0.0.1:5109/"
+            [| "--connection-file"; connection; "--token-file"; token; "--runner-token-file"; runnerToken; "--prefix"; "http://127.0.0.1:5109/"
                "--store-id"; "main-pilot"; "--backup-identity"; Guid.NewGuid().ToString()
                "--minimum-generation-fence"; "3"; "--permit-id"; Fixture.permitId.ToString()
                "--pilot-principal"; "pilot-route"
@@ -185,10 +197,10 @@ let ``serve configuration requires private files loopback and explicit identitie
         Assert.True(HostConfiguration.parseServe arguments |> Result.isOk)
         Assert.Equal(Error "duplicate-option", HostConfiguration.parseServe (Array.append arguments [| "--permit-id"; Fixture.permitId.ToString() |]))
         let publicArguments = arguments |> Array.copy
-        publicArguments[5] <- "http://0.0.0.0:5109/"
+        publicArguments[7] <- "http://0.0.0.0:5109/"
         Assert.Equal(Error "prefix-must-be-loopback-http-root", HostConfiguration.parseServe publicArguments)
         let queryArguments = arguments |> Array.copy
-        queryArguments[5] <- "http://127.0.0.1:5109/?token=forbidden"
+        queryArguments[7] <- "http://127.0.0.1:5109/?token=forbidden"
         Assert.Equal(Error "prefix-must-be-loopback-http-root", HostConfiguration.parseServe queryArguments)
         let tokenLink = Path.Combine(root, "token-link")
         File.CreateSymbolicLink(tokenLink, token) |> ignore
@@ -208,7 +220,7 @@ let private freePrefix () =
 let ``http host bounds malformed and slow control requests without stopping status`` () = task {
     let prefix, token = freePrefix(), String.replicate 32 "z"
     let configuration =
-        { ConnectionString = "unused"; Token = token; Prefix = prefix; StoreId = "fixture"
+        { ConnectionString = "unused"; Token = token; RunnerToken=String.replicate 32 "r"; Prefix = prefix; StoreId = "fixture"
           BackupIdentity = Guid.NewGuid().ToString(); MinimumGenerationFence = 0L; PermitId = Fixture.permitId
           PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.permit.SubjectId
           RequestTimeout = TimeSpan.FromMilliseconds 150.; MaximumConcurrentRequests = 2 }
@@ -219,6 +231,14 @@ let ``http host bounds malformed and slow control requests without stopping stat
     use client = new HttpClient()
     let! denied = client.GetAsync(prefix + "v1/status")
     Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode)
+    use runnerBody = new StringContent("{}", Encoding.UTF8, "application/json")
+    client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", token)
+    let! operatorDeniedOnRunner = client.PostAsync(prefix + "v1/runner/assignment", runnerBody)
+    Assert.Equal(HttpStatusCode.Unauthorized, operatorDeniedOnRunner.StatusCode)
+    use malformedRunnerBody = new StringContent("{}", Encoding.UTF8, "application/json")
+    client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", configuration.RunnerToken)
+    let! malformedRunner = client.PostAsync(prefix + "v1/runner/assignment", malformedRunnerBody)
+    Assert.Equal(HttpStatusCode.BadRequest, malformedRunner.StatusCode)
     client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", token)
     let issuedAt = Fixture.now.AddSeconds(-1.).ToString("O")
     let expiresAt = Fixture.now.AddMinutes(1.).ToString("O")

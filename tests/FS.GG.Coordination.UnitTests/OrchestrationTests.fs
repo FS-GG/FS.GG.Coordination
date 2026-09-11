@@ -226,7 +226,7 @@ module Cases =
         let active,attemptId,candidateId,route = hostedReady()
         let processed = recordDispatchReadback "27500000-0000-0000-0000-00000000000" route (routeEffect route.ProcessOperationId DispatchRunner (Id.attemptValue attemptId |> string) route) (Id.attemptValue attemptId |> string) None None active
         let contentDigest = digest "d"
-        let candidate = { CandidateId=candidateId;BaselineSha=String.replicate 40 "a";HeadSha=String.replicate 40 "b";TreeSha=String.replicate 40 "c";ManifestSha256=digest "c";ContentSha256=contentDigest;MediaType="application/vnd.git.bundle";SizeBytes=10L;RetainUntil=now.AddDays 1.;Location=ContentAddressedObject $"sha256/{contentDigest}" }
+        let candidate = { CandidateId=candidateId;BaselineSha=String.replicate 40 "a";HeadSha=String.replicate 40 "b";TreeSha=String.replicate 40 "c";ManifestSha256=digest "c";ContentSha256=contentDigest;MediaType="application/vnd.fsgg.runner-candidate+zip";SizeBytes=10L;RetainUntil=now.AddDays 1.;Location=ContentAddressedObject $"sha256/{contentDigest}" }
         let proof = { CandidateId=candidateId;ContentSha256=candidate.ContentSha256;ManifestSha256=candidate.ManifestSha256;SizeBytes=candidate.SizeBytes;Location=candidate.Location;StoreId="postgresql-object-store";StoreSchemaVersion=1;StorageReceiptSha256=digest "e";VerifiedAt=now }
         let stored = recordDispatchReadback "27600000-0000-0000-0000-00000000000" route (routeEffect route.CandidateOperationId StoreCandidate (Id.candidateValue candidateId |> string) route) (Id.candidateValue candidateId |> string) (Some candidate.HeadSha) (Some candidate.ContentSha256) processed
         let accepted = decide now stored (command "27700000-0000-0000-0000-000000000001") "" (RecordCandidate(candidate,proof)) |> fun d -> apply d stored
@@ -334,7 +334,7 @@ module Cases =
     let ``candidate acknowledgement needs recoverability`` () =
         let state=admit()
         let contentDigest=digest "d"
-        let candidate={CandidateId=Id.candidate(guid "80000000-0000-0000-0000-000000000001");BaselineSha=String.replicate 40 "a";HeadSha=String.replicate 40 "b";TreeSha=String.replicate 40 "c";ManifestSha256=digest "c";ContentSha256=contentDigest;MediaType="application/vnd.git.bundle";SizeBytes=10L;RetainUntil=now.AddDays 1.;Location=ContentAddressedObject $"sha256/{contentDigest}"}
+        let candidate={CandidateId=Id.candidate(guid "80000000-0000-0000-0000-000000000001");BaselineSha=String.replicate 40 "a";HeadSha=String.replicate 40 "b";TreeSha=String.replicate 40 "c";ManifestSha256=digest "c";ContentSha256=contentDigest;MediaType="application/vnd.fsgg.runner-candidate+zip";SizeBytes=10L;RetainUntil=now.AddDays 1.;Location=ContentAddressedObject $"sha256/{contentDigest}"}
         let proof={CandidateId=candidate.CandidateId;ContentSha256=candidate.ContentSha256;ManifestSha256=candidate.ManifestSha256;SizeBytes=candidate.SizeBytes;Location=candidate.Location;StoreId="postgresql-object-store";StoreSchemaVersion=1;StorageReceiptSha256=digest "e";VerifiedAt=now}
         Assert.Equal(Rejected,(decide now state (command "20000000-0000-0000-0000-000000000012") (digest "c") (RecordCandidate(candidate,{proof with SizeBytes=11L}))).Receipt.Disposition)
         Assert.Equal(Accepted,(decide now state (command "20000000-0000-0000-0000-000000000013") (digest "d") (RecordCandidate(candidate,proof))).Receipt.Disposition)
@@ -357,3 +357,21 @@ module Cases =
         Assert.Equal(Error "duplicate-client-message",Session.accept session (ClientMessage 4L))
         Assert.Equal(Error "client-sequence-gap",Session.accept session (ClientMessage 6L))
         Assert.Equal(5L,(Session.accept session (ClientMessage 5L) |> Result.defaultWith failwith).LastClientSequence)
+
+    [<Fact>]
+    let ``runner session cursors survive replay and stop while paused`` () =
+        let active,attemptId,_,_ = hostedReady()
+        let attempt=active.Attempts[attemptId]
+        let opened=active.Sessions[attempt.SessionId]
+        Assert.Equal(0L,opened.LastClientSequence)
+        let advancedDecision=decide now active (command "29000000-0000-0000-0000-000000000001") "" (AcceptRunnerMessage(attempt.SessionId,1L,true,digest "9"))
+        Assert.Equal(Accepted,advancedDecision.Receipt.Disposition)
+        let advanced=apply advancedDecision active
+        Assert.Equal(1L,advanced.Sessions[attempt.SessionId].LastClientSequence)
+        Assert.Equal(1L,advanced.Sessions[attempt.SessionId].LastServerSequence)
+        let replayed=List.fold evolve active advancedDecision.Events
+        Assert.True(replayed.Sessions.ContainsKey attempt.SessionId)
+        Assert.Equal("duplicate-runner-message",(decide now advanced (command "29000000-0000-0000-0000-000000000002") "" (AcceptRunnerMessage(attempt.SessionId,1L,false,digest "8"))).Receipt.Detail)
+        Assert.Equal("runner-client-sequence-gap-or-inactive-session",(decide now advanced (command "29000000-0000-0000-0000-000000000003") "" (AcceptRunnerMessage(attempt.SessionId,3L,false,digest "7"))).Receipt.Detail)
+        let paused=decide now advanced (command "29000000-0000-0000-0000-000000000004") "" (Pause "operator") |> fun result -> apply result advanced
+        Assert.Equal("runner-client-sequence-gap-or-inactive-session",(decide now paused (command "29000000-0000-0000-0000-000000000005") "" (AcceptRunnerMessage(attempt.SessionId,2L,false,digest "6"))).Receipt.Detail)

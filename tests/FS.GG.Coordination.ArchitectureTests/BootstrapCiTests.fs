@@ -88,6 +88,8 @@ let private vulnerabilityJson projectCount vulnerable =
           "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
           "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj"
           "src/FS.GG.Coordination.Orchestration.Pilot/FS.GG.Coordination.Orchestration.Pilot.fsproj"
+          "src/FS.GG.Coordination.Orchestration.Runner.Protocol/FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj"
+          "src/FS.GG.Coordination.Orchestration.Runner.Client/FS.GG.Coordination.Orchestration.Runner.Client.fsproj"
           "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
           "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
           "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
@@ -759,14 +761,14 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 17 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 19 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
 
 [<Theory>]
-[<InlineData(14, false, "vulnerability-report-completeness")>]
-[<InlineData(17, true, "vulnerable-package")>]
+[<InlineData(16, false, "vulnerability-report-completeness")>]
+[<InlineData(19, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error = validateVulnerability (vulnerabilityJson projectCount vulnerable)
     Assert.NotEqual(0, exitCode)

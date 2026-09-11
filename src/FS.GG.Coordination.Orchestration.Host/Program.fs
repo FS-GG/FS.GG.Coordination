@@ -6,7 +6,7 @@ open FS.GG.Coordination.Orchestration.Host
 
 let private usage () =
     eprintfn "usage: fsgg-coord-orchestration-host init --connection-file <absolute-private-path>"
-    eprintfn "   or: fsgg-coord-orchestration-host serve --connection-file <path> --token-file <path> --prefix <loopback-http-root> --store-id <id> --backup-identity <uuid> --minimum-generation-fence <n> --permit-id <uuid> --pilot-principal <id> --repository-node-id <id> --repository-database-id <n> --issue-node-id <id> --issue-database-id <n>"
+    eprintfn "   or: fsgg-coord-orchestration-host serve --connection-file <path> --token-file <path> --runner-token-file <path> --prefix <loopback-http-root> --store-id <id> --backup-identity <uuid> --minimum-generation-fence <n> --permit-id <uuid> --pilot-principal <id> --repository-node-id <id> --repository-database-id <n> --issue-node-id <id> --issue-database-id <n>"
     2
 
 [<EntryPoint>]

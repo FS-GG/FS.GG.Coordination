@@ -10,6 +10,7 @@ open FS.GG.Coordination.Core.Orchestration
 type HostConfiguration =
     { ConnectionString: string
       Token: string
+      RunnerToken: string
       Prefix: string
       StoreId: string
       BackupIdentity: string
@@ -104,13 +105,16 @@ module HostConfiguration =
 
     let parseServe arguments =
         result {
-            do! validateArguments (set [ "--connection-file"; "--token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id" ]) arguments
+            do! validateArguments (set [ "--connection-file"; "--token-file"; "--runner-token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id" ]) arguments
             let! connectionPath = value "--connection-file" arguments
             let! tokenPath = value "--token-file" arguments
+            let! runnerTokenPath = value "--runner-token-file" arguments
             let! connection = privateFile 16384 connectionPath
             let! token = privateFile 4096 tokenPath
+            let! runnerToken = privateFile 4096 runnerTokenPath
             do! if String.IsNullOrWhiteSpace connection then Error "connection-string-required" else Ok()
             do! if token.Length < 32 then Error "operator-token-too-short" else Ok()
+            do! if runnerToken.Length < 32 || runnerToken=token then Error "runner-token-must-be-distinct-and-long" else Ok()
             let! prefix = value "--prefix" arguments |> Result.bind loopbackPrefix
             let! storeId = value "--store-id" arguments
             let! backupIdentity = value "--backup-identity" arguments
@@ -130,7 +134,7 @@ module HostConfiguration =
                      && repositoryNodeId = repositoryNodeId.Trim() && repositoryNodeId.Length <= 128
                      && issueNodeId = issueNodeId.Trim() && issueNodeId.Length <= 128 ->
                 return
-                    { ConnectionString = connection; Token = token; Prefix = prefix; StoreId = storeId
+                    { ConnectionString = connection; Token = token; RunnerToken=runnerToken; Prefix = prefix; StoreId = storeId
                       BackupIdentity = backup.ToString(); MinimumGenerationFence = fence; PermitId = permit
                       PilotPrincipalId = principal
                       WorkItemId = WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId

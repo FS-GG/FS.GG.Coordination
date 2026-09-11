@@ -13,10 +13,12 @@ open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Pilot
 open FS.GG.Coordination.Orchestration.PostgreSql
+open FS.GG.Coordination.Orchestration.Runner.Protocol
 
 type HostStore =
     { CheckReadiness: CancellationToken -> Task<Result<unit, ReadinessFailure list>>
       WorkItems: IJournalStore
+      Candidates: ICandidateStore
       Recover: Guid -> CancellationToken -> Task<Result<PilotRecovery, PilotRecoveryFailure list>>
       Append: PilotAppendRequest -> CancellationToken -> Task<PilotAppendOutcome> }
 
@@ -57,13 +59,15 @@ module HostRuntime =
         let options =
             { DataSource = source; StoreId = configuration.StoreId; BackupIdentity = configuration.BackupIdentity
               MinimumGenerationFence = configuration.MinimumGenerationFence; RuntimeSchemaVersion = 1
-              SupportedEventSchemaVersions = Set [ 1 ]; SupportedSerializerVersions = Set [ EventEnvelope.serializerVersion ]
+              SupportedEventSchemaVersions = Set [ 1 ]; SupportedSerializerVersions = Set [ EventEnvelope.legacySerializerVersion; EventEnvelope.serializerVersion ]
               MaximumCandidateBytes = 104857600L }
-        let root = PostgreSqlStore(options) :> IJournalStore
+        let postgres = PostgreSqlStore(options)
+        let root = postgres :> IJournalStore
         let pilot = PostgreSqlPilotStore(options) :> IPilotJournalStore
         source,
         { CheckReadiness = root.CheckReadiness
           WorkItems = root
+          Candidates = postgres :> ICandidateStore
           Recover = fun permit token -> pilot.RecoverPilot(permit, token)
           Append = fun request token -> pilot.AppendPilot(request, token) }
 
@@ -195,10 +199,58 @@ module HostRuntime =
                             if isNull (box value) then return Error "invalid-json" else return Ok value
                 with :? JsonException -> return Error "invalid-json" }
 
+    let private readRunner maximumBytes (request:HttpListenerRequest) cancellationToken = task {
+        let mediaType = if isNull request.ContentType then "" else (request.ContentType.Split([|';'|],2)).[0].Trim()
+        if request.ContentLength64<=0L || request.ContentLength64>int64 maximumBytes
+           || not(String.Equals(mediaType,"application/json",StringComparison.OrdinalIgnoreCase)) then return Error "invalid-runner-content"
+        else
+            let bytes=Array.zeroCreate<byte>(int request.ContentLength64)
+            let mutable offset=0
+            while offset<bytes.Length do
+                let! read=request.InputStream.ReadAsync(Memory(bytes,offset,bytes.Length-offset),cancellationToken).AsTask()
+                if read=0 then offset <- bytes.Length+1 else offset <- offset+read
+            if offset<>bytes.Length then return Error "truncated-runner-content" else return Ok bytes }
+
+    let private runnerStore (store:HostStore) = { RunnerWireStore.WorkItems=store.WorkItems;Candidates=store.Candidates }
+
     let private handle clock configuration store (context: HttpListenerContext) cancellationToken = task {
         let request, response = context.Request, context.Response
         if request.HttpMethod = "GET" && request.Url.AbsolutePath = "/health/live" then
             do! writeJson response 200 {| schema = "fsgg.orchestration.host-liveness/1"; live = true; dispatchEnabled = false |} cancellationToken
+        elif request.Url.AbsolutePath.StartsWith("/v1/runner/",StringComparison.Ordinal) then
+            if not(authorize configuration.RunnerToken (Option.ofObj request.Headers["Authorization"])) then
+                do! writeJson response 401 {| error="unauthorized" |} cancellationToken
+            else
+                let maximum=if request.Url.AbsolutePath="/v1/runner/candidate" then 140*1024*1024 else 8192
+                let! body=readRunner maximum request cancellationToken
+                match body with
+                | Error reason -> do! writeJson response 400 {| error=reason |} cancellationToken
+                | Ok bytes ->
+                    let wire=runnerStore store
+                    let! parsed,result =
+                        match request.HttpMethod,request.Url.AbsolutePath with
+                        | "POST","/v1/runner/assignment" ->
+                            match RunnerWire.parsePoll bytes with
+                            | Error reason -> Task.FromResult(false,Error reason)
+                            | Ok value -> task {
+                                let! found=RunnerWireRuntime.poll clock wire configuration.WorkItemId value cancellationToken
+                                return true,Result.map box found }
+                        | "POST","/v1/runner/ack" ->
+                            match RunnerWire.parseAck bytes with
+                            | Error reason -> Task.FromResult(false,Error reason)
+                            | Ok value -> task {
+                                let! found=RunnerWireRuntime.acknowledge clock wire configuration.WorkItemId value cancellationToken
+                                return true,Result.map (fun revision -> box {| schema="fsgg.orchestration.runner-ack-receipt/1";accepted=true;workflowRevision=revision |}) found }
+                        | "POST","/v1/runner/candidate" ->
+                            match RunnerWire.parseCandidate bytes with
+                            | Error reason -> Task.FromResult(false,Error reason)
+                            | Ok value -> task {
+                                let! found=RunnerWireRuntime.submitCandidate clock wire configuration.WorkItemId value cancellationToken
+                                return true,Result.map (fun revision -> box {| schema="fsgg.orchestration.runner-candidate-receipt/1";accepted=true;workflowRevision=revision |}) found }
+                        | _ -> Task.FromResult(false,Error "runner-route-not-found")
+                    match result with
+                    | Ok value -> do! writeJson response 200 value cancellationToken
+                    | Error reason -> do! writeJson response (if parsed then 409 else 400) {| error=reason |} cancellationToken
         elif not (authorize configuration.Token (Option.ofObj request.Headers["Authorization"])) then
             do! writeJson response 401 {| error = "unauthorized" |} cancellationToken
         elif request.HttpMethod = "GET" && (request.Url.AbsolutePath = "/health/ready" || request.Url.AbsolutePath = "/v1/status") then

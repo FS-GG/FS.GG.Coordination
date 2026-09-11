@@ -20,7 +20,7 @@
     "cancelInProgress": true
   },
   "requiredGateCount": 10,
-  "requiredProjectCount": 17,
+  "requiredProjectCount": 19,
   "requiredVulnerabilitySources": ["https://api.nuget.org/v3/index.json"],
   "requiredProjects": [
     "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj",
@@ -31,6 +31,8 @@
     "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj",
     "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj",
     "src/FS.GG.Coordination.Orchestration.Pilot/FS.GG.Coordination.Orchestration.Pilot.fsproj",
+    "src/FS.GG.Coordination.Orchestration.Runner.Protocol/FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj",
+    "src/FS.GG.Coordination.Orchestration.Runner.Client/FS.GG.Coordination.Orchestration.Runner.Client.fsproj",
     "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj",
     "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj",
     "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj",

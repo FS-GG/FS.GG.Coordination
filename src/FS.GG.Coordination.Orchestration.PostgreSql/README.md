@@ -26,7 +26,7 @@ commits. The plugin is configured without remoting/listeners and with an
 isolated PostgreSQL search path.
 
 Candidate bytes and metadata commit together. `Put` permits only
-`application/vnd.git.bundle`, `application/zip`, and `application/zstd`, then
+`application/vnd.fsgg.runner-candidate+zip`, then
 reads the `bytea` value back and verifies identity, size, and SHA-256 before it
 returns a receipt. A caller-created receipt is never an input to this adapter.
 
