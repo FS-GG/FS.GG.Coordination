@@ -59,15 +59,15 @@ module HostRuntime =
         options.UnmappedMemberHandling <- JsonUnmappedMemberHandling.Disallow
         options
 
-    let private storeOptions (configuration:HostConfiguration) (source:NpgsqlDataSource) : StoreOptions =
+    let private storeOptions runtimeSchemaVersion (configuration:HostConfiguration) (source:NpgsqlDataSource) : StoreOptions =
             { DataSource = source; StoreId = configuration.StoreId; BackupIdentity = configuration.BackupIdentity
-              MinimumGenerationFence = configuration.MinimumGenerationFence; RuntimeSchemaVersion = 2
+              MinimumGenerationFence = configuration.MinimumGenerationFence; RuntimeSchemaVersion = runtimeSchemaVersion
               SupportedEventSchemaVersions = Set [ 1 ]; SupportedSerializerVersions = Set [ EventEnvelope.legacySerializerVersion; EventEnvelope.serializerVersion ]
               MaximumCandidateBytes = 104857600L }
 
     let createStore (configuration: HostConfiguration) =
         let source = NpgsqlDataSource.Create configuration.ConnectionString
-        let options = storeOptions configuration source
+        let options = storeOptions 1 configuration source
         let postgres = PostgreSqlStore(options)
         let root = postgres :> IJournalStore
         let pilot = PostgreSqlPilotStore(options) :> IPilotJournalStore
@@ -82,7 +82,7 @@ module HostRuntime =
     /// the legacy two-value factory for callers that only serve runner /1 routes.
     let createProductionStores (configuration:HostConfiguration) =
         let source,store=createStore configuration
-        source,store,PostgreSqlExecutionStore(storeOptions configuration source)
+        source,store,PostgreSqlExecutionStore(storeOptions 2 configuration source)
 
     let status (store: HostStore) permitId cancellationToken = task {
         let! readiness = store.CheckReadiness cancellationToken
