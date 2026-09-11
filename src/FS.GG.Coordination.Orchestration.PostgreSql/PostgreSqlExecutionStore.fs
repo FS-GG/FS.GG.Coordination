@@ -15,9 +15,37 @@ open FS.GG.Coordination.Orchestration.Pilot
 type ExecutorCommandAppend = CommandPersisted of int64 | CommandDuplicate of int64 | CommandConflict | CommandRefused of string
 type SubscriptionAppend = SubscriptionReserved | SubscriptionDuplicate | SubscriptionCapacityRefused | SubscriptionAuthorityRefused | SubscriptionConflict
 
+type private StoredExecutorCommand =
+    { CommandId:Guid; BodySha256:string; Kind:string; AssignmentId:Guid; AttemptId:Guid
+      Generation:int64; ExpectedRevision:int64; RecordedAt:DateTimeOffset; Deadline:DateTimeOffset
+      MaximumRuntimeSeconds:int64; MaximumAttempts:int; Workspace:string; RequestedModel:string
+      RequestedEffort:string; InputDigest:string; ExecutorBinding:string; WorkspaceManifestSha256:string option }
+
+[<RequireQualifiedAccess>]
+module private StoredExecutorCommand =
+    let parse bytes =
+        match ExecutorWire.parseCommand bytes with
+        | Ok value -> Ok { CommandId=value.CommandId;BodySha256=value.BodySha256;Kind=value.Kind
+                           AssignmentId=value.AssignmentId;AttemptId=value.AttemptId;Generation=value.Generation
+                           ExpectedRevision=value.ExpectedRevision;RecordedAt=value.RecordedAt;Deadline=value.Deadline
+                           MaximumRuntimeSeconds=value.MaximumRuntimeSeconds;MaximumAttempts=value.MaximumAttempts
+                           Workspace=value.Workspace;RequestedModel=value.RequestedModel;RequestedEffort=value.RequestedEffort
+                           InputDigest=value.InputDigest;ExecutorBinding=value.ExecutorBinding;WorkspaceManifestSha256=None }
+        | Error legacyError ->
+            match ExecutorWire.parseCommandV2 bytes with
+            | Ok value -> Ok { CommandId=value.CommandId;BodySha256=value.BodySha256;Kind=value.Kind
+                               AssignmentId=value.AssignmentId;AttemptId=value.AttemptId;Generation=value.Generation
+                               ExpectedRevision=value.ExpectedRevision;RecordedAt=value.RecordedAt;Deadline=value.Deadline
+                               MaximumRuntimeSeconds=value.MaximumRuntimeSeconds;MaximumAttempts=value.MaximumAttempts
+                               Workspace=value.Workspace;RequestedModel=value.RequestedModel;RequestedEffort=value.RequestedEffort
+                               InputDigest=value.InputDigest;ExecutorBinding=value.ExecutorBinding;WorkspaceManifestSha256=Some value.WorkspaceManifestSha256 }
+            | Error _ -> Error legacyError
+
 type IExecutorCommandStore =
     abstract StageInput: manifestBytes:byte array * bytes:byte array * CancellationToken -> Task<Result<unit,string>>
     abstract ReadInput: digest:string * CancellationToken -> Task<Result<byte array,string>>
+    abstract StageWorkspaceManifest: manifestBytes:byte array * CancellationToken -> Task<Result<string,string>>
+    abstract ReadWorkspaceManifest: digest:string * CancellationToken -> Task<Result<byte array,string>>
     abstract PersistCommand: commandBytes:byte array * CancellationToken -> Task<ExecutorCommandAppend>
     abstract ReadPending: maximum:int * CancellationToken -> Task<byte array list>
     abstract SettleCommand: commandId:Guid * receiptBytes:byte array * CancellationToken -> Task<Result<unit,string>>
@@ -164,8 +192,30 @@ type PostgreSqlExecutionStore(options:StoreOptions) =
             let! value=command.ExecuteScalarAsync cancellationToken
             if isNull value then return Error "execution-input-not-found"
             else let bytes=unbox<byte array> value in return if sha bytes=digest then Ok bytes else Error "execution-input-corrupt" }
+        member _.StageWorkspaceManifest(manifestBytes,cancellationToken)=task {
+            match ExecutorWire.parseWorkspaceManifest manifestBytes with
+            | Error reason -> return Error reason
+            | Ok _ ->
+                let digest=sha manifestBytes
+                use! connection=dataSource.OpenConnectionAsync cancellationToken
+                use! transaction=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken)
+                do! gate connection transaction true cancellationToken
+                use command=new NpgsqlCommand("INSERT INTO fsgg_orchestration.execution_workspace_manifest(manifest_sha256,payload,created_at) VALUES($1,$2,$3) ON CONFLICT(manifest_sha256) DO NOTHING",connection,transaction)
+                add command digest;add command manifestBytes;add command DateTimeOffset.UtcNow
+                let! _=command.ExecuteNonQueryAsync cancellationToken
+                do! transaction.CommitAsync cancellationToken
+                return Ok digest }
+        member _.ReadWorkspaceManifest(digest,cancellationToken)=task {
+            use! connection=dataSource.OpenConnectionAsync cancellationToken
+            use! transaction=connection.BeginTransactionAsync(IsolationLevel.RepeatableRead,cancellationToken)
+            do! gate connection transaction false cancellationToken
+            use command=new NpgsqlCommand("SELECT payload FROM fsgg_orchestration.execution_workspace_manifest WHERE manifest_sha256=$1",connection,transaction)
+            add command digest
+            let! value=command.ExecuteScalarAsync cancellationToken
+            if isNull value then return Error "execution-workspace-manifest-not-found"
+            else let bytes=unbox<byte array> value in return if sha bytes=digest && ExecutorWire.parseWorkspaceManifest bytes|>Result.isOk then Ok bytes else Error "execution-workspace-manifest-corrupt" }
         member _.PersistCommand(commandBytes,cancellationToken)=task {
-            match ExecutorWire.parseCommand commandBytes with
+            match StoredExecutorCommand.parse commandBytes with
             | Error reason->return CommandRefused reason
             | Ok commandValue ->
                 use! connection=dataSource.OpenConnectionAsync cancellationToken
@@ -214,12 +264,19 @@ type PostgreSqlExecutionStore(options:StoreOptions) =
                         use input=new NpgsqlCommand("SELECT 1 FROM fsgg_orchestration.execution_input_object WHERE input_sha256=$1",connection,transaction)
                         add input commandValue.InputDigest
                         let! inputExists=input.ExecuteScalarAsync cancellationToken
+                        let! workspaceExists = task {
+                            match commandValue.WorkspaceManifestSha256 with
+                            | None -> return box 1
+                            | Some digest ->
+                                use workspace=new NpgsqlCommand("SELECT 1 FROM fsgg_orchestration.execution_workspace_manifest WHERE manifest_sha256=$1",connection,transaction)
+                                add workspace digest
+                                return! workspace.ExecuteScalarAsync cancellationToken }
                         use reservationCommand=new NpgsqlCommand("SELECT 1 FROM fsgg_orchestration.subscription_reservation WHERE assignment_id=$1 AND attempt_id=$2 AND generation=$3 AND expected_revision=$4 AND active AND deadline=$5",connection,transaction)
                         add reservationCommand commandValue.AssignmentId;add reservationCommand commandValue.AttemptId;add reservationCommand commandValue.Generation;add reservationCommand commandValue.ExpectedRevision;add reservationCommand commandValue.Deadline
                         let! reservationExists=reservationCommand.ExecuteScalarAsync cancellationToken
                         let effectiveExpiry=min commandValue.Deadline (commandValue.RecordedAt.AddSeconds(float commandValue.MaximumRuntimeSeconds))
                         let launchAuthorized=commandValue.Kind<>"launch" || (intentMatches && not(isNull reservationExists) && effectiveExpiry>DateTimeOffset.UtcNow)
-                        if isNull inputExists || not launchAuthorized then
+                        if isNull inputExists || isNull workspaceExists || not launchAuthorized then
                             do! transaction.RollbackAsync cancellationToken
                             return CommandRefused "executor-command-intent-input-or-reservation-refused"
                         else
@@ -265,7 +322,7 @@ ORDER BY c.created_at,c.command_id LIMIT $1
                 reading<-more
                 if more then
                     let payload=reader.GetFieldValue<byte array> 0
-                    match ExecutorWire.parseCommand payload with
+                    match StoredExecutorCommand.parse payload with
                     | Error reason -> failure <- Some reason
                     | Ok queued ->
                         let indexValid =
@@ -282,15 +339,22 @@ ORDER BY c.created_at,c.command_id LIMIT $1
             | Some reason -> return raise(InvalidDataException reason)
             | None -> return List.ofSeq values }
         member _.SettleCommand(commandId,receiptBytes,cancellationToken)=task {
-            match ExecutorWire.parseReceipt receiptBytes with
+            let binding =
+                match ExecutorWire.parseReceipt receiptBytes with
+                | Ok receipt -> Ok(receipt.CommandId,receipt.BodySha256)
+                | Error _ ->
+                    match ExecutorWire.parseOperationOutcome receiptBytes with
+                    | Ok outcome -> Ok(outcome.CommandId,outcome.BodySha256)
+                    | Error _ -> ExecutorWire.parseResponse receiptBytes |> Result.map(fun response->response.CommandId,response.BodySha256)
+            match binding with
             | Error reason->return Error reason
-            | Ok receipt when receipt.CommandId<>commandId->return Error "executor-receipt-identity-refused"
-            | Ok receipt->
+            | Ok(receiptCommandId,_) when receiptCommandId<>commandId->return Error "executor-receipt-identity-refused"
+            | Ok(_,bodySha256)->
                 use! connection=dataSource.OpenConnectionAsync cancellationToken
                 use! transaction=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken)
                 do! gate connection transaction true cancellationToken
                 use command=new NpgsqlCommand("UPDATE fsgg_orchestration.executor_command SET settled=true,receipt=$2 WHERE command_id=$1 AND body_sha256=$3 AND NOT settled",connection,transaction)
-                add command commandId;add command receiptBytes;add command receipt.BodySha256
+                add command commandId;add command receiptBytes;add command bodySha256
                 let! changed=command.ExecuteNonQueryAsync cancellationToken
                 do! transaction.CommitAsync cancellationToken
                 return if changed=1 then Ok() else Error "executor-command-settlement-refused" }

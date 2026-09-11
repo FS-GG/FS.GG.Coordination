@@ -636,6 +636,10 @@ module Orchestration =
                 match kind with
                 | AcquireExternalClaim -> readback.ProviderResourceId=route.ClaimResourceId && readback.CandidateHeadSha.IsNone && readback.ResultSha.IsNone
                 | DispatchRunner -> readback.ProviderResourceId=(Id.attemptValue route.AttemptId |> string) && readback.CandidateHeadSha.IsNone && readback.ResultSha.IsNone
+                // Storage readback precedes RecordCandidate: it binds the provider's
+                // immutable bytes; the following command independently proves the
+                // Main-owned ICandidateStore receipt/readback. Requiring Candidates here
+                // would make that two-step durable transition circular.
                 | StoreCandidate -> readback.ProviderResourceId=(Id.candidateValue route.CandidateId |> string) && readback.CandidateHeadSha |> Option.exists validGitObject && readback.ResultSha |> Option.exists validSha
                 | PublishCandidateBranch ->
                     readback.ProviderResourceId=route.BranchRef && candidate route |> Option.exists(fun value -> readback.CandidateHeadSha=Some value.HeadSha && readback.ResultSha=Some value.HeadSha)

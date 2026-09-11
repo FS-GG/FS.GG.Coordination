@@ -54,13 +54,15 @@ module HostRuntime =
         options.UnmappedMemberHandling <- JsonUnmappedMemberHandling.Disallow
         options
 
-    let createStore (configuration: HostConfiguration) =
-        let source = NpgsqlDataSource.Create configuration.ConnectionString
-        let options =
+    let private storeOptions (configuration:HostConfiguration) (source:NpgsqlDataSource) : StoreOptions =
             { DataSource = source; StoreId = configuration.StoreId; BackupIdentity = configuration.BackupIdentity
-              MinimumGenerationFence = configuration.MinimumGenerationFence; RuntimeSchemaVersion = 1
+              MinimumGenerationFence = configuration.MinimumGenerationFence; RuntimeSchemaVersion = 2
               SupportedEventSchemaVersions = Set [ 1 ]; SupportedSerializerVersions = Set [ EventEnvelope.legacySerializerVersion; EventEnvelope.serializerVersion ]
               MaximumCandidateBytes = 104857600L }
+
+    let createStore (configuration: HostConfiguration) =
+        let source = NpgsqlDataSource.Create configuration.ConnectionString
+        let options = storeOptions configuration source
         let postgres = PostgreSqlStore(options)
         let root = postgres :> IJournalStore
         let pilot = PostgreSqlPilotStore(options) :> IPilotJournalStore
@@ -70,6 +72,12 @@ module HostRuntime =
           Candidates = postgres :> ICandidateStore
           Recover = fun permit token -> pilot.RecoverPilot(permit, token)
           Append = fun request token -> pilot.AppendPilot(request, token) }
+
+    /// Production composition exposes the execution journal/transport while retaining
+    /// the legacy two-value factory for callers that only serve runner /1 routes.
+    let createProductionStores (configuration:HostConfiguration) =
+        let source,store=createStore configuration
+        source,store,PostgreSqlExecutionStore(storeOptions configuration source)
 
     let status (store: HostStore) permitId cancellationToken = task {
         let! readiness = store.CheckReadiness cancellationToken

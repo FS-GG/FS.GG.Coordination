@@ -26,7 +26,7 @@ let main arguments =
         | Error reason -> eprintfn "%s" reason; 2
         | Ok configuration ->
             try
-                let source, store = HostRuntime.createStore configuration
+                let source, store, _executionStore = HostRuntime.createProductionStores configuration
                 use source = source
                 use shutdown = new CancellationTokenSource()
                 Console.CancelKeyPress.Add(fun event -> event.Cancel <- true; shutdown.Cancel())

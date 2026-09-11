@@ -167,7 +167,19 @@ module HostedWriterJournal =
             let request = appendRequest recovery.PersistenceId (clock.GetUtcNow()) recovery.Sequence envelope decision
             let! appended = store.Append(request, cancellationToken)
             match appended with
-            | Appended sequence | Duplicate sequence -> return Ok(decision, sequence)
+            | Appended sequence -> return Ok(decision, sequence)
+            | Duplicate sequence ->
+                // A lost append response must return the original durable receipt, not a
+                // newly reduced stale-revision refusal for the replayed envelope.
+                let! refreshed = recover store workItemId cancellationToken
+                match refreshed with
+                | Ok current ->
+                    match Map.tryFind envelope.CommandId current.State.CommandReceipts with
+                    | Some receipt when receipt.BodySha256 = request.Inbox.BodySha256 ->
+                        return Ok({ Events=[];Effects=[];Receipt=receipt },sequence)
+                    | Some _ -> return Error "command-identity-conflict"
+                    | None -> return Error "duplicate-command-receipt-missing"
+                | Error failures -> return Error(sprintf "%A" failures)
             | Conflict -> return Error "command-identity-conflict"
             | WrongExpectedSequence sequence -> return Error($"wrong-expected-sequence:{sequence}")
             | InvalidAppend reason -> return Error reason }

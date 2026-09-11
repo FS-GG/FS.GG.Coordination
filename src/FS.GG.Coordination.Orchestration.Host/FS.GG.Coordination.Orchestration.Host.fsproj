@@ -13,6 +13,10 @@
     <Compile Include="HostConfiguration.fs" />
     <Compile Include="HostInitialization.fs" />
     <Compile Include="HostedWriterRuntime.fs" />
+    <Compile Include="RemoteExecutorProvider.fs" />
+    <Compile Include="HttpExecutorTransport.fs" />
+    <Compile Include="MainEffectDriver.fs" />
+    <Compile Include="MainHostComposition.fs" />
     <Compile Include="RunnerWireRuntime.fs" />
     <Compile Include="HostRuntime.fs" />
     <Compile Include="Program.fs" />

@@ -20,3 +20,10 @@ The journal's attempt stream is keyed by assignment plus attempt; generation is 
 persisted intent. A launch intent is durable before spawn. Recovery reconciles the original intent
 and its original finite deadline and limits, so ambiguity cannot create a second process or renew a
 budget. Cancellation records a request separately from an observed terminal lifecycle.
+
+The Main Host composition owns the PostgreSQL session journal and queued executor
+commands. A provider-neutral authenticated transport relays the closed frames; Main
+persists digest-bound input and workspace manifests and independently stores and
+reads back candidate bundles before GitHub publication. Source qualification does
+not install that transport, activate the Host, copy a subscription session, publish
+an artifact, or make a live model invocation.

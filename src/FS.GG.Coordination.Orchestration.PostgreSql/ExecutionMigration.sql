@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS fsgg_orchestration.execution_input_object (
     created_at timestamptz NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS fsgg_orchestration.execution_workspace_manifest (
+    manifest_sha256 text PRIMARY KEY CHECK (manifest_sha256 ~ '^[0-9a-f]{64}$'),
+    payload bytea NOT NULL CHECK (octet_length(payload) <= 32768),
+    created_at timestamptz NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS fsgg_orchestration.subscription_reservation (
     reservation_id uuid PRIMARY KEY,
     assignment_id uuid NOT NULL UNIQUE,

@@ -681,6 +681,10 @@ type PostgreSqlStoreTests() =
         let inputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=inputDigest;MediaType="text/markdown; charset=utf-8";SizeBytes=input.LongLength;ChunkBytes=1024}
         let! staged=transport.StageInput(ExecutorWire.encodeInputManifest inputManifest,input,cancellationToken)
         Assert.True(Result.isOk staged)
+        let workspaceManifest={Schema=ExecutorWire.workspaceManifestSchema;Workspace="pilot";RepositoryBinding="FS-GG/.github";BaselineObjectId=String.replicate 40 "a";AllowedPaths=[|"docs/**"|];Validations=[|"git-diff-check"|];InputDigest=inputDigest}
+        let workspaceBytes=ExecutorWire.encodeWorkspaceManifest workspaceManifest
+        let! workspaceDigest=transport.StageWorkspaceManifest(workspaceBytes,cancellationToken)
+        Assert.Equal(Fixture.sha workspaceBytes,workspaceDigest|>Result.defaultWith failwith)
         // A future absolute deadline cannot renew the original maximum-runtime window.
         let shortAssignment=Guid.NewGuid()
         let shortAttempt=Guid.NewGuid()
@@ -724,6 +728,14 @@ type PostgreSqlStoreTests() =
         Assert.Equal(CommandDuplicate 2L,lostResponseRetry)
         let! pending=transport.ReadPending(4,cancellationToken)
         Assert.Single pending |> ignore
+
+        let v2Unsigned={Schema=ExecutorWire.commandSchemaV2;CommandId=Guid.NewGuid();BodySha256="";Kind="reconcile";WorkItemPersistenceId="work-item-v2-test";RouteOperationId=assignmentId;AssignmentId=assignmentId;AttemptId=attemptId;CandidateId=Guid.NewGuid();Generation=7L;ExpectedRevision=2L;RecordedAt=intent.RecordedAt;Deadline=intent.Limits.Deadline;MaximumRuntimeSeconds=1800L;MaximumAttempts=1;Workspace=intent.Workspace;WorkspaceManifestSha256=workspaceDigest|>Result.defaultWith failwith;RequestedModel=null;RequestedEffort=null;InputDigest=inputDigest;ExecutorBinding="runner-1";ProviderSessionReference=null;ArtifactDigest=null;ContentOffset=0L;ContentLength=0}
+        let v2={v2Unsigned with BodySha256=ExecutorWire.commandV2Digest v2Unsigned}
+        let! v2Persisted=transport.PersistCommand(ExecutorWire.encodeCommandV2 v2,cancellationToken)
+        Assert.Equal(CommandPersisted 2L,v2Persisted)
+        let v2Outcome={Schema=ExecutorWire.operationOutcomeSchema;CommandId=v2.CommandId;BodySha256=v2.BodySha256;Operation="reconcile";Disposition="unknown";ProviderSessionReference=null;ObservedAt=now;Reason="no-process-observation"}
+        let! v2Settled=transport.SettleCommand(v2.CommandId,ExecutorWire.encodeOperationOutcome v2Outcome,cancellationToken)
+        Assert.True(Result.isOk v2Settled)
 
         let settlement=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.settle (now.AddMinutes 40.) 2400L None "provider-usage-unavailable" reservation |> Result.defaultWith failwith
         Assert.False(settlement.RuntimeWithinBound)
@@ -781,6 +793,8 @@ type PostgreSqlStoreTests() =
         let! _=Fixture.sql "orchestration_o0_restore" $"UPDATE fsgg_orchestration.subscription_reservation SET deadline='{reservation.Deadline:O}' WHERE reservation_id='{reservation.ReservationId}'"
         let! restoredInput=restoredTransport.ReadInput(inputDigest,cancellationToken)
         Assert.Equal<byte array>(input,restoredInput |> Result.defaultWith failwith)
+        let! restoredWorkspace=restoredTransport.ReadWorkspaceManifest(workspaceDigest|>Result.defaultWith failwith,cancellationToken)
+        Assert.Equal<byte array>(workspaceBytes,restoredWorkspace|>Result.defaultWith failwith)
         let! restoredAccounting=restoredTransport.ReadSubscription(reservation.ReservationId,cancellationToken)
         let restoredReservationBytes,restoredSettlementBytes=restoredAccounting |> Result.defaultWith failwith
         Assert.Equal<byte array>(reservationBytes,restoredReservationBytes)
