@@ -17,5 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.PostgreSql\FS.GG.Coordination.Orchestration.PostgreSql.fsproj" />
+    <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.Host\FS.GG.Coordination.Orchestration.Host.fsproj" />
+    <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.Runner.Client\FS.GG.Coordination.Orchestration.Runner.Client.fsproj" />
   </ItemGroup>
 </Project>

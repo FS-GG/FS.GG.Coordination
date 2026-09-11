@@ -424,7 +424,7 @@ type ExecutorRuntimeTests() =
         let mutable attempts=0
         while artifact.IsNone && attempts<100 do
             attempts<-attempts+1
-            let unsigned={launch with CommandId=Guid.NewGuid();BodySha256="";Kind="observe"}
+            let unsigned={launch with CommandId=Guid.NewGuid();BodySha256="";Kind="observe";ProviderSessionReference=started.ProviderSessionReference}
             let observe={unsigned with BodySha256=ExecutorWire.commandV2Digest unsigned}
             use observeInput=new MemoryStream(RuntimeFixture.frames [|ExecutorWire.encodeCommandV2 observe|])
             use observeOutput=new MemoryStream()

@@ -42,6 +42,9 @@ module private StoredExecutorCommand =
             | Error _ -> Error legacyError
 
 type IExecutorCommandStore =
+    abstract BindRoute: bindingBytes:byte array * CancellationToken -> Task<Result<string,string>>
+    abstract ReadRoute: assignmentId:Guid * attemptId:Guid * CancellationToken -> Task<Result<byte array,string>>
+    abstract FindAttemptBySession: providerSessionReference:string * CancellationToken -> Task<Result<Guid * Guid,string>>
     abstract StageInput: manifestBytes:byte array * bytes:byte array * CancellationToken -> Task<Result<unit,string>>
     abstract ReadInput: digest:string * CancellationToken -> Task<Result<byte array,string>>
     abstract StageWorkspaceManifest: manifestBytes:byte array * CancellationToken -> Task<Result<string,string>>
@@ -170,6 +173,67 @@ type PostgreSqlExecutionStore(options:StoreOptions) =
                     do! transaction.CommitAsync cancellationToken
                     return Appended }
     interface IExecutorCommandStore with
+        member _.BindRoute(bindingBytes,cancellationToken)=task {
+            match ExecutorWire.parseRouteBinding bindingBytes with
+            | Error reason -> return Error reason
+            | Ok binding ->
+                use! connection=dataSource.OpenConnectionAsync cancellationToken
+                use! transaction=connection.BeginTransactionAsync(IsolationLevel.Serializable,cancellationToken)
+                do! gate connection transaction true cancellationToken
+                use command=new NpgsqlCommand("INSERT INTO fsgg_orchestration.execution_route_binding(assignment_id,attempt_id,generation,binding_sha256,payload,created_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(assignment_id,attempt_id) DO NOTHING",connection,transaction)
+                add command binding.AssignmentId;add command binding.AttemptId;add command binding.Generation;add command binding.BindingSha256;add command bindingBytes;add command DateTimeOffset.UtcNow
+                let! changed=command.ExecuteNonQueryAsync cancellationToken
+                if changed=1 then
+                    do! transaction.CommitAsync cancellationToken
+                    return Ok binding.BindingSha256
+                else
+                    use existing=new NpgsqlCommand("SELECT generation,binding_sha256,payload FROM fsgg_orchestration.execution_route_binding WHERE assignment_id=$1 AND attempt_id=$2 FOR UPDATE",connection,transaction)
+                    add existing binding.AssignmentId;add existing binding.AttemptId
+                    use! row=existing.ExecuteReaderAsync cancellationToken
+                    let! found=row.ReadAsync cancellationToken
+                    let same=found && row.GetInt64(0)=binding.Generation && row.GetString(1)=binding.BindingSha256 && (row.GetFieldValue<byte array>(2)).AsSpan().SequenceEqual(bindingBytes.AsSpan())
+                    do! row.CloseAsync()
+                    do! transaction.CommitAsync cancellationToken
+                    return if same then Ok binding.BindingSha256 else Error "execution-route-binding-conflict" }
+        member _.ReadRoute(assignmentId,attemptId,cancellationToken)=task {
+            use! connection=dataSource.OpenConnectionAsync cancellationToken
+            use! transaction=connection.BeginTransactionAsync(IsolationLevel.RepeatableRead,cancellationToken)
+            do! gate connection transaction false cancellationToken
+            use command=new NpgsqlCommand("SELECT generation,binding_sha256,payload FROM fsgg_orchestration.execution_route_binding WHERE assignment_id=$1 AND attempt_id=$2",connection,transaction)
+            add command assignmentId;add command attemptId
+            use! row=command.ExecuteReaderAsync cancellationToken
+            let! found=row.ReadAsync cancellationToken
+            if not found then return Error "execution-route-binding-not-found"
+            else
+                let generation=row.GetInt64 0
+                let digest=row.GetString 1
+                let payload=row.GetFieldValue<byte array> 2
+                return match ExecutorWire.parseRouteBinding payload with Ok value when value.AssignmentId=assignmentId && value.AttemptId=attemptId && value.Generation=generation && value.BindingSha256=digest->Ok payload|_->Error "execution-route-binding-corrupt" }
+        member _.FindAttemptBySession(providerSessionReference,cancellationToken)=task {
+            match ProviderSessionReference.create providerSessionReference with
+            | Error reason -> return Error reason
+            | Ok expected ->
+                use! connection=dataSource.OpenConnectionAsync cancellationToken
+                use! transaction=connection.BeginTransactionAsync(IsolationLevel.RepeatableRead,cancellationToken)
+                do! gate connection transaction false cancellationToken
+                use command=new NpgsqlCommand("SELECT assignment_id,attempt_id,payload FROM fsgg_orchestration.execution_event WHERE schema=$1 ORDER BY recorded_at DESC LIMIT 256",connection,transaction)
+                add command SessionEventCodec.schema
+                use! row=command.ExecuteReaderAsync cancellationToken
+                let mutable found=None
+                let mutable ambiguous=false
+                let mutable reading=true
+                while reading do
+                    let! more=row.ReadAsync cancellationToken
+                    reading<-more
+                    if more then
+                        match SessionEventCodec.decode(row.GetFieldValue<byte array> 2) with
+                        | Ok(StartObserved observation)|Ok(ObservationRecorded observation) when observation.Session=expected ->
+                            let key=row.GetGuid 0,row.GetGuid 1
+                            match found with None->found<-Some key|Some prior when prior<>key->ambiguous<-true|_->()
+                        | _ -> ()
+                return
+                    if ambiguous then Error "execution-session-binding-ambiguous"
+                    else match found with Some value->Ok value|None->Error "execution-session-binding-not-found" }
         member _.StageInput(manifestBytes,bytes,cancellationToken)=task {
             match ExecutorWire.parseInputManifest manifestBytes with
             | Error reason -> return Error reason
@@ -271,14 +335,28 @@ type PostgreSqlExecutionStore(options:StoreOptions) =
                                 use workspace=new NpgsqlCommand("SELECT 1 FROM fsgg_orchestration.execution_workspace_manifest WHERE manifest_sha256=$1",connection,transaction)
                                 add workspace digest
                                 return! workspace.ExecuteScalarAsync cancellationToken }
-                        use reservationCommand=new NpgsqlCommand("SELECT 1 FROM fsgg_orchestration.subscription_reservation WHERE assignment_id=$1 AND attempt_id=$2 AND generation=$3 AND expected_revision=$4 AND active AND deadline=$5",connection,transaction)
-                        add reservationCommand commandValue.AssignmentId;add reservationCommand commandValue.AttemptId;add reservationCommand commandValue.Generation;add reservationCommand commandValue.ExpectedRevision;add reservationCommand commandValue.Deadline
-                        let! reservationExists=reservationCommand.ExecuteScalarAsync cancellationToken
+                        use reservationCommand=new NpgsqlCommand("SELECT reservation_payload FROM fsgg_orchestration.subscription_reservation WHERE assignment_id=$1 AND attempt_id=$2 AND generation=$3 AND (expected_revision=$4 OR ($6 AND expected_revision=$4-1)) AND active AND deadline >= $5",connection,transaction)
+                        add reservationCommand commandValue.AssignmentId;add reservationCommand commandValue.AttemptId;add reservationCommand commandValue.Generation;add reservationCommand commandValue.ExpectedRevision;add reservationCommand commandValue.Deadline;add reservationCommand (commandValue.Kind="launch" && commandValue.ExpectedRevision=2L)
+                        let! reservationPayload=reservationCommand.ExecuteScalarAsync cancellationToken
+                        let reservationMatches =
+                            if isNull reservationPayload then false
+                            else
+                                match SubscriptionAccountingCodec.decodeReservation(unbox<byte array> reservationPayload) with
+                                | Ok value -> value.Deadline>=commandValue.Deadline && value.MaximumRuntimeSeconds>=commandValue.MaximumRuntimeSeconds && value.AttemptLimit>=commandValue.MaximumAttempts
+                                | Error _ -> false
                         let effectiveExpiry=min commandValue.Deadline (commandValue.RecordedAt.AddSeconds(float commandValue.MaximumRuntimeSeconds))
-                        let launchAuthorized=commandValue.Kind<>"launch" || (intentMatches && not(isNull reservationExists) && effectiveExpiry>DateTimeOffset.UtcNow)
+                        let launchAuthorized=commandValue.Kind<>"launch" || (intentMatches && reservationMatches && effectiveExpiry>DateTimeOffset.UtcNow)
                         if isNull inputExists || isNull workspaceExists || not launchAuthorized then
                             do! transaction.RollbackAsync cancellationToken
-                            return CommandRefused "executor-command-intent-input-or-reservation-refused"
+                            let reasons =
+                                ["intent",intentMatches
+                                 "input",not(isNull inputExists)
+                                 "workspace",not(isNull workspaceExists)
+                                 "reservation",commandValue.Kind<>"launch" || reservationMatches
+                                 "expiry",commandValue.Kind<>"launch" || effectiveExpiry>DateTimeOffset.UtcNow]
+                                |>List.choose(fun(name,valid)->if valid then None else Some name)
+                                |>String.concat ","
+                            return CommandRefused($"executor-command-authority-refused:{reasons}")
                         else
                             if storedBinding.IsNone && commandValue.Kind="launch" then
                                 use bind=new NpgsqlCommand("UPDATE fsgg_orchestration.execution_stream SET executor_binding=$3 WHERE assignment_id=$1 AND attempt_id=$2 AND executor_binding IS NULL",connection,transaction)
@@ -303,10 +381,11 @@ type PostgreSqlExecutionStore(options:StoreOptions) =
             do! gate connection transaction true cancellationToken
             use command=new NpgsqlCommand("""
 SELECT c.payload,c.body_sha256,s.last_revision,s.generation,s.executor_binding,
-       EXISTS(SELECT 1 FROM fsgg_orchestration.subscription_reservation r
+       (SELECT r.reservation_payload FROM fsgg_orchestration.subscription_reservation r
               WHERE r.assignment_id=c.assignment_id AND r.attempt_id=c.attempt_id
-                AND r.generation=c.generation AND r.expected_revision=c.expected_revision
-                AND r.active AND r.deadline > now())
+                AND r.generation=c.generation
+                AND (r.expected_revision=c.expected_revision OR (c.expected_revision=2 AND r.expected_revision=1))
+                AND r.active AND r.deadline >= c.deadline AND r.deadline > now())
 FROM fsgg_orchestration.executor_command c
 JOIN fsgg_orchestration.execution_stream s USING(assignment_id,attempt_id)
 WHERE c.visible AND NOT c.settled
@@ -332,7 +411,13 @@ ORDER BY c.created_at,c.command_id LIMIT $1
                             && not(reader.IsDBNull 4)
                             && queued.ExecutorBinding = reader.GetString 4
                         let effectiveExpiry=min queued.Deadline (queued.RecordedAt.AddSeconds(float queued.MaximumRuntimeSeconds))
-                        let dispatchAuthorized=queued.Kind<>"launch" || (reader.GetBoolean 5 && effectiveExpiry>DateTimeOffset.UtcNow)
+                        let reservationMatches =
+                            if reader.IsDBNull 5 then false
+                            else
+                                match SubscriptionAccountingCodec.decodeReservation(reader.GetFieldValue<byte array> 5) with
+                                | Ok value -> value.Deadline>=queued.Deadline && value.MaximumRuntimeSeconds>=queued.MaximumRuntimeSeconds && value.AttemptLimit>=queued.MaximumAttempts
+                                | Error _ -> false
+                        let dispatchAuthorized=queued.Kind<>"launch" || (reservationMatches && effectiveExpiry>DateTimeOffset.UtcNow)
                         if not indexValid then failure <- Some "executor-command-index-refused"
                         elif dispatchAuthorized then values.Add payload
             match failure with

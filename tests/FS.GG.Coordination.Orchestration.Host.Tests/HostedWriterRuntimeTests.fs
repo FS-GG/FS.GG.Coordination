@@ -2,10 +2,10 @@ module FS.GG.Coordination.Orchestration.Host.Tests.HostedWriterRuntimeTests
 
 open System
 open System.Collections.Generic
+open System.IO
+open System.Diagnostics
 open System.Threading
 open System.Threading.Tasks
-open System.Net
-open System.Net.Http
 open Xunit
 open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
@@ -54,6 +54,16 @@ module private Fixture =
           ObservedPullRequestHeadSha = String.replicate 40 "a"; MergeCommitSha = String.replicate 40 "b"
           ProviderRevision = "provider-revision"; Generation = route.Generation
           WorkflowRevision = route.WorkflowRevision; ObservedAt = now; Merged = true }
+    let executorCommand commandId =
+        let unsigned=
+            { Schema=ExecutorWire.commandSchemaV2;CommandId=commandId;BodySha256="";Kind="reconcile"
+              WorkItemPersistenceId=WorkItemIdentity.persistenceId workItem;RouteOperationId=Id.operationValue route.ProcessOperationId
+              AssignmentId=Id.operationValue route.ProcessOperationId;AttemptId=Id.attemptValue attempt;CandidateId=Id.candidateValue candidate
+              Generation=1L;ExpectedRevision=1L;RecordedAt=now;Deadline=now.AddMinutes 30.;MaximumRuntimeSeconds=1800L
+              MaximumAttempts=1;Workspace="pilot";WorkspaceManifestSha256=String.replicate 64 "a";RequestedModel=null
+              RequestedEffort=null;InputDigest=String.replicate 64 "b";ExecutorBinding="executor-1";ProviderSessionReference=null
+              ArtifactDigest=null;ContentOffset=0L;ContentLength=0 }
+        {unsigned with BodySha256=ExecutorWire.commandV2Digest unsigned}
 
 type private FixedClock(now:DateTimeOffset) =
     inherit TimeProvider()
@@ -222,27 +232,41 @@ let ``Main verifies complete executor bundle before durable candidate readback``
     let! truncated=RemoteCandidatePipeline.store store candidateId manifest.BaselineObjectId (Fixture.now.AddDays 1.) {Frames=[ExecutorWire.encodeArtifactManifest manifest]} CancellationToken.None
     Assert.Equal(Error "executor-artifact-content-refused",truncated) }
 
-type private RelayHandler(expectedToken:string,responseBytes:byte array) =
-    inherit HttpMessageHandler()
-    override _.SendAsync(request,_) =
-        Assert.Equal("Bearer",request.Headers.Authorization.Scheme)
-        Assert.Equal(expectedToken,request.Headers.Authorization.Parameter)
-        let response=new HttpResponseMessage(HttpStatusCode.OK)
-        response.Content<-new ByteArrayContent(responseBytes)
-        Task.FromResult response
+[<Fact>]
+let ``Host relay binds duplicate commands and replays completion after response loss`` () = task {
+    let relay=HostExecutorRelay(2,1024*1024)
+    let transport=relay :> IAuthenticatedExecutorTransport
+    let command=Fixture.executorCommand(Guid.NewGuid())
+    let frames=[ExecutorWire.encodeCommandV2 command]
+    let first=transport.Exchange(frames,CancellationToken.None)
+    let duplicate=transport.Exchange(frames,CancellationToken.None)
+    let! polled=relay.Poll(CancellationToken.None)
+    Assert.Equal(Some{CommandId=command.CommandId;Frames=frames},polled)
+    let changed={command with ExpectedRevision=2L;BodySha256=""}|>fun value->{value with BodySha256=ExecutorWire.commandV2Digest value}
+    let! conflict=transport.Exchange([ExecutorWire.encodeCommandV2 changed],CancellationToken.None)
+    Assert.Equal(Error "executor-relay-command-identity-conflict",conflict)
+    let response=[ExecutorWire.encodeOperationOutcome {Schema=ExecutorWire.operationOutcomeSchema;CommandId=command.CommandId;BodySha256=command.BodySha256;Operation="reconcile";Disposition="unknown";ProviderSessionReference=null;Reason="fixture";ObservedAt=Fixture.now}]
+    Assert.Equal(Ok(),relay.Complete(command.CommandId,response))
+    Assert.Equal(Ok{Frames=response},first.Result)
+    Assert.Equal(Ok{Frames=response},duplicate.Result)
+    Assert.Equal(Ok(),relay.Complete(command.CommandId,response))
+    let! replayed=transport.Exchange(frames,CancellationToken.None)
+    Assert.Equal(Ok{Frames=response},replayed)
+    Assert.Equal(Error "executor-relay-response-identity-conflict",relay.Complete(command.CommandId,[|1uy|]::[])) }
 
 [<Fact>]
-let ``loopback executor transport authenticates and rejects truncated frames`` () = task {
-    let token=String.replicate 32 "t"
-    let framed (bytes:byte array)=Array.concat[[|0uy;0uy;0uy;byte bytes.Length|];bytes]
-    use goodClient=new HttpClient(new RelayHandler(token,framed [|1uy;2uy|]))
-    let transport=HttpExecutorTransport(goodClient,Uri "http://127.0.0.1:19441/v1/executor/exchange",token,1024) :> IAuthenticatedExecutorTransport
-    let! accepted=transport.Exchange([[|3uy|]],CancellationToken.None)
-    Assert.Equal(Ok{Frames=[[|1uy;2uy|]]},accepted)
-    use badClient=new HttpClient(new RelayHandler(token,[|0uy;0uy;0uy;4uy;1uy|]))
-    let bad=HttpExecutorTransport(badClient,Uri "http://127.0.0.1:19441/v1/executor/exchange",token,1024) :> IAuthenticatedExecutorTransport
-    let! refused=bad.Exchange([[|3uy|]],CancellationToken.None)
-    Assert.Equal(Error "executor-http-response-framing-refused",refused) }
+let ``Host relay cancellation leaves original request available for reconciliation`` () = task {
+    let relay=HostExecutorRelay(2,1024*1024)
+    let command=Fixture.executorCommand(Guid.NewGuid())
+    let frames=[ExecutorWire.encodeCommandV2 command]
+    use cancelled=new CancellationTokenSource()
+    let waiting=(relay :> IAuthenticatedExecutorTransport).Exchange(frames,cancelled.Token)
+    cancelled.Cancel()
+    let! result=waiting
+    Assert.Equal(Error "executor-relay-response-unknown",result)
+    Assert.Equal(1,relay.PendingCount)
+    let! polled=relay.Poll(CancellationToken.None)
+    Assert.Equal(Some{CommandId=command.CommandId;Frames=frames},polled) }
 
 [<Fact>]
 let ``work item recovery refuses an untyped snapshot instead of inventing state`` () = task {
@@ -291,3 +315,56 @@ let ``work item recovery replays typed events and retains unsettled provider wor
         Assert.Equal(IntentRecorded intent,result.State.Operations[intent.OperationId])
         Assert.Equal<EffectIntent list>([intent],result.UnsettledEffects)
         Assert.True(result.RequiresExternalReconciliation) }
+
+type private QueuedGitHub(outcomes:FS.GG.Coordination.GitHub.TransportOutcome list) =
+    let queue=Queue<FS.GG.Coordination.GitHub.TransportOutcome>(outcomes)
+    let requests=ResizeArray<FS.GG.Coordination.GitHub.GitHubRequest>()
+    member _.Requests=requests|>Seq.toList
+    interface IGitHubRequestExecutor with
+        member _.Send(request,_)=requests.Add request;Task.FromResult(if queue.Count=0 then FS.GG.Coordination.GitHub.NetworkFailure else queue.Dequeue())
+
+type private FixedPublisher(result:Result<string,string>) =
+    interface IGitCandidatePublisher with member _.Publish(_,_,_,_,_,_)=Task.FromResult result
+
+let private response body =
+    FS.GG.Coordination.GitHub.Response{StatusCode=200;Headers=Map.empty;Body=body;ETag=Some "fixture-etag";RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}}
+
+let private githubTarget =
+    {ApiRoot=Uri "https://api.github.test/";Repository="FS-GG/.github";IssueNumber=3419;Principal="pilot-worker";BaseRef="main"
+     RequiredChecks=set["routine-eligibility";"reuse-decision";"aggregate"];ClaimLease=TimeSpan.FromMinutes 30.}
+
+let private pr state mergedAt head mergeSha =
+    let merged=match mergedAt with Some value -> $"\"{value}\"" | None -> "null"
+    let merge=match mergeSha with Some value -> $"\"{value}\"" | None -> "null"
+    $"[{{\"number\":42,\"node_id\":\"PR_node\",\"state\":\"{state}\",\"merged_at\":{merged},\"merge_commit_sha\":{merge},\"head\":{{\"sha\":\"{head}\",\"ref\":\"pilot\"}},\"base\":{{\"ref\":\"main\",\"repo\":{{\"full_name\":\"FS-GG/.github\"}}}}}}]"
+
+[<Fact>]
+let ``GitHub route refuses competing canonical claim marker`` () = task {
+    let operation=Guid.Parse "80000000-0000-0000-0000-000000000001"
+    let comments=$"[{{\"id\":1,\"updated_at\":\"2026-09-10T19:00:00Z\",\"body\":\"<!-- fsgg:claim worker=other lease=30 renewed=1 session={operation:N} -->\"}}]"
+    let executor=QueuedGitHub[response comments]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok(String.replicate 40 "a")),githubTarget,FixedClock Fixture.now)
+    let! result=client.AcquireClaim("claim-1",operation,CancellationToken.None)
+    Assert.Equal(Error "github-claim-held-by-competitor",result)
+    Assert.Single(executor.Requests)|>ignore }
+
+[<Fact>]
+let ``GitHub route refuses missing branch readback and unmerged delivery`` () = task {
+    let head=String.replicate 40 "a"
+    let executor=QueuedGitHub[FS.GG.Coordination.GitHub.Response{StatusCode=404;Headers=Map.empty;Body="{}";ETag=None;RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}};response(pr "open" None head None)]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok head),githubTarget,FixedClock Fixture.now)
+    let! publication=client.PublishBranch("refs/heads/pilot",None,head,[|1uy|],Guid.NewGuid(),CancellationToken.None)
+    Assert.Equal(Error "github-status-404",publication)
+    let! delivery=client.ReadDelivery("refs/heads/pilot",head,CancellationToken.None)
+    Assert.Equal(Error "github-native-delivery-not-observed",delivery) }
+
+[<Fact>]
+let ``GitHub merge refuses incomplete required checks before mutation`` () = task {
+    let head=String.replicate 40 "a"
+    let protection="{\"checks\":[{\"context\":\"compiler-and-tests\"}]}"
+    let checks="{\"check_runs\":[{\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"success\"}]}"
+    let executor=QueuedGitHub[response(pr "open" None head None);response protection;response checks]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok head),githubTarget,FixedClock Fixture.now)
+    let! result=client.Merge("refs/heads/pilot",head,Guid.NewGuid(),CancellationToken.None)
+    Assert.Equal(Error "github-required-checks-not-green",result)
+    Assert.Equal(3,executor.Requests.Length) }

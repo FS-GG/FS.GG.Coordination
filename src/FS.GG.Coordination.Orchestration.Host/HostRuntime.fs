@@ -46,6 +46,11 @@ type ControlRequest =
       ExpiresAt: DateTimeOffset
       Reason: string }
 
+[<CLIMutable>]
+type ExecutorRelayPoll = { Schema:string; MaximumWaitSeconds:int }
+[<CLIMutable>]
+type ExecutorRelayCompletion = { Schema:string; CommandId:Guid; FramesBase64:string array; Failure:string }
+
 [<RequireQualifiedAccess>]
 module HostRuntime =
     let private jsonOptions =
@@ -221,10 +226,44 @@ module HostRuntime =
 
     let private runnerStore (store:HostStore) = { RunnerWireStore.WorkItems=store.WorkItems;Candidates=store.Candidates }
 
-    let private handle clock configuration store (context: HttpListenerContext) cancellationToken = task {
+    let private exactObject (expected:Set<string>) (bytes:byte array) =
+        use document=JsonDocument.Parse(ReadOnlyMemory bytes,JsonDocumentOptions(MaxDepth=8))
+        if document.RootElement.ValueKind<>JsonValueKind.Object then false else
+        let names=document.RootElement.EnumerateObject()|>Seq.map _.Name|>Seq.toList
+        names.Length=expected.Count && Set.ofList names=expected
+
+    let private handle clock configuration store (executorRelay:HostExecutorRelay option) (mainAdmission:IMainRouteAdmissionHandler option) (context: HttpListenerContext) cancellationToken = task {
         let request, response = context.Request, context.Response
         if request.HttpMethod = "GET" && request.Url.AbsolutePath = "/health/live" then
             do! writeJson response 200 {| schema = "fsgg.orchestration.host-liveness/1"; live = true; dispatchEnabled = false |} cancellationToken
+        elif request.Url.AbsolutePath.StartsWith("/v1/executor/",StringComparison.Ordinal) then
+            if not(authorize configuration.RunnerToken (Option.ofObj request.Headers["Authorization"])) || executorRelay.IsNone then
+                do! writeJson response 401 {| error="unauthorized" |} cancellationToken
+            else
+                let! body=readRunner (2*1024*1024) request cancellationToken
+                match body with
+                | Error reason -> do! writeJson response 400 {| error=reason |} cancellationToken
+                | Ok bytes ->
+                    try
+                        if request.HttpMethod="POST" && request.Url.AbsolutePath="/v1/executor/poll" then
+                            let value=JsonSerializer.Deserialize<ExecutorRelayPoll>(ReadOnlySpan bytes,jsonOptions)
+                            if not(exactObject (set["schema";"maximumWaitSeconds"]) bytes) || isNull(box value) || value.Schema<>"fsgg.orchestration.executor-relay-poll/1" || value.MaximumWaitSeconds<1 || value.MaximumWaitSeconds>30 then do! writeJson response 400 {|error="executor-relay-poll-refused"|} cancellationToken
+                            else
+                                use deadline=CancellationTokenSource.CreateLinkedTokenSource cancellationToken
+                                deadline.CancelAfter(TimeSpan.FromSeconds(float value.MaximumWaitSeconds))
+                                let! found=executorRelay.Value.Poll(deadline.Token)
+                                match found with
+                                | None -> do! writeJson response 204 {|schema="fsgg.orchestration.executor-relay-empty/1"|} cancellationToken
+                                | Some pending -> do! writeJson response 200 {|schema="fsgg.orchestration.executor-relay-request/1";commandId=pending.CommandId;framesBase64=pending.Frames|>List.map Convert.ToBase64String|>List.toArray|} cancellationToken
+                        elif request.HttpMethod="POST" && request.Url.AbsolutePath="/v1/executor/complete" then
+                            let value=JsonSerializer.Deserialize<ExecutorRelayCompletion>(ReadOnlySpan bytes,jsonOptions)
+                            let frames=if isNull(box value)||isNull value.FramesBase64 then [] else value.FramesBase64|>Array.toList|>List.map(fun item->try Convert.FromBase64String item with _->Array.empty)
+                            let result=if not(exactObject (set["schema";"commandId";"framesBase64";"failure"]) bytes) || isNull(box value) || value.Schema<>"fsgg.orchestration.executor-relay-complete/1" || value.CommandId=Guid.Empty then Error "executor-relay-completion-refused" elif not(String.IsNullOrWhiteSpace value.Failure) then executorRelay.Value.Fail(value.CommandId,value.Failure) else executorRelay.Value.Complete(value.CommandId,frames)
+                            match result with
+                            | Ok() -> do! writeJson response 200 {|schema="fsgg.orchestration.executor-relay-completion/1";accepted=true|} cancellationToken
+                            | Error reason -> do! writeJson response 409 {|error=reason|} cancellationToken
+                        else do! writeJson response 404 {|error="executor-relay-route-not-found"|} cancellationToken
+                    with :? JsonException -> do! writeJson response 400 {|error="executor-relay-json-refused"|} cancellationToken
         elif request.Url.AbsolutePath.StartsWith("/v1/runner/",StringComparison.Ordinal) then
             if not(authorize configuration.RunnerToken (Option.ofObj request.Headers["Authorization"])) then
                 do! writeJson response 401 {| error="unauthorized" |} cancellationToken
@@ -261,6 +300,18 @@ module HostRuntime =
                     | Error reason -> do! writeJson response (if parsed then 409 else 400) {| error=reason |} cancellationToken
         elif not (authorize configuration.Token (Option.ofObj request.Headers["Authorization"])) then
             do! writeJson response 401 {| error = "unauthorized" |} cancellationToken
+        elif request.HttpMethod="POST" && request.Url.AbsolutePath="/v1/main/admit" then
+            match mainAdmission with
+            | None->do! writeJson response 503 {|error="main-route-admission-not-configured"|} cancellationToken
+            | Some admission->
+                let! body=readRunner (2*1024*1024) request cancellationToken
+                match body with
+                | Error reason->do! writeJson response 400 {|error=reason|} cancellationToken
+                | Ok bytes->
+                    let! admitted=admission.Admit(bytes,cancellationToken)
+                    match admitted with
+                    | Ok()->do! writeJson response 200 {|schema="fsgg.orchestration.main-route-admission-receipt/1";accepted=true|} cancellationToken
+                    | Error reason->do! writeJson response 409 {|error=reason|} cancellationToken
         elif request.HttpMethod = "GET" && (request.Url.AbsolutePath = "/health/ready" || request.Url.AbsolutePath = "/v1/status") then
             let! current = status store configuration.PermitId cancellationToken
             do! writeJson response (if current.Ready then 200 else 503) current cancellationToken
@@ -275,27 +326,27 @@ module HostRuntime =
                 | Error reason -> do! writeJson response 409 {| error = reason |} cancellationToken
         else do! writeJson response 404 {| error = "not-found" |} cancellationToken }
 
-    let serve (clock: TimeProvider) (configuration: HostConfiguration) (store: HostStore) (cancellationToken: CancellationToken) = task {
+    let private serveInternal (clock: TimeProvider) (configuration: HostConfiguration) (store: HostStore) relay admission (cancellationToken: CancellationToken) = task {
         use listener = new HttpListener()
-        use admission = new SemaphoreSlim(configuration.MaximumConcurrentRequests, configuration.MaximumConcurrentRequests)
+        use requestSlots = new SemaphoreSlim(configuration.MaximumConcurrentRequests, configuration.MaximumConcurrentRequests)
         let active = ResizeArray<Task>()
         listener.Prefixes.Add configuration.Prefix
         listener.Start()
         try
             while not cancellationToken.IsCancellationRequested do
                     let! context = listener.GetContextAsync().WaitAsync(cancellationToken)
-                    if admission.Wait(0) then
+                    if requestSlots.Wait(0) then
                         let pending = task {
                             use deadline = CancellationTokenSource.CreateLinkedTokenSource cancellationToken
                             deadline.CancelAfter configuration.RequestTimeout
                             try
                                 try
-                                    do! handle clock configuration store context deadline.Token
+                                    do! handle clock configuration store relay admission context deadline.Token
                                 with
                                 | :? OperationCanceledException when not cancellationToken.IsCancellationRequested ->
                                     do! writeEmergency context.Response 408 {| error = "request-timeout" |}
                                 | _ -> do! writeEmergency context.Response 500 {| error = "request-refused" |}
-                            finally admission.Release() |> ignore }
+                            finally requestSlots.Release() |> ignore }
                         active.Add pending
                         active.RemoveAll(fun item -> item.IsCompleted) |> ignore
                     else
@@ -304,3 +355,7 @@ module HostRuntime =
         with :? OperationCanceledException -> ()
         listener.Stop()
         try do! Task.WhenAll(active) with _ -> () }
+
+    let serve clock configuration store cancellationToken = serveInternal clock configuration store None None cancellationToken
+    let serveProduction clock configuration store relay cancellationToken = serveInternal clock configuration store (Some relay) None cancellationToken
+    let serveMain clock configuration store relay admission cancellationToken = serveInternal clock configuration store (Some relay) (Some admission) cancellationToken

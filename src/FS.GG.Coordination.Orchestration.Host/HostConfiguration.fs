@@ -18,8 +18,12 @@ type HostConfiguration =
       PermitId: Guid
       PilotPrincipalId: string
       WorkItemId: WorkItemId
+      GitHub: MainGitHubConfiguration option
       RequestTimeout: TimeSpan
       MaximumConcurrentRequests: int }
+
+and MainGitHubConfiguration =
+    { Token:string; Repository:string; IssueNumber:int; BaseRef:string; ApiRoot:Uri; RemoteUri:Uri; RequiredChecks:Set<string> }
 
 [<RequireQualifiedAccess>]
 module HostConfiguration =
@@ -54,6 +58,9 @@ module HostConfiguration =
         |> Option.bind (fun index -> Array.tryItem (index + 1) arguments)
         |> Option.filter (String.IsNullOrWhiteSpace >> not)
         |> function Some found -> Ok found | None -> Error $"missing {name}"
+
+    let private optionalValue name (arguments:string array) =
+        arguments|>Array.tryFindIndex((=) name)|>Option.bind(fun index->Array.tryItem(index+1) arguments)|>Option.filter(String.IsNullOrWhiteSpace>>not)
 
     let private validateArguments allowed (arguments: string array) =
         if arguments.Length % 2 <> 0 then Error "options-must-be-name-value-pairs"
@@ -105,7 +112,7 @@ module HostConfiguration =
 
     let parseServe arguments =
         result {
-            do! validateArguments (set [ "--connection-file"; "--token-file"; "--runner-token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id" ]) arguments
+            do! validateArguments (set [ "--connection-file"; "--token-file"; "--runner-token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id"; "--github-token-file"; "--github-repository"; "--github-issue-number"; "--github-base-ref" ]) arguments
             let! connectionPath = value "--connection-file" arguments
             let! tokenPath = value "--token-file" arguments
             let! runnerTokenPath = value "--runner-token-file" arguments
@@ -125,6 +132,16 @@ module HostConfiguration =
             let! repositoryDatabaseText = value "--repository-database-id" arguments
             let! issueNodeId = value "--issue-node-id" arguments
             let! issueDatabaseText = value "--issue-database-id" arguments
+            let githubValues=optionalValue "--github-token-file" arguments,optionalValue "--github-repository" arguments,optionalValue "--github-issue-number" arguments,optionalValue "--github-base-ref" arguments
+            let! github=
+                match githubValues with
+                | None,None,None,None->Ok None
+                | Some tokenPath,Some repository,Some issueText,Some baseRef->
+                    match privateFile 4096 tokenPath,Int32.TryParse issueText with
+                    | Ok githubToken,(true,issueNumber) when githubToken.Length>=32&&repository.Split('/').Length=2&&issueNumber>0&&baseRef=baseRef.Trim()&&baseRef.Length<=128->
+                        Ok(Some{Token=githubToken;Repository=repository;IssueNumber=issueNumber;BaseRef=baseRef;ApiRoot=Uri "https://api.github.com/";RemoteUri=Uri($"https://github.com/{repository}.git");RequiredChecks=set["routine-eligibility";"reuse-decision";"aggregate"]})
+                    | _->Error "invalid-github-main-configuration"
+                | _->Error "incomplete-github-main-configuration"
             match Int64.TryParse fenceText, Guid.TryParse backupIdentity, Guid.TryParse permitText,
                   Int64.TryParse repositoryDatabaseText, Int64.TryParse issueDatabaseText with
             | (true, fence), (true, backup), (true, permit), (true, repositoryDatabaseId), (true, issueDatabaseId)
@@ -138,6 +155,7 @@ module HostConfiguration =
                       BackupIdentity = backup.ToString(); MinimumGenerationFence = fence; PermitId = permit
                       PilotPrincipalId = principal
                       WorkItemId = WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
+                      GitHub=github
                       RequestTimeout = TimeSpan.FromSeconds 5.; MaximumConcurrentRequests = 4 }
             | _ -> return! Error "invalid-fence-backup-permit-or-work-item-identity"
         }

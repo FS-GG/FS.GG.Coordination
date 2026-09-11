@@ -3,13 +3,14 @@ namespace FS.GG.Coordination.Orchestration.Host
 open System
 open System.Threading
 open System.Threading.Tasks
+open System.Collections.Concurrent
 open FS.GG.Coordination.Orchestration.Execution
 open FS.GG.Coordination.Orchestration.PostgreSql
 open FS.GG.Coordination.Orchestration.Runner.Protocol
 open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 
-type ExecutorRouteBinding =
+type ResolvedExecutorRouteBinding =
     { WorkItemPersistenceId:string; RouteOperationId:Guid; CandidateId:Guid; ExpectedRevision:int64
       ExecutorBinding:string; WorkspaceManifest:ExecutorWorkspaceManifest
       InputManifest:ExecutorInputManifest; InputBytes:byte array }
@@ -23,9 +24,41 @@ type IAuthenticatedExecutorTransport =
     abstract Exchange: frames:byte array list * CancellationToken -> Task<Result<ExecutorTransportReadback,string>>
 
 type IExecutorBindingResolver =
-    abstract ResolveReadiness: CancellationToken -> Task<Result<LaunchIntent * ExecutorRouteBinding,string>>
-    abstract Resolve: LaunchIntent * CancellationToken -> Task<Result<ExecutorRouteBinding,string>>
-    abstract ResolveSession: ProviderSessionReference * CancellationToken -> Task<Result<LaunchIntent * ExecutorRouteBinding,string>>
+    abstract ResolveReadiness: CancellationToken -> Task<Result<LaunchIntent * ResolvedExecutorRouteBinding,string>>
+    abstract Resolve: LaunchIntent * CancellationToken -> Task<Result<ResolvedExecutorRouteBinding,string>>
+    abstract ResolveSession: ProviderSessionReference * CancellationToken -> Task<Result<LaunchIntent * ResolvedExecutorRouteBinding,string>>
+
+/// Resolves only immutable Main-owned PostgreSQL state. Relay endpoint details are
+/// deliberately absent, so reconnecting a launcher cannot renew execution authority.
+[<Sealed>]
+type PostgreSqlExecutorBindingResolver(store:IExecutorCommandStore,journal:IExecutionSessionJournal,readinessAssignment:Guid,readinessAttempt:Guid) =
+    let resolve assignmentId attemptId expectedIntent token = task {
+        let! stored=journal.ReadAttempt(assignmentId,attemptId,token)
+        let! routeBytes=store.ReadRoute(assignmentId,attemptId,token)
+        match stored,routeBytes with
+        | Some stream,Ok bytes ->
+            match SessionState.replay stream.Events,ExecutorWire.parseRouteBinding bytes with
+            | Some state,Ok route when expectedIntent|>Option.forall((=)state.Intent)
+                                      && route.AssignmentId=state.Intent.Key.AssignmentId && route.AttemptId=state.Intent.Key.AttemptId
+                                      && route.Generation=state.Intent.Key.Generation && route.PromptDigest=state.Intent.InputDigest ->
+                let! input=store.ReadInput(state.Intent.InputDigest,token)
+                let! workspace=store.ReadWorkspaceManifest(route.WorkspaceManifestSha256,token)
+                match input,workspace with
+                | Ok inputBytes,Ok workspaceBytes ->
+                    match ExecutorWire.parseWorkspaceManifest workspaceBytes with
+                    | Ok workspaceManifest when workspaceManifest.InputDigest=state.Intent.InputDigest && workspaceManifest.BaselineObjectId=route.BaselineObjectId && workspaceManifest.RepositoryBinding=route.RepositoryBinding ->
+                        let inputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=state.Intent.InputDigest;MediaType="text/markdown; charset=utf-8";SizeBytes=inputBytes.LongLength;ChunkBytes=ExecutorWire.maximumContentBytes}
+                        return Ok(state.Intent,{WorkItemPersistenceId=route.WorkItemPersistenceId;RouteOperationId=route.ProcessOperationId;CandidateId=route.CandidateId;ExpectedRevision=stream.Revision;ExecutorBinding=route.ExecutorBinding;WorkspaceManifest=workspaceManifest;InputManifest=inputManifest;InputBytes=inputBytes})
+                    | _ -> return Error "execution-route-workspace-binding-refused"
+                | _ -> return Error "execution-route-input-unavailable"
+            | _ -> return Error "execution-route-authority-refused"
+        | _ -> return Error "execution-route-binding-unavailable" }
+    interface IExecutorBindingResolver with
+        member _.ResolveReadiness token=resolve readinessAssignment readinessAttempt None token
+        member _.Resolve(intent,token)=task { let! value=resolve intent.Key.AssignmentId intent.Key.AttemptId (Some intent) token in return value|>Result.map snd }
+        member _.ResolveSession(session,token)=task {
+            let! found=store.FindAttemptBySession(ProviderSessionReference.value session,token)
+            match found with Error reason->return Error reason|Ok(assignment,attempt)->return! resolve assignment attempt None token }
 
 [<RequireQualifiedAccess>]
 module RemoteCandidatePipeline =
@@ -65,6 +98,7 @@ module RemoteCandidatePipeline =
 
 [<Sealed>]
 type RemoteExecutorProvider(store:IExecutorCommandStore,resolver:IExecutorBindingResolver,transport:IAuthenticatedExecutorTransport) =
+    let artifacts=ConcurrentDictionary<ExecutionKey,ExecutorArtifactManifest>()
     let nullableText value=if String.IsNullOrWhiteSpace value then None else Some value
     let observation (response:ExecutorResponse) =
         match ProviderSessionReference.create response.ProviderSessionReference with
@@ -87,12 +121,12 @@ type RemoteExecutorProvider(store:IExecutorCommandStore,resolver:IExecutorBindin
                     Resolved={Model=nullableText response.ResolvedModel;Effort=nullableText response.ResolvedEffort};Lifecycle=lifecycle
                     Output=refs response.Output;LifecycleReferences=refs response.LifecycleReferences;Usage={Values=usage;Cost=cost}
                     Candidate=candidate;ObservedAt=response.ObservedAt}
-    let command kind (intent:LaunchIntent) (binding:ExecutorRouteBinding) session =
-        let identity=System.Text.Encoding.UTF8.GetBytes($"{intent.Key.AssignmentId:D}:{intent.Key.AttemptId:D}:{intent.Key.Generation}:{binding.ExpectedRevision}:{kind}:{session}")|>System.Security.Cryptography.SHA256.HashData
-        let value={Schema=ExecutorWire.commandSchemaV2;CommandId=Guid(ReadOnlySpan(identity,0,16));BodySha256="";Kind=kind;WorkItemPersistenceId=binding.WorkItemPersistenceId;RouteOperationId=binding.RouteOperationId;AssignmentId=intent.Key.AssignmentId;AttemptId=intent.Key.AttemptId;CandidateId=binding.CandidateId;Generation=intent.Key.Generation;ExpectedRevision=binding.ExpectedRevision;RecordedAt=intent.RecordedAt;Deadline=intent.Limits.Deadline;MaximumRuntimeSeconds=int64 intent.Limits.MaximumRuntime.TotalSeconds;MaximumAttempts=intent.Limits.MaximumAttempts;Workspace=intent.Workspace;WorkspaceManifestSha256=(RunnerWire.serialize binding.WorkspaceManifest|>RunnerWire.sha256);RequestedModel=Option.toObj intent.Requested.Model;RequestedEffort=Option.toObj intent.Requested.Effort;InputDigest=intent.InputDigest;ExecutorBinding=binding.ExecutorBinding;ProviderSessionReference=session;ArtifactDigest=null;ContentOffset=0L;ContentLength=0}
+    let command kind (intent:LaunchIntent) (binding:ResolvedExecutorRouteBinding) session artifactDigest offset length =
+        let identity=System.Text.Encoding.UTF8.GetBytes($"{intent.Key.AssignmentId:D}:{intent.Key.AttemptId:D}:{intent.Key.Generation}:{binding.ExpectedRevision}:{kind}:{session}:{artifactDigest}:{offset}:{length}")|>System.Security.Cryptography.SHA256.HashData
+        let value={Schema=ExecutorWire.commandSchemaV2;CommandId=Guid(ReadOnlySpan(identity,0,16));BodySha256="";Kind=kind;WorkItemPersistenceId=binding.WorkItemPersistenceId;RouteOperationId=binding.RouteOperationId;AssignmentId=intent.Key.AssignmentId;AttemptId=intent.Key.AttemptId;CandidateId=binding.CandidateId;Generation=intent.Key.Generation;ExpectedRevision=binding.ExpectedRevision;RecordedAt=intent.RecordedAt;Deadline=intent.Limits.Deadline;MaximumRuntimeSeconds=int64 intent.Limits.MaximumRuntime.TotalSeconds;MaximumAttempts=intent.Limits.MaximumAttempts;Workspace=intent.Workspace;WorkspaceManifestSha256=(RunnerWire.serialize binding.WorkspaceManifest|>RunnerWire.sha256);RequestedModel=Option.toObj intent.Requested.Model;RequestedEffort=Option.toObj intent.Requested.Effort;InputDigest=intent.InputDigest;ExecutorBinding=binding.ExecutorBinding;ProviderSessionReference=session;ArtifactDigest=artifactDigest;ContentOffset=offset;ContentLength=length}
         {value with BodySha256=ExecutorWire.commandV2Digest value}
     let invoke kind intent binding session token = task {
-        let commandValue=command kind intent binding session
+        let commandValue=command kind intent binding session null 0L 0
         let commandBytes=ExecutorWire.encodeCommandV2 commandValue
         let! inputPrepared=store.StageInput(ExecutorWire.encodeInputManifest binding.InputManifest,binding.InputBytes,token)
         let! manifestPrepared=store.StageWorkspaceManifest(ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest,token)
@@ -102,13 +136,17 @@ type RemoteExecutorProvider(store:IExecutorCommandStore,resolver:IExecutorBindin
             | Ok(),Ok digest when digest=expectedManifest -> store.PersistCommand(commandBytes,token)
             | _ -> Task.FromResult(CommandRefused "executor-bound-input-preparation-refused")
         match persisted with
-        | CommandConflict | CommandRefused _ -> return Error "executor-command-persistence-refused"
+        | CommandConflict -> return Error "executor-command-persistence-conflict"
+        | CommandRefused reason -> return Error($"executor-command-persistence-refused:{reason}")
         | CommandPersisted _ | CommandDuplicate _ ->
             let frames=if kind="launch" then [ExecutorWire.encodeInputManifest binding.InputManifest;ExecutorWire.encodeContent {Schema=ExecutorWire.contentSchema;CommandId=commandValue.CommandId;InputDigest=intent.InputDigest;Offset=0L;Final=true;ContentBase64=Convert.ToBase64String binding.InputBytes};ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest;commandBytes] else [commandBytes]
             let! exchanged=transport.Exchange(frames,token)
             match exchanged with
             | Error reason -> return Error reason
             | Ok value ->
+                value.Frames
+                |>List.choose(fun bytes->ExecutorWire.parseArtifactManifest bytes|>Result.toOption)
+                |>List.iter(fun manifest->if manifest.CandidateId=binding.CandidateId then artifacts[intent.Key]<-manifest)
                 let receipts=value.Frames|>List.choose(fun bytes->ExecutorWire.parseReceipt bytes|>Result.toOption)
                 let outcome=value.Frames|>List.choose(fun bytes->ExecutorWire.parseOperationOutcome bytes|>Result.toOption)|>List.tryLast
                 let response=value.Frames|>List.choose(fun bytes->ExecutorWire.parseResponse bytes|>Result.toOption)|>List.tryLast
@@ -120,7 +158,7 @@ type RemoteExecutorProvider(store:IExecutorCommandStore,resolver:IExecutorBindin
                     let! settled=store.SettleCommand(commandValue.CommandId,terminal.Value,token)
                     return settled |> Result.map(fun ()->outcome,response,value) }
     let readiness intent binding token = task {
-        let value=command "readiness" intent binding null
+        let value=command "readiness" intent binding null null 0L 0
         let bytes=ExecutorWire.encodeCommandV2 value
         let frames=[ExecutorWire.encodeInputManifest binding.InputManifest;ExecutorWire.encodeContent {Schema=ExecutorWire.contentSchema;CommandId=value.CommandId;InputDigest=intent.InputDigest;Offset=0L;Final=true;ContentBase64=Convert.ToBase64String binding.InputBytes};ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest;bytes]
         let! exchanged=transport.Exchange(frames,token)
@@ -194,3 +232,36 @@ type RemoteExecutorProvider(store:IExecutorCommandStore,resolver:IExecutorBindin
                 | Ok(Some outcome,_,_) ->
                     return match outcome.Disposition with "accepted"->CancelAccepted|"refused"->CancelRefused outcome.Reason|_->CancelUnknown outcome.Reason
                 | Ok(None,_,_) -> return CancelUnknown "executor-cancel-terminal-readback-missing" }
+    member _.ReadCandidate(intent:LaunchIntent,manifest:ExecutorArtifactManifest,token:CancellationToken)=task {
+        let! resolved=resolver.Resolve(intent,token)
+        match resolved with
+        | Error reason -> return Error reason
+        | Ok binding ->
+            let output=ResizeArray<byte array>()
+            output.Add(ExecutorWire.encodeArtifactManifest manifest)
+            let mutable offset=0L
+            let mutable failure=None
+            while failure.IsNone && offset<manifest.BundleSizeBytes do
+                let length=int(min (int64 ExecutorWire.maximumContentBytes) (manifest.BundleSizeBytes-offset))
+                let commandValue=command "content-read" intent binding null manifest.BundleSha256 offset length
+                let commandBytes=ExecutorWire.encodeCommandV2 commandValue
+                let! persisted=store.PersistCommand(commandBytes,token)
+                match persisted with
+                | CommandConflict|CommandRefused _ -> failure<-Some "executor-content-command-persistence-refused"
+                | CommandPersisted _|CommandDuplicate _ ->
+                    let! readback=transport.Exchange([commandBytes],token)
+                    match readback with
+                    | Error reason -> failure<-Some reason
+                    | Ok value ->
+                        let chunk=value.Frames|>List.choose(fun bytes->ExecutorWire.parseArtifactContent bytes|>Result.toOption)|>List.tryExactlyOne
+                        let outcome=value.Frames|>List.choose(fun bytes->ExecutorWire.parseOperationOutcome bytes|>Result.toOption)|>List.tryLast
+                        match chunk,outcome with
+                        | Some(item,bytes),Some doneValue when item.CommandId=commandValue.CommandId && item.Offset=offset && item.BundleSha256=manifest.BundleSha256 && doneValue.CommandId=commandValue.CommandId && doneValue.BodySha256=commandValue.BodySha256 && doneValue.Disposition="reconciled" ->
+                            let! settled=store.SettleCommand(commandValue.CommandId,ExecutorWire.encodeOperationOutcome doneValue,token)
+                            match settled with Error reason->failure<-Some reason|Ok()->output.Add(ExecutorWire.encodeArtifactContent item);offset<-offset+int64 bytes.Length
+                        | _ -> failure<-Some "executor-artifact-command-binding-refused"
+            return match failure with Some reason->Error reason|None->Ok{Frames=List.ofSeq output} }
+    member this.ReadCandidate(intent:LaunchIntent,token:CancellationToken)=task {
+        match artifacts.TryGetValue intent.Key with
+        | true,manifest -> return! this.ReadCandidate(intent,manifest,token)
+        | _ -> return Error "executor-artifact-manifest-not-observed" }
