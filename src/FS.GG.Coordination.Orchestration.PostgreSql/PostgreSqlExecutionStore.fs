@@ -86,6 +86,7 @@ type PostgreSqlExecutionStore(options:StoreOptions) =
                     if schema<>SessionEventCodec.schema then failure<-Some "execution-event-schema-refused"
                     elif sha payload<>identity then failure<-Some "execution-event-digest-refused"
                     else match SessionEventCodec.decode payload with Ok value->events.Add value|Error reason->failure<-Some reason
+            do! reader.CloseAsync()
             match failure with
             | Some reason -> return raise(InvalidDataException reason)
             | None when revision<>expectedTail -> return raise(InvalidDataException "execution-stream-tail-refused")
