@@ -801,11 +801,16 @@ type PostgreSqlStoreTests() =
               CandidateId=Guid.Empty;CandidateHeadSha=null;CandidateTreeSha=null;ObservedAt=now;Detail="ready" }
         Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse response) |> Result.isOk)
         Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {response with InvocationCostState="observed"}) |> Result.isError)
+        let responseText=ExecutorWire.encodeResponse response |> Encoding.UTF8.GetString
+        Assert.True(ExecutorWire.parseResponse(Encoding.UTF8.GetBytes(responseText.Replace("\"output\":[]","\"output\":[null]"))) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(Encoding.UTF8.GetBytes(responseText.Replace("\"usage\":[{","\"usage\":[{\"unknownNested\":true,"))) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(Encoding.UTF8.GetBytes(responseText.Replace("\"provenance\":\"provider-not-reported\"","\"provenance\":\"provider-not-reported\",\"provenance\":\"duplicate\""))) |> Result.isError)
         let manifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=valid.InputDigest;MediaType="text/markdown";SizeBytes=5L;ChunkBytes=5}
         Assert.True(ExecutorWire.parseInputManifest(ExecutorWire.encodeInputManifest manifest) |> Result.isOk)
         Assert.True(ExecutorWire.parseInputManifest(ExecutorWire.encodeInputManifest {manifest with Schema="fsgg.orchestration.executor-input-manifest/2"}) |> Result.isError)
         let content={Schema=ExecutorWire.contentSchema;CommandId=valid.CommandId;InputDigest=valid.InputDigest;Offset=0L;Final=true;ContentBase64=Convert.ToBase64String(Encoding.UTF8.GetBytes "input")}
         Assert.True(ExecutorWire.parseContent(ExecutorWire.encodeContent content) |> Result.isOk)
+        Assert.True(ExecutorWire.parseContent(ExecutorWire.encodeContent {content with ContentBase64=null}) |> Result.isError)
         Assert.True(ExecutorWire.parseContent(ExecutorWire.encodeContent {content with Schema="fsgg.orchestration.executor-content/2"}) |> Result.isError)
         let eventBytes=FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.encode(FS.GG.Coordination.Orchestration.Execution.SessionEvent.CancelRequested now)
         Assert.True(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.decode eventBytes |> Result.isOk)
