@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><IsPackable>false</IsPackable></PropertyGroup>
-  <ItemGroup><Compile Include="CodexExecutionProviderTests.fs" /></ItemGroup>
+  <ItemGroup><Compile Include="CodexExecutionProviderTests.fs" /><Compile Include="ExecutorRuntimeTests.fs" /></ItemGroup>
   <ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" /></ItemGroup>
-  <ItemGroup><ProjectReference Include="../../src/FS.GG.Coordination.Orchestration.Execution.Codex/FS.GG.Coordination.Orchestration.Execution.Codex.fsproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/FS.GG.Coordination.Orchestration.Execution.Codex/FS.GG.Coordination.Orchestration.Execution.Codex.fsproj" /><ProjectReference Include="../../src/FS.GG.Coordination.Orchestration.Runner.Client/FS.GG.Coordination.Orchestration.Runner.Client.fsproj" /><ProjectReference Include="../../src/FS.GG.Coordination.Orchestration.Runner.Protocol/FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj" /></ItemGroup>
 </Project>

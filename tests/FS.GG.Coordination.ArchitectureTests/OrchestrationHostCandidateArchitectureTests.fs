@@ -52,14 +52,17 @@ let ``runner client candidate workflow and archive controls pass mutation self t
         Assert.Contains("ORCHESTRATION_RUNNER_CLIENT_CANDIDATE_SELF_TEST_OK",output,StringComparison.Ordinal)
 
 [<Fact>]
-let ``runner client is separately locked and has no host or provider reference`` () =
+let ``runner client is separately locked and composes only the selected executor provider`` () =
         let project=File.ReadAllText(Path.Combine(root,"src/FS.GG.Coordination.Orchestration.Runner.Client/FS.GG.Coordination.Orchestration.Runner.Client.fsproj"))
         let source=File.ReadAllText(Path.Combine(root,"src/FS.GG.Coordination.Orchestration.Runner.Client/Program.fs"))
         for binding in ["<IsPackable>false</IsPackable>";"<RuntimeIdentifier>linux-x64</RuntimeIdentifier>";"<SelfContained>true</SelfContained>";"<PublishSingleFile>true</PublishSingleFile>"] do Assert.Contains(binding,project,StringComparison.Ordinal)
         Assert.DoesNotContain("Orchestration.Host",project,StringComparison.Ordinal)
         Assert.DoesNotContain("FS.GG.Coordination.GitHub",project,StringComparison.Ordinal)
+        Assert.DoesNotContain("Orchestration.PostgreSql",project,StringComparison.Ordinal)
+        Assert.Contains("Orchestration.Execution.Codex",project,StringComparison.Ordinal)
         Assert.Contains("net10.0/linux-x64",File.ReadAllText(Path.Combine(root,"src/FS.GG.Coordination.Orchestration.Runner.Client/packages.lock.json")),StringComparison.Ordinal)
         for binding in ["--client-cert-file";"--client-key-file";"--ca-file";"orchestration.main.internal";"18080";"AllowAutoRedirect=false";"CustomRootTrust";"8192"] do Assert.Contains(binding,source,StringComparison.Ordinal)
+        for binding in ["executor-stdio";"--repository-root";"--workspace-root";"--artifact-root";"--executor-binding"] do Assert.Contains(binding,source,StringComparison.Ordinal)
         Assert.DoesNotContain("Authorization",source,StringComparison.Ordinal)
         Assert.DoesNotContain("--token-file",source,StringComparison.Ordinal)
         Assert.DoesNotContain("File.ReadAllBytes(values[\"--request-file\"])",source,StringComparison.Ordinal)
