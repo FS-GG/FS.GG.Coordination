@@ -377,7 +377,9 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
 
     Assert.Contains("  canonical-quint:", workflow)
     Assert.Contains("needs: [reuse-decision, deterministic-build, compiler-and-tests, canonical-quint, dependency-and-security, package-install-smoke, orchestration-postgresql, orchestration-observer-postgresql, orchestration-pilot-postgresql, bootstrap-recovery]", workflow)
-    Assert.Contains("run: bash eng/bootstrap-gates/canonical-quint.sh", workflow)
+    Assert.Contains("run: bash eng/bootstrap-gates/canonical-quint-shard.sh", workflow)
+    Assert.Contains("run: bash eng/bootstrap-gates/canonical-quint-performance.sh", workflow)
+    Assert.Contains("run: bash eng/bootstrap-gates/canonical-quint-aggregate.sh", workflow)
     Assert.Contains("bash eng/qualify-canonical-quint.sh", gate)
     let validatorInvocation = "dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output"
     Assert.Contains(validatorInvocation, qualification)
@@ -2745,6 +2747,35 @@ let ``canonical Quint retained process inventory near miss fails closed`` () =
         Assert.Equal("failed", value.GetProperty("q2Outcome").GetString())
         Assert.Equal(0, value.GetProperty("processCounts").GetProperty("external").GetInt32())
         Assert.Equal("PROCESS-INVENTORY-COVERAGE", value.GetProperty("failure").GetProperty("code").GetString())
+    finally
+        if File.Exists receipt then File.Delete receipt
+
+[<Theory>]
+[<InlineData("formal-process-inventory-missing")>]
+[<InlineData("formal-process-inventory-wrong")>]
+[<InlineData("formal-process-inventory-extra")>]
+let ``canonical Quint formal shard inventory mutations fail closed`` phase =
+    let receipt =
+        Path.Combine(Path.GetTempPath(), $"fsgg-quint-%s{phase}-" + Guid.NewGuid().ToString("N") + ".json")
+
+    try
+        let exitCode, _, error =
+            run
+                "dotnet"
+                [ "fsi"
+                  "eng/validate-canonical-quint-protocol.fsx"
+                  "--"
+                  "--root"
+                  "."
+                  "--output"
+                  receipt
+                  "--exercise-failure-receipt"
+                  phase ]
+
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("code=PROCESS-INVENTORY-COVERAGE", error)
+        use document = JsonDocument.Parse(File.ReadAllBytes receipt)
+        Assert.Equal("PROCESS-INVENTORY-COVERAGE", document.RootElement.GetProperty("failure").GetProperty("code").GetString())
     finally
         if File.Exists receipt then File.Delete receipt
 

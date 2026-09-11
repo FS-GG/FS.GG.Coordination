@@ -56,7 +56,7 @@ let private withRepositoryMutation mutate verify =
 let ``production graph satisfies dependency policy`` () =
     let exitCode, output, error = runVerifier repositoryRoot
     Assert.Equal(0, exitCode)
-    Assert.Equal("DEPENDENCY_POLICY_OK projects=12", output)
+    Assert.Equal("DEPENDENCY_POLICY_OK projects=13", output)
     Assert.Equal("", error)
 
 [<Fact>]

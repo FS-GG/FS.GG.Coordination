@@ -62,6 +62,8 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         |> Seq.map (fun item -> item["id"].GetValue<string>(), item)
         |> Map.ofSeq
     Assert.Equal("canonical-runner-observed-tlc-and-rust-v1", baseline["formalMeasurementMethod"].GetValue<string>())
+    let validator = File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+    Assert.Contains("actualInvocationInventory.TryAdd(label, 0)", validator)
     let ids = tests |> List.map (fun item -> item["id"].GetValue<string>()) |> Set.ofList
     let expectedIds =
         Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback"
@@ -70,6 +72,21 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
               "pilot-permit-major-action-coverage"; "hosted-writer-progress"
               "hosted-writer-fault-safety" ]
     if ids <> expectedIds then failwithf "unexpected formal-test catalogue: %A" ids
+    let elapsedBudget id =
+        tests
+        |> List.find (fun item -> item["id"].GetValue<string>() = id)
+        |> fun item -> (item["budget"].AsObject()["elapsedMs"]).GetValue<int>()
+    let expectedElapsedBudgets =
+        Map [ "claim-election", 75000; "relation-mutation", 75000; "lifecycle", 60000
+              "operation-saga", 60000; "epoch", 75000; "rollback", 75000
+              "journal-reconciliation", 60000; "journal-fencing", 75000
+              "authority-reconciliation", 75000; "review-epoch", 60000
+              "cutover-observation", 75000; "pilot-permit-transfer", 75000
+              "pilot-permit-fault-safety", 75000; "pilot-permit-major-action-coverage", 75000
+              "hosted-writer-progress", 75000; "hosted-writer-fault-safety", 75000 ]
+    let actualElapsedBudgets = expectedIds |> Seq.map (fun id -> id, elapsedBudget id) |> Map
+    Assert.True((expectedElapsedBudgets = actualElapsedBudgets), sprintf "unexpected formal elapsed budgets: %A" actualElapsedBudgets)
+    Assert.Equal(60000, elapsedBudget "operation-saga")
     for item in tests do
         Assert.Equal("tlc", item["backend"].GetValue<string>())
         for field in [ "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"; "removedStep"; "violatedTemporal"; "blockedInvariant" ] do

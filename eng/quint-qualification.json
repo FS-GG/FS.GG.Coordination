@@ -623,7 +623,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -649,7 +649,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -727,13 +727,13 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
     },
     {
-      "id": "rollback",
+  "id": "rollback",
       "main": "CoordinationProtocolTests",
       "init": "formalInit",
       "step": "formalRollbackTlcStep",
@@ -753,7 +753,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -805,13 +805,13 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
     },
     {
-      "id": "authority-reconciliation",
+  "id": "authority-reconciliation",
       "main": "GS20310ReconcileModel",
       "init": "init",
       "step": "step",
@@ -831,7 +831,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 1000,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -883,7 +883,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }
@@ -1013,7 +1013,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }

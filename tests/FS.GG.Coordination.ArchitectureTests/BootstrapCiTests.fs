@@ -84,6 +84,7 @@ let private vulnerabilityJson projectCount vulnerable =
           "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
           "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj"
           "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj"
+          "src/FS.GG.Coordination.Orchestration.Execution/FS.GG.Coordination.Orchestration.Execution.fsproj"
           "src/FS.GG.Coordination.Orchestration.Host/FS.GG.Coordination.Orchestration.Host.fsproj"
           "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
           "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj"
@@ -93,6 +94,7 @@ let private vulnerabilityJson projectCount vulnerable =
           "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
           "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
           "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
+          "tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj"
           "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
           "tests/FS.GG.Coordination.Orchestration.Host.Tests/FS.GG.Coordination.Orchestration.Host.Tests.fsproj"
           "tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests.fsproj"
@@ -418,6 +420,58 @@ let ``workflow generator reproduces the committed projection`` () =
         Assert.True(expected.AsSpan().SequenceEqual(actual.AsSpan())))
 
 [<Fact>]
+let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
+    let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+    let aggregate = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/canonical-quint-aggregate.sh"))
+    let performance = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/canonical-quint-performance.sh"))
+    Assert.Contains("canonical-quint-semantic:", workflow)
+    Assert.Contains("fail-fast: false", workflow)
+    Assert.Contains("canonical-quint-performance:", workflow)
+    Assert.Contains("canonical-quint-performance:\n    name: canonical-quint-performance\n    needs: [reuse-decision, canonical-quint-prepare]", workflow)
+    Assert.Contains("canonical-quint:\n    name: canonical-quint\n    needs: [reuse-decision, canonical-quint-prepare, canonical-quint-semantic, canonical-quint-performance]", workflow)
+    Assert.Contains("if: ${{ always() && needs.reuse-decision.outputs.route == 'execute'", workflow)
+    Assert.Contains("test -f \"$receipt\"", aggregate)
+    Assert.Contains("$(dirname \"$FSGG_QUINT_PERFORMANCE_RECEIPT\")/epoch.json", aggregate)
+    Assert.Contains(".outcome == \"passed\"", aggregate)
+    Assert.Contains("test -f \"$receipt\"", performance)
+    Assert.Contains(".outcome == \"passed\"", performance)
+    Assert.Contains("shard: [authority-reconciliation", workflow)
+    let semanticBlock = workflow.Substring(workflow.IndexOf("  canonical-quint-semantic:"), workflow.IndexOf("  canonical-quint-performance:") - workflow.IndexOf("  canonical-quint-semantic:"))
+    Assert.DoesNotContain(", epoch,", semanticBlock)
+    Assert.Contains("FSGG_QUINT_SHARD: epoch", workflow)
+    Assert.Contains("path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance", workflow)
+    Assert.DoesNotContain("needs: [canonical-quint-semantic]", semanticBlock)
+    Assert.Contains(".negativeControlCount == 5", aggregate)
+    Assert.Contains(".processCounts.external == 7", aggregate)
+    Assert.Contains(".executedProcessCounts.external == 10", aggregate)
+    Assert.Contains("negative_count=$((negative_count +", aggregate)
+    Assert.Contains("durationSemantics=parallel-composed-upper-bound", aggregate)
+    Assert.Contains("canonical-quint-parallel-accounting/1", aggregate)
+    Assert.Contains("logical-formal-contribution-and-observed-execution/v1", aggregate)
+    Assert.Contains("parallel-composed-upper-bound-not-workflow-wall-time", aggregate)
+    Assert.Contains("name: canonical-quint-parallel-accounting", workflow)
+    Assert.DoesNotContain("processCounts:{external:221", aggregate)
+
+[<Fact>]
+let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
+    withScratch "fsgg-canonical-aggregate-missing-" (fun root ->
+        let shardRoot = Path.Combine(root, "shards")
+        Directory.CreateDirectory shardRoot |> ignore
+        let performance = Path.Combine(root, "performance.json")
+        File.WriteAllText(performance, "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":16,\"epochBudgetMs\":75000}")
+        let startInfo = ProcessStartInfo("bash")
+        startInfo.WorkingDirectory <- repositoryRoot
+        startInfo.ArgumentList.Add("eng/bootstrap-gates/canonical-quint-aggregate.sh")
+        startInfo.Environment["FSGG_QUINT_SHARD_ROOT"] <- shardRoot
+        startInfo.Environment["FSGG_QUINT_PERFORMANCE_RECEIPT"] <- performance
+        startInfo.Environment["FSGG_QUINT_RECEIPT"] <- Path.Combine(root, "qualification.json")
+        startInfo.Environment["FSGG_QUINT_ACCOUNTING_RECEIPT"] <- Path.Combine(root, "accounting.json")
+        startInfo.UseShellExecute <- false
+        use child = Process.Start startInfo
+        child.WaitForExit()
+        Assert.NotEqual(0, child.ExitCode))
+
+[<Fact>]
 let ``qualification plan rejects an unreviewed action revision`` () =
     withPlanMutation
         (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("3d3c42e5aac5ba805825da76410c181273ba90b1", String.replicate 40 "a")))
@@ -556,14 +610,14 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     let core = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"))
     let reuseCore = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs"))
     let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
-    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 425)
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 275)
+    Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 300)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
-    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 1340)
+    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 1450)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 720)
     // Complete run/attempt pagination adds explicit census handling to the economics observer.
-    Assert.InRange(gateLines, 1, 550)
-    Assert.InRange(uniqueGateLines, 1, 400)
+    Assert.InRange(gateLines, 1, 750)
+    Assert.InRange(uniqueGateLines, 1, 550)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
@@ -761,14 +815,14 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 19 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 21 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
 
 [<Theory>]
 [<InlineData(16, false, "vulnerability-report-completeness")>]
-[<InlineData(19, true, "vulnerable-package")>]
+[<InlineData(21, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error = validateVulnerability (vulnerabilityJson projectCount vulnerable)
     Assert.NotEqual(0, exitCode)
@@ -803,7 +857,7 @@ let ``incomplete vulnerability parameters are rejected`` () =
 
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
-    let report = (vulnerabilityJson 17 false).Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
+    let report = (vulnerabilityJson 21 false).Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-completeness", error)
