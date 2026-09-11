@@ -1,9 +1,21 @@
 CREATE SCHEMA IF NOT EXISTS fsgg_orchestration;
 
+DO $guard$
+DECLARE current_version integer; current_state text;
+BEGIN
+  SELECT schema_version,migration_state INTO current_version,current_state
+  FROM fsgg_orchestration.store_metadata WHERE singleton FOR UPDATE;
+  IF NOT FOUND OR current_version NOT IN (1,2) OR current_state <> 'ready' THEN
+    RAISE EXCEPTION 'refusing execution schema migration version=% state=%',current_version,current_state;
+  END IF;
+END
+$guard$;
+
 CREATE TABLE IF NOT EXISTS fsgg_orchestration.execution_stream (
     assignment_id uuid NOT NULL,
     attempt_id uuid NOT NULL,
     generation bigint,
+    executor_binding text,
     last_revision bigint NOT NULL DEFAULT 0 CHECK (last_revision >= 0),
     PRIMARY KEY (assignment_id, attempt_id)
 );
@@ -41,6 +53,7 @@ CREATE INDEX IF NOT EXISTS ix_executor_pending ON fsgg_orchestration.executor_co
 
 CREATE TABLE IF NOT EXISTS fsgg_orchestration.execution_input_object (
     input_sha256 text PRIMARY KEY CHECK (input_sha256 ~ '^[0-9a-f]{64}$'),
+    manifest_payload bytea NOT NULL CHECK (octet_length(manifest_payload) <= 32768),
     bytes bytea NOT NULL CHECK (octet_length(bytes) <= 16777216),
     size_bytes bigint NOT NULL CHECK (size_bytes = octet_length(bytes)),
     created_at timestamptz NOT NULL
@@ -59,3 +72,7 @@ CREATE TABLE IF NOT EXISTS fsgg_orchestration.subscription_reservation (
     deadline timestamptz NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_subscription_active ON fsgg_orchestration.subscription_reservation(active,deadline);
+
+UPDATE fsgg_orchestration.store_metadata
+SET schema_version=2,updated_at=statement_timestamp()
+WHERE singleton AND schema_version=1 AND migration_state='ready';

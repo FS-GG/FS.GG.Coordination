@@ -82,7 +82,7 @@ module RunnerWire =
                     | JsonValueKind.Array -> element.EnumerateArray() |> Seq.forall duplicateFree
                     | _ -> true
                 if document.RootElement.ValueKind<>JsonValueKind.Object then Error "runner-message-object-required"
-                elif not(duplicateFree document.RootElement) then Error "runner-message-duplicate-property-refused"
+                elif not(duplicateFree document.RootElement) then Error "runner-message-shape-refused"
                 else
                     let names=document.RootElement.EnumerateObject() |> Seq.map _.Name |> Seq.toList
                     if names.Length<>expected.Count || Set.ofList names<>expected then Error "runner-message-shape-refused"

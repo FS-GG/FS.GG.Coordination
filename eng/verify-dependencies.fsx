@@ -136,8 +136,10 @@ let private allowedDependencies =
           "FS.GG.Coordination.Orchestration.PostgreSql",
           Set.ofList
               [ "FS.GG.Coordination.Core"
+                "FS.GG.Coordination.Orchestration.Execution"
                 "FS.GG.Coordination.Orchestration.Observer"
-                "FS.GG.Coordination.Orchestration.Pilot" ]
+                "FS.GG.Coordination.Orchestration.Pilot"
+                "FS.GG.Coordination.Orchestration.Runner.Protocol" ]
           "FS.GG.Coordination.GitHub",
           Set.ofList [ "FS.GG.Coordination.Protocol"; "FS.GG.Coordination.Core" ]
           "FS.GG.Coordination.Cli",

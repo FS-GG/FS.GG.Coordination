@@ -16,7 +16,7 @@ type ExecutorCommandAppend = CommandPersisted of int64 | CommandDuplicate of int
 type SubscriptionAppend = SubscriptionReserved | SubscriptionDuplicate | SubscriptionCapacityRefused | SubscriptionAuthorityRefused | SubscriptionConflict
 
 type IExecutorCommandStore =
-    abstract StageInput: digest:string * bytes:byte array * CancellationToken -> Task<Result<unit,string>>
+    abstract StageInput: manifestBytes:byte array * bytes:byte array * CancellationToken -> Task<Result<unit,string>>
     abstract ReadInput: digest:string * CancellationToken -> Task<Result<byte array,string>>
     abstract PersistCommand: commandBytes:byte array * CancellationToken -> Task<ExecutorCommandAppend>
     abstract ReadPending: maximum:int * CancellationToken -> Task<byte array list>
@@ -38,33 +38,63 @@ module PostgreSqlExecutionSchema =
         let! _=command.ExecuteNonQueryAsync cancellationToken
         do! transaction.CommitAsync cancellationToken }
 
-type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
+type PostgreSqlExecutionStore(options:StoreOptions) =
+    let dataSource=options.DataSource
     let add (command:NpgsqlCommand) value = command.Parameters.AddWithValue(value) |> ignore
     let sha (bytes:byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+    let gate (connection:NpgsqlConnection) (transaction:NpgsqlTransaction) forWrite (cancellationToken:CancellationToken) = task {
+        use command=new NpgsqlCommand("SELECT schema_version,migration_state,backup_identity::text,generation_fence,current_setting('transaction_read_only') FROM fsgg_orchestration.store_metadata WHERE singleton FOR SHARE",connection,transaction)
+        use! row=command.ExecuteReaderAsync cancellationToken
+        let! found=row.ReadAsync cancellationToken
+        if not found then return raise (InvalidOperationException "execution-store-metadata-missing")
+        else
+            let valid=row.GetInt32(0)=options.RuntimeSchemaVersion && options.RuntimeSchemaVersion=2
+                      && row.GetString(1)="ready" && row.GetString(2)=options.BackupIdentity
+                      && row.GetInt64(3)>=options.MinimumGenerationFence && (not forWrite || row.GetString(4)="off")
+            if not valid then return raise (InvalidOperationException "execution-store-fence-refused") }
     let read assignmentId attemptId cancellationToken = task {
         use! connection=dataSource.OpenConnectionAsync cancellationToken
-        use command=new NpgsqlCommand("SELECT revision,event_identity,schema,payload FROM fsgg_orchestration.execution_event WHERE assignment_id=$1 AND attempt_id=$2 ORDER BY revision",connection)
-        add command assignmentId;add command attemptId
-        use! reader=command.ExecuteReaderAsync cancellationToken
-        let events=ResizeArray<SessionEvent>()
-        let mutable revision=0L
-        let mutable failure=None
-        let mutable reading=true
-        while reading do
-            let! more=reader.ReadAsync cancellationToken
-            reading<-more
-            if more && failure.IsNone then
-                revision<-reader.GetInt64 0
-                let identity=reader.GetString 1
-                let schema=reader.GetString 2
-                let payload=reader.GetFieldValue<byte array> 3
-                if schema<>SessionEventCodec.schema then failure<-Some "execution-event-schema-refused"
-                elif sha payload<>identity then failure<-Some "execution-event-digest-refused"
-                else match SessionEventCodec.decode payload with Ok value->events.Add value|Error reason->failure<-Some reason
-        match failure with
-        | Some reason -> return raise(InvalidDataException reason)
-        | None when revision=0L -> return None
-        | None -> return Some{Revision=revision;Events=List.ofSeq events} }
+        use! transaction=connection.BeginTransactionAsync(IsolationLevel.RepeatableRead,cancellationToken)
+        do! gate connection transaction false cancellationToken
+        use streamCommand=new NpgsqlCommand("SELECT last_revision,generation FROM fsgg_orchestration.execution_stream WHERE assignment_id=$1 AND attempt_id=$2",connection,transaction)
+        add streamCommand assignmentId;add streamCommand attemptId
+        use! streamRow=streamCommand.ExecuteReaderAsync cancellationToken
+        let! streamFound=streamRow.ReadAsync cancellationToken
+        let tail=if streamFound then Some(streamRow.GetInt64 0) else None
+        let streamGeneration=if streamFound && not(streamRow.IsDBNull 1) then Some(streamRow.GetInt64 1) else None
+        do! streamRow.CloseAsync()
+        match tail with
+        | None -> return None
+        | Some expectedTail ->
+            use command=new NpgsqlCommand("SELECT revision,event_identity,schema,payload FROM fsgg_orchestration.execution_event WHERE assignment_id=$1 AND attempt_id=$2 ORDER BY revision",connection,transaction)
+            add command assignmentId;add command attemptId
+            use! reader=command.ExecuteReaderAsync cancellationToken
+            let events=ResizeArray<SessionEvent>()
+            let mutable revision=0L
+            let mutable failure=None
+            let mutable reading=true
+            while reading do
+                let! more=reader.ReadAsync cancellationToken
+                reading<-more
+                if more && failure.IsNone then
+                    let next=reader.GetInt64 0
+                    if next<>revision+1L then failure<-Some "execution-event-revision-gap-refused"
+                    revision<-next
+                    let identity=reader.GetString 1
+                    let schema=reader.GetString 2
+                    let payload=reader.GetFieldValue<byte array> 3
+                    if schema<>SessionEventCodec.schema then failure<-Some "execution-event-schema-refused"
+                    elif sha payload<>identity then failure<-Some "execution-event-digest-refused"
+                    else match SessionEventCodec.decode payload with Ok value->events.Add value|Error reason->failure<-Some reason
+            match failure with
+            | Some reason -> return raise(InvalidDataException reason)
+            | None when revision<>expectedTail -> return raise(InvalidDataException "execution-stream-tail-refused")
+            | None ->
+                match events |> Seq.tryHead with
+                | Some(LaunchIntentRecorded intent) when streamGeneration=Some intent.Key.Generation ->
+                    do! transaction.CommitAsync cancellationToken
+                    return Some{Revision=revision;Events=List.ofSeq events}
+                | _ -> return raise(InvalidDataException "execution-stream-generation-refused") }
     interface IExecutionSessionJournal with
         member _.ReadAttempt(assignmentId,attemptId,cancellationToken)=read assignmentId attemptId cancellationToken
         member _.AppendAttempt(assignmentId,attemptId,expectedRevision,eventValue,cancellationToken)=task {
@@ -72,6 +102,7 @@ type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
             let identity=SessionEventCodec.identity eventValue
             use! connection=dataSource.OpenConnectionAsync cancellationToken
             use! transaction=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken)
+            do! gate connection transaction true cancellationToken
             use ensure=new NpgsqlCommand("INSERT INTO fsgg_orchestration.execution_stream(assignment_id,attempt_id) VALUES($1,$2) ON CONFLICT DO NOTHING",connection,transaction)
             add ensure assignmentId;add ensure attemptId
             let! _=ensure.ExecuteNonQueryAsync cancellationToken
@@ -91,6 +122,9 @@ type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
             elif current<>expectedRevision then
                 do! transaction.RollbackAsync cancellationToken
                 return AppendConflict
+            elif current > 0L && (match eventValue with LaunchIntentRecorded _ -> true | _ -> false) then
+                do! transaction.RollbackAsync cancellationToken
+                return AppendConflict
             else
                 let generation = match eventValue with LaunchIntentRecorded intent when intent.Key.AssignmentId=assignmentId && intent.Key.AttemptId=attemptId -> Some intent.Key.Generation | _ -> storedGeneration
                 if generation.IsNone || (storedGeneration.IsSome && storedGeneration<>generation) then
@@ -107,17 +141,24 @@ type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
                     do! transaction.CommitAsync cancellationToken
                     return Appended }
     interface IExecutorCommandStore with
-        member _.StageInput(digest,bytes,cancellationToken)=task {
-            if isNull bytes || bytes.LongLength>16L*1024L*1024L || not(RunnerWire.validSha256 digest) || sha bytes<>digest then return Error "execution-input-refused"
-            else
+        member _.StageInput(manifestBytes,bytes,cancellationToken)=task {
+            match ExecutorWire.parseInputManifest manifestBytes with
+            | Error reason -> return Error reason
+            | Ok manifest when isNull bytes || bytes.LongLength<>manifest.SizeBytes || sha bytes<>manifest.InputDigest -> return Error "execution-input-refused"
+            | Ok manifest ->
                 use! connection=dataSource.OpenConnectionAsync cancellationToken
-                use command=new NpgsqlCommand("INSERT INTO fsgg_orchestration.execution_input_object(input_sha256,bytes,size_bytes,created_at) VALUES($1,$2,$3,$4) ON CONFLICT(input_sha256) DO NOTHING",connection)
-                add command digest;add command bytes;add command bytes.LongLength;add command DateTimeOffset.UtcNow
+                use! transaction=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken)
+                do! gate connection transaction true cancellationToken
+                use command=new NpgsqlCommand("INSERT INTO fsgg_orchestration.execution_input_object(input_sha256,manifest_payload,bytes,size_bytes,created_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT(input_sha256) DO NOTHING",connection,transaction)
+                add command manifest.InputDigest;add command manifestBytes;add command bytes;add command bytes.LongLength;add command DateTimeOffset.UtcNow
                 let! _=command.ExecuteNonQueryAsync cancellationToken
+                do! transaction.CommitAsync cancellationToken
                 return Ok() }
         member _.ReadInput(digest,cancellationToken)=task {
             use! connection=dataSource.OpenConnectionAsync cancellationToken
-            use command=new NpgsqlCommand("SELECT bytes FROM fsgg_orchestration.execution_input_object WHERE input_sha256=$1",connection)
+            use! transaction=connection.BeginTransactionAsync(IsolationLevel.RepeatableRead,cancellationToken)
+            do! gate connection transaction false cancellationToken
+            use command=new NpgsqlCommand("SELECT bytes FROM fsgg_orchestration.execution_input_object WHERE input_sha256=$1",connection,transaction)
             add command digest
             let! value=command.ExecuteScalarAsync cancellationToken
             if isNull value then return Error "execution-input-not-found"
@@ -128,6 +169,7 @@ type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
             | Ok commandValue ->
                 use! connection=dataSource.OpenConnectionAsync cancellationToken
                 use! transaction=connection.BeginTransactionAsync(IsolationLevel.Serializable,cancellationToken)
+                do! gate connection transaction true cancellationToken
                 use existing=new NpgsqlCommand("SELECT body_sha256,durable_revision FROM fsgg_orchestration.executor_command WHERE command_id=$1 FOR UPDATE",connection,transaction)
                 add existing commandValue.CommandId
                 use! row=existing.ExecuteReaderAsync cancellationToken
@@ -142,23 +184,48 @@ type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
                     do! transaction.RollbackAsync cancellationToken
                     return CommandConflict
                 | None ->
-                    use authority=new NpgsqlCommand("SELECT last_revision,generation FROM fsgg_orchestration.execution_stream WHERE assignment_id=$1 AND attempt_id=$2",connection,transaction)
+                    use authority=new NpgsqlCommand("SELECT last_revision,generation,executor_binding FROM fsgg_orchestration.execution_stream WHERE assignment_id=$1 AND attempt_id=$2 FOR UPDATE",connection,transaction)
                     add authority commandValue.AssignmentId;add authority commandValue.AttemptId
                     use! auth=authority.ExecuteReaderAsync cancellationToken
                     let! authorityFound=auth.ReadAsync cancellationToken
+                    let storedBinding=if authorityFound && not(auth.IsDBNull 2) then Some(auth.GetString 2) else None
                     let valid=authorityFound && auth.GetInt64(0)=commandValue.ExpectedRevision && not(auth.IsDBNull 1) && auth.GetInt64(1)=commandValue.Generation
+                              && (storedBinding.IsNone || storedBinding=Some commandValue.ExecutorBinding)
                     do! auth.CloseAsync()
                     if not valid then
                         do! transaction.RollbackAsync cancellationToken
                         return CommandRefused "executor-command-stale-authority"
                     else
+                        use intentCommand=new NpgsqlCommand("SELECT payload FROM fsgg_orchestration.execution_event WHERE assignment_id=$1 AND attempt_id=$2 AND revision=1",connection,transaction)
+                        add intentCommand commandValue.AssignmentId;add intentCommand commandValue.AttemptId
+                        let! intentPayload=intentCommand.ExecuteScalarAsync cancellationToken
+                        let intentMatches =
+                            if isNull intentPayload then false
+                            else
+                                match SessionEventCodec.decode(unbox<byte array> intentPayload) with
+                                | Ok(LaunchIntentRecorded intent) ->
+                                    intent.Key.Generation=commandValue.Generation && intent.InputDigest=commandValue.InputDigest
+                                    && intent.Workspace=commandValue.Workspace && intent.Limits.Deadline=commandValue.Deadline
+                                    && int64 intent.Limits.MaximumRuntime.TotalSeconds=commandValue.MaximumRuntimeSeconds
+                                    && intent.Limits.MaximumAttempts=commandValue.MaximumAttempts
+                                    && Option.toObj intent.Requested.Model=commandValue.RequestedModel && Option.toObj intent.Requested.Effort=commandValue.RequestedEffort
+                                | _ -> false
                         use input=new NpgsqlCommand("SELECT 1 FROM fsgg_orchestration.execution_input_object WHERE input_sha256=$1",connection,transaction)
                         add input commandValue.InputDigest
                         let! inputExists=input.ExecuteScalarAsync cancellationToken
-                        if isNull inputExists then
+                        use reservationCommand=new NpgsqlCommand("SELECT 1 FROM fsgg_orchestration.subscription_reservation WHERE assignment_id=$1 AND attempt_id=$2 AND generation=$3 AND expected_revision=$4 AND active AND deadline=$5",connection,transaction)
+                        add reservationCommand commandValue.AssignmentId;add reservationCommand commandValue.AttemptId;add reservationCommand commandValue.Generation;add reservationCommand commandValue.ExpectedRevision;add reservationCommand commandValue.Deadline
+                        let! reservationExists=reservationCommand.ExecuteScalarAsync cancellationToken
+                        let launchAuthorized=commandValue.Kind<>"launch" || (intentMatches && not(isNull reservationExists) && commandValue.Deadline>DateTimeOffset.UtcNow)
+                        if isNull inputExists || not launchAuthorized then
                             do! transaction.RollbackAsync cancellationToken
-                            return CommandRefused "executor-command-input-not-found"
+                            return CommandRefused "executor-command-intent-input-or-reservation-refused"
                         else
+                            if storedBinding.IsNone && commandValue.Kind="launch" then
+                                use bind=new NpgsqlCommand("UPDATE fsgg_orchestration.execution_stream SET executor_binding=$3 WHERE assignment_id=$1 AND attempt_id=$2 AND executor_binding IS NULL",connection,transaction)
+                                add bind commandValue.AssignmentId;add bind commandValue.AttemptId;add bind commandValue.ExecutorBinding
+                                let! _=bind.ExecuteNonQueryAsync cancellationToken
+                                ()
                             let durableRevision=commandValue.ExpectedRevision
                             use insert=new NpgsqlCommand("INSERT INTO fsgg_orchestration.executor_command(command_id,body_sha256,assignment_id,attempt_id,generation,expected_revision,deadline,payload,durable_revision,visible,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,false,$10)",connection,transaction)
                             add insert commandValue.CommandId;add insert commandValue.BodySha256;add insert commandValue.AssignmentId;add insert commandValue.AttemptId;add insert commandValue.Generation;add insert commandValue.ExpectedRevision;add insert commandValue.Deadline;add insert commandBytes;add insert durableRevision;add insert DateTimeOffset.UtcNow
@@ -171,33 +238,67 @@ type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
         member _.ReadPending(maximum,cancellationToken)=task {
             if maximum<1 || maximum>128 then invalidArg (nameof maximum) "pending command bound"
             use! connection=dataSource.OpenConnectionAsync cancellationToken
-            use command=new NpgsqlCommand("SELECT payload FROM fsgg_orchestration.executor_command WHERE visible AND NOT settled ORDER BY created_at,command_id LIMIT $1",connection)
+            use! transaction=connection.BeginTransactionAsync(IsolationLevel.RepeatableRead,cancellationToken)
+            // Taking work is an authority-bearing read: require a writable, current store and
+            // revalidate the stream and reservation at visibility time.
+            do! gate connection transaction true cancellationToken
+            use command=new NpgsqlCommand("""
+SELECT c.payload,c.body_sha256,s.last_revision,s.generation,s.executor_binding,
+       EXISTS(SELECT 1 FROM fsgg_orchestration.subscription_reservation r
+              WHERE r.assignment_id=c.assignment_id AND r.attempt_id=c.attempt_id
+                AND r.generation=c.generation AND r.expected_revision=c.expected_revision
+                AND r.active AND r.deadline > now())
+FROM fsgg_orchestration.executor_command c
+JOIN fsgg_orchestration.execution_stream s USING(assignment_id,attempt_id)
+WHERE c.visible AND NOT c.settled
+ORDER BY c.created_at,c.command_id LIMIT $1
+""",connection,transaction)
             add command maximum
             use! reader=command.ExecuteReaderAsync cancellationToken
             let values=ResizeArray<byte array>()
+            let mutable failure=None
             let mutable reading=true
             while reading do
                 let! more=reader.ReadAsync cancellationToken
                 reading<-more
-                if more then values.Add(reader.GetFieldValue<byte array> 0)
-            return List.ofSeq values }
+                if more then
+                    let payload=reader.GetFieldValue<byte array> 0
+                    match ExecutorWire.parseCommand payload with
+                    | Error reason -> failure <- Some reason
+                    | Ok queued ->
+                        let indexValid =
+                            queued.BodySha256 = reader.GetString 1
+                            && queued.ExpectedRevision = reader.GetInt64 2
+                            && queued.Generation = reader.GetInt64 3
+                            && not(reader.IsDBNull 4)
+                            && queued.ExecutorBinding = reader.GetString 4
+                        let dispatchAuthorized=queued.Kind<>"launch" || reader.GetBoolean 5
+                        if not indexValid then failure <- Some "executor-command-index-refused"
+                        elif dispatchAuthorized then values.Add payload
+            match failure with
+            | Some reason -> return raise(InvalidDataException reason)
+            | None -> return List.ofSeq values }
         member _.SettleCommand(commandId,receiptBytes,cancellationToken)=task {
             match ExecutorWire.parseReceipt receiptBytes with
             | Error reason->return Error reason
             | Ok receipt when receipt.CommandId<>commandId->return Error "executor-receipt-identity-refused"
             | Ok receipt->
                 use! connection=dataSource.OpenConnectionAsync cancellationToken
-                use command=new NpgsqlCommand("UPDATE fsgg_orchestration.executor_command SET settled=true,receipt=$2 WHERE command_id=$1 AND body_sha256=$3 AND NOT settled",connection)
+                use! transaction=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken)
+                do! gate connection transaction true cancellationToken
+                use command=new NpgsqlCommand("UPDATE fsgg_orchestration.executor_command SET settled=true,receipt=$2 WHERE command_id=$1 AND body_sha256=$3 AND NOT settled",connection,transaction)
                 add command commandId;add command receiptBytes;add command receipt.BodySha256
                 let! changed=command.ExecuteNonQueryAsync cancellationToken
+                do! transaction.CommitAsync cancellationToken
                 return if changed=1 then Ok() else Error "executor-command-settlement-refused" }
         member _.ReserveSubscription(reservationBytes,ordinaryCapacity,recoveryCapacity,cancellationToken)=task {
             match SubscriptionAccountingCodec.decodeReservation reservationBytes with
             | Error _ -> return SubscriptionConflict
-            | Ok reservation when ordinaryCapacity<=recoveryCapacity || recoveryCapacity<1 || reservation.Deadline<=DateTimeOffset.UtcNow -> return SubscriptionCapacityRefused
+            | Ok reservation when ordinaryCapacity<1 || recoveryCapacity<1 || reservation.Deadline<=DateTimeOffset.UtcNow -> return SubscriptionCapacityRefused
             | Ok reservation ->
                 use! connection=dataSource.OpenConnectionAsync cancellationToken
                 use! transaction=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken)
+                do! gate connection transaction true cancellationToken
                 use capacityLock=new NpgsqlCommand("LOCK TABLE fsgg_orchestration.subscription_reservation IN SHARE ROW EXCLUSIVE MODE",connection,transaction)
                 let! _=capacityLock.ExecuteNonQueryAsync cancellationToken
                 use existing=new NpgsqlCommand("SELECT reservation_payload FROM fsgg_orchestration.subscription_reservation WHERE reservation_id=$1 OR assignment_id=$2 OR attempt_id=$3 FOR UPDATE",connection,transaction)
@@ -220,7 +321,7 @@ type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
                     else
                         use capacity=new NpgsqlCommand("SELECT count(*) FROM fsgg_orchestration.subscription_reservation WHERE active",connection,transaction)
                         let! count=capacity.ExecuteScalarAsync cancellationToken
-                        if Convert.ToInt32 count>=ordinaryCapacity-recoveryCapacity then
+                        if Convert.ToInt32 count>=ordinaryCapacity then
                             do! transaction.RollbackAsync cancellationToken
                             return SubscriptionCapacityRefused
                         else
@@ -235,14 +336,19 @@ type PostgreSqlExecutionStore(dataSource:NpgsqlDataSource) =
             | Ok settlement when settlement.ReservationId<>reservationId -> return Error "subscription-settlement-identity-refused"
             | Ok _ ->
                 use! connection=dataSource.OpenConnectionAsync cancellationToken
+                use! transaction=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken)
+                do! gate connection transaction true cancellationToken
                 // Accounting arrival is not terminal/reconciliation authority. Keep capacity reserved.
-                use command=new NpgsqlCommand("UPDATE fsgg_orchestration.subscription_reservation SET settlement_payload=$2 WHERE reservation_id=$1 AND settlement_payload IS NULL",connection)
+                use command=new NpgsqlCommand("UPDATE fsgg_orchestration.subscription_reservation SET settlement_payload=$2 WHERE reservation_id=$1 AND settlement_payload IS NULL",connection,transaction)
                 add command reservationId;add command settlementBytes
                 let! changed=command.ExecuteNonQueryAsync cancellationToken
+                do! transaction.CommitAsync cancellationToken
                 return if changed=1 then Ok() else Error "subscription-settlement-conflict" }
         member _.ReadSubscription(reservationId,cancellationToken)=task {
             use! connection=dataSource.OpenConnectionAsync cancellationToken
-            use command=new NpgsqlCommand("SELECT reservation_payload,settlement_payload FROM fsgg_orchestration.subscription_reservation WHERE reservation_id=$1",connection)
+            use! transaction=connection.BeginTransactionAsync(IsolationLevel.RepeatableRead,cancellationToken)
+            do! gate connection transaction false cancellationToken
+            use command=new NpgsqlCommand("SELECT reservation_payload,settlement_payload FROM fsgg_orchestration.subscription_reservation WHERE reservation_id=$1",connection,transaction)
             add command reservationId
             use! reader=command.ExecuteReaderAsync cancellationToken
             let! found=reader.ReadAsync cancellationToken
