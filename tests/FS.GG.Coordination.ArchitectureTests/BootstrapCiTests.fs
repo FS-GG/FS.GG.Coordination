@@ -85,6 +85,7 @@ let private vulnerabilityJson projectCount vulnerable =
           "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj"
           "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj"
           "src/FS.GG.Coordination.Orchestration.Execution/FS.GG.Coordination.Orchestration.Execution.fsproj"
+          "src/FS.GG.Coordination.Orchestration.Execution.Codex/FS.GG.Coordination.Orchestration.Execution.Codex.fsproj"
           "src/FS.GG.Coordination.Orchestration.Host/FS.GG.Coordination.Orchestration.Host.fsproj"
           "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
           "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj"
@@ -95,6 +96,7 @@ let private vulnerabilityJson projectCount vulnerable =
           "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
           "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
           "tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj"
+          "tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests.fsproj"
           "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
           "tests/FS.GG.Coordination.Orchestration.Host.Tests/FS.GG.Coordination.Orchestration.Host.Tests.fsproj"
           "tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests.fsproj"
@@ -815,14 +817,14 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 21 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 23 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
 
 [<Theory>]
 [<InlineData(16, false, "vulnerability-report-completeness")>]
-[<InlineData(21, true, "vulnerable-package")>]
+[<InlineData(23, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error = validateVulnerability (vulnerabilityJson projectCount vulnerable)
     Assert.NotEqual(0, exitCode)
@@ -857,7 +859,7 @@ let ``incomplete vulnerability parameters are rejected`` () =
 
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
-    let report = (vulnerabilityJson 21 false).Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
+    let report = (vulnerabilityJson 23 false).Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-completeness", error)
