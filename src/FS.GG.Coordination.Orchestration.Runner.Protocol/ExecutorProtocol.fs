@@ -6,7 +6,7 @@ open System
 type ExecutorCommand =
     { Schema:string; CommandId:Guid; BodySha256:string; Kind:string
       WorkItemPersistenceId:string; RouteOperationId:Guid; AssignmentId:Guid; AttemptId:Guid; CandidateId:Guid
-      Generation:int64; ExpectedRevision:int64; Deadline:DateTimeOffset; MaximumRuntimeSeconds:int64; MaximumAttempts:int
+      Generation:int64; ExpectedRevision:int64; RecordedAt:DateTimeOffset; Deadline:DateTimeOffset; MaximumRuntimeSeconds:int64; MaximumAttempts:int
       Workspace:string; RequestedModel:string; RequestedEffort:string; InputDigest:string; ExecutorBinding:string
       ContentOffset:int64; ContentLength:int }
 [<CLIMutable>]
@@ -41,7 +41,7 @@ module ExecutorWire =
     let maximumContentBytes=1024*1024
     let private commandKinds=set ["readiness";"launch";"observe";"reconcile";"cancel";"content-read"]
     let private dispositions=set ["persisted";"duplicate";"conflict";"refused";"observed"]
-    let private commandProperties=set ["schema";"commandId";"bodySha256";"kind";"workItemPersistenceId";"routeOperationId";"assignmentId";"attemptId";"candidateId";"generation";"expectedRevision";"deadline";"maximumRuntimeSeconds";"maximumAttempts";"workspace";"requestedModel";"requestedEffort";"inputDigest";"executorBinding";"contentOffset";"contentLength"]
+    let private commandProperties=set ["schema";"commandId";"bodySha256";"kind";"workItemPersistenceId";"routeOperationId";"assignmentId";"attemptId";"candidateId";"generation";"expectedRevision";"recordedAt";"deadline";"maximumRuntimeSeconds";"maximumAttempts";"workspace";"requestedModel";"requestedEffort";"inputDigest";"executorBinding";"contentOffset";"contentLength"]
     let private receiptProperties=set ["schema";"commandId";"bodySha256";"disposition";"durableRevision";"processCreationObserved";"detail"]
     let private contentProperties=set ["schema";"commandId";"inputDigest";"offset";"final";"contentBase64"]
     let private manifestProperties=set ["schema";"inputDigest";"mediaType";"sizeBytes";"chunkBytes"]
@@ -61,7 +61,7 @@ module ExecutorWire =
             elif not(validGuid value.CommandId&&validGuid value.RouteOperationId&&validGuid value.AssignmentId&&validGuid value.AttemptId&&validGuid value.CandidateId)||value.AssignmentId<>value.RouteOperationId then Error "executor-command-identity-refused"
             elif not(RunnerWire.validSha256 value.BodySha256)||commandDigest value<>value.BodySha256 then Error "executor-command-digest-refused"
             elif not(commandKinds.Contains value.Kind) then Error "executor-command-kind-refused"
-            elif value.Generation<0L||value.ExpectedRevision<1L||value.Deadline=DateTimeOffset.MinValue||value.MaximumRuntimeSeconds<1L||value.MaximumRuntimeSeconds>1800L||value.MaximumAttempts<>1 then Error "executor-command-authority-refused"
+            elif value.Generation<0L||value.ExpectedRevision<1L||value.RecordedAt=DateTimeOffset.MinValue||value.Deadline<=value.RecordedAt||value.MaximumRuntimeSeconds<1L||value.MaximumRuntimeSeconds>1800L||value.MaximumAttempts<>1 then Error "executor-command-authority-refused"
             elif not(validText 512 value.WorkItemPersistenceId&&validText 256 value.ExecutorBinding&&validText 4096 value.Workspace) then Error "executor-command-binding-refused"
             elif not(RunnerWire.validSha256 value.InputDigest) then Error "executor-command-input-refused"
             elif value.ContentOffset<0L||value.ContentLength<0||value.ContentLength>maximumContentBytes then Error "executor-command-content-bounds-refused"

@@ -681,6 +681,28 @@ type PostgreSqlStoreTests() =
         let inputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=inputDigest;MediaType="text/markdown; charset=utf-8";SizeBytes=input.LongLength;ChunkBytes=1024}
         let! staged=transport.StageInput(ExecutorWire.encodeInputManifest inputManifest,input,cancellationToken)
         Assert.True(Result.isOk staged)
+        // A future absolute deadline cannot renew the original maximum-runtime window.
+        let shortAssignment=Guid.NewGuid()
+        let shortAttempt=Guid.NewGuid()
+        let shortNow=DateTimeOffset.UtcNow
+        let shortBudget=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.createBudget shortNow
+        let shortIntent={intent with Key={AssignmentId=shortAssignment;AttemptId=shortAttempt;Generation=1L};RecordedAt=shortNow.AddMilliseconds(-100.);Limits={Deadline=shortBudget.ExecutionDeadline;MaximumRuntime=TimeSpan.FromSeconds 2.;MaximumAttempts=1}}
+        let! _=journal.AppendAttempt(shortAssignment,shortAttempt,0L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchIntentRecorded shortIntent,cancellationToken)
+        let shortReservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve shortNow (Guid.NewGuid()) shortAssignment shortAttempt 1L 1L shortBudget |> Result.defaultWith failwith
+        let! shortReserved=transport.ReserveSubscription(FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation shortReservation,1,1,cancellationToken)
+        Assert.Equal(SubscriptionReserved,shortReserved)
+        let shortUnsigned=
+            { Schema=ExecutorWire.commandSchema;CommandId=Guid.NewGuid();BodySha256="";Kind="launch";WorkItemPersistenceId="short-runtime"
+              RouteOperationId=shortAssignment;AssignmentId=shortAssignment;AttemptId=shortAttempt;CandidateId=Guid.NewGuid();Generation=1L;ExpectedRevision=1L
+              RecordedAt=shortIntent.RecordedAt;Deadline=shortIntent.Limits.Deadline;MaximumRuntimeSeconds=2L;MaximumAttempts=1;Workspace=shortIntent.Workspace
+              RequestedModel=null;RequestedEffort=null;InputDigest=inputDigest;ExecutorBinding="runner-1";ContentOffset=0L;ContentLength=0 }
+        let shortCommand={shortUnsigned with BodySha256=ExecutorWire.commandDigest shortUnsigned}
+        let! shortPersisted=transport.PersistCommand(ExecutorWire.encodeCommand shortCommand,cancellationToken)
+        Assert.Equal(CommandPersisted 1L,shortPersisted)
+        do! Task.Delay 2000
+        let! expiredByOriginalRuntime=transport.ReadPending(4,cancellationToken)
+        Assert.Empty expiredByOriginalRuntime
+        let! _=Fixture.sql "orchestration_o0" $"UPDATE fsgg_orchestration.subscription_reservation SET active=false WHERE reservation_id='{shortReservation.ReservationId}'"
         let budget=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.createBudget now
         let reservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve now (Guid.NewGuid()) assignmentId attemptId 7L 2L budget |> Result.defaultWith failwith
         let reservationBytes=FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation reservation
@@ -692,7 +714,7 @@ type PostgreSqlStoreTests() =
         let unsigned =
             { Schema=ExecutorWire.commandSchema;CommandId=commandId;BodySha256="";Kind="launch";WorkItemPersistenceId="work-item-v1-test"
               RouteOperationId=assignmentId;AssignmentId=assignmentId;AttemptId=attemptId;CandidateId=Guid.NewGuid();Generation=7L
-              ExpectedRevision=2L;Deadline=intent.Limits.Deadline;MaximumRuntimeSeconds=1800L;MaximumAttempts=1;Workspace=intent.Workspace
+              ExpectedRevision=2L;RecordedAt=intent.RecordedAt;Deadline=intent.Limits.Deadline;MaximumRuntimeSeconds=1800L;MaximumAttempts=1;Workspace=intent.Workspace
               RequestedModel=null;RequestedEffort=null;InputDigest=inputDigest;ExecutorBinding="runner-1";ContentOffset=0L;ContentLength=0 }
         let command={unsigned with BodySha256=ExecutorWire.commandDigest unsigned}
         let commandBytes=ExecutorWire.encodeCommand command
@@ -780,7 +802,7 @@ type PostgreSqlStoreTests() =
         let unsigned =
             { Schema=ExecutorWire.commandSchema;CommandId=Guid.NewGuid();BodySha256="";Kind="cancel";WorkItemPersistenceId="work"
               RouteOperationId=assignment;AssignmentId=assignment;AttemptId=Guid.NewGuid();CandidateId=Guid.NewGuid();Generation=2L;ExpectedRevision=1L
-              Deadline=now.AddMinutes 1.;MaximumRuntimeSeconds=60L;MaximumAttempts=1;Workspace="/workspace";RequestedModel=null;RequestedEffort=null
+              RecordedAt=now;Deadline=now.AddMinutes 1.;MaximumRuntimeSeconds=60L;MaximumAttempts=1;Workspace="/workspace";RequestedModel=null;RequestedEffort=null
               InputDigest=String.replicate 64 "a";ExecutorBinding="runner";ContentOffset=0L;ContentLength=0 }
         let valid={unsigned with BodySha256=ExecutorWire.commandDigest unsigned}
         Assert.True(ExecutorWire.parseCommand(ExecutorWire.encodeCommand valid) |> Result.isOk)

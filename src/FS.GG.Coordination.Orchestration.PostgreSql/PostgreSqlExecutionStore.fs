@@ -206,7 +206,7 @@ type PostgreSqlExecutionStore(options:StoreOptions) =
                                 match SessionEventCodec.decode(unbox<byte array> intentPayload) with
                                 | Ok(LaunchIntentRecorded intent) ->
                                     intent.Key.Generation=commandValue.Generation && intent.InputDigest=commandValue.InputDigest
-                                    && intent.Workspace=commandValue.Workspace && intent.Limits.Deadline=commandValue.Deadline
+                                    && intent.Workspace=commandValue.Workspace && intent.RecordedAt=commandValue.RecordedAt && intent.Limits.Deadline=commandValue.Deadline
                                     && int64 intent.Limits.MaximumRuntime.TotalSeconds=commandValue.MaximumRuntimeSeconds
                                     && intent.Limits.MaximumAttempts=commandValue.MaximumAttempts
                                     && Option.toObj intent.Requested.Model=commandValue.RequestedModel && Option.toObj intent.Requested.Effort=commandValue.RequestedEffort
@@ -217,7 +217,8 @@ type PostgreSqlExecutionStore(options:StoreOptions) =
                         use reservationCommand=new NpgsqlCommand("SELECT 1 FROM fsgg_orchestration.subscription_reservation WHERE assignment_id=$1 AND attempt_id=$2 AND generation=$3 AND expected_revision=$4 AND active AND deadline=$5",connection,transaction)
                         add reservationCommand commandValue.AssignmentId;add reservationCommand commandValue.AttemptId;add reservationCommand commandValue.Generation;add reservationCommand commandValue.ExpectedRevision;add reservationCommand commandValue.Deadline
                         let! reservationExists=reservationCommand.ExecuteScalarAsync cancellationToken
-                        let launchAuthorized=commandValue.Kind<>"launch" || (intentMatches && not(isNull reservationExists) && commandValue.Deadline>DateTimeOffset.UtcNow)
+                        let effectiveExpiry=min commandValue.Deadline (commandValue.RecordedAt.AddSeconds(float commandValue.MaximumRuntimeSeconds))
+                        let launchAuthorized=commandValue.Kind<>"launch" || (intentMatches && not(isNull reservationExists) && effectiveExpiry>DateTimeOffset.UtcNow)
                         if isNull inputExists || not launchAuthorized then
                             do! transaction.RollbackAsync cancellationToken
                             return CommandRefused "executor-command-intent-input-or-reservation-refused"
@@ -273,7 +274,8 @@ ORDER BY c.created_at,c.command_id LIMIT $1
                             && queued.Generation = reader.GetInt64 3
                             && not(reader.IsDBNull 4)
                             && queued.ExecutorBinding = reader.GetString 4
-                        let dispatchAuthorized=queued.Kind<>"launch" || reader.GetBoolean 5
+                        let effectiveExpiry=min queued.Deadline (queued.RecordedAt.AddSeconds(float queued.MaximumRuntimeSeconds))
+                        let dispatchAuthorized=queued.Kind<>"launch" || (reader.GetBoolean 5 && effectiveExpiry>DateTimeOffset.UtcNow)
                         if not indexValid then failure <- Some "executor-command-index-refused"
                         elif dispatchAuthorized then values.Add payload
             match failure with
