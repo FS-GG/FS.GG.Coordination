@@ -3,6 +3,7 @@ module FS.GG.Coordination.Orchestration.Host.Tests.RunnerWireRuntimeTests
 open System
 open System.Collections.Generic
 open System.Security.Cryptography
+open System.Text
 open System.Threading
 open System.Threading.Tasks
 open Xunit
@@ -92,17 +93,20 @@ let ``assignment and acknowledgement persist cursors and settle only dispatch ef
     Assert.Equal(1L,assignment.ServerSequence)
     let! afterPoll=HostedWriterJournal.recover journal WireFixture.work CancellationToken.None
     let afterPoll=afterPoll |> Result.defaultWith(fun failures -> failwithf "%A" failures)
+    Assert.Equal(Id.revisionValue afterPoll.State.Revision,assignment.WorkflowRevision)
     Assert.Equal(1L,afterPoll.State.Sessions[WireFixture.sessionId].LastClientSequence)
     Assert.Equal(1L,afterPoll.State.Sessions[WireFixture.sessionId].LastServerSequence)
     let ack:RunnerAckRequest=
         { Schema=RunnerWire.ackSchema;CommandId=Guid.Parse("90000000-0000-0000-0000-000000000002");WorkItemPersistenceId=WireFixture.persistenceId
           SessionId=poll.SessionId;RunnerId=poll.RunnerId;PrincipalId=poll.PrincipalId;FingerprintSha256=poll.FingerprintSha256
-          Generation=1L;ExpectedRevision=Id.revisionValue afterPoll.State.Revision;ClientSequence=2L;AssignmentSha256=assignment.AssignmentSha256
+          Generation=1L;ExpectedRevision=assignment.WorkflowRevision;ClientSequence=2L;AssignmentSha256=assignment.AssignmentSha256
           IssuedAt=WireFixture.now.AddSeconds(-1.);ExpiresAt=WireFixture.now.AddMinutes 5. }
     let! acknowledged=RunnerWireRuntime.acknowledge (WireFixture.Clock()) store WireFixture.work ack CancellationToken.None
     let! replayed=RunnerWireRuntime.acknowledge (WireFixture.Clock()) store WireFixture.work ack CancellationToken.None
-    match acknowledged with Ok() -> () | Error reason -> failwith $"acknowledgement failed: {reason}"
-    match replayed with Ok() -> () | Error reason -> failwith $"acknowledgement replay failed: {reason}"
+    let! changed=RunnerWireRuntime.acknowledge (WireFixture.Clock()) store WireFixture.work {ack with AssignmentSha256=String.replicate 64 "f"} CancellationToken.None
+    match acknowledged with Ok _ -> () | Error reason -> failwith $"acknowledgement failed: {reason}"
+    match replayed with Ok _ -> () | Error reason -> failwith $"acknowledgement replay failed: {reason}"
+    Assert.Equal(Error "runner-command-identity-conflict",changed)
     let! final=HostedWriterJournal.recover journal WireFixture.work CancellationToken.None
     let final=final |> Result.defaultWith(fun failures -> failwithf "%A" failures)
     Assert.Equal(2L,final.State.Sessions[WireFixture.sessionId].LastClientSequence)
@@ -115,36 +119,129 @@ let ``restart resumes an accepted acknowledgement without advancing its client c
         { CommandId=Id.command(Guid.Parse("91000000-0000-0000-0000-000000000001"));ProtocolVersion=Id.protocolVersion 1 0
           ExpectedRevision=(replay WireFixture.events).Revision;ExpectedGeneration=WireFixture.generation;PrincipalId="main-runner"
           SessionId=Some WireFixture.sessionId;IssuedAt=WireFixture.now.AddSeconds(-2.);ExpiresAt=WireFixture.now.AddMinutes 5.
-          Command=AcceptRunnerMessage(WireFixture.sessionId,1L,true) }
+          Command=AcceptRunnerMessage(WireFixture.sessionId,1L,true,String.replicate 64 "9") }
     let pollDecision=decide WireFixture.now (replay WireFixture.events) pollEnvelope
     let afterPoll=replay (WireFixture.events @ pollDecision.Events)
     let unsigned:RunnerAssignment=
         { Schema=RunnerWire.assignmentSchema;WorkItemPersistenceId=WireFixture.persistenceId;RouteId=WireFixture.routeId
           AttemptId=Id.attemptValue WireFixture.attemptId;CandidateId=Id.candidateValue WireFixture.candidateId
           SessionId=Id.sessionValue WireFixture.sessionId;RunnerId=Id.runnerValue WireFixture.runnerId;PrincipalId="main-runner"
-          FingerprintSha256=WireFixture.fingerprint;Generation=1L;WorkflowRevision=7L;ClientSequence=1L;ServerSequence=1L
+          FingerprintSha256=WireFixture.fingerprint;Generation=1L;WorkflowRevision=Id.revisionValue afterPoll.Revision;ClientSequence=1L;ServerSequence=1L
           PayloadSha256=WireFixture.processIntent.PayloadSha256;AssignmentSha256="";ExpiresAt=WireFixture.enrollment.ExpiresAt
           Deadline=WireFixture.now.AddHours 1. }
     let assignmentSha=RunnerWire.assignmentDigest unsigned
     let commandId=Guid.Parse("91000000-0000-0000-0000-000000000002")
     let issuedAt=WireFixture.now.AddSeconds(-1.)
     let expiresAt=WireFixture.now.AddMinutes 5.
-    let acceptedEnvelope=
-        { CommandId=Id.command commandId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=afterPoll.Revision
-          ExpectedGeneration=WireFixture.generation;PrincipalId="main-runner";SessionId=Some WireFixture.sessionId
-          IssuedAt=issuedAt;ExpiresAt=expiresAt;Command=AcceptRunnerMessage(WireFixture.sessionId,2L,false) }
-    let accepted=decide WireFixture.now afterPoll acceptedEnvelope
-    let interrupted=WireFixture.events @ pollDecision.Events @ accepted.Events
-    let journal=WireFixture.Journal(interrupted) :> IJournalStore
-    let store={WorkItems=journal;Candidates=WireFixture.candidates}
     let request:RunnerAckRequest=
         { Schema=RunnerWire.ackSchema;CommandId=commandId;WorkItemPersistenceId=WireFixture.persistenceId
           SessionId=Id.sessionValue WireFixture.sessionId;RunnerId=Id.runnerValue WireFixture.runnerId;PrincipalId="main-runner"
           FingerprintSha256=WireFixture.fingerprint;Generation=1L;ExpectedRevision=Id.revisionValue afterPoll.Revision
           ClientSequence=2L;AssignmentSha256=assignmentSha;IssuedAt=issuedAt;ExpiresAt=expiresAt }
+    let acceptedEnvelope=
+        { CommandId=Id.command commandId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=afterPoll.Revision
+          ExpectedGeneration=WireFixture.generation;PrincipalId="main-runner";SessionId=Some WireFixture.sessionId
+          IssuedAt=issuedAt;ExpiresAt=expiresAt;Command=AcceptRunnerMessage(WireFixture.sessionId,2L,false,RunnerWire.serialize request |> RunnerWire.sha256) }
+    let accepted=decide WireFixture.now afterPoll acceptedEnvelope
+    let interrupted=WireFixture.events @ pollDecision.Events @ accepted.Events
+    let journal=WireFixture.Journal(interrupted) :> IJournalStore
+    let store={WorkItems=journal;Candidates=WireFixture.candidates}
     let! resumed=RunnerWireRuntime.acknowledge (WireFixture.Clock()) store WireFixture.work request CancellationToken.None
-    match resumed with Ok() -> () | Error reason -> failwith $"restart recovery failed: {reason}"
+    match resumed with Ok _ -> () | Error reason -> failwith $"restart recovery failed: {reason}"
     let! recovered=HostedWriterJournal.recover journal WireFixture.work CancellationToken.None
     let recovered=recovered |> Result.defaultWith(fun failures -> failwithf "%A" failures)
     Assert.Equal(2L,recovered.State.Sessions[WireFixture.sessionId].LastClientSequence)
     Assert.True(recovered.State.Operations[WireFixture.route.ProcessOperationId] |> function OperationState.Settled _ -> true | _ -> false) }
+
+let private candidateFixture () =
+    let assignmentSha=String.replicate 64 "d"
+    let processReadback=
+        { WireFixture.claimReadback with OperationId=WireFixture.route.ProcessOperationId;
+                                          ProviderResourceId=string(Id.attemptValue WireFixture.attemptId);
+                                          ProviderRevision=$"runner-ack:{assignmentSha}" }
+    let candidateIntent=
+        { OperationId=WireFixture.route.CandidateOperationId;Kind=StoreCandidate;Generation=WireFixture.generation
+          WorkflowRevision=WireFixture.revision;ResourceId=string(Id.candidateValue WireFixture.candidateId);PayloadSha256=String.replicate 64 "e" }
+    let events=WireFixture.events @ [HostedEffectReadbackAccepted processReadback;EffectSettled(processReadback.OperationId,Applied processReadback.ProviderRevision);EffectIntentRecorded candidateIntent;EffectDispatchStarted candidateIntent.OperationId]
+    let state=replay events
+    let bytes=Encoding.UTF8.GetBytes "candidate"
+    let request:RunnerCandidateRequest=
+        { Schema=RunnerWire.candidateSchema;CommandId=Guid.Parse("92000000-0000-0000-0000-000000000001");WorkItemPersistenceId=WireFixture.persistenceId
+          SessionId=Id.sessionValue WireFixture.sessionId;RunnerId=Id.runnerValue WireFixture.runnerId;PrincipalId="main-runner";FingerprintSha256=WireFixture.fingerprint
+          Generation=1L;ExpectedRevision=Id.revisionValue state.Revision;ClientSequence=1L;AssignmentSha256=assignmentSha
+          CandidateId=Id.candidateValue WireFixture.candidateId;BaselineSha=String.replicate 40 "a";HeadSha=String.replicate 40 "b";TreeSha=String.replicate 40 "c"
+          ManifestSha256=String.replicate 64 "f";ContentSha256=RunnerWire.sha256 bytes;MediaType="application/vnd.fsgg.runner-candidate+zip"
+          SizeBytes=int64 bytes.Length;RetainUntil=WireFixture.now.AddDays 1.;ContentBase64=Convert.ToBase64String bytes
+          IssuedAt=WireFixture.now.AddSeconds(-1.);ExpiresAt=WireFixture.now.AddMinutes 5. }
+    events,state,request
+
+[<Fact>]
+let ``stale revision and gapped candidate sequence never write candidate storage`` () = task {
+    let events,state,request=candidateFixture()
+    let mutable puts=0
+    let candidates=
+        { new ICandidateStore with
+            member _.Put(_,_) = puts<-puts+1;Task.FromResult(Error CapacityRefused)
+            member _.Read(_,_) = Task.FromResult(Error "unused")
+            member _.Quarantine(_,_,_) = Task.FromResult(Error "unused")
+            member _.CleanupUnreferenced(_,_,_) = Task.FromResult 0 }
+    let store={WorkItems=WireFixture.Journal(events) :> IJournalStore;Candidates=candidates}
+    let! stale=RunnerWireRuntime.submitCandidate (WireFixture.Clock()) store WireFixture.work {request with ExpectedRevision=Id.revisionValue state.Revision-1L} CancellationToken.None
+    let! gap=RunnerWireRuntime.submitCandidate (WireFixture.Clock()) store WireFixture.work {request with CommandId=Guid.NewGuid();ClientSequence=2L} CancellationToken.None
+    Assert.True(Result.isError stale)
+    Assert.True(Result.isError gap)
+    Assert.Equal(0,puts) }
+
+[<Fact>]
+let ``changed candidate body conflicts before candidate storage`` () = task {
+    let events,state,request=candidateFixture()
+    let envelope=
+        { CommandId=Id.command request.CommandId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=state.Revision
+          ExpectedGeneration=WireFixture.generation;PrincipalId=request.PrincipalId;SessionId=Some WireFixture.sessionId
+          IssuedAt=request.IssuedAt;ExpiresAt=request.ExpiresAt
+          Command=AcceptRunnerMessage(WireFixture.sessionId,request.ClientSequence,false,RunnerWire.serialize request |> RunnerWire.sha256) }
+    let accepted=decide WireFixture.now state envelope
+    Assert.Equal(Accepted,accepted.Receipt.Disposition)
+    let mutable puts=0
+    let candidates=
+        { new ICandidateStore with
+            member _.Put(_,_) = puts<-puts+1;Task.FromResult(Error CapacityRefused)
+            member _.Read(_,_) = Task.FromResult(Error "unused")
+            member _.Quarantine(_,_,_) = Task.FromResult(Error "unused")
+            member _.CleanupUnreferenced(_,_,_) = Task.FromResult 0 }
+    let store={WorkItems=WireFixture.Journal(events @ accepted.Events) :> IJournalStore;Candidates=candidates}
+    let changedBytes=Encoding.UTF8.GetBytes "changed"
+    let changed={request with ContentBase64=Convert.ToBase64String changedBytes;ContentSha256=RunnerWire.sha256 changedBytes;SizeBytes=int64 changedBytes.Length}
+    let! result=RunnerWireRuntime.submitCandidate (WireFixture.Clock()) store WireFixture.work changed CancellationToken.None
+    Assert.Equal(Error "runner-command-identity-conflict",result)
+    Assert.Equal(0,puts) }
+
+[<Fact>]
+let ``completed candidate response-loss retry succeeds after session closure without another put`` () = task {
+    let events,state,request=candidateFixture()
+    let envelope=
+        { CommandId=Id.command request.CommandId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=state.Revision
+          ExpectedGeneration=WireFixture.generation;PrincipalId=request.PrincipalId;SessionId=Some WireFixture.sessionId
+          IssuedAt=request.IssuedAt;ExpiresAt=request.ExpiresAt
+          Command=AcceptRunnerMessage(WireFixture.sessionId,request.ClientSequence,false,RunnerWire.serialize request |> RunnerWire.sha256) }
+    let accepted=decide WireFixture.now state envelope
+    let candidate=
+        { CandidateId=WireFixture.candidateId;BaselineSha=request.BaselineSha;HeadSha=request.HeadSha;TreeSha=request.TreeSha
+          ManifestSha256=request.ManifestSha256;ContentSha256=request.ContentSha256;MediaType=request.MediaType;SizeBytes=request.SizeBytes
+          RetainUntil=request.RetainUntil;Location=ContentAddressedObject($"sha256/{request.ContentSha256}") }
+    let readback=
+        { WireFixture.claimReadback with OperationId=WireFixture.route.CandidateOperationId;ProviderResourceId=string request.CandidateId;
+                                          CandidateHeadSha=Some request.HeadSha;ResultSha=Some request.ContentSha256;ProviderRevision="candidate:stored" }
+    let completed=events @ accepted.Events @ [HostedEffectReadbackAccepted readback;EffectSettled(readback.OperationId,Applied readback.ProviderRevision);CandidateAccepted candidate;RunnerSessionClosed WireFixture.sessionId]
+    let bytes=Convert.FromBase64String request.ContentBase64
+    let mutable puts=0
+    let candidates=
+        { new ICandidateStore with
+            member _.Put(_,_) = puts<-puts+1;Task.FromResult(Error CapacityRefused)
+            member _.Read(_,_) = Task.FromResult(Ok {Candidate=candidate;Bytes=bytes})
+            member _.Quarantine(_,_,_) = Task.FromResult(Error "unused")
+            member _.CleanupUnreferenced(_,_,_) = Task.FromResult 0 }
+    let store={WorkItems=WireFixture.Journal(completed) :> IJournalStore;Candidates=candidates}
+    let! result=RunnerWireRuntime.submitCandidate (WireFixture.Clock()) store WireFixture.work request CancellationToken.None
+    match result with Ok _ -> () | Error reason -> failwith reason
+    Assert.Equal(0,puts) }

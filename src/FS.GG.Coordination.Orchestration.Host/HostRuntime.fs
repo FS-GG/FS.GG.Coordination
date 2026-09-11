@@ -240,13 +240,13 @@ module HostRuntime =
                             | Error reason -> Task.FromResult(false,Error reason)
                             | Ok value -> task {
                                 let! found=RunnerWireRuntime.acknowledge clock wire configuration.WorkItemId value cancellationToken
-                                return true,Result.map (fun () -> box {| schema="fsgg.orchestration.runner-ack-receipt/1";accepted=true |}) found }
+                                return true,Result.map (fun revision -> box {| schema="fsgg.orchestration.runner-ack-receipt/1";accepted=true;workflowRevision=revision |}) found }
                         | "POST","/v1/runner/candidate" ->
                             match RunnerWire.parseCandidate bytes with
                             | Error reason -> Task.FromResult(false,Error reason)
                             | Ok value -> task {
                                 let! found=RunnerWireRuntime.submitCandidate clock wire configuration.WorkItemId value cancellationToken
-                                return true,Result.map (fun () -> box {| schema="fsgg.orchestration.runner-candidate-receipt/1";accepted=true |}) found }
+                                return true,Result.map (fun revision -> box {| schema="fsgg.orchestration.runner-candidate-receipt/1";accepted=true;workflowRevision=revision |}) found }
                         | _ -> Task.FromResult(false,Error "runner-route-not-found")
                     match result with
                     | Ok value -> do! writeJson response 200 value cancellationToken

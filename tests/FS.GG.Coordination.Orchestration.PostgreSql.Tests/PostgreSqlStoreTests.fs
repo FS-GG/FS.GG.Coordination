@@ -152,7 +152,7 @@ module private Fixture =
             { CandidateId = Id.candidate(Guid.NewGuid())
               BaselineSha = String.replicate 40 "a"; HeadSha = String.replicate 40 "b"; TreeSha = String.replicate 40 "c"
               ManifestSha256 = sha(Encoding.UTF8.GetBytes $"manifest:{label}"); ContentSha256 = digest
-              MediaType = "application/vnd.git.bundle"; SizeBytes = int64 bytes.LongLength; RetainUntil = DateTimeOffset.UtcNow.AddDays 1.0
+              MediaType = "application/vnd.fsgg.runner-candidate+zip"; SizeBytes = int64 bytes.LongLength; RetainUntil = DateTimeOffset.UtcNow.AddDays 1.0
               Location = ContentAddressedObject($"sha256/{digest}") }
         { Candidate = value; Bytes = bytes }
 

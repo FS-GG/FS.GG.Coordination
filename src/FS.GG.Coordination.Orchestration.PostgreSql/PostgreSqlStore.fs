@@ -564,7 +564,7 @@ WHERE fsgg_orchestration.projection_checkpoint.sequence_number <= excluded.seque
         member _.Put(request, cancellationToken) =
             task {
                 let candidate = request.Candidate
-                let allowedMediaTypes = set [ "application/vnd.git.bundle"; "application/zip"; "application/zstd" ]
+                let allowedMediaTypes = Set.singleton "application/vnd.fsgg.runner-candidate+zip"
                 match locationKey candidate.Location with
                 | _ when not (allowedMediaTypes.Contains candidate.MediaType) -> return Error InvalidArchive
                 | None -> return Error InvalidArchive

@@ -177,6 +177,20 @@ def usage_readback(binary: bytes) -> str:
         process = subprocess.run([str(path)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         require(process.returncode == 2, "ORC-USAGE", f"expected usage exit 2, observed {process.returncode}")
         require(process.stdout.startswith("usage: fsgg-coord-orchestration-runner post"), "ORC-USAGE", "native usage readback differs")
+        for binding in ("https://orchestration.main.internal:18080/", "--client-cert-file", "--client-key-file", "--ca-file"):
+            require(binding in process.stdout, "ORC-USAGE", f"native usage omits bridge binding {binding}")
+        require("--token-file" not in process.stdout, "ORC-USAGE", "runner usage exposes forbidden bearer-token input")
+        oversized = Path(temporary) / "oversized-request.json"
+        oversized.write_bytes(b"x" * 8193)
+        refused = subprocess.run(
+            [str(path), "post", "--endpoint", "https://orchestration.main.internal:18080/",
+             "--client-cert-file", str(Path(temporary) / "missing-cert"),
+             "--client-key-file", str(Path(temporary) / "missing-key"),
+             "--ca-file", str(Path(temporary) / "missing-ca"),
+             "--path", "/v1/runner/assignment", "--request-file", str(oversized)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        require(refused.returncode == 2 and refused.stdout.strip() == "runner-request-size-refused", "ORC-USAGE", "oversized request was not refused before credential or network access")
         return digest_bytes(process.stdout.encode())
 
 

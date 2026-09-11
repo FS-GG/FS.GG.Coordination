@@ -154,7 +154,7 @@ module Orchestration =
         | RecordCompensationFailure of claimId:string * reason:string
         | SelectHostedRoute of HostedRoutePlan | StartAttempt of AttemptId * SessionId * RunnerEnrollment
         | ObserveAttempt of AttemptId * AttemptStatus
-        | AcceptRunnerMessage of SessionId * clientSequence:int64 * emitServerMessage:bool
+        | AcceptRunnerMessage of SessionId * clientSequence:int64 * emitServerMessage:bool * requestSha256:string
         | CloseRunnerSession of SessionId
         | ChargeBudget of BudgetUse | Pause of string | Resume | RequestCancel of string
         | RecordStartupPause of string | RecordHostedRouteReadback of HostedRouteReadback
@@ -420,7 +420,7 @@ module Orchestration =
             match Map.tryFind id state.Operations with
             | Some(Settled(intent,ProvenAbsent)) -> {state with Operations=Map.add id (IntentRecorded intent) state.Operations;Revision=revision}
             | _ -> {state with Revision=revision}
-        | CommandRecorded r -> {state with CommandReceipts=Map.add r.CommandId r state.CommandReceipts;Revision=revision}
+        | CommandRecorded r -> {state with CommandReceipts=Map.add r.CommandId r state.CommandReceipts}
 
     let replay events = List.fold evolve initial events
     let private mkReceipt state id digest disposition detail =
@@ -483,7 +483,7 @@ module Orchestration =
                     let session:SessionState={SessionId=s;RunnerId=r.RunnerId;Generation=state.Generation;LastClientSequence=0L;LastServerSequence=0L;Closed=false}
                     accept [AttemptStarted attempt;RunnerSessionOpened session] [] "attempt-and-runner-session-started"
                 | _ -> reject "dispatch-requires-current-reservation-claim-runner-and-budget"
-        | AcceptRunnerMessage(sessionId,clientSequence,emitServerMessage) ->
+        | AcceptRunnerMessage(sessionId,clientSequence,emitServerMessage,requestSha256) when validSha requestSha256 ->
             match Map.tryFind sessionId state.Sessions with
             | Some session when currentRunnerSession now state session && clientSequence=session.LastClientSequence+1L ->
                 let events =
@@ -495,6 +495,7 @@ module Orchestration =
             | Some session when clientSequence<=session.LastClientSequence -> reject "duplicate-runner-message"
             | Some _ -> reject "runner-client-sequence-gap-or-inactive-session"
             | None -> reject "unknown-runner-session"
+        | AcceptRunnerMessage _ -> reject "runner-request-digest-invalid"
         | CloseRunnerSession sessionId ->
             match Map.tryFind sessionId state.Sessions with
             | Some session when not session.Closed -> accept [RunnerSessionClosed sessionId] [] "runner-session-closed"
@@ -539,7 +540,7 @@ module Orchestration =
         | RequestCancel r -> match state.Control with | Running|Paused _ -> accept [CancelRequestedEvent r] [] "cancel-requested" | _ -> reject "cancel-refused"
         | ConfirmCancelled r -> match state.Control with | CancelPending _ -> accept [CancelledEvent r;GenerationAdvanced(nextGeneration state.Generation)] [] "cancelled" | _ -> reject "cancel-not-pending"
         | Revoke r -> accept [RevokedEvent r;GenerationAdvanced(nextGeneration state.Generation)] [] "revoked"
-        | RecordCandidate(c,proof) when proof.CandidateId=c.CandidateId && proof.ContentSha256.Equals(c.ContentSha256,StringComparison.OrdinalIgnoreCase) && proof.ManifestSha256.Equals(c.ManifestSha256,StringComparison.OrdinalIgnoreCase) && proof.SizeBytes=c.SizeBytes && proof.Location=c.Location && proof.StoreSchemaVersion=1 && not(String.IsNullOrWhiteSpace proof.StoreId) && validSha proof.StorageReceiptSha256 && proof.VerifiedAt<=now && c.SizeBytes>=0L && c.SizeBytes<=104857600L && c.RetainUntil>now && c.RetainUntil<=now.AddDays 90. && validSha c.ContentSha256 && validSha c.ManifestSha256 && validGitObject c.BaselineSha && validGitObject c.HeadSha && validGitObject c.TreeSha && Set.contains c.MediaType (Set.ofList ["application/vnd.git.bundle";"application/zip";"application/zstd"]) && (match c.Location with | ContentAddressedObject key -> key=$"sha256/{c.ContentSha256.ToLowerInvariant()}" | ImmutableRemoteGitRef(repository,commit,qualifiedRef) -> not(String.IsNullOrWhiteSpace repository) && validGitObject commit && commit.Equals(c.HeadSha,StringComparison.OrdinalIgnoreCase) && qualifiedRef.StartsWith("refs/fsgg/candidates/",StringComparison.Ordinal)) && (state.HostedRoute |> Option.forall(fun route -> route.CandidateId=c.CandidateId && state.HostedEffectReadbacks |> Map.tryFind route.CandidateOperationId |> Option.exists(fun readback -> readback.Exists && readback.CandidateHeadSha=Some c.HeadSha && readback.ResultSha=Some c.ContentSha256))) ->
+        | RecordCandidate(c,proof) when proof.CandidateId=c.CandidateId && proof.ContentSha256.Equals(c.ContentSha256,StringComparison.OrdinalIgnoreCase) && proof.ManifestSha256.Equals(c.ManifestSha256,StringComparison.OrdinalIgnoreCase) && proof.SizeBytes=c.SizeBytes && proof.Location=c.Location && proof.StoreSchemaVersion=1 && not(String.IsNullOrWhiteSpace proof.StoreId) && validSha proof.StorageReceiptSha256 && proof.VerifiedAt<=now && c.SizeBytes>=0L && c.SizeBytes<=104857600L && c.RetainUntil>now && c.RetainUntil<=now.AddDays 90. && validSha c.ContentSha256 && validSha c.ManifestSha256 && validGitObject c.BaselineSha && validGitObject c.HeadSha && validGitObject c.TreeSha && Set.contains c.MediaType (Set.singleton "application/vnd.fsgg.runner-candidate+zip") && (match c.Location with | ContentAddressedObject key -> key=$"sha256/{c.ContentSha256.ToLowerInvariant()}" | ImmutableRemoteGitRef(repository,commit,qualifiedRef) -> not(String.IsNullOrWhiteSpace repository) && validGitObject commit && commit.Equals(c.HeadSha,StringComparison.OrdinalIgnoreCase) && qualifiedRef.StartsWith("refs/fsgg/candidates/",StringComparison.Ordinal)) && (state.HostedRoute |> Option.forall(fun route -> route.CandidateId=c.CandidateId && state.HostedEffectReadbacks |> Map.tryFind route.CandidateOperationId |> Option.exists(fun readback -> readback.Exists && readback.CandidateHeadSha=Some c.HeadSha && readback.ResultSha=Some c.ContentSha256))) ->
             match Map.tryFind c.CandidateId state.Candidates with | Some x when x=c -> accept [] [] "candidate-already-accepted" | Some _ -> conflict "candidate-identity-conflict" | None -> accept [CandidateAccepted c] [] "candidate-durably-accepted"
         | RecordCandidate _ -> reject "candidate-not-recoverable-or-invalid"
         | RecordEffectIntent i when sameGeneration i.Generation state.Generation ->
@@ -654,7 +655,7 @@ module Orchestration =
             | SelectHostedRoute route -> "select-hosted-route"::routeParts route
             | StartAttempt(a,s,r) -> ["start-attempt";Id.attemptValue a |> string;Id.sessionValue s |> string;Id.runnerValue r.RunnerId |> string;r.PrincipalId;r.FingerprintSha256;generationText r.Generation;timeText r.ExpiresAt]
             | ObserveAttempt(a,status) -> ["observe-attempt";Id.attemptValue a |> string;sprintf "%A" status]
-            | AcceptRunnerMessage(sessionId,sequence,emitServer) -> ["accept-runner-message";Id.sessionValue sessionId |> string;invariant sequence;string emitServer]
+            | AcceptRunnerMessage(sessionId,sequence,emitServer,requestSha256) -> ["accept-runner-message";Id.sessionValue sessionId |> string;invariant sequence;string emitServer;requestSha256]
             | CloseRunnerSession sessionId -> ["close-runner-session";Id.sessionValue sessionId |> string]
             | ChargeBudget b -> ["charge";invariant b.Tokens;invariant b.RuntimeSeconds;invariant b.CostMicros]
             | Pause reason -> ["pause";reason] | Resume -> ["resume"] | RequestCancel reason -> ["request-cancel";reason]

@@ -20,10 +20,11 @@ module RunnerWireRuntime =
     let private activeAttempt (state:State) sessionId =
         state.Attempts |> Map.tryPick(fun _ attempt -> if Id.sessionValue attempt.SessionId=sessionId then Some attempt else None)
 
-    let private validateIdentity now workItemId sessionId runnerId principal fingerprint generation expectedRevision issuedAt expiresAt (state:State) =
+    let private validateIdentity requireExpectedRevision now workItemId sessionId runnerId principal fingerprint generation expectedRevision issuedAt expiresAt (state:State) =
         let persistenceId=WorkItemIdentity.persistenceId workItemId
         if issuedAt>now || expiresAt<now || expiresAt<=issuedAt then Error "runner-envelope-expired-or-invalid"
         elif generation<>Id.generationValue state.Generation then Error "runner-authority-stale"
+        elif requireExpectedRevision && expectedRevision<>Id.revisionValue state.Revision then Error "runner-expected-revision-stale"
         elif state.Control<>Running || not state.ReadbackCurrent then Error "runner-dispatch-paused-or-readback-stale"
         elif state.Budget |> Option.exists(fun budget -> budget.Deadline>=now && expiresAt<=budget.Deadline) |> not then Error "runner-budget-or-deadline-refused"
         else
@@ -37,6 +38,10 @@ module RunnerWireRuntime =
             | _ -> Error "runner-enrollment-mismatch"
 
     let private recover (store:RunnerWireStore) workItemId token = HostedWriterJournal.recover store.WorkItems workItemId token
+
+    let private currentRevision store workItemId token = task {
+        let! recovered=recover store workItemId token
+        return recovered |> Result.map(fun value -> Id.revisionValue value.State.Revision) |> Result.mapError(sprintf "%A") }
 
     let private priorReceipt (state:State) commandId expectedRevision generation principal sessionId issuedAt expiresAt command =
         let envelope=
@@ -73,7 +78,7 @@ module RunnerWireRuntime =
                       AttemptId=Id.attemptValue attempt.AttemptId;CandidateId=Id.candidateValue route.CandidateId
                       SessionId=Id.sessionValue attempt.SessionId;RunnerId=Id.runnerValue attempt.Runner.RunnerId
                       PrincipalId=attempt.Runner.PrincipalId;FingerprintSha256=attempt.Runner.FingerprintSha256
-                      Generation=Id.generationValue state.Generation;WorkflowRevision=Id.revisionValue route.WorkflowRevision
+                      Generation=Id.generationValue state.Generation;WorkflowRevision=Id.revisionValue state.Revision
                       ClientSequence=clientSequence;ServerSequence=session.LastServerSequence;PayloadSha256=intent.PayloadSha256
                       AssignmentSha256="";ExpiresAt=attempt.Runner.ExpiresAt;Deadline=budget.Deadline }
                 Ok {value with AssignmentSha256=RunnerWire.assignmentDigest value}
@@ -87,10 +92,10 @@ module RunnerWireRuntime =
         | Error failures -> return Error(sprintf "%A" failures)
         | Ok current when request.Schema<>RunnerWire.pollSchema || request.WorkItemPersistenceId<>current.PersistenceId -> return Error "runner-poll-schema-or-work-item-refused"
         | Ok current ->
-            match validateIdentity now workItemId request.SessionId request.RunnerId request.PrincipalId request.FingerprintSha256 request.Generation request.ExpectedRevision request.IssuedAt request.ExpiresAt current.State with
+            match validateIdentity true now workItemId request.SessionId request.RunnerId request.PrincipalId request.FingerprintSha256 request.Generation request.ExpectedRevision request.IssuedAt request.ExpiresAt current.State with
             | Error reason -> return Error reason
             | Ok(_,attempt) ->
-                let! accepted=apply clock store workItemId request.PrincipalId request.SessionId request.CommandId request.ExpectedRevision request.IssuedAt request.ExpiresAt (AcceptRunnerMessage(Id.session request.SessionId,request.ClientSequence,true)) token
+                let! accepted=apply clock store workItemId request.PrincipalId request.SessionId request.CommandId request.ExpectedRevision request.IssuedAt request.ExpiresAt (AcceptRunnerMessage(Id.session request.SessionId,request.ClientSequence,true,RunnerWire.serialize request |> RunnerWire.sha256)) token
                 match accepted with
                 | Error reason -> return Error reason
                 | Ok() ->
@@ -115,9 +120,26 @@ module RunnerWireRuntime =
         && validGitObject request.BaselineSha
         && validGitObject request.HeadSha
         && validGitObject request.TreeSha
-        && Set.contains request.MediaType (Set.ofList ["application/vnd.git.bundle";"application/zip";"application/zstd"])
+        && Set.contains request.MediaType (Set.singleton "application/vnd.fsgg.runner-candidate+zip")
         && request.SizeBytes>=0L && request.SizeBytes<=104857600L
         && request.RetainUntil>now && request.RetainUntil<=now.AddDays 90.
+
+    let private candidateArtifact candidateId (request:RunnerCandidateRequest) =
+        { CandidateId=candidateId;BaselineSha=request.BaselineSha;HeadSha=request.HeadSha;TreeSha=request.TreeSha
+          ManifestSha256=request.ManifestSha256;ContentSha256=request.ContentSha256;MediaType=request.MediaType
+          SizeBytes=request.SizeBytes;RetainUntil=request.RetainUntil;Location=ContentAddressedObject($"sha256/{request.ContentSha256}") }
+
+    let private completedCandidateMatches (state:State) (request:RunnerCandidateRequest) (durable:CandidatePut) =
+        state.HostedRoute
+        |> Option.exists(fun route ->
+            let candidate=candidateArtifact route.CandidateId request
+            Id.candidateValue route.CandidateId=request.CandidateId
+            && Map.tryFind route.CandidateId state.Candidates=Some candidate
+            && durable.Candidate=candidate
+            && durable.Bytes.LongLength=request.SizeBytes
+            && RunnerWire.sha256 durable.Bytes=request.ContentSha256
+            && (state.HostedEffectReadbacks |> Map.tryFind route.CandidateOperationId
+                |> Option.exists(fun readback -> readback.Exists && readback.CandidateHeadSha=Some request.HeadSha && readback.ResultSha=Some request.ContentSha256)))
 
     let acknowledge (clock:TimeProvider) store workItemId (request:RunnerAckRequest) token = task {
         let now=clock.GetUtcNow()
@@ -126,13 +148,13 @@ module RunnerWireRuntime =
         | Error failures -> return Error(sprintf "%A" failures)
         | Ok current when request.Schema<>RunnerWire.ackSchema || request.WorkItemPersistenceId<>current.PersistenceId || not(RunnerWire.validSha256 request.AssignmentSha256) -> return Error "runner-ack-schema-or-work-item-refused"
         | Ok current ->
-            let runnerCommand=AcceptRunnerMessage(Id.session request.SessionId,request.ClientSequence,false)
+            let runnerCommand=AcceptRunnerMessage(Id.session request.SessionId,request.ClientSequence,false,RunnerWire.serialize request |> RunnerWire.sha256)
             match priorReceipt current.State request.CommandId request.ExpectedRevision request.Generation request.PrincipalId request.SessionId request.IssuedAt request.ExpiresAt runnerCommand with
             | Some false -> return Error "runner-command-identity-conflict"
             | commandReceipt ->
-              if commandReceipt=Some true && acknowledgedAssignment request.AssignmentSha256 current.State then return Ok()
+              if commandReceipt=Some true && acknowledgedAssignment request.AssignmentSha256 current.State then return Ok(Id.revisionValue current.State.Revision)
               else
-                match validateIdentity now workItemId request.SessionId request.RunnerId request.PrincipalId request.FingerprintSha256 request.Generation request.ExpectedRevision request.IssuedAt request.ExpiresAt current.State with
+                match validateIdentity (commandReceipt.IsNone) now workItemId request.SessionId request.RunnerId request.PrincipalId request.FingerprintSha256 request.Generation request.ExpectedRevision request.IssuedAt request.ExpiresAt current.State with
                 | Error reason -> return Error reason
                 | Ok(_,attempt) ->
                     let assignmentValid =
@@ -156,7 +178,7 @@ module RunnerWireRuntime =
                             match refreshed with
                             | Error failures -> return Error(sprintf "%A" failures)
                             | Ok current ->
-                                if acknowledgedAssignment request.AssignmentSha256 current.State then return Ok()
+                                if acknowledgedAssignment request.AssignmentSha256 current.State then return Ok(Id.revisionValue current.State.Revision)
                                 else
                                     let route=current.State.HostedRoute.Value
                                     let readback=
@@ -165,7 +187,8 @@ module RunnerWireRuntime =
                                           CandidateHeadSha=None;ResultSha=None;ProviderRevision=$"runner-ack:{request.AssignmentSha256}"
                                           Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=request.IssuedAt;Exists=true }
                                     let commandId=derivedCommandId request.CommandId "dispatch-readback"
-                                    return! apply clock store workItemId request.PrincipalId request.SessionId commandId (Id.revisionValue current.State.Revision) request.IssuedAt request.ExpiresAt (RecordHostedEffectReadback(route.ProcessOperationId,readback)) token }
+                                    let! recorded=apply clock store workItemId request.PrincipalId request.SessionId commandId (Id.revisionValue current.State.Revision) request.IssuedAt request.ExpiresAt (RecordHostedEffectReadback(route.ProcessOperationId,readback)) token
+                                    match recorded with Error reason -> return Error reason | Ok() -> return! currentRevision store workItemId token }
 
     let submitCandidate (clock:TimeProvider) store workItemId (request:RunnerCandidateRequest) token = task {
         let now=clock.GetUtcNow()
@@ -174,72 +197,91 @@ module RunnerWireRuntime =
         | Error failures -> return Error(sprintf "%A" failures)
         | Ok current when request.Schema<>RunnerWire.candidateSchema || request.WorkItemPersistenceId<>current.PersistenceId || not(RunnerWire.validSha256 request.AssignmentSha256) || not(validCandidateRequest now request) -> return Error "runner-candidate-schema-or-work-item-refused"
         | Ok current ->
-            let runnerCommand=AcceptRunnerMessage(Id.session request.SessionId,request.ClientSequence,false)
-            match priorReceipt current.State request.CommandId request.ExpectedRevision request.Generation request.PrincipalId request.SessionId request.IssuedAt request.ExpiresAt runnerCommand with
-            | Some false -> return Error "runner-command-identity-conflict"
-            | commandReceipt ->
-              match validateIdentity now workItemId request.SessionId request.RunnerId request.PrincipalId request.FingerprintSha256 request.Generation request.ExpectedRevision request.IssuedAt request.ExpiresAt current.State with
-              | Error reason -> return Error reason
-              | Ok(_,attempt) ->
-                match current.State.HostedRoute with
-                | None -> return Error "runner-route-missing"
-                | Some route when Id.candidateValue route.CandidateId<>request.CandidateId -> return Error "runner-candidate-identity-mismatch"
-                | Some route when current.State.HostedEffectReadbacks |> Map.tryFind route.ProcessOperationId |> Option.exists(fun readback -> readback.ProviderRevision=$"runner-ack:{request.AssignmentSha256}") |> not -> return Error "runner-assignment-digest-mismatch"
-                | Some route ->
-                    match Map.tryFind route.CandidateOperationId current.State.Operations with
-                    | Some(Dispatching intent) | Some(NeedsObservation(intent,_)) | Some(OperationState.Settled(intent,Applied _)) when intent.Kind=StoreCandidate ->
-                        let bytes = try Convert.FromBase64String request.ContentBase64 with _ -> Array.empty
-                        let candidate=
-                            { CandidateId=route.CandidateId;BaselineSha=request.BaselineSha;HeadSha=request.HeadSha;TreeSha=request.TreeSha
-                              ManifestSha256=request.ManifestSha256;ContentSha256=request.ContentSha256;MediaType=request.MediaType
-                              SizeBytes=request.SizeBytes;RetainUntil=request.RetainUntil;Location=ContentAddressedObject($"sha256/{request.ContentSha256}") }
-                        if bytes.LongLength<>request.SizeBytes || RunnerWire.sha256 bytes<>request.ContentSha256 then return Error "runner-candidate-bytes-refused"
-                        else
-                            let! stored=store.Candidates.Put({Candidate=candidate;Bytes=bytes},token)
-                            let receipt=
-                                match stored with
-                                | Ok receipt | Error(Existing receipt) -> Some receipt
-                                | _ -> None
-                            match receipt with
-                            | None -> return Error(sprintf "runner-candidate-storage-refused:%A" stored)
-                            | Some receipt ->
-                                let! readBack=store.Candidates.Read(route.CandidateId,token)
-                                match readBack with
-                                | Error reason -> return Error($"runner-candidate-readback-refused:{reason}")
-                                | Ok durable when durable.Bytes<>bytes || durable.Candidate<>candidate -> return Error "runner-candidate-readback-mismatch"
-                                | Ok _ ->
-                                    let! accepted =
-                                        match commandReceipt with
-                                        | Some true -> Task.FromResult(Ok())
-                                        | _ -> apply clock store workItemId request.PrincipalId request.SessionId request.CommandId request.ExpectedRevision request.IssuedAt request.ExpiresAt runnerCommand token
-                                    match accepted with
-                                    | Error reason -> return Error reason
-                                    | Ok() ->
-                                        let readback=
-                                            { OperationId=route.CandidateOperationId;RouteId=route.RouteId;AttemptId=route.AttemptId;CandidateId=route.CandidateId
-                                              RepositoryNodeId=route.RepositoryNodeId;ProviderResourceId=string request.CandidateId
-                                              CandidateHeadSha=Some request.HeadSha;ResultSha=Some request.ContentSha256
-                                              ProviderRevision=$"candidate:{receipt.StorageReceiptSha256}";Generation=route.Generation
-                                              WorkflowRevision=route.WorkflowRevision;ObservedAt=request.IssuedAt;Exists=true }
-                                        let! afterClient=recover store workItemId token
-                                        let currentAfterClient=afterClient |> Result.map(fun value -> value.State) |> Result.toOption
-                                        let readbackAlreadyAccepted =
-                                            currentAfterClient |> Option.bind(fun state -> Map.tryFind route.CandidateOperationId state.HostedEffectReadbacks)
-                                            |> Option.exists(fun existing -> existing.CandidateHeadSha=Some request.HeadSha && existing.ResultSha=Some request.ContentSha256 && existing.ProviderRevision=readback.ProviderRevision)
-                                        let! effectRecorded =
-                                            if readbackAlreadyAccepted then Task.FromResult(Ok())
-                                            else
-                                                let revisionAfterClient=currentAfterClient |> Option.map(fun state -> Id.revisionValue state.Revision) |> Option.defaultValue -1L
-                                                apply clock store workItemId request.PrincipalId request.SessionId (derivedCommandId request.CommandId "candidate-readback") revisionAfterClient request.IssuedAt request.ExpiresAt (RecordHostedEffectReadback(route.CandidateOperationId,readback)) token
-                                        match effectRecorded with
-                                        | Error reason -> return Error reason
-                                        | Ok() ->
-                                            let! afterEffect=recover store workItemId token
-                                            let stateAfterEffect=afterEffect |> Result.map(fun value -> value.State) |> Result.toOption
-                                            match stateAfterEffect |> Option.bind(fun state -> Map.tryFind route.CandidateId state.Candidates) with
-                                            | Some existing when existing=candidate -> return Ok()
-                                            | Some _ -> return Error "runner-candidate-identity-conflict"
-                                            | None ->
-                                                let revisionAfterEffect=stateAfterEffect |> Option.map(fun state -> Id.revisionValue state.Revision) |> Option.defaultValue -1L
-                                                return! apply clock store workItemId request.PrincipalId request.SessionId (derivedCommandId request.CommandId "candidate-record") revisionAfterEffect request.IssuedAt request.ExpiresAt (RecordCandidate(candidate,receipt)) token
-                    | _ -> return Error "runner-candidate-intent-not-current" }
+            let runnerCommand=AcceptRunnerMessage(Id.session request.SessionId,request.ClientSequence,false,RunnerWire.serialize request |> RunnerWire.sha256)
+            let commandReceipt=priorReceipt current.State request.CommandId request.ExpectedRevision request.Generation request.PrincipalId request.SessionId request.IssuedAt request.ExpiresAt runnerCommand
+            let! completedDuplicate =
+                match commandReceipt with
+                | Some true -> task {
+                    let! durable=store.Candidates.Read(Id.candidate request.CandidateId,token)
+                    return durable |> Result.exists(completedCandidateMatches current.State request) }
+                | _ -> Task.FromResult false
+            if completedDuplicate then return Ok(Id.revisionValue current.State.Revision)
+            else
+              match commandReceipt with
+              | Some false -> return Error "runner-command-identity-conflict"
+              | commandReceipt ->
+                match validateIdentity commandReceipt.IsNone now workItemId request.SessionId request.RunnerId request.PrincipalId request.FingerprintSha256 request.Generation request.ExpectedRevision request.IssuedAt request.ExpiresAt current.State with
+                | Error reason -> return Error reason
+                | Ok(_,attempt) ->
+                  match current.State.HostedRoute with
+                  | None -> return Error "runner-route-missing"
+                  | Some route when Id.candidateValue route.CandidateId<>request.CandidateId -> return Error "runner-candidate-identity-mismatch"
+                  | Some route when current.State.HostedEffectReadbacks |> Map.tryFind route.ProcessOperationId |> Option.exists(fun readback -> readback.ProviderRevision=$"runner-ack:{request.AssignmentSha256}") |> not -> return Error "runner-assignment-digest-mismatch"
+                  | Some route ->
+                      let freshCommandAccepted =
+                          match commandReceipt with
+                          | Some true -> true
+                          | _ ->
+                              let envelope=
+                                  { CommandId=Id.command request.CommandId;ProtocolVersion=Id.protocolVersion 1 0
+                                    ExpectedRevision=Id.revision request.ExpectedRevision;ExpectedGeneration=Id.generation request.Generation
+                                    PrincipalId=request.PrincipalId;SessionId=Some(Id.session request.SessionId)
+                                    IssuedAt=request.IssuedAt;ExpiresAt=request.ExpiresAt;Command=runnerCommand }
+                              (decide now current.State envelope).Receipt.Disposition=ReceiptDisposition.Accepted
+                      if not freshCommandAccepted then return Error "runner-candidate-command-refused-before-storage"
+                      else
+                        match Map.tryFind route.CandidateOperationId current.State.Operations with
+                        | Some(Dispatching intent) | Some(NeedsObservation(intent,_)) | Some(OperationState.Settled(intent,Applied _)) when intent.Kind=StoreCandidate ->
+                          let bytes = try Convert.FromBase64String request.ContentBase64 with _ -> Array.empty
+                          let candidate=candidateArtifact route.CandidateId request
+                          if bytes.LongLength<>request.SizeBytes || RunnerWire.sha256 bytes<>request.ContentSha256 then return Error "runner-candidate-bytes-refused"
+                          else
+                              let! stored=store.Candidates.Put({Candidate=candidate;Bytes=bytes},token)
+                              let receipt=
+                                  match stored with
+                                  | Ok receipt | Error(Existing receipt) -> Some receipt
+                                  | _ -> None
+                              match receipt with
+                              | None -> return Error(sprintf "runner-candidate-storage-refused:%A" stored)
+                              | Some receipt ->
+                                  let! readBack=store.Candidates.Read(route.CandidateId,token)
+                                  match readBack with
+                                  | Error reason -> return Error($"runner-candidate-readback-refused:{reason}")
+                                  | Ok durable when durable.Bytes<>bytes || durable.Candidate<>candidate -> return Error "runner-candidate-readback-mismatch"
+                                  | Ok _ ->
+                                      let! accepted =
+                                          match commandReceipt with
+                                          | Some true -> Task.FromResult(Ok())
+                                          | _ -> apply clock store workItemId request.PrincipalId request.SessionId request.CommandId request.ExpectedRevision request.IssuedAt request.ExpiresAt runnerCommand token
+                                      match accepted with
+                                      | Error reason -> return Error reason
+                                      | Ok() ->
+                                          let readback=
+                                              { OperationId=route.CandidateOperationId;RouteId=route.RouteId;AttemptId=route.AttemptId;CandidateId=route.CandidateId
+                                                RepositoryNodeId=route.RepositoryNodeId;ProviderResourceId=string request.CandidateId
+                                                CandidateHeadSha=Some request.HeadSha;ResultSha=Some request.ContentSha256
+                                                ProviderRevision=$"candidate:{receipt.StorageReceiptSha256}";Generation=route.Generation
+                                                WorkflowRevision=route.WorkflowRevision;ObservedAt=request.IssuedAt;Exists=true }
+                                          let! afterClient=recover store workItemId token
+                                          let currentAfterClient=afterClient |> Result.map(fun value -> value.State) |> Result.toOption
+                                          let readbackAlreadyAccepted =
+                                              currentAfterClient |> Option.bind(fun state -> Map.tryFind route.CandidateOperationId state.HostedEffectReadbacks)
+                                              |> Option.exists(fun existing -> existing.CandidateHeadSha=Some request.HeadSha && existing.ResultSha=Some request.ContentSha256 && existing.ProviderRevision=readback.ProviderRevision)
+                                          let! effectRecorded =
+                                              if readbackAlreadyAccepted then Task.FromResult(Ok())
+                                              else
+                                                  let revisionAfterClient=currentAfterClient |> Option.map(fun state -> Id.revisionValue state.Revision) |> Option.defaultValue -1L
+                                                  apply clock store workItemId request.PrincipalId request.SessionId (derivedCommandId request.CommandId "candidate-readback") revisionAfterClient request.IssuedAt request.ExpiresAt (RecordHostedEffectReadback(route.CandidateOperationId,readback)) token
+                                          match effectRecorded with
+                                          | Error reason -> return Error reason
+                                          | Ok() ->
+                                              let! afterEffect=recover store workItemId token
+                                              let stateAfterEffect=afterEffect |> Result.map(fun value -> value.State) |> Result.toOption
+                                              match stateAfterEffect |> Option.bind(fun state -> Map.tryFind route.CandidateId state.Candidates) with
+                                              | Some existing when existing=candidate -> return Ok(Id.revisionValue stateAfterEffect.Value.Revision)
+                                              | Some _ -> return Error "runner-candidate-identity-conflict"
+                                              | None ->
+                                                  let revisionAfterEffect=stateAfterEffect |> Option.map(fun state -> Id.revisionValue state.Revision) |> Option.defaultValue -1L
+                                                  let! recorded=apply clock store workItemId request.PrincipalId request.SessionId (derivedCommandId request.CommandId "candidate-record") revisionAfterEffect request.IssuedAt request.ExpiresAt (RecordCandidate(candidate,receipt)) token
+                                                  match recorded with Error reason -> return Error reason | Ok() -> return! currentRevision store workItemId token
+                        | _ -> return Error "runner-candidate-intent-not-current" }

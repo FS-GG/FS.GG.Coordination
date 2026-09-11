@@ -39,12 +39,20 @@ type RunnerCandidateRequest =
       RetainUntil: DateTimeOffset; ContentBase64: string
       IssuedAt: DateTimeOffset; ExpiresAt: DateTimeOffset }
 
+[<CLIMutable>]
+type RunnerAckReceipt = { Schema:string; Accepted:bool; WorkflowRevision:int64 }
+
+[<CLIMutable>]
+type RunnerCandidateReceipt = { Schema:string; Accepted:bool; WorkflowRevision:int64 }
+
 [<RequireQualifiedAccess>]
 module RunnerWire =
     let pollSchema = "fsgg.orchestration.runner-poll/1"
     let assignmentSchema = "fsgg.orchestration.runner-assignment/1"
     let ackSchema = "fsgg.orchestration.runner-ack/1"
     let candidateSchema = "fsgg.orchestration.runner-candidate/1"
+    let ackReceiptSchema = "fsgg.orchestration.runner-ack-receipt/1"
+    let candidateReceiptSchema = "fsgg.orchestration.runner-candidate-receipt/1"
 
     let options =
         let value = JsonSerializerOptions(PropertyNamingPolicy=JsonNamingPolicy.CamelCase,MaxDepth=8)
@@ -83,7 +91,20 @@ module RunnerWire =
     let parsePoll bytes = deserializeClosed<RunnerPollRequest> pollProperties 8192 bytes
     let parseAck bytes = deserializeClosed<RunnerAckRequest> ackProperties 8192 bytes
     let parseCandidate bytes = deserializeClosed<RunnerCandidateRequest> candidateProperties (140*1024*1024) bytes
-
     let assignmentDigest (value:RunnerAssignment) =
         let unsigned={value with AssignmentSha256=""}
         serialize unsigned |> sha256
+    let assignmentProperties =
+        set ["schema";"workItemPersistenceId";"routeId";"attemptId";"candidateId";"sessionId";"runnerId";"principalId";"fingerprintSha256";"generation";"workflowRevision";"clientSequence";"serverSequence";"payloadSha256";"assignmentSha256";"expiresAt";"deadline"]
+    let receiptProperties = set ["schema";"accepted";"workflowRevision"]
+    let parseAssignment bytes =
+        deserializeClosed<RunnerAssignment> assignmentProperties 8192 bytes
+        |> Result.bind(fun value ->
+            if value.Schema=assignmentSchema && validSha256 value.AssignmentSha256 && assignmentDigest value=value.AssignmentSha256 then Ok value
+            else Error "runner-assignment-response-refused")
+    let parseAckReceipt bytes =
+        deserializeClosed<RunnerAckReceipt> receiptProperties 8192 bytes
+        |> Result.bind(fun value -> if value.Schema=ackReceiptSchema && value.Accepted && value.WorkflowRevision>=0L then Ok value else Error "runner-ack-response-refused")
+    let parseCandidateReceipt bytes =
+        deserializeClosed<RunnerCandidateReceipt> receiptProperties 8192 bytes
+        |> Result.bind(fun value -> if value.Schema=candidateReceiptSchema && value.Accepted && value.WorkflowRevision>=0L then Ok value else Error "runner-candidate-response-refused")

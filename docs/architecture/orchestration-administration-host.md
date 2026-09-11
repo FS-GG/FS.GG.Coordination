@@ -26,8 +26,12 @@ Every process start durably records the default-paused state and invalidates rou
 the listener. Recovery of pilot-owned state after process replacement reports that fresh reconnect
 readback is required. The operator surface continues to report `dispatchEnabled=false` and `mode=paused`.
 
-The runner surface uses a distinct owner-only runner token in addition to Main's mutually authenticated TLS
-boundary. It accepts only three closed messages: assignment poll, assignment acknowledgement, and durable
+The runner surface receives a distinct owner-only runner token only from Main's mutually authenticated TLS
+broker. The runner executable supplies no HTTP Authorization header: it authenticates to the fixed
+`https://orchestration.main.internal:18080/` container bridge with its enrolled client certificate and private key, using the
+dedicated runner CA for server validation. The broker rejects incoming Authorization, terminates mTLS, and
+injects the runner token only on its loopback Host connection. Main binds that internal DNS name to the
+bridge's loopback address inside the isolated runner namespace. It accepts only three closed messages: assignment poll, assignment acknowledgement, and durable
 candidate return. Each message binds the immutable WorkItem persistence ID, route, attempt, runner, session,
 principal, enrolled client fingerprint, generation, workflow revision, monotone client sequence, finite
 enrollment expiry, and WorkItem deadline. The host derives the trusted principal from recovered enrollment;
@@ -66,4 +70,21 @@ at `GET /health/live` is unauthenticated.
 
 The separately released `fsgg-coord-orchestration-runner` executable is a least-capability HTTPS client. It
 can post a prepared closed request to `/v1/runner/assignment`, `/v1/runner/ack`, or
-`/v1/runner/candidate`; it has no database, operator, GitHub, provider, migration, or host-control code.
+`/v1/runner/candidate`; successful responses must match the path's exact closed schema and fit within 8,192
+bytes. Its request is bounded before allocation, its certificate, private key and CA are owner-only regular
+files, and redirects are disabled. Candidate media is exactly
+`application/vnd.fsgg.runner-candidate+zip`. It has no database, operator, GitHub, provider, migration, or
+host-control code.
+
+The assignment returns the current WorkItem `workflowRevision`, which is the exact revision required by its
+acknowledgement. Accepted acknowledgement and candidate receipts return the newly recovered
+`workflowRevision`; the runner must use the acknowledgement receipt's revision for candidate submission.
+The runner never infers revision changes from implementation event counts.
+
+```text
+fsgg-coord-orchestration-runner post --endpoint https://orchestration.main.internal:18080/ \
+  --client-cert-file /run/fsgg-runner-mtls/client-cert.pem \
+  --client-key-file /run/fsgg-runner-mtls/client-key.pem \
+  --ca-file /run/fsgg-runner-mtls/ca.pem \
+  --path /v1/runner/assignment --request-file /run/fsgg-runner/request.json
+```
