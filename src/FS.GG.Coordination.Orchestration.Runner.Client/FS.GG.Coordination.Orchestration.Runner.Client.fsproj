@@ -4,6 +4,6 @@
     <AssemblyName>fsgg-coord-orchestration-runner</AssemblyName><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <IsPackable>false</IsPackable><RuntimeIdentifier>linux-x64</RuntimeIdentifier><SelfContained>true</SelfContained><PublishSingleFile>true</PublishSingleFile>
   </PropertyGroup>
-  <ItemGroup><Compile Include="Program.fs" /></ItemGroup>
-  <ItemGroup><ProjectReference Include="..\FS.GG.Coordination.Orchestration.Runner.Protocol\FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj" /></ItemGroup>
+  <ItemGroup><None Include="README.md" /><Compile Include="CandidatePipeline.fs" /><Compile Include="ExecutorRuntime.fs" /><Compile Include="Program.fs" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\FS.GG.Coordination.Orchestration.Runner.Protocol\FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj" /><ProjectReference Include="..\FS.GG.Coordination.Orchestration.Execution\FS.GG.Coordination.Orchestration.Execution.fsproj" /><ProjectReference Include="..\FS.GG.Coordination.Orchestration.Execution.Codex\FS.GG.Coordination.Orchestration.Execution.Codex.fsproj" /></ItemGroup>
 </Project>

@@ -38,7 +38,7 @@ type CodexCommand = { FileName:string; Arguments:string list; WorkingDirectory:s
 [<RequireQualifiedAccess>]
 module CodexCommand =
     let private common (options:CodexExecutionProviderOptions) (intent:LaunchIntent) schemaPath outputPath =
-        [ "exec";"--json";"--color";"never";"--sandbox";"workspace-write"
+        [ "exec";"--ignore-user-config";"--strict-config";"--json";"--color";"never";"--sandbox";"workspace-write"
           "-C";intent.Workspace;"--output-schema";schemaPath;"--output-last-message";outputPath ]
         @ (intent.Requested.Model |> Option.map(fun value -> ["--model";value]) |> Option.defaultValue [])
         @ (intent.Requested.Effort |> Option.map(fun value -> ["-c";$"model_reasoning_effort={JsonSerializer.Serialize value}"]) |> Option.defaultValue [])
@@ -191,10 +191,24 @@ type CodexExecutionProvider(options:CodexExecutionProviderOptions,input:ICodexEx
         let command=commandBuilder schemaPath finalPath
         let receiptPath=Path.Combine(directory,"spawn-intent.json")
         let receipt=$"{{\"schema\":\"fsgg.codex.spawn-intent/1\",\"assignmentId\":\"{intent.Key.AssignmentId}\",\"attemptId\":\"{intent.Key.AttemptId}\",\"generation\":{intent.Key.Generation},\"inputDigest\":\"{intent.InputDigest}\"}}"
-        File.WriteAllText(receiptPath,receipt)
+        try
+            use marker=new FileStream(receiptPath,FileMode.CreateNew,FileAccess.Write,FileShare.Read,4096,FileOptions.WriteThrough)
+            let bytes=Encoding.UTF8.GetBytes receipt
+            marker.Write(bytes,0,bytes.Length)
+            marker.Flush(true)
+        with :? IOException -> raise(InvalidOperationException "codex-existing-launch-ambiguous")
         let proc=new Process(StartInfo=processStartInfo command,EnableRaisingEvents=true)
         if not(proc.Start()) then raise(InvalidOperationException "codex-process-start-refused")
         let startedAt=clock.GetUtcNow()
+        let createdPath=Path.Combine(directory,"process-created.json")
+        try
+            use created=new FileStream(createdPath,FileMode.CreateNew,FileAccess.Write,FileShare.Read,4096,FileOptions.WriteThrough)
+            let evidence=Encoding.UTF8.GetBytes($"{{\"schema\":\"fsgg.codex.process-created/1\",\"pid\":{proc.Id},\"processStartUtcTicks\":{proc.StartTime.ToUniversalTime().Ticks},\"observedAt\":\"{startedAt:O}\"}}")
+            created.Write(evidence,0,evidence.Length)
+            created.Flush(true)
+        with _ ->
+            try proc.Kill(true) with _ -> ()
+            raise(InvalidOperationException "codex-process-creation-evidence-ambiguous")
         let runtimeDeadline=min intent.Limits.Deadline (intent.RecordedAt.Add intent.Limits.MaximumRuntime)
         let remaining=max TimeSpan.Zero (runtimeDeadline-startedAt)
         let cancelRequested=ref false
@@ -295,12 +309,14 @@ type CodexExecutionProvider(options:CodexExecutionProviderOptions,input:ICodexEx
                     | Error reason -> return LaunchRefused reason
                     | Ok prompt when not(String.Equals(Convert.ToHexString(SHA256.HashData prompt),intent.InputDigest,StringComparison.OrdinalIgnoreCase)) -> return LaunchRefused "codex-input-digest-mismatch"
                     | Ok prompt ->
-                        let! started=startProcess intent (fun schema output -> CodexCommand.launch options intent schema output) prompt cancellationToken
-                        match started with
-                        | Error reason -> return LaunchAmbiguous reason
-                        | Ok running ->
-                            return LaunchStarted {Provider=identity;Session=running.Reference;Resolved={Model=intent.Requested.Model;Effort=intent.Requested.Effort};Lifecycle=Running
-                                                  Output=[];LifecycleReferences=[];Usage=unknownUsage "codex-turn-not-completed";Candidate=None;ObservedAt=clock.GetUtcNow()}
+                        try
+                            let! started=startProcess intent (fun schema output -> CodexCommand.launch options intent schema output) prompt cancellationToken
+                            match started with
+                            | Error reason -> return LaunchAmbiguous reason
+                            | Ok running ->
+                                return LaunchStarted {Provider=identity;Session=running.Reference;Resolved={Model=intent.Requested.Model;Effort=intent.Requested.Effort};Lifecycle=Running
+                                                      Output=[];LifecycleReferences=[];Usage=unknownUsage "codex-turn-not-completed";Candidate=None;ObservedAt=clock.GetUtcNow()}
+                        with error -> return LaunchAmbiguous error.Message
                 | NotAuthenticated provenance -> return LaunchRefused provenance
                 | AuthenticationUnknown provenance -> return LaunchRefused provenance }
         member _.Observe(reference,_) = task {

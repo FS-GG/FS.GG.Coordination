@@ -7,6 +7,7 @@ open System.Runtime.InteropServices
 open System.Security.Cryptography.X509Certificates
 open System.Threading
 open FS.GG.Coordination.Orchestration.Runner.Protocol
+open FS.GG.Coordination.Orchestration.Runner.Client
 
 [<Struct; StructLayout(LayoutKind.Sequential)>]
 type private Timespec = { Seconds:int64; Nanoseconds:int64 }
@@ -24,6 +25,7 @@ extern uint32 private geteuid()
 
 let private usage () =
     eprintfn "usage: fsgg-coord-orchestration-runner post --endpoint https://orchestration.main.internal:18080/ --client-cert-file <owner-only-pem> --client-key-file <owner-only-pem> --ca-file <owner-only-pem> --path </v1/runner/...> --request-file <closed-json>"
+    eprintfn "   or: fsgg-coord-orchestration-runner executor-stdio --repository-root <git-repository> --workspace-root <fixed-root> --input-root <fixed-root> --state-root <fixed-root> --artifact-root <fixed-root> --codex-executable <path> --executor-binding <identity>"
     2
 
 let private pairs (arguments:string array) =
@@ -101,7 +103,22 @@ let private readBoundedResponse (response:HttpResponseMessage) =
 
 [<EntryPoint>]
 let main arguments =
-    if not(OperatingSystem.IsLinux()) || RuntimeInformation.ProcessArchitecture<>Architecture.X64 || Array.tryHead arguments<>Some "post" then usage()
+    if not(OperatingSystem.IsLinux()) || RuntimeInformation.ProcessArchitecture<>Architecture.X64 then usage()
+    elif Array.tryHead arguments=Some "executor-stdio" then
+        match pairs arguments[1..] with
+        | Error reason->eprintfn "%s" reason;2
+        | Ok values->
+            let allowed=set["--repository-root";"--workspace-root";"--input-root";"--state-root";"--artifact-root";"--codex-executable";"--executor-binding"]
+            if values.Count<>allowed.Count||values|>Map.exists(fun key _->not(allowed.Contains key)) then usage()
+            elif allowed|>Seq.exists(fun key->String.IsNullOrWhiteSpace values[key] || (key<>"--executor-binding" && not(Path.IsPathFullyQualified values[key]))) then eprintfn "executor-option-refused";2
+            else
+                try
+                    for key in ["--workspace-root";"--input-root";"--state-root";"--artifact-root"] do Directory.CreateDirectory values[key]|>ignore
+                    let options={RepositoryRoot=values["--repository-root"];WorkspaceRoot=values["--workspace-root"];InputRoot=values["--input-root"];StateRoot=values["--state-root"];ArtifactRoot=values["--artifact-root"];CodexExecutable=values["--codex-executable"];ExecutorBinding=values["--executor-binding"];MaximumFrameBytes=2*ExecutorWire.maximumContentBytes}
+                    ExecutorRuntime(options,TimeProvider.System).Run(Console.OpenStandardInput(),Console.OpenStandardOutput(),CancellationToken.None).GetAwaiter().GetResult()
+                    0
+                with error->eprintfn "executor-stdio-refused:%s" error.Message;3
+    elif Array.tryHead arguments<>Some "post" then usage()
     else
         match pairs arguments[1..] with
         | Error reason -> eprintfn "%s" reason; 2
