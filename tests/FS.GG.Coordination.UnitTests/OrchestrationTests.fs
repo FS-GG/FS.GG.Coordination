@@ -316,6 +316,39 @@ module Cases =
         Assert.Equal("budget-exceeded-or-expired",outcome.Receipt.Detail)
 
     [<Fact>]
+    let ``subscription admission reaches durable dispatch without fabricated token or cost ceilings`` () =
+        let subscription =
+            { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1
+              MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.
+              Usage=TokensUnknown "provider-has-not-reported-usage"
+              Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="subscription-cost-not-attributable"} }
+        let decideV2 at state id body =
+            FS.GG.Coordination.Core.Orchestration.decide at state
+                {CommandId=command id;ProtocolVersion=Id.protocolVersion 2 0;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation
+                 PrincipalId="test-principal";SessionId=None;IssuedAt=at;ExpiresAt=at.AddMinutes 1.;Command=body}
+        let admittedDecision=decideV2 now initial "25000000-0000-0000-0000-000000000001" (AdmitSubscription(snapshot ["board-a"],subscription))
+        Assert.Equal(Accepted,admittedDecision.Receipt.Disposition)
+        let admitted=apply admittedDecision initial
+        Assert.True(admitted.Budget.IsNone)
+        Assert.True(admitted.SubscriptionBudget.IsSome)
+        let reservationId=Id.reservation(guid "35000000-0000-0000-0000-000000000001")
+        let reserved=decide now admitted (command "25000000-0000-0000-0000-000000000002") "" (Reserve(reservationId,now.AddMinutes 5.,Set.singleton "claim")) |> fun result->apply result admitted
+        let claim={ClaimId="claim";Generation=reserved.Generation;WorkflowRevision=Id.revision 8L;ObservedAt=now}
+        let claimed=decide now reserved (command "25000000-0000-0000-0000-000000000003") "" (ObserveClaim claim) |> fun result->apply result reserved
+        let runner={RunnerId=Id.runner(guid "45000000-0000-0000-0000-000000000001");PrincipalId="runner";FingerprintSha256=digest "4";Generation=claimed.Generation;ExpiresAt=now.AddMinutes 5.}
+        let started=decide now claimed (command "25000000-0000-0000-0000-000000000004") "" (StartAttempt(Id.attempt(guid "55000000-0000-0000-0000-000000000001"),Id.session(guid "65000000-0000-0000-0000-000000000001"),runner))
+        Assert.Equal(Accepted,started.Receipt.Disposition)
+        let active=apply started claimed
+        let accounting={ObservedAt=now.AddMinutes 40.;RuntimeSeconds=2400L;RuntimeWithinBound=false;Usage=TokensUnknown "provider-not-reported";Cost=subscription.Cost}
+        let late=decideV2 (now.AddMinutes 40.) active "25000000-0000-0000-0000-000000000005" (RecordSubscriptionAccounting accounting)
+        Assert.Equal(Accepted,late.Receipt.Disposition)
+        let replayed=apply late active
+        Assert.Equal(Some accounting,replayed.SubscriptionAccounting)
+        Assert.Single replayed.Attempts |> ignore
+        let downgraded={CommandId=command "25000000-0000-0000-0000-000000000006";ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation;PrincipalId="test";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=AdmitSubscription(snapshot [],subscription)}
+        Assert.Equal("unsupported-command-version",(FS.GG.Coordination.Core.Orchestration.decide now initial downgraded).Receipt.Detail)
+
+    [<Fact>]
     let ``revocation advances durable generation`` () =
         let state=admit()
         let decision=decide now state (command "20000000-0000-0000-0000-000000000011") (digest "b") (Revoke "operator")

@@ -14,6 +14,7 @@ open Xunit
 open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.PostgreSql
+open FS.GG.Coordination.Orchestration.Runner.Protocol
 
 module private Fixture =
     let private environment name fallback =
@@ -642,3 +643,210 @@ type PostgreSqlStoreTests() =
         do! leftSystem.Terminate()
         do! rightSystem.Terminate()
     }
+
+    [<Fact>]
+    member _.``execution journal commands subscription and backup retain one fenced attempt``() = task {
+        let! dataSource, identity = Fixture.reset()
+        use dataSource = dataSource
+        do! PostgreSqlExecutionSchema.migrate dataSource cancellationToken
+        let executionOptions={Fixture.options dataSource identity 0L with RuntimeSchemaVersion=2}
+        let! downgrade=Assert.ThrowsAsync<PostgresException>(fun ()->PostgreSqlSchema.migrate dataSource cancellationToken :> Task)
+        Assert.Contains("refusing schema state",downgrade.Message)
+        let assignmentId=Guid.NewGuid()
+        let attemptId=Guid.NewGuid()
+        let now=DateTimeOffset.UtcNow
+        let input=Encoding.UTF8.GetBytes "bounded-input"
+        let inputDigest=Fixture.sha input
+        let intent : FS.GG.Coordination.Orchestration.Execution.LaunchIntent =
+            { Schema=FS.GG.Coordination.Orchestration.Execution.ExecutionProtocol.launchSchema;Key={AssignmentId=assignmentId;AttemptId=attemptId;Generation=7L}
+              InputDigest=inputDigest;Workspace="/workspace";Requested={Model=None;Effort=None}
+              Limits={Deadline=now.AddMinutes 30.;MaximumRuntime=TimeSpan.FromMinutes 30.;MaximumAttempts=1};RecordedAt=now }
+        let journal=PostgreSqlExecutionStore(executionOptions) :> FS.GG.Coordination.Orchestration.Execution.IExecutionSessionJournal
+        let! initialAppend=journal.AppendAttempt(assignmentId,attemptId,0L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchIntentRecorded intent,cancellationToken)
+        Assert.Equal(FS.GG.Coordination.Orchestration.Execution.AppendResult.Appended,initialAppend)
+        let! exactIntentRetry=journal.AppendAttempt(assignmentId,attemptId,0L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchIntentRecorded intent,cancellationToken)
+        Assert.Equal(FS.GG.Coordination.Orchestration.Execution.AppendResult.DuplicateEvent,exactIntentRetry)
+        let changedIntent={intent with Workspace="/different-workspace"}
+        let! changedIntentResult=journal.AppendAttempt(assignmentId,attemptId,1L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchIntentRecorded changedIntent,cancellationToken)
+        Assert.Equal(FS.GG.Coordination.Orchestration.Execution.AppendResult.AppendConflict,changedIntentResult)
+        let left=journal.AppendAttempt(assignmentId,attemptId,1L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchAttemptRecorded(1,now),cancellationToken)
+        let right=journal.AppendAttempt(assignmentId,attemptId,1L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.CancelRequested now,cancellationToken)
+        let! outcomes=Task.WhenAll(left,right)
+        Assert.Equal(1,outcomes |> Array.filter((=)FS.GG.Coordination.Orchestration.Execution.AppendResult.Appended) |> Array.length)
+        Assert.Equal(1,outcomes |> Array.filter((=)FS.GG.Coordination.Orchestration.Execution.AppendResult.AppendConflict) |> Array.length)
+        let! recovered=(PostgreSqlExecutionStore(executionOptions) :> FS.GG.Coordination.Orchestration.Execution.IExecutionSessionJournal).ReadAttempt(assignmentId,attemptId,cancellationToken)
+        Assert.Equal(2L,recovered.Value.Revision)
+
+        let transport=PostgreSqlExecutionStore(executionOptions) :> IExecutorCommandStore
+        let inputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=inputDigest;MediaType="text/markdown; charset=utf-8";SizeBytes=input.LongLength;ChunkBytes=1024}
+        let! staged=transport.StageInput(ExecutorWire.encodeInputManifest inputManifest,input,cancellationToken)
+        Assert.True(Result.isOk staged)
+        // A future absolute deadline cannot renew the original maximum-runtime window.
+        let shortAssignment=Guid.NewGuid()
+        let shortAttempt=Guid.NewGuid()
+        let shortNow=DateTimeOffset.UtcNow
+        let shortBudget=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.createBudget shortNow
+        let shortIntent={intent with Key={AssignmentId=shortAssignment;AttemptId=shortAttempt;Generation=1L};RecordedAt=shortNow.AddMilliseconds(-100.);Limits={Deadline=shortBudget.ExecutionDeadline;MaximumRuntime=TimeSpan.FromSeconds 2.;MaximumAttempts=1}}
+        let! _=journal.AppendAttempt(shortAssignment,shortAttempt,0L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchIntentRecorded shortIntent,cancellationToken)
+        let shortReservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve shortNow (Guid.NewGuid()) shortAssignment shortAttempt 1L 1L shortBudget |> Result.defaultWith failwith
+        let! shortReserved=transport.ReserveSubscription(FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation shortReservation,1,1,cancellationToken)
+        Assert.Equal(SubscriptionReserved,shortReserved)
+        let shortUnsigned=
+            { Schema=ExecutorWire.commandSchema;CommandId=Guid.NewGuid();BodySha256="";Kind="launch";WorkItemPersistenceId="short-runtime"
+              RouteOperationId=shortAssignment;AssignmentId=shortAssignment;AttemptId=shortAttempt;CandidateId=Guid.NewGuid();Generation=1L;ExpectedRevision=1L
+              RecordedAt=shortIntent.RecordedAt;Deadline=shortIntent.Limits.Deadline;MaximumRuntimeSeconds=2L;MaximumAttempts=1;Workspace=shortIntent.Workspace
+              RequestedModel=null;RequestedEffort=null;InputDigest=inputDigest;ExecutorBinding="runner-1";ContentOffset=0L;ContentLength=0 }
+        let shortCommand={shortUnsigned with BodySha256=ExecutorWire.commandDigest shortUnsigned}
+        let! shortPersisted=transport.PersistCommand(ExecutorWire.encodeCommand shortCommand,cancellationToken)
+        Assert.Equal(CommandPersisted 1L,shortPersisted)
+        do! Task.Delay 2000
+        let! expiredByOriginalRuntime=transport.ReadPending(4,cancellationToken)
+        Assert.Empty expiredByOriginalRuntime
+        let! _=Fixture.sql "orchestration_o0" $"UPDATE fsgg_orchestration.subscription_reservation SET active=false WHERE reservation_id='{shortReservation.ReservationId}'"
+        let budget=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.createBudget now
+        let reservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve now (Guid.NewGuid()) assignmentId attemptId 7L 2L budget |> Result.defaultWith failwith
+        let reservationBytes=FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation reservation
+        let! reserved=transport.ReserveSubscription(reservationBytes,1,1,cancellationToken)
+        let! duplicate=transport.ReserveSubscription(reservationBytes,1,1,cancellationToken)
+        Assert.Equal(SubscriptionReserved,reserved)
+        Assert.Equal(SubscriptionDuplicate,duplicate)
+        let commandId=Guid.NewGuid()
+        let unsigned =
+            { Schema=ExecutorWire.commandSchema;CommandId=commandId;BodySha256="";Kind="launch";WorkItemPersistenceId="work-item-v1-test"
+              RouteOperationId=assignmentId;AssignmentId=assignmentId;AttemptId=attemptId;CandidateId=Guid.NewGuid();Generation=7L
+              ExpectedRevision=2L;RecordedAt=intent.RecordedAt;Deadline=intent.Limits.Deadline;MaximumRuntimeSeconds=1800L;MaximumAttempts=1;Workspace=intent.Workspace
+              RequestedModel=null;RequestedEffort=null;InputDigest=inputDigest;ExecutorBinding="runner-1";ContentOffset=0L;ContentLength=0 }
+        let command={unsigned with BodySha256=ExecutorWire.commandDigest unsigned}
+        let commandBytes=ExecutorWire.encodeCommand command
+        let! first=transport.PersistCommand(commandBytes,cancellationToken)
+        let! lostResponseRetry=transport.PersistCommand(commandBytes,cancellationToken)
+        Assert.Equal(CommandPersisted 2L,first)
+        Assert.Equal(CommandDuplicate 2L,lostResponseRetry)
+        let! pending=transport.ReadPending(4,cancellationToken)
+        Assert.Single pending |> ignore
+
+        let settlement=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.settle (now.AddMinutes 40.) 2400L None "provider-usage-unavailable" reservation |> Result.defaultWith failwith
+        Assert.False(settlement.RuntimeWithinBound)
+        let settlementBytes=FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeSettlement settlement
+        Assert.Contains("\"tokens\":null",Encoding.UTF8.GetString settlementBytes)
+        let! settled=transport.SettleSubscription(reservation.ReservationId,settlementBytes,cancellationToken)
+        Assert.True(Result.isOk settled)
+        dataSource.Dispose()
+        Fixture.stopImmediate()
+        Fixture.start()
+        do! Fixture.waitReady()
+        use restartedSource=Fixture.dataSource "orchestration_o0"
+        let restartedOptions={Fixture.options restartedSource identity 0L with RuntimeSchemaVersion=2}
+        let journal=PostgreSqlExecutionStore(restartedOptions) :> FS.GG.Coordination.Orchestration.Execution.IExecutionSessionJournal
+        let transport=PostgreSqlExecutionStore(restartedOptions) :> IExecutorCommandStore
+        let! restartPending=transport.ReadPending(4,cancellationToken)
+        Assert.Single restartPending |> ignore
+        let! restartState=journal.ReadAttempt(assignmentId,attemptId,cancellationToken)
+        Assert.Equal(2L,restartState.Value.Revision)
+        // Accounting does not release an unknown process outcome or renew capacity.
+        let secondAttempt=Guid.NewGuid()
+        let secondIntent={intent with Key={intent.Key with AttemptId=secondAttempt}}
+        let! _=journal.AppendAttempt(assignmentId,secondAttempt,0L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchIntentRecorded secondIntent,cancellationToken)
+        let secondReservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve now (Guid.NewGuid()) assignmentId secondAttempt 7L 1L budget |> Result.defaultWith failwith
+        let! stillFull=transport.ReserveSubscription(FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation secondReservation,1,1,cancellationToken)
+        Assert.Equal(SubscriptionConflict,stillFull) // assignment identity is nonrenewing even across a new attempt
+        let otherAssignment=Guid.NewGuid()
+        let otherAttempt=Guid.NewGuid()
+        let otherIntent={intent with Key={AssignmentId=otherAssignment;AttemptId=otherAttempt;Generation=7L}}
+        let! _=journal.AppendAttempt(otherAssignment,otherAttempt,0L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchIntentRecorded otherIntent,cancellationToken)
+        let otherReservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve now (Guid.NewGuid()) otherAssignment otherAttempt 7L 1L budget |> Result.defaultWith failwith
+        let! capacityHeld=transport.ReserveSubscription(FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation otherReservation,1,1,cancellationToken)
+        Assert.Equal(SubscriptionCapacityRefused,capacityHeld)
+
+        let dump=Fixture.dump()
+        Fixture.restore dump
+        use restoredSource=Fixture.dataSource "orchestration_o0_restore"
+        let restoredOptions={Fixture.options restoredSource identity 0L with RuntimeSchemaVersion=2}
+        let restoredJournal=PostgreSqlExecutionStore(restoredOptions) :> FS.GG.Coordination.Orchestration.Execution.IExecutionSessionJournal
+        let! restored=restoredJournal.ReadAttempt(assignmentId,attemptId,cancellationToken)
+        Assert.Equal(intent,(FS.GG.Coordination.Orchestration.Execution.SessionState.replay restored.Value.Events).Value.Intent)
+        let restoredTransport=PostgreSqlExecutionStore(restoredOptions) :> IExecutorCommandStore
+        let! restoredPending=restoredTransport.ReadPending(4,cancellationToken)
+        Assert.Single restoredPending |> ignore
+        use readOnlySource=NpgsqlDataSource.Create(Fixture.connectionString "orchestration_o0_restore" + ";Options=-c default_transaction_read_only=on")
+        let readOnlyTransport=PostgreSqlExecutionStore({restoredOptions with DataSource=readOnlySource}) :> IExecutorCommandStore
+        let! _=Assert.ThrowsAnyAsync<Exception>(fun ()->readOnlyTransport.ReadPending(1,cancellationToken) :> Task)
+        let corruptBodyDigest=String.replicate 64 "b"
+        let! _=Fixture.sql "orchestration_o0_restore" $"UPDATE fsgg_orchestration.executor_command SET body_sha256='{corruptBodyDigest}' WHERE command_id='{commandId}'"
+        let! _=Assert.ThrowsAsync<InvalidDataException>(fun ()->restoredTransport.ReadPending(4,cancellationToken) :> Task)
+        let! _=Fixture.sql "orchestration_o0_restore" $"UPDATE fsgg_orchestration.executor_command SET body_sha256='{command.BodySha256}' WHERE command_id='{commandId}'"
+        let! _=Fixture.sql "orchestration_o0_restore" $"UPDATE fsgg_orchestration.subscription_reservation SET deadline=now()-interval '1 second' WHERE reservation_id='{reservation.ReservationId}'"
+        let! expiredPending=restoredTransport.ReadPending(4,cancellationToken)
+        Assert.Empty expiredPending
+        let! _=Fixture.sql "orchestration_o0_restore" $"UPDATE fsgg_orchestration.subscription_reservation SET deadline='{reservation.Deadline:O}' WHERE reservation_id='{reservation.ReservationId}'"
+        let! restoredInput=restoredTransport.ReadInput(inputDigest,cancellationToken)
+        Assert.Equal<byte array>(input,restoredInput |> Result.defaultWith failwith)
+        let! restoredAccounting=restoredTransport.ReadSubscription(reservation.ReservationId,cancellationToken)
+        let restoredReservationBytes,restoredSettlementBytes=restoredAccounting |> Result.defaultWith failwith
+        Assert.Equal<byte array>(reservationBytes,restoredReservationBytes)
+        let restoredSettlement=restoredSettlementBytes.Value |> FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.decodeSettlement |> Result.defaultWith failwith
+        Assert.Equal("unknown",restoredSettlement.TokensState)
+        Assert.False(restoredSettlement.Tokens.HasValue)
+        Assert.False(restoredSettlement.RuntimeWithinBound)
+        let! _=Fixture.sql "orchestration_o0_restore" $"UPDATE fsgg_orchestration.execution_stream SET last_revision=last_revision+1 WHERE assignment_id='{assignmentId}' AND attempt_id='{attemptId}'"
+        let! _=Assert.ThrowsAsync<InvalidDataException>(fun ()->restoredJournal.ReadAttempt(assignmentId,attemptId,cancellationToken) :> Task)
+        let! _=Fixture.sql "orchestration_o0_restore" "UPDATE fsgg_orchestration.store_metadata SET backup_identity=gen_random_uuid() WHERE singleton"
+        let! _=Assert.ThrowsAsync<InvalidOperationException>(fun ()->restoredTransport.ReadPending(1,cancellationToken) :> Task)
+        ()
+    }
+
+    [<Fact>]
+    member _.``execution codecs refuse mutation unknown versions duplicate properties and oversize``() =
+        let now=DateTimeOffset.UtcNow
+        let assignment=Guid.NewGuid()
+        let unsigned =
+            { Schema=ExecutorWire.commandSchema;CommandId=Guid.NewGuid();BodySha256="";Kind="cancel";WorkItemPersistenceId="work"
+              RouteOperationId=assignment;AssignmentId=assignment;AttemptId=Guid.NewGuid();CandidateId=Guid.NewGuid();Generation=2L;ExpectedRevision=1L
+              RecordedAt=now;Deadline=now.AddMinutes 1.;MaximumRuntimeSeconds=60L;MaximumAttempts=1;Workspace="/workspace";RequestedModel=null;RequestedEffort=null
+              InputDigest=String.replicate 64 "a";ExecutorBinding="runner";ContentOffset=0L;ContentLength=0 }
+        let valid={unsigned with BodySha256=ExecutorWire.commandDigest unsigned}
+        Assert.True(ExecutorWire.parseCommand(ExecutorWire.encodeCommand valid) |> Result.isOk)
+        Assert.True(ExecutorWire.parseCommand(ExecutorWire.encodeCommand {valid with Generation=3L}) |> Result.isError) // digest binds stale mutation
+        Assert.True(ExecutorWire.parseCommand((ExecutorWire.encodeCommand valid)[0..20]) |> Result.isError)
+        Assert.True(ExecutorWire.parseCommand(ExecutorWire.encodeCommand {valid with Schema="fsgg.orchestration.executor-command/2"}) |> Result.isError)
+        Assert.True(ExecutorWire.parseCommand(Array.zeroCreate(ExecutorWire.maximumControlBytes+1)) |> Result.isError)
+        let duplicate=Encoding.UTF8.GetBytes($"{{\"schema\":\"{ExecutorWire.commandSchema}\",\"schema\":\"{ExecutorWire.commandSchema}\"}}")
+        Assert.True(ExecutorWire.parseCommand duplicate |> Result.isError)
+        let receipt={Schema=ExecutorWire.receiptSchema;CommandId=valid.CommandId;BodySha256=valid.BodySha256;Disposition="persisted";DurableRevision=1L;ProcessCreationObserved=false;Detail="durable-only"}
+        Assert.False((ExecutorWire.parseReceipt(ExecutorWire.encodeReceipt receipt) |> Result.defaultWith failwith).ProcessCreationObserved)
+        let response=
+            { Schema=ExecutorWire.responseSchema;CommandId=valid.CommandId;BodySha256=valid.BodySha256;Kind="readiness"
+              Provider="codex";AdapterVersion="0.154.0";AuthenticationState="authenticated";AuthenticationProvenance="codex-login-status";SupportsResume=false
+              ProviderSessionReference=null;Lifecycle="ready";RequestedModel=null;RequestedEffort=null;ResolvedModel=null;ResolvedEffort=null
+              Output=[||];LifecycleReferences=[||];Usage=[|{Name="tokens";State="unknown";Value=Nullable();UnitName=null;Provenance="provider-not-reported"}|]
+              InvocationCostState="not-applicable";InvocationCostAmount=Nullable();InvocationCostCurrency=null;InvocationCostProvenance="subscription"
+              BroaderCostState="unknown";BroaderCostAmount=Nullable();BroaderCostCurrency=null;BroaderCostProvenance="not-attributed"
+              CandidateId=Guid.Empty;CandidateHeadSha=null;CandidateTreeSha=null;ObservedAt=now;Detail="ready" }
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse response) |> Result.isOk)
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {response with InvocationCostState="known"}) |> Result.isError)
+        let nonSubscription=
+            { response with Kind="session-observation";Provider="deepseek";AdapterVersion="http-fixture/1";ProviderSessionReference="opaque-session"
+                            Lifecycle="succeeded";InvocationCostState="known";InvocationCostAmount=Nullable 0.125M;InvocationCostCurrency="USD";InvocationCostProvenance="provider-receipt"
+                            BroaderCostState="not-applicable";BroaderCostProvenance="no-broader-attribution"
+                            CandidateId=Guid.NewGuid();CandidateHeadSha=String.replicate 40 "a";CandidateTreeSha=String.replicate 40 "b" }
+        Assert.Equal(nonSubscription,ExecutorWire.parseResponse(ExecutorWire.encodeResponse nonSubscription) |> Result.defaultWith failwith)
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {nonSubscription with InvocationCostCurrency=null}) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {nonSubscription with Lifecycle="complete-ish"}) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {nonSubscription with CandidateId=Guid.NewGuid();CandidateHeadSha="not-a-digest";CandidateTreeSha=String.replicate 64 "a"}) |> Result.isError)
+        let responseText=ExecutorWire.encodeResponse response |> Encoding.UTF8.GetString
+        Assert.True(ExecutorWire.parseResponse(Encoding.UTF8.GetBytes(responseText.Replace("\"output\":[]","\"output\":[null]"))) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(Encoding.UTF8.GetBytes(responseText.Replace("\"usage\":[{","\"usage\":[{\"unknownNested\":true,"))) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(Encoding.UTF8.GetBytes(responseText.Replace("\"provenance\":\"provider-not-reported\"","\"provenance\":\"provider-not-reported\",\"provenance\":\"duplicate\""))) |> Result.isError)
+        let manifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=valid.InputDigest;MediaType="text/markdown";SizeBytes=5L;ChunkBytes=5}
+        Assert.True(ExecutorWire.parseInputManifest(ExecutorWire.encodeInputManifest manifest) |> Result.isOk)
+        Assert.True(ExecutorWire.parseInputManifest(ExecutorWire.encodeInputManifest {manifest with Schema="fsgg.orchestration.executor-input-manifest/2"}) |> Result.isError)
+        let content={Schema=ExecutorWire.contentSchema;CommandId=valid.CommandId;InputDigest=valid.InputDigest;Offset=0L;Final=true;ContentBase64=Convert.ToBase64String(Encoding.UTF8.GetBytes "input")}
+        Assert.True(ExecutorWire.parseContent(ExecutorWire.encodeContent content) |> Result.isOk)
+        Assert.True(ExecutorWire.parseContent(ExecutorWire.encodeContent {content with ContentBase64=null}) |> Result.isError)
+        Assert.True(ExecutorWire.parseContent(ExecutorWire.encodeContent {content with Schema="fsgg.orchestration.executor-content/2"}) |> Result.isError)
+        let eventBytes=FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.encode(FS.GG.Coordination.Orchestration.Execution.SessionEvent.CancelRequested now)
+        Assert.True(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.decode eventBytes |> Result.isOk)
+        let eventText=Encoding.UTF8.GetString eventBytes
+        let duplicateEvent=Encoding.UTF8.GetBytes($"{{\"schema\":\"{FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.schema}\"," + eventText.Substring(1))
+        Assert.True(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.decode duplicateEvent |> Result.isError)
+        Assert.True(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.decode(Array.zeroCreate(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.maximumBytes+1)) |> Result.isError)

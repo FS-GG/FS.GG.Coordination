@@ -10,9 +10,11 @@
     <Compile Include="PostgreSqlObserverStore.fsi" />
     <Compile Include="PostgreSqlObserverStore.fs" />
     <Compile Include="PostgreSqlPilotStore.fs" />
+    <Compile Include="PostgreSqlExecutionStore.fs" />
     <EmbeddedResource Include="Migration.sql" />
     <EmbeddedResource Include="ObserverMigration.sql" />
     <EmbeddedResource Include="PilotMigration.sql" />
+    <EmbeddedResource Include="ExecutionMigration.sql" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Akka" />
@@ -24,5 +26,7 @@
     <ProjectReference Include="..\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Observer\FS.GG.Coordination.Orchestration.Observer.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Pilot\FS.GG.Coordination.Orchestration.Pilot.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Execution\FS.GG.Coordination.Orchestration.Execution.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Runner.Protocol\FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj" />
   </ItemGroup>
 </Project>

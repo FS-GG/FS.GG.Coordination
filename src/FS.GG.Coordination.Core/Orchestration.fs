@@ -70,6 +70,19 @@ module Orchestration =
 
     type Budget = { TokenLimit: int64; RuntimeSecondsLimit: int64; CostMicrosLimit: int64; Deadline: DateTimeOffset }
     type BudgetUse = { Tokens: int64; RuntimeSeconds: int64; CostMicros: int64 }
+    /// Additive subscription accounting; legacy Budget and BudgetUse retain their /1 meaning.
+    type SubscriptionUsage =
+        | TokensObserved of int64 * provenance:string
+        | TokensUnknown of provenance:string
+    type SubscriptionCost =
+        { InvocationState:string; InvocationProvenance:string
+          BroaderAttributionState:string; BroaderAttributionProvenance:string }
+    type SubscriptionExecutionBudget =
+        { Schema:string; AttemptLimit:int; MaximumRuntime:TimeSpan; ExecutionDeadline:DateTimeOffset
+          Usage:SubscriptionUsage; Cost:SubscriptionCost }
+    type SubscriptionAccountingObservation =
+        { ObservedAt:DateTimeOffset; RuntimeSeconds:int64; RuntimeWithinBound:bool
+          Usage:SubscriptionUsage; Cost:SubscriptionCost }
     type RunnerEnrollment =
         { RunnerId: RunnerId; PrincipalId: string; FingerprintSha256: string
           Generation: Generation; ExpiresAt: DateTimeOffset }
@@ -140,6 +153,7 @@ module Orchestration =
     type State =
         { WorkItemId: WorkItemId option; Snapshot: PlanningSnapshot option; Revision: WorkflowRevision
           Generation: Generation; Control: ControlState; ReadbackCurrent: bool; Budget: Budget option; Used: BudgetUse
+          SubscriptionBudget: SubscriptionExecutionBudget option; SubscriptionAccounting: SubscriptionAccountingObservation option
           Reservation: Reservation option; ExternalClaims: Map<string,ExternalClaim>
           RecoveryObligations: Set<string>; CompensationFailures: Map<string,string>
           Attempts: Map<AttemptId, Attempt>; Sessions: Map<SessionId, SessionState>
@@ -149,14 +163,16 @@ module Orchestration =
           NativeDeliveryReadbacks: Map<OperationId, NativeDeliveryReadback>
           CommandReceipts: Map<CommandId, CommandReceipt> }
     type Command =
-        | Admit of PlanningSnapshot * Budget | Reserve of ReservationId * DateTimeOffset * requiredClaimIds:Set<string>
+        | Admit of PlanningSnapshot * Budget | AdmitSubscription of PlanningSnapshot * SubscriptionExecutionBudget
+        | Reserve of ReservationId * DateTimeOffset * requiredClaimIds:Set<string>
         | ObserveClaim of ExternalClaim | ReleaseReservation of string | ObserveClaimReleased of string
         | RecordCompensationFailure of claimId:string * reason:string
         | SelectHostedRoute of HostedRoutePlan | StartAttempt of AttemptId * SessionId * RunnerEnrollment
         | ObserveAttempt of AttemptId * AttemptStatus
         | AcceptRunnerMessage of SessionId * clientSequence:int64 * emitServerMessage:bool * requestSha256:string
         | CloseRunnerSession of SessionId
-        | ChargeBudget of BudgetUse | Pause of string | Resume | RequestCancel of string
+        | ChargeBudget of BudgetUse | RecordSubscriptionAccounting of SubscriptionAccountingObservation
+        | Pause of string | Resume | RequestCancel of string
         | RecordStartupPause of string | RecordHostedRouteReadback of HostedRouteReadback
         | ConfirmCancelled of string | Revoke of string | RecordCandidate of CandidateArtifact * CandidateStorageReceipt
         | RecordEffectIntent of EffectIntent | MarkEffectDispatching of OperationId
@@ -170,10 +186,12 @@ module Orchestration =
           PrincipalId: string; SessionId: SessionId option; IssuedAt: DateTimeOffset
           ExpiresAt: DateTimeOffset; Command: Command }
     type Event =
-        | WorkAdmitted of PlanningSnapshot * Budget | GenerationAdvanced of Generation
+        | WorkAdmitted of PlanningSnapshot * Budget | SubscriptionWorkAdmitted of PlanningSnapshot * SubscriptionExecutionBudget
+        | GenerationAdvanced of Generation
         | ReservationCreated of Reservation | ReservationReleased of ReservationId * string * claimsToCompensate:Set<string>
         | ClaimObserved of ExternalClaim | ClaimReleased of string | CompensationFailed of string * string
         | HostedRouteSelected of HostedRoutePlan | AttemptStarted of Attempt | AttemptObserved of AttemptId * AttemptStatus | BudgetCharged of BudgetUse
+        | SubscriptionAccountingRecorded of SubscriptionAccountingObservation
         | RunnerSessionOpened of SessionState | RunnerClientSequenceAccepted of SessionId * int64
         | RunnerServerSequenceAdvanced of SessionId * int64 | RunnerSessionClosed of SessionId
         | PausedEvent of string | ResumedEvent | CancelRequestedEvent of string | CancelledEvent of string
@@ -189,6 +207,7 @@ module Orchestration =
     let initial =
         { WorkItemId=None; Snapshot=None; Revision=WorkflowRevision 0L; Generation=Generation 0L
           Control=Paused "not-admitted"; ReadbackCurrent=true; Budget=None; Used={Tokens=0L;RuntimeSeconds=0L;CostMicros=0L}
+          SubscriptionBudget=None;SubscriptionAccounting=None
           Reservation=None; ExternalClaims=Map.empty; RecoveryObligations=Set.empty;CompensationFailures=Map.empty
           Attempts=Map.empty; Sessions=Map.empty; Candidates=Map.empty
           Operations=Map.empty; HostedRoute=None; HostedEffectReadbacks=Map.empty
@@ -207,6 +226,20 @@ module Orchestration =
     let private within now budget used =
         now <= budget.Deadline && used.Tokens <= budget.TokenLimit
         && used.RuntimeSeconds <= budget.RuntimeSecondsLimit && used.CostMicros <= budget.CostMicrosLimit
+    let private validSubscriptionUsage = function
+        | TokensObserved(value,provenance) -> value>=0L && not(String.IsNullOrWhiteSpace provenance)
+        | TokensUnknown provenance -> not(String.IsNullOrWhiteSpace provenance)
+    let private validSubscriptionCost cost =
+        cost.InvocationState="not-applicable" && not(String.IsNullOrWhiteSpace cost.InvocationProvenance)
+        && cost.BroaderAttributionState="unknown" && not(String.IsNullOrWhiteSpace cost.BroaderAttributionProvenance)
+    let private validSubscriptionBudget now budget =
+        budget.Schema="fsgg.coordination.subscription-execution-budget/1"
+        && budget.AttemptLimit=1 && budget.MaximumRuntime=TimeSpan.FromMinutes 30.
+        && budget.ExecutionDeadline>now && budget.ExecutionDeadline<=now.AddMinutes 30.
+        && validSubscriptionUsage budget.Usage && validSubscriptionCost budget.Cost
+    let private budgetAvailable now state =
+        (state.Budget |> Option.exists(fun budget->within now budget state.Used))
+        || (state.SubscriptionBudget |> Option.exists(fun budget->now<budget.ExecutionDeadline))
     let private hasCurrentClaims state reservation =
         reservation.RequiredClaimIds
         |> Set.forall(fun claimId ->
@@ -305,7 +338,7 @@ module Orchestration =
     let private currentRouteAuthorization now (state: State) (route: HostedRoutePlan) (intent: EffectIntent) requireAttempt =
         let currentRevision = state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=intent.WorkflowRevision)
         let currentGeneration = sameGeneration intent.Generation state.Generation
-        let budgetAvailable = match state.Budget with | Some budget -> within now budget state.Used | None -> false
+        let budgetAvailable = budgetAvailable now state
         let reservationReady =
             state.Reservation
             |> Option.exists(fun reservation ->
@@ -320,7 +353,7 @@ module Orchestration =
     let private effectAuthorized now state (intent: EffectIntent) =
         let currentRevision = state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=intent.WorkflowRevision)
         let currentGeneration = sameGeneration intent.Generation state.Generation
-        let budgetAvailable = match state.Budget with | Some budget -> within now budget state.Used | None -> false
+        let budgetAvailable = budgetAvailable now state
         match intent.Kind with
         | DispatchRunner ->
             match state.HostedRoute with
@@ -347,19 +380,20 @@ module Orchestration =
         let attempt =
             state.Attempts
             |> Map.tryPick(fun _ attempt -> if attempt.SessionId=session.SessionId then Some attempt else None)
-        match attempt,state.Budget with
-        | Some attempt,Some budget ->
+        match attempt with
+        | Some attempt ->
             not session.Closed && attempt.Status=Active && attempt.Runner.RunnerId=session.RunnerId
             && attempt.Generation=session.Generation && session.Generation=state.Generation
             && attempt.Runner.Generation=state.Generation && attempt.Runner.ExpiresAt>now
-            && state.Control=Running && state.ReadbackCurrent && within now budget state.Used
+            && state.Control=Running && state.ReadbackCurrent && budgetAvailable now state
             && Set.isEmpty state.RecoveryObligations
         | _ -> false
 
     let evolve state event =
         let revision = nextRevision state.Revision
         match event with
-        | WorkAdmitted(s,b) -> {state with WorkItemId=Some s.WorkItemId;Snapshot=Some s;Budget=Some b;Control=Running;Revision=revision}
+        | WorkAdmitted(s,b) -> {state with WorkItemId=Some s.WorkItemId;Snapshot=Some s;Budget=Some b;SubscriptionBudget=None;Control=Running;Revision=revision}
+        | SubscriptionWorkAdmitted(s,b) -> {state with WorkItemId=Some s.WorkItemId;Snapshot=Some s;Budget=None;SubscriptionBudget=Some b;Control=Running;Revision=revision}
         | GenerationAdvanced g -> {state with Generation=g;Revision=revision}
         | ReservationCreated r -> {state with Reservation=Some r;Revision=revision}
         | ReservationReleased(_,_,claims) -> {state with Reservation=None;RecoveryObligations=Set.union state.RecoveryObligations claims;Revision=revision}
@@ -389,6 +423,7 @@ module Orchestration =
             match tryAddUse state.Used b with
             | Some used -> {state with Used=used;Revision=revision}
             | None -> invalidOp "persisted budget event overflows"
+        | SubscriptionAccountingRecorded accounting -> {state with SubscriptionAccounting=Some accounting;Revision=revision}
         | PausedEvent r -> {state with Control=Paused r;Revision=revision}
         | ResumedEvent -> {state with Control=Running;Revision=revision}
         | StartupPausedEvent r ->
@@ -423,22 +458,24 @@ module Orchestration =
         | CommandRecorded r -> {state with CommandReceipts=Map.add r.CommandId r state.CommandReceipts}
 
     let replay events = List.fold evolve initial events
-    let private mkReceipt state id digest disposition detail =
-        {CommandId=id;BodySha256=digest;Disposition=disposition;Revision=state.Revision;ProtocolVersion=ProtocolVersion(1,0);Detail=detail}
-    let private decideNew now state id digest command =
+    let private mkReceipt protocolVersion state id digest disposition detail =
+        {CommandId=id;BodySha256=digest;Disposition=disposition;Revision=state.Revision;ProtocolVersion=protocolVersion;Detail=detail}
+    let private decideNew now protocolVersion state id digest command =
         let accept events effects detail =
             let projected=List.fold evolve state events
-            let receipt=mkReceipt projected id digest Accepted detail
+            let receipt=mkReceipt protocolVersion projected id digest Accepted detail
             {Events=events@[CommandRecorded receipt];Effects=effects;Receipt=receipt}
         let reject detail =
-            let receipt=mkReceipt state id digest Rejected detail
+            let receipt=mkReceipt protocolVersion state id digest Rejected detail
             {Events=[CommandRecorded receipt];Effects=[];Receipt=receipt}
         let conflict detail =
-            let receipt=mkReceipt state id digest Conflict detail
+            let receipt=mkReceipt protocolVersion state id digest Conflict detail
             {Events=[CommandRecorded receipt];Effects=[];Receipt=receipt}
         match command with
         | Admit(s,b) when state.WorkItemId.IsNone && within now b state.Used -> accept [WorkAdmitted(s,b);GenerationAdvanced(nextGeneration state.Generation)] [] "admitted"
         | Admit _ -> reject "already-admitted-or-invalid-budget"
+        | AdmitSubscription(s,b) when state.WorkItemId.IsNone && validSubscriptionBudget now b -> accept [SubscriptionWorkAdmitted(s,b);GenerationAdvanced(nextGeneration state.Generation)] [] "subscription-admitted"
+        | AdmitSubscription _ -> reject "already-admitted-or-invalid-subscription-budget"
         | Reserve(r,e,claims) when state.Reservation |> Option.exists(fun existing -> existing.ReservationId=r && existing.ExpiresAt=e && existing.RequiredClaimIds=claims) -> accept [] [] "reservation-already-created"
         | Reserve(r,_,_) when state.Reservation |> Option.exists(fun existing -> existing.ReservationId=r) -> conflict "reservation-identity-conflict"
         | Reserve(r,e,claims) when state.Control=Running && state.Reservation.IsNone && e>now && not(Set.isEmpty claims) && Set.forall (String.IsNullOrWhiteSpace >> not) claims -> accept [ReservationCreated{ReservationId=r;Generation=state.Generation;ExpiresAt=e;RequiredClaimIds=claims}] [] "reserved"
@@ -477,8 +514,8 @@ module Orchestration =
             | Some existing when existing.SessionId=s && existing.Runner=r -> accept [] [] "attempt-already-started"
             | Some _ -> conflict "attempt-identity-conflict"
             | None ->
-                match state.Control,state.Budget,state.Reservation with
-                | Running,Some b,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && within now b state.Used && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation && (state.HostedRoute |> Option.forall(fun route -> route.AttemptId=a && predecessorReadbackPresent DispatchRunner route state)) ->
+                match state.Control,state.Reservation with
+                | Running,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && budgetAvailable now state && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation && (state.HostedRoute |> Option.forall(fun route -> route.AttemptId=a && predecessorReadbackPresent DispatchRunner route state)) ->
                     let attempt={AttemptId=a;SessionId=s;Runner=r;Generation=state.Generation;StartedAt=now;Status=Active}
                     let session:SessionState={SessionId=s;RunnerId=r.RunnerId;Generation=state.Generation;LastClientSequence=0L;LastServerSequence=0L;Closed=false}
                     accept [AttemptStarted attempt;RunnerSessionOpened session] [] "attempt-and-runner-session-started"
@@ -517,9 +554,15 @@ module Orchestration =
             match state.Budget,tryAddUse state.Used delta with
             | Some b,Some used when within now b used -> accept [BudgetCharged delta] [] "budget-charged"
             | _ -> reject "budget-exceeded-or-expired"
+        | RecordSubscriptionAccounting accounting ->
+            let valid = accounting.ObservedAt<=now && accounting.RuntimeSeconds>=0L
+                        && accounting.RuntimeWithinBound=(accounting.RuntimeSeconds<=1800L)
+                        && validSubscriptionUsage accounting.Usage && validSubscriptionCost accounting.Cost
+            if state.SubscriptionBudget.IsSome && valid then accept [SubscriptionAccountingRecorded accounting] [] "subscription-accounting-recorded"
+            else reject "subscription-accounting-refused"
         | Pause r when state.Control=Running -> accept [PausedEvent r] [] "paused"
         | Pause _ -> reject "not-running"
-        | Resume -> match state.Control,state.Budget with | Paused _,Some b when state.ReadbackCurrent && within now b state.Used -> accept [ResumedEvent] [] "resumed" | _ -> reject "resume-refused"
+        | Resume -> match state.Control with | Paused _ when state.ReadbackCurrent && budgetAvailable now state -> accept [ResumedEvent] [] "resumed" | _ -> reject "resume-refused"
         | RecordStartupPause reason when not(String.IsNullOrWhiteSpace reason) && reason=reason.Trim() ->
             accept [StartupPausedEvent reason] [] "startup-paused-readback-invalidated"
         | RecordStartupPause _ -> reject "invalid-startup-pause"
@@ -631,6 +674,14 @@ module Orchestration =
     let private generationText generation = generation |> Id.generationValue |> invariant
     let private revisionText revision = revision |> Id.revisionValue |> invariant
     let private timeText (value:DateTimeOffset) = value.ToUniversalTime().Ticks |> invariant
+    let private subscriptionUsageParts = function
+        | TokensObserved(value,provenance) -> ["observed";invariant value;provenance]
+        | TokensUnknown provenance -> ["unknown";"";provenance]
+    let private subscriptionCostParts cost =
+        [cost.InvocationState;cost.InvocationProvenance;cost.BroaderAttributionState;cost.BroaderAttributionProvenance]
+    let private subscriptionBudgetParts budget =
+        [budget.Schema;invariant budget.AttemptLimit;invariant (int64 budget.MaximumRuntime.TotalSeconds);timeText budget.ExecutionDeadline]
+        @ subscriptionUsageParts budget.Usage @ subscriptionCostParts budget.Cost
     let private candidateParts (candidate:CandidateArtifact) =
         let location = match candidate.Location with | ContentAddressedObject key -> frame["object";key] | ImmutableRemoteGitRef(repo,commit,reference) -> frame["git";repo;commit;reference]
         [Id.candidateValue candidate.CandidateId |> string;candidate.BaselineSha;candidate.HeadSha;candidate.TreeSha;candidate.ManifestSha256;candidate.ContentSha256;candidate.MediaType;invariant candidate.SizeBytes;timeText candidate.RetainUntil;location]
@@ -647,6 +698,7 @@ module Orchestration =
         let parts =
             match command with
             | Admit(s,b) -> ["admit";Convert.ToBase64String(WorkItemIdentity.canonicalBytes s.WorkItemId);Id.projectValue s.ProjectId |> string;revisionText s.WorkflowRevision;s.CanonicalSha256;frame(List.sort s.BoardMembershipIds);timeText s.CapturedAt;invariant b.TokenLimit;invariant b.RuntimeSecondsLimit;invariant b.CostMicrosLimit;timeText b.Deadline]
+            | AdmitSubscription(s,b) -> ["admit-subscription";Convert.ToBase64String(WorkItemIdentity.canonicalBytes s.WorkItemId);Id.projectValue s.ProjectId |> string;revisionText s.WorkflowRevision;s.CanonicalSha256;frame(List.sort s.BoardMembershipIds);timeText s.CapturedAt] @ subscriptionBudgetParts b
             | Reserve(id,expires,claims) -> ["reserve";Id.reservationValue id |> string;timeText expires;frame(Set.toList claims)]
             | ObserveClaim c -> ["claim";c.ClaimId;generationText c.Generation;revisionText c.WorkflowRevision;timeText c.ObservedAt]
             | ReleaseReservation reason -> ["release-reservation";reason]
@@ -658,6 +710,7 @@ module Orchestration =
             | AcceptRunnerMessage(sessionId,sequence,emitServer,requestSha256) -> ["accept-runner-message";Id.sessionValue sessionId |> string;invariant sequence;string emitServer;requestSha256]
             | CloseRunnerSession sessionId -> ["close-runner-session";Id.sessionValue sessionId |> string]
             | ChargeBudget b -> ["charge";invariant b.Tokens;invariant b.RuntimeSeconds;invariant b.CostMicros]
+            | RecordSubscriptionAccounting accounting -> ["subscription-accounting";timeText accounting.ObservedAt;invariant accounting.RuntimeSeconds;string accounting.RuntimeWithinBound] @ subscriptionUsageParts accounting.Usage @ subscriptionCostParts accounting.Cost
             | Pause reason -> ["pause";reason] | Resume -> ["resume"] | RequestCancel reason -> ["request-cancel";reason]
             | RecordStartupPause reason -> ["startup-pause";reason]
             | RecordHostedRouteReadback readback ->
@@ -698,18 +751,22 @@ module Orchestration =
 
     let decide now state envelope =
         let digest=canonicalEnvelopeSha256 envelope
+        let requiredProtocol =
+            match envelope.Command with
+            | AdmitSubscription _ | RecordSubscriptionAccounting _ -> ProtocolVersion(2,0)
+            | _ -> ProtocolVersion(1,0)
         match Map.tryFind envelope.CommandId state.CommandReceipts with
         | Some prior when prior.BodySha256=digest -> {Events=[];Effects=[];Receipt={prior with Disposition=Duplicate;Detail="duplicate-command"}}
         | Some prior -> {Events=[];Effects=[];Receipt={prior with Disposition=Conflict;Detail="command-identity-conflict"}}
-        | None when envelope.ProtocolVersion<>ProtocolVersion(1,0) ->
-            {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "unsupported-command-version"}
+        | None when envelope.ProtocolVersion<>requiredProtocol ->
+            {Events=[];Effects=[];Receipt=mkReceipt envelope.ProtocolVersion state envelope.CommandId digest Rejected "unsupported-command-version"}
         | None when String.IsNullOrWhiteSpace envelope.PrincipalId || envelope.ExpiresAt<now || envelope.IssuedAt>now ->
-            {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "invalid-or-expired-command-envelope"}
+            {Events=[];Effects=[];Receipt=mkReceipt envelope.ProtocolVersion state envelope.CommandId digest Rejected "invalid-or-expired-command-envelope"}
         | None when envelope.ExpectedRevision<>state.Revision ->
-            {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "stale-workflow-revision"}
+            {Events=[];Effects=[];Receipt=mkReceipt envelope.ProtocolVersion state envelope.CommandId digest Rejected "stale-workflow-revision"}
         | None when envelope.ExpectedGeneration<>state.Generation ->
-            {Events=[];Effects=[];Receipt=mkReceipt state envelope.CommandId digest Rejected "stale-generation"}
-        | None -> decideNew now state envelope.CommandId digest envelope.Command
+            {Events=[];Effects=[];Receipt=mkReceipt envelope.ProtocolVersion state envelope.CommandId digest Rejected "stale-generation"}
+        | None -> decideNew now envelope.ProtocolVersion state envelope.CommandId digest envelope.Command
 
     [<RequireQualifiedAccess>]
     module CandidateArtifact =
