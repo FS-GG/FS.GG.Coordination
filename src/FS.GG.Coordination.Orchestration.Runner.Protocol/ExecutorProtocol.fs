@@ -26,7 +26,8 @@ type ExecutorResponse =
       Provider:string; AdapterVersion:string; AuthenticationState:string; AuthenticationProvenance:string; SupportsResume:bool
       ProviderSessionReference:string; Lifecycle:string; RequestedModel:string; RequestedEffort:string; ResolvedModel:string; ResolvedEffort:string
       Output:ExecutorReference array; LifecycleReferences:ExecutorReference array; Usage:ExecutorUsage array
-      InvocationCostState:string; InvocationCostProvenance:string; BroaderCostState:string; BroaderCostProvenance:string
+      InvocationCostState:string; InvocationCostAmount:Nullable<decimal>; InvocationCostCurrency:string; InvocationCostProvenance:string
+      BroaderCostState:string; BroaderCostAmount:Nullable<decimal>; BroaderCostCurrency:string; BroaderCostProvenance:string
       CandidateId:Guid; CandidateHeadSha:string; CandidateTreeSha:string; ObservedAt:DateTimeOffset; Detail:string }
 
 [<RequireQualifiedAccess>]
@@ -44,7 +45,7 @@ module ExecutorWire =
     let private receiptProperties=set ["schema";"commandId";"bodySha256";"disposition";"durableRevision";"processCreationObserved";"detail"]
     let private contentProperties=set ["schema";"commandId";"inputDigest";"offset";"final";"contentBase64"]
     let private manifestProperties=set ["schema";"inputDigest";"mediaType";"sizeBytes";"chunkBytes"]
-    let private responseProperties=set ["schema";"commandId";"bodySha256";"kind";"provider";"adapterVersion";"authenticationState";"authenticationProvenance";"supportsResume";"providerSessionReference";"lifecycle";"requestedModel";"requestedEffort";"resolvedModel";"resolvedEffort";"output";"lifecycleReferences";"usage";"invocationCostState";"invocationCostProvenance";"broaderCostState";"broaderCostProvenance";"candidateId";"candidateHeadSha";"candidateTreeSha";"observedAt";"detail"]
+    let private responseProperties=set ["schema";"commandId";"bodySha256";"kind";"provider";"adapterVersion";"authenticationState";"authenticationProvenance";"supportsResume";"providerSessionReference";"lifecycle";"requestedModel";"requestedEffort";"resolvedModel";"resolvedEffort";"output";"lifecycleReferences";"usage";"invocationCostState";"invocationCostAmount";"invocationCostCurrency";"invocationCostProvenance";"broaderCostState";"broaderCostAmount";"broaderCostCurrency";"broaderCostProvenance";"candidateId";"candidateHeadSha";"candidateTreeSha";"observedAt";"detail"]
     let private validText maximum (value:string)=not(String.IsNullOrWhiteSpace value)&&value=value.Trim()&&value.Length<=maximum
     let private validGuid value=value<>Guid.Empty
     let private closed<'T> properties maximumBytes bytes=RunnerWire.deserializeClosed<'T> properties maximumBytes bytes
@@ -74,8 +75,25 @@ module ExecutorWire =
         |> Result.bind(fun value->
             let validRefs (items:ExecutorReference array)=not(isNull items)&&items.Length<=64&&items|>Array.forall(fun item->not(isNull(box item))&&validText 64 item.Kind&&validText 2048 item.Reference&&(isNull item.Digest||RunnerWire.validSha256 item.Digest))
             let validUsage=not(isNull value.Usage)&&value.Usage.Length<=64&&value.Usage|>Array.forall(fun item->not(isNull(box item))&&validText 64 item.Name&&validText 256 item.Provenance&&((item.State="observed"&&item.Value.HasValue&&item.Value.Value>=0L&&validText 64 item.UnitName)||((item.State="unknown"||item.State="not-applicable")&&not item.Value.HasValue&&isNull item.UnitName)))
+            let validOptionalText maximum text=isNull text || validText maximum text
+            let validCost state (amount:Nullable<decimal>) currency provenance =
+                validText 256 provenance
+                && match state with
+                   | "known" -> amount.HasValue && amount.Value>=0M && validText 16 currency
+                   | "unknown" | "not-applicable" -> not amount.HasValue && isNull currency
+                   | _ -> false
             let kindOk=(set ["readiness";"session-observation";"refusal"]).Contains value.Kind
             let authOk=(set ["authenticated";"not-authenticated";"unknown"]).Contains value.AuthenticationState
+            let lifecycleOk =
+                match value.Kind with
+                | "readiness" -> (set ["ready";"not-ready"]).Contains value.Lifecycle && isNull value.ProviderSessionReference && value.CandidateId=Guid.Empty && isNull value.CandidateHeadSha && isNull value.CandidateTreeSha
+                | "refusal" -> value.Lifecycle="refused" && isNull value.ProviderSessionReference && value.CandidateId=Guid.Empty && isNull value.CandidateHeadSha && isNull value.CandidateTreeSha
+                | "session-observation" ->
+                    (set ["starting";"running";"cancelling";"succeeded";"failed";"cancelled";"deadline-exceeded";"outcome-unknown"]).Contains value.Lifecycle
+                    && validText 512 value.ProviderSessionReference
+                    && ((value.CandidateId=Guid.Empty && isNull value.CandidateHeadSha && isNull value.CandidateTreeSha)
+                        || (value.CandidateId<>Guid.Empty && RunnerWire.validSha256 value.CandidateHeadSha && RunnerWire.validSha256 value.CandidateTreeSha))
+                | _ -> false
             if value.Schema = responseSchema
                && validGuid value.CommandId
                && RunnerWire.validSha256 value.BodySha256
@@ -84,11 +102,17 @@ module ExecutorWire =
                && validText 128 value.AdapterVersion
                && validText 256 value.AuthenticationProvenance
                && authOk
+               && lifecycleOk
+               && validOptionalText 128 value.RequestedModel
+               && validOptionalText 128 value.RequestedEffort
+               && validOptionalText 128 value.ResolvedModel
+               && validOptionalText 128 value.ResolvedEffort
                && validRefs value.Output
                && validRefs value.LifecycleReferences
                && validUsage
-               && value.InvocationCostState = "not-applicable"
-               && value.BroaderCostState = "unknown"
+               && validCost value.InvocationCostState value.InvocationCostAmount value.InvocationCostCurrency value.InvocationCostProvenance
+               && validCost value.BroaderCostState value.BroaderCostAmount value.BroaderCostCurrency value.BroaderCostProvenance
+               && value.ObservedAt<>DateTimeOffset.MinValue
                && not (isNull value.Detail)
                && value.Detail.Length <= 1024 then Ok value
             else Error "executor-response-refused")

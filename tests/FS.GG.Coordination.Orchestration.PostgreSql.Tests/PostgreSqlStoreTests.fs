@@ -797,10 +797,19 @@ type PostgreSqlStoreTests() =
               Provider="codex";AdapterVersion="0.154.0";AuthenticationState="authenticated";AuthenticationProvenance="codex-login-status";SupportsResume=false
               ProviderSessionReference=null;Lifecycle="ready";RequestedModel=null;RequestedEffort=null;ResolvedModel=null;ResolvedEffort=null
               Output=[||];LifecycleReferences=[||];Usage=[|{Name="tokens";State="unknown";Value=Nullable();UnitName=null;Provenance="provider-not-reported"}|]
-              InvocationCostState="not-applicable";InvocationCostProvenance="subscription";BroaderCostState="unknown";BroaderCostProvenance="not-attributed"
+              InvocationCostState="not-applicable";InvocationCostAmount=Nullable();InvocationCostCurrency=null;InvocationCostProvenance="subscription"
+              BroaderCostState="unknown";BroaderCostAmount=Nullable();BroaderCostCurrency=null;BroaderCostProvenance="not-attributed"
               CandidateId=Guid.Empty;CandidateHeadSha=null;CandidateTreeSha=null;ObservedAt=now;Detail="ready" }
         Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse response) |> Result.isOk)
-        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {response with InvocationCostState="observed"}) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {response with InvocationCostState="known"}) |> Result.isError)
+        let nonSubscription=
+            { response with Kind="session-observation";Provider="deepseek";AdapterVersion="http-fixture/1";ProviderSessionReference="opaque-session"
+                            Lifecycle="succeeded";InvocationCostState="known";InvocationCostAmount=Nullable 0.125M;InvocationCostCurrency="USD";InvocationCostProvenance="provider-receipt"
+                            BroaderCostState="not-applicable";BroaderCostProvenance="no-broader-attribution" }
+        Assert.Equal(nonSubscription,ExecutorWire.parseResponse(ExecutorWire.encodeResponse nonSubscription) |> Result.defaultWith failwith)
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {nonSubscription with InvocationCostCurrency=null}) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {nonSubscription with Lifecycle="complete-ish"}) |> Result.isError)
+        Assert.True(ExecutorWire.parseResponse(ExecutorWire.encodeResponse {nonSubscription with CandidateId=Guid.NewGuid();CandidateHeadSha="not-a-digest";CandidateTreeSha=String.replicate 64 "a"}) |> Result.isError)
         let responseText=ExecutorWire.encodeResponse response |> Encoding.UTF8.GetString
         Assert.True(ExecutorWire.parseResponse(Encoding.UTF8.GetBytes(responseText.Replace("\"output\":[]","\"output\":[null]"))) |> Result.isError)
         Assert.True(ExecutorWire.parseResponse(Encoding.UTF8.GetBytes(responseText.Replace("\"usage\":[{","\"usage\":[{\"unknownNested\":true,"))) |> Result.isError)
