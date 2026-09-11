@@ -221,6 +221,13 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.coordination.orchestration.execution": {
+        "type": "Project",
+        "dependencies": {
+          "Akka": "[1.5.71, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.coordination.orchestration.observer": {
         "type": "Project",
         "dependencies": {
@@ -237,6 +244,12 @@
           "FS.GG.Coordination.Protocol": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )",
           "FSharp.SystemTextJson": "[1.4.36, )"
+        }
+      },
+      "fs.gg.coordination.orchestration.runner.protocol": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
         }
       },
       "fs.gg.coordination.protocol": {

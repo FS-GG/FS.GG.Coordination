@@ -70,6 +70,16 @@ module Orchestration =
 
     type Budget = { TokenLimit: int64; RuntimeSecondsLimit: int64; CostMicrosLimit: int64; Deadline: DateTimeOffset }
     type BudgetUse = { Tokens: int64; RuntimeSeconds: int64; CostMicros: int64 }
+    /// Additive subscription accounting; legacy Budget and BudgetUse retain their /1 meaning.
+    type SubscriptionUsage =
+        | TokensObserved of int64 * provenance:string
+        | TokensUnknown of provenance:string
+    type SubscriptionCost =
+        { InvocationState:string; InvocationProvenance:string
+          BroaderAttributionState:string; BroaderAttributionProvenance:string }
+    type SubscriptionExecutionBudget =
+        { Schema:string; AttemptLimit:int; MaximumRuntime:TimeSpan; ExecutionDeadline:DateTimeOffset
+          Usage:SubscriptionUsage; Cost:SubscriptionCost }
     type RunnerEnrollment =
         { RunnerId: RunnerId; PrincipalId: string; FingerprintSha256: string
           Generation: Generation; ExpiresAt: DateTimeOffset }

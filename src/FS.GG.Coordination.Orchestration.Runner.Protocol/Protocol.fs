@@ -74,7 +74,15 @@ module RunnerWire =
         else
             try
                 use document = JsonDocument.Parse(ReadOnlyMemory bytes,JsonDocumentOptions(MaxDepth=8))
+                let rec duplicateFree (element:JsonElement) =
+                    match element.ValueKind with
+                    | JsonValueKind.Object ->
+                        let names=element.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                        names.Length=(Set.ofList names).Count && element.EnumerateObject() |> Seq.forall(fun property->duplicateFree property.Value)
+                    | JsonValueKind.Array -> element.EnumerateArray() |> Seq.forall duplicateFree
+                    | _ -> true
                 if document.RootElement.ValueKind<>JsonValueKind.Object then Error "runner-message-object-required"
+                elif not(duplicateFree document.RootElement) then Error "runner-message-duplicate-property-refused"
                 else
                     let names=document.RootElement.EnumerateObject() |> Seq.map _.Name |> Seq.toList
                     if names.Length<>expected.Count || Set.ofList names<>expected then Error "runner-message-shape-refused"

@@ -321,3 +321,60 @@ module PilotJournal =
               { PermitId = permitId; Sequence = envelope.ExpectedSequence + int64 index + 1L
                 EventId = Guid.NewGuid(); SchemaVersion = PilotCodec.schemaVersion
                 SerializerVersion = PilotCodec.serializerVersion; Event = eventValue; RecordedAt = receivedAt }) }
+
+type SubscriptionReservation =
+    { Schema:string; ReservationId:Guid; AssignmentId:Guid; AttemptId:Guid; Generation:int64
+      ExpectedRevision:int64; ReservedAt:DateTimeOffset; Deadline:DateTimeOffset; MaximumRuntimeSeconds:int64; AttemptLimit:int }
+type SubscriptionSettlement =
+    { Schema:string; ReservationId:Guid; SettledAt:DateTimeOffset; RuntimeSeconds:int64
+      RuntimeWithinBound:bool; TokensState:string; Tokens:Nullable<int64>; TokensProvenance:string
+      InvocationCostState:string; InvocationCostProvenance:string; BroaderCostState:string; BroaderCostProvenance:string }
+
+[<RequireQualifiedAccess>]
+module SubscriptionPilot =
+    let budgetSchema="fsgg.coordination.subscription-execution-budget/1"
+    let reservationSchema="fsgg.coordination.subscription-reservation/1"
+    let settlementSchema="fsgg.coordination.subscription-settlement/1"
+    let maximumRuntime=TimeSpan.FromMinutes 30.
+    let createBudget (now:DateTimeOffset) : SubscriptionExecutionBudget =
+        { Schema=budgetSchema;AttemptLimit=1;MaximumRuntime=maximumRuntime;ExecutionDeadline=now.Add maximumRuntime
+          Usage=TokensUnknown "provider-has-not-reported-usage"
+          Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="subscription-cost-not-attributable-to-invocation"} }
+    let reserve now reservationId assignmentId attemptId generation expectedRevision (budget:SubscriptionExecutionBudget) =
+        if budget.Schema<>budgetSchema || budget.AttemptLimit<>1 || budget.MaximumRuntime<>maximumRuntime
+           || budget.ExecutionDeadline<=now || budget.ExecutionDeadline>now.Add maximumRuntime || generation<0L
+           || expectedRevision<1L || reservationId=Guid.Empty || assignmentId=Guid.Empty || attemptId=Guid.Empty then Error "subscription-admission-refused"
+        else Ok {Schema=reservationSchema;ReservationId=reservationId;AssignmentId=assignmentId;AttemptId=attemptId;Generation=generation
+                 ExpectedRevision=expectedRevision;ReservedAt=now;Deadline=budget.ExecutionDeadline;MaximumRuntimeSeconds=int64 budget.MaximumRuntime.TotalSeconds;AttemptLimit=1}
+    let settle now runtimeSeconds tokens provenance (reservation:SubscriptionReservation) =
+        if reservation.Schema<>reservationSchema || runtimeSeconds<0L then Error "subscription-settlement-refused"
+        else
+            let state,value = match tokens with Some value when value>=0L->"observed",Nullable value|_->"unknown",Nullable()
+            Ok {Schema=settlementSchema;ReservationId=reservation.ReservationId;SettledAt=now;RuntimeSeconds=runtimeSeconds
+                RuntimeWithinBound=runtimeSeconds<=reservation.MaximumRuntimeSeconds;TokensState=state;Tokens=value;TokensProvenance=provenance;InvocationCostState="not-applicable";InvocationCostProvenance="subscription-session"
+                BroaderCostState="unknown";BroaderCostProvenance="subscription-cost-not-attributable-to-invocation"}
+
+[<RequireQualifiedAccess>]
+module SubscriptionAccountingCodec =
+    let private options =
+        let value=JsonSerializerOptions(PropertyNamingPolicy=JsonNamingPolicy.CamelCase,MaxDepth=4)
+        value.PropertyNameCaseInsensitive<-false
+        value.UnmappedMemberHandling<-JsonUnmappedMemberHandling.Disallow
+        value
+    let private closed<'T> (properties:Set<string>) maximum (bytes:byte array) =
+        if isNull bytes || bytes.Length=0 || bytes.Length>maximum then Error "subscription-accounting-size-refused"
+        else
+            try
+                use document=JsonDocument.Parse(ReadOnlyMemory bytes,JsonDocumentOptions(MaxDepth=4))
+                if document.RootElement.ValueKind<>JsonValueKind.Object then Error "subscription-accounting-object-refused"
+                else
+                    let names=document.RootElement.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                    if names.Length<>properties.Count || Set.ofList names<>properties then Error "subscription-accounting-shape-refused"
+                    else let value=JsonSerializer.Deserialize<'T>(ReadOnlySpan bytes,options) in if isNull(box value) then Error "subscription-accounting-null-refused" else Ok value
+            with :? JsonException -> Error "subscription-accounting-json-refused"
+    let private reservationProperties=set ["schema";"reservationId";"assignmentId";"attemptId";"generation";"expectedRevision";"reservedAt";"deadline";"maximumRuntimeSeconds";"attemptLimit"]
+    let private settlementProperties=set ["schema";"reservationId";"settledAt";"runtimeSeconds";"runtimeWithinBound";"tokensState";"tokens";"tokensProvenance";"invocationCostState";"invocationCostProvenance";"broaderCostState";"broaderCostProvenance"]
+    let encodeReservation value=JsonSerializer.SerializeToUtf8Bytes(value,options)
+    let decodeReservation bytes=closed<SubscriptionReservation> reservationProperties 8192 bytes |> Result.bind(fun value->if value.Schema=SubscriptionPilot.reservationSchema && value.ReservationId<>Guid.Empty && value.AssignmentId<>Guid.Empty && value.AttemptId<>Guid.Empty && value.Generation>=0L && value.ExpectedRevision>0L && value.AttemptLimit=1 && value.MaximumRuntimeSeconds=1800L && value.Deadline>value.ReservedAt && value.Deadline<=value.ReservedAt.AddMinutes 30. then Ok value else Error "subscription-reservation-refused")
+    let encodeSettlement value=JsonSerializer.SerializeToUtf8Bytes(value,options)
+    let decodeSettlement bytes=closed<SubscriptionSettlement> settlementProperties 8192 bytes |> Result.bind(fun value->if value.Schema=SubscriptionPilot.settlementSchema && value.ReservationId<>Guid.Empty && value.RuntimeSeconds>=0L && not(String.IsNullOrWhiteSpace value.TokensProvenance) && ((value.TokensState="observed" && value.Tokens.HasValue && value.Tokens.Value>=0L) || (value.TokensState="unknown" && not value.Tokens.HasValue)) && value.InvocationCostState="not-applicable" && not(String.IsNullOrWhiteSpace value.InvocationCostProvenance) && value.BroaderCostState="unknown" && not(String.IsNullOrWhiteSpace value.BroaderCostProvenance) then Ok value else Error "subscription-settlement-refused")

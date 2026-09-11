@@ -1,5 +1,24 @@
 # PostgreSQL orchestration adapter
 
+## Durable execution transport
+
+`PostgreSqlExecutionStore` is the Main-owned S2a boundary. It journals explicit
+`execution-session-event/1` bytes by `(assignment_id, attempt_id)` with an
+expected-revision lock and generation fence. The assignment is the hosted
+route's process operation ID; route and attempt identities remain distinct.
+Digest-addressed inputs and closed `executor-command/1` messages commit before
+they become poll-visible. A durable command receipt does not imply that a
+provider process was created.
+
+The additive subscription reservation uses one nonrenewing attempt and the
+original 30-minute deadline/runtime bound. Provider-reported tokens are tagged
+with provenance; absent tokens remain `unknown` with no numeric value.
+Per-invocation subscription cost is `not-applicable`, while broader monetary
+attribution remains `unknown`. Late or over-limit accounting is retained and
+does not release capacity: only a later terminal/reconciliation boundary may
+do that. These tables are included by the existing whole-schema PostgreSQL
+backup, and the runner is never given database credentials.
+
 This non-packable O0 adapter treats `fsgg_orchestration.event`, `stream`, and
 `inbox` as the only authoritative domain history. An append locks the stream
 and commits the command identity and all domain events in one serializable
