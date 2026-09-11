@@ -28,6 +28,12 @@ type ExecutorWorkspaceManifest =
     { Schema:string; Workspace:string; RepositoryBinding:string; BaselineObjectId:string
       AllowedPaths:string array; Validations:string array; InputDigest:string }
 [<CLIMutable>]
+type ExecutorRouteBinding =
+    { Schema:string; BindingSha256:string; WorkItemPersistenceId:string; RouteId:Guid
+      RouteOperationId:Guid; ProcessOperationId:Guid; AssignmentId:Guid; AttemptId:Guid
+      CandidateId:Guid; Generation:int64; RepositoryBinding:string; BaselineObjectId:string
+      PromptDigest:string; WorkspaceManifestSha256:string; ExecutorBinding:string }
+[<CLIMutable>]
 type ExecutorArtifactManifest =
     { Schema:string; CommandId:Guid; CandidateId:Guid; BaselineObjectId:string; HeadObjectId:string; TreeObjectId:string
       BundleSha256:string; BundleSizeBytes:int64; ManifestSha256:string; ChunkBytes:int }
@@ -60,6 +66,7 @@ module ExecutorWire =
     let contentSchema="fsgg.orchestration.executor-content/1"
     let inputManifestSchema="fsgg.orchestration.executor-input-manifest/1"
     let workspaceManifestSchema="fsgg.orchestration.executor-workspace-manifest/1"
+    let routeBindingSchema="fsgg.orchestration.executor-route-binding/1"
     let artifactManifestSchema="fsgg.orchestration.executor-artifact-manifest/1"
     let artifactContentSchema="fsgg.orchestration.executor-artifact-content/1"
     let operationOutcomeSchema="fsgg.orchestration.executor-operation-outcome/1"
@@ -74,6 +81,7 @@ module ExecutorWire =
     let private contentProperties=set ["schema";"commandId";"inputDigest";"offset";"final";"contentBase64"]
     let private manifestProperties=set ["schema";"inputDigest";"mediaType";"sizeBytes";"chunkBytes"]
     let private workspaceProperties=set ["schema";"workspace";"repositoryBinding";"baselineObjectId";"allowedPaths";"validations";"inputDigest"]
+    let private routeBindingProperties=set ["schema";"bindingSha256";"workItemPersistenceId";"routeId";"routeOperationId";"processOperationId";"assignmentId";"attemptId";"candidateId";"generation";"repositoryBinding";"baselineObjectId";"promptDigest";"workspaceManifestSha256";"executorBinding"]
     let private artifactManifestProperties=set ["schema";"commandId";"candidateId";"baselineObjectId";"headObjectId";"treeObjectId";"bundleSha256";"bundleSizeBytes";"manifestSha256";"chunkBytes"]
     let private artifactContentProperties=set ["schema";"commandId";"candidateId";"bundleSha256";"offset";"final";"contentBase64"]
     let private operationOutcomeProperties=set ["schema";"commandId";"bodySha256";"operation";"disposition";"providerSessionReference";"observedAt";"reason"]
@@ -110,8 +118,8 @@ module ExecutorWire =
             elif not(commandKinds.Contains value.Kind) then Error "executor-command-kind-refused"
             elif value.Generation<0L||value.ExpectedRevision<1L||value.RecordedAt=DateTimeOffset.MinValue||value.Deadline<=value.RecordedAt||value.MaximumRuntimeSeconds<1L||value.MaximumRuntimeSeconds>1800L||value.MaximumAttempts<>1 then Error "executor-command-authority-refused"
             elif not(validText 512 value.WorkItemPersistenceId&&validText 256 value.ExecutorBinding&&validText 128 value.Workspace) then Error "executor-command-binding-refused"
-            elif value.Kind="cancel" && not(validText 512 value.ProviderSessionReference) then Error "executor-command-session-refused"
-            elif value.Kind<>"cancel" && not(isNull value.ProviderSessionReference) then Error "executor-command-session-refused"
+            elif (value.Kind="cancel" || value.Kind="observe") && not(validText 512 value.ProviderSessionReference) then Error "executor-command-session-refused"
+            elif value.Kind<>"cancel" && value.Kind<>"observe" && not(isNull value.ProviderSessionReference) then Error "executor-command-session-refused"
             elif value.Kind="content-read" && not(RunnerWire.validSha256 value.ArtifactDigest) then Error "executor-command-artifact-refused"
             elif value.Kind<>"content-read" && not(isNull value.ArtifactDigest) then Error "executor-command-artifact-refused"
             elif not(RunnerWire.validSha256 value.InputDigest&&RunnerWire.validSha256 value.WorkspaceManifestSha256) then Error "executor-command-input-refused"
@@ -136,6 +144,18 @@ module ExecutorWire =
                && (validGitObject value.BaselineObjectId) && (validItems 512 128 value.AllowedPaths) && (value.AllowedPaths|>Array.forall validPathRule) && value.AllowedPaths.Length=(Set.ofArray value.AllowedPaths).Count
                && (validItems 256 16 value.Validations) && value.Validations.Length=(Set.ofArray value.Validations).Count
                && (RunnerWire.validSha256 value.InputDigest) then Ok value else Error "executor-workspace-manifest-refused")
+    let routeBindingDigest (value:ExecutorRouteBinding)=RunnerWire.serialize {value with BindingSha256=""}|>RunnerWire.sha256
+    let encodeRouteBinding (value:ExecutorRouteBinding)=RunnerWire.serialize value
+    let parseRouteBinding bytes=
+        closed<ExecutorRouteBinding> routeBindingProperties maximumControlBytes bytes
+        |> Result.bind(fun value->
+            if value.Schema=routeBindingSchema && RunnerWire.validSha256 value.BindingSha256 && routeBindingDigest value=value.BindingSha256
+               && validText 512 value.WorkItemPersistenceId && validGuid value.RouteId && validGuid value.RouteOperationId
+               && validGuid value.ProcessOperationId && value.RouteOperationId=value.ProcessOperationId && value.AssignmentId=value.ProcessOperationId
+               && validGuid value.AttemptId && validGuid value.CandidateId && value.Generation>=0L
+               && validText 256 value.RepositoryBinding && validGitObject value.BaselineObjectId
+               && RunnerWire.validSha256 value.PromptDigest && RunnerWire.validSha256 value.WorkspaceManifestSha256
+               && validText 256 value.ExecutorBinding then Ok value else Error "executor-route-binding-refused")
     let encodeArtifactManifest (value:ExecutorArtifactManifest)=RunnerWire.serialize value
     let artifactManifestDigest (value:ExecutorArtifactManifest)=RunnerWire.serialize {value with ManifestSha256=""}|>RunnerWire.sha256
     let parseArtifactManifest bytes=

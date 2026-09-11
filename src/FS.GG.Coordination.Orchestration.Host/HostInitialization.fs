@@ -11,4 +11,5 @@ module HostInitialization =
         use source = NpgsqlDataSource.Create connectionString
         let! backupIdentity = PostgreSqlSchema.migrate source cancellationToken
         do! PostgreSqlPilotSchema.migrate source cancellationToken
+        do! PostgreSqlExecutionSchema.migrate source cancellationToken
         return backupIdentity }

@@ -2,12 +2,16 @@ module FS.GG.Coordination.Orchestration.Host.Tests.HostedWriterRuntimeTests
 
 open System
 open System.Collections.Generic
+open System.IO
+open System.Diagnostics
 open System.Threading
 open System.Threading.Tasks
 open Xunit
 open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Host
+open FS.GG.Coordination.Orchestration.PostgreSql
+open FS.GG.Coordination.Orchestration.Runner.Protocol
 
 module private Fixture =
     let now = DateTimeOffset.Parse "2026-09-10T19:00:00Z"
@@ -50,6 +54,20 @@ module private Fixture =
           ObservedPullRequestHeadSha = String.replicate 40 "a"; MergeCommitSha = String.replicate 40 "b"
           ProviderRevision = "provider-revision"; Generation = route.Generation
           WorkflowRevision = route.WorkflowRevision; ObservedAt = now; Merged = true }
+    let executorCommand commandId =
+        let unsigned=
+            { Schema=ExecutorWire.commandSchemaV2;CommandId=commandId;BodySha256="";Kind="reconcile"
+              WorkItemPersistenceId=WorkItemIdentity.persistenceId workItem;RouteOperationId=Id.operationValue route.ProcessOperationId
+              AssignmentId=Id.operationValue route.ProcessOperationId;AttemptId=Id.attemptValue attempt;CandidateId=Id.candidateValue candidate
+              Generation=1L;ExpectedRevision=1L;RecordedAt=now;Deadline=now.AddMinutes 30.;MaximumRuntimeSeconds=1800L
+              MaximumAttempts=1;Workspace="pilot";WorkspaceManifestSha256=String.replicate 64 "a";RequestedModel=null
+              RequestedEffort=null;InputDigest=String.replicate 64 "b";ExecutorBinding="executor-1";ProviderSessionReference=null
+              ArtifactDigest=null;ContentOffset=0L;ContentLength=0 }
+        {unsigned with BodySha256=ExecutorWire.commandV2Digest unsigned}
+
+type private FixedClock(now:DateTimeOffset) =
+    inherit TimeProvider()
+    override _.GetUtcNow()=now
 
 [<Fact>]
 let ``sealed adapter exposes exactly the seven route-bound operations`` () = task {
@@ -125,6 +143,131 @@ type private FixedStore(recovery: RecoveryResult) =
         member _.SaveSnapshot(_, _) = Task.FromResult(Ok())
         member _.SaveProjectionCheckpoint(_, _) = Task.FromResult(Ok())
 
+type private MemoryStore(initialEvents:Event list) =
+    let persistenceId=WorkItemIdentity.persistenceId Fixture.workItem
+    let mutable events =
+        initialEvents |> List.mapi(fun index eventValue ->
+            let payload=EventEnvelope.encode eventValue
+            { PersistenceId=persistenceId;Sequence=int64(index+1);EventId=Guid.NewGuid();SchemaVersion=1
+              SerializerVersion=EventEnvelope.serializerVersion;Payload=payload
+              PayloadSha256=System.Security.Cryptography.SHA256.HashData payload|>Convert.ToHexString|>_.ToLowerInvariant()
+              EffectChange=(match eventValue with EffectIntentRecorded intent->IntentAdded intent|EffectSettled(id,_)->EffectChange.Settled id|_->NoEffect)
+              RecordedAt=Fixture.now })
+    let commands=Dictionary<CommandId,string*int64>()
+    interface IJournalStore with
+        member _.CheckReadiness _=Task.FromResult(Ok())
+        member _.Recover(_, _)=
+            let state=events|>List.map(fun stored->EventEnvelope.tryDecode stored.Payload|>Result.defaultWith failwith)|>replay
+            let unsettled=state.Operations|>Map.toList|>List.choose(fun (_,value)->match value with IntentRecorded i|Dispatching i|NeedsObservation(i,_)->Some i|_->None)
+            Task.FromResult(Ok{Events=events;Snapshot=None;UnsettledEffects=unsettled;RequiresExternalReconciliation=not unsettled.IsEmpty})
+        member _.Append(request,_)=
+            match commands.TryGetValue request.Inbox.CommandId with
+            | true,(digest,sequence) when digest=request.Inbox.BodySha256 -> Task.FromResult(Duplicate sequence)
+            | true,_ -> Task.FromResult Conflict
+            | _ when request.ExpectedSequence<>int64 events.Length -> Task.FromResult(WrongExpectedSequence(int64 events.Length))
+            | _ ->
+                events<-events@request.Events
+                let tail=int64 events.Length
+                commands[request.Inbox.CommandId]<-(request.Inbox.BodySha256,tail)
+                Task.FromResult(Appended tail)
+        member _.SaveSnapshot(_, _)=Task.FromResult(Ok())
+        member _.SaveProjectionCheckpoint(_, _)=Task.FromResult(Ok())
+
+let private activeClaimEvents () =
+    let snapshot={ProjectId=Id.project(Guid.NewGuid());WorkItemId=Fixture.workItem;WorkflowRevision=Fixture.route.WorkflowRevision;CanonicalSha256=String.replicate 64 "b";BoardMembershipIds=[];CapturedAt=Fixture.now.AddMinutes(-2.)}
+    let budget={Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=Fixture.now.AddMinutes 25.;Usage=TokensUnknown "not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription";BroaderAttributionState="unknown";BroaderAttributionProvenance="unattributed"}}
+    let reservation={ReservationId=Id.reservation(Guid.NewGuid());Generation=Fixture.route.Generation;ExpiresAt=Fixture.now.AddMinutes 20.;RequiredClaimIds=Set.empty}
+    let intent=Fixture.intent AcquireExternalClaim Fixture.route.ClaimOperationId
+    [SubscriptionWorkAdmitted(snapshot,budget);GenerationAdvanced Fixture.route.Generation;ReservationCreated reservation;HostedRouteSelected Fixture.route;ResumedEvent;EffectIntentRecorded intent],intent
+
+[<Fact>]
+let ``duplicate durable command returns original accepted receipt after response loss`` () = task {
+    let events,_=activeClaimEvents()
+    let store=MemoryStore events :> IJournalStore
+    let commandId=Id.command(Guid.Parse "70000000-0000-0000-0000-000000000001")
+    let envelope={CommandId=commandId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=Id.revision(int64 events.Length);ExpectedGeneration=Fixture.route.Generation;PrincipalId="pilot";SessionId=None;IssuedAt=Fixture.now;ExpiresAt=Fixture.now.AddMinutes 1.;Command=MarkEffectDispatching Fixture.route.ClaimOperationId}
+    let! first=HostedWriterJournal.decideAndAppend (FixedClock Fixture.now) store Fixture.workItem envelope CancellationToken.None
+    let! replayed=HostedWriterJournal.decideAndAppend (FixedClock Fixture.now) store Fixture.workItem envelope CancellationToken.None
+    let firstDecision,_=Result.defaultWith failwith first
+    let replayDecision,_=Result.defaultWith failwith replayed
+    Assert.Equal(ReceiptDisposition.Accepted,firstDecision.Receipt.Disposition)
+    Assert.Equal(firstDecision.Receipt,replayDecision.Receipt) }
+
+[<Fact>]
+let ``paused restart reconciles dispatch without repeating provider mutation`` () = task {
+    let events,intent=activeClaimEvents()
+    let store=MemoryStore(events@[EffectDispatchStarted intent.OperationId;StartupPausedEvent "restart"]) :> IJournalStore
+    let mutable writes=0
+    let mutable reconciles=0
+    let hosted={OperationId=intent.OperationId;RouteId=Fixture.route.RouteId;AttemptId=Fixture.route.AttemptId;CandidateId=Fixture.route.CandidateId;RepositoryNodeId=Fixture.route.RepositoryNodeId;ProviderResourceId=Fixture.route.ClaimResourceId;CandidateHeadSha=None;ResultSha=None;ProviderRevision="claim-revision";Generation=Fixture.route.Generation;WorkflowRevision=Fixture.route.WorkflowRevision;ObservedAt=Fixture.now;Exists=true}
+    let call _ _ _=writes<-writes+1;Task.FromResult(Ok hosted)
+    let adapter=HostedWriterProviderAdapter.Create{AcquireExternalClaim=call;DispatchRunner=call;StoreCandidate=call;PublishCandidateBranch=call;CreatePullRequest=call;MergePullRequest=call;ReadNativeDelivery=fun _ _ _->Task.FromResult(Error "unused")}
+    let reconcile _ _ _=reconciles<-reconciles+1;Task.FromResult(Ok(HostedEffect hosted))
+    let driver=MainEffectDriver(FixedClock Fixture.now,store,Fixture.workItem,"pilot",adapter,reconcile)
+    let! result=driver.Drive(intent.OperationId,CancellationToken.None)
+    match result with EffectCompleted _->()|other->failwithf "%A" other
+    Assert.Equal(0,writes)
+    Assert.Equal(1,reconciles) }
+
+[<Fact>]
+let ``Main verifies complete executor bundle before durable candidate readback`` () = task {
+    let bytes=System.Text.Encoding.UTF8.GetBytes "immutable git bundle"
+    let digest=RunnerWire.sha256 bytes
+    let candidateId=Id.candidateValue Fixture.candidate
+    let unsigned={Schema=ExecutorWire.artifactManifestSchema;CommandId=Guid.NewGuid();CandidateId=candidateId;BaselineObjectId=String.replicate 40 "a";HeadObjectId=String.replicate 40 "b";TreeObjectId=String.replicate 40 "c";BundleSha256=digest;BundleSizeBytes=int64 bytes.Length;ManifestSha256="";ChunkBytes=bytes.Length}
+    let manifest={unsigned with ManifestSha256=ExecutorWire.artifactManifestDigest unsigned}
+    let chunk={Schema=ExecutorWire.artifactContentSchema;CommandId=manifest.CommandId;CandidateId=candidateId;BundleSha256=digest;Offset=0L;Final=true;ContentBase64=Convert.ToBase64String bytes}
+    let mutable stored=None
+    let store=
+        { new ICandidateStore with
+            member _.Put(value,_)=
+                stored<-Some value
+                Task.FromResult(Ok{CandidateId=value.Candidate.CandidateId;ContentSha256=value.Candidate.ContentSha256;ManifestSha256=value.Candidate.ManifestSha256;SizeBytes=value.Candidate.SizeBytes;Location=value.Candidate.Location;StoreId="main";StoreSchemaVersion=1;StorageReceiptSha256=String.replicate 64 "d";VerifiedAt=Fixture.now})
+            member _.Read(_, _)=Task.FromResult(Ok stored.Value)
+            member _.Quarantine(_,_,_)=Task.FromResult(Ok())
+            member _.CleanupUnreferenced(_,_,_)=Task.FromResult 0 }
+    let readback={Frames=[ExecutorWire.encodeArtifactManifest manifest;ExecutorWire.encodeArtifactContent chunk]}
+    let! accepted=RemoteCandidatePipeline.store store candidateId manifest.BaselineObjectId (Fixture.now.AddDays 1.) readback CancellationToken.None
+    Assert.True(Result.isOk accepted)
+    let! truncated=RemoteCandidatePipeline.store store candidateId manifest.BaselineObjectId (Fixture.now.AddDays 1.) {Frames=[ExecutorWire.encodeArtifactManifest manifest]} CancellationToken.None
+    Assert.Equal(Error "executor-artifact-content-refused",truncated) }
+
+[<Fact>]
+let ``Host relay binds duplicate commands and replays completion after response loss`` () = task {
+    let relay=HostExecutorRelay(2,1024*1024)
+    let transport=relay :> IAuthenticatedExecutorTransport
+    let command=Fixture.executorCommand(Guid.NewGuid())
+    let frames=[ExecutorWire.encodeCommandV2 command]
+    let first=transport.Exchange(frames,CancellationToken.None)
+    let duplicate=transport.Exchange(frames,CancellationToken.None)
+    let! polled=relay.Poll(CancellationToken.None)
+    Assert.Equal(Some{CommandId=command.CommandId;Frames=frames},polled)
+    let changed={command with ExpectedRevision=2L;BodySha256=""}|>fun value->{value with BodySha256=ExecutorWire.commandV2Digest value}
+    let! conflict=transport.Exchange([ExecutorWire.encodeCommandV2 changed],CancellationToken.None)
+    Assert.Equal(Error "executor-relay-command-identity-conflict",conflict)
+    let response=[ExecutorWire.encodeOperationOutcome {Schema=ExecutorWire.operationOutcomeSchema;CommandId=command.CommandId;BodySha256=command.BodySha256;Operation="reconcile";Disposition="unknown";ProviderSessionReference=null;Reason="fixture";ObservedAt=Fixture.now}]
+    Assert.Equal(Ok(),relay.Complete(command.CommandId,response))
+    Assert.Equal(Ok{Frames=response},first.Result)
+    Assert.Equal(Ok{Frames=response},duplicate.Result)
+    Assert.Equal(Ok(),relay.Complete(command.CommandId,response))
+    let! replayed=transport.Exchange(frames,CancellationToken.None)
+    Assert.Equal(Ok{Frames=response},replayed)
+    Assert.Equal(Error "executor-relay-response-identity-conflict",relay.Complete(command.CommandId,[|1uy|]::[])) }
+
+[<Fact>]
+let ``Host relay cancellation leaves original request available for reconciliation`` () = task {
+    let relay=HostExecutorRelay(2,1024*1024)
+    let command=Fixture.executorCommand(Guid.NewGuid())
+    let frames=[ExecutorWire.encodeCommandV2 command]
+    use cancelled=new CancellationTokenSource()
+    let waiting=(relay :> IAuthenticatedExecutorTransport).Exchange(frames,cancelled.Token)
+    cancelled.Cancel()
+    let! result=waiting
+    Assert.Equal(Error "executor-relay-response-unknown",result)
+    Assert.Equal(1,relay.PendingCount)
+    let! polled=relay.Poll(CancellationToken.None)
+    Assert.Equal(Some{CommandId=command.CommandId;Frames=frames},polled) }
+
 [<Fact>]
 let ``work item recovery refuses an untyped snapshot instead of inventing state`` () = task {
     let persistenceId = WorkItemIdentity.persistenceId Fixture.workItem
@@ -172,3 +315,56 @@ let ``work item recovery replays typed events and retains unsettled provider wor
         Assert.Equal(IntentRecorded intent,result.State.Operations[intent.OperationId])
         Assert.Equal<EffectIntent list>([intent],result.UnsettledEffects)
         Assert.True(result.RequiresExternalReconciliation) }
+
+type private QueuedGitHub(outcomes:FS.GG.Coordination.GitHub.TransportOutcome list) =
+    let queue=Queue<FS.GG.Coordination.GitHub.TransportOutcome>(outcomes)
+    let requests=ResizeArray<FS.GG.Coordination.GitHub.GitHubRequest>()
+    member _.Requests=requests|>Seq.toList
+    interface IGitHubRequestExecutor with
+        member _.Send(request,_)=requests.Add request;Task.FromResult(if queue.Count=0 then FS.GG.Coordination.GitHub.NetworkFailure else queue.Dequeue())
+
+type private FixedPublisher(result:Result<string,string>) =
+    interface IGitCandidatePublisher with member _.Publish(_,_,_,_,_,_)=Task.FromResult result
+
+let private response body =
+    FS.GG.Coordination.GitHub.Response{StatusCode=200;Headers=Map.empty;Body=body;ETag=Some "fixture-etag";RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}}
+
+let private githubTarget =
+    {ApiRoot=Uri "https://api.github.test/";Repository="FS-GG/.github";IssueNumber=3419;Principal="pilot-worker";BaseRef="main"
+     RequiredChecks=set["routine-eligibility";"reuse-decision";"aggregate"];ClaimLease=TimeSpan.FromMinutes 30.}
+
+let private pr state mergedAt head mergeSha =
+    let merged=match mergedAt with Some value -> $"\"{value}\"" | None -> "null"
+    let merge=match mergeSha with Some value -> $"\"{value}\"" | None -> "null"
+    $"[{{\"number\":42,\"node_id\":\"PR_node\",\"state\":\"{state}\",\"merged_at\":{merged},\"merge_commit_sha\":{merge},\"head\":{{\"sha\":\"{head}\",\"ref\":\"pilot\"}},\"base\":{{\"ref\":\"main\",\"repo\":{{\"full_name\":\"FS-GG/.github\"}}}}}}]"
+
+[<Fact>]
+let ``GitHub route refuses competing canonical claim marker`` () = task {
+    let operation=Guid.Parse "80000000-0000-0000-0000-000000000001"
+    let comments=$"[{{\"id\":1,\"updated_at\":\"2026-09-10T19:00:00Z\",\"body\":\"<!-- fsgg:claim worker=other lease=30 renewed=1 session={operation:N} -->\"}}]"
+    let executor=QueuedGitHub[response comments]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok(String.replicate 40 "a")),githubTarget,FixedClock Fixture.now)
+    let! result=client.AcquireClaim("claim-1",operation,CancellationToken.None)
+    Assert.Equal(Error "github-claim-held-by-competitor",result)
+    Assert.Single(executor.Requests)|>ignore }
+
+[<Fact>]
+let ``GitHub route refuses missing branch readback and unmerged delivery`` () = task {
+    let head=String.replicate 40 "a"
+    let executor=QueuedGitHub[FS.GG.Coordination.GitHub.Response{StatusCode=404;Headers=Map.empty;Body="{}";ETag=None;RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}};response(pr "open" None head None)]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok head),githubTarget,FixedClock Fixture.now)
+    let! publication=client.PublishBranch("refs/heads/pilot",None,head,[|1uy|],Guid.NewGuid(),CancellationToken.None)
+    Assert.Equal(Error "github-status-404",publication)
+    let! delivery=client.ReadDelivery("refs/heads/pilot",head,CancellationToken.None)
+    Assert.Equal(Error "github-native-delivery-not-observed",delivery) }
+
+[<Fact>]
+let ``GitHub merge refuses incomplete required checks before mutation`` () = task {
+    let head=String.replicate 40 "a"
+    let protection="{\"checks\":[{\"context\":\"compiler-and-tests\"}]}"
+    let checks="{\"check_runs\":[{\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"success\"}]}"
+    let executor=QueuedGitHub[response(pr "open" None head None);response protection;response checks]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok head),githubTarget,FixedClock Fixture.now)
+    let! result=client.Merge("refs/heads/pilot",head,Guid.NewGuid(),CancellationToken.None)
+    Assert.Equal(Error "github-required-checks-not-green",result)
+    Assert.Equal(3,executor.Requests.Length) }

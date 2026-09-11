@@ -222,7 +222,7 @@ let ``http host bounds malformed and slow control requests without stopping stat
     let configuration =
         { ConnectionString = "unused"; Token = token; RunnerToken=String.replicate 32 "r"; Prefix = prefix; StoreId = "fixture"
           BackupIdentity = Guid.NewGuid().ToString(); MinimumGenerationFence = 0L; PermitId = Fixture.permitId
-          PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.permit.SubjectId
+          PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.permit.SubjectId; GitHub=None
           RequestTimeout = TimeSpan.FromMilliseconds 150.; MaximumConcurrentRequests = 2 }
     let store, _ = Fixture.durableStore { Fixture.pilotOwned with ReadbackCurrent = false }
     use shutdown = new CancellationTokenSource()

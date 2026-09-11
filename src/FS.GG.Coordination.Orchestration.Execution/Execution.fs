@@ -229,6 +229,12 @@ type ExecutionSessionCoordinator(provider:IExecutionProvider,journal:IExecutionS
             let! existing=readState intent.Key cancellationToken
             match existing with
             | Some state when state.Intent<>intent -> return SessionRefused "execution-key-conflict"
+            // A durable intent with no launch-attempt event has never crossed the
+            // provider boundary. This is the normal Main-owned persist-before-
+            // visibility path, so the first launch is safe and still records its
+            // attempt before spawning. Once an attempt exists, only reconcile.
+            | Some state when state.LaunchAttempts=0 && state.Observation.IsNone ->
+                return! launchProvider state cancellationToken
             | Some state ->
                 let! reconciled=provider.Reconcile(intent,cancellationToken)
                 match reconciled with
@@ -298,6 +304,8 @@ type ExecutionSessionCommand = Launch of LaunchIntent | Observe of ExecutionKey 
 type ExecutionSessionActor(coordinator:ExecutionSessionCoordinator) =
     inherit UntypedActor()
     override this.OnReceive(message) =
+        let replyTo=this.Sender
+        let self=this.Self
         let operation =
             match message with
             | :? ExecutionSessionCommand as command ->
@@ -306,5 +314,16 @@ type ExecutionSessionActor(coordinator:ExecutionSessionCoordinator) =
                 | Observe key | Reconnect key -> coordinator.Observe(key,CancellationToken.None)
                 | Cancel key -> coordinator.Cancel(key,CancellationToken.None)
             | _ -> Task.FromResult(SessionRefused "execution-command-refused")
-        this.Sender.Tell(operation.GetAwaiter().GetResult(),this.Self)
+        // Never synchronously block the Akka dispatcher while PostgreSQL or a
+        // remote provider awaits. Akka's dispatcher synchronization context is
+        // also where that continuation resumes, so GetResult would deadlock the
+        // real durable composition even though synchronous test journals pass.
+        operation.ContinueWith(fun (completed:Task<CoordinationResult>) ->
+            if completed.IsCompletedSuccessfully then replyTo.Tell(completed.Result,self)
+            else
+                let detail =
+                    if isNull completed.Exception then "cancelled"
+                    else completed.Exception.GetBaseException().Message
+                replyTo.Tell(SessionNeedsReconciliation($"execution-actor-operation-failed:{detail}"),self))
+        |>ignore
     static member Props(coordinator) = Akka.Actor.Props.Create(fun () -> ExecutionSessionActor(coordinator))

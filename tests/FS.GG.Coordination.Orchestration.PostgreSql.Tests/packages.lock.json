@@ -311,6 +311,13 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.coordination.orchestration.execution.codex": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Orchestration.Execution": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.coordination.orchestration.observer": {
         "type": "Project",
         "dependencies": {
@@ -353,6 +360,25 @@
       "fs.gg.coordination.protocol": {
         "type": "Project",
         "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fsgg-coord-orchestration-host": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Pilot": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.PostgreSql": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Runner.Protocol": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fsgg-coord-orchestration-runner": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Orchestration.Execution": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Execution.Codex": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Runner.Protocol": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       }

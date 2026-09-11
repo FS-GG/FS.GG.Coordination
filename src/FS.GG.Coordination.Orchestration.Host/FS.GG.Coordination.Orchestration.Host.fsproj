@@ -13,6 +13,14 @@
     <Compile Include="HostConfiguration.fs" />
     <Compile Include="HostInitialization.fs" />
     <Compile Include="HostedWriterRuntime.fs" />
+    <Compile Include="RemoteExecutorProvider.fs" />
+    <Compile Include="HostExecutorRelay.fs" />
+    <Compile Include="GitHubRouteClient.fs" />
+    <Compile Include="MainEffectDriver.fs" />
+    <Compile Include="MainRouteAdmission.fs" />
+    <Compile Include="MainRouteWorkflow.fs" />
+    <Compile Include="MainProductionCallbacks.fs" />
+    <Compile Include="MainHostComposition.fs" />
     <Compile Include="RunnerWireRuntime.fs" />
     <Compile Include="HostRuntime.fs" />
     <Compile Include="Program.fs" />

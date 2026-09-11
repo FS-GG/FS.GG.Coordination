@@ -59,6 +59,23 @@ CREATE TABLE IF NOT EXISTS fsgg_orchestration.execution_input_object (
     created_at timestamptz NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS fsgg_orchestration.execution_workspace_manifest (
+    manifest_sha256 text PRIMARY KEY CHECK (manifest_sha256 ~ '^[0-9a-f]{64}$'),
+    payload bytea NOT NULL CHECK (octet_length(payload) <= 32768),
+    created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS fsgg_orchestration.execution_route_binding (
+    assignment_id uuid NOT NULL,
+    attempt_id uuid NOT NULL,
+    generation bigint NOT NULL CHECK (generation >= 0),
+    binding_sha256 text NOT NULL CHECK (binding_sha256 ~ '^[0-9a-f]{64}$'),
+    payload bytea NOT NULL CHECK (octet_length(payload) <= 32768),
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (assignment_id,attempt_id),
+    UNIQUE (binding_sha256)
+);
+
 CREATE TABLE IF NOT EXISTS fsgg_orchestration.subscription_reservation (
     reservation_id uuid PRIMARY KEY,
     assignment_id uuid NOT NULL UNIQUE,

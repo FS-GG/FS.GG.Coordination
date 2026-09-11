@@ -195,6 +195,7 @@ type ExecutorRuntime(options:ExecutorRuntimeOptions,clock:TimeProvider) =
                         stream.ReadExactly bytes
                         let content={Schema=ExecutorWire.artifactContentSchema;CommandId=command.CommandId;CandidateId=command.CandidateId;BundleSha256=artifact.Manifest.BundleSha256;Offset=command.ContentOffset;Final=stream.Position=stream.Length;ContentBase64=Convert.ToBase64String bytes}
                         do! writeFrame output (ExecutorWire.encodeArtifactContent content)
+                        do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "content-read" "reconciled" None "candidate-artifact-chunk-observed"))
         else
             let supervised =
                 match sessions.TryGetValue itemKey with

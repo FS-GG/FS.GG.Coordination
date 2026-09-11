@@ -3,8 +3,12 @@ namespace FS.GG.Coordination.Orchestration.PostgreSql.Tests
 open System
 open System.Diagnostics
 open System.IO
+open System.Net
+open System.Net.Http
+open System.Net.Sockets
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 open Akka.Actor
@@ -15,6 +19,11 @@ open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.PostgreSql
 open FS.GG.Coordination.Orchestration.Runner.Protocol
+open FS.GG.Coordination.Orchestration.Execution
+open FS.GG.Coordination.Orchestration.Pilot
+open FS.GG.Coordination.Orchestration.Host
+open FS.GG.Coordination.GitHub
+open System.Buffers.Binary
 
 module private Fixture =
     let private environment name fallback =
@@ -119,7 +128,7 @@ module private Fixture =
             match effect with
             | NoEffect -> PausedEvent payload
             | IntentAdded intent -> EffectIntentRecorded intent
-            | Settled operationId -> EffectSettled(operationId, Applied payload)
+            | Settled operationId -> EffectSettled(operationId, EffectOutcome.Applied payload)
         let envelope = EventEnvelope.encode coreEvent
         { PersistenceId = persistenceId
           Sequence = sequence
@@ -199,11 +208,11 @@ type PostgreSqlStoreTests() =
               ObservedAt=DateTimeOffset.UtcNow; Merged=true }
         let intentEvent = Fixture.event persistenceId 1L (IntentAdded intent) "intent"
         let readbackEvent = Fixture.coreEvent persistenceId 2L (NativeDeliveryReadbackAccepted readback)
-        let settledBase = Fixture.coreEvent persistenceId 3L (EffectSettled(operationId,Applied readback.ProviderRevision))
+        let settledBase = Fixture.coreEvent persistenceId 3L (EffectSettled(operationId,EffectOutcome.Applied readback.ProviderRevision))
         let settledEvent = { settledBase with EffectChange=Settled operationId }
         let body = Fixture.sha(Encoding.UTF8.GetBytes "hosted-delivery-command")
         let! appended = store.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [intentEvent;readbackEvent;settledEvent], cancellationToken)
-        Assert.Equal<AppendOutcome>(Appended 3L, appended)
+        Assert.Equal<AppendOutcome>(AppendOutcome.Appended 3L, appended)
         let! recovered = store.Recover(persistenceId, cancellationToken)
         match recovered with
         | Error failures -> failwithf "hosted delivery did not recover: %A" failures
@@ -211,7 +220,7 @@ type PostgreSqlStoreTests() =
             let state = result.Events |> List.map(fun value -> EventEnvelope.tryDecode value.Payload |> Result.defaultWith failwith) |> replay
             Assert.Equal(readback, state.NativeDeliveryReadbacks[operationId])
             match state.Operations[operationId] with
-            | OperationState.Settled(stored,Applied revision) -> Assert.Equal(ReadNativeDelivery,stored.Kind); Assert.Equal(readback.ProviderRevision,revision)
+            | OperationState.Settled(stored,EffectOutcome.Applied revision) -> Assert.Equal(ReadNativeDelivery,stored.Kind); Assert.Equal(readback.ProviderRevision,revision)
             | other -> failwithf "unexpected recovered operation: %A" other
     }
 
@@ -230,7 +239,7 @@ type PostgreSqlStoreTests() =
         let readbackEvent = Fixture.coreEvent persistenceId 2L (HostedRouteReadbackAccepted readback)
         let body = Fixture.sha(Encoding.UTF8.GetBytes "startup-readback")
         let! appended = store.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [pauseEvent;readbackEvent], cancellationToken)
-        Assert.Equal<AppendOutcome>(Appended 2L,appended)
+        Assert.Equal<AppendOutcome>(AppendOutcome.Appended 2L,appended)
         let! recovered = store.Recover(persistenceId,cancellationToken)
         match recovered with
         | Error failures -> failwithf "startup readback did not recover: %A" failures
@@ -262,9 +271,9 @@ type PostgreSqlStoreTests() =
         let body = Fixture.sha(Encoding.UTF8.GetBytes "command")
         let first = Fixture.event persistenceId 1L NoEffect "accepted"
         let! appended = store.Append(Fixture.append persistenceId 0L commandId body [ first ], cancellationToken)
-        Assert.Equal<AppendOutcome>(Appended 1L, appended)
+        Assert.Equal<AppendOutcome>(AppendOutcome.Appended 1L, appended)
         let! duplicate = store.Append(Fixture.append persistenceId 99L commandId body [], cancellationToken)
-        Assert.Equal<AppendOutcome>(Duplicate 1L, duplicate)
+        Assert.Equal<AppendOutcome>(AppendOutcome.Duplicate 1L, duplicate)
         let changed = Fixture.sha(Encoding.UTF8.GetBytes "changed")
         let! conflict = store.Append(Fixture.append persistenceId 1L commandId changed [ Fixture.event persistenceId 2L NoEffect "changed" ], cancellationToken)
         Assert.Equal<AppendOutcome>(Conflict, conflict)
@@ -285,7 +294,7 @@ type PostgreSqlStoreTests() =
         let request = Fixture.append persistenceId 0L commandId body [ Fixture.event persistenceId 1L NoEffect "committed-before-client-lost-response" ]
         let! _lostResponse = store.Append(request, cancellationToken)
         let! observed = store.Append(Fixture.append persistenceId 99L commandId body [], cancellationToken)
-        Assert.Equal<AppendOutcome>(Duplicate 1L, observed)
+        Assert.Equal<AppendOutcome>(AppendOutcome.Duplicate 1L, observed)
     }
 
     [<Fact>]
@@ -298,7 +307,7 @@ type PostgreSqlStoreTests() =
             let body = Fixture.sha(Encoding.UTF8.GetBytes suffix)
             Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [ Fixture.event persistenceId 1L NoEffect suffix ]
         let! outcomes = Task.WhenAll [| store.Append(request "left", cancellationToken); store.Append(request "right", cancellationToken) |]
-        Assert.Equal(1, outcomes |> Array.filter (function Appended 1L -> true | _ -> false) |> Array.length)
+        Assert.Equal(1, outcomes |> Array.filter (function AppendOutcome.Appended 1L -> true | _ -> false) |> Array.length)
         let! recovered = store.Recover(persistenceId, cancellationToken)
         match recovered with
         | Ok result -> Assert.Single result.Events |> ignore
@@ -392,7 +401,7 @@ type PostgreSqlStoreTests() =
                 SchemaVersion = 2; Payload = v2Payload; PayloadSha256 = Fixture.sha v2Payload }
         let body = Fixture.sha(Encoding.UTF8.GetBytes "upgrade")
         let! outcome = store.Append(Fixture.append persistenceId 0L (Id.command(Guid.NewGuid())) body [ first; second ], cancellationToken)
-        Assert.Equal<AppendOutcome>(Appended 2L, outcome)
+        Assert.Equal<AppendOutcome>(AppendOutcome.Appended 2L, outcome)
         let! recovered = store.Recover(persistenceId, cancellationToken)
         match recovered with
         | Ok result ->
@@ -428,13 +437,13 @@ type PostgreSqlStoreTests() =
                   PrincipalId = "test:operator"; SessionId = None; IssuedAt = now; ExpiresAt = now.AddMinutes 5.0
                   Command = command }
             let decision = WorkItem.decide now state envelope
-            Assert.Equal<ReceiptDisposition>(Accepted, decision.Receipt.Disposition)
+            Assert.Equal<ReceiptDisposition>(ReceiptDisposition.Accepted, decision.Receipt.Disposition)
             let firstSequence = terminalSequence + 1L
             let serialized = decision.Events |> List.mapi (fun index value -> Fixture.coreEvent persistenceId (firstSequence + int64 index) value)
             let request = Fixture.append persistenceId terminalSequence envelope.CommandId decision.Receipt.BodySha256 serialized
             let! outcome = journal.Append(request, cancellationToken)
             state <- decision.Events |> List.fold FS.GG.Coordination.Core.Orchestration.evolve state
-            match outcome with Appended sequence -> terminalSequence <- sequence | _ -> failwithf "append failed: %A" outcome
+            match outcome with AppendOutcome.Appended sequence -> terminalSequence <- sequence | _ -> failwithf "append failed: %A" outcome
         }
         do! appendCommand (Admit(planning, budget))
         let reservationId = Id.reservation(Guid.NewGuid())
@@ -449,9 +458,9 @@ type PostgreSqlStoreTests() =
         let! stored = candidateStore.Put(candidate, cancellationToken)
         let receipt = match stored with Ok value -> value | Error error -> failwithf "candidate put failed: %A" error
         do! appendCommand (RecordCandidate(candidate.Candidate, receipt))
-        do! appendCommand (ObserveAttempt(attemptId, OutcomeUnknown "provider-response-lost"))
-        do! appendCommand (Pause "operator")
-        do! appendCommand (RequestCancel "cancel")
+        do! appendCommand (Command.ObserveAttempt(attemptId, AttemptStatus.OutcomeUnknown "provider-response-lost"))
+        do! appendCommand (Command.Pause "operator")
+        do! appendCommand (Command.RequestCancel "cancel")
         let! recovered = journal.Recover(persistenceId, cancellationToken)
         match recovered with
         | Error failures -> failwithf "lifecycle recovery failed: %A" failures
@@ -681,6 +690,20 @@ type PostgreSqlStoreTests() =
         let inputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=inputDigest;MediaType="text/markdown; charset=utf-8";SizeBytes=input.LongLength;ChunkBytes=1024}
         let! staged=transport.StageInput(ExecutorWire.encodeInputManifest inputManifest,input,cancellationToken)
         Assert.True(Result.isOk staged)
+        let workspaceManifest={Schema=ExecutorWire.workspaceManifestSchema;Workspace="pilot";RepositoryBinding="FS-GG/.github";BaselineObjectId=String.replicate 40 "a";AllowedPaths=[|"docs/**"|];Validations=[|"git-diff-check"|];InputDigest=inputDigest}
+        let workspaceBytes=ExecutorWire.encodeWorkspaceManifest workspaceManifest
+        let! workspaceDigest=transport.StageWorkspaceManifest(workspaceBytes,cancellationToken)
+        Assert.Equal(Fixture.sha workspaceBytes,workspaceDigest|>Result.defaultWith failwith)
+        let routeUnsigned={Schema=ExecutorWire.routeBindingSchema;BindingSha256="";WorkItemPersistenceId="work-item-v2-test";RouteId=Guid.NewGuid();RouteOperationId=assignmentId;ProcessOperationId=assignmentId;AssignmentId=assignmentId;AttemptId=attemptId;CandidateId=Guid.NewGuid();Generation=7L;RepositoryBinding=workspaceManifest.RepositoryBinding;BaselineObjectId=workspaceManifest.BaselineObjectId;PromptDigest=inputDigest;WorkspaceManifestSha256=workspaceDigest|>Result.defaultWith failwith;ExecutorBinding="runner-1"}
+        let routeBinding={routeUnsigned with BindingSha256=ExecutorWire.routeBindingDigest routeUnsigned}
+        let routeBytes=ExecutorWire.encodeRouteBinding routeBinding
+        let! routeBound=transport.BindRoute(routeBytes,cancellationToken)
+        let! routeDuplicate=transport.BindRoute(routeBytes,cancellationToken)
+        Assert.Equal(Ok routeBinding.BindingSha256,routeBound)
+        Assert.Equal(routeBound,routeDuplicate)
+        let changedRoute={routeUnsigned with CandidateId=Guid.NewGuid()}|>fun value->{value with BindingSha256=ExecutorWire.routeBindingDigest value}
+        let! routeConflict=transport.BindRoute(ExecutorWire.encodeRouteBinding changedRoute,cancellationToken)
+        Assert.Equal(Error "execution-route-binding-conflict",routeConflict)
         // A future absolute deadline cannot renew the original maximum-runtime window.
         let shortAssignment=Guid.NewGuid()
         let shortAttempt=Guid.NewGuid()
@@ -724,6 +747,14 @@ type PostgreSqlStoreTests() =
         Assert.Equal(CommandDuplicate 2L,lostResponseRetry)
         let! pending=transport.ReadPending(4,cancellationToken)
         Assert.Single pending |> ignore
+
+        let v2Unsigned={Schema=ExecutorWire.commandSchemaV2;CommandId=Guid.NewGuid();BodySha256="";Kind="reconcile";WorkItemPersistenceId="work-item-v2-test";RouteOperationId=assignmentId;AssignmentId=assignmentId;AttemptId=attemptId;CandidateId=Guid.NewGuid();Generation=7L;ExpectedRevision=2L;RecordedAt=intent.RecordedAt;Deadline=intent.Limits.Deadline;MaximumRuntimeSeconds=1800L;MaximumAttempts=1;Workspace=intent.Workspace;WorkspaceManifestSha256=workspaceDigest|>Result.defaultWith failwith;RequestedModel=null;RequestedEffort=null;InputDigest=inputDigest;ExecutorBinding="runner-1";ProviderSessionReference=null;ArtifactDigest=null;ContentOffset=0L;ContentLength=0}
+        let v2={v2Unsigned with BodySha256=ExecutorWire.commandV2Digest v2Unsigned}
+        let! v2Persisted=transport.PersistCommand(ExecutorWire.encodeCommandV2 v2,cancellationToken)
+        Assert.Equal(CommandPersisted 2L,v2Persisted)
+        let v2Outcome={Schema=ExecutorWire.operationOutcomeSchema;CommandId=v2.CommandId;BodySha256=v2.BodySha256;Operation="reconcile";Disposition="unknown";ProviderSessionReference=null;ObservedAt=now;Reason="no-process-observation"}
+        let! v2Settled=transport.SettleCommand(v2.CommandId,ExecutorWire.encodeOperationOutcome v2Outcome,cancellationToken)
+        Assert.True(Result.isOk v2Settled)
 
         let settlement=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.settle (now.AddMinutes 40.) 2400L None "provider-usage-unavailable" reservation |> Result.defaultWith failwith
         Assert.False(settlement.RuntimeWithinBound)
@@ -781,6 +812,10 @@ type PostgreSqlStoreTests() =
         let! _=Fixture.sql "orchestration_o0_restore" $"UPDATE fsgg_orchestration.subscription_reservation SET deadline='{reservation.Deadline:O}' WHERE reservation_id='{reservation.ReservationId}'"
         let! restoredInput=restoredTransport.ReadInput(inputDigest,cancellationToken)
         Assert.Equal<byte array>(input,restoredInput |> Result.defaultWith failwith)
+        let! restoredWorkspace=restoredTransport.ReadWorkspaceManifest(workspaceDigest|>Result.defaultWith failwith,cancellationToken)
+        Assert.Equal<byte array>(workspaceBytes,restoredWorkspace|>Result.defaultWith failwith)
+        let! restoredRoute=restoredTransport.ReadRoute(assignmentId,attemptId,cancellationToken)
+        Assert.Equal<byte array>(routeBytes,restoredRoute|>Result.defaultWith failwith)
         let! restoredAccounting=restoredTransport.ReadSubscription(reservation.ReservationId,cancellationToken)
         let restoredReservationBytes,restoredSettlementBytes=restoredAccounting |> Result.defaultWith failwith
         Assert.Equal<byte array>(reservationBytes,restoredReservationBytes)
@@ -850,3 +885,276 @@ type PostgreSqlStoreTests() =
         let duplicateEvent=Encoding.UTF8.GetBytes($"{{\"schema\":\"{FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.schema}\"," + eventText.Substring(1))
         Assert.True(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.decode duplicateEvent |> Result.isError)
         Assert.True(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.decode(Array.zeroCreate(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.maximumBytes+1)) |> Result.isError)
+
+    [<Fact>]
+    member _.``production Main composes PostgreSQL packaged executor and seven native effects``() = task {
+        let! dataSource,identity=Fixture.reset()
+        use dataSource=dataSource
+        let options={Fixture.options dataSource identity 0L with RuntimeSchemaVersion=2}
+        do! PostgreSqlExecutionSchema.migrate dataSource cancellationToken
+        let workItems=PostgreSqlStore(options) :> IJournalStore
+        let candidates=PostgreSqlStore(options) :> ICandidateStore
+        let executions=PostgreSqlExecutionStore(options)
+        let workItem=WorkItemIdentity.create "R_main" 4242L "I_main" 3421L
+        let now=DateTimeOffset.UtcNow
+        let operations=[|for _ in 1..7->Guid.NewGuid()|]
+        let assignment=operations[1]
+        let attempt=Guid.NewGuid()
+        let candidateId=Guid.NewGuid()
+        let generation=1L
+        let workflowRevision=8L
+        let root=Directory.CreateTempSubdirectory("main-composed-").FullName
+        let repository=Path.Combine(root,"source")
+        Directory.CreateDirectory repository|>ignore
+        let git cwd (arguments:string list)=
+            let start=ProcessStartInfo("git",WorkingDirectory=cwd,UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true)
+            arguments|>List.iter start.ArgumentList.Add
+            use child=Process.Start start
+            let output=child.StandardOutput.ReadToEnd()
+            let error=child.StandardError.ReadToEnd()
+            child.WaitForExit()
+            if child.ExitCode<>0 then failwith error else output.Trim()
+        git repository ["init";"--initial-branch=main"]|>ignore
+        git repository ["config";"user.name";"Fixture"]|>ignore
+        git repository ["config";"user.email";"fixture@example.invalid"]|>ignore
+        Directory.CreateDirectory(Path.Combine(repository,"docs"))|>ignore
+        File.WriteAllText(Path.Combine(repository,"docs/item.md"),"base\n")
+        git repository ["add";"."]|>ignore
+        git repository ["commit";"-m";"base"]|>ignore
+        let baseline=git repository ["rev-parse";"HEAD"]
+        let prompt=Encoding.UTF8.GetBytes "Update docs/item.md with the bounded candidate."
+        let inputDigest=Fixture.sha prompt
+        let workspace={Schema=ExecutorWire.workspaceManifestSchema;Workspace="pilot";RepositoryBinding="selected-repository";BaselineObjectId=baseline;AllowedPaths=[|"docs/**"|];Validations=[|"git-diff-check"|];InputDigest=inputDigest}
+        let workspaceDigest=ExecutorWire.encodeWorkspaceManifest workspace|>RunnerWire.sha256
+        let launch={Schema=ExecutionProtocol.launchSchema;Key={AssignmentId=assignment;AttemptId=attempt;Generation=generation};InputDigest=inputDigest;Workspace="pilot";Requested={Model=None;Effort=None};Limits={Deadline=now.AddMinutes 5.;MaximumRuntime=TimeSpan.FromMinutes 5.;MaximumAttempts=1};RecordedAt=now}
+        let routeId=Guid.NewGuid()
+        let binding0={Schema=ExecutorWire.routeBindingSchema;BindingSha256="";WorkItemPersistenceId=WorkItemIdentity.persistenceId workItem;RouteId=routeId;RouteOperationId=assignment;ProcessOperationId=assignment;AssignmentId=assignment;AttemptId=attempt;CandidateId=candidateId;Generation=generation;RepositoryBinding="selected-repository";BaselineObjectId=baseline;PromptDigest=inputDigest;WorkspaceManifestSha256=workspaceDigest;ExecutorBinding="fixture-executor"}
+        let binding={binding0 with BindingSha256=ExecutorWire.routeBindingDigest binding0}
+        let inputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=inputDigest;MediaType="text/markdown; charset=utf-8";SizeBytes=prompt.LongLength;ChunkBytes=prompt.Length}
+        let budget={Schema=SubscriptionPilot.budgetSchema;AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.;Usage=TokensUnknown "provider-has-not-reported-usage";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="subscription-cost-not-attributable-to-invocation"}}
+        let executionReservation=SubscriptionPilot.reserve now (Guid.NewGuid()) assignment attempt generation 1L budget|>Result.defaultWith failwith
+        let route={RouteId=routeId;WorkItemId=workItem;JobClass="routine-documentation-delivery";AttemptId=Id.attempt attempt;CandidateId=Id.candidate candidateId;RepositoryNodeId="R_main";BranchRef="refs/heads/fsgg/pilot/o2";ClaimResourceId="claim-pilot";ClaimOperationId=Id.operation operations[0];ProcessOperationId=Id.operation operations[1];CandidateOperationId=Id.operation operations[2];BranchOperationId=Id.operation operations[3];PullRequestOperationId=Id.operation operations[4];MergeOperationId=Id.operation operations[5];ReadbackOperationId=Id.operation operations[6];Generation=Id.generation generation;WorkflowRevision=Id.revision workflowRevision;SelectedAt=now}
+        let preparation={Snapshot={ProjectId=Id.project(Guid.NewGuid());WorkItemId=workItem;WorkflowRevision=route.WorkflowRevision;CanonicalSha256=String.replicate 64 "c";BoardMembershipIds=[];CapturedAt=now};Budget=budget;Reservation={ReservationId=Id.reservation(Guid.NewGuid());Generation=route.Generation;ExpiresAt=now.AddMinutes 20.;RequiredClaimIds=set[route.ClaimResourceId]};Route=route;Readback={RouteId=routeId;WorkItemId=workItem;RepositoryNodeId=route.RepositoryNodeId;ProviderRevision="fresh-route";EvidenceSha256=String.replicate 64 "d";Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=now};Runner={RunnerId=Id.runner(Guid.NewGuid());PrincipalId="pilot";FingerprintSha256=String.replicate 64 "e";Generation=route.Generation;ExpiresAt=now.AddMinutes 20.};SessionId=Id.session(Guid.NewGuid());LaunchIntent=launch;Binding=binding;InputManifest=inputManifest;InputBytes=prompt;WorkspaceManifest=workspace;ExecutionReservation=executionReservation}
+
+        let bare=Path.Combine(root,"remote.git")
+        git root ["init";"--bare";bare]|>ignore
+        git repository ["push";bare;$"{baseline}:refs/heads/main"]|>ignore
+        let mutable claimBody:string option=None
+        let mutable pullCreated=false
+        let mutable merged=false
+        let mutable pullHead=""
+        let mutable mutationCount=0
+        let jsonResponse status body=Response{StatusCode=status;Headers=Map.empty;Body=body;ETag=Some(Guid.NewGuid().ToString("N"));RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}}
+        let githubTransport=
+            {new IGitHubRequestExecutor with
+                member _.Send(request,_)=
+                    let methodValue,path,body=match request with Rest value->value.Method,value.Uri.PathAndQuery,value.Body|_->RestMethod.Post,"",None
+                    let outcome=
+                        if path.Contains("issues/3421/comments")&&methodValue=RestMethod.Get then
+                            let comments=match claimBody with None -> "[]" | Some value -> $"[{{\"id\":11,\"updated_at\":\"{DateTimeOffset.UtcNow:O}\",\"body\":{JsonSerializer.Serialize value}}}]"
+                            jsonResponse 200 comments
+                        elif path.Contains("issues/3421/comments")&&methodValue=RestMethod.Post then
+                            mutationCount<-mutationCount+1
+                            use doc=JsonDocument.Parse(body.Value)
+                            claimBody<-Some(doc.RootElement.GetProperty("body").GetString())
+                            jsonResponse 201 "{\"id\":11}"
+                        elif path.Contains("git/ref/heads/") then
+                            let head=git bare ["rev-parse";"refs/heads/fsgg/pilot/o2"]
+                            jsonResponse 200 $"{{\"object\":{{\"sha\":\"{head}\"}}}}"
+                        elif path.Contains("pulls?") then
+                            if not pullCreated then jsonResponse 200 "[]" else
+                            let mergeValue=String.replicate 40 "f"
+                            let state,mergedAt,mergeSha=if merged then "closed",$"\"{DateTimeOffset.UtcNow:O}\"",$"\"{mergeValue}\"" else "open","null","null"
+                            jsonResponse 200 $"[{{\"number\":42,\"node_id\":\"PR_fixture\",\"state\":\"{state}\",\"merged_at\":{mergedAt},\"merge_commit_sha\":{mergeSha},\"head\":{{\"sha\":\"{pullHead}\",\"ref\":\"fsgg/pilot/o2\"}},\"base\":{{\"ref\":\"main\",\"repo\":{{\"full_name\":\"FS-GG/.github\"}}}}}}]"
+                        elif path.EndsWith("/pulls")&&methodValue=RestMethod.Post then
+                            mutationCount<-mutationCount+1
+                            use doc=JsonDocument.Parse(body.Value)
+                            let marker=doc.RootElement.GetProperty("body").GetString()
+                            if not(marker.Contains("fsgg:routine-development/v1")) then jsonResponse 422 "{}"
+                            else
+                                pullCreated<-true
+                                pullHead<-git bare ["rev-parse";"refs/heads/fsgg/pilot/o2"]
+                                jsonResponse 201 "{}"
+                        elif path.Contains("protection/required_status_checks") then jsonResponse 200 "{\"checks\":[{\"context\":\"compiler-and-tests\"}]}"
+                        elif path.Contains("check-runs") then jsonResponse 200 "{\"check_runs\":[{\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"success\"},{\"name\":\"reuse-decision\",\"status\":\"completed\",\"conclusion\":\"success\"},{\"name\":\"aggregate\",\"status\":\"completed\",\"conclusion\":\"success\"},{\"name\":\"compiler-and-tests\",\"status\":\"completed\",\"conclusion\":\"success\"}]}"
+                        elif path.Contains("pulls/42/merge")&&methodValue=RestMethod.Put then
+                            mutationCount<-mutationCount+1
+                            merged<-true
+                            let mergeValue=String.replicate 40 "f"
+                            jsonResponse 200 $"{{\"merged\":true,\"sha\":\"{mergeValue}\"}}"
+                        else jsonResponse 404 "{}"
+                    Task.FromResult outcome}
+        let github=GitHubRouteClient(githubTransport,GitBundlePublisher(Uri(bare),String.replicate 40 "t",1024*1024),{ApiRoot=Uri "https://api.github.test/";Repository="FS-GG/.github";IssueNumber=3421;Principal="pilot";BaseRef="main";RequiredChecks=set["routine-eligibility";"reuse-decision";"aggregate"];ClaimLease=TimeSpan.FromMinutes 30.},TimeProvider.System)
+        let codex=Path.Combine(root,"codex-fixture")
+        let scriptTemplate="""#!/bin/sh
+if [ "$1" = --version ]; then echo 'codex-cli 0.154.0'; exit 0; fi
+if [ "$1" = login ]; then echo 'Logged in using ChatGPT'; exit 0; fi
+workspace=''; final=''
+while [ $# -gt 0 ]; do if [ "$1" = -C ]; then workspace="$2"; shift 2; elif [ "$1" = --output-last-message ]; then final="$2"; shift 2; else shift; fi; done
+printf '%s\n' '{"type":"thread.started","thread_id":"thread-main-fixture"}'
+cat >/dev/null
+cd "$workspace"; printf 'candidate\n' > docs/item.md; git add docs/item.md; git -c user.name=Fixture -c user.email=fixture@example.invalid commit -m candidate >/dev/null
+head=$(git rev-parse HEAD); tree=$(git rev-parse 'HEAD^{tree}')
+printf '{"inputDigest":"__INPUT_DIGEST__","candidateId":"__CANDIDATE_ID__","headSha":"%s","treeSha":"%s"}\n' "$head" "$tree" > "$final"
+printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}'
+"""
+        let script=scriptTemplate.Replace("__INPUT_DIGEST__",inputDigest).Replace("__CANDIDATE_ID__",candidateId.ToString())
+        File.WriteAllText(codex,script)
+        File.SetUnixFileMode(codex,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
+        let repositoryRoot=let rec find (d:DirectoryInfo)=if File.Exists(Path.Combine(d.FullName,"FS.GG.Coordination.sln")) then d.FullName else find d.Parent in find(DirectoryInfo(AppContext.BaseDirectory))
+        let runner=Path.Combine(repositoryRoot,"src/FS.GG.Coordination.Orchestration.Runner.Client/bin/Release/net10.0/linux-x64/fsgg-coord-orchestration-runner")
+        Assert.True(File.Exists runner,$"packaged runner missing: {runner}")
+        let roots names=names|>List.map(fun name->Directory.CreateDirectory(Path.Combine(root,name)).FullName)
+        let workspaceRoot,inputRoot,stateRoot,artifactRoot=match roots["workspaces";"inputs";"state";"artifacts"] with [a;b;c;d]->a,b,c,d|_->failwith "roots"
+        let start=ProcessStartInfo(runner,UseShellExecute=false,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true)
+        for argument in ["executor-stdio";"--repository-root";repository;"--workspace-root";workspaceRoot;"--input-root";inputRoot;"--state-root";stateRoot;"--artifact-root";artifactRoot;"--codex-executable";codex;"--executor-binding";"fixture-executor"] do start.ArgumentList.Add argument
+        use runnerProcess=Process.Start start
+        let runnerError=runnerProcess.StandardError.ReadToEndAsync()
+        let relay=HostExecutorRelay(4,2*1024*1024)
+        use relayStop=new CancellationTokenSource()
+        let mutable relayStage="starting"
+        let readFrame()=task {
+            let header=Array.zeroCreate<byte> 4
+            do! runnerProcess.StandardOutput.BaseStream.ReadExactlyAsync header
+            let length=BinaryPrimitives.ReadInt32BigEndian header
+            let bytes=Array.zeroCreate<byte> length
+            do! runnerProcess.StandardOutput.BaseStream.ReadExactlyAsync bytes
+            return bytes }
+        let relayLoop=task {
+            while not relayStop.IsCancellationRequested do
+                let! pending=relay.Poll(relayStop.Token)
+                match pending with
+                | None->()
+                | Some request->
+                    relayStage<-"writing-request"
+                    for frame in request.Frames do
+                        let header=Array.zeroCreate<byte> 4
+                        BinaryPrimitives.WriteInt32BigEndian(header,frame.Length)
+                        do! runnerProcess.StandardInput.BaseStream.WriteAsync header
+                        do! runnerProcess.StandardInput.BaseStream.WriteAsync frame
+                    do! runnerProcess.StandardInput.BaseStream.FlushAsync()
+                    relayStage<-"reading-response"
+                    let frames=ResizeArray<byte array>()
+                    let mutable terminal=false
+                    while not terminal do
+                        let! frame=readFrame()
+                        frames.Add frame
+                        relayStage <- $"reading-response-{frames.Count}"
+                        terminal<-(ExecutorWire.parseResponse frame|>Result.isOk)||(ExecutorWire.parseOperationOutcome frame|>Result.isOk)
+                    relay.Complete(request.CommandId,List.ofSeq frames)|>Result.defaultWith failwith
+                    relayStage<-"completed" }
+        use firstShutdown=new CancellationTokenSource()
+        let crashAfterSettlement =
+            { new IJournalStore with
+                member _.CheckReadiness token=workItems.CheckReadiness token
+                member _.Recover(id,token)=workItems.Recover(id,token)
+                member _.SaveSnapshot(value,token)=workItems.SaveSnapshot(value,token)
+                member _.SaveProjectionCheckpoint(value,token)=workItems.SaveProjectionCheckpoint(value,token)
+                member _.Append(request,token)=task {
+                    let! outcome=workItems.Append(request,token)
+                    if request.Events|>List.exists(fun event->event.EffectChange=Settled route.ClaimOperationId) then firstShutdown.Cancel()
+                    return outcome } }
+        let hostStore journal : HostStore =
+            { CheckReadiness=(fun _->Task.FromResult<Result<unit,ReadinessFailure list>>(Ok()))
+              WorkItems=journal
+              Candidates=candidates
+              Recover=(fun _ _->Task.FromResult<Result<PilotRecovery,PilotRecoveryFailure list>>(Error []))
+              Append=(fun _ _->failwith "pilot-store-not-used-by-main-admission") }
+        use portProbe=new TcpListener(IPAddress.Loopback,0)
+        portProbe.Start()
+        let port=(portProbe.LocalEndpoint :?> IPEndPoint).Port
+        portProbe.Stop()
+        let operatorToken=String.replicate 32 "o"
+        let hostConfiguration =
+            { ConnectionString="unused";Token=operatorToken;RunnerToken=String.replicate 32 "r";Prefix=$"http://127.0.0.1:{port}/"
+              StoreId="fixture";BackupIdentity=Guid.NewGuid().ToString();MinimumGenerationFence=0L;PermitId=Guid.NewGuid()
+              PilotPrincipalId="pilot";WorkItemId=workItem;GitHub=None;RequestTimeout=TimeSpan.FromSeconds 10.;MaximumConcurrentRequests=4 }
+        use firstActorSystem=ActorSystem.Create("main-composed-before-crash")
+        let firstAdmission=MainProductionAdmission(firstActorSystem,TimeProvider.System,crashAfterSettlement,candidates,executions,workItem,"pilot",github,relay,firstShutdown.Token)
+        let firstServer=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore crashAfterSettlement) relay (firstAdmission :> IMainRouteAdmissionHandler) firstShutdown.Token
+        do! Task.Delay 50
+        use client=new HttpClient()
+        let admissionBytes=MainRouteAdmission.encode (Guid.NewGuid()) preparation
+        use deniedContent=new ByteArrayContent(admissionBytes)
+        deniedContent.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+        let! denied=client.PostAsync(Uri(hostConfiguration.Prefix+"v1/main/admit"),deniedContent)
+        Assert.Equal(HttpStatusCode.Unauthorized,denied.StatusCode)
+        let admit ()=task {
+            use request=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/main/admit"))
+            request.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+            request.Content<-new ByteArrayContent(admissionBytes)
+            request.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+            return! client.SendAsync request }
+        let! admitted=admit()
+        let! admissionDetail=admitted.Content.ReadAsStringAsync()
+        Assert.True(admitted.StatusCode=HttpStatusCode.OK,$"admission refused: {admitted.StatusCode} {admissionDetail}")
+        Assert.Contains("main-route-admission-receipt/1",admissionDetail)
+        let mutable settlementVisible=false
+        let mutable settlementChecks=0
+        while not settlementVisible&&settlementChecks<50 do
+            do! Task.Delay 100
+            let! recovered=HostedWriterJournal.recover workItems workItem CancellationToken.None
+            settlementVisible <-
+                recovered|>Result.exists(fun value->
+                    match Map.tryFind route.ClaimOperationId value.State.Operations,Map.tryFind route.ProcessOperationId value.State.Operations with
+                    | Some(OperationState.Settled _),None->true
+                    | _->false)
+            settlementChecks<-settlementChecks+1
+        Assert.True(settlementVisible,"claim settlement was not durably isolated before continuation")
+        try do! firstServer.WaitAsync(TimeSpan.FromSeconds 2.) with _->()
+        do! firstActorSystem.Terminate()
+
+        // Replace the whole Host actor graph and retry the exact admission bytes.
+        // Durable settled evidence, rather than an in-memory callback receipt,
+        // must create the next intent without replaying the external claim.
+        use actorSystem=ActorSystem.Create("main-composed-after-crash")
+        use shutdown=new CancellationTokenSource()
+        let admission=MainProductionAdmission(actorSystem,TimeProvider.System,workItems,candidates,executions,workItem,"pilot",github,relay,shutdown.Token)
+        let server=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore workItems) relay (admission :> IMainRouteAdmissionHandler) shutdown.Token
+        do! Task.Delay 50
+        let! readmitted=admit()
+        let! readmissionDetail=readmitted.Content.ReadAsStringAsync()
+        Assert.True(readmitted.StatusCode=HttpStatusCode.OK,$"restart admission refused: {readmitted.StatusCode} {readmissionDetail}")
+        use conflictingRequest=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/main/admit"))
+        conflictingRequest.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+        conflictingRequest.Content<-new ByteArrayContent(MainRouteAdmission.encode (Guid.NewGuid()) preparation)
+        conflictingRequest.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+        let! conflicting=client.SendAsync conflictingRequest
+        Assert.Equal(HttpStatusCode.Conflict,conflicting.StatusCode)
+        let running=admission.Running|>Option.defaultWith(fun()->failwith "production graph was not restarted by admission")
+        let mutable complete=false
+        let mutable checks=0
+        let mutable routeState="not-read"
+        while not complete&&checks<200 do
+            do! Task.Delay 100
+            let! recovered=HostedWriterJournal.recover workItems workItem CancellationToken.None
+            routeState<-
+                recovered
+                |>Result.map(fun value->
+                    value.State.Operations
+                    |>Map.values
+                    |>Seq.map(function
+                        | OperationState.IntentRecorded intent -> $"{intent.Kind}:intent"
+                        | OperationState.Dispatching intent -> $"{intent.Kind}:dispatching"
+                        | OperationState.NeedsObservation(intent,reason) -> $"{intent.Kind}:unknown:{reason}"
+                        | OperationState.Settled(intent,outcome) -> $"{intent.Kind}:settled:{outcome}")
+                    |>String.concat ";")
+                |>sprintf "%A"
+            complete<-recovered|>Result.exists(fun value->value.State.Attempts|>Map.tryFind route.AttemptId|>Option.exists(fun item->item.Status=AttemptStatus.Completed))
+            checks<-checks+1
+        let! executionState=(executions :> IExecutionSessionJournal).ReadAttempt(assignment,attempt,CancellationToken.None)
+        let! dbPending=(executions :> IExecutorCommandStore).ReadPending(4,CancellationToken.None)
+        let! recovery=running.Workflow.RecoverContinuation(preparation,CancellationToken.None)
+        let recoveryText=sprintf "%A" recovery
+        let stderr=if runnerError.IsCompletedSuccessfully then runnerError.Result else "runner-stderr-pending"
+        Assert.True(complete,$"seven-effect route did not reach native delivery; relay={relayLoop.Status}/{relayStage}; pending={relay.PendingCount}; dbPending={dbPending.Length}; recovery={recoveryText}; runnerExited={runnerProcess.HasExited}; stderr={stderr}; execution={executionState}; state={routeState}")
+        Assert.Equal(3,mutationCount)
+        let! stored=candidates.Read(route.CandidateId,CancellationToken.None)
+        Assert.True(Result.isOk stored)
+        shutdown.Cancel()
+        relayStop.Cancel()
+        try runnerProcess.Kill(true) with _->()
+        try do! relayLoop.WaitAsync(TimeSpan.FromSeconds 2.) with _->()
+        try do! server.WaitAsync(TimeSpan.FromSeconds 2.) with _->()
+        do! actorSystem.Terminate()
+    }
