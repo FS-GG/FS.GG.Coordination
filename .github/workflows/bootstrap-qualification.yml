@@ -61,6 +61,161 @@ jobs:
             ${{ env.FSGG_RUNNER_TEMP }}/milestone.json
           if-no-files-found: error
 
+  canonical-quint-prepare:
+    name: canonical-quint-prepare
+    needs: [reuse-decision]
+    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint-prepare
+      FSGG_QUINT_TOOLCHAIN_OUTPUT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain/toolchain.tar.gz
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - name: Prepare the pinned canonical toolchain
+        run: bash eng/bootstrap-gates/canonical-quint-prepare.sh
+      - name: Upload the pinned canonical toolchain
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: canonical-quint-toolchain
+          path: ${{ env.FSGG_QUINT_TOOLCHAIN_OUTPUT }}
+          if-no-files-found: error
+
+  canonical-quint-semantic:
+    name: canonical-quint-semantic (${{ matrix.shard }})
+    needs: [reuse-decision, canonical-quint-prepare]
+    if: ${{ needs.canonical-quint-prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [authority-reconciliation, claim-election, cutover-observation, hosted-writer-fault-safety, hosted-writer-progress, journal-fencing, journal-reconciliation, lifecycle, operation-saga, pilot-permit-fault-safety, pilot-permit-major-action-coverage, pilot-permit-transfer, relation-mutation, review-epoch, rollback, base]
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint-${{ matrix.shard }}
+      FSGG_QUINT_SHARD: ${{ matrix.shard }}
+      FSGG_QUINT_SHARD_ROOT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-shards
+      FSGG_QUINT_TOOLCHAIN_ARCHIVE: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain/toolchain.tar.gz
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - name: Download the pinned canonical toolchain
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: canonical-quint-toolchain
+          path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain
+      - name: Run one independent canonical shard
+        run: bash eng/bootstrap-gates/canonical-quint-shard.sh
+      - name: Upload the canonical shard receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: canonical-quint-shard-${{ matrix.shard }}
+          path: ${{ env.FSGG_QUINT_SHARD_ROOT }}/${{ matrix.shard }}.json
+          if-no-files-found: error
+
+  canonical-quint-performance:
+    name: canonical-quint-performance
+    needs: [reuse-decision, canonical-quint-prepare]
+    if: ${{ needs.canonical-quint-prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint-performance
+      FSGG_QUINT_SHARD: epoch
+      FSGG_QUINT_SHARD_ROOT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance
+      FSGG_QUINT_TOOLCHAIN_ARCHIVE: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain/toolchain.tar.gz
+      FSGG_QUINT_PERFORMANCE_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance/performance.json
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - name: Download the pinned canonical toolchain
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: canonical-quint-toolchain
+          path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain
+      - name: Run the independently bounded epoch measurement
+        run: bash eng/bootstrap-gates/canonical-quint-shard.sh
+      - name: Validate the independent epoch measurement
+        run: bash eng/bootstrap-gates/canonical-quint-performance.sh
+      - name: Upload canonical performance receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: canonical-quint-performance
+          path: ${{ env.FSGG_QUINT_SHARD_ROOT }}
+          if-no-files-found: error
+
+  canonical-quint:
+    name: canonical-quint
+    needs: [reuse-decision, canonical-quint-prepare, canonical-quint-semantic, canonical-quint-performance]
+    if: ${{ always() && needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FSGG_QUINT_SHARD_ROOT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-shards
+      FSGG_QUINT_PERFORMANCE_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance/performance.json
+      FSGG_QUINT_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint/qualification.json
+      FSGG_QUINT_ACCOUNTING_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint/accounting.json
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Download every available semantic shard
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: canonical-quint-shard-*
+          path: ${{ env.FSGG_QUINT_SHARD_ROOT }}
+          merge-multiple: true
+      - name: Download canonical performance receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: canonical-quint-performance
+          path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance
+      - name: Aggregate the complete canonical receipt
+        run: bash eng/bootstrap-gates/canonical-quint-aggregate.sh
+      - name: Upload parallel accounting evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: canonical-quint-parallel-accounting
+          path: ${{ env.FSGG_QUINT_ACCOUNTING_RECEIPT }}
+          if-no-files-found: error
+      - name: Upload qualification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: canonical-quint
+          path: ${{ env.FSGG_QUINT_RECEIPT }}
+          if-no-files-found: error
+      - name: Upload content-addressed canonical evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: canonical-quint-${{ needs.reuse-decision.outputs.formal-subject-sha }}
+          path: ${{ env.FSGG_QUINT_RECEIPT }}
+          if-no-files-found: error
+
   deterministic-build:
     name: deterministic-build
     needs: [reuse-decision]
@@ -110,41 +265,6 @@ jobs:
         with:
           name: compiler-and-tests
           path: ${{ runner.temp }}/compiler-and-tests/architecture.trx
-          if-no-files-found: error
-
-  canonical-quint:
-    name: canonical-quint
-    needs: [reuse-decision]
-    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint
-      FSGG_QUINT_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint/qualification.json
-    steps:
-      - name: Check out the exact candidate
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Set up the pinned .NET SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          dotnet-version: 10.0.400
-          global-json-file: global.json
-      - name: Run the stable qualification gate
-        run: bash eng/bootstrap-gates/canonical-quint.sh
-      - name: Upload qualification evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: canonical-quint
-          path: ${{ env.FSGG_QUINT_RECEIPT }}
-          if-no-files-found: error
-      - name: Upload content-addressed canonical evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: canonical-quint-${{ needs.reuse-decision.outputs.formal-subject-sha }}
-          path: ${{ env.FSGG_QUINT_RECEIPT }}
           if-no-files-found: error
 
   dependency-and-security:

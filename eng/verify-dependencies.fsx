@@ -122,6 +122,7 @@ let private allowedDependencies =
           "FS.GG.Coordination.Orchestration.Pilot",
           Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.Protocol" ]
           "FS.GG.Coordination.Orchestration.Runner.Protocol", Set.empty
+          "FS.GG.Coordination.Orchestration.Execution", Set.empty
           "FS.GG.Coordination.Orchestration.Runner.Client",
           Set.singleton "FS.GG.Coordination.Orchestration.Runner.Protocol"
           "FS.GG.Coordination.Orchestration.Host",

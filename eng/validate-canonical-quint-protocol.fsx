@@ -472,6 +472,31 @@ let requireCompletedProcessInventory () =
             "PROCESS-INVENTORY-COVERAGE"
             ($"expected=%A{expected}; actual=%A{actual}")
 
+let exerciseFormalShardProcessInventory mutation =
+    let expected =
+        [ "external/base", 25
+          "quint/base-nonverify", 5
+          "quint/base-verify", 0
+          "quint/selected-root", 7
+          "quint/formal-simulation", 1
+          "quint/formal-temporal", 1
+          "quint/formal-safety-mutant", 1
+          "quint/formal-counterexample-temporal", 2
+          "quint/formal-counterexample-projection", 2 ]
+    for label, count in expected do
+        expectedInvocationInventory[label] <- count
+        actualInvocationInventory[label] <- count
+    match mutation with
+    | "missing" -> actualInvocationInventory.TryRemove("quint/formal-temporal") |> ignore
+    | "wrong" -> actualInvocationInventory["quint/formal-temporal"] <- 2
+    | "extra" -> actualInvocationInventory["quint/unplanned"] <- 1
+    | value -> fail "ARGUMENT" value
+    q1Outcome <- "passed"
+    currentPhase <- "q2"
+    preparationDurationMs <- qualificationClock.ElapsedMilliseconds
+    preparationDigest <- Some(String.replicate 64 "0")
+    requireCompletedProcessInventory ()
+
 match receiptFailurePhase with
 | Some "q1" -> fail "RECEIPT-SELF-TEST-Q1" "exercise q1 failure receipt"
 | Some "q2" ->
@@ -489,6 +514,9 @@ match receiptFailurePhase with
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
     requireCompletedProcessInventory ()
+| Some "formal-process-inventory-missing" -> exerciseFormalShardProcessInventory "missing"
+| Some "formal-process-inventory-wrong" -> exerciseFormalShardProcessInventory "wrong"
+| Some "formal-process-inventory-extra" -> exerciseFormalShardProcessInventory "extra"
 | Some value -> fail "ARGUMENT" ($"invalid failure receipt phase: %s{value}")
 | None -> ()
 
@@ -835,8 +863,22 @@ let selectedRootIds =
     |> Set.ofSeq
 File.Delete selectionPlanPath
 let processInventoryConfiguration = JsonDocument.Parse(File.ReadAllBytes qualificationConfiguration)
+let formalShardId =
+    match Environment.GetEnvironmentVariable "FSGG_QUINT_FORMAL_SHARD" with
+    | null | "" -> None
+    | "base" -> Some "base"
+    | value -> Some value
 let declaredFormalTestCount =
-    processInventoryConfiguration.RootElement.GetProperty("formalTests").GetArrayLength()
+    match formalShardId with
+    | None -> processInventoryConfiguration.RootElement.GetProperty("formalTests").GetArrayLength()
+    | Some "base" -> 0
+    | Some value ->
+        let matches =
+            processInventoryConfiguration.RootElement.GetProperty("formalTests").EnumerateArray()
+            |> Seq.filter (fun item -> item.GetProperty("id").GetString() = value)
+            |> Seq.length
+        if matches <> 1 then fail "QUINT-FORMAL-SHARD" value
+        1
 
 if staticOnly then
     printfn "CANONICAL_QUINT_PROTOCOL_STATIC_OK contract=%s profile=%s" expectedContract expectedProfile
@@ -1208,6 +1250,11 @@ try
             item.GetProperty("budget").GetProperty("elapsedMs").GetInt32(),
             item.GetProperty("budget").GetProperty("peakMiB").GetInt32(),
             item.GetProperty("budget").GetProperty("artifactBytes").GetInt32())
+        |> Seq.filter (fun (id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) ->
+            match formalShardId with
+            | None -> true
+            | Some "base" -> false
+            | Some selected -> id = selected)
         |> Seq.toList
 
     formalSafeSteps <- formalTests |> List.map (fun (_, main, _, step, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) -> main, step) |> Set.ofList
@@ -1218,10 +1265,14 @@ try
     // This is the executable qualification plan. Each category corresponds to one named
     // orchestration obligation; completion compares the actual invocation multiset to this plan.
     // Adding a formal test extends five explicit categories rather than changing opaque totals.
+    let expectedBaseNonverifyCount, expectedBaseVerifyCount =
+        match formalShardId with
+        | Some selected when selected <> "base" -> 5, 0
+        | _ -> 63, 14
     for label, count in
         [ "external/base", 25
-          "quint/base-nonverify", 63
-          "quint/base-verify", 14
+          "quint/base-nonverify", expectedBaseNonverifyCount
+          "quint/base-verify", expectedBaseVerifyCount
           "quint/selected-root", selectedRootIds.Count
           "quint/formal-simulation", declaredFormalTestCount
           "quint/formal-temporal", declaredFormalTestCount
@@ -1229,6 +1280,7 @@ try
           "quint/formal-counterexample-temporal", 2 * declaredFormalTestCount
           "quint/formal-counterexample-projection", 2 * declaredFormalTestCount ] do
         expectedInvocationInventory[label] <- count
+        actualInvocationInventory.TryAdd(label, 0) |> ignore
 
     // The base qualification suite has 71 intentional red outcomes. Every formal scenario
     // contributes one safety mutant, two TLC reproductions, and two Rust projections.
@@ -1313,6 +1365,10 @@ try
     let formalArtifactDirectory = Path.Combine(scratch, "formal-test-artifacts")
     Directory.CreateDirectory formalArtifactDirectory |> ignore
     let formalMeasurements = System.Collections.Generic.Dictionary<string, FormalMeasurement>()
+    let formalExternalProcessBaseline = externalProcessCount
+    let formalQuintProcessBaseline = quintProcessCount
+    let formalApalacheVerifyBaseline = apalacheVerifyInvocationCount
+    let formalRejectedProcessBaseline = quintRejectedProcessCount
 
     for formalId, main, init, step, invariantName, witness, _, _, _, _, _, _, _, _, depth, _, _, samples, elapsedBudget, peakBudget, artifactBudget in formalTests do
         let artifactPath = Path.Combine(formalArtifactDirectory, $"%s{formalId}-simulation.json")
@@ -1603,6 +1659,73 @@ try
         if expectedStable <> observedStable && not refreshFormalEvidence then
             fail "QUINT-FORMAL-BASELINE-DRIFT" ($"%s{formalId}: expected=%A{expectedStable}; observed=%A{observedStable}")
         printfn "QUINT_FORMAL_MEASUREMENT id=%s stateCount=%d transitionCount=%d sampleCount=%d elapsedMs=%d peakMiB=%d artifactBytes=%d" formalId observed.StateCount observed.TransitionCount observed.SampleCount observed.ElapsedMs observed.PeakMiB observed.ArtifactBytes
+
+    match formalShardId with
+    | Some formalId when formalId <> "base" ->
+        requireCompletedProcessInventory ()
+        let observed = formalMeasurements[formalId]
+        let _, manifestSha256, traceSha256, itfSha256 = formalCounterexampleReceipts |> Seq.exactlyOne
+        let invocationCount label =
+            match actualInvocationInventory.TryGetValue label with
+            | true, count -> count
+            | _ -> 0
+        let formalQuintProcessCount =
+            [ "quint/formal-simulation"
+              "quint/formal-temporal"
+              "quint/formal-safety-mutant"
+              "quint/formal-counterexample-temporal"
+              "quint/formal-counterexample-projection" ]
+            |> List.sumBy invocationCount
+        let formalExternalProcessCount = formalQuintProcessCount
+        let formalApalacheVerifyCount =
+            invocationCount "quint/formal-temporal"
+            + invocationCount "quint/formal-counterexample-temporal"
+        let executedExternalProcessCount = externalProcessCount - formalExternalProcessBaseline
+        let executedQuintProcessCount = quintProcessCount - formalQuintProcessBaseline
+        let executedApalacheVerifyCount = apalacheVerifyInvocationCount - formalApalacheVerifyBaseline
+        let formalRejectedProcessCount = quintRejectedProcessCount - formalRejectedProcessBaseline
+        let shardQ2DurationMs = Math.Max(0L, qualificationClock.ElapsedMilliseconds - preparationDurationMs)
+        let outputDirectory = Path.GetDirectoryName qualificationOutput
+        if not (String.IsNullOrWhiteSpace outputDirectory) then Directory.CreateDirectory outputDirectory |> ignore
+        use outputStream = File.Create qualificationOutput
+        use writer = new Utf8JsonWriter(outputStream, JsonWriterOptions(Indented = false))
+        writer.WriteStartObject()
+        writer.WriteString("schema", "fsgg.coordination.canonical-quint-formal-shard/1")
+        writer.WriteString("id", formalId)
+        writer.WriteString("outcome", "passed")
+        writer.WriteString("accountingMethod", "logical-formal-contribution-and-observed-execution/v1")
+        writer.WriteNumber("negativeControlCount", formalRejectedProcessCount)
+        writer.WriteNumber("q2DurationMs", shardQ2DurationMs)
+        writer.WriteStartObject("processCounts")
+        writer.WriteNumber("external", formalExternalProcessCount)
+        writer.WriteNumber("quintCli", formalQuintProcessCount)
+        writer.WriteNumber("apalacheVerify", formalApalacheVerifyCount)
+        writer.WriteEndObject()
+        writer.WriteStartObject("executedProcessCounts")
+        writer.WriteNumber("external", executedExternalProcessCount)
+        writer.WriteNumber("quintCli", executedQuintProcessCount)
+        writer.WriteNumber("apalacheVerify", executedApalacheVerifyCount)
+        writer.WriteEndObject()
+        writer.WriteNumber("elapsedMs", observed.ElapsedMs)
+        writer.WriteNumber("peakMiB", observed.PeakMiB)
+        writer.WriteNumber("artifactBytes", observed.ArtifactBytes)
+        writer.WriteNumber("stateCount", observed.StateCount)
+        writer.WriteNumber("transitionCount", observed.TransitionCount)
+        writer.WriteNumber("sampleCount", observed.SampleCount)
+        writer.WriteString("manifestSha256", manifestSha256)
+        writer.WriteString("traceSha256", traceSha256)
+        writer.WriteString("itfSha256", itfSha256)
+        writer.WriteString("toolchainSha256", expectedToolchain)
+        writer.WriteString("quintSha256", expectedQuint)
+        writer.WriteString("apalacheJarSha256", expectedApalacheJar)
+        writer.WriteString("sourceSha256", expectedSource)
+        writer.WriteString("contractSha256", expectedContract)
+        writer.WriteString("preparationSha256", preparationDigest |> Option.defaultValue "")
+        writer.WriteEndObject()
+        writer.Flush()
+        printfn "CANONICAL_QUINT_FORMAL_SHARD_OK id=%s receipt=%s" formalId qualificationOutput
+        exit 0
+    | _ -> ()
 
     requireGreen
         "QUINT-POSITIVE-INVARIANTS-VERIFY"

@@ -39,6 +39,10 @@ download() {
   printf '%s  %s\n' "$expected" "$target" | sha256sum --check --status
 }
 
+if [[ -n "${FSGG_QUINT_TOOLCHAIN_ARCHIVE:-}" ]]; then
+  test -f "$FSGG_QUINT_TOOLCHAIN_ARCHIVE"
+  tar -xzf "$FSGG_QUINT_TOOLCHAIN_ARCHIVE" -C "$qualification_root"
+else
 download \
   "https://github.com/quint-co/quint/releases/download/v0.32.0/quint-linux-amd64" \
   "$cache/objects/$quint_sha" \
@@ -67,7 +71,7 @@ chmod +x "$quint_home/rust-evaluator-v0.6.0/quint_evaluator"
 
 tar -xzf "$downloads/apalache.tgz" -C "$runtime"
 mkdir -p "$quint_home/apalache-dist-0.56.1"
-ln -s "$runtime/apalache-0.56.1" "$quint_home/apalache-dist-0.56.1/apalache"
+ln -s ../../../runtime/apalache-0.56.1 "$quint_home/apalache-dist-0.56.1/apalache"
 printf '%s  %s\n' "$apalache_jar_sha" "$runtime/apalache-0.56.1/lib/apalache.jar" | sha256sum --check --status
 
 tar -xzf "$downloads/temurin-jre.tar.gz" -C "$runtime"
@@ -93,6 +97,26 @@ GO111MODULE=off "$go" build \
   "$lmt_source"
 printf '%s  %s\n' "$lmt_sha" "$cache/objects/$lmt_sha" | sha256sum --check --status
 chmod +x "$cache/objects/$lmt_sha"
+fi
+
+java_home="$runtime/jdk-21.0.9+10-jre"
+test -x "$cache/objects/$quint_sha"
+test -x "$cache/objects/$lmt_sha"
+test -x "$quint_home/rust-evaluator-v0.6.0/quint_evaluator"
+test -f "$runtime/apalache-0.56.1/lib/apalache.jar"
+test -x "$runtime/jdk-21.0.9+10-jre/bin/java"
+printf '%s  %s\n' "$quint_sha" "$cache/objects/$quint_sha" | sha256sum --check --status
+printf '%s  %s\n' "$lmt_sha" "$cache/objects/$lmt_sha" | sha256sum --check --status
+printf '%s  %s\n' "$evaluator_sha" "$quint_home/rust-evaluator-v0.6.0/quint_evaluator" | sha256sum --check --status
+printf '%s  %s\n' "$apalache_jar_sha" "$runtime/apalache-0.56.1/lib/apalache.jar" | sha256sum --check --status
+printf '%s  %s\n' "$java_sha" "$runtime/jdk-21.0.9+10-jre/bin/java" | sha256sum --check --status
+
+if [[ "${FSGG_QUINT_PREPARE_ONLY:-0}" == "1" ]]; then
+  : "${FSGG_QUINT_TOOLCHAIN_OUTPUT:?FSGG_QUINT_TOOLCHAIN_OUTPUT is required}"
+  tar -czf "$FSGG_QUINT_TOOLCHAIN_OUTPUT" -C "$qualification_root" cache runtime dotnet-tools home
+  printf 'CANONICAL_QUINT_TOOLCHAIN_OK sha256=%s\n' "$(sha256sum "$FSGG_QUINT_TOOLCHAIN_OUTPUT" | cut -d' ' -f1)"
+  exit 0
+fi
 
 export FSGG_QUINT_CACHE="$cache"
 export FSGG_QUINT_HOME="$quint_home"
