@@ -60,7 +60,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/orchestration-runner-client-candidate.yml",
-      "sha256": "b4d4c67e6a372750ba4757e5d33290f141cdc24bd79aeee91fa4b8c302f79bd7",
+      "sha256": "60000d6d65d18d60c53d4c597004dbedd35162e080071f0da300d50c3cb80532",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",

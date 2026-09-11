@@ -987,7 +987,7 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 60000,
+        "elapsedMs": 75000,
         "peakMiB": 2048,
         "artifactBytes": 6291456
       }

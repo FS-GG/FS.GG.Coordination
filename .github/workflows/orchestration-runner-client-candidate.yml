@@ -66,7 +66,7 @@ jobs:
         with:
           name: orchestration-runner-client-linux-x64-${{ github.sha }}
           path: |
-            ${{ env.CANDIDATE_OUTPUT }}/fsgg-coord-orchestration-runner-client-linux-x64-${{ github.sha }}.zip
+            ${{ env.CANDIDATE_OUTPUT }}/fsgg-coord-orchestration-runner-linux-x64-${{ github.sha }}.zip
             ${{ env.CANDIDATE_OUTPUT }}/manifest.json
             ${{ env.CANDIDATE_OUTPUT }}/prepared.json
             ${{ env.CANDIDATE_OUTPUT }}/provenance.intoto.json
@@ -82,7 +82,7 @@ jobs:
         run: >-
           python3 eng/orchestration-runner-client-candidate.py verify-served
           --prepared "$CANDIDATE_OUTPUT/prepared.json"
-          --served "$SERVED_OUTPUT/fsgg-coord-orchestration-runner-client-linux-x64-${{ github.sha }}.zip"
+          --served "$SERVED_OUTPUT/fsgg-coord-orchestration-runner-linux-x64-${{ github.sha }}.zip"
           --artifact-id "${{ steps.upload.outputs.artifact-id }}"
           --artifact-name "orchestration-runner-client-linux-x64-${{ github.sha }}"
           --artifact-url "${{ steps.upload.outputs.artifact-url }}"
