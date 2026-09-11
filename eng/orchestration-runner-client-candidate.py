@@ -358,6 +358,8 @@ def validate_workflow(repo: Path) -> None:
         'git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main',
         '--candidate "${{ github.sha }}"',
         "--protected-ref refs/remotes/origin/main",
+        "${{ env.CANDIDATE_OUTPUT }}/fsgg-coord-orchestration-runner-linux-x64-${{ github.sha }}.zip",
+        '"$SERVED_OUTPUT/fsgg-coord-orchestration-runner-linux-x64-${{ github.sha }}.zip"',
         "name: orchestration-runner-client-verification-${{ github.sha }}",
     ):
         require(text.count(exact) == 1, "ORC-WORKFLOW", f"missing or ambiguous workflow binding: {exact}")
