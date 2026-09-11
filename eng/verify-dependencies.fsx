@@ -121,11 +121,15 @@ let private allowedDependencies =
           Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.GitHub" ]
           "FS.GG.Coordination.Orchestration.Pilot",
           Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.Protocol" ]
+          "FS.GG.Coordination.Orchestration.Runner.Protocol", Set.empty
+          "FS.GG.Coordination.Orchestration.Runner.Client",
+          Set.singleton "FS.GG.Coordination.Orchestration.Runner.Protocol"
           "FS.GG.Coordination.Orchestration.Host",
           Set.ofList
               [ "FS.GG.Coordination.Core"
                 "FS.GG.Coordination.Orchestration.Pilot"
-                "FS.GG.Coordination.Orchestration.PostgreSql" ]
+                "FS.GG.Coordination.Orchestration.PostgreSql"
+                "FS.GG.Coordination.Orchestration.Runner.Protocol" ]
           "FS.GG.Coordination.Orchestration.PostgreSql",
           Set.ofList
               [ "FS.GG.Coordination.Core"

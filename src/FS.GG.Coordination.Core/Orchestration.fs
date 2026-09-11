@@ -127,6 +127,9 @@ module Orchestration =
     type Attempt =
         { AttemptId: AttemptId; SessionId: SessionId; Runner: RunnerEnrollment
           Generation: Generation; StartedAt: DateTimeOffset; Status: AttemptStatus }
+    type SessionState =
+        { SessionId: SessionId; RunnerId: RunnerId; Generation: Generation
+          LastClientSequence: int64; LastServerSequence: int64; Closed: bool }
     type OperationState =
         | IntentRecorded of EffectIntent | Dispatching of EffectIntent
         | NeedsObservation of EffectIntent * string | Settled of EffectIntent * EffectOutcome
@@ -139,7 +142,8 @@ module Orchestration =
           Generation: Generation; Control: ControlState; ReadbackCurrent: bool; Budget: Budget option; Used: BudgetUse
           Reservation: Reservation option; ExternalClaims: Map<string,ExternalClaim>
           RecoveryObligations: Set<string>; CompensationFailures: Map<string,string>
-          Attempts: Map<AttemptId, Attempt>; Candidates: Map<CandidateId, CandidateArtifact>
+          Attempts: Map<AttemptId, Attempt>; Sessions: Map<SessionId, SessionState>
+          Candidates: Map<CandidateId, CandidateArtifact>
           Operations: Map<OperationId, OperationState>; HostedRoute: HostedRoutePlan option
           HostedEffectReadbacks: Map<OperationId, HostedEffectReadback>
           NativeDeliveryReadbacks: Map<OperationId, NativeDeliveryReadback>
@@ -150,6 +154,8 @@ module Orchestration =
         | RecordCompensationFailure of claimId:string * reason:string
         | SelectHostedRoute of HostedRoutePlan | StartAttempt of AttemptId * SessionId * RunnerEnrollment
         | ObserveAttempt of AttemptId * AttemptStatus
+        | AcceptRunnerMessage of SessionId * clientSequence:int64 * emitServerMessage:bool
+        | CloseRunnerSession of SessionId
         | ChargeBudget of BudgetUse | Pause of string | Resume | RequestCancel of string
         | RecordStartupPause of string | RecordHostedRouteReadback of HostedRouteReadback
         | ConfirmCancelled of string | Revoke of string | RecordCandidate of CandidateArtifact * CandidateStorageReceipt
@@ -168,6 +174,8 @@ module Orchestration =
         | ReservationCreated of Reservation | ReservationReleased of ReservationId * string * claimsToCompensate:Set<string>
         | ClaimObserved of ExternalClaim | ClaimReleased of string | CompensationFailed of string * string
         | HostedRouteSelected of HostedRoutePlan | AttemptStarted of Attempt | AttemptObserved of AttemptId * AttemptStatus | BudgetCharged of BudgetUse
+        | RunnerSessionOpened of SessionState | RunnerClientSequenceAccepted of SessionId * int64
+        | RunnerServerSequenceAdvanced of SessionId * int64 | RunnerSessionClosed of SessionId
         | PausedEvent of string | ResumedEvent | CancelRequestedEvent of string | CancelledEvent of string
         | StartupPausedEvent of string | HostedRouteReadbackAccepted of HostedRouteReadback
         | RevokedEvent of string | CandidateAccepted of CandidateArtifact | EffectIntentRecorded of EffectIntent
@@ -182,7 +190,7 @@ module Orchestration =
         { WorkItemId=None; Snapshot=None; Revision=WorkflowRevision 0L; Generation=Generation 0L
           Control=Paused "not-admitted"; ReadbackCurrent=true; Budget=None; Used={Tokens=0L;RuntimeSeconds=0L;CostMicros=0L}
           Reservation=None; ExternalClaims=Map.empty; RecoveryObligations=Set.empty;CompensationFailures=Map.empty
-          Attempts=Map.empty; Candidates=Map.empty
+          Attempts=Map.empty; Sessions=Map.empty; Candidates=Map.empty
           Operations=Map.empty; HostedRoute=None; HostedEffectReadbacks=Map.empty
           NativeDeliveryReadbacks=Map.empty; CommandReceipts=Map.empty }
     let private nextRevision (WorkflowRevision value) = WorkflowRevision(value + 1L)
@@ -335,6 +343,19 @@ module Orchestration =
         | StoreCandidate | PublishCandidateBranch | CreatePullRequest | MergePullRequest | ReadNativeDelivery ->
             state.HostedRoute |> Option.exists(fun route -> currentRouteAuthorization now state route intent true)
 
+    let private currentRunnerSession now (state:State) (session:SessionState) =
+        let attempt =
+            state.Attempts
+            |> Map.tryPick(fun _ attempt -> if attempt.SessionId=session.SessionId then Some attempt else None)
+        match attempt,state.Budget with
+        | Some attempt,Some budget ->
+            not session.Closed && attempt.Status=Active && attempt.Runner.RunnerId=session.RunnerId
+            && attempt.Generation=session.Generation && session.Generation=state.Generation
+            && attempt.Runner.Generation=state.Generation && attempt.Runner.ExpiresAt>now
+            && state.Control=Running && state.ReadbackCurrent && within now budget state.Used
+            && Set.isEmpty state.RecoveryObligations
+        | _ -> false
+
     let evolve state event =
         let revision = nextRevision state.Revision
         match event with
@@ -347,6 +368,19 @@ module Orchestration =
         | CompensationFailed(claimId,reason) -> {state with RecoveryObligations=Set.add claimId state.RecoveryObligations;CompensationFailures=Map.add claimId reason state.CompensationFailures;Revision=revision}
         | HostedRouteSelected route -> {state with HostedRoute=Some route;Revision=revision}
         | AttemptStarted a -> {state with Attempts=Map.add a.AttemptId a state.Attempts;Revision=revision}
+        | RunnerSessionOpened session -> {state with Sessions=Map.add session.SessionId session state.Sessions;Revision=revision}
+        | RunnerClientSequenceAccepted(sessionId,sequence) ->
+            match Map.tryFind sessionId state.Sessions with
+            | Some session -> {state with Sessions=Map.add sessionId {session with LastClientSequence=sequence} state.Sessions;Revision=revision}
+            | None -> {state with Revision=revision}
+        | RunnerServerSequenceAdvanced(sessionId,sequence) ->
+            match Map.tryFind sessionId state.Sessions with
+            | Some session -> {state with Sessions=Map.add sessionId {session with LastServerSequence=sequence} state.Sessions;Revision=revision}
+            | None -> {state with Revision=revision}
+        | RunnerSessionClosed sessionId ->
+            match Map.tryFind sessionId state.Sessions with
+            | Some session -> {state with Sessions=Map.add sessionId {session with Closed=true} state.Sessions;Revision=revision}
+            | None -> {state with Revision=revision}
         | AttemptObserved(id,status) ->
             match Map.tryFind id state.Attempts with
             | Some attempt -> {state with Attempts=Map.add id {attempt with Status=status} state.Attempts;Revision=revision}
@@ -386,7 +420,7 @@ module Orchestration =
             match Map.tryFind id state.Operations with
             | Some(Settled(intent,ProvenAbsent)) -> {state with Operations=Map.add id (IntentRecorded intent) state.Operations;Revision=revision}
             | _ -> {state with Revision=revision}
-        | CommandRecorded r -> {state with CommandReceipts=Map.add r.CommandId r state.CommandReceipts}
+        | CommandRecorded r -> {state with CommandReceipts=Map.add r.CommandId r state.CommandReceipts;Revision=revision}
 
     let replay events = List.fold evolve initial events
     let private mkReceipt state id digest disposition detail =
@@ -445,8 +479,27 @@ module Orchestration =
             | None ->
                 match state.Control,state.Budget,state.Reservation with
                 | Running,Some b,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && within now b state.Used && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation && (state.HostedRoute |> Option.forall(fun route -> route.AttemptId=a && predecessorReadbackPresent DispatchRunner route state)) ->
-                    accept [AttemptStarted{AttemptId=a;SessionId=s;Runner=r;Generation=state.Generation;StartedAt=now;Status=Active}] [] "attempt-started"
+                    let attempt={AttemptId=a;SessionId=s;Runner=r;Generation=state.Generation;StartedAt=now;Status=Active}
+                    let session:SessionState={SessionId=s;RunnerId=r.RunnerId;Generation=state.Generation;LastClientSequence=0L;LastServerSequence=0L;Closed=false}
+                    accept [AttemptStarted attempt;RunnerSessionOpened session] [] "attempt-and-runner-session-started"
                 | _ -> reject "dispatch-requires-current-reservation-claim-runner-and-budget"
+        | AcceptRunnerMessage(sessionId,clientSequence,emitServerMessage) ->
+            match Map.tryFind sessionId state.Sessions with
+            | Some session when currentRunnerSession now state session && clientSequence=session.LastClientSequence+1L ->
+                let events =
+                    [ RunnerClientSequenceAccepted(sessionId,clientSequence)
+                      if emitServerMessage && session.LastServerSequence<Int64.MaxValue then
+                          RunnerServerSequenceAdvanced(sessionId,session.LastServerSequence+1L) ]
+                if emitServerMessage && session.LastServerSequence=Int64.MaxValue then reject "runner-server-sequence-overflow"
+                else accept events [] "runner-message-accepted"
+            | Some session when clientSequence<=session.LastClientSequence -> reject "duplicate-runner-message"
+            | Some _ -> reject "runner-client-sequence-gap-or-inactive-session"
+            | None -> reject "unknown-runner-session"
+        | CloseRunnerSession sessionId ->
+            match Map.tryFind sessionId state.Sessions with
+            | Some session when not session.Closed -> accept [RunnerSessionClosed sessionId] [] "runner-session-closed"
+            | Some _ -> accept [] [] "runner-session-already-closed"
+            | None -> reject "unknown-runner-session"
         | ObserveAttempt(attemptId,status) ->
             match Map.tryFind attemptId state.Attempts,status with
             | Some _,Active -> reject "observation-cannot-create-active-attempt"
@@ -601,6 +654,8 @@ module Orchestration =
             | SelectHostedRoute route -> "select-hosted-route"::routeParts route
             | StartAttempt(a,s,r) -> ["start-attempt";Id.attemptValue a |> string;Id.sessionValue s |> string;Id.runnerValue r.RunnerId |> string;r.PrincipalId;r.FingerprintSha256;generationText r.Generation;timeText r.ExpiresAt]
             | ObserveAttempt(a,status) -> ["observe-attempt";Id.attemptValue a |> string;sprintf "%A" status]
+            | AcceptRunnerMessage(sessionId,sequence,emitServer) -> ["accept-runner-message";Id.sessionValue sessionId |> string;invariant sequence;string emitServer]
+            | CloseRunnerSession sessionId -> ["close-runner-session";Id.sessionValue sessionId |> string]
             | ChargeBudget b -> ["charge";invariant b.Tokens;invariant b.RuntimeSeconds;invariant b.CostMicros]
             | Pause reason -> ["pause";reason] | Resume -> ["resume"] | RequestCancel reason -> ["request-cancel";reason]
             | RecordStartupPause reason -> ["startup-pause";reason]
@@ -714,9 +769,6 @@ module Orchestration =
         let requiresObservation state =
             state.Operations |> Map.exists(fun _ status -> match status with NeedsObservation _ -> true | _ -> false)
 
-    type SessionState =
-        { SessionId: SessionId; RunnerId: RunnerId; Generation: Generation
-          LastClientSequence: int64; LastServerSequence: int64; Closed: bool }
     type SessionInput = ClientMessage of sequence:int64 | ServerMessage | CloseSession
 
     [<RequireQualifiedAccess>]

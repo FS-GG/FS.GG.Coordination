@@ -24,11 +24,17 @@ let ``administration host is separate and serve path is migration free`` () =
     Assert.Equal<string list>(
         [ "../FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj"
           "../FS.GG.Coordination.Orchestration.Pilot/FS.GG.Coordination.Orchestration.Pilot.fsproj"
-          "../FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj" ], references)
+          "../FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
+          "../FS.GG.Coordination.Orchestration.Runner.Protocol/FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj" ], references)
     let runtime = read "src/FS.GG.Coordination.Orchestration.Host/HostRuntime.fs"
     Assert.DoesNotContain(".migrate", runtime, StringComparison.Ordinal)
-    Assert.DoesNotContain("DispatchRunner", runtime, StringComparison.Ordinal)
     Assert.DoesNotContain("FS.GG.Coordination.GitHub", runtime, StringComparison.Ordinal)
+    let runner = read "src/FS.GG.Coordination.Orchestration.Host/RunnerWireRuntime.fs"
+    Assert.Contains("runner-dispatch-intent-not-current", runner, StringComparison.Ordinal)
+    Assert.Contains("runner-candidate-intent-not-current", runner, StringComparison.Ordinal)
+    Assert.DoesNotContain("FS.GG.Coordination.GitHub", runner, StringComparison.Ordinal)
+    Assert.DoesNotContain("CreatePullRequest", runner, StringComparison.Ordinal)
+    Assert.DoesNotContain("MergePullRequest", runner, StringComparison.Ordinal)
     let initialization = read "src/FS.GG.Coordination.Orchestration.Host/HostInitialization.fs"
     Assert.Contains("PostgreSqlSchema.migrate", initialization, StringComparison.Ordinal)
     Assert.Contains("PostgreSqlPilotSchema.migrate", initialization, StringComparison.Ordinal)
@@ -38,7 +44,7 @@ let ``administration host is separate and serve path is migration free`` () =
     Assert.DoesNotContain("Orchestration.Host", app, StringComparison.Ordinal)
 
 [<Fact>]
-let ``host contract records paused authority and deployment limit`` () =
+let ``host contract records paused startup and runner authority limit`` () =
     let contract = read "docs/architecture/orchestration-administration-host.md"
-    for required in [ "migration-free"; "dispatchEnabled=false"; "loopback"; "hosted-writer amendment"; "Telemetry is neither referenced" ] do
+    for required in [ "migration-free"; "default-paused"; "loopback"; "runner token"; "Telemetry is neither referenced" ] do
         Assert.Contains(required, contract, StringComparison.Ordinal)

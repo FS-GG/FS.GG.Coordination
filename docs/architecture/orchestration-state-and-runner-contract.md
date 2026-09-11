@@ -64,9 +64,11 @@ Attempt history and IDs remain immutable. Likewise, an unknown provider effect m
 `NeedsObservation`; it cannot be dispatched again until external readback proves it absent. A proven-absent
 result authorizes retry under the same operation ID, followed by the ordinary current-authority checks.
 
-Session state rejects duplicate and gapped client sequences and preserves client/server cursors. Runner
+Session opening, client-sequence acceptance, server-sequence advancement and closure are WorkItem events.
+Their replayed state rejects duplicate and gapped client sequences and preserves both cursors. Runner
 enrollment binds the stable runner ID, authenticated principal, specification fingerprint, generation and
-finite expiry. Restart or reconnect does not mint a new budget or generation.
+finite expiry. Every runner message is also bound to current control, readback, budget and deadline state.
+Restart or reconnect does not mint a new budget, generation, session, or sequence.
 
 ## Persistence and recovery
 

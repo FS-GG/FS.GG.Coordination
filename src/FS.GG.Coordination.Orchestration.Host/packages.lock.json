@@ -248,6 +248,12 @@
           "Npgsql": "[10.0.3, )"
         }
       },
+      "fs.gg.coordination.orchestration.runner.protocol": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.coordination.protocol": {
         "type": "Project",
         "dependencies": {

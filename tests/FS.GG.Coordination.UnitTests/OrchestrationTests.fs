@@ -357,3 +357,21 @@ module Cases =
         Assert.Equal(Error "duplicate-client-message",Session.accept session (ClientMessage 4L))
         Assert.Equal(Error "client-sequence-gap",Session.accept session (ClientMessage 6L))
         Assert.Equal(5L,(Session.accept session (ClientMessage 5L) |> Result.defaultWith failwith).LastClientSequence)
+
+    [<Fact>]
+    let ``runner session cursors survive replay and stop while paused`` () =
+        let active,attemptId,_,_ = hostedReady()
+        let attempt=active.Attempts[attemptId]
+        let opened=active.Sessions[attempt.SessionId]
+        Assert.Equal(0L,opened.LastClientSequence)
+        let advancedDecision=decide now active (command "29000000-0000-0000-0000-000000000001") "" (AcceptRunnerMessage(attempt.SessionId,1L,true))
+        Assert.Equal(Accepted,advancedDecision.Receipt.Disposition)
+        let advanced=apply advancedDecision active
+        Assert.Equal(1L,advanced.Sessions[attempt.SessionId].LastClientSequence)
+        Assert.Equal(1L,advanced.Sessions[attempt.SessionId].LastServerSequence)
+        let replayed=List.fold evolve active advancedDecision.Events
+        Assert.True(replayed.Sessions.ContainsKey attempt.SessionId)
+        Assert.Equal("duplicate-runner-message",(decide now advanced (command "29000000-0000-0000-0000-000000000002") "" (AcceptRunnerMessage(attempt.SessionId,1L,false))).Receipt.Detail)
+        Assert.Equal("runner-client-sequence-gap-or-inactive-session",(decide now advanced (command "29000000-0000-0000-0000-000000000003") "" (AcceptRunnerMessage(attempt.SessionId,3L,false))).Receipt.Detail)
+        let paused=decide now advanced (command "29000000-0000-0000-0000-000000000004") "" (Pause "operator") |> fun result -> apply result advanced
+        Assert.Equal("runner-client-sequence-gap-or-inactive-session",(decide now paused (command "29000000-0000-0000-0000-000000000005") "" (AcceptRunnerMessage(attempt.SessionId,2L,false))).Receipt.Detail)

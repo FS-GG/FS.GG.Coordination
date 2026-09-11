@@ -338,7 +338,7 @@ type PostgreSqlPilotStoreTests() =
         use source = source
         let! _ = Fixture.sql "UPDATE fsgg_orchestration.pilot_store_metadata SET migration_state='applying'"
         let configuration =
-            { ConnectionString = Fixture.connectionString; Token = String.replicate 32 "x"; Prefix = "http://127.0.0.1:5110/"
+            { ConnectionString = Fixture.connectionString; Token = String.replicate 32 "x"; RunnerToken=String.replicate 32 "r"; Prefix = "http://127.0.0.1:5110/"
               StoreId = "pilot-pg18-lab"; BackupIdentity = identity; MinimumGenerationFence = 0L
               PermitId = Fixture.permitId; PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.subject
               RequestTimeout = TimeSpan.FromSeconds 1.

@@ -93,7 +93,8 @@ module private Effect =
 
 [<RequireQualifiedAccess>]
 module EventEnvelope =
-    let serializerVersion = "fsgg.orchestration.core-event-json/1"
+    let legacySerializerVersion = "fsgg.orchestration.core-event-json/1"
+    let serializerVersion = "fsgg.orchestration.core-event-json/2"
 
     let private options =
         let value = JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
