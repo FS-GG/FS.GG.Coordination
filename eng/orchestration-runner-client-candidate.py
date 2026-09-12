@@ -11,9 +11,12 @@ from pathlib import Path
 import re
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
+import uuid
 from urllib.parse import urlsplit
 import zipfile
 
@@ -194,6 +197,90 @@ def usage_readback(binary: bytes) -> str:
         return digest_bytes(process.stdout.encode())
 
 
+def production_readback(binary: bytes) -> str:
+    """Exercise closed executor framing from the exact payload without invoking Codex."""
+    with tempfile.TemporaryDirectory(prefix="o2-runner-executor-") as temporary:
+        root = Path(temporary)
+        path = root / PAYLOAD
+        path.write_bytes(binary)
+        path.chmod(0o500)
+        repository = root / "repository"
+        repository.mkdir()
+        subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
+        subprocess.run(["git", "-C", str(repository), "config", "user.name", "Served Fixture"], check=True)
+        subprocess.run(["git", "-C", str(repository), "config", "user.email", "served@example.invalid"], check=True)
+        (repository / "README.md").write_text("served readiness fixture\n")
+        subprocess.run(["git", "-C", str(repository), "add", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(repository), "commit", "--quiet", "-m", "fixture"], check=True)
+        baseline = subprocess.run(["git", "-C", str(repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        arguments = [str(path), "executor-stdio", "--repository-root", str(repository),
+                     "--workspace-root", str(root / "workspaces"), "--input-root", str(root / "inputs"),
+                     "--state-root", str(root / "state"), "--artifact-root", str(root / "artifacts"),
+                     "--codex-executable", str(root / "codex-must-not-run"), "--executor-binding", "served-readback"]
+        outputs: list[bytes] = []
+        for frame in (b"\x00\x00\x00", struct.pack(">i", 4 * 1024 * 1024)):
+            refused = subprocess.run(arguments, input=frame, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            require(refused.returncode == 3 and refused.stderr.startswith(b"executor-stdio-refused:"), "ORC-EXECUTOR", "closed executor framing was not refused")
+            require(refused.stdout == b"", "ORC-EXECUTOR", "refused frame polluted protocol stdout")
+            outputs.append(refused.stderr)
+
+        # A valid readiness exchange proves the exact packaged executable can
+        # parse and emit closed frames. The deterministic provider probe exposes
+        # only --version and subscription login status; any model command trips
+        # the sentinel and fails the readback.
+        probe_log = root / "provider-probe.log"
+        provider = root / "codex-readiness-fixture"
+        provider.write_text(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + str(probe_log) + "'\n"
+            "if [ \"$1\" = --version ]; then echo 'codex-cli 0.154.0'; exit 0; fi\n"
+            "if [ \"$1 $2\" = 'login status' ]; then echo 'Logged in using ChatGPT'; exit 0; fi\n"
+            "echo model-invocation-refused >&2; exit 91\n"
+        )
+        provider.chmod(0o500)
+        positive_arguments = list(arguments)
+        positive_arguments[positive_arguments.index(str(root / "codex-must-not-run"))] = str(provider)
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        identifier = str(uuid.UUID("71000000-0000-0000-0000-000000000001"))
+        workspace_manifest = {
+            "schema": "fsgg.orchestration.executor-workspace-manifest/1", "workspace": "served-readback",
+            "repositoryBinding": "selected-repository", "baselineObjectId": baseline,
+            "allowedPaths": ["docs/**"], "validations": ["git-diff-check"], "inputDigest": "a" * 64,
+        }
+        workspace_bytes = json.dumps(workspace_manifest, separators=(",", ":")).encode()
+        command = {
+            "schema": "fsgg.orchestration.executor-command/2", "commandId": identifier, "bodySha256": "", "kind": "readiness",
+            "workItemPersistenceId": "served-readback-work-item", "routeOperationId": identifier, "assignmentId": identifier,
+            "attemptId": "71000000-0000-0000-0000-000000000002", "candidateId": "71000000-0000-0000-0000-000000000003",
+            "generation": 1, "expectedRevision": 1, "recordedAt": now.isoformat(), "deadline": (now + timedelta(minutes=5)).isoformat(),
+            "maximumRuntimeSeconds": 300, "maximumAttempts": 1, "workspace": "served-readback",
+            "workspaceManifestSha256": digest_bytes(workspace_bytes), "requestedModel": None, "requestedEffort": None, "inputDigest": "a" * 64,
+            "executorBinding": "served-readback", "providerSessionReference": None, "artifactDigest": None,
+            "contentOffset": 0, "contentLength": 0,
+        }
+        digest_shape = json.dumps(command, separators=(",", ":")).encode()
+        command["bodySha256"] = digest_bytes(digest_shape)
+        command_bytes = json.dumps(command, separators=(",", ":")).encode()
+        framed = struct.pack(">i", len(workspace_bytes)) + workspace_bytes + struct.pack(">i", len(command_bytes)) + command_bytes
+        ready = subprocess.run(positive_arguments, input=framed, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        require(ready.returncode == 0 and ready.stderr == b"", "ORC-EXECUTOR", f"readiness process failed: exit={ready.returncode} stderr={ready.stderr!r}")
+        require(len(ready.stdout) >= 4, "ORC-EXECUTOR", "readiness emitted no protocol frame")
+        response_length = struct.unpack(">i", ready.stdout[:4])[0]
+        require(response_length > 0 and len(ready.stdout) == 4 + response_length, "ORC-EXECUTOR", "readiness frame was truncated or polluted")
+        response = json.loads(ready.stdout[4:4 + response_length])
+        require(response.get("schema") == "fsgg.orchestration.executor-response/1" and response.get("commandId") == identifier,
+                "ORC-EXECUTOR", f"readiness response identity differs: {response!r}; stderr={ready.stderr!r}")
+        require(response.get("kind") == "readiness" and response.get("provider") == "Codex" and response.get("authenticationState") == "authenticated",
+                "ORC-EXECUTOR", "normalized readiness response differs")
+        require(probe_log.read_text().splitlines() == ["--version", "login status"], "ORC-EXECUTOR", "readiness attempted an unintended provider operation")
+        outputs.append(canonical_bytes({
+            "schema": response["schema"], "commandId": response["commandId"], "kind": response["kind"],
+            "provider": response["provider"], "adapterVersion": response["adapterVersion"],
+            "authenticationState": response["authenticationState"], "supportsResume": response["supportsResume"],
+            "lifecycle": response["lifecycle"], "detail": response["detail"],
+        }))
+        return digest_bytes(b"".join(outputs))
+
+
 def build_once(repo: Path, candidate: str, tree: str, commit_time: str, identity: dict[str, str], root: Path) -> tuple[Path, bytes, dict]:
     require(not root.exists(), "ORC-BUILD-ROOT", f"fixed build root already exists: {root}")
     source = root / "source"
@@ -228,7 +315,8 @@ def build_once(repo: Path, candidate: str, tree: str, commit_time: str, identity
     validated, archived_binary = validate_archive(archive, manifest_bytes)
     require(validated == manifest and archived_binary == binary.read_bytes(), "ORC-ARCHIVE", "archive readback differs")
     usage_sha = usage_readback(archived_binary)
-    return archive, manifest_bytes, {"manifest": manifest, "usageSha256": usage_sha}
+    production_sha = production_readback(archived_binary)
+    return archive, manifest_bytes, {"manifest": manifest, "usageSha256": usage_sha, "productionReadbackSha256": production_sha}
 
 
 def prepare(args: argparse.Namespace) -> None:
@@ -268,6 +356,7 @@ def prepare(args: argparse.Namespace) -> None:
         "archive": {"file": archive_name, "bytes": archive_path.stat().st_size, "sha256": digest_file(archive_path)},
         "manifestSha256": digest_file(manifest_path), "provenanceSha256": digest_file(output / "provenance.intoto.json"),
         "payload": manifest["payload"], "usageSha256": products[0][2]["usageSha256"],
+        "productionReadbackSha256": products[0][2]["productionReadbackSha256"],
         "stages": ["protected-main-bound", "tracked-source-projected", "locked-rid-restored", "published-twice", "archives-byte-identical", "prepared-verified"],
     }
     write_json(output / "prepared.json", prepared)
@@ -291,6 +380,7 @@ def verify_prepared(path: Path) -> dict:
     require(manifest.get("sourceRevision") == candidate and manifest.get("sourceTree") == receipt.get("sourceTree"), "ORC-PREPARED", "source binding differs")
     require(manifest.get("payload") == receipt.get("payload"), "ORC-PREPARED", "payload binding differs")
     require(usage_readback(binary) == receipt.get("usageSha256"), "ORC-PREPARED", "usage binding differs")
+    require(production_readback(binary) == receipt.get("productionReadbackSha256"), "ORC-PREPARED", "production readback binding differs")
     provenance_path = root / "provenance.intoto.json"
     require(digest_file(provenance_path) == receipt.get("provenanceSha256"), "ORC-PREPARED", "provenance digest differs")
     provenance = json.loads(provenance_path.read_text())
@@ -316,13 +406,15 @@ def verify_served(args: argparse.Namespace) -> None:
     manifest, binary = validate_archive(served, (prepared_path.parent / "manifest.json").read_bytes())
     usage_sha = usage_readback(binary)
     require(usage_sha == receipt["usageSha256"], "ORC-SERVED", "served usage differs")
+    production_sha = production_readback(binary)
+    require(production_sha == receipt["productionReadbackSha256"], "ORC-SERVED", "served production readback differs")
     artifact = validate_artifact_identity(receipt["candidate"], args.artifact_id, args.artifact_name, args.artifact_url, args.artifact_digest)
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     verification = {
         "schema": VERIFICATION_SCHEMA, "candidate": receipt["candidate"], "sourceTree": receipt["sourceTree"],
-        "artifact": artifact, "archive": archive, "payload": manifest["payload"], "usageSha256": usage_sha,
-        "stages": ["uploaded-once", "downloaded-fresh", "archive-byte-identical", "payload-byte-identical", "native-usage-readback"],
+        "artifact": artifact, "archive": archive, "payload": manifest["payload"], "usageSha256": usage_sha, "productionReadbackSha256": production_sha,
+        "stages": ["uploaded-once", "downloaded-fresh", "archive-byte-identical", "payload-byte-identical", "native-usage-readback", "native-executor-stdio-readback"],
     }
     write_json(output / "verification.json", verification)
     print(f"ORCHESTRATION_RUNNER_CLIENT_SERVED candidate={receipt['candidate']} artifactId={artifact['id']} archiveSha256={archive['sha256']}")

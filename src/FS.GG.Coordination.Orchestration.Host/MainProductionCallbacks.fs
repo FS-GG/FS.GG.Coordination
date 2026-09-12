@@ -75,7 +75,7 @@ type MainProductionCallbacks
         match candidate with
         | Error reason->return Error reason
         | Ok value->
-            let! merged=github.Merge(route.BranchRef,value.Candidate.HeadSha,Id.operationValue intent.OperationId,token)
+            let! merged=github.MergeAuthorized(route.BranchRef,value.Candidate.HeadSha,Id.operationValue intent.OperationId,token)
             return merged|>Result.map(fun(node,mergeSha,revision)->hosted route intent node (Some value.Candidate.HeadSha) (Some mergeSha) revision true) }
     let native (route:HostedRoutePlan) (intent:EffectIntent) (token:CancellationToken)=task {
         let! candidate=candidates.Read(route.CandidateId,token)

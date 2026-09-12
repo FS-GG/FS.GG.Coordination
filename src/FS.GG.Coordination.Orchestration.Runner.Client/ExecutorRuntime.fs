@@ -289,6 +289,7 @@ type ExecutorRuntime(options:ExecutorRuntimeOptions,clock:TimeProvider) =
             while got<4 && not finished do
                 let! read=input.ReadAsync(header.AsMemory(got,4-got),cancellationToken)
                 if read=0 then finished<-true else got<-got+read
+            if finished && got>0 then raise(EndOfStreamException "executor-frame-header-truncated")
             if not finished then
                 let size=BinaryPrimitives.ReadInt32BigEndian header
                 if size<1||size>options.MaximumFrameBytes then raise(InvalidDataException "executor-frame-size-refused")

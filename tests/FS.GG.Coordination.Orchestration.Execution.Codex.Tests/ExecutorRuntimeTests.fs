@@ -546,6 +546,10 @@ type ExecutorRuntimeTests() =
         use truncatedInput=new MemoryStream(truncated)
         use truncatedOutput=new MemoryStream()
         let! _=Assert.ThrowsAsync<EndOfStreamException>(fun ()->ExecutorRuntime(options,TimeProvider.System).Run(truncatedInput,truncatedOutput,CancellationToken.None))
+        use headerInput=new MemoryStream([|0uy;0uy;0uy|])
+        use headerOutput=new MemoryStream()
+        let! headerError=Assert.ThrowsAsync<EndOfStreamException>(fun ()->ExecutorRuntime(options,TimeProvider.System).Run(headerInput,headerOutput,CancellationToken.None))
+        Assert.Equal("executor-frame-header-truncated",headerError.Message)
         () }
 
     [<Fact>]

@@ -944,6 +944,9 @@ type PostgreSqlStoreTests() =
         let mutable merged=false
         let mutable pullHead=""
         let mutable mutationCount=0
+        let mutable mergePutCount=0
+        let mutable checkReads=0
+        let mutable checksReleased=false
         let jsonResponse status body=Response{StatusCode=status;Headers=Map.empty;Body=body;ETag=Some(Guid.NewGuid().ToString("N"));RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}}
         let githubTransport=
             {new IGitHubRequestExecutor with
@@ -965,7 +968,7 @@ type PostgreSqlStoreTests() =
                             if not pullCreated then jsonResponse 200 "[]" else
                             let mergeValue=String.replicate 40 "f"
                             let state,mergedAt,mergeSha=if merged then "closed",$"\"{DateTimeOffset.UtcNow:O}\"",$"\"{mergeValue}\"" else "open","null","null"
-                            jsonResponse 200 $"[{{\"number\":42,\"node_id\":\"PR_fixture\",\"state\":\"{state}\",\"merged_at\":{mergedAt},\"merge_commit_sha\":{mergeSha},\"head\":{{\"sha\":\"{pullHead}\",\"ref\":\"fsgg/pilot/o2\"}},\"base\":{{\"ref\":\"main\",\"repo\":{{\"full_name\":\"FS-GG/.github\"}}}}}}]"
+                            jsonResponse 200 $"[{{\"number\":42,\"node_id\":\"PR_fixture\",\"state\":\"{state}\",\"body\":\"<!-- fsgg:routine-development/v1 head={pullHead} operation=internal-docs -->\",\"merged_at\":{mergedAt},\"merge_commit_sha\":{mergeSha},\"head\":{{\"sha\":\"{pullHead}\",\"ref\":\"fsgg/pilot/o2\"}},\"base\":{{\"ref\":\"main\",\"sha\":\"{baseline}\",\"repo\":{{\"full_name\":\"FS-GG/.github\"}}}}}}]"
                         elif path.EndsWith("/pulls")&&methodValue=RestMethod.Post then
                             mutationCount<-mutationCount+1
                             use doc=JsonDocument.Parse(body.Value)
@@ -975,16 +978,25 @@ type PostgreSqlStoreTests() =
                                 pullCreated<-true
                                 pullHead<-git bare ["rev-parse";"refs/heads/fsgg/pilot/o2"]
                                 jsonResponse 201 "{}"
+                        elif path.EndsWith("pulls/42")&&methodValue=RestMethod.Get then
+                            jsonResponse 200 $"{{\"draft\":false,\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{{\"sha\":\"{pullHead}\"}},\"base\":{{\"ref\":\"main\"}}}}"
+                        elif path.Contains("contents/.fsgg/routine-development.json") then
+                            let policy=Encoding.UTF8.GetBytes "{\"schema\":\"fsgg.routine-development-policy/v1\",\"allowedOperations\":[\"source-change\",\"internal-docs\"]}"|>Convert.ToBase64String
+                            jsonResponse 200 $"{{\"content\":\"{policy}\"}}"
                         elif path.Contains("protection/required_status_checks") then jsonResponse 200 "{\"checks\":[{\"context\":\"compiler-and-tests\"}]}"
-                        elif path.Contains("check-runs") then jsonResponse 200 "{\"check_runs\":[{\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"success\"},{\"name\":\"reuse-decision\",\"status\":\"completed\",\"conclusion\":\"success\"},{\"name\":\"aggregate\",\"status\":\"completed\",\"conclusion\":\"success\"},{\"name\":\"compiler-and-tests\",\"status\":\"completed\",\"conclusion\":\"success\"}]}"
+                        elif path.Contains("check-runs") then
+                            checkReads<-checkReads+1
+                            let status,conclusion=if checksReleased then "completed","\"success\"" else "in_progress","null"
+                            jsonResponse 200 $"{{\"check_runs\":[{{\"id\":1,\"head_sha\":\"{pullHead}\",\"name\":\"routine-eligibility\",\"status\":\"{status}\",\"conclusion\":{conclusion}}},{{\"id\":2,\"head_sha\":\"{pullHead}\",\"name\":\"compiler-and-tests\",\"status\":\"completed\",\"conclusion\":\"success\"}}]}}"
                         elif path.Contains("pulls/42/merge")&&methodValue=RestMethod.Put then
                             mutationCount<-mutationCount+1
+                            mergePutCount<-mergePutCount+1
                             merged<-true
                             let mergeValue=String.replicate 40 "f"
                             jsonResponse 200 $"{{\"merged\":true,\"sha\":\"{mergeValue}\"}}"
                         else jsonResponse 404 "{}"
                     Task.FromResult outcome}
-        let github=GitHubRouteClient(githubTransport,GitBundlePublisher(Uri(bare),String.replicate 40 "t",1024*1024),{ApiRoot=Uri "https://api.github.test/";Repository="FS-GG/.github";IssueNumber=3421;Principal="pilot";BaseRef="main";RequiredChecks=set["routine-eligibility";"reuse-decision";"aggregate"];ClaimLease=TimeSpan.FromMinutes 30.},TimeProvider.System)
+        let github=GitHubRouteClient(githubTransport,GitBundlePublisher(Uri(bare),String.replicate 40 "t",1024*1024),{ApiRoot=Uri "https://api.github.test/";Repository="FS-GG/.github";IssueNumber=3421;Principal="pilot";BaseRef="main";RoutineOperation="internal-docs";ClaimLease=TimeSpan.FromMinutes 30.},TimeProvider.System)
         let codex=Path.Combine(root,"codex-fixture")
         let scriptTemplate="""#!/bin/sh
 if [ "$1" = --version ]; then echo 'codex-cli 0.154.0'; exit 0; fi
@@ -1122,6 +1134,57 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         let! conflicting=client.SendAsync conflictingRequest
         Assert.Equal(HttpStatusCode.Conflict,conflicting.StatusCode)
         let running=admission.Running|>Option.defaultWith(fun()->failwith "production graph was not restarted by admission")
+        let getMainStatus ()=task {
+            use request=new HttpRequestMessage(HttpMethod.Get,Uri(hostConfiguration.Prefix+"v1/status"))
+            request.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+            let! response=client.SendAsync request
+            let! body=response.Content.ReadAsByteArrayAsync()
+            return response.StatusCode,JsonDocument.Parse(ReadOnlyMemory body) }
+        let postMainControl action sequence expectedGeneration reason=task {
+            let issued=DateTimeOffset.UtcNow
+            let bytes=JsonSerializer.SerializeToUtf8Bytes(
+                {|schema="fsgg.orchestration.host-control/1";permitId=hostConfiguration.PermitId;commandId=Guid.NewGuid();
+                  expectedSequence=sequence;expectedGeneration=expectedGeneration;principalId="pilot";issuedAt=issued;expiresAt=issued.AddMinutes 1.;reason=reason|})
+            use request=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix + $"v1/{action}"))
+            request.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+            request.Content<-new ByteArrayContent(bytes)
+            request.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+            let! response=client.SendAsync request
+            let! body=response.Content.ReadAsByteArrayAsync()
+            return response.StatusCode,JsonDocument.Parse(ReadOnlyMemory body) }
+        let mutable preflightWaits=0
+        while checkReads=0&&preflightWaits<100 do
+            do! Task.Delay 50
+            preflightWaits<-preflightWaits+1
+        Assert.True(checkReads>0,"merge preflight did not reach the pending native check")
+        let! readyCode,readyStatus=getMainStatus()
+        use readyStatus=readyStatus
+        Assert.Equal(HttpStatusCode.OK,readyCode)
+        Assert.True(readyStatus.RootElement.GetProperty("ready").GetBoolean())
+        let readySequence=readyStatus.RootElement.GetProperty("sequence").GetInt64()
+        let readyGeneration=readyStatus.RootElement.GetProperty("generation").GetInt64()
+        let! pauseCode,pauseReceipt=postMainControl "pause" readySequence readyGeneration "fixture-pause-before-merge"
+        use pauseReceipt=pauseReceipt
+        Assert.Equal(HttpStatusCode.OK,pauseCode)
+        Assert.Equal("pause",pauseReceipt.RootElement.GetProperty("action").GetString())
+        let mutationsWhilePaused=mutationCount
+        let readsBeforeRelease=checkReads
+        checksReleased<-true
+        let! releasedQualification=github.CheckProtectedHead(route.BranchRef,pullHead,CancellationToken.None)
+        Assert.True(Result.isOk releasedQualification,$"released native qualification refused: {releasedQualification}")
+        do! Task.Delay 500
+        Assert.Equal(readsBeforeRelease+1,checkReads)
+        Assert.Equal(mutationsWhilePaused,mutationCount)
+        let! pausedCode,pausedStatus=getMainStatus()
+        use pausedStatus=pausedStatus
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,pausedCode)
+        Assert.False(pausedStatus.RootElement.GetProperty("dispatchEnabled").GetBoolean())
+        Assert.Equal("paused",pausedStatus.RootElement.GetProperty("mode").GetString())
+        let pausedSequence=pausedStatus.RootElement.GetProperty("sequence").GetInt64()
+        let pausedGeneration=pausedStatus.RootElement.GetProperty("generation").GetInt64()
+        let! resumeCode,resumeReceipt=postMainControl "resume" pausedSequence pausedGeneration "fixture-resume-after-checks"
+        use resumeReceipt=resumeReceipt
+        Assert.Equal(HttpStatusCode.OK,resumeCode)
         let mutable complete=false
         let mutable checks=0
         let mutable routeState="not-read"
@@ -1147,10 +1210,31 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         let! recovery=running.Workflow.RecoverContinuation(preparation,CancellationToken.None)
         let recoveryText=sprintf "%A" recovery
         let stderr=if runnerError.IsCompletedSuccessfully then runnerError.Result else "runner-stderr-pending"
-        Assert.True(complete,$"seven-effect route did not reach native delivery; relay={relayLoop.Status}/{relayStage}; pending={relay.PendingCount}; dbPending={dbPending.Length}; recovery={recoveryText}; runnerExited={runnerProcess.HasExited}; stderr={stderr}; execution={executionState}; state={routeState}")
+        Assert.True(complete,$"seven-effect route did not reach native delivery; effectLoop={running.EffectLoop.Status}/{running.EffectLoop.Exception}; checks={checkReads}/released={checksReleased}; relay={relayLoop.Status}/{relayStage}; pending={relay.PendingCount}; dbPending={dbPending.Length}; recovery={recoveryText}; runnerExited={runnerProcess.HasExited}; stderr={stderr}; execution={executionState}; state={routeState}")
         Assert.Equal(3,mutationCount)
+        Assert.Equal(1,mergePutCount)
+        Assert.True(checkReads>=2,"pending routine eligibility was not rechecked before the first merge")
         let! stored=candidates.Read(route.CandidateId,CancellationToken.None)
         Assert.True(Result.isOk stored)
+        let! terminalCode,terminalStatus=getMainStatus()
+        use terminalStatus=terminalStatus
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,terminalCode)
+        Assert.False(terminalStatus.RootElement.GetProperty("dispatchEnabled").GetBoolean())
+        let terminalSequence=terminalStatus.RootElement.GetProperty("sequence").GetInt64()
+        let terminalGeneration=terminalStatus.RootElement.GetProperty("generation").GetInt64()
+        let! terminalPauseCode,terminalPause=postMainControl "pause" terminalSequence terminalGeneration "fixture-pause-before-cancel"
+        use terminalPause=terminalPause
+        Assert.Equal(HttpStatusCode.OK,terminalPauseCode)
+        let! beforeCancelCode,beforeCancelStatus=getMainStatus()
+        use beforeCancelStatus=beforeCancelStatus
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,beforeCancelCode)
+        let cancelSequence=beforeCancelStatus.RootElement.GetProperty("sequence").GetInt64()
+        let cancelGeneration=beforeCancelStatus.RootElement.GetProperty("generation").GetInt64()
+        let! cancelCode,cancelReceipt=postMainControl "cancel" cancelSequence cancelGeneration "fixture-cancel-while-paused"
+        use cancelReceipt=cancelReceipt
+        Assert.Equal(HttpStatusCode.OK,cancelCode)
+        Assert.True(cancelReceipt.RootElement.GetProperty("requestPersisted").GetBoolean())
+        Assert.True(cancelReceipt.RootElement.GetProperty("processTerminationObserved").GetBoolean(),cancelReceipt.RootElement.GetRawText())
         shutdown.Cancel()
         relayStop.Cancel()
         try runnerProcess.Kill(true) with _->()

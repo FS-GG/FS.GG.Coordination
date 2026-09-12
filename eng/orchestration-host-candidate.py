@@ -180,6 +180,19 @@ def usage_readback(binary: bytes) -> str:
         return digest_bytes(process.stdout.encode())
 
 
+def production_readback(binary: bytes) -> str:
+    """Exercise the served production command parser without opening DB/network authority."""
+    with tempfile.TemporaryDirectory(prefix="o2-host-production-") as temporary:
+        path = Path(temporary) / PAYLOAD
+        path.write_bytes(binary)
+        path.chmod(0o500)
+        usage = subprocess.run([str(path)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=10)
+        require(usage.returncode == 2 and "serve" in usage.stdout and "--github-repository" in usage.stdout, "OHC-PRODUCTION", "served Host omits production mode")
+        refused = subprocess.run([str(path), "serve", "--unsupported", "value"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=10)
+        require(refused.returncode == 2 and refused.stdout.strip() == "unknown-option", "OHC-PRODUCTION", "unknown production option did not fail before effects")
+        return digest_bytes((usage.stdout + refused.stdout).encode())
+
+
 def build_once(repo: Path, candidate: str, tree: str, commit_time: str, identity: dict[str, str], root: Path) -> tuple[Path, bytes, dict]:
     require(not root.exists(), "OHC-BUILD-ROOT", f"fixed build root already exists: {root}")
     source = root / "source"
@@ -214,7 +227,8 @@ def build_once(repo: Path, candidate: str, tree: str, commit_time: str, identity
     validated, archived_binary = validate_archive(archive, manifest_bytes)
     require(validated == manifest and archived_binary == binary.read_bytes(), "OHC-ARCHIVE", "archive readback differs")
     usage_sha = usage_readback(archived_binary)
-    return archive, manifest_bytes, {"manifest": manifest, "usageSha256": usage_sha}
+    production_sha = production_readback(archived_binary)
+    return archive, manifest_bytes, {"manifest": manifest, "usageSha256": usage_sha, "productionReadbackSha256": production_sha}
 
 
 def prepare(args: argparse.Namespace) -> None:
@@ -254,6 +268,7 @@ def prepare(args: argparse.Namespace) -> None:
         "archive": {"file": archive_name, "bytes": archive_path.stat().st_size, "sha256": digest_file(archive_path)},
         "manifestSha256": digest_file(manifest_path), "provenanceSha256": digest_file(output / "provenance.intoto.json"),
         "payload": manifest["payload"], "usageSha256": products[0][2]["usageSha256"],
+        "productionReadbackSha256": products[0][2]["productionReadbackSha256"],
         "stages": ["protected-main-bound", "tracked-source-projected", "locked-rid-restored", "published-twice", "archives-byte-identical", "prepared-verified"],
     }
     write_json(output / "prepared.json", prepared)
@@ -277,6 +292,7 @@ def verify_prepared(path: Path) -> dict:
     require(manifest.get("sourceRevision") == candidate and manifest.get("sourceTree") == receipt.get("sourceTree"), "OHC-PREPARED", "source binding differs")
     require(manifest.get("payload") == receipt.get("payload"), "OHC-PREPARED", "payload binding differs")
     require(usage_readback(binary) == receipt.get("usageSha256"), "OHC-PREPARED", "usage binding differs")
+    require(production_readback(binary) == receipt.get("productionReadbackSha256"), "OHC-PREPARED", "production readback binding differs")
     provenance_path = root / "provenance.intoto.json"
     require(digest_file(provenance_path) == receipt.get("provenanceSha256"), "OHC-PREPARED", "provenance digest differs")
     provenance = json.loads(provenance_path.read_text())
@@ -302,13 +318,15 @@ def verify_served(args: argparse.Namespace) -> None:
     manifest, binary = validate_archive(served, (prepared_path.parent / "manifest.json").read_bytes())
     usage_sha = usage_readback(binary)
     require(usage_sha == receipt["usageSha256"], "OHC-SERVED", "served usage differs")
+    production_sha = production_readback(binary)
+    require(production_sha == receipt["productionReadbackSha256"], "OHC-SERVED", "served production readback differs")
     artifact = validate_artifact_identity(receipt["candidate"], args.artifact_id, args.artifact_name, args.artifact_url, args.artifact_digest)
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     verification = {
         "schema": VERIFICATION_SCHEMA, "candidate": receipt["candidate"], "sourceTree": receipt["sourceTree"],
-        "artifact": artifact, "archive": archive, "payload": manifest["payload"], "usageSha256": usage_sha,
-        "stages": ["uploaded-once", "downloaded-fresh", "archive-byte-identical", "payload-byte-identical", "native-usage-readback"],
+        "artifact": artifact, "archive": archive, "payload": manifest["payload"], "usageSha256": usage_sha, "productionReadbackSha256": production_sha,
+        "stages": ["uploaded-once", "downloaded-fresh", "archive-byte-identical", "payload-byte-identical", "native-usage-readback", "native-production-mode-readback"],
     }
     write_json(output / "verification.json", verification)
     print(f"ORCHESTRATION_HOST_SERVED candidate={receipt['candidate']} artifactId={artifact['id']} archiveSha256={archive['sha256']}")

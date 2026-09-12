@@ -16,8 +16,22 @@ type MainRoutePreparation =
       LaunchIntent:LaunchIntent; Binding:ExecutorRouteBinding; InputManifest:ExecutorInputManifest
       InputBytes:byte array; WorkspaceManifest:ExecutorWorkspaceManifest; ExecutionReservation:SubscriptionReservation }
 
+type MainRouteStatus =
+    { Admitted:bool; Ready:bool; DispatchEnabled:bool; Mode:string
+      Sequence:int64; Generation:int64; UnknownOperations:int; Findings:string list }
+
+type MainRouteControl =
+    { CommandId:Guid; ExpectedSequence:int64; ExpectedGeneration:int64; PrincipalId:string
+      IssuedAt:DateTimeOffset; ExpiresAt:DateTimeOffset; Reason:string; Action:string }
+
+type MainRouteControlReceipt =
+    { Sequence:int64; Action:string; RequestPersisted:bool
+      ProcessTerminationObserved:bool option; Detail:string }
+
 type IMainRouteAdmissionHandler =
     abstract Admit:byte array * CancellationToken -> Task<Result<unit,string>>
+    abstract Status:CancellationToken -> Task<Result<MainRouteStatus,string>>
+    abstract Control:MainRouteControl * CancellationToken -> Task<Result<MainRouteControlReceipt,string>>
 
 [<CLIMutable>]
 type MainRouteAdmissionWire =
