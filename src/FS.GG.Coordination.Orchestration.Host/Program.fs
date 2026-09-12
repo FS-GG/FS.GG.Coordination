@@ -46,7 +46,7 @@ let main arguments =
                     let relay=HostExecutorRelay(4,2*1024*1024)
                     let githubExecutor=HttpGitHubRequestExecutor(httpClient,githubConfiguration.Token,2*1024*1024) :> IGitHubRequestExecutor
                     let publisher=GitBundlePublisher(githubConfiguration.RemoteUri,githubConfiguration.Token,1024*1024) :> IGitCandidatePublisher
-                    let github=GitHubRouteClient(githubExecutor,publisher,{ApiRoot=githubConfiguration.ApiRoot;Repository=githubConfiguration.Repository;IssueNumber=githubConfiguration.IssueNumber;Principal=configuration.PilotPrincipalId;BaseRef=githubConfiguration.BaseRef;RequiredChecks=githubConfiguration.RequiredChecks;ClaimLease=TimeSpan.FromMinutes 30.},TimeProvider.System)
+                    let github=GitHubRouteClient(githubExecutor,publisher,{ApiRoot=githubConfiguration.ApiRoot;Repository=githubConfiguration.Repository;IssueNumber=githubConfiguration.IssueNumber;Principal=configuration.PilotPrincipalId;BaseRef=githubConfiguration.BaseRef;RoutineOperation=githubConfiguration.RoutineOperation;ClaimLease=TimeSpan.FromMinutes 30.},TimeProvider.System)
                     let admission=
                         MainProductionAdmission(actorSystem,TimeProvider.System,store.WorkItems,store.Candidates,executionStore,
                             configuration.WorkItemId,configuration.PilotPrincipalId,github,relay,shutdown.Token)

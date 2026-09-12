@@ -4,9 +4,13 @@ open System
 open System.Collections.Generic
 open System.IO
 open System.Diagnostics
+open System.Net
+open System.Net.Http
+open System.Text
 open System.Threading
 open System.Threading.Tasks
 open Xunit
+open FS.GG.Coordination.GitHub
 open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Host
@@ -68,6 +72,10 @@ module private Fixture =
 type private FixedClock(now:DateTimeOffset) =
     inherit TimeProvider()
     override _.GetUtcNow()=now
+
+type private FixedHttpHandler(send:HttpRequestMessage*CancellationToken->Task<HttpResponseMessage>) =
+    inherit HttpMessageHandler()
+    override _.SendAsync(request,cancellationToken)=send(request,cancellationToken)
 
 [<Fact>]
 let ``sealed adapter exposes exactly the seven route-bound operations`` () = task {
@@ -210,6 +218,86 @@ let ``paused restart reconciles dispatch without repeating provider mutation`` (
     Assert.Equal(1,reconciles) }
 
 [<Fact>]
+let ``pending preflight remains undispatched then lost response is reconcile only`` () = task {
+    let events,intent=activeClaimEvents()
+    let store=MemoryStore events :> IJournalStore
+    let mutable preflights=0
+    let mutable writes=0
+    let mutable reconciles=0
+    let preflight _ _ _=
+        preflights<-preflights+1
+        Task.FromResult(if preflights=1 then Error "github-required-checks-not-green" else Ok())
+    let mutate _ _ _=writes<-writes+1;Task.FromResult(Error "github-timeout-unknown")
+    let unused _ _ _=Task.FromResult(Error "unused")
+    let adapter=HostedWriterProviderAdapter.Create{AcquireExternalClaim=mutate;DispatchRunner=unused;StoreCandidate=unused;PublishCandidateBranch=unused;CreatePullRequest=unused;MergePullRequest=unused;ReadNativeDelivery=fun _ _ _->Task.FromResult(Error "unused")}
+    let reconcile _ _ _=reconciles<-reconciles+1;Task.FromResult(Error "github-native-delivery-not-observed")
+    let driver=MainEffectDriver(FixedClock Fixture.now,store,Fixture.workItem,"pilot",adapter,reconcile,preflight=preflight)
+    let! pending=driver.Drive(intent.OperationId,CancellationToken.None)
+    Assert.Equal(EffectDriveRefused "github-required-checks-not-green",pending)
+    Assert.Equal(0,writes)
+    let! ambiguous=driver.Drive(intent.OperationId,CancellationToken.None)
+    match ambiguous with EffectNeedsExternalReconciliation _->()|other->failwithf "%A" other
+    Assert.Equal(1,writes)
+    let! afterRestart=driver.Drive(intent.OperationId,CancellationToken.None)
+    match afterRestart with EffectNeedsExternalReconciliation _->()|other->failwithf "%A" other
+    Assert.Equal(1,writes)
+    Assert.Equal(1,reconciles) }
+
+[<Fact>]
+let ``expired authority refuses before external preflight`` () = task {
+    let events,intent=activeClaimEvents()
+    let store=MemoryStore events :> IJournalStore
+    let mutable preflights=0
+    let preflight _ _ _=preflights<-preflights+1;Task.FromResult(Ok())
+    let unused _ _ _=Task.FromResult(Error "unused")
+    let adapter=HostedWriterProviderAdapter.Create{AcquireExternalClaim=unused;DispatchRunner=unused;StoreCandidate=unused;PublishCandidateBranch=unused;CreatePullRequest=unused;MergePullRequest=unused;ReadNativeDelivery=fun _ _ _->Task.FromResult(Error "unused")}
+    let driver=MainEffectDriver(FixedClock(Fixture.now.AddMinutes 31.),store,Fixture.workItem,"pilot",adapter,(fun _ _ _->Task.FromResult(Error "unused")),preflight=preflight)
+    let! result=driver.Drive(intent.OperationId,CancellationToken.None)
+    Assert.Equal(EffectDriveRefused "effect-authority-not-current",result)
+    Assert.Equal(0,preflights) }
+
+[<Fact>]
+let ``HTTP GitHub executor honors case-insensitive rate reset before another request`` () = task {
+    let mutable calls=0
+    use handler=new FixedHttpHandler(fun _->task {
+        calls<-calls+1
+        let response=new HttpResponseMessage(HttpStatusCode.OK)
+        response.Headers.TryAddWithoutValidation("x-rAtElImIt-ReMaInInG","0")|>ignore
+        response.Headers.TryAddWithoutValidation("X-RATELIMIT-RESET",DateTimeOffset.UtcNow.AddMinutes(1.).ToUnixTimeSeconds().ToString())|>ignore
+        response.Content<-new StringContent("{}")
+        return response })
+    use client=new HttpClient(handler)
+    let executor=HttpGitHubRequestExecutor(client,"fixture-token",1024) :> IGitHubRequestExecutor
+    let request=Rest{Method=RestMethod.Get;Uri=Uri "https://api.github.test/rate";Headers=Map.empty;Body=None;ApiVersion=FS.GG.Coordination.GitHub.ApiVersion.required;Idempotency=FS.GG.Coordination.GitHub.IdempotencyClass.ReplaySafe}
+    let! first=executor.Send(request,CancellationToken.None)
+    match first with
+    | Response response->Assert.Equal(Some 0,response.RateBudget.Remaining)
+    | other->failwithf "%A" other
+    use cancelled=new CancellationTokenSource(TimeSpan.FromMilliseconds 50.)
+    let! second=executor.Send(request,cancelled.Token)
+    Assert.Equal(TimedOut,second)
+    Assert.Equal(1,calls) }
+
+[<Fact>]
+let ``HTTP GitHub executor honors mixed-case Retry-After on throttling`` () = task {
+    let mutable calls=0
+    use handler=new FixedHttpHandler(fun _->task {
+        calls<-calls+1
+        let response=new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+        response.Headers.TryAddWithoutValidation("rEtRy-AfTeR","60")|>ignore
+        response.Content<-new StringContent("{}")
+        return response })
+    use client=new HttpClient(handler)
+    let executor=HttpGitHubRequestExecutor(client,"fixture-token",1024) :> IGitHubRequestExecutor
+    let request=Rest{Method=RestMethod.Get;Uri=Uri "https://api.github.test/retry";Headers=Map.empty;Body=None;ApiVersion=FS.GG.Coordination.GitHub.ApiVersion.required;Idempotency=FS.GG.Coordination.GitHub.IdempotencyClass.ReplaySafe}
+    let! first=executor.Send(request,CancellationToken.None)
+    match first with Response response->Assert.Equal(429,response.StatusCode)|other->failwithf "%A" other
+    use cancelled=new CancellationTokenSource(TimeSpan.FromMilliseconds 50.)
+    let! second=executor.Send(request,cancelled.Token)
+    Assert.Equal(TimedOut,second)
+    Assert.Equal(1,calls) }
+
+[<Fact>]
 let ``Main verifies complete executor bundle before durable candidate readback`` () = task {
     let bytes=System.Text.Encoding.UTF8.GetBytes "immutable git bundle"
     let digest=RunnerWire.sha256 bytes
@@ -329,19 +417,40 @@ type private FixedPublisher(result:Result<string,string>) =
 let private response body =
     FS.GG.Coordination.GitHub.Response{StatusCode=200;Headers=Map.empty;Body=body;ETag=Some "fixture-etag";RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}}
 
+let private responseStatus status body =
+    FS.GG.Coordination.GitHub.Response{StatusCode=status;Headers=Map.empty;Body=body;ETag=Some "fixture-etag";RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}}
+
 let private githubTarget =
     {ApiRoot=Uri "https://api.github.test/";Repository="FS-GG/.github";IssueNumber=3419;Principal="pilot-worker";BaseRef="main"
-     RequiredChecks=set["routine-eligibility";"reuse-decision";"aggregate"];ClaimLease=TimeSpan.FromMinutes 30.}
+     RoutineOperation="internal-docs";ClaimLease=TimeSpan.FromMinutes 30.}
 
 let private pr state mergedAt head mergeSha =
     let merged=match mergedAt with Some value -> $"\"{value}\"" | None -> "null"
     let merge=match mergeSha with Some value -> $"\"{value}\"" | None -> "null"
-    $"[{{\"number\":42,\"node_id\":\"PR_node\",\"state\":\"{state}\",\"merged_at\":{merged},\"merge_commit_sha\":{merge},\"head\":{{\"sha\":\"{head}\",\"ref\":\"pilot\"}},\"base\":{{\"ref\":\"main\",\"repo\":{{\"full_name\":\"FS-GG/.github\"}}}}}}]"
+    let baseSha=String.replicate 40 "b"
+    $"[{{\"number\":42,\"node_id\":\"PR_node\",\"state\":\"{state}\",\"body\":\"<!-- fsgg:routine-development/v1 head={head} operation=internal-docs -->\",\"merged_at\":{merged},\"merge_commit_sha\":{merge},\"head\":{{\"sha\":\"{head}\",\"ref\":\"pilot\"}},\"base\":{{\"ref\":\"main\",\"sha\":\"{baseSha}\",\"repo\":{{\"full_name\":\"FS-GG/.github\"}}}}}}]"
+
+let private prDetail head =
+    $"{{\"draft\":false,\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{{\"sha\":\"{head}\"}},\"base\":{{\"ref\":\"main\"}}}}"
+
+let private routinePolicy =
+    let bytes=Encoding.UTF8.GetBytes "{\"schema\":\"fsgg.routine-development-policy/v1\",\"allowedOperations\":[\"source-change\",\"internal-docs\"]}"
+    $"{{\"content\":\"{Convert.ToBase64String bytes}\"}}"
 
 [<Fact>]
 let ``GitHub route refuses competing canonical claim marker`` () = task {
     let operation=Guid.Parse "80000000-0000-0000-0000-000000000001"
     let comments=$"[{{\"id\":1,\"updated_at\":\"2026-09-10T19:00:00Z\",\"body\":\"<!-- fsgg:claim worker=other lease=30 renewed=1 session={operation:N} -->\"}}]"
+    let executor=QueuedGitHub[response comments]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok(String.replicate 40 "a")),githubTarget,FixedClock Fixture.now)
+    let! result=client.AcquireClaim("claim-1",operation,CancellationToken.None)
+    Assert.Equal(Error "github-claim-held-by-competitor",result)
+    Assert.Single(executor.Requests)|>ignore }
+
+[<Fact>]
+let ``GitHub route recognizes canonical claim metadata without stealing ownership`` () = task {
+    let operation=Guid.Parse "80000000-0000-0000-0000-000000000001"
+    let comments=$"[{{\"id\":1,\"updated_at\":\"2026-09-10T19:00:00Z\",\"body\":\"<!-- fsgg:claim worker=other lease=30 renewed=1 session={operation:N} prev=Ready pathRepo=FS-GG.github agentContract=v1 -->\"}}]"
     let executor=QueuedGitHub[response comments]
     let client=GitHubRouteClient(executor,FixedPublisher(Ok(String.replicate 40 "a")),githubTarget,FixedClock Fixture.now)
     let! result=client.AcquireClaim("claim-1",operation,CancellationToken.None)
@@ -362,9 +471,34 @@ let ``GitHub route refuses missing branch readback and unmerged delivery`` () = 
 let ``GitHub merge refuses incomplete required checks before mutation`` () = task {
     let head=String.replicate 40 "a"
     let protection="{\"checks\":[{\"context\":\"compiler-and-tests\"}]}"
-    let checks="{\"check_runs\":[{\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"success\"}]}"
-    let executor=QueuedGitHub[response(pr "open" None head None);response protection;response checks]
+    let checks=$"{{\"check_runs\":[{{\"id\":1,\"head_sha\":\"{head}\",\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"success\"}}]}}"
+    let executor=QueuedGitHub[response(pr "open" None head None);response(prDetail head);response routinePolicy;response protection;response checks]
     let client=GitHubRouteClient(executor,FixedPublisher(Ok head),githubTarget,FixedClock Fixture.now)
     let! result=client.Merge("refs/heads/pilot",head,Guid.NewGuid(),CancellationToken.None)
     Assert.Equal(Error "github-required-checks-not-green",result)
-    Assert.Equal(3,executor.Requests.Length) }
+    Assert.Equal(5,executor.Requests.Length) }
+
+[<Fact>]
+let ``GitHub routine docs accepts policy and latest exact-head eligibility only`` () = task {
+    let head=String.replicate 40 "a"
+    let checks=$"{{\"check_runs\":[{{\"id\":1,\"head_sha\":\"{head}\",\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"failure\"}},{{\"id\":2,\"head_sha\":\"{head}\",\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"success\"}}]}}"
+    let executor=QueuedGitHub[response(pr "open" None head None);response(prDetail head);response routinePolicy;responseStatus 404 "{}";response checks]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok head),githubTarget,FixedClock Fixture.now)
+    let! accepted=client.CheckProtectedHead("refs/heads/pilot",head,CancellationToken.None)
+    match accepted with Ok(42,"PR_node","fixture-etag")->()|other->failwithf "%A" other
+    Assert.Equal(5,executor.Requests.Length) }
+
+[<Fact>]
+let ``GitHub routine docs refuses newer failed eligibility and unsupported operation`` () = task {
+    let head=String.replicate 40 "a"
+    let checks=$"{{\"check_runs\":[{{\"id\":1,\"head_sha\":\"{head}\",\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"success\"}},{{\"id\":2,\"head_sha\":\"{head}\",\"name\":\"routine-eligibility\",\"status\":\"completed\",\"conclusion\":\"failure\"}}]}}"
+    let executor=QueuedGitHub[response(pr "open" None head None);response(prDetail head);response routinePolicy;responseStatus 404 "{}";response checks]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok head),githubTarget,FixedClock Fixture.now)
+    let! refused=client.CheckProtectedHead("refs/heads/pilot",head,CancellationToken.None)
+    Assert.Equal(Error "github-required-checks-not-green",refused)
+    let unsupported={githubTarget with RoutineOperation="source-change"}
+    let unsupportedExecutor=QueuedGitHub[]
+    let unsupportedClient=GitHubRouteClient(unsupportedExecutor,FixedPublisher(Ok head),unsupported,FixedClock Fixture.now)
+    let! profile=unsupportedClient.CheckProtectedHead("refs/heads/pilot",head,CancellationToken.None)
+    Assert.Equal(Error "github-routine-profile-unsupported",profile)
+    Assert.Empty(unsupportedExecutor.Requests) }

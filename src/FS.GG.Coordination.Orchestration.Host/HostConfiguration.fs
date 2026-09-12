@@ -23,7 +23,7 @@ type HostConfiguration =
       MaximumConcurrentRequests: int }
 
 and MainGitHubConfiguration =
-    { Token:string; Repository:string; IssueNumber:int; BaseRef:string; ApiRoot:Uri; RemoteUri:Uri; RequiredChecks:Set<string> }
+    { Token:string; Repository:string; IssueNumber:int; BaseRef:string; ApiRoot:Uri; RemoteUri:Uri; RoutineOperation:string }
 
 [<RequireQualifiedAccess>]
 module HostConfiguration =
@@ -139,7 +139,7 @@ module HostConfiguration =
                 | Some tokenPath,Some repository,Some issueText,Some baseRef->
                     match privateFile 4096 tokenPath,Int32.TryParse issueText with
                     | Ok githubToken,(true,issueNumber) when githubToken.Length>=32&&repository.Split('/').Length=2&&issueNumber>0&&baseRef=baseRef.Trim()&&baseRef.Length<=128->
-                        Ok(Some{Token=githubToken;Repository=repository;IssueNumber=issueNumber;BaseRef=baseRef;ApiRoot=Uri "https://api.github.com/";RemoteUri=Uri($"https://github.com/{repository}.git");RequiredChecks=set["routine-eligibility";"reuse-decision";"aggregate"]})
+                        Ok(Some{Token=githubToken;Repository=repository;IssueNumber=issueNumber;BaseRef=baseRef;ApiRoot=Uri "https://api.github.com/";RemoteUri=Uri($"https://github.com/{repository}.git");RoutineOperation="internal-docs"})
                     | _->Error "invalid-github-main-configuration"
                 | _->Error "incomplete-github-main-configuration"
             match Int64.TryParse fenceText, Guid.TryParse backupIdentity, Guid.TryParse permitText,

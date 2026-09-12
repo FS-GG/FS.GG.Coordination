@@ -235,7 +235,10 @@ module HostRuntime =
     let private handle clock configuration store (executorRelay:HostExecutorRelay option) (mainAdmission:IMainRouteAdmissionHandler option) (context: HttpListenerContext) cancellationToken = task {
         let request, response = context.Request, context.Response
         if request.HttpMethod = "GET" && request.Url.AbsolutePath = "/health/live" then
-            do! writeJson response 200 {| schema = "fsgg.orchestration.host-liveness/1"; live = true; dispatchEnabled = false |} cancellationToken
+            // Liveness deliberately says nothing about mutation readiness. The
+            // authenticated /health/ready and /v1/status routes own the
+            // paused/admitted/reconciled dispatch state.
+            do! writeJson response 200 {| schema = "fsgg.orchestration.host-liveness/2"; live = true; readinessRoute = "/health/ready" |} cancellationToken
         elif request.Url.AbsolutePath.StartsWith("/v1/executor/",StringComparison.Ordinal) then
             if not(authorize configuration.RunnerToken (Option.ofObj request.Headers["Authorization"])) || executorRelay.IsNone then
                 do! writeJson response 401 {| error="unauthorized" |} cancellationToken
@@ -313,17 +316,35 @@ module HostRuntime =
                     | Ok()->do! writeJson response 200 {|schema="fsgg.orchestration.main-route-admission-receipt/1";accepted=true|} cancellationToken
                     | Error reason->do! writeJson response 409 {|error=reason|} cancellationToken
         elif request.HttpMethod = "GET" && (request.Url.AbsolutePath = "/health/ready" || request.Url.AbsolutePath = "/v1/status") then
-            let! current = status store configuration.PermitId cancellationToken
-            do! writeJson response (if current.Ready then 200 else 503) current cancellationToken
-        elif request.HttpMethod = "POST" && (request.Url.AbsolutePath = "/v1/pause" || request.Url.AbsolutePath = "/v1/revoke") then
+            match mainAdmission with
+            | None->
+                let! current = status store configuration.PermitId cancellationToken
+                do! writeJson response (if current.Ready then 200 else 503) current cancellationToken
+            | Some admission->
+                let! current=admission.Status cancellationToken
+                match current with
+                | Error reason->do! writeJson response 503 {|schema="fsgg.orchestration.main-host-status/1";ready=false;dispatchEnabled=false;mode="unavailable";findings=[|reason|]|} cancellationToken
+                | Ok value->do! writeJson response (if value.Ready then 200 else 503) {|schema="fsgg.orchestration.main-host-status/1";ready=value.Ready;dispatchEnabled=value.DispatchEnabled;admitted=value.Admitted;mode=value.Mode;sequence=value.Sequence;generation=value.Generation;unknownOperations=value.UnknownOperations;findings=List.toArray value.Findings|} cancellationToken
+        elif request.HttpMethod = "POST" && (request.Url.AbsolutePath = "/v1/pause" || request.Url.AbsolutePath = "/v1/resume" || request.Url.AbsolutePath = "/v1/revoke" || request.Url.AbsolutePath = "/v1/cancel") then
             let! decoded = readControl request cancellationToken
             match decoded with
             | Error reason -> do! writeJson response 400 {| error = reason |} cancellationToken
             | Ok control ->
-                let! result = applyControl clock store configuration.PermitId configuration.PilotPrincipalId control (request.Url.AbsolutePath = "/v1/revoke") cancellationToken
-                match result with
-                | Ok sequence -> do! writeJson response 200 {| schema = "fsgg.orchestration.host-control-receipt/1"; accepted = true; sequence = sequence |} cancellationToken
-                | Error reason -> do! writeJson response 409 {| error = reason |} cancellationToken
+                match mainAdmission with
+                | None->
+                    if request.Url.AbsolutePath="/v1/resume" || request.Url.AbsolutePath="/v1/cancel" then do! writeJson response 404 {|error="legacy-main-control-route-not-supported"|} cancellationToken else
+                        let! result = applyControl clock store configuration.PermitId configuration.PilotPrincipalId control (request.Url.AbsolutePath = "/v1/revoke") cancellationToken
+                        match result with
+                        | Ok sequence -> do! writeJson response 200 {| schema = "fsgg.orchestration.host-control-receipt/1"; accepted = true; sequence = sequence |} cancellationToken
+                        | Error reason -> do! writeJson response 409 {| error = reason |} cancellationToken
+                | Some admission->
+                    if control.Schema<>"fsgg.orchestration.host-control/1" then do! writeJson response 400 {|error="invalid-main-control-schema"|} cancellationToken
+                    elif control.PermitId<>configuration.PermitId then do! writeJson response 409 {|error="control-authority-mismatch"|} cancellationToken else
+                    let value={CommandId=control.CommandId;ExpectedSequence=control.ExpectedSequence;ExpectedGeneration=control.ExpectedGeneration;PrincipalId=control.PrincipalId;IssuedAt=control.IssuedAt;ExpiresAt=control.ExpiresAt;Reason=control.Reason;Action=request.Url.AbsolutePath.Substring(4)}
+                    let! result=admission.Control(value,cancellationToken)
+                    match result with
+                    | Ok receipt->do! writeJson response 200 {|schema="fsgg.orchestration.main-host-control-receipt/1";accepted=true;sequence=receipt.Sequence;action=receipt.Action;requestPersisted=receipt.RequestPersisted;processTerminationObserved=receipt.ProcessTerminationObserved;detail=receipt.Detail|} cancellationToken
+                    | Error reason->do! writeJson response 409 {|error=reason|} cancellationToken
         else do! writeJson response 404 {| error = "not-found" |} cancellationToken }
 
     let private serveInternal (clock: TimeProvider) (configuration: HostConfiguration) (store: HostStore) relay admission (cancellationToken: CancellationToken) = task {
