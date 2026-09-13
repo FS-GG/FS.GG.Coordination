@@ -65,6 +65,38 @@ let hostedReady () =
 
 module Cases =
     [<Fact>]
+    let ``invalid hosted route is rejected before selection and exact paused recovery is append only`` () =
+        let subscription =
+            { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.
+              Usage=TokensUnknown "provider-not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="not-attributed"} }
+        let append protocol state id body =
+            FS.GG.Coordination.Core.Orchestration.decide now state
+                {CommandId=id;ProtocolVersion=protocol;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=body}
+        let admittedDecision=append (Id.protocolVersion 2 0) initial (command "19000000-0000-0000-0000-000000000001") (AdmitSubscription(snapshot [],subscription))
+        let admitted=apply admittedDecision initial
+        let running=append (Id.protocolVersion 1 0) admitted (command "19000000-0000-0000-0000-000000000002") Resume |> fun d->apply d admitted
+        let reserved=append (Id.protocolVersion 1 0) running (command "19000000-0000-0000-0000-000000000003") (Reserve(Id.reservation(guid "19000000-0000-0000-0000-000000000004"),now.AddMinutes 20.,Set.singleton "pilot-claim")) |> fun d->apply d running
+        let corrected=hostedRoute reserved (Id.attempt(guid "19000000-0000-0000-0000-000000000005")) (Id.candidate(guid "19000000-0000-0000-0000-000000000006"))
+        let rejectedRoute={corrected with BranchRef="refs/heads/fsgg/recovery-evidence"}
+        Assert.False(validHostedRouteShape now work rejectedRoute)
+        let rejectedId=command "19000000-0000-0000-0000-000000000007"
+        let rejected=append (Id.protocolVersion 1 0) reserved rejectedId (SelectHostedRoute rejectedRoute)
+        Assert.Equal(Rejected,rejected.Receipt.Disposition)
+        let rejectedState=apply rejected reserved
+        Assert.True(rejectedState.HostedRoute.IsNone)
+        let paused=append (Id.protocolVersion 1 0) rejectedState (command "19000000-0000-0000-0000-000000000008") (Pause "recovery") |> fun d->apply d rejectedState
+        let recoveryId=command "19000000-0000-0000-0000-000000000009"
+        let recoveryBody=RecoverHostedRoute(rejectedId,rejectedRoute,corrected)
+        let recoveryEnvelope={CommandId=recoveryId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=paused.Revision;ExpectedGeneration=paused.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=recoveryBody}
+        let recovered=FS.GG.Coordination.Core.Orchestration.decide now paused recoveryEnvelope
+        Assert.Equal(Accepted,recovered.Receipt.Disposition)
+        let recoveredState=apply recovered paused
+        Assert.Equal(Some corrected,recoveredState.HostedRoute)
+        Assert.Equal(Duplicate,(FS.GG.Coordination.Core.Orchestration.decide now recoveredState recoveryEnvelope).Receipt.Disposition)
+        let conflict={recoveryEnvelope with Command=RecoverHostedRoute(rejectedId,rejectedRoute,{corrected with ClaimResourceId="changed"})}
+        Assert.Equal(Conflict,(FS.GG.Coordination.Core.Orchestration.decide now recoveredState conflict).Receipt.Disposition)
+
+    [<Fact>]
     let ``canonical WorkItem ignores aliases urls and multi-board projection membership`` () =
         Assert.Equal(WorkItemIdentity.persistenceId (snapshot ["board-a"]).WorkItemId,WorkItemIdentity.persistenceId (snapshot ["board-z";"board-a"]).WorkItemId)
         let legacy=WorkItemIdentity.create "MDQ6VXNlcjU4MzIzMQ==" 42L "MDU6SXNzdWUxNw==" 17L

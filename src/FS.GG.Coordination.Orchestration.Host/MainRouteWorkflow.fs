@@ -96,7 +96,15 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
                     match result with Error reason->failure<-Some reason|_->()
                 if failure.IsNone then
                     let! current=state token
-                    let! result=runIf (current|>Result.exists _.HostedRoute.IsNone) "select-route" (SelectHostedRoute value.Route) token
+                    let rejectedCommandId=commandId "select-route"
+                    let recoverable=
+                        current|>Result.exists(fun state->
+                            state.HostedRoute.IsNone
+                            && (state.CommandReceipts|>Map.tryFind rejectedCommandId|>Option.exists(fun receipt->receipt.Disposition=Rejected&&receipt.Detail="invalid-hosted-route")))
+                    let priorRoute={value.Route with BranchRef=value.Route.BranchRef.Replace("refs/heads/fsgg/pilot/","refs/heads/fsgg/")}
+                    let! result=
+                        if recoverable then append "recover-select-route" (RecoverHostedRoute(rejectedCommandId,priorRoute,value.Route)) token
+                        else runIf (current|>Result.exists _.HostedRoute.IsNone) "select-route" (SelectHostedRoute value.Route) token
                     match result with Error reason->failure<-Some reason|_->()
                 if failure.IsNone then
                     let! current=state token

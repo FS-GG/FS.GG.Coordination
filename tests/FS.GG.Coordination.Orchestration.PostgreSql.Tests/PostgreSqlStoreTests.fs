@@ -1083,6 +1083,14 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
               PilotPrincipalId="pilot";WorkItemId=workItem;GitHub=None;RequestTimeout=TimeSpan.FromSeconds 10.;MaximumConcurrentRequests=4 }
         use firstActorSystem=ActorSystem.Create("main-composed-before-crash")
         let firstAdmission=MainProductionAdmission(firstActorSystem,TimeProvider.System,crashAfterSettlement,candidates,executions,workItem,"pilot",github,relay,firstShutdown.Token)
+        let invalidPreparation={preparation with Route={preparation.Route with BranchRef="refs/heads/fsgg/not-pilot"}}
+        let! invalidAdmission=(firstAdmission :> IMainRouteAdmissionHandler).Admit(MainRouteAdmission.encode (Guid.NewGuid()) invalidPreparation,CancellationToken.None)
+        Assert.Equal(Error "main-route-admission-route-refused",invalidAdmission)
+        let! afterInvalid=HostedWriterJournal.recover workItems workItem CancellationToken.None
+        let afterInvalidState=match afterInvalid with Ok value->value.State|Error failures->failwithf "unexpected recovery failure: %A" failures
+        Assert.True(afterInvalidState.WorkItemId.IsNone)
+        Assert.True(afterInvalidState.Reservation.IsNone)
+        Assert.True(afterInvalidState.HostedRoute.IsNone)
         let firstServer=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore crashAfterSettlement) relay (firstAdmission :> IMainRouteAdmissionHandler) firstShutdown.Token
         do! Task.Delay 50
         use client=new HttpClient()

@@ -167,7 +167,9 @@ module Orchestration =
         | Reserve of ReservationId * DateTimeOffset * requiredClaimIds:Set<string>
         | ObserveClaim of ExternalClaim | ReleaseReservation of string | ObserveClaimReleased of string
         | RecordCompensationFailure of claimId:string * reason:string
-        | SelectHostedRoute of HostedRoutePlan | StartAttempt of AttemptId * SessionId * RunnerEnrollment
+        | SelectHostedRoute of HostedRoutePlan
+        | RecoverHostedRoute of rejectedCommandId:CommandId * rejectedRoute:HostedRoutePlan * correctedRoute:HostedRoutePlan
+        | StartAttempt of AttemptId * SessionId * RunnerEnrollment
         | ObserveAttempt of AttemptId * AttemptStatus
         | AcceptRunnerMessage of SessionId * clientSequence:int64 * emitServerMessage:bool * requestSha256:string
         | CloseRunnerSession of SessionId
@@ -190,7 +192,8 @@ module Orchestration =
         | GenerationAdvanced of Generation
         | ReservationCreated of Reservation | ReservationReleased of ReservationId * string * claimsToCompensate:Set<string>
         | ClaimObserved of ExternalClaim | ClaimReleased of string | CompensationFailed of string * string
-        | HostedRouteSelected of HostedRoutePlan | AttemptStarted of Attempt | AttemptObserved of AttemptId * AttemptStatus | BudgetCharged of BudgetUse
+        | HostedRouteSelected of HostedRoutePlan | HostedRouteRecovered of HostedRoutePlan * rejectedCommandId:CommandId
+        | AttemptStarted of Attempt | AttemptObserved of AttemptId * AttemptStatus | BudgetCharged of BudgetUse
         | SubscriptionAccountingRecorded of SubscriptionAccountingObservation
         | RunnerSessionOpened of SessionState | RunnerClientSequenceAccepted of SessionId * int64
         | RunnerServerSequenceAdvanced of SessionId * int64 | RunnerSessionClosed of SessionId
@@ -217,6 +220,18 @@ module Orchestration =
     let private sameGeneration (Generation left) (Generation right) = left = right
     let private validSha value = not(String.IsNullOrWhiteSpace value) && value.Length=64 && Seq.forall Uri.IsHexDigit value
     let private validGitObject value = not(String.IsNullOrWhiteSpace value) && (value.Length=40 || value.Length=64) && Seq.forall Uri.IsHexDigit value
+    let validHostedRouteShape now expectedWorkItem (route:HostedRoutePlan) =
+        let operations =
+            [route.ClaimOperationId;route.ProcessOperationId;route.CandidateOperationId;route.BranchOperationId
+             route.PullRequestOperationId;route.MergeOperationId;route.ReadbackOperationId]
+        let validText maximum value = not(String.IsNullOrWhiteSpace value) && value=value.Trim() && value.Length<=maximum
+        route.RouteId<>Guid.Empty && route.WorkItemId=expectedWorkItem
+        && route.JobClass="routine-documentation-delivery" && Id.generationValue route.Generation>=0L
+        && Id.revisionValue route.WorkflowRevision>=1L && route.SelectedAt<=now
+        && validText 128 route.RepositoryNodeId && validText 128 route.ClaimResourceId
+        && route.BranchRef.StartsWith("refs/heads/fsgg/pilot/",StringComparison.Ordinal)
+        && route.BranchRef.Length<=255 && Set.count(Set.ofList operations)=operations.Length
+        && operations |> List.forall(fun operation -> Id.operationValue operation<>Guid.Empty)
     let private tryAdd left right =
         if left < 0L || right < 0L || left > Int64.MaxValue-right then None else Some(left+right)
     let private tryAddUse a b =
@@ -401,6 +416,7 @@ module Orchestration =
         | ClaimReleased claimId -> {state with ExternalClaims=Map.remove claimId state.ExternalClaims;RecoveryObligations=Set.remove claimId state.RecoveryObligations;CompensationFailures=Map.remove claimId state.CompensationFailures;Revision=revision}
         | CompensationFailed(claimId,reason) -> {state with RecoveryObligations=Set.add claimId state.RecoveryObligations;CompensationFailures=Map.add claimId reason state.CompensationFailures;Revision=revision}
         | HostedRouteSelected route -> {state with HostedRoute=Some route;Revision=revision}
+        | HostedRouteRecovered(route,_) -> {state with HostedRoute=Some route;Revision=revision}
         | AttemptStarted a -> {state with Attempts=Map.add a.AttemptId a state.Attempts;Revision=revision}
         | RunnerSessionOpened session -> {state with Sessions=Map.add session.SessionId session state.Sessions;Revision=revision}
         | RunnerClientSequenceAccepted(sessionId,sequence) ->
@@ -496,19 +512,33 @@ module Orchestration =
         | RecordCompensationFailure(claimId,reason) when Set.contains claimId state.RecoveryObligations -> accept [CompensationFailed(claimId,reason)] [] "compensation-pending"
         | RecordCompensationFailure _ -> reject "no-compensation-obligation"
         | SelectHostedRoute route ->
-            let operations = routeOperations route |> List.map snd
-            let validText maximum value = not(String.IsNullOrWhiteSpace value) && value=value.Trim() && value.Length<=maximum
             let valid =
-                route.RouteId<>Guid.Empty && state.HostedRoute.IsNone && state.WorkItemId=Some route.WorkItemId
-                && route.JobClass="routine-documentation-delivery" && route.Generation=state.Generation
+                state.HostedRoute.IsNone && state.WorkItemId=Some route.WorkItemId
+                && validHostedRouteShape now route.WorkItemId route && route.Generation=state.Generation
                 && state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=route.WorkflowRevision)
-                && route.SelectedAt<=now && validText 128 route.RepositoryNodeId && validText 128 route.ClaimResourceId
-                && route.BranchRef.StartsWith("refs/heads/fsgg/pilot/",StringComparison.Ordinal)
-                && route.BranchRef.Length<=255 && Set.count(Set.ofList operations)=operations.Length
-                && operations |> List.forall(fun operation -> Id.operationValue operation<>Guid.Empty)
                 && state.Operations.IsEmpty && state.Attempts.IsEmpty
             if valid then accept [HostedRouteSelected route] [] "hosted-route-selected"
             else reject "invalid-hosted-route"
+        | RecoverHostedRoute(rejectedCommandId,rejectedRoute,correctedRoute) ->
+            let correctedFromRejected =
+                { rejectedRoute with BranchRef = rejectedRoute.BranchRef.Replace("refs/heads/fsgg/", "refs/heads/fsgg/pilot/") }
+            let paused = match state.Control with Paused _ -> true | _ -> false
+            let priorRejected =
+                state.CommandReceipts |> Map.tryFind rejectedCommandId
+                |> Option.exists(fun receipt -> receipt.Disposition=Rejected && receipt.Detail="invalid-hosted-route")
+            let safePartial =
+                state.HostedRoute.IsNone && state.WorkItemId=Some correctedRoute.WorkItemId && state.SubscriptionBudget.IsSome
+                && state.Reservation.IsSome && state.ExternalClaims.IsEmpty && state.Operations.IsEmpty && state.Attempts.IsEmpty
+                && state.Sessions.IsEmpty && state.Candidates.IsEmpty && state.HostedEffectReadbacks.IsEmpty && state.NativeDeliveryReadbacks.IsEmpty
+            let valid =
+                paused && priorRejected && safePartial && correctedFromRejected=correctedRoute
+                && validHostedRouteShape now correctedRoute.WorkItemId correctedRoute
+                && correctedRoute.Generation=state.Generation
+                && state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=correctedRoute.WorkflowRevision)
+                && state.SubscriptionBudget |> Option.exists(fun budget -> budget.ExecutionDeadline>now)
+                && state.Reservation |> Option.exists(fun reservation -> reservation.ExpiresAt>now && reservation.Generation=state.Generation)
+            if valid then accept [HostedRouteRecovered(correctedRoute,rejectedCommandId)] [] "hosted-route-recovered-after-invalid-branch"
+            else reject "hosted-route-recovery-refused"
         | StartAttempt(a,s,r) ->
             match Map.tryFind a state.Attempts with
             | Some existing when existing.SessionId=s && existing.Runner=r -> accept [] [] "attempt-already-started"
@@ -710,6 +740,8 @@ module Orchestration =
             | ObserveClaimReleased claim -> ["claim-released";claim]
             | RecordCompensationFailure(claim,reason) -> ["compensation-failed";claim;reason]
             | SelectHostedRoute route -> "select-hosted-route"::routeParts route
+            | RecoverHostedRoute(rejectedCommandId,rejectedRoute,correctedRoute) ->
+                ["recover-hosted-route";Id.commandValue rejectedCommandId |> string;frame(routeParts rejectedRoute);frame(routeParts correctedRoute)]
             | StartAttempt(a,s,r) -> ["start-attempt";Id.attemptValue a |> string;Id.sessionValue s |> string;Id.runnerValue r.RunnerId |> string;r.PrincipalId;r.FingerprintSha256;generationText r.Generation;timeText r.ExpiresAt]
             | ObserveAttempt(a,status) -> ["observe-attempt";Id.attemptValue a |> string;sprintf "%A" status]
             | AcceptRunnerMessage(sessionId,sequence,emitServer,requestSha256) -> ["accept-runner-message";Id.sessionValue sessionId |> string;invariant sequence;string emitServer;requestSha256]
