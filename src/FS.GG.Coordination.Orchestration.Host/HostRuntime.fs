@@ -65,9 +65,9 @@ module HostRuntime =
               SupportedEventSchemaVersions = Set [ 1 ]; SupportedSerializerVersions = Set [ EventEnvelope.legacySerializerVersion; EventEnvelope.serializerVersion ]
               MaximumCandidateBytes = 104857600L }
 
-    let createStore (configuration: HostConfiguration) =
+    let private createStoreAt runtimeSchemaVersion (configuration: HostConfiguration) =
         let source = NpgsqlDataSource.Create configuration.ConnectionString
-        let options = storeOptions 1 configuration source
+        let options = storeOptions runtimeSchemaVersion configuration source
         let postgres = PostgreSqlStore(options)
         let root = postgres :> IJournalStore
         let pilot = PostgreSqlPilotStore(options) :> IPilotJournalStore
@@ -78,10 +78,12 @@ module HostRuntime =
           Recover = fun permit token -> pilot.RecoverPilot(permit, token)
           Append = fun request token -> pilot.AppendPilot(request, token) }
 
+    let createStore (configuration: HostConfiguration) = createStoreAt 1 configuration
+
     /// Production composition exposes the execution journal/transport while retaining
     /// the legacy two-value factory for callers that only serve runner /1 routes.
     let createProductionStores (configuration:HostConfiguration) =
-        let source,store=createStore configuration
+        let source,store=createStoreAt 2 configuration
         source,store,PostgreSqlExecutionStore(storeOptions 2 configuration source)
 
     let status (store: HostStore) permitId cancellationToken = task {
