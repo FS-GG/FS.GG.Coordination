@@ -188,7 +188,6 @@ module HostedWriterJournal =
         let! recovered = recover store workItemId cancellationToken
         match recovered with
         | Error failures -> return Error(sprintf "%A" failures)
-        | Ok recovery when recovery.State.WorkItemId <> Some workItemId -> return Error "configured-work-item-not-admitted"
         | Ok recovery ->
             let now = clock.GetUtcNow()
             let envelope =
