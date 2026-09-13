@@ -190,6 +190,7 @@ module Cases =
         let paused = apply startup primed
         Assert.Equal(Paused "process-startup",paused.Control)
         Assert.False(paused.ReadbackCurrent)
+        Assert.Equal(Accepted,(decide now paused (command "27800000-0000-0000-0000-000000000003") "" (Pause "operator-reasserted")).Receipt.Disposition)
         Assert.Equal("resume-refused",(decide now paused (command "27800000-0000-0000-0000-000000000002") "" Resume).Receipt.Detail)
         Assert.Equal("effect-not-authorized",(decide now paused (command "27800000-0000-0000-0000-000000000006") "" (MarkEffectDispatching candidateIntent.OperationId)).Receipt.Detail)
         let readback =

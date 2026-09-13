@@ -561,6 +561,7 @@ module Orchestration =
             if state.SubscriptionBudget.IsSome && valid then accept [SubscriptionAccountingRecorded accounting] [] "subscription-accounting-recorded"
             else reject "subscription-accounting-refused"
         | Pause r when state.Control=Running -> accept [PausedEvent r] [] "paused"
+        | Pause _ when (match state.Control with Paused _ -> true | _ -> false) -> accept [] [] "already-paused"
         | Pause _ -> reject "not-running"
         | Resume -> match state.Control with | Paused _ when state.ReadbackCurrent && budgetAvailable now state -> accept [ResumedEvent] [] "resumed" | _ -> reject "resume-refused"
         | RecordStartupPause reason when not(String.IsNullOrWhiteSpace reason) && reason=reason.Trim() ->

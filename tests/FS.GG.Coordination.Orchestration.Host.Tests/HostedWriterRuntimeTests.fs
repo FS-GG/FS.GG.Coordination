@@ -181,6 +181,16 @@ type private MemoryStore(initialEvents:Event list) =
         member _.SaveSnapshot(_, _)=Task.FromResult(Ok())
         member _.SaveProjectionCheckpoint(_, _)=Task.FromResult(Ok())
 
+[<Fact>]
+let ``startup pause is established before work item admission`` () = task {
+    let store = MemoryStore [] :> IJournalStore
+    let! result = HostedWriterJournal.persistStartupPause (FixedClock Fixture.now) store Fixture.workItem "pilot" CancellationToken.None
+    Assert.True(Result.isOk result)
+    let! recovered = HostedWriterJournal.recover store Fixture.workItem CancellationToken.None
+    let state = (match recovered with Ok value -> value | Error failures -> failwithf "%A" failures).State
+    Assert.Equal(None, state.WorkItemId)
+    Assert.Equal(Paused "process-startup", state.Control) }
+
 let private activeClaimEvents () =
     let snapshot={ProjectId=Id.project(Guid.NewGuid());WorkItemId=Fixture.workItem;WorkflowRevision=Fixture.route.WorkflowRevision;CanonicalSha256=String.replicate 64 "b";BoardMembershipIds=[];CapturedAt=Fixture.now.AddMinutes(-2.)}
     let budget={Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=Fixture.now.AddMinutes 25.;Usage=TokensUnknown "not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription";BroaderAttributionState="unknown";BroaderAttributionProvenance="unattributed"}}
