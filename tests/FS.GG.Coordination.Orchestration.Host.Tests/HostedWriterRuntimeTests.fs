@@ -187,7 +187,7 @@ let ``startup pause is established before work item admission`` () = task {
     let! result = HostedWriterJournal.persistStartupPause (FixedClock Fixture.now) store Fixture.workItem "pilot" CancellationToken.None
     Assert.True(Result.isOk result)
     let! recovered = HostedWriterJournal.recover store Fixture.workItem CancellationToken.None
-    let state = (Result.defaultWith failwith recovered).State
+    let state = (match recovered with Ok value -> value | Error failures -> failwithf "%A" failures).State
     Assert.Equal(None, state.WorkItemId)
     Assert.Equal(Paused "process-startup", state.Control) }
 
