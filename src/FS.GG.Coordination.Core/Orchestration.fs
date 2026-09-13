@@ -408,7 +408,13 @@ module Orchestration =
         let revision = nextRevision state.Revision
         match event with
         | WorkAdmitted(s,b) -> {state with WorkItemId=Some s.WorkItemId;Snapshot=Some s;Budget=Some b;SubscriptionBudget=None;Control=Running;Revision=revision}
-        | SubscriptionWorkAdmitted(s,b) -> {state with WorkItemId=Some s.WorkItemId;Snapshot=Some s;Budget=None;SubscriptionBudget=Some b;Control=Running;Revision=revision}
+        | SubscriptionWorkAdmitted(s,b) ->
+            {state with WorkItemId=Some s.WorkItemId;Snapshot=Some s;Budget=None;SubscriptionBudget=Some b
+                        SubscriptionAccounting=None;Reservation=None;ExternalClaims=Map.empty
+                        RecoveryObligations=Set.empty;CompensationFailures=Map.empty;Attempts=Map.empty
+                        Sessions=Map.empty;Candidates=Map.empty;Operations=Map.empty;HostedRoute=None
+                        HostedEffectReadbacks=Map.empty;NativeDeliveryReadbacks=Map.empty
+                        Control=Running;ReadbackCurrent=true;Used={Tokens=0L;RuntimeSeconds=0L;CostMicros=0L};Revision=revision}
         | GenerationAdvanced g -> {state with Generation=g;Revision=revision}
         | ReservationCreated r -> {state with Reservation=Some r;Revision=revision}
         | ReservationReleased(_,_,claims) -> {state with Reservation=None;RecoveryObligations=Set.union state.RecoveryObligations claims;Revision=revision}
@@ -491,6 +497,14 @@ module Orchestration =
         | Admit(s,b) when state.WorkItemId.IsNone && within now b state.Used -> accept [WorkAdmitted(s,b);GenerationAdvanced(nextGeneration state.Generation)] [] "admitted"
         | Admit _ -> reject "already-admitted-or-invalid-budget"
         | AdmitSubscription(s,b) when state.WorkItemId.IsNone && validSubscriptionBudget now b -> accept [SubscriptionWorkAdmitted(s,b);GenerationAdvanced(nextGeneration state.Generation)] [] "subscription-admitted"
+        | AdmitSubscription(s,b)
+            when state.WorkItemId=Some s.WorkItemId && validSubscriptionBudget now b
+                 && (match state.Control with Revoked _->true|_->false)
+                 && state.Reservation.IsNone && Map.isEmpty state.ExternalClaims
+                 && Set.isEmpty state.RecoveryObligations && Map.isEmpty state.CompensationFailures
+                 && (state.Attempts|>Map.forall(fun _ attempt->match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _->true|_->false))
+                 && (state.Operations|>Map.forall(fun _ operation->match operation with Settled _->true|_->false)) ->
+            accept [SubscriptionWorkAdmitted(s,b)] [] "subscription-readmitted"
         | AdmitSubscription _ -> reject "already-admitted-or-invalid-subscription-budget"
         | Reserve(r,e,claims) when state.Reservation |> Option.exists(fun existing -> existing.ReservationId=r && existing.ExpiresAt=e && existing.RequiredClaimIds=claims) -> accept [] [] "reservation-already-created"
         | Reserve(r,_,_) when state.Reservation |> Option.exists(fun existing -> existing.ReservationId=r) -> conflict "reservation-identity-conflict"

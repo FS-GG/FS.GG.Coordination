@@ -14,6 +14,7 @@ open FS.GG.Coordination.Orchestration.Pilot
 
 type ExecutorCommandAppend = CommandPersisted of int64 | CommandDuplicate of int64 | CommandConflict | CommandRefused of string
 type SubscriptionAppend = SubscriptionReserved | SubscriptionDuplicate | SubscriptionCapacityRefused | SubscriptionAuthorityRefused | SubscriptionConflict
+type SubscriptionRelease = SubscriptionReleased | SubscriptionReleaseDuplicate | SubscriptionReleaseConflict
 
 type private StoredExecutorCommand =
     { CommandId:Guid; BodySha256:string; Kind:string; AssignmentId:Guid; AttemptId:Guid
@@ -54,6 +55,7 @@ type IExecutorCommandStore =
     abstract SettleCommand: commandId:Guid * receiptBytes:byte array * CancellationToken -> Task<Result<unit,string>>
     abstract ReserveSubscription: reservationBytes:byte array * ordinaryCapacity:int * recoveryCapacity:int * CancellationToken -> Task<SubscriptionAppend>
     abstract SettleSubscription: reservationId:Guid * settlementBytes:byte array * CancellationToken -> Task<Result<unit,string>>
+    abstract ReleaseSubscription: reservationId:Guid * attemptId:Guid * generation:int64 * CancellationToken -> Task<SubscriptionRelease>
     abstract ReadSubscription: reservationId:Guid * CancellationToken -> Task<Result<byte array * byte array option,string>>
 
 [<RequireQualifiedAccess>]
@@ -453,6 +455,8 @@ ORDER BY c.created_at,c.command_id LIMIT $1
                 do! gate connection transaction true cancellationToken
                 use capacityLock=new NpgsqlCommand("LOCK TABLE fsgg_orchestration.subscription_reservation IN SHARE ROW EXCLUSIVE MODE",connection,transaction)
                 let! _=capacityLock.ExecuteNonQueryAsync cancellationToken
+                use expire=new NpgsqlCommand("UPDATE fsgg_orchestration.subscription_reservation SET active=false WHERE active AND deadline < statement_timestamp()",connection,transaction)
+                let! _=expire.ExecuteNonQueryAsync cancellationToken
                 use existing=new NpgsqlCommand("SELECT reservation_payload FROM fsgg_orchestration.subscription_reservation WHERE reservation_id=$1 OR assignment_id=$2 OR attempt_id=$3 FOR UPDATE",connection,transaction)
                 add existing reservation.ReservationId;add existing reservation.AssignmentId;add existing reservation.AttemptId
                 let! prior=existing.ExecuteScalarAsync cancellationToken
@@ -496,6 +500,26 @@ ORDER BY c.created_at,c.command_id LIMIT $1
                 let! changed=command.ExecuteNonQueryAsync cancellationToken
                 do! transaction.CommitAsync cancellationToken
                 return if changed=1 then Ok() else Error "subscription-settlement-conflict" }
+        member _.ReleaseSubscription(reservationId,attemptId,generation,cancellationToken)=task {
+            if reservationId=Guid.Empty || attemptId=Guid.Empty || generation<0L then return SubscriptionReleaseConflict else
+            use! connection=dataSource.OpenConnectionAsync cancellationToken
+            use! transaction=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken)
+            do! gate connection transaction true cancellationToken
+            use command=new NpgsqlCommand("UPDATE fsgg_orchestration.subscription_reservation SET active=false WHERE reservation_id=$1 AND attempt_id=$2 AND generation=$3 AND active RETURNING reservation_id",connection,transaction)
+            add command reservationId;add command attemptId;add command generation
+            let! released=command.ExecuteScalarAsync cancellationToken
+            if not(isNull released) then
+                do! transaction.CommitAsync cancellationToken
+                return SubscriptionReleased
+            else
+                use existing=new NpgsqlCommand("SELECT attempt_id,generation,active FROM fsgg_orchestration.subscription_reservation WHERE reservation_id=$1",connection,transaction)
+                add existing reservationId
+                use! reader=existing.ExecuteReaderAsync cancellationToken
+                let! found=reader.ReadAsync cancellationToken
+                let duplicate=found && reader.GetGuid(0)=attemptId && reader.GetInt64(1)=generation && not(reader.GetBoolean(2))
+                do! reader.CloseAsync()
+                do! transaction.CommitAsync cancellationToken
+                return if duplicate then SubscriptionReleaseDuplicate else SubscriptionReleaseConflict }
         member _.ReadSubscription(reservationId,cancellationToken)=task {
             use! connection=dataSource.OpenConnectionAsync cancellationToken
             use! transaction=connection.BeginTransactionAsync(IsolationLevel.RepeatableRead,cancellationToken)

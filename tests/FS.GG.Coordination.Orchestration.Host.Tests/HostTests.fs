@@ -85,6 +85,18 @@ module private Fixture =
         store, appended
 
 [<Fact>]
+let ``Main route stage identity is stable inside and distinct across attempt scopes`` () =
+    let work=WorkItemIdentity.create "R_route" 1L "I_route" 2L
+    let route=Guid.Parse "10000000-0000-4000-8000-000000000001"
+    let attempt=Id.attempt(Guid.Parse "20000000-0000-4000-8000-000000000001")
+    let first=MainRouteWorkflowIdentity.commandId work route attempt (Id.generation 1L) "reserve"
+    Assert.Equal(first,MainRouteWorkflowIdentity.commandId work route attempt (Id.generation 1L) "reserve")
+    Assert.NotEqual(first,MainRouteWorkflowIdentity.commandId work route attempt (Id.generation 2L) "reserve")
+    Assert.NotEqual(first,MainRouteWorkflowIdentity.commandId work route (Id.attempt(Guid.Parse "20000000-0000-4000-8000-000000000002")) (Id.generation 1L) "reserve")
+    Assert.NotEqual(first,MainRouteWorkflowIdentity.commandId work (Guid.Parse "10000000-0000-4000-8000-000000000002") attempt (Id.generation 1L) "reserve")
+    Assert.NotEqual(first,MainRouteWorkflowIdentity.commandId work route attempt (Id.generation 1L) "select-route")
+
+[<Fact>]
 let ``pilot permit admits only the hosted writer job class`` () =
     Assert.True(Pilot.validatePermit Fixture.permit)
     Assert.False(Pilot.validatePermit { Fixture.permit with JobClass = "routine-implementation" })

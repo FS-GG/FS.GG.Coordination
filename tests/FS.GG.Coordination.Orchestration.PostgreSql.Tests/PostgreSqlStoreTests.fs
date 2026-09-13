@@ -708,7 +708,7 @@ type PostgreSqlStoreTests() =
         let shortAssignment=Guid.NewGuid()
         let shortAttempt=Guid.NewGuid()
         let shortNow=DateTimeOffset.UtcNow
-        let shortBudget=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.createBudget shortNow
+        let shortBudget={FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.createBudget shortNow with ExecutionDeadline=shortNow.AddSeconds 2.}
         let shortIntent={intent with Key={AssignmentId=shortAssignment;AttemptId=shortAttempt;Generation=1L};RecordedAt=shortNow.AddMilliseconds(-100.);Limits={Deadline=shortBudget.ExecutionDeadline;MaximumRuntime=TimeSpan.FromSeconds 2.;MaximumAttempts=1}}
         let! _=journal.AppendAttempt(shortAssignment,shortAttempt,0L,FS.GG.Coordination.Orchestration.Execution.SessionEvent.LaunchIntentRecorded shortIntent,cancellationToken)
         let shortReservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve shortNow (Guid.NewGuid()) shortAssignment shortAttempt 1L 1L shortBudget |> Result.defaultWith failwith
@@ -725,7 +725,6 @@ type PostgreSqlStoreTests() =
         do! Task.Delay 2000
         let! expiredByOriginalRuntime=transport.ReadPending(4,cancellationToken)
         Assert.Empty expiredByOriginalRuntime
-        let! _=Fixture.sql "orchestration_o0" $"UPDATE fsgg_orchestration.subscription_reservation SET active=false WHERE reservation_id='{shortReservation.ReservationId}'"
         let budget=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.createBudget now
         let reservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve now (Guid.NewGuid()) assignmentId attemptId 7L 2L budget |> Result.defaultWith failwith
         let reservationBytes=FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation reservation
@@ -788,6 +787,14 @@ type PostgreSqlStoreTests() =
         let otherReservation=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.reserve now (Guid.NewGuid()) otherAssignment otherAttempt 7L 1L budget |> Result.defaultWith failwith
         let! capacityHeld=transport.ReserveSubscription(FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation otherReservation,1,1,cancellationToken)
         Assert.Equal(SubscriptionCapacityRefused,capacityHeld)
+        let! released=transport.ReleaseSubscription(reservation.ReservationId,reservation.AttemptId,reservation.Generation,cancellationToken)
+        let! releaseReplay=transport.ReleaseSubscription(reservation.ReservationId,reservation.AttemptId,reservation.Generation,cancellationToken)
+        let! releaseConflict=transport.ReleaseSubscription(reservation.ReservationId,Guid.NewGuid(),reservation.Generation,cancellationToken)
+        Assert.Equal(SubscriptionReleased,released)
+        Assert.Equal(SubscriptionReleaseDuplicate,releaseReplay)
+        Assert.Equal(SubscriptionReleaseConflict,releaseConflict)
+        let! capacityAfterRelease=transport.ReserveSubscription(FS.GG.Coordination.Orchestration.Pilot.SubscriptionAccountingCodec.encodeReservation otherReservation,1,1,cancellationToken)
+        Assert.Equal(SubscriptionReserved,capacityAfterRelease)
 
         let dump=Fixture.dump()
         Fixture.restore dump
@@ -798,7 +805,7 @@ type PostgreSqlStoreTests() =
         Assert.Equal(intent,(FS.GG.Coordination.Orchestration.Execution.SessionState.replay restored.Value.Events).Value.Intent)
         let restoredTransport=PostgreSqlExecutionStore(restoredOptions) :> IExecutorCommandStore
         let! restoredPending=restoredTransport.ReadPending(4,cancellationToken)
-        Assert.Single restoredPending |> ignore
+        Assert.Empty restoredPending
         use readOnlySource=NpgsqlDataSource.Create(Fixture.connectionString "orchestration_o0_restore" + ";Options=-c default_transaction_read_only=on")
         let readOnlyTransport=PostgreSqlExecutionStore({restoredOptions with DataSource=readOnlySource}) :> IExecutorCommandStore
         let! _=Assert.ThrowsAnyAsync<Exception>(fun ()->readOnlyTransport.ReadPending(1,cancellationToken) :> Task)
