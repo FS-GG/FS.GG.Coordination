@@ -228,6 +228,16 @@ type MainProductionAdmission
                                 with :? OperationCanceledException->
                                     return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=Some false;Detail="execution-cancel-observation-timeout"}
                             | _->return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=Some false;Detail="execution-cancel-binding-unavailable"}
+                        | ReceiptDisposition.Accepted|ReceiptDisposition.Duplicate when control.Action="revoke"->
+                            match lock gate (fun()->boundPreparation) with
+                            | None->return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=None;Detail=decision.Receipt.Detail}
+                            | Some preparation->
+                                let reservation=preparation.ExecutionReservation
+                                let! released=(executions :> IExecutorCommandStore).ReleaseSubscription(reservation.ReservationId,reservation.AttemptId,reservation.Generation,token)
+                                match released with
+                                | SubscriptionReleased|SubscriptionReleaseDuplicate->
+                                    return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=None;Detail=decision.Receipt.Detail}
+                                | SubscriptionReleaseConflict->return Error "subscription-release-conflict"
                         | ReceiptDisposition.Accepted|ReceiptDisposition.Duplicate->
                             return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=None;Detail=decision.Receipt.Detail}
                         | _->return Error decision.Receipt.Detail }

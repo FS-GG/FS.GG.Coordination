@@ -65,6 +65,32 @@ let hostedReady () =
 
 module Cases =
     [<Fact>]
+    let ``revoked subscription generation admits one fresh scoped budget without rewriting receipts`` () =
+        let subscription deadline =
+            { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=deadline
+              Usage=TokensUnknown "provider-not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="not-attributed"} }
+        let append protocol state id body =
+            FS.GG.Coordination.Core.Orchestration.decide now state
+                {CommandId=id;ProtocolVersion=protocol;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=body}
+        let firstId=command "18000000-0000-0000-0000-000000000001"
+        let first=append (Id.protocolVersion 2 0) initial firstId (AdmitSubscription(snapshot [],subscription(now.AddMinutes 20.)))
+        let admitted=apply first initial
+        let revoked=append (Id.protocolVersion 1 0) admitted (command "18000000-0000-0000-0000-000000000002") (Revoke "terminal") |> fun decision->apply decision admitted
+        Assert.Equal(Id.generation 2L,revoked.Generation)
+        let secondId=command "18000000-0000-0000-0000-000000000003"
+        let secondEnvelope=
+            {CommandId=secondId;ProtocolVersion=Id.protocolVersion 2 0;ExpectedRevision=revoked.Revision;ExpectedGeneration=revoked.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=AdmitSubscription(snapshot [],subscription(now.AddMinutes 25.))}
+        let readmission=FS.GG.Coordination.Core.Orchestration.decide now revoked secondEnvelope
+        Assert.Equal(Accepted,readmission.Receipt.Disposition)
+        let readmitted=apply readmission revoked
+        Assert.Equal(Id.generation 2L,readmitted.Generation)
+        Assert.Equal(ControlState.Running,readmitted.Control)
+        Assert.True(readmitted.CommandReceipts.ContainsKey firstId)
+        Assert.Equal(Duplicate,(FS.GG.Coordination.Core.Orchestration.decide now readmitted secondEnvelope).Receipt.Disposition)
+        let conflict={secondEnvelope with Command=Pause "changed"}
+        Assert.Equal(Conflict,(FS.GG.Coordination.Core.Orchestration.decide now readmitted conflict).Receipt.Disposition)
+
+    [<Fact>]
     let ``invalid hosted route is rejected before selection and exact paused recovery is append only`` () =
         let subscription =
             { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.
