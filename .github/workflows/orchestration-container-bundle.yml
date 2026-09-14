@@ -1,0 +1,90 @@
+name: Orchestration container bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact protected-main bundle candidate commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orchestration-container-bundle-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish-and-readback:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HOST_OUTPUT: /tmp/fsgg-${{ github.run_id }}-bundle-host
+      RUNNER_OUTPUT: /tmp/fsgg-${{ github.run_id }}-bundle-runner
+      BUNDLE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-bundle
+      SERVED_OUTPUT: /tmp/fsgg-${{ github.run_id }}-bundle-served
+    steps:
+      - name: Check out the exact protected candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - name: Bind exact protected-main authority
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+      - name: Prepare the Host component
+        env:
+          DOTNET_ROLL_FORWARD: Disable
+        run: >-
+          python3 eng/orchestration-host-candidate.py prepare
+          --repo . --candidate "${{ github.sha }}"
+          --protected-ref refs/remotes/origin/main --output "$HOST_OUTPUT"
+      - name: Prepare the runner component
+        env:
+          DOTNET_ROLL_FORWARD: Disable
+        run: >-
+          python3 eng/orchestration-runner-client-candidate.py prepare
+          --repo . --candidate "${{ github.sha }}"
+          --protected-ref refs/remotes/origin/main --output "$RUNNER_OUTPUT"
+      - name: Assemble and verify one application bundle
+        run: |
+          python3 eng/orchestration-container-bundle.py assemble --host "$HOST_OUTPUT" --runner "$RUNNER_OUTPUT" --output "$BUNDLE_OUTPUT"
+          python3 eng/orchestration-container-bundle.py verify --prepared "$BUNDLE_OUTPUT/prepared.json"
+      - name: Upload the immutable application bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: orchestration-container-linux-x64-${{ github.sha }}
+          path: |
+            ${{ env.BUNDLE_OUTPUT }}/fsgg-coord-orchestration-linux-x64-${{ github.sha }}.zip
+            ${{ env.BUNDLE_OUTPUT }}/manifest.json
+            ${{ env.BUNDLE_OUTPUT }}/prepared.json
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Download into a fresh directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: orchestration-container-linux-x64-${{ github.sha }}
+          path: ${{ env.SERVED_OUTPUT }}
+      - name: Verify served bytes
+        run: >-
+          python3 eng/orchestration-container-bundle.py verify
+          --prepared "$BUNDLE_OUTPUT/prepared.json"
+          --archive "$SERVED_OUTPUT/fsgg-coord-orchestration-linux-x64-${{ github.sha }}.zip"
+
