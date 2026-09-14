@@ -10,7 +10,7 @@ open FS.GG.Coordination.Orchestration.Execution
 
 let private usage () =
     eprintfn "usage: fsgg-coord-orchestration-host init --connection-file <absolute-private-path>"
-    eprintfn "   or: fsgg-coord-orchestration-host serve ... [--github-token-file <path> --github-repository <owner/repo> --github-issue-number <n> --github-base-ref <ref>]"
+    eprintfn "   or: fsgg-coord-orchestration-host serve ... [--github-token-file <path> --github-repository <owner/repo> --github-issue-number <n> --github-base-ref <ref> --runner-executable <absolute-path> --runner-repository-root <absolute-path> --runner-workspace-root <absolute-path> --runner-input-root <absolute-path> --runner-state-root <absolute-path> --runner-artifact-root <absolute-path> --codex-executable <absolute-path> --executor-binding <identity>]"
     2
 
 [<EntryPoint>]
@@ -41,17 +41,18 @@ let main arguments =
                 match configuration.GitHub with
                 | None->HostRuntime.serve TimeProvider.System configuration store shutdown.Token |> _.GetAwaiter().GetResult()
                 | Some githubConfiguration->
+                    let localConfiguration=configuration.LocalExecutor|>Option.defaultWith(fun ()->failwith "local-executor-configuration-required")
+                    use transport=new LocalExecutorTransport(localConfiguration)
                     use httpClient=new HttpClient()
                     use actorSystem=ActorSystem.Create("fsgg-coordination-main")
-                    let relay=HostExecutorRelay(4,2*1024*1024)
                     let githubExecutor=HttpGitHubRequestExecutor(httpClient,githubConfiguration.Token,2*1024*1024) :> IGitHubRequestExecutor
                     let publisher=GitBundlePublisher(githubConfiguration.RemoteUri,githubConfiguration.Token,1024*1024) :> IGitCandidatePublisher
                     let github=GitHubRouteClient(githubExecutor,publisher,{ApiRoot=githubConfiguration.ApiRoot;Repository=githubConfiguration.Repository;IssueNumber=githubConfiguration.IssueNumber;Principal=configuration.PilotPrincipalId;BaseRef=githubConfiguration.BaseRef;RoutineOperation=githubConfiguration.RoutineOperation;ClaimLease=TimeSpan.FromMinutes 30.},TimeProvider.System)
                     let admission=
                         MainProductionAdmission(actorSystem,TimeProvider.System,store.WorkItems,store.Candidates,executionStore,
-                            configuration.WorkItemId,configuration.PilotPrincipalId,github,relay,shutdown.Token)
+                            configuration.WorkItemId,configuration.PilotPrincipalId,github,transport,shutdown.Token)
                         :> IMainRouteAdmissionHandler
-                    HostRuntime.serveMain TimeProvider.System configuration store relay admission shutdown.Token |> _.GetAwaiter().GetResult()
+                    HostRuntime.serveMainLocal TimeProvider.System configuration store admission shutdown.Token |> _.GetAwaiter().GetResult()
                     actorSystem.Terminate()|>ignore
                 0
             with error -> eprintfn "host-refused:%s" error.Message; 3

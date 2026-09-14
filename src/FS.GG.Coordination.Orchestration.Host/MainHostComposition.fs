@@ -20,7 +20,7 @@ type MainHostComposition =
 type RunningMainHost = { ExecutionActor:IActorRef; EffectLoop:Task }
 type RunningProductionMainHost =
     { ExecutionActor:IActorRef; EffectLoop:Task; Workflow:MainRouteWorkflow
-      Callbacks:MainProductionCallbacks; Relay:HostExecutorRelay }
+      Callbacks:MainProductionCallbacks; Transport:IAuthenticatedExecutorTransport }
 
 [<RequireQualifiedAccess>]
 module MainHostComposition =
@@ -71,8 +71,8 @@ module MainHostComposition =
     /// a fresh route readback and resume the selected attempt.
     let startProduction (system:ActorSystem) (clock:TimeProvider) (workItems:IJournalStore) (candidates:ICandidateStore) (executions:PostgreSqlExecutionStore)
                         workItemId principal (resolver:IExecutorBindingResolver) (github:GitHubRouteClient)
-                        (relay:HostExecutorRelay) (preparation:MainRoutePreparation) (cancellationToken:CancellationToken) =
-        let remote=RemoteExecutorProvider(executions :> IExecutorCommandStore,resolver,relay :> IAuthenticatedExecutorTransport)
+                        (transport:IAuthenticatedExecutorTransport) (preparation:MainRoutePreparation) (cancellationToken:CancellationToken) =
+        let remote=RemoteExecutorProvider(executions :> IExecutorCommandStore,resolver,transport)
         let coordinator=ExecutionSessionCoordinator(remote :> IExecutionProvider,executions :> IExecutionSessionJournal,clock)
         let actor=system.ActorOf(ExecutionSessionActor.Props coordinator,"main-execution-session")
         let callbacks=MainProductionCallbacks(clock,actor,remote,candidates,github,preparation)
@@ -101,7 +101,7 @@ module MainHostComposition =
                         results.Add result
                     let! _=workflow.RecoverContinuation(preparation,cancellationToken)
                     do! Task.Delay(pacing results,cancellationToken) }
-        {ExecutionActor=actor;EffectLoop=loop;Workflow=workflow;Callbacks=callbacks;Relay=relay}
+        {ExecutionActor=actor;EffectLoop=loop;Workflow=workflow;Callbacks=callbacks;Transport=transport}
 
 /// The production admission boundary shared by Program and executable tests.
 /// It binds one immutable preparation to one running actor graph. Exact retries
@@ -110,7 +110,7 @@ module MainHostComposition =
 type MainProductionAdmission
     (system:ActorSystem,clock:TimeProvider,workItems:IJournalStore,candidates:ICandidateStore,
      executions:PostgreSqlExecutionStore,workItemId:WorkItemId,principal:string,
-     github:GitHubRouteClient,relay:HostExecutorRelay,cancellationToken:CancellationToken) =
+     github:GitHubRouteClient,transport:IAuthenticatedExecutorTransport,cancellationToken:CancellationToken) =
     let gate=obj()
     let mutable running:RunningProductionMainHost option=None
     let mutable boundDigest:string option=None
@@ -136,7 +136,7 @@ type MainProductionAdmission
                                     preparation.LaunchIntent.Key.AttemptId) :> IExecutorBindingResolver
                             let value=
                                 MainHostComposition.startProduction system clock workItems candidates executions
-                                    workItemId principal resolver github relay preparation cancellationToken
+                                    workItemId principal resolver github transport preparation cancellationToken
                             running<-Some value
                             boundDigest<-Some admissionDigest
                             boundPreparation<-Some preparation

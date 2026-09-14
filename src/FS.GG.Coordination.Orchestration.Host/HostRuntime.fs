@@ -242,7 +242,7 @@ module HostRuntime =
             // paused/admitted/reconciled dispatch state.
             do! writeJson response 200 {| schema = "fsgg.orchestration.host-liveness/2"; live = true; readinessRoute = "/health/ready" |} cancellationToken
         elif request.Url.AbsolutePath.StartsWith("/v1/executor/",StringComparison.Ordinal) then
-            if not(authorize configuration.RunnerToken (Option.ofObj request.Headers["Authorization"])) || executorRelay.IsNone then
+            if executorRelay.IsNone || not(configuration.RunnerToken|>Option.exists(fun token->authorize token (Option.ofObj request.Headers["Authorization"]))) then
                 do! writeJson response 401 {| error="unauthorized" |} cancellationToken
             else
                 let! body=readRunner (2*1024*1024) request cancellationToken
@@ -269,8 +269,8 @@ module HostRuntime =
                             | Error reason -> do! writeJson response 409 {|error=reason|} cancellationToken
                         else do! writeJson response 404 {|error="executor-relay-route-not-found"|} cancellationToken
                     with :? JsonException -> do! writeJson response 400 {|error="executor-relay-json-refused"|} cancellationToken
-        elif request.Url.AbsolutePath.StartsWith("/v1/runner/",StringComparison.Ordinal) then
-            if not(authorize configuration.RunnerToken (Option.ofObj request.Headers["Authorization"])) then
+        elif request.Url.AbsolutePath.StartsWith("/v1/runner/",StringComparison.Ordinal) && configuration.RunnerToken.IsSome then
+            if not(authorize configuration.RunnerToken.Value (Option.ofObj request.Headers["Authorization"])) then
                 do! writeJson response 401 {| error="unauthorized" |} cancellationToken
             else
                 let maximum=if request.Url.AbsolutePath="/v1/runner/candidate" then 140*1024*1024 else 8192
@@ -382,3 +382,4 @@ module HostRuntime =
     let serve clock configuration store cancellationToken = serveInternal clock configuration store None None cancellationToken
     let serveProduction clock configuration store relay cancellationToken = serveInternal clock configuration store (Some relay) None cancellationToken
     let serveMain clock configuration store relay admission cancellationToken = serveInternal clock configuration store (Some relay) (Some admission) cancellationToken
+    let serveMainLocal clock configuration store admission cancellationToken = serveInternal clock configuration store None (Some admission) cancellationToken

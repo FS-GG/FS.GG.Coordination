@@ -140,6 +140,17 @@ exit 9
 
 type ExecutorRuntimeTests() =
     [<Fact>]
+    member _.``workspace accepts selected opaque repository binding and refuses blank``() =
+        let repository,baseline=RuntimeFixture.repo()
+        let workspaceRoot=Directory.CreateTempSubdirectory("executor-binding-").FullName
+        let digest=String.replicate 64 "a"
+        let selected={RuntimeFixture.manifest baseline digest with RepositoryBinding="FS-GG/.github"}
+        let accepted=ExecutorWorkspace.materialize repository workspaceRoot (Guid.NewGuid()) (Guid.NewGuid()) 1L selected
+        Assert.True(Result.isOk accepted)
+        let blank={selected with RepositoryBinding=" "}
+        Assert.Equal(Error "repository-binding-refused",ExecutorWorkspace.materialize repository workspaceRoot (Guid.NewGuid()) (Guid.NewGuid()) 1L blank)
+
+    [<Fact>]
     member _.``version two command binds closed workspace manifest without changing version one``() =
         let _,baseline=RuntimeFixture.repo()
         let digest=String.replicate 64 "a"

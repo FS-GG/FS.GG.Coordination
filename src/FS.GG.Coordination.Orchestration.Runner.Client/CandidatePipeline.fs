@@ -160,7 +160,7 @@ module ExecutorWorkspace =
     let materialize repositoryRoot workspaceRoot (assignmentId:Guid) (attemptId:Guid) generation (manifest:ExecutorWorkspaceManifest) =
         if not(Directory.Exists repositoryRoot)||not(Directory.Exists workspaceRoot)
            ||not(SafePath.noLinks (Path.GetPathRoot repositoryRoot) repositoryRoot)||not(SafePath.noLinks (Path.GetPathRoot workspaceRoot) workspaceRoot) then Error "executor-root-refused"
-        elif manifest.RepositoryBinding<>"selected-repository" then Error "repository-binding-refused"
+        elif String.IsNullOrWhiteSpace manifest.RepositoryBinding then Error "repository-binding-refused"
         else
             let relative=Path.Combine(assignmentId.ToString("N"),attemptId.ToString("N"),generation.ToString())
             SafePath.child workspaceRoot relative |> Result.bind(fun target->

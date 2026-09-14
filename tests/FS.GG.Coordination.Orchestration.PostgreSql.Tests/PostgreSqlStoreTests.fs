@@ -1085,9 +1085,9 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         portProbe.Stop()
         let operatorToken=String.replicate 32 "o"
         let hostConfiguration =
-            { ConnectionString="unused";Token=operatorToken;RunnerToken=String.replicate 32 "r";Prefix=$"http://127.0.0.1:{port}/"
+            { ConnectionString="unused";Token=operatorToken;RunnerToken=Some(String.replicate 32 "r");Prefix=$"http://127.0.0.1:{port}/"
               StoreId="fixture";BackupIdentity=Guid.NewGuid().ToString();MinimumGenerationFence=0L;PermitId=Guid.NewGuid()
-              PilotPrincipalId="pilot";WorkItemId=workItem;GitHub=None;RequestTimeout=TimeSpan.FromSeconds 10.;MaximumConcurrentRequests=4 }
+              PilotPrincipalId="pilot";WorkItemId=workItem;GitHub=None;LocalExecutor=None;RequestTimeout=TimeSpan.FromSeconds 10.;MaximumConcurrentRequests=4 }
         use firstActorSystem=ActorSystem.Create("main-composed-before-crash")
         let firstAdmission=MainProductionAdmission(firstActorSystem,TimeProvider.System,crashAfterSettlement,candidates,executions,workItem,"pilot",github,relay,firstShutdown.Token)
         let invalidPreparation={preparation with Route={preparation.Route with BranchRef="refs/heads/fsgg/not-pilot"}}
