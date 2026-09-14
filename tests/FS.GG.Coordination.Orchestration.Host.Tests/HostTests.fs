@@ -239,11 +239,12 @@ let ``serve configuration requires private files loopback and explicit identitie
         Assert.Equal(Error "runner-token-not-allowed-with-local-executor",HostConfiguration.parseServe(Array.append arguments localOptions))
         let containerListen=localArguments|>Array.copy
         let prefixIndex=Array.findIndex((=) "--prefix") containerListen
-        containerListen[prefixIndex+1]<-"http://0.0.0.0:5109/"
+        containerListen[prefixIndex+1]<-"http://*:5109/"
         Assert.True(HostConfiguration.parseServe containerListen|>Result.isOk)
-        containerListen[prefixIndex+1]<-"http://0.0.0.0:5110/"
-        let wrongContainerPort=HostConfiguration.parseServe containerListen
-        Assert.True((wrongContainerPort=Error "local-executor-prefix-must-be-loopback-or-container-listen"),sprintf "%A" wrongContainerPort)
+        for refused in [ "http://0.0.0.0:5109/"; "http://+:5109/"; "http://*:5110/"; "https://*:5109/" ] do
+            containerListen[prefixIndex+1] <- refused
+            let invalidContainerPrefix = HostConfiguration.parseServe containerListen
+            Assert.True((invalidContainerPrefix=Error "local-executor-prefix-must-be-loopback-or-container-listen"),sprintf "%s: %A" refused invalidContainerPrefix)
         Assert.Equal(Error "incomplete-local-executor-configuration",HostConfiguration.parseServe(localArguments[..localArguments.Length-3]))
         let relative=localArguments|>Array.copy
         let workspaceIndex=Array.findIndex((=) "--runner-workspace-root") relative
@@ -257,6 +258,31 @@ let private freePrefix () =
     let port = (socket.LocalEndpoint :?> IPEndPoint).Port
     socket.Stop()
     $"http://127.0.0.1:{port}/"
+
+[<Fact>]
+let ``linux wildcard prefix starts accepts loopback request and stops`` () = task {
+    if OperatingSystem.IsLinux() then
+        let loopbackPrefix, token = freePrefix(), String.replicate 32 "z"
+        let port = Uri(loopbackPrefix).Port
+        let local =
+            { RunnerExecutable="/app/runner";RepositoryRoot="/srv/repository";WorkspaceRoot="/srv/workspaces"
+              InputRoot="/srv/inputs";StateRoot="/srv/state";ArtifactRoot="/srv/artifacts"
+              CodexExecutable="/usr/bin/codex";ExecutorBinding="codex-main" }
+        let configuration =
+            { ConnectionString="unused";Token=token;RunnerToken=None;Prefix=$"http://*:{port}/";StoreId="fixture"
+              BackupIdentity=Guid.NewGuid().ToString();MinimumGenerationFence=0L;PermitId=Fixture.permitId
+              PilotPrincipalId="pilot-route";WorkItemId=Fixture.permit.SubjectId;GitHub=None;LocalExecutor=Some local
+              RequestTimeout=TimeSpan.FromSeconds 1.;MaximumConcurrentRequests=2 }
+        let store,_ = Fixture.durableStore Fixture.pilotOwned
+        use shutdown = new CancellationTokenSource()
+        let server = HostRuntime.serve (Fixture.FixedClock()) configuration store shutdown.Token
+        do! Task.Delay 50
+        use client = new HttpClient()
+        client.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", token)
+        let! response = client.GetAsync(loopbackPrefix + "v1/status")
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode)
+        shutdown.Cancel()
+        do! server.WaitAsync(TimeSpan.FromSeconds 2.) }
 
 [<Fact>]
 let ``http host bounds malformed and slow control requests without stopping status`` () = task {

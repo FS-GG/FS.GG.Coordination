@@ -124,11 +124,8 @@ module HostConfiguration =
     let private localChildPrefix value =
         match loopbackPrefix value with
         | Ok accepted -> Ok accepted
-        | Error _ ->
-            match Uri.TryCreate(value,UriKind.Absolute) with
-            | true,uri when uri.Scheme=Uri.UriSchemeHttp && uri.Host="0.0.0.0" && uri.Port=5109
-                            && uri.AbsolutePath="/" && uri.UserInfo="" && uri.Query="" && uri.Fragment="" -> Ok value
-            | _ -> Error "local-executor-prefix-must-be-loopback-or-container-listen"
+        | Error _ when value = "http://*:5109/" -> Ok value
+        | Error _ -> Error "local-executor-prefix-must-be-loopback-or-container-listen"
 
     let parseServe arguments =
         result {
