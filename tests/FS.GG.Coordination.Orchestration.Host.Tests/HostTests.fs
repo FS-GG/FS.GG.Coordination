@@ -97,6 +97,14 @@ let ``Main route stage identity is stable inside and distinct across attempt sco
     Assert.NotEqual(first,MainRouteWorkflowIdentity.commandId work route attempt (Id.generation 1L) "select-route")
 
 [<Fact>]
+let ``Main route readmits only absent or terminally ended subscriptions`` () =
+    Assert.True(MainRouteWorkflowPolicy.needsSubscriptionAdmission initial)
+    Assert.True(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=Revoked "ended" })
+    Assert.True(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=Cancelled "ended" })
+    Assert.False(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=Running })
+    Assert.False(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=Paused "waiting" })
+
+[<Fact>]
 let ``pilot permit admits only the hosted writer job class`` () =
     Assert.True(Pilot.validatePermit Fixture.permit)
     Assert.False(Pilot.validatePermit { Fixture.permit with JobClass = "routine-implementation" })

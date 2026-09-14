@@ -908,7 +908,7 @@ type PostgreSqlStoreTests() =
         let assignment=operations[1]
         let attempt=Guid.NewGuid()
         let candidateId=Guid.NewGuid()
-        let generation=1L
+        let generation=2L
         let workflowRevision=8L
         let root=Directory.CreateTempSubdirectory("main-composed-").FullName
         let repository=Path.Combine(root,"source")
@@ -942,6 +942,115 @@ type PostgreSqlStoreTests() =
         let executionReservation=SubscriptionPilot.reserve now (Guid.NewGuid()) assignment attempt generation 1L budget|>Result.defaultWith failwith
         let route={RouteId=routeId;WorkItemId=workItem;JobClass="routine-documentation-delivery";AttemptId=Id.attempt attempt;CandidateId=Id.candidate candidateId;RepositoryNodeId="R_main";BranchRef="refs/heads/fsgg/pilot/o2";ClaimResourceId="claim-pilot";ClaimOperationId=Id.operation operations[0];ProcessOperationId=Id.operation operations[1];CandidateOperationId=Id.operation operations[2];BranchOperationId=Id.operation operations[3];PullRequestOperationId=Id.operation operations[4];MergeOperationId=Id.operation operations[5];ReadbackOperationId=Id.operation operations[6];Generation=Id.generation generation;WorkflowRevision=Id.revision workflowRevision;SelectedAt=now}
         let preparation={Snapshot={ProjectId=Id.project(Guid.NewGuid());WorkItemId=workItem;WorkflowRevision=route.WorkflowRevision;CanonicalSha256=String.replicate 64 "c";BoardMembershipIds=[];CapturedAt=now};Budget=budget;Reservation={ReservationId=Id.reservation(Guid.NewGuid());Generation=route.Generation;ExpiresAt=now.AddMinutes 20.;RequiredClaimIds=set[route.ClaimResourceId]};Route=route;Readback={RouteId=routeId;WorkItemId=workItem;RepositoryNodeId=route.RepositoryNodeId;ProviderRevision="fresh-route";EvidenceSha256=String.replicate 64 "d";Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=now};Runner={RunnerId=Id.runner(Guid.NewGuid());PrincipalId="pilot";FingerprintSha256=String.replicate 64 "e";Generation=route.Generation;ExpiresAt=now.AddMinutes 20.};SessionId=Id.session(Guid.NewGuid());LaunchIntent=launch;Binding=binding;InputManifest=inputManifest;InputBytes=prompt;WorkspaceManifest=workspace;ExecutionReservation=executionReservation}
+
+        let appendCore protocol command = task {
+            let! recovered=HostedWriterJournal.recover workItems workItem CancellationToken.None
+            let state=match recovered with Ok value->value.State|Error failures->failwithf "unexpected recovery failure: %A" failures
+            let issued=DateTimeOffset.UtcNow
+            let envelope={CommandId=Id.command(Guid.NewGuid());ProtocolVersion=protocol;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation;PrincipalId="pilot";SessionId=None;IssuedAt=issued;ExpiresAt=issued.AddMinutes 1.;Command=command}
+            let! result=HostedWriterJournal.decideAndAppend TimeProvider.System workItems workItem envelope CancellationToken.None
+            match result with
+            | Ok(decision,_) when decision.Receipt.Disposition=ReceiptDisposition.Accepted->()
+            | other->failwithf "cancelled-state fixture append refused: %A" other }
+        do! appendCore (Id.protocolVersion 2 0) (AdmitSubscription(preparation.Snapshot,preparation.Budget))
+        do! appendCore (Id.protocolVersion 1 0) (RequestCancel "prior-attempt-ended")
+        do! appendCore (Id.protocolVersion 1 0) (ConfirmCancelled "prior-attempt-ended")
+
+        let alternatePreparation () =
+            let nextAssignment=Guid.NewGuid()
+            let nextAttempt=Guid.NewGuid()
+            let nextCandidate=Guid.NewGuid()
+            let nextRouteId=Guid.NewGuid()
+            let nextOperations=[|for _ in 1..7->Guid.NewGuid()|]
+            nextOperations[1]<-nextAssignment
+            let nextLaunch={launch with Key={AssignmentId=nextAssignment;AttemptId=nextAttempt;Generation=generation}}
+            let nextRoute={route with RouteId=nextRouteId;AttemptId=Id.attempt nextAttempt;CandidateId=Id.candidate nextCandidate;ClaimOperationId=Id.operation nextOperations[0];ProcessOperationId=Id.operation nextOperations[1];CandidateOperationId=Id.operation nextOperations[2];BranchOperationId=Id.operation nextOperations[3];PullRequestOperationId=Id.operation nextOperations[4];MergeOperationId=Id.operation nextOperations[5];ReadbackOperationId=Id.operation nextOperations[6]}
+            let nextBinding0={binding0 with RouteId=nextRouteId;RouteOperationId=nextAssignment;ProcessOperationId=nextAssignment;AssignmentId=nextAssignment;AttemptId=nextAttempt;CandidateId=nextCandidate}
+            let nextBinding={nextBinding0 with BindingSha256=ExecutorWire.routeBindingDigest nextBinding0}
+            let nextExecutionReservation=SubscriptionPilot.reserve now (Guid.NewGuid()) nextAssignment nextAttempt generation 1L budget|>Result.defaultWith failwith
+            {preparation with Reservation={preparation.Reservation with ReservationId=Id.reservation(Guid.NewGuid())};Route=nextRoute;SessionId=Id.session(Guid.NewGuid());LaunchIntent=nextLaunch;Binding=nextBinding;ExecutionReservation=nextExecutionReservation}
+        let commandStore=executions :> IExecutorCommandStore
+        let withRelease release =
+            { new IExecutorCommandStore with
+                member _.BindRoute(a,b)=commandStore.BindRoute(a,b)
+                member _.ReadRoute(a,b,c)=commandStore.ReadRoute(a,b,c)
+                member _.FindAttemptBySession(a,b)=commandStore.FindAttemptBySession(a,b)
+                member _.StageInput(a,b,c)=commandStore.StageInput(a,b,c)
+                member _.ReadInput(a,b)=commandStore.ReadInput(a,b)
+                member _.StageWorkspaceManifest(a,b)=commandStore.StageWorkspaceManifest(a,b)
+                member _.ReadWorkspaceManifest(a,b)=commandStore.ReadWorkspaceManifest(a,b)
+                member _.PersistCommand(a,b)=commandStore.PersistCommand(a,b)
+                member _.ReadPending(a,b)=commandStore.ReadPending(a,b)
+                member _.SettleCommand(a,b,c)=commandStore.SettleCommand(a,b,c)
+                member _.ReserveSubscription(a,b,c,d)=commandStore.ReserveSubscription(a,b,c,d)
+                member _.SettleSubscription(a,b,c)=commandStore.SettleSubscription(a,b,c)
+                member _.ReleaseSubscription(a,b,c,d)=release(a,b,c,d)
+                member _.ReadSubscription(a,b)=commandStore.ReadSubscription(a,b) }
+        let reservationActive reservationId = task {
+            use! connection=dataSource.OpenConnectionAsync(CancellationToken.None)
+            use command=new NpgsqlCommand("SELECT active FROM fsgg_orchestration.subscription_reservation WHERE reservation_id=$1",connection)
+            command.Parameters.AddWithValue(reservationId)|>ignore
+            let! value=command.ExecuteScalarAsync(CancellationToken.None)
+            return unbox<bool> value }
+        let refusingWorkItems=
+            { new IJournalStore with
+                member _.CheckReadiness token=workItems.CheckReadiness token
+                member _.Recover(id,token)=workItems.Recover(id,token)
+                member _.SaveSnapshot(value,token)=workItems.SaveSnapshot(value,token)
+                member _.SaveProjectionCheckpoint(value,token)=workItems.SaveProjectionCheckpoint(value,token)
+                member _.Append(_,_) = Task.FromResult(InvalidAppend "fixture-core-admission-refused") }
+        let refusedPreparation=alternatePreparation()
+        let refusedWorkflow=MainRouteWorkflow(TimeProvider.System,refusingWorkItems,candidates,executions,executions,workItem,"pilot")
+        use refusedRequest=new CancellationTokenSource()
+        let cancellingWorkItems=
+            { new IJournalStore with
+                member _.CheckReadiness token=refusingWorkItems.CheckReadiness token
+                member _.Recover(id,token)=refusingWorkItems.Recover(id,token)
+                member _.SaveSnapshot(value,token)=refusingWorkItems.SaveSnapshot(value,token)
+                member _.SaveProjectionCheckpoint(value,token)=refusingWorkItems.SaveProjectionCheckpoint(value,token)
+                member _.Append(request,token) = refusedRequest.Cancel();refusingWorkItems.Append(request,token) }
+        let cancelledRequestWorkflow=MainRouteWorkflow(TimeProvider.System,cancellingWorkItems,candidates,executions,executions,workItem,"pilot")
+        let! refusedPreparationResult=cancelledRequestWorkflow.Prepare(refusedPreparation,refusedRequest.Token)
+        Assert.Equal(Error "fixture-core-admission-refused",refusedPreparationResult)
+        let! refusedStillActive=reservationActive refusedPreparation.ExecutionReservation.ReservationId
+        Assert.False(refusedStillActive)
+
+        let duplicatePreparation=alternatePreparation()
+        let! duplicateIntent=(executions :> IExecutionSessionJournal).AppendAttempt(duplicatePreparation.LaunchIntent.Key.AssignmentId,duplicatePreparation.LaunchIntent.Key.AttemptId,0L,LaunchIntentRecorded duplicatePreparation.LaunchIntent,CancellationToken.None)
+        Assert.Equal(Appended,duplicateIntent)
+        let! duplicateReserved=commandStore.ReserveSubscription(SubscriptionAccountingCodec.encodeReservation duplicatePreparation.ExecutionReservation,1,1,CancellationToken.None)
+        Assert.Equal(SubscriptionReserved,duplicateReserved)
+        let! duplicateRefusal=refusedWorkflow.Prepare(duplicatePreparation,CancellationToken.None)
+        Assert.Equal(Error "fixture-core-admission-refused",duplicateRefusal)
+        let! duplicateStillActive=reservationActive duplicatePreparation.ExecutionReservation.ReservationId
+        Assert.True(duplicateStillActive)
+        let! duplicateCleanup=commandStore.ReleaseSubscription(duplicatePreparation.ExecutionReservation.ReservationId,duplicatePreparation.ExecutionReservation.AttemptId,duplicatePreparation.ExecutionReservation.Generation,CancellationToken.None)
+        Assert.Equal(SubscriptionReleased,duplicateCleanup)
+
+        let conflictPreparation=alternatePreparation()
+        let conflictStore=withRelease(fun _->Task.FromResult SubscriptionReleaseConflict)
+        let conflictWorkflow=MainRouteWorkflow(TimeProvider.System,refusingWorkItems,candidates,conflictStore,executions,workItem,"pilot")
+        let! conflictResult=conflictWorkflow.Prepare(conflictPreparation,CancellationToken.None)
+        Assert.Equal(Error "fixture-core-admission-refused;main-route-subscription-release-conflict",conflictResult)
+        let! conflictStillActive=reservationActive conflictPreparation.ExecutionReservation.ReservationId
+        Assert.True(conflictStillActive)
+        let! conflictCleanup=commandStore.ReleaseSubscription(conflictPreparation.ExecutionReservation.ReservationId,conflictPreparation.ExecutionReservation.AttemptId,conflictPreparation.ExecutionReservation.Generation,CancellationToken.None)
+        Assert.Equal(SubscriptionReleased,conflictCleanup)
+
+        let exceptionPreparation=alternatePreparation()
+        let exceptionStore=withRelease(fun _->Task.FromException<SubscriptionRelease>(InvalidOperationException "fixture-release-failed"))
+        let exceptionWorkflow=MainRouteWorkflow(TimeProvider.System,refusingWorkItems,candidates,exceptionStore,executions,workItem,"pilot")
+        let! exceptionResult=exceptionWorkflow.Prepare(exceptionPreparation,CancellationToken.None)
+        Assert.Equal(Error "fixture-core-admission-refused;main-route-subscription-release-failed:InvalidOperationException",exceptionResult)
+        let! exceptionStillActive=reservationActive exceptionPreparation.ExecutionReservation.ReservationId
+        Assert.True(exceptionStillActive)
+        let! exceptionCleanup=commandStore.ReleaseSubscription(exceptionPreparation.ExecutionReservation.ReservationId,exceptionPreparation.ExecutionReservation.AttemptId,exceptionPreparation.ExecutionReservation.Generation,CancellationToken.None)
+        Assert.Equal(SubscriptionReleased,exceptionCleanup)
+
+        let! stagedIntent=(executions :> IExecutionSessionJournal).AppendAttempt(assignment,attempt,0L,LaunchIntentRecorded launch,CancellationToken.None)
+        Assert.Equal(Appended,stagedIntent)
+        let! stagedReservation=(executions :> IExecutorCommandStore).ReserveSubscription(SubscriptionAccountingCodec.encodeReservation executionReservation,1,1,CancellationToken.None)
+        Assert.Equal(SubscriptionReserved,stagedReservation)
 
         let bare=Path.Combine(root,"remote.git")
         git root ["init";"--bare";bare]|>ignore
@@ -1094,7 +1203,8 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         Assert.Equal(Error "main-route-admission-route-refused",invalidAdmission)
         let! afterInvalid=HostedWriterJournal.recover workItems workItem CancellationToken.None
         let afterInvalidState=match afterInvalid with Ok value->value.State|Error failures->failwithf "unexpected recovery failure: %A" failures
-        Assert.True(afterInvalidState.WorkItemId.IsNone)
+        Assert.Equal(Some workItem,afterInvalidState.WorkItemId)
+        Assert.Equal(ControlState.Cancelled "prior-attempt-ended",afterInvalidState.Control)
         Assert.True(afterInvalidState.Reservation.IsNone)
         Assert.True(afterInvalidState.HostedRoute.IsNone)
         let firstServer=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore crashAfterSettlement) relay (firstAdmission :> IMainRouteAdmissionHandler) firstShutdown.Token
