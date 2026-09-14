@@ -91,6 +91,36 @@ module Cases =
         Assert.Equal(Conflict,(FS.GG.Coordination.Core.Orchestration.decide now readmitted conflict).Receipt.Disposition)
 
     [<Fact>]
+    let ``cancelled subscription admits one fresh scoped budget only after terminal cleanup`` () =
+        let subscription deadline =
+            { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=deadline
+              Usage=TokensUnknown "provider-not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="not-attributed"} }
+        let append protocol state id body =
+            FS.GG.Coordination.Core.Orchestration.decide now state
+                {CommandId=id;ProtocolVersion=protocol;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=body}
+        let first=append (Id.protocolVersion 2 0) initial (command "18000000-0000-0000-0000-000000000011") (AdmitSubscription(snapshot [],subscription(now.AddMinutes 20.)))
+        let admitted=apply first initial
+        let pending=append (Id.protocolVersion 1 0) admitted (command "18000000-0000-0000-0000-000000000012") (RequestCancel "ended") |> fun decision->apply decision admitted
+        let cancelled=append (Id.protocolVersion 1 0) pending (command "18000000-0000-0000-0000-000000000013") (ConfirmCancelled "ended") |> fun decision->apply decision pending
+        let secondId=command "18000000-0000-0000-0000-000000000014"
+        let secondEnvelope=
+            {CommandId=secondId;ProtocolVersion=Id.protocolVersion 2 0;ExpectedRevision=cancelled.Revision;ExpectedGeneration=cancelled.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=AdmitSubscription(snapshot [],subscription(now.AddMinutes 25.))}
+        let readmission=FS.GG.Coordination.Core.Orchestration.decide now cancelled secondEnvelope
+        Assert.Equal(Accepted,readmission.Receipt.Disposition)
+        let readmitted=apply readmission cancelled
+        Assert.Equal(cancelled.Generation,readmitted.Generation)
+        Assert.Equal(ControlState.Running,readmitted.Control)
+        Assert.Equal(Duplicate,(FS.GG.Coordination.Core.Orchestration.decide now readmitted secondEnvelope).Receipt.Disposition)
+        Assert.Equal(Conflict,(FS.GG.Coordination.Core.Orchestration.decide now readmitted { secondEnvelope with Command=Pause "changed" }).Receipt.Disposition)
+        let unresolved={cancelled with RecoveryObligations=Set.singleton "unresolved"}
+        let refused=FS.GG.Coordination.Core.Orchestration.decide now unresolved { secondEnvelope with ExpectedRevision=unresolved.Revision;ExpectedGeneration=unresolved.Generation;CommandId=command "18000000-0000-0000-0000-000000000015" }
+        Assert.Equal(Rejected,refused.Receipt.Disposition)
+        Assert.Equal("already-admitted-or-invalid-subscription-budget",refused.Receipt.Detail)
+        let otherSnapshot={snapshot [] with WorkItemId=WorkItemIdentity.create "R_other" 2L "I_other" 2L}
+        let wrongIdentity=FS.GG.Coordination.Core.Orchestration.decide now cancelled { secondEnvelope with CommandId=command "18000000-0000-0000-0000-000000000016";Command=AdmitSubscription(otherSnapshot,subscription(now.AddMinutes 25.)) }
+        Assert.Equal(Rejected,wrongIdentity.Receipt.Disposition)
+
+    [<Fact>]
     let ``invalid hosted route is rejected before selection and exact paused recovery is append only`` () =
         let subscription =
             { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.

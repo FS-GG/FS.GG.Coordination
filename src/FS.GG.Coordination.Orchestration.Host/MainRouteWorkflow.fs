@@ -21,6 +21,14 @@ module MainRouteWorkflowIdentity =
         let bytes=SHA256.HashData(Encoding.UTF8.GetBytes($"{WorkItemIdentity.persistenceId workItemId}:{route}:{attempt}:{generationValue}:{stage}"))
         Id.command(Guid(ReadOnlySpan(bytes,0,16)))
 
+[<RequireQualifiedAccess>]
+module MainRouteWorkflowPolicy =
+    let needsSubscriptionAdmission (state:State) =
+        state.WorkItemId.IsNone
+        || match state.Control with
+           | ControlState.Revoked _ | ControlState.Cancelled _ -> true
+           | _ -> false
+
 /// Advances a selected route only through existing Core commands. Before every
 /// append it rereads durable state, so response-loss retry observes the original
 /// transition and cannot mint a replacement authority window.
@@ -91,17 +99,31 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
                 if failure.IsNone then
                     let! intentStored=executionJournal.AppendAttempt(value.LaunchIntent.Key.AssignmentId,value.LaunchIntent.Key.AttemptId,0L,LaunchIntentRecorded value.LaunchIntent,token)
                     match intentStored with AppendConflict->failure<-Some "main-route-launch-intent-conflict"|Appended|DuplicateEvent->()
+                let mutable subscriptionReservationAcquired=false
                 if failure.IsNone then
                     let! reserved=executions.ReserveSubscription(SubscriptionAccountingCodec.encodeReservation value.ExecutionReservation,1,1,token)
-                    match reserved with SubscriptionReserved|SubscriptionDuplicate->()|other->failure<-Some($"main-route-subscription-reservation-refused:{other}")
+                    match reserved with
+                    | SubscriptionReserved->subscriptionReservationAcquired<-true
+                    | SubscriptionDuplicate->()
+                    | other->failure<-Some($"main-route-subscription-reservation-refused:{other}")
                 if failure.IsNone then
                     let! before=state token
                     match before with
                     | Error reason -> failure<-Some reason
                     | Ok current ->
-                        let needsAdmission=current.WorkItemId.IsNone || (match current.Control with ControlState.Revoked _->true|_->false)
+                        let needsAdmission=MainRouteWorkflowPolicy.needsSubscriptionAdmission current
                         let! result=runIf value needsAdmission "admit-subscription" (AdmitSubscription(value.Snapshot,value.Budget)) token
                         match result with Error reason->failure<-Some reason|_->()
+                if failure.IsSome && subscriptionReservationAcquired then
+                    let originalFailure=failure.Value
+                    try
+                        use cleanup=new CancellationTokenSource(TimeSpan.FromSeconds 10.)
+                        let! released=executions.ReleaseSubscription(value.ExecutionReservation.ReservationId,value.ExecutionReservation.AttemptId,value.ExecutionReservation.Generation,cleanup.Token)
+                        match released with
+                        | SubscriptionReleased|SubscriptionReleaseDuplicate->()
+                        | SubscriptionReleaseConflict->failure<-Some($"%s{originalFailure};main-route-subscription-release-conflict")
+                    with error ->
+                        failure<-Some($"%s{originalFailure};main-route-subscription-release-failed:%s{error.GetType().Name}")
                 if failure.IsNone then
                     let! current=state token
                     let! result=runIf value (current|>Result.exists _.Reservation.IsNone) "reserve" (Reserve(value.Reservation.ReservationId,value.Reservation.ExpiresAt,value.Reservation.RequiredClaimIds)) token

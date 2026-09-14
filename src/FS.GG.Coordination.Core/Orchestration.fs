@@ -499,7 +499,7 @@ module Orchestration =
         | AdmitSubscription(s,b) when state.WorkItemId.IsNone && validSubscriptionBudget now b -> accept [SubscriptionWorkAdmitted(s,b);GenerationAdvanced(nextGeneration state.Generation)] [] "subscription-admitted"
         | AdmitSubscription(s,b)
             when state.WorkItemId=Some s.WorkItemId && validSubscriptionBudget now b
-                 && (match state.Control with Revoked _->true|_->false)
+                 && (match state.Control with Revoked _|Cancelled _->true|_->false)
                  && state.Reservation.IsNone && Map.isEmpty state.ExternalClaims
                  && Set.isEmpty state.RecoveryObligations && Map.isEmpty state.CompensationFailures
                  && (state.Attempts|>Map.forall(fun _ attempt->match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _->true|_->false))
