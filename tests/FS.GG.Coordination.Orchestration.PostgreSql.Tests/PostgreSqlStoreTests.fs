@@ -1122,10 +1122,10 @@ while [ $# -gt 0 ]; do if [ "$1" = -C ]; then workspace="$2"; shift 2; elif [ "$
 printf '%s\n' '{"type":"thread.started","thread_id":"thread-main-fixture"}'
 cat >/dev/null
 cd "$workspace"; printf 'candidate\n' > docs/item.md
-printf '{"inputDigest":"__INPUT_DIGEST__","candidateId":"__CANDIDATE_ID__"}\n' > "$final"
+printf '{"status":"completed","summary":"requested edits and checks completed"}\n' > "$final"
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}'
 """
-        let script=scriptTemplate.Replace("__INPUT_DIGEST__",inputDigest).Replace("__CANDIDATE_ID__",candidateId.ToString())
+        let script=scriptTemplate
         File.WriteAllText(codex,script)
         File.SetUnixFileMode(codex,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
         let repositoryRoot=let rec find (d:DirectoryInfo)=if File.Exists(Path.Combine(d.FullName,"FS.GG.Coordination.sln")) then d.FullName else find d.Parent in find(DirectoryInfo(AppContext.BaseDirectory))

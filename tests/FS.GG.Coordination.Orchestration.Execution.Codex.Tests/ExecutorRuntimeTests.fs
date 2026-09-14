@@ -89,7 +89,7 @@ printf '%%s\n' '{{"type":"thread.started","thread_id":"thread-runtime-1"}}'
 cat >/dev/null
 cd "$workspace"
 printf 'candidate\n' > docs/item.md
-printf '{{"inputDigest":"{digest}","candidateId":"{candidateId}"}}\n' > "$final"
+printf '{{"status":"completed","summary":"requested edits and checks completed"}}\n' > "$final"
 printf '%%s\n' '{{"type":"turn.completed","usage":{{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}}}'
 """
         File.WriteAllText(path,script)

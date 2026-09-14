@@ -15,10 +15,18 @@ type Input(bytes:byte array) =
         member _.ReadUtf8(_,_) = Task.FromResult(Ok bytes)
 
 type CandidateInspector(accepted:bool) =
+    let candidateId=Guid.Parse "30000000-0000-0000-0000-000000000099"
     interface ICodexCandidateInspector with
+        member _.CandidateId=candidateId
         member _.Verify(_,_,_) = Task.FromResult(if accepted then Ok() else Error "candidate-refused")
-        member _.CreateCandidate(_,candidateId,_) =
+        member _.CreateCandidate(_,_) =
             Task.FromResult(if accepted then Ok {CandidateId=candidateId;HeadSha="abc";TreeSha="def"} else Error "candidate-refused")
+
+type MismatchedCandidateInspector() =
+    interface ICodexCandidateInspector with
+        member _.CandidateId=Guid.Parse "30000000-0000-0000-0000-000000000099"
+        member _.Verify(_,_,_)=Task.FromResult(Ok())
+        member _.CreateCandidate(_,_)=Task.FromResult(Ok {CandidateId=Guid.Parse "30000000-0000-0000-0000-000000000098";HeadSha="abc";TreeSha="def"})
 
 type Behavior = { Version:string;Login:string;LoginExit:int;Stderr:string;Body:string }
 
@@ -72,7 +80,7 @@ printf '%%s\n' '{behavior.Stderr}' >&2
 type CodexExecutionProviderTests() =
     let successful root =
         { Version="codex-cli 0.154.0";Login="Logged in using ChatGPT";LoginExit=0;Stderr="diagnostic"
-          Body=$"head -c 100000 /dev/zero | tr '\\000' x; printf '\\n'\ni=0; while [ $i -lt 500 ]; do printf 'diagnostic-stdout-padding-%%04d\\n' $i; printf 'diagnostic-stderr-padding-%%04d\\n' $i >&2; i=$((i+1)); done\nprintf '%%s\\n' '{{\"inputDigest\":\"{Fixture.digest}\",\"candidateId\":\"30000000-0000-0000-0000-000000000003\"}}' > \"$final\"\nprintf '%%s\\n' '{{\"type\":\"turn.completed\",\"usage\":{{\"input_tokens\":11,\"cached_input_tokens\":2,\"output_tokens\":3,\"reasoning_output_tokens\":4}}}}'" }
+          Body=$"head -c 100000 /dev/zero | tr '\\000' x; printf '\\n'\ni=0; while [ $i -lt 500 ]; do printf 'diagnostic-stdout-padding-%%04d\\n' $i; printf 'diagnostic-stderr-padding-%%04d\\n' $i >&2; i=$((i+1)); done\nprintf '%%s\\n' '{{\"status\":\"completed\",\"summary\":\"requested edits and checks completed\"}}' > \"$final\"\nprintf '%%s\\n' '{{\"type\":\"turn.completed\",\"usage\":{{\"input_tokens\":11,\"cached_input_tokens\":2,\"output_tokens\":3,\"reasoning_output_tokens\":4}}}}'" }
 
     [<Fact>]
     member _.``actual subprocess uses argument list stdin cwd bounded streams and validates candidate``() = task {
@@ -88,6 +96,7 @@ type CodexExecutionProviderTests() =
         let! terminal=Fixture.waitTerminal provider reference
         Assert.Equal(Succeeded,terminal.Lifecycle)
         Assert.Equal(Some "abc",terminal.Candidate |> Option.map _.HeadSha)
+        Assert.Equal(Some(Guid.Parse "30000000-0000-0000-0000-000000000099"),terminal.Candidate |> Option.map _.CandidateId)
         Assert.Equal(UsageKnown(11L,"tokens","codex-exec-jsonl:turn.completed"),terminal.Usage.Values["input_tokens"])
         Assert.Equal(CostNotApplicable "codex-chatgpt-subscription-no-per-invocation-price",terminal.Usage.Cost)
         Assert.True(Fixture.prompt = File.ReadAllBytes(Path.Combine(root,"stdin")))
@@ -96,6 +105,9 @@ type CodexExecutionProviderTests() =
         Assert.Contains("--model",argv);Assert.Contains("fixture-model",argv);Assert.Contains("-",argv)
         Assert.False(File.Exists(Path.Combine(workspace,"never")))
         Assert.Equal("",File.ReadAllText(Path.Combine(root,"secret")))
+        let schema=File.ReadAllText(Path.Combine(root,"state",intent.Key.AssignmentId.ToString("N"),intent.Key.AttemptId.ToString("N"),"7","completion-schema.json"))
+        Assert.Contains("\"status\"",schema);Assert.Contains("\"summary\"",schema)
+        Assert.DoesNotContain("inputDigest",schema);Assert.DoesNotContain("candidateId",schema)
         Assert.True(File.ReadAllText(terminal.Output |> List.find(fun value -> value.Kind="codex-stderr") |> _.Reference).Length<=4096)
         Assert.True(File.ReadAllText(terminal.Output |> List.find(fun value -> value.Kind="codex-jsonl") |> _.Reference).Length<=4096) }
 
@@ -191,7 +203,40 @@ type CodexExecutionProviderTests() =
     member _.``zero exit and final candidate require terminal turn event``() = task {
         let root=Directory.CreateTempSubdirectory("codex-terminal-").FullName
         let workspace=Directory.CreateDirectory(Path.Combine(root,"workspace")).FullName
-        let body=$"printf '%%s\\n' '{{\"inputDigest\":\"{Fixture.digest}\",\"candidateId\":\"30000000-0000-0000-0000-000000000003\"}}' > \"$final\""
+        let body="printf '%s\\n' '{\"status\":\"completed\",\"summary\":\"done\"}' > \"$final\""
+        let behavior={Version="codex-cli 0.154.0";Login="Logged in using ChatGPT";LoginExit=0;Stderr="";Body=body}
+        let provider=CodexExecutionProvider(Fixture.options (Fixture.script root behavior) (Path.Combine(root,"state")),Input(Fixture.prompt),CandidateInspector(true),TimeProvider.System) :> IExecutionProvider
+        let! launched=provider.Launch(Fixture.intent workspace (TimeSpan.FromSeconds 2.),CancellationToken.None)
+        let reference=match launched with LaunchStarted value -> value.Session | value -> failwithf "%A" value
+        let! terminal=Fixture.waitTerminal provider reference
+        Assert.Equal(OutcomeUnknown,terminal.Lifecycle)
+        Assert.True(terminal.Candidate.IsNone) }
+
+    [<Theory>]
+    [<InlineData("{\"status\":\"completed\",\"summary\":\"done\"}")>]
+    [<InlineData("{\"status\":\"completed\",\"summary\":\"done\",\"inputDigest\":\"the requested input was applied\",\"candidateId\":\"candidate prepared successfully\"}")>]
+    [<InlineData("{\"status\":\"completed\",\"summary\":\"done\",\"inputDigest\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"candidateId\":\"30000000-0000-0000-0000-000000000003\"}")>]
+    member _.``runner-owned identities replace missing prose or wrong model echoes``(completion:string) = task {
+        let root=Directory.CreateTempSubdirectory("codex-owned-identity-").FullName
+        let workspace=Directory.CreateDirectory(Path.Combine(root,"workspace")).FullName
+        let body=$"printf '%%s\\n' '{completion}' > \"$final\"\nprintf '%%s\\n' '{{\"type\":\"turn.completed\",\"usage\":{{\"input_tokens\":1,\"cached_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}}}'"
+        let behavior={Version="codex-cli 0.154.0";Login="Logged in using ChatGPT";LoginExit=0;Stderr="";Body=body}
+        let provider=CodexExecutionProvider(Fixture.options (Fixture.script root behavior) (Path.Combine(root,"state")),Input(Fixture.prompt),CandidateInspector(true),TimeProvider.System) :> IExecutionProvider
+        let! launched=provider.Launch(Fixture.intent workspace (TimeSpan.FromSeconds 2.),CancellationToken.None)
+        let reference=match launched with LaunchStarted value -> value.Session | value -> failwithf "%A" value
+        let! terminal=Fixture.waitTerminal provider reference
+        Assert.Equal(Succeeded,terminal.Lifecycle)
+        Assert.Equal(Guid.Parse "30000000-0000-0000-0000-000000000099",terminal.Candidate.Value.CandidateId) }
+
+    [<Theory>]
+    [<InlineData("{\"summary\":\"done\"}")>]
+    [<InlineData("{\"status\":\"failed\",\"summary\":\"not complete\"}")>]
+    [<InlineData("{\"status\":\"completed\",\"summary\":\"\"}")>]
+    [<InlineData("{\"status\":\"completed\",\"status\":\"completed\",\"summary\":\"done\"}")>]
+    member _.``missing ambiguous or duplicate model result stays unknown``(completion:string) = task {
+        let root=Directory.CreateTempSubdirectory("codex-result-refused-").FullName
+        let workspace=Directory.CreateDirectory(Path.Combine(root,"workspace")).FullName
+        let body=$"printf '%%s\\n' '{completion}' > \"$final\"\nprintf '%%s\\n' '{{\"type\":\"turn.completed\",\"usage\":{{\"input_tokens\":1,\"cached_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}}}'"
         let behavior={Version="codex-cli 0.154.0";Login="Logged in using ChatGPT";LoginExit=0;Stderr="";Body=body}
         let provider=CodexExecutionProvider(Fixture.options (Fixture.script root behavior) (Path.Combine(root,"state")),Input(Fixture.prompt),CandidateInspector(true),TimeProvider.System) :> IExecutionProvider
         let! launched=provider.Launch(Fixture.intent workspace (TimeSpan.FromSeconds 2.),CancellationToken.None)
@@ -205,6 +250,17 @@ type CodexExecutionProviderTests() =
         let root=Directory.CreateTempSubdirectory("codex-candidate-").FullName
         let workspace=Directory.CreateDirectory(Path.Combine(root,"workspace")).FullName
         let provider=CodexExecutionProvider(Fixture.options (Fixture.script root (successful root)) (Path.Combine(root,"state")),Input(Fixture.prompt),CandidateInspector(false),TimeProvider.System) :> IExecutionProvider
+        let! launched=provider.Launch(Fixture.intent workspace (TimeSpan.FromSeconds 2.),CancellationToken.None)
+        let reference=match launched with LaunchStarted value -> value.Session | value -> failwithf "%A" value
+        let! terminal=Fixture.waitTerminal provider reference
+        Assert.Equal(OutcomeUnknown,terminal.Lifecycle)
+        Assert.True(terminal.Candidate.IsNone) }
+
+    [<Fact>]
+    member _.``candidate inspector cannot substitute the request-owned identity``() = task {
+        let root=Directory.CreateTempSubdirectory("codex-candidate-identity-").FullName
+        let workspace=Directory.CreateDirectory(Path.Combine(root,"workspace")).FullName
+        let provider=CodexExecutionProvider(Fixture.options (Fixture.script root (successful root)) (Path.Combine(root,"state")),Input(Fixture.prompt),MismatchedCandidateInspector(),TimeProvider.System) :> IExecutionProvider
         let! launched=provider.Launch(Fixture.intent workspace (TimeSpan.FromSeconds 2.),CancellationToken.None)
         let reference=match launched with LaunchStarted value -> value.Session | value -> failwithf "%A" value
         let! terminal=Fixture.waitTerminal provider reference
