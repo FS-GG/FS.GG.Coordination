@@ -1,7 +1,6 @@
 open System
 open System.Diagnostics
 open System.IO
-open System.Net.Sockets
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -66,6 +65,10 @@ let mutable formalInvalidSteps = Set.empty<string * string>
 let mutable formalRemovedSteps = Set.empty<string * string>
 let mutable formalInventoryReady = false
 let mutable apalacheEndpointOrdinal = 0
+let mutable apalacheStartupRetryCount = 0
+let mutable apalacheVerifyStartupRetryCount = 0
+let mutable apalacheReflectionRetryCount = 0
+let mutable apalacheEarlyLifecycleRetryCount = 0
 let apalacheEndpointBase =
     match Environment.GetEnvironmentVariable "FSGG_APALACHE_PORT_BASE" with
     | null | "" -> 18820
@@ -159,56 +162,6 @@ let requireFile code path =
     if not (File.Exists path) then
         fail code path
 
-type OwnedApalacheServer =
-    { Process: Process
-      Output: Task<string>
-      Error: Task<string>
-      mutable Stopped: bool }
-
-let stopApalacheServer server =
-    if not server.Stopped then
-        server.Stopped <- true
-        if not server.Process.HasExited then server.Process.Kill(true)
-        server.Process.WaitForExit()
-    let output = server.Output.Result.Trim()
-    let error = server.Error.Result.Trim()
-    String.concat "\n" [ output; error ] |> _.Trim()
-
-let startApalacheServer workingDirectory environment port =
-    let quintHome =
-        environment
-        |> List.tryPick (fun (name, value) -> if name = "QUINT_HOME" then Some value else None)
-        |> Option.defaultWith (fun () -> Environment.GetEnvironmentVariable "FSGG_QUINT_HOME")
-    if String.IsNullOrWhiteSpace quintHome then fail "APALACHE-SERVER-HOME" "QUINT_HOME is required"
-    let executable = Path.Combine(quintHome, "apalache-dist-0.56.1/apalache/bin/apalache-mc")
-    requireFile "APALACHE-SERVER-MISSING" executable
-    let info = ProcessStartInfo(executable)
-    info.WorkingDirectory <- workingDirectory
-    info.UseShellExecute <- false
-    info.RedirectStandardOutput <- true
-    info.RedirectStandardError <- true
-    info.ArgumentList.Add "server"
-    info.ArgumentList.Add($"--port=%d{port}")
-    for name, value in environment do info.Environment[name] <- value
-    let child = Process.Start info
-    let server =
-        { Process = child
-          Output = child.StandardOutput.ReadToEndAsync()
-          Error = child.StandardError.ReadToEndAsync()
-          Stopped = false }
-    let clock = Stopwatch.StartNew()
-    let mutable ready = false
-    while not ready && not child.HasExited && clock.Elapsed < TimeSpan.FromSeconds 20.0 do
-        try
-            use client = new TcpClient()
-            client.Connect("127.0.0.1", port)
-            ready <- true
-        with :? SocketException -> Thread.Sleep 50
-    if not ready then
-        let diagnostic = stopApalacheServer server
-        fail "APALACHE-SERVER-START" ($"port=%d{port}; elapsedMs=%d{clock.ElapsedMilliseconds}; %s{diagnostic}")
-    server
-
 let isolateApalacheEndpoint isQuint arguments =
     let command = List.tryHead arguments
     let usesApalacheServer =
@@ -224,11 +177,38 @@ let isolateApalacheEndpoint isQuint arguments =
         if not (apalacheEndpoints.TryAdd(port, 0uy)) then fail "APALACHE-ENDPOINT-DUPLICATE" (string port)
         arguments @ [ "--server-endpoint"; $"localhost:%d{port}" ], Some port
 
+let classifyTransientApalacheStartupFailure exitCode (output: string) (error: string) =
+    let diagnostic = output + "\n" + error
+    let reflectionDeadline =
+        diagnostic.Contains("Error querying reflection endpoint", StringComparison.Ordinal)
+        && diagnostic.Contains("DEADLINE_EXCEEDED", StringComparison.Ordinal)
+    let earlyLifecycleExit =
+        diagnostic.Contains("No running Apalache server found, launching", StringComparison.Ordinal)
+        && diagnostic.Contains("Started Apalache server on pid=", StringComparison.Ordinal)
+        && diagnostic.Contains("Shutting down Apalache server", StringComparison.Ordinal)
+        && Regex.IsMatch(diagnostic, "(?m)^error: error\\s*$")
+
+    if exitCode = 0 then None
+    elif reflectionDeadline then Some "reflection-deadline"
+    elif earlyLifecycleExit then Some "early-lifecycle-exit"
+    else None
+
+let recordApalacheStartupRetry commandKind failureClass =
+    match commandKind with
+    | "verify" -> Interlocked.Increment(&apalacheVerifyStartupRetryCount) |> ignore
+    | "compile" -> ()
+    | _ -> fail "APALACHE-STARTUP-RETRY-COMMAND" commandKind
+    let retryCount = Interlocked.Increment(&apalacheStartupRetryCount)
+    match failureClass with
+    | "reflection-deadline" -> Interlocked.Increment(&apalacheReflectionRetryCount) |> ignore
+    | "early-lifecycle-exit" -> Interlocked.Increment(&apalacheEarlyLifecycleRetryCount) |> ignore
+    | _ -> fail "APALACHE-STARTUP-RETRY-CLASS" failureClass
+    eprintfn "APALACHE_STARTUP_RETRY count=%d command=%s class=%s" retryCount commandKind failureClass
+
 let run workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
 
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
-    let arguments, apalachePort = isolateApalacheEndpoint isQuint arguments
     incrementInvocation (classifyInvocation isQuint arguments)
 
     if isQuint then
@@ -238,39 +218,38 @@ let run workingDirectory (executable: string) arguments environment =
         | "verify" :: _ -> Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
         | _ -> ()
 
-    let info = ProcessStartInfo(executable)
-    info.WorkingDirectory <- workingDirectory
-    info.UseShellExecute <- false
-    info.RedirectStandardOutput <- true
-    info.RedirectStandardError <- true
+    let invoke () =
+        let isolatedArguments, _ = isolateApalacheEndpoint isQuint arguments
+        let info = ProcessStartInfo(executable)
+        info.WorkingDirectory <- workingDirectory
+        info.UseShellExecute <- false
+        info.RedirectStandardOutput <- true
+        info.RedirectStandardError <- true
 
-    for argument in arguments do
-        info.ArgumentList.Add argument
+        for argument in isolatedArguments do
+            info.ArgumentList.Add argument
 
-    for name, value in environment do
-        info.Environment[name] <- value
+        for name, value in environment do
+            info.Environment[name] <- value
 
-    let server = apalachePort |> Option.map (startApalacheServer workingDirectory environment)
-    use serverGuard =
-        { new IDisposable with
-            member _.Dispose() =
-                server
-                |> Option.iter (fun owned ->
-                    if not owned.Stopped then stopApalacheServer owned |> ignore) }
-    use child = Process.Start info
-    let output = child.StandardOutput.ReadToEndAsync()
-    let error = child.StandardError.ReadToEndAsync()
-    child.WaitForExit()
-    let serverDiagnostic = server |> Option.map stopApalacheServer |> Option.defaultValue ""
+        use child = Process.Start info
+        let output = child.StandardOutput.ReadToEndAsync()
+        let error = child.StandardError.ReadToEndAsync()
+        child.WaitForExit()
+        child.ExitCode, output.Result.Trim(), error.Result.Trim()
 
-    if isQuint && child.ExitCode <> 0 then
+    let firstExit, firstOutput, firstError = invoke ()
+    let exitCode, output, error =
+        match if isQuint && List.tryHead arguments = Some "verify" then classifyTransientApalacheStartupFailure firstExit firstOutput firstError else None with
+        | Some failureClass ->
+            recordApalacheStartupRetry (List.head arguments) failureClass
+            invoke ()
+        | None ->
+            firstExit, firstOutput, firstError
+
+    if isQuint && exitCode <> 0 then
         Interlocked.Increment(&quintRejectedProcessCount) |> ignore
-
-    let errorText =
-        if child.ExitCode <> 0 && not (String.IsNullOrWhiteSpace serverDiagnostic) then
-            error.Result.Trim() + "\napalache-server: " + serverDiagnostic
-        else error.Result.Trim()
-    child.ExitCode, output.Result.Trim(), errorText
+    exitCode, output, error
 
 let private processTreeRssBytes rootPid =
     let rec collect visited pid =
@@ -303,45 +282,46 @@ let private processTreeRssBytes rootPid =
 let runMeasured workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
-    let arguments, apalachePort = isolateApalacheEndpoint isQuint arguments
     incrementInvocation (classifyInvocation isQuint arguments)
     if isQuint then
         Interlocked.Increment(&quintProcessCount) |> ignore
         match arguments with
         | "verify" :: _ -> Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
         | _ -> ()
-    let info = ProcessStartInfo(executable)
-    info.WorkingDirectory <- workingDirectory
-    info.UseShellExecute <- false
-    info.RedirectStandardOutput <- true
-    info.RedirectStandardError <- true
-    for argument in arguments do info.ArgumentList.Add argument
-    for name, value in environment do info.Environment[name] <- value
-    let server = apalachePort |> Option.map (startApalacheServer workingDirectory environment)
-    use serverGuard =
-        { new IDisposable with
-            member _.Dispose() =
-                server
-                |> Option.iter (fun owned ->
-                    if not owned.Stopped then stopApalacheServer owned |> ignore) }
-    use child = Process.Start info
-    let output = child.StandardOutput.ReadToEndAsync()
-    let error = child.StandardError.ReadToEndAsync()
-    let clock = Stopwatch.StartNew()
-    let mutable peakBytes = 0L
-    while not child.HasExited do
+    let invoke () =
+        let isolatedArguments, _ = isolateApalacheEndpoint isQuint arguments
+        let info = ProcessStartInfo(executable)
+        info.WorkingDirectory <- workingDirectory
+        info.UseShellExecute <- false
+        info.RedirectStandardOutput <- true
+        info.RedirectStandardError <- true
+        for argument in isolatedArguments do info.ArgumentList.Add argument
+        for name, value in environment do info.Environment[name] <- value
+        use child = Process.Start info
+        let output = child.StandardOutput.ReadToEndAsync()
+        let error = child.StandardError.ReadToEndAsync()
+        let clock = Stopwatch.StartNew()
+        let mutable peakBytes = 0L
+        while not child.HasExited do
+            peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
+            Thread.Sleep 10
+        child.WaitForExit()
         peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
-        Thread.Sleep 10
-    child.WaitForExit()
-    peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
-    let serverDiagnostic = server |> Option.map stopApalacheServer |> Option.defaultValue ""
-    if isQuint && child.ExitCode <> 0 then Interlocked.Increment(&quintRejectedProcessCount) |> ignore
-    let errorText =
-        if child.ExitCode <> 0 && not (String.IsNullOrWhiteSpace serverDiagnostic) then
-            error.Result.Trim() + "\napalache-server: " + serverDiagnostic
-        else error.Result.Trim()
-    child.ExitCode, output.Result.Trim(), errorText, clock.ElapsedMilliseconds,
-    int (Math.Ceiling(float peakBytes / 1048576.0))
+        child.ExitCode, output.Result.Trim(), error.Result.Trim(), clock.ElapsedMilliseconds,
+        int (Math.Ceiling(float peakBytes / 1048576.0))
+
+    let firstExit, firstOutput, firstError, firstElapsed, firstPeak = invoke ()
+    let exitCode, output, error, elapsed, peak =
+        match if isQuint && List.tryHead arguments = Some "verify" then classifyTransientApalacheStartupFailure firstExit firstOutput firstError else None with
+        | Some failureClass ->
+            recordApalacheStartupRetry (List.head arguments) failureClass
+            let retryExit, retryOutput, retryError, retryElapsed, retryPeak = invoke ()
+            retryExit, retryOutput, retryError, firstElapsed + retryElapsed, Math.Max(firstPeak, retryPeak)
+        | None ->
+            firstExit, firstOutput, firstError, firstElapsed, firstPeak
+
+    if isQuint && exitCode <> 0 then Interlocked.Increment(&quintRejectedProcessCount) |> ignore
+    exitCode, output, error, elapsed, peak
 
 let requireGreen code workingDirectory executable arguments environment =
     let exitCode, output, error = run workingDirectory executable arguments environment
@@ -390,7 +370,7 @@ let writeQualificationReceipt failure =
 
     let resultSha256 =
         sha256Text
-            ($"%s{q1Outcome}|%s{q2Outcome}|%d{verifiedPositiveInvariantCount}|%d{quintRejectedProcessCount}|%d{externalProcessCount}|%d{quintProcessCount}|%d{apalacheVerifyInvocationCount}|%s{preparationValue}|%s{formalEvidenceIdentity}|%s{failureCode}|%s{failureDetailSha256}")
+            ($"%s{q1Outcome}|%s{q2Outcome}|%d{verifiedPositiveInvariantCount}|%d{quintRejectedProcessCount}|%d{externalProcessCount}|%d{quintProcessCount}|%d{apalacheVerifyInvocationCount}|%d{apalacheStartupRetryCount}|%d{apalacheVerifyStartupRetryCount}|%d{apalacheReflectionRetryCount}|%d{apalacheEarlyLifecycleRetryCount}|%s{preparationValue}|%s{formalEvidenceIdentity}|%s{failureCode}|%s{failureDetailSha256}")
 
     let outputDirectory = Path.GetDirectoryName qualificationOutput
 
@@ -415,6 +395,18 @@ let writeQualificationReceipt failure =
         writer.WriteNumber("external", externalProcessCount)
         writer.WriteNumber("quintCli", quintProcessCount)
         writer.WriteNumber("apalacheVerify", apalacheVerifyInvocationCount)
+        writer.WriteEndObject()
+        writer.WriteString("processAccounting", "logical-invocations-plus-explicit-startup-retries/v1")
+        writer.WriteStartObject("physicalProcessCounts")
+        writer.WriteNumber("external", externalProcessCount + apalacheStartupRetryCount)
+        writer.WriteNumber("quintCli", quintProcessCount + apalacheStartupRetryCount)
+        writer.WriteNumber("apalacheVerify", apalacheVerifyInvocationCount + apalacheVerifyStartupRetryCount)
+        writer.WriteEndObject()
+        writer.WriteStartObject("startupRetries")
+        writer.WriteNumber("total", apalacheStartupRetryCount)
+        writer.WriteNumber("verify", apalacheVerifyStartupRetryCount)
+        writer.WriteNumber("reflectionDeadline", apalacheReflectionRetryCount)
+        writer.WriteNumber("earlyLifecycleExit", apalacheEarlyLifecycleRetryCount)
         writer.WriteEndObject()
         writer.WriteStartArray("formalCounterexamples")
         for id, manifestSha256, traceSha256, itfSha256 in formalCounterexampleReceipts |> Seq.sortBy (fun (id, _, _, _) -> id) do
@@ -1369,6 +1361,10 @@ try
     let formalQuintProcessBaseline = quintProcessCount
     let formalApalacheVerifyBaseline = apalacheVerifyInvocationCount
     let formalRejectedProcessBaseline = quintRejectedProcessCount
+    let formalStartupRetryBaseline = apalacheStartupRetryCount
+    let formalVerifyStartupRetryBaseline = apalacheVerifyStartupRetryCount
+    let formalReflectionRetryBaseline = apalacheReflectionRetryCount
+    let formalEarlyLifecycleRetryBaseline = apalacheEarlyLifecycleRetryCount
 
     for formalId, main, init, step, invariantName, witness, _, _, _, _, _, _, _, _, depth, _, _, samples, elapsedBudget, peakBudget, artifactBudget in formalTests do
         let artifactPath = Path.Combine(formalArtifactDirectory, $"%s{formalId}-simulation.json")
@@ -1684,6 +1680,10 @@ try
         let executedQuintProcessCount = quintProcessCount - formalQuintProcessBaseline
         let executedApalacheVerifyCount = apalacheVerifyInvocationCount - formalApalacheVerifyBaseline
         let formalRejectedProcessCount = quintRejectedProcessCount - formalRejectedProcessBaseline
+        let startupRetryCount = apalacheStartupRetryCount - formalStartupRetryBaseline
+        let verifyStartupRetryCount = apalacheVerifyStartupRetryCount - formalVerifyStartupRetryBaseline
+        let reflectionRetryCount = apalacheReflectionRetryCount - formalReflectionRetryBaseline
+        let earlyLifecycleRetryCount = apalacheEarlyLifecycleRetryCount - formalEarlyLifecycleRetryBaseline
         let shardQ2DurationMs = Math.Max(0L, qualificationClock.ElapsedMilliseconds - preparationDurationMs)
         let outputDirectory = Path.GetDirectoryName qualificationOutput
         if not (String.IsNullOrWhiteSpace outputDirectory) then Directory.CreateDirectory outputDirectory |> ignore
@@ -1702,9 +1702,15 @@ try
         writer.WriteNumber("apalacheVerify", formalApalacheVerifyCount)
         writer.WriteEndObject()
         writer.WriteStartObject("executedProcessCounts")
-        writer.WriteNumber("external", executedExternalProcessCount)
-        writer.WriteNumber("quintCli", executedQuintProcessCount)
-        writer.WriteNumber("apalacheVerify", executedApalacheVerifyCount)
+        writer.WriteNumber("external", executedExternalProcessCount + startupRetryCount)
+        writer.WriteNumber("quintCli", executedQuintProcessCount + startupRetryCount)
+        writer.WriteNumber("apalacheVerify", executedApalacheVerifyCount + verifyStartupRetryCount)
+        writer.WriteEndObject()
+        writer.WriteStartObject("startupRetries")
+        writer.WriteNumber("total", startupRetryCount)
+        writer.WriteNumber("verify", verifyStartupRetryCount)
+        writer.WriteNumber("reflectionDeadline", reflectionRetryCount)
+        writer.WriteNumber("earlyLifecycleExit", earlyLifecycleRetryCount)
         writer.WriteEndObject()
         writer.WriteNumber("elapsedMs", observed.ElapsedMs)
         writer.WriteNumber("peakMiB", observed.PeakMiB)

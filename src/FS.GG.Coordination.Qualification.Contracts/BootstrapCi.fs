@@ -873,13 +873,18 @@ let private inspectCanonicalQuintReceipt (path: string) =
         let properties = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let expectedProperties =
             [ "schema"; "q1Outcome"; "q2Outcome"; "positiveInvariantCount"; "negativeControlCount"
-              "preparationDurationMs"; "q2DurationMs"; "totalDurationMs"; "processCounts"; "formalCounterexamples"; "tools"; "inputs"
+              "preparationDurationMs"; "q2DurationMs"; "totalDurationMs"; "processCounts"; "processAccounting"
+              "physicalProcessCounts"; "startupRetries"; "formalCounterexamples"; "tools"; "inputs"
               "preparationSha256"; "failure"; "resultSha256" ]
         let processCounts = root.GetProperty("processCounts")
+        let physicalProcessCounts = root.GetProperty("physicalProcessCounts")
+        let startupRetries = root.GetProperty("startupRetries")
         let formalCounterexamples = root.GetProperty("formalCounterexamples")
         let tools = root.GetProperty("tools")
         let inputs = root.GetProperty("inputs")
         let processProperties = processCounts.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        let physicalProcessProperties = physicalProcessCounts.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        let startupRetryProperties = startupRetries.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let toolProperties = tools.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let inputProperties = inputs.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let preparationDigest = stringProperty "preparationSha256" root |> Option.defaultValue ""
@@ -896,7 +901,14 @@ let private inspectCanonicalQuintReceipt (path: string) =
             formalRows
             |> List.map (fun (id, manifest, trace, itf) -> $"%s{id}|%s{manifest}|%s{trace}|%s{itf}")
             |> String.concat ";"
-        let expectedResult = sha256Bytes (Encoding.UTF8.GetBytes($"passed|passed|8|151|221|196|62|%s{preparationDigest}|%s{formalIdentity}|none|none"))
+        let startupRetryCount = int64Property "total" startupRetries |> Option.defaultValue -1L
+        let verifyRetryCount = int64Property "verify" startupRetries |> Option.defaultValue -1L
+        let reflectionRetryCount = int64Property "reflectionDeadline" startupRetries |> Option.defaultValue -1L
+        let earlyLifecycleRetryCount = int64Property "earlyLifecycleExit" startupRetries |> Option.defaultValue -1L
+        let expectedResult =
+            sha256Bytes
+                (Encoding.UTF8.GetBytes(
+                    $"passed|passed|8|151|221|196|62|%d{startupRetryCount}|%d{verifyRetryCount}|%d{reflectionRetryCount}|%d{earlyLifecycleRetryCount}|%s{preparationDigest}|%s{formalIdentity}|none|none"))
         let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
         let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
         let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
@@ -916,6 +928,18 @@ let private inspectCanonicalQuintReceipt (path: string) =
             yield violation "quint-receipt-process-count" "expected labeled retained process inventory 221/196/62"
           if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
               yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
+          if stringProperty "processAccounting" root <> Some "logical-invocations-plus-explicit-startup-retries/v1" then
+              yield violation "quint-receipt-process-accounting" "unsupported accounting method"
+          if physicalProcessProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
+              yield violation "quint-receipt-physical-process-properties" (String.concat "," physicalProcessProperties)
+          if startupRetryProperties <> [ "total"; "verify"; "reflectionDeadline"; "earlyLifecycleExit" ]
+             || startupRetryCount < 0L || verifyRetryCount < 0L || verifyRetryCount > startupRetryCount
+             || startupRetryCount <> reflectionRetryCount + earlyLifecycleRetryCount then
+              yield violation "quint-receipt-startup-retries" "retry command/class counts are inconsistent"
+          if int64Property "external" physicalProcessCounts <> Some(221L + startupRetryCount)
+             || int64Property "quintCli" physicalProcessCounts <> Some(196L + startupRetryCount)
+             || int64Property "apalacheVerify" physicalProcessCounts <> Some(62L + verifyRetryCount) then
+              yield violation "quint-receipt-physical-process-count" "physical process inventory does not match logical invocations and retry commands"
           let expectedFormalIds =
               [ "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
                 "journal-reconciliation"; "lifecycle"; "operation-saga"; "pilot-permit-fault-safety"; "pilot-permit-major-action-coverage"; "pilot-permit-transfer"; "relation-mutation"; "review-epoch"; "rollback" ]

@@ -77,16 +77,16 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         |> List.find (fun item -> item["id"].GetValue<string>() = id)
         |> fun item -> (item["budget"].AsObject()["elapsedMs"]).GetValue<int>()
     let expectedElapsedBudgets =
-        Map [ "claim-election", 75000; "relation-mutation", 75000; "lifecycle", 60000
-              "operation-saga", 60000; "epoch", 75000; "rollback", 75000
-              "journal-reconciliation", 60000; "journal-fencing", 75000
-              "authority-reconciliation", 75000; "review-epoch", 60000
-              "cutover-observation", 75000; "pilot-permit-transfer", 75000
-              "pilot-permit-fault-safety", 75000; "pilot-permit-major-action-coverage", 75000
-              "hosted-writer-progress", 75000; "hosted-writer-fault-safety", 75000 ]
+        Map [ "claim-election", 105000; "relation-mutation", 105000; "lifecycle", 90000
+              "operation-saga", 90000; "epoch", 105000; "rollback", 105000
+              "journal-reconciliation", 90000; "journal-fencing", 105000
+              "authority-reconciliation", 105000; "review-epoch", 90000
+              "cutover-observation", 105000; "pilot-permit-transfer", 105000
+              "pilot-permit-fault-safety", 105000; "pilot-permit-major-action-coverage", 105000
+              "hosted-writer-progress", 105000; "hosted-writer-fault-safety", 105000 ]
     let actualElapsedBudgets = expectedIds |> Seq.map (fun id -> id, elapsedBudget id) |> Map
     Assert.True((expectedElapsedBudgets = actualElapsedBudgets), sprintf "unexpected formal elapsed budgets: %A" actualElapsedBudgets)
-    Assert.Equal(60000, elapsedBudget "operation-saga")
+    Assert.Equal(90000, elapsedBudget "operation-saga")
     for item in tests do
         Assert.Equal("tlc", item["backend"].GetValue<string>())
         for field in [ "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"; "removedStep"; "violatedTemporal"; "blockedInvariant" ] do
