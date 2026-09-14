@@ -199,8 +199,9 @@ type GitCandidateInspector(workspace:string,manifest:ExecutorWorkspaceManifest,a
                     File.WriteAllBytes(Path.Combine(artifactRoot,candidate.CandidateId.ToString("N")+".manifest.json"),ExecutorWire.encodeArtifactManifest result)
                     Ok {Manifest=result;BundlePath=bundlePath}))
     interface ICodexCandidateInspector with
+        member _.CandidateId=candidateId
         member _.Verify(candidateWorkspace,candidate,cancellationToken)=Task.FromResult(if cancellationToken.IsCancellationRequested||candidateWorkspace<>workspace then Error "candidate-workspace-refused" else verify cancellationToken candidate)
-        member _.CreateCandidate(candidateWorkspace,requestedCandidateId,cancellationToken)=Task.FromResult(if cancellationToken.IsCancellationRequested||candidateWorkspace<>workspace then Error "candidate-workspace-refused" else createCandidate cancellationToken requestedCandidateId)
+        member _.CreateCandidate(candidateWorkspace,cancellationToken)=Task.FromResult(if cancellationToken.IsCancellationRequested||candidateWorkspace<>workspace then Error "candidate-workspace-refused" else createCandidate cancellationToken candidateId)
 
 [<RequireQualifiedAccess>]
 module ExecutorWorkspace =

@@ -16,8 +16,9 @@ type ICodexExecutionInput =
     abstract member ReadUtf8: digest:string * CancellationToken -> Task<Result<byte array,string>>
 
 type ICodexCandidateInspector =
+    abstract member CandidateId: Guid
     abstract member Verify: workspace:string * CandidateReference * CancellationToken -> Task<Result<unit,string>>
-    abstract member CreateCandidate: workspace:string * candidateId:Guid * CancellationToken -> Task<Result<CandidateReference,string>>
+    abstract member CreateCandidate: workspace:string * CancellationToken -> Task<Result<CandidateReference,string>>
 
 type CodexExecutionProviderOptions =
     { Executable: string
@@ -49,7 +50,7 @@ module CodexCommand =
         { FileName=options.Executable;Arguments=common options intent schemaPath outputPath @ ["resume";threadId;"-"];WorkingDirectory=intent.Workspace }
 
 type private CompletionEnvelope =
-    { InputDigest:string;CandidateId:Guid }
+    { Status:string;Summary:string }
 
 type private RunningProcess =
     { Intent:LaunchIntent;Reference:ProviderSessionReference;Process:Process;Directory:string
@@ -147,7 +148,7 @@ type CodexExecutionProvider(options:CodexExecutionProviderOptions,input:ICodexEx
         with :? OperationCanceledException -> return AuthenticationUnknown "codex-login-status-cancelled"
            | _ -> return AuthenticationUnknown "codex-login-status-unavailable" }
     let writeSchema path =
-        File.WriteAllText(path,"""{"type":"object","additionalProperties":false,"required":["inputDigest","candidateId"],"properties":{"inputDigest":{"type":"string"},"candidateId":{"type":"string"}}}""")
+        File.WriteAllText(path,"""{"type":"object","additionalProperties":false,"required":["status","summary"],"properties":{"status":{"type":"string","enum":["completed"]},"summary":{"type":"string","minLength":1,"maxLength":4096}}}""")
     let unknownUsage provenance = {Values=Map["provider-usage",UsageUnknown provenance];Cost=CostNotApplicable "codex-chatgpt-subscription-no-per-invocation-price"}
     let parseUsage (lines:seq<string>) =
         lines |> Seq.tryPick(fun line ->
@@ -260,15 +261,25 @@ type CodexExecutionProvider(options:CodexExecutionProviderOptions,input:ICodexEx
                         use document=JsonDocument.Parse(stream,JsonDocumentOptions(MaxDepth=8))
                         let root=document.RootElement
                         let properties=root.EnumerateObject()|>Seq.map _.Name|>Seq.toArray
-                        if properties.Length<>2 || Set.ofArray properties<>set["inputDigest";"candidateId"] then return OutcomeUnknown,None
+                        let propertySet=Set.ofArray properties
+                        let allowed=set["status";"summary";"inputDigest";"candidateId"]
+                        let optionalTextIsBounded (name:string) =
+                            match root.TryGetProperty name with
+                            | false,_->true
+                            | true,value->value.ValueKind=JsonValueKind.String && (value.GetString() |> Option.ofObj |> Option.exists(fun text->text.Length<=4096))
+                        if root.ValueKind<>JsonValueKind.Object || properties.Length<>propertySet.Count || not(Set.isSubset propertySet allowed)
+                           || not(propertySet.Contains "status" && propertySet.Contains "summary")
+                           || not(optionalTextIsBounded "inputDigest" && optionalTextIsBounded "candidateId") then return OutcomeUnknown,None
                         else
                             let envelope=
-                                { InputDigest=root.GetProperty("inputDigest").GetString()
-                                  CandidateId=root.GetProperty("candidateId").GetGuid() }
-                            if not(String.Equals(envelope.InputDigest,intent.InputDigest,StringComparison.OrdinalIgnoreCase)) then return OutcomeUnknown,None
+                                { Status=root.GetProperty("status").GetString()
+                                  Summary=root.GetProperty("summary").GetString() }
+                            if envelope.Status<>"completed" || String.IsNullOrWhiteSpace envelope.Summary || envelope.Summary.Length>4096 then return OutcomeUnknown,None
                             else
-                                let! candidate=candidateInspector.CreateCandidate(intent.Workspace,envelope.CandidateId,CancellationToken.None)
-                                match candidate with Ok value -> return Succeeded,Some value | Error _ -> return OutcomeUnknown,None
+                                let! candidate=candidateInspector.CreateCandidate(intent.Workspace,CancellationToken.None)
+                                match candidate with
+                                | Ok value when value.CandidateId=candidateInspector.CandidateId -> return Succeeded,Some value
+                                | _ -> return OutcomeUnknown,None
                     with _ -> return OutcomeUnknown,None }
             let session =
                 match threadStarted.Task.IsCompletedSuccessfully with

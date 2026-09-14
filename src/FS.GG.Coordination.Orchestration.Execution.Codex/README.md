@@ -7,6 +7,10 @@ captures the final structured response with `--output-schema` and `--output-last
 Codex thread can be expressed with `codex exec ... resume <thread-id> -`, but recovery never resumes
 an ambiguous spawn automatically.
 
+The structured response reports only a completed edit result and a bounded summary. Input and
+candidate identities remain owned by the accepted launch request and runner candidate inspector;
+optional legacy identity-shaped response fields are treated as non-authoritative text.
+
 Readiness requires both the exact CLI version and `codex login status` reporting a ChatGPT login.
 The provider-reported model is not present in Codex exec JSONL, so the resolved selection is the
 locally selected CLI model/effort, not a claim about backend routing. Complete token fields are
