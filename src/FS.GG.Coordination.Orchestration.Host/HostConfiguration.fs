@@ -20,7 +20,7 @@ type LocalExecutorConfiguration =
 type HostConfiguration =
     { ConnectionString: string
       Token: string
-      RunnerToken: string
+      RunnerToken: string option
       Prefix: string
       StoreId: string
       BackupIdentity: string
@@ -126,13 +126,18 @@ module HostConfiguration =
             do! validateArguments (set [ "--connection-file"; "--token-file"; "--runner-token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id"; "--github-token-file"; "--github-repository"; "--github-issue-number"; "--github-base-ref"; "--runner-executable"; "--runner-repository-root"; "--runner-workspace-root"; "--runner-input-root"; "--runner-state-root"; "--runner-artifact-root"; "--codex-executable"; "--executor-binding" ]) arguments
             let! connectionPath = value "--connection-file" arguments
             let! tokenPath = value "--token-file" arguments
-            let! runnerTokenPath = value "--runner-token-file" arguments
             let! connection = privateFile 16384 connectionPath
             let! token = privateFile 4096 tokenPath
-            let! runnerToken = privateFile 4096 runnerTokenPath
+            let! runnerToken =
+                match optionalValue "--runner-token-file" arguments with
+                | Some path -> privateFile 4096 path |> Result.map Some
+                | None -> Ok None
             do! if String.IsNullOrWhiteSpace connection then Error "connection-string-required" else Ok()
             do! if token.Length < 32 then Error "operator-token-too-short" else Ok()
-            do! if runnerToken.Length < 32 || runnerToken=token then Error "runner-token-must-be-distinct-and-long" else Ok()
+            do!
+                match runnerToken with
+                | Some value when value.Length < 32 || value=token -> Error "runner-token-must-be-distinct-and-long"
+                | _ -> Ok()
             let! prefix = value "--prefix" arguments |> Result.bind loopbackPrefix
             let! storeId = value "--store-id" arguments
             let! backupIdentity = value "--backup-identity" arguments
@@ -172,6 +177,11 @@ module HostConfiguration =
                           CodexExecutable=get "--codex-executable";ExecutorBinding=get "--executor-binding" })
                 | Some _,_,_ -> Error "incomplete-local-executor-configuration"
                 | None,false,_ -> Error "local-executor-requires-github-main-configuration"
+            do!
+                match localExecutor,runnerToken with
+                | Some _,Some _ -> Error "runner-token-not-allowed-with-local-executor"
+                | None,None -> Error "missing --runner-token-file"
+                | _ -> Ok()
             match Int64.TryParse fenceText, Guid.TryParse backupIdentity, Guid.TryParse permitText,
                   Int64.TryParse repositoryDatabaseText, Int64.TryParse issueDatabaseText with
             | (true, fence), (true, backup), (true, permit), (true, repositoryDatabaseId), (true, issueDatabaseId)

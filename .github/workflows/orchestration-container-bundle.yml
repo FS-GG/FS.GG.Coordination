@@ -27,7 +27,7 @@ jobs:
       SERVED_OUTPUT: /tmp/fsgg-${{ github.run_id }}-bundle-served
     steps:
       - name: Check out the exact protected candidate
-        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -87,4 +87,3 @@ jobs:
           python3 eng/orchestration-container-bundle.py verify
           --prepared "$BUNDLE_OUTPUT/prepared.json"
           --archive "$SERVED_OUTPUT/fsgg-coord-orchestration-linux-x64-${{ github.sha }}.zip"
-
