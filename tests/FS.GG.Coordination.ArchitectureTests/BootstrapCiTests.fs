@@ -163,12 +163,12 @@ let private createArtifacts root =
                     $"{{\"id\":\"%s{id}\",\"manifestSha256\":\"%s{manifest}\",\"traceSha256\":\"%s{trace}\",\"itfSha256\":\"%s{itf}\"}}")
                 |> String.concat ","
             let resultDigest =
-                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|151|221|196|62|%s{preparationDigest}|%s{formalIdentity}|none|none"))
+                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|151|221|196|62|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"))
                 |> Convert.ToHexString
                 |> _.ToLowerInvariant()
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":151,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":221,\"quintCli\":196,\"apalacheVerify\":62}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":151,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":221,\"quintCli\":196,\"apalacheVerify\":62}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":221,\"quintCli\":196,\"apalacheVerify\":62}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
 
@@ -445,7 +445,11 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
     Assert.DoesNotContain("needs: [canonical-quint-semantic]", semanticBlock)
     Assert.Contains(".negativeControlCount == 5", aggregate)
     Assert.Contains(".processCounts.external == 7", aggregate)
-    Assert.Contains(".executedProcessCounts.external == 10", aggregate)
+    Assert.Contains(".executedProcessCounts.external == (10 + .startupRetries.total)", aggregate)
+    Assert.Contains(".executedProcessCounts.apalacheVerify == (3 + .startupRetries.verify)", aggregate)
+    Assert.Contains(".startupRetries.total == (.startupRetries.reflectionDeadline + .startupRetries.earlyLifecycleExit)", aggregate)
+    Assert.Contains(".startupRetries.verify <= .startupRetries.total", aggregate)
+    Assert.Contains("physicalProcessCounts", aggregate)
     Assert.Contains("negative_count=$((negative_count +", aggregate)
     Assert.Contains("durationSemantics=parallel-composed-upper-bound", aggregate)
     Assert.Contains("canonical-quint-parallel-accounting/1", aggregate)
@@ -460,7 +464,7 @@ let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
         let shardRoot = Path.Combine(root, "shards")
         Directory.CreateDirectory shardRoot |> ignore
         let performance = Path.Combine(root, "performance.json")
-        File.WriteAllText(performance, "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":16,\"epochBudgetMs\":75000}")
+        File.WriteAllText(performance, "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":16,\"epochBudgetMs\":105000}")
         let startInfo = ProcessStartInfo("bash")
         startInfo.WorkingDirectory <- repositoryRoot
         startInfo.ArgumentList.Add("eng/bootstrap-gates/canonical-quint-aggregate.sh")
@@ -984,6 +988,7 @@ let private mutateCanonicalQuintReceipt mutate =
 [<InlineData("\"quintCli\":196", "\"quintCli\":160", "quint-receipt-process-count")>]
 [<InlineData("\"apalacheVerify\":62", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
 [<InlineData("\"quintCli\":196", "\"quintCli\":0", "quint-receipt-process-count")>]
+[<InlineData("\"verify\":0", "\"verify\":1", "quint-receipt-startup-retries")>]
 [<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
 let ``canonical Quint receipt rejects incomplete or contradictory evidence`` (original: string) (replacement: string) (rule: string) =
     let exitCode, _, error =

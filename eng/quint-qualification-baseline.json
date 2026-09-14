@@ -1,10 +1,10 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
   "sourceSha256": "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f",
-  "configurationSha256": "a4d6ec2fae5ef867a4922daf1dae9460a93f6f59c9106f3b80a6c3b0ec182738",
+  "configurationSha256": "b65e129e2b98c4e6675a4b4827d59f5f764038d6e5d2ee91bb060473d852eea6",
   "assembledQuintSha256": "e3a955d18822c18ac9c05c4545a722954bcac2c856994ac9ece7bd4a3d56c2ca",
   "runnerClass": "linux-x64-local-calibration",
-  "measuredAt": "2026-09-10T15:51:30Z",
+  "measuredAt": "2026-09-14T15:00:00Z",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v1",
   "measurements": [
     {
@@ -95,8 +95,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 26459,
-      "peakMiB": 730,
+      "elapsedMs": 67580,
+      "peakMiB": 1043,
       "artifactBytes": 4586
     },
     {
@@ -104,8 +104,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 26386,
-      "peakMiB": 726,
+      "elapsedMs": 66172,
+      "peakMiB": 1037,
       "artifactBytes": 4559
     },
     {
@@ -131,8 +131,8 @@
       "stateCount": 20,
       "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 26075,
-      "peakMiB": 622,
+      "elapsedMs": 65024,
+      "peakMiB": 962,
       "artifactBytes": 7536
     },
     {
@@ -194,8 +194,8 @@
       "stateCount": 14,
       "transitionCount": 14,
       "sampleCount": 10000,
-      "elapsedMs": 30373,
-      "peakMiB": 617,
+      "elapsedMs": 76322,
+      "peakMiB": 1226,
       "artifactBytes": 9697
     },
     {
