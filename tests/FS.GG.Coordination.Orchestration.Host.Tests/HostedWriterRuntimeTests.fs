@@ -212,6 +212,33 @@ let ``duplicate durable command returns original accepted receipt after response
     Assert.Equal(firstDecision.Receipt,replayDecision.Receipt) }
 
 [<Fact>]
+let ``historical hosted absence survives durable append and restart`` () = task {
+    let events,intent=activeClaimEvents()
+    let historicalEvents =
+        events @ [ EffectDispatchStarted intent.OperationId
+                   EffectObservationRequired(intent.OperationId,"process-launch-not-observed")
+                   RevokedEvent "generation-replaced"
+                   GenerationAdvanced(Id.generation 2L) ]
+    let store=MemoryStore historicalEvents :> IJournalStore
+    let commandId=Id.command(Guid.Parse "70010000-0000-0000-0000-000000000001")
+    let envelope=
+        { CommandId=commandId;ProtocolVersion=Id.protocolVersion 1 0
+          ExpectedRevision=Id.revision(int64 historicalEvents.Length);ExpectedGeneration=Id.generation 2L
+          PrincipalId="pilot";SessionId=None;IssuedAt=Fixture.now;ExpiresAt=Fixture.now.AddMinutes 1.
+          Command=ObserveEffect(intent.OperationId,ProvenAbsent) }
+    let! first=HostedWriterJournal.decideAndAppend (FixedClock Fixture.now) store Fixture.workItem envelope CancellationToken.None
+    let firstDecision,_=Result.defaultWith failwith first
+    Assert.Equal(ReceiptDisposition.Accepted,firstDecision.Receipt.Disposition)
+    Assert.Equal("historical-hosted-effect-absence-settled",firstDecision.Receipt.Detail)
+    let! replayed=HostedWriterJournal.decideAndAppend (FixedClock Fixture.now) store Fixture.workItem envelope CancellationToken.None
+    let replayDecision,_=Result.defaultWith failwith replayed
+    Assert.Equal(firstDecision.Receipt,replayDecision.Receipt)
+    let! recovered=HostedWriterJournal.recover store Fixture.workItem CancellationToken.None
+    let recoveredResult = match recovered with Ok value -> value | Error failures -> failwithf "%A" failures
+    Assert.Equal(OperationState.Settled(intent,ProvenAbsent),recoveredResult.State.Operations[intent.OperationId])
+    Assert.False(recoveredResult.RequiresExternalReconciliation) }
+
+[<Fact>]
 let ``paused restart reconciles dispatch without repeating provider mutation`` () = task {
     let events,intent=activeClaimEvents()
     let store=MemoryStore(events@[EffectDispatchStarted intent.OperationId;StartupPausedEvent "restart"]) :> IJournalStore

@@ -661,7 +661,14 @@ module Orchestration =
             match Map.tryFind operationId state.Operations with | Some(IntentRecorded i) when effectAuthorized now state i -> accept [EffectDispatchStarted operationId] [i] "effect-dispatching" | Some(NeedsObservation _) -> reject "observe-before-retry" | Some _ -> reject "effect-not-authorized" | _ -> reject "effect-not-dispatchable"
         | ObserveEffect(operationId,Unknown reason) ->
             match Map.tryFind operationId state.Operations with | Some(IntentRecorded _)|Some(Dispatching _)|Some(NeedsObservation _) -> accept [EffectObservationRequired(operationId,reason)] [] "observe-before-retry" | _ -> reject "unknown-operation"
-        | ObserveEffect(operationId,(Applied _|ProvenAbsent)) when state.HostedRoute |> Option.exists(fun route -> routeKind operationId route |> Option.isSome) -> reject "hosted-effect-readback-required"
+        | ObserveEffect(operationId,ProvenAbsent) when state.HostedRoute |> Option.exists(fun route -> routeKind operationId route |> Option.isSome) ->
+            match state.HostedRoute,Map.tryFind operationId state.Operations with
+            | Some route,Some(NeedsObservation(intent,_))
+                when routeIntentMatches route intent
+                     && Id.generationValue route.Generation < Id.generationValue state.Generation ->
+                accept [EffectSettled(operationId,ProvenAbsent)] [] "historical-hosted-effect-absence-settled"
+            | _ -> reject "hosted-effect-readback-required"
+        | ObserveEffect(operationId,Applied _) when state.HostedRoute |> Option.exists(fun route -> routeKind operationId route |> Option.isSome) -> reject "hosted-effect-readback-required"
         | ObserveEffect(operationId,outcome) ->
             match Map.tryFind operationId state.Operations with | Some(IntentRecorded _)|Some(Dispatching _)|Some(NeedsObservation _) -> accept [EffectSettled(operationId,outcome)] [] "effect-settled" | _ -> reject "unknown-operation"
         | RecordHostedEffectReadback(operationId,readback) ->
