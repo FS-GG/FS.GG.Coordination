@@ -125,7 +125,7 @@ type ExecutorRuntime(options:ExecutorRuntimeOptions,clock:TimeProvider) =
             ExecutorWorkspace.materialize options.RepositoryRoot options.WorkspaceRoot command.AssignmentId command.AttemptId command.Generation manifest
             |> Result.map(fun workspace->
                 let input=DigestInput(options.InputRoot,command.InputDigest,16L*1024L*1024L):>ICodexExecutionInput
-                let inspector=GitCandidateInspector(workspace,manifest,options.ArtifactRoot,command.CommandId,command.CandidateId)
+                let inspector=GitCandidateInspector(workspace,manifest,options.ArtifactRoot,command.CommandId,command.CandidateId,command.RecordedAt)
                 let providerOptions={CodexExecutionProviderOptions.create options.CodexExecutable options.StateRoot with MaximumStreamBytes=1024*1024}
                 let provider=CodexExecution.provider providerOptions input (inspector:>ICodexCandidateInspector) clock
                 {Command=command;Manifest=manifest;Provider=provider;Inspector=inspector;Session=None;Readiness=None})

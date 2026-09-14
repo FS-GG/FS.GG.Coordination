@@ -17,6 +17,7 @@ type ICodexExecutionInput =
 
 type ICodexCandidateInspector =
     abstract member Verify: workspace:string * CandidateReference * CancellationToken -> Task<Result<unit,string>>
+    abstract member CreateCandidate: workspace:string * candidateId:Guid * CancellationToken -> Task<Result<CandidateReference,string>>
 
 type CodexExecutionProviderOptions =
     { Executable: string
@@ -48,7 +49,7 @@ module CodexCommand =
         { FileName=options.Executable;Arguments=common options intent schemaPath outputPath @ ["resume";threadId;"-"];WorkingDirectory=intent.Workspace }
 
 type private CompletionEnvelope =
-    { InputDigest:string;CandidateId:Guid;HeadSha:string;TreeSha:string }
+    { InputDigest:string;CandidateId:Guid }
 
 type private RunningProcess =
     { Intent:LaunchIntent;Reference:ProviderSessionReference;Process:Process;Directory:string
@@ -146,7 +147,7 @@ type CodexExecutionProvider(options:CodexExecutionProviderOptions,input:ICodexEx
         with :? OperationCanceledException -> return AuthenticationUnknown "codex-login-status-cancelled"
            | _ -> return AuthenticationUnknown "codex-login-status-unavailable" }
     let writeSchema path =
-        File.WriteAllText(path,"""{"type":"object","additionalProperties":false,"required":["inputDigest","candidateId","headSha","treeSha"],"properties":{"inputDigest":{"type":"string"},"candidateId":{"type":"string"},"headSha":{"type":"string"},"treeSha":{"type":"string"}}}""")
+        File.WriteAllText(path,"""{"type":"object","additionalProperties":false,"required":["inputDigest","candidateId"],"properties":{"inputDigest":{"type":"string"},"candidateId":{"type":"string"}}}""")
     let unknownUsage provenance = {Values=Map["provider-usage",UsageUnknown provenance];Cost=CostNotApplicable "codex-chatgpt-subscription-no-per-invocation-price"}
     let parseUsage (lines:seq<string>) =
         lines |> Seq.tryPick(fun line ->
@@ -258,16 +259,16 @@ type CodexExecutionProvider(options:CodexExecutionProviderOptions,input:ICodexEx
                         use stream=File.OpenRead finalPath
                         use document=JsonDocument.Parse(stream,JsonDocumentOptions(MaxDepth=8))
                         let root=document.RootElement
-                        let envelope=
-                            { InputDigest=root.GetProperty("inputDigest").GetString()
-                              CandidateId=root.GetProperty("candidateId").GetGuid()
-                              HeadSha=root.GetProperty("headSha").GetString()
-                              TreeSha=root.GetProperty("treeSha").GetString() }
-                        if not(String.Equals(envelope.InputDigest,intent.InputDigest,StringComparison.OrdinalIgnoreCase)) then return OutcomeUnknown,None
+                        let properties=root.EnumerateObject()|>Seq.map _.Name|>Seq.toArray
+                        if properties.Length<>2 || Set.ofArray properties<>set["inputDigest";"candidateId"] then return OutcomeUnknown,None
                         else
-                            let candidate={CandidateId=envelope.CandidateId;HeadSha=envelope.HeadSha;TreeSha=envelope.TreeSha}
-                            let! verified=candidateInspector.Verify(intent.Workspace,candidate,CancellationToken.None)
-                            match verified with Ok () -> return Succeeded,Some candidate | Error _ -> return OutcomeUnknown,None
+                            let envelope=
+                                { InputDigest=root.GetProperty("inputDigest").GetString()
+                                  CandidateId=root.GetProperty("candidateId").GetGuid() }
+                            if not(String.Equals(envelope.InputDigest,intent.InputDigest,StringComparison.OrdinalIgnoreCase)) then return OutcomeUnknown,None
+                            else
+                                let! candidate=candidateInspector.CreateCandidate(intent.Workspace,envelope.CandidateId,CancellationToken.None)
+                                match candidate with Ok value -> return Succeeded,Some value | Error _ -> return OutcomeUnknown,None
                     with _ -> return OutcomeUnknown,None }
             let session =
                 match threadStarted.Task.IsCompletedSuccessfully with

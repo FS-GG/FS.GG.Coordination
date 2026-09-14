@@ -13,10 +13,13 @@ is distinct from process-creation observation. Exact retries reconcile, while co
 stale generation or missing local state remains unknown and never authorizes another process.
 
 The workspace manifest binds the selected repository, baseline Git object, allowed paths,
-validation names and prompt digest. Candidate acceptance checks the actual baseline-to-head diff,
-clean worktree, ancestry, tree identity, symlink absence and fixed validation implementations. The
-artifact is a Git bundle plus a digest-bound manifest and bounded replay chunks, so Main can
-independently reconstruct it before durable candidate acceptance.
+validation names and prompt digest. The provider edits the worktree but does not write Git metadata.
+After provider success, the runner requires the immutable base to remain checked out, validates the
+nonempty unstaged diff and declared paths, runs the fixed validations, and creates the candidate commit
+with a fixed identity and authority timestamp. Candidate acceptance then checks the committed
+baseline-to-head diff, clean worktree, ancestry, tree identity and symlink absence. The artifact is a
+Git bundle plus a digest-bound manifest and bounded replay chunks, so Main can independently
+reconstruct it before durable candidate acceptance.
 
 The first concrete adapter is Codex subscription execution. Codex 0.154.0 documents
 `--ignore-user-config` as retaining `CODEX_HOME` authentication while ignoring user configuration;

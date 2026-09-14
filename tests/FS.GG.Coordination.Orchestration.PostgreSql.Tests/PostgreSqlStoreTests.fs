@@ -1012,9 +1012,8 @@ workspace=''; final=''
 while [ $# -gt 0 ]; do if [ "$1" = -C ]; then workspace="$2"; shift 2; elif [ "$1" = --output-last-message ]; then final="$2"; shift 2; else shift; fi; done
 printf '%s\n' '{"type":"thread.started","thread_id":"thread-main-fixture"}'
 cat >/dev/null
-cd "$workspace"; printf 'candidate\n' > docs/item.md; git add docs/item.md; git -c user.name=Fixture -c user.email=fixture@example.invalid commit -m candidate >/dev/null
-head=$(git rev-parse HEAD); tree=$(git rev-parse 'HEAD^{tree}')
-printf '{"inputDigest":"__INPUT_DIGEST__","candidateId":"__CANDIDATE_ID__","headSha":"%s","treeSha":"%s"}\n' "$head" "$tree" > "$final"
+cd "$workspace"; printf 'candidate\n' > docs/item.md
+printf '{"inputDigest":"__INPUT_DIGEST__","candidateId":"__CANDIDATE_ID__"}\n' > "$final"
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}'
 """
         let script=scriptTemplate.Replace("__INPUT_DIGEST__",inputDigest).Replace("__CANDIDATE_ID__",candidateId.ToString())

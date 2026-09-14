@@ -89,11 +89,7 @@ printf '%%s\n' '{{"type":"thread.started","thread_id":"thread-runtime-1"}}'
 cat >/dev/null
 cd "$workspace"
 printf 'candidate\n' > docs/item.md
-git add docs/item.md
-git commit -m candidate >/dev/null
-head=$(git rev-parse HEAD)
-tree=$(git rev-parse 'HEAD^{{tree}}')
-printf '{{"inputDigest":"{digest}","candidateId":"{candidateId}","headSha":"%%s","treeSha":"%%s"}}\n' "$head" "$tree" > "$final"
+printf '{{"inputDigest":"{digest}","candidateId":"{candidateId}"}}\n' > "$final"
 printf '%%s\n' '{{"type":"turn.completed","usage":{{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}}}'
 """
         File.WriteAllText(path,script)
@@ -195,16 +191,88 @@ type ExecutorRuntimeTests() =
         let head=RuntimeFixture.git workspace ["rev-parse";"HEAD"]
         let tree=RuntimeFixture.git workspace ["rev-parse";"HEAD^{tree}"]
         let candidate={CandidateId=Guid.NewGuid();HeadSha=head;TreeSha=tree}
-        let inspector=GitCandidateInspector(workspace,manifest,artifactRoot,Guid.NewGuid(),candidate.CandidateId)
+        let inspector=GitCandidateInspector(workspace,manifest,artifactRoot,Guid.NewGuid(),candidate.CandidateId,DateTimeOffset.UnixEpoch)
         let artifact=inspector.CreateArtifact(candidate,4096)|>Result.defaultWith failwith
         Assert.Equal(Ok artifact.Manifest,ExecutorWire.parseArtifactManifest(ExecutorWire.encodeArtifactManifest artifact.Manifest))
         use stream=File.OpenRead artifact.BundlePath
         Assert.Equal(artifact.Manifest.BundleSha256,SHA256.HashData stream|>Convert.ToHexString|>_.ToLowerInvariant())
         RuntimeFixture.git workspace ["bundle";"verify";artifact.BundlePath]|>ignore
         let secondRoot=Directory.CreateDirectory(Path.Combine(roots,"artifacts-2")).FullName
-        let repeated=GitCandidateInspector(workspace,manifest,secondRoot,artifact.Manifest.CommandId,candidate.CandidateId).CreateArtifact(candidate,4096)|>Result.defaultWith failwith
+        let repeated=GitCandidateInspector(workspace,manifest,secondRoot,artifact.Manifest.CommandId,candidate.CandidateId,DateTimeOffset.UnixEpoch).CreateArtifact(candidate,4096)|>Result.defaultWith failwith
         Assert.Equal(artifact.Manifest.BundleSha256,repeated.Manifest.BundleSha256)
         Assert.Equal(artifact.Manifest.ManifestSha256,repeated.Manifest.ManifestSha256)
+
+    [<Fact>]
+    member _.``runner commits an allowed model worktree edit``() =
+        let repository,baseline=RuntimeFixture.repo()
+        let roots=Directory.CreateTempSubdirectory("executor-runner-commit-").FullName
+        let workspaceRoot=Directory.CreateDirectory(Path.Combine(roots,"workspaces")).FullName
+        let artifactRoot=Directory.CreateDirectory(Path.Combine(roots,"artifacts")).FullName
+        let candidateId=Guid.NewGuid()
+        let manifest=RuntimeFixture.manifest baseline (String.replicate 64 "a")
+        let workspace=ExecutorWorkspace.materialize repository workspaceRoot (Guid.NewGuid()) (Guid.NewGuid()) 1L manifest|>Result.defaultWith failwith
+        File.WriteAllText(Path.Combine(workspace,"docs/item.md"),"runner owned\n")
+        let inspector=GitCandidateInspector(workspace,manifest,artifactRoot,Guid.NewGuid(),candidateId,DateTimeOffset.Parse("2026-09-14T12:00:00Z"))
+        let candidate=inspector.CreateCandidate(candidateId,CancellationToken.None)|>Result.defaultWith failwith
+        Assert.Equal(candidateId,candidate.CandidateId)
+        Assert.Equal(candidate.HeadSha,RuntimeFixture.git workspace ["rev-parse";"HEAD"])
+        Assert.Equal("",RuntimeFixture.git workspace ["status";"--porcelain=v1";"--untracked-files=all"])
+        Assert.Equal("FS.GG Orchestration Runner <orchestration-runner@fs.gg>",RuntimeFixture.git workspace ["show";"-s";"--format=%an <%ae>";"HEAD"])
+        let repeatedRoot=Directory.CreateDirectory(Path.Combine(roots,"workspaces-repeated")).FullName
+        let repeatedWorkspace=ExecutorWorkspace.materialize repository repeatedRoot (Guid.NewGuid()) (Guid.NewGuid()) 1L manifest|>Result.defaultWith failwith
+        File.WriteAllText(Path.Combine(repeatedWorkspace,"docs/item.md"),"runner owned\n")
+        let repeated=GitCandidateInspector(repeatedWorkspace,manifest,artifactRoot,Guid.NewGuid(),candidateId,DateTimeOffset.Parse("2026-09-14T12:00:00Z")).CreateCandidate(candidateId,CancellationToken.None)|>Result.defaultWith failwith
+        Assert.Equal(candidate.HeadSha,repeated.HeadSha)
+        Assert.Equal(candidate.TreeSha,repeated.TreeSha)
+
+    [<Fact>]
+    member _.``runner refuses missing invalid dirty and uncommittable model diffs``() =
+        let make () =
+            let repository,baseline=RuntimeFixture.repo()
+            let roots=Directory.CreateTempSubdirectory("executor-runner-refuse-").FullName
+            let workspaceRoot=Directory.CreateDirectory(Path.Combine(roots,"workspaces")).FullName
+            let candidateId=Guid.NewGuid()
+            let manifest=RuntimeFixture.manifest baseline (String.replicate 64 "a")
+            let workspace=ExecutorWorkspace.materialize repository workspaceRoot (Guid.NewGuid()) (Guid.NewGuid()) 1L manifest|>Result.defaultWith failwith
+            workspace,baseline,candidateId,GitCandidateInspector(workspace,manifest,Path.Combine(roots,"artifacts"),Guid.NewGuid(),candidateId,DateTimeOffset.UnixEpoch)
+        let missingWorkspace,missingBase,missingId,missing=make()
+        Assert.Equal(Error "candidate-change-missing",missing.CreateCandidate(missingId,CancellationToken.None))
+        Assert.Equal(missingBase,RuntimeFixture.git missingWorkspace ["rev-parse";"HEAD"])
+        let outsideRepository,_=RuntimeFixture.repo()
+        File.WriteAllText(Path.Combine(outsideRepository,"outside.md"),"base\n")
+        RuntimeFixture.git outsideRepository ["add";"outside.md"]|>ignore
+        RuntimeFixture.git outsideRepository ["commit";"-m";"tracked outside"]|>ignore
+        let outsideBase=RuntimeFixture.git outsideRepository ["rev-parse";"HEAD"]
+        let outsideRoots=Directory.CreateTempSubdirectory("executor-runner-outside-").FullName
+        let outsideWorkspaceRoot=Directory.CreateDirectory(Path.Combine(outsideRoots,"workspaces")).FullName
+        let outsideId=Guid.NewGuid()
+        let outsideManifest=RuntimeFixture.manifest outsideBase (String.replicate 64 "a")
+        let outsideWorkspace=ExecutorWorkspace.materialize outsideRepository outsideWorkspaceRoot (Guid.NewGuid()) (Guid.NewGuid()) 1L outsideManifest|>Result.defaultWith failwith
+        File.WriteAllText(Path.Combine(outsideWorkspace,"outside.md"),"changed\n")
+        let outside=GitCandidateInspector(outsideWorkspace,outsideManifest,Path.Combine(outsideRoots,"artifacts"),Guid.NewGuid(),outsideId,DateTimeOffset.UnixEpoch)
+        Assert.Equal(Error "candidate-touch-set-refused",outside.CreateCandidate(outsideId,CancellationToken.None))
+        Assert.Equal(outsideBase,RuntimeFixture.git outsideWorkspace ["rev-parse";"HEAD"])
+        let invalidWorkspace,invalidBase,invalidId,invalid=make()
+        File.WriteAllText(Path.Combine(invalidWorkspace,"docs/item.md"),"trailing  \n")
+        Assert.True(Result.isError(invalid.CreateCandidate(invalidId,CancellationToken.None)))
+        Assert.Equal(invalidBase,RuntimeFixture.git invalidWorkspace ["rev-parse";"HEAD"])
+        let driftWorkspace,driftBase,driftId,drift=make()
+        File.WriteAllText(Path.Combine(driftWorkspace,"docs/item.md"),"first\n")
+        RuntimeFixture.git driftWorkspace ["add";"docs/item.md"]|>ignore
+        RuntimeFixture.git driftWorkspace ["commit";"-m";"untrusted commit"]|>ignore
+        File.WriteAllText(Path.Combine(driftWorkspace,"docs/item.md"),"second\n")
+        Assert.Equal(Error "candidate-baseline-drift",drift.CreateCandidate(driftId,CancellationToken.None))
+        let driftHead=RuntimeFixture.git driftWorkspace ["rev-parse";"HEAD"]
+        Assert.NotEqual<string>(driftBase,driftHead)
+        let failedWorkspace,failedBase,failedId,failed=make()
+        File.WriteAllText(Path.Combine(failedWorkspace,"docs/item.md"),"valid edit\n")
+        let objects=Path.Combine(failedWorkspace,".git","objects")
+        let originalMode=File.GetUnixFileMode objects
+        File.SetUnixFileMode(objects,UnixFileMode.UserRead|||UnixFileMode.UserExecute)
+        try
+            Assert.True(Result.isError(failed.CreateCandidate(failedId,CancellationToken.None)))
+            Assert.Equal(failedBase,RuntimeFixture.git failedWorkspace ["rev-parse";"HEAD"])
+        finally File.SetUnixFileMode(objects,originalMode)
 
     [<Fact>]
     member _.``committed whitespace damage and dirty or disallowed candidate fail closed``() =
@@ -219,7 +287,7 @@ type ExecutorRuntimeTests() =
         RuntimeFixture.git workspace ["add";"."]|>ignore
         RuntimeFixture.git workspace ["commit";"-m";"bad"]|>ignore
         let candidate={CandidateId=Guid.NewGuid();HeadSha=RuntimeFixture.git workspace ["rev-parse";"HEAD"];TreeSha=RuntimeFixture.git workspace ["rev-parse";"HEAD^{tree}"]}
-        let inspector=GitCandidateInspector(workspace,manifest,artifactRoot,Guid.NewGuid(),candidate.CandidateId):>FS.GG.Coordination.Orchestration.Execution.Codex.ICodexCandidateInspector
+        let inspector=GitCandidateInspector(workspace,manifest,artifactRoot,Guid.NewGuid(),candidate.CandidateId,DateTimeOffset.UnixEpoch):>FS.GG.Coordination.Orchestration.Execution.Codex.ICodexCandidateInspector
         let result=inspector.Verify(workspace,candidate,CancellationToken.None).Result
         Assert.True(Result.isError result)
         RuntimeFixture.git workspace ["reset";"--hard";baseline]|>ignore

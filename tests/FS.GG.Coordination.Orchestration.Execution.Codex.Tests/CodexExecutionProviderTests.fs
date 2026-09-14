@@ -17,6 +17,8 @@ type Input(bytes:byte array) =
 type CandidateInspector(accepted:bool) =
     interface ICodexCandidateInspector with
         member _.Verify(_,_,_) = Task.FromResult(if accepted then Ok() else Error "candidate-refused")
+        member _.CreateCandidate(_,candidateId,_) =
+            Task.FromResult(if accepted then Ok {CandidateId=candidateId;HeadSha="abc";TreeSha="def"} else Error "candidate-refused")
 
 type Behavior = { Version:string;Login:string;LoginExit:int;Stderr:string;Body:string }
 
@@ -70,7 +72,7 @@ printf '%%s\n' '{behavior.Stderr}' >&2
 type CodexExecutionProviderTests() =
     let successful root =
         { Version="codex-cli 0.154.0";Login="Logged in using ChatGPT";LoginExit=0;Stderr="diagnostic"
-          Body=$"head -c 100000 /dev/zero | tr '\\000' x; printf '\\n'\ni=0; while [ $i -lt 500 ]; do printf 'diagnostic-stdout-padding-%%04d\\n' $i; printf 'diagnostic-stderr-padding-%%04d\\n' $i >&2; i=$((i+1)); done\nprintf '%%s\\n' '{{\"inputDigest\":\"{Fixture.digest}\",\"candidateId\":\"30000000-0000-0000-0000-000000000003\",\"headSha\":\"abc\",\"treeSha\":\"def\"}}' > \"$final\"\nprintf '%%s\\n' '{{\"type\":\"turn.completed\",\"usage\":{{\"input_tokens\":11,\"cached_input_tokens\":2,\"output_tokens\":3,\"reasoning_output_tokens\":4}}}}'" }
+          Body=$"head -c 100000 /dev/zero | tr '\\000' x; printf '\\n'\ni=0; while [ $i -lt 500 ]; do printf 'diagnostic-stdout-padding-%%04d\\n' $i; printf 'diagnostic-stderr-padding-%%04d\\n' $i >&2; i=$((i+1)); done\nprintf '%%s\\n' '{{\"inputDigest\":\"{Fixture.digest}\",\"candidateId\":\"30000000-0000-0000-0000-000000000003\"}}' > \"$final\"\nprintf '%%s\\n' '{{\"type\":\"turn.completed\",\"usage\":{{\"input_tokens\":11,\"cached_input_tokens\":2,\"output_tokens\":3,\"reasoning_output_tokens\":4}}}}'" }
 
     [<Fact>]
     member _.``actual subprocess uses argument list stdin cwd bounded streams and validates candidate``() = task {
@@ -189,7 +191,7 @@ type CodexExecutionProviderTests() =
     member _.``zero exit and final candidate require terminal turn event``() = task {
         let root=Directory.CreateTempSubdirectory("codex-terminal-").FullName
         let workspace=Directory.CreateDirectory(Path.Combine(root,"workspace")).FullName
-        let body=$"printf '%%s\\n' '{{\"inputDigest\":\"{Fixture.digest}\",\"candidateId\":\"30000000-0000-0000-0000-000000000003\",\"headSha\":\"abc\",\"treeSha\":\"def\"}}' > \"$final\""
+        let body=$"printf '%%s\\n' '{{\"inputDigest\":\"{Fixture.digest}\",\"candidateId\":\"30000000-0000-0000-0000-000000000003\"}}' > \"$final\""
         let behavior={Version="codex-cli 0.154.0";Login="Logged in using ChatGPT";LoginExit=0;Stderr="";Body=body}
         let provider=CodexExecutionProvider(Fixture.options (Fixture.script root behavior) (Path.Combine(root,"state")),Input(Fixture.prompt),CandidateInspector(true),TimeProvider.System) :> IExecutionProvider
         let! launched=provider.Launch(Fixture.intent workspace (TimeSpan.FromSeconds 2.),CancellationToken.None)

@@ -49,12 +49,13 @@ module private BoundedProcess =
                 if remaining>0 then kept.Write(buffer,0,min remaining count)
                 if count>remaining then overflow<-true
         return Encoding.UTF8.GetString(kept.ToArray()),overflow }
-    let runWithCancellation (cancellationToken:CancellationToken) executable cwd arguments =
+    let runWithEnvironment (cancellationToken:CancellationToken) executable cwd arguments environment =
         let start=ProcessStartInfo(executable,WorkingDirectory=cwd,UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true,CreateNoWindow=true)
         arguments |> List.iter start.ArgumentList.Add
         start.Environment["GIT_CONFIG_NOSYSTEM"]<-"1"
         start.Environment["GIT_TERMINAL_PROMPT"]<-"0"
         start.Environment["GIT_OPTIONAL_LOCKS"]<-"0"
+        environment |> Map.iter(fun key value->start.Environment[key]<-value)
         use child=Process.Start start
         use cancellation=cancellationToken.Register(fun ()->try child.Kill(true) with _->())
         let output=drain child.StandardOutput.BaseStream (4*1024*1024)
@@ -74,6 +75,7 @@ module private BoundedProcess =
         elif not exited then Error "subprocess-timeout"
         elif child.ExitCode<>0 then Error("subprocess-refused:"+((error.Result|>fst).Trim() |> fun value -> if value.Length>256 then value[..255] else value))
         else Ok((output.Result|>fst).Trim())
+    let runWithCancellation cancellationToken executable cwd arguments = runWithEnvironment cancellationToken executable cwd arguments Map.empty
     let run executable cwd arguments=runWithCancellation CancellationToken.None executable cwd arguments
 
 [<RequireQualifiedAccess>]
@@ -106,7 +108,7 @@ type DigestInput(root:string,digest:string,maximumBytes:int64) =
                             let observed=SHA256.HashData bytes|>Convert.ToHexString|>_.ToLowerInvariant()
                             if observed<>digest then return Error "executor-input-digest-mismatch" else return Ok bytes }
 
-type GitCandidateInspector(workspace:string,manifest:ExecutorWorkspaceManifest,artifactRoot:string,commandId:Guid,candidateId:Guid) =
+type GitCandidateInspector(workspace:string,manifest:ExecutorWorkspaceManifest,artifactRoot:string,commandId:Guid,candidateId:Guid,recordedAt:DateTimeOffset) =
     let allowed (path:string) =
         manifest.AllowedPaths |> Array.exists(fun rule ->
             if rule.EndsWith("/**",StringComparison.Ordinal) then path.StartsWith(rule[..rule.Length-3],StringComparison.Ordinal)
@@ -136,6 +138,50 @@ type GitCandidateInspector(workspace:string,manifest:ExecutorWorkspaceManifest,a
                         |> Result.bind(fun ()->
                             BoundedProcess.runWithCancellation cancellationToken "python3" workspace ["scripts/check-prose-citations.py";"--root";"."] |> Result.map ignore)
                     | _ -> Error "candidate-validation-unknown")) (Ok()))
+    let createCandidate (cancellationToken:CancellationToken) (requestedCandidateId:Guid) =
+        if cancellationToken.IsCancellationRequested then Error "candidate-creation-cancelled"
+        elif requestedCandidateId<>candidateId then Error "candidate-identity-refused"
+        else
+            let run=Git.runWithCancellation cancellationToken workspace
+            run ["rev-parse";"HEAD"] |> Result.bind(fun head->if head<>manifest.BaselineObjectId then Error "candidate-baseline-drift" else Ok())
+            |> Result.bind(fun ()->
+                run ["status";"--porcelain=v1";"--untracked-files=all"] |> Result.bind(fun status->
+                    let rows=status.Split('\n',StringSplitOptions.RemoveEmptyEntries)
+                    if rows.Length=0 then Error "candidate-change-missing"
+                    else
+                        let path (row:string) =
+                            if row.Length>=4 && row[0]=' ' && (row[1]='M'||row[1]='D') && row[2]=' ' then Some(row.Substring 3)
+                            elif row.Length>=3 && (row[0]='M'||row[0]='D') && row[1]=' ' && row[2]<>' ' then Some(row.Substring 2)
+                            else None
+                        let parsed=rows|>Array.map path
+                        if parsed|>Array.exists Option.isNone then Error "candidate-worktree-state-refused"
+                        else
+                            let paths=parsed|>Array.choose id
+                            if paths|>Array.exists(fun value->String.IsNullOrWhiteSpace value || value.Contains(" -> ",StringComparison.Ordinal) || not(allowed value)) then Error "candidate-touch-set-refused"
+                            else Ok paths))
+            |> Result.bind(fun paths->
+                run ["diff";"--check";manifest.BaselineObjectId;"--"] |> Result.map(fun _->paths))
+            |> Result.bind(fun paths->
+                manifest.Validations |> Array.fold(fun state validationName -> state |> Result.bind(fun ()->
+                    match validationName with
+                    | "git-diff-check" -> Ok()
+                    | "prose-citations" ->
+                        run ["diff";"--quiet";manifest.BaselineObjectId;"--";"scripts/check-prose-citations.py"] |> Result.map ignore
+                        |> Result.bind(fun ()->run ["show";manifest.BaselineObjectId+":scripts/check-prose-citations.py"] |> Result.map ignore)
+                        |> Result.bind(fun ()->BoundedProcess.runWithCancellation cancellationToken "python3" workspace ["scripts/check-prose-citations.py";"--root";"."] |> Result.map ignore)
+                    | _ -> Error "candidate-validation-unknown")) (Ok()) |> Result.map(fun ()->paths))
+            |> Result.bind(fun paths->
+                run (["add";"--"]@Array.toList paths) |> Result.map(fun _->paths))
+            |> Result.bind(fun _->
+                let timestamp=recordedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'",Globalization.CultureInfo.InvariantCulture)
+                let environment=Map["GIT_AUTHOR_NAME","FS.GG Orchestration Runner";"GIT_AUTHOR_EMAIL","orchestration-runner@fs.gg";"GIT_AUTHOR_DATE",timestamp;"GIT_COMMITTER_NAME","FS.GG Orchestration Runner";"GIT_COMMITTER_EMAIL","orchestration-runner@fs.gg";"GIT_COMMITTER_DATE",timestamp]
+                BoundedProcess.runWithEnvironment cancellationToken "git" workspace ["-c";"core.hooksPath=/dev/null";"commit";"--no-gpg-sign";"-m";$"Candidate {candidateId:N}"] environment |> Result.map ignore)
+            |> Result.bind(fun ()->
+                run ["rev-parse";"HEAD"] |> Result.bind(fun head->
+                    run ["rev-parse";"HEAD^{tree}"] |> Result.bind(fun tree->
+                        let candidate={CandidateId=candidateId;HeadSha=head;TreeSha=tree}
+                        verify cancellationToken candidate |> Result.map(fun ()->candidate))))
+    member _.CreateCandidate(candidateId,cancellationToken)=createCandidate cancellationToken candidateId
     member _.CreateArtifact(candidate:CandidateReference,chunkBytes:int)=
         verify CancellationToken.None candidate |> Result.bind(fun ()->
             Directory.CreateDirectory artifactRoot|>ignore
@@ -154,6 +200,7 @@ type GitCandidateInspector(workspace:string,manifest:ExecutorWorkspaceManifest,a
                     Ok {Manifest=result;BundlePath=bundlePath}))
     interface ICodexCandidateInspector with
         member _.Verify(candidateWorkspace,candidate,cancellationToken)=Task.FromResult(if cancellationToken.IsCancellationRequested||candidateWorkspace<>workspace then Error "candidate-workspace-refused" else verify cancellationToken candidate)
+        member _.CreateCandidate(candidateWorkspace,requestedCandidateId,cancellationToken)=Task.FromResult(if cancellationToken.IsCancellationRequested||candidateWorkspace<>workspace then Error "candidate-workspace-refused" else createCandidate cancellationToken requestedCandidateId)
 
 [<RequireQualifiedAccess>]
 module ExecutorWorkspace =
