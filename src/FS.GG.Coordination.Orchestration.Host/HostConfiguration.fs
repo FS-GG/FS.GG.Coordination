@@ -121,6 +121,15 @@ module HostConfiguration =
         | true, uri when uri.Scheme = Uri.UriSchemeHttp && uri.AbsolutePath = "/" && uri.UserInfo = "" && uri.Query = "" && uri.Fragment = "" && String.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) -> Ok value
         | _ -> Error "prefix-must-be-loopback-http-root"
 
+    let private localChildPrefix value =
+        match loopbackPrefix value with
+        | Ok accepted -> Ok accepted
+        | Error _ ->
+            match Uri.TryCreate(value,UriKind.Absolute) with
+            | true,uri when uri.Scheme=Uri.UriSchemeHttp && uri.Host="0.0.0.0" && uri.Port=5109
+                            && uri.AbsolutePath="/" && uri.UserInfo="" && uri.Query="" && uri.Fragment="" -> Ok value
+            | _ -> Error "local-executor-prefix-must-be-loopback-or-container-listen"
+
     let parseServe arguments =
         result {
             do! validateArguments (set [ "--connection-file"; "--token-file"; "--runner-token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id"; "--github-token-file"; "--github-repository"; "--github-issue-number"; "--github-base-ref"; "--runner-executable"; "--runner-repository-root"; "--runner-workspace-root"; "--runner-input-root"; "--runner-state-root"; "--runner-artifact-root"; "--codex-executable"; "--executor-binding" ]) arguments
@@ -138,7 +147,7 @@ module HostConfiguration =
                 match runnerToken with
                 | Some value when value.Length < 32 || value=token -> Error "runner-token-must-be-distinct-and-long"
                 | _ -> Ok()
-            let! prefix = value "--prefix" arguments |> Result.bind loopbackPrefix
+            let! prefixText = value "--prefix" arguments
             let! storeId = value "--store-id" arguments
             let! backupIdentity = value "--backup-identity" arguments
             let! fenceText = value "--minimum-generation-fence" arguments
@@ -182,6 +191,10 @@ module HostConfiguration =
                 | Some _,Some _ -> Error "runner-token-not-allowed-with-local-executor"
                 | None,None -> Error "missing --runner-token-file"
                 | _ -> Ok()
+            let! prefix =
+                match localExecutor with
+                | Some _ -> localChildPrefix prefixText
+                | None -> loopbackPrefix prefixText
             match Int64.TryParse fenceText, Guid.TryParse backupIdentity, Guid.TryParse permitText,
                   Int64.TryParse repositoryDatabaseText, Int64.TryParse issueDatabaseText with
             | (true, fence), (true, backup), (true, permit), (true, repositoryDatabaseId), (true, issueDatabaseId)

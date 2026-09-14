@@ -237,6 +237,13 @@ let ``serve configuration requires private files loopback and explicit identitie
         Assert.Equal(Some "/app/runner/fsgg-coord-orchestration-runner",parsed|>Result.toOption|>Option.bind(fun value->value.LocalExecutor|>Option.map _.RunnerExecutable))
         Assert.Equal(None,parsed|>Result.toOption|>Option.bind _.RunnerToken)
         Assert.Equal(Error "runner-token-not-allowed-with-local-executor",HostConfiguration.parseServe(Array.append arguments localOptions))
+        let containerListen=localArguments|>Array.copy
+        let prefixIndex=Array.findIndex((=) "--prefix") containerListen
+        containerListen[prefixIndex+1]<-"http://0.0.0.0:5109/"
+        Assert.True(HostConfiguration.parseServe containerListen|>Result.isOk)
+        containerListen[prefixIndex+1]<-"http://0.0.0.0:5110/"
+        let wrongContainerPort=HostConfiguration.parseServe containerListen
+        Assert.True((wrongContainerPort=Error "local-executor-prefix-must-be-loopback-or-container-listen"),sprintf "%A" wrongContainerPort)
         Assert.Equal(Error "incomplete-local-executor-configuration",HostConfiguration.parseServe(localArguments[..localArguments.Length-3]))
         let relative=localArguments|>Array.copy
         let workspaceIndex=Array.findIndex((=) "--runner-workspace-root") relative
