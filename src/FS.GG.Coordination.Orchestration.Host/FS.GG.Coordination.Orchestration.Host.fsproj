@@ -14,6 +14,7 @@
     <Compile Include="HostInitialization.fs" />
     <Compile Include="HostedWriterRuntime.fs" />
     <Compile Include="RemoteExecutorProvider.fs" />
+    <Compile Include="LocalExecutorTransport.fs" />
     <Compile Include="HostExecutorRelay.fs" />
     <Compile Include="GitHubRouteClient.fs" />
     <Compile Include="MainEffectDriver.fs" />

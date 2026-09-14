@@ -382,3 +382,4 @@ module HostRuntime =
     let serve clock configuration store cancellationToken = serveInternal clock configuration store None None cancellationToken
     let serveProduction clock configuration store relay cancellationToken = serveInternal clock configuration store (Some relay) None cancellationToken
     let serveMain clock configuration store relay admission cancellationToken = serveInternal clock configuration store (Some relay) (Some admission) cancellationToken
+    let serveMainLocal clock configuration store admission cancellationToken = serveInternal clock configuration store None (Some admission) cancellationToken

@@ -94,5 +94,11 @@ let ``combined orchestration bundle binds both protected main executables`` () =
         for binding in ["github.ref == 'refs/heads/main'";"orchestration-host-candidate.py prepare";"orchestration-runner-client-candidate.py prepare";"orchestration-container-bundle.py assemble";"orchestration-container-bundle.py verify";"compression-level: 0"] do
             Assert.Contains(binding,workflow,StringComparison.Ordinal)
         let documentation=File.ReadAllText(Path.Combine(root,"docs/architecture/orchestration-container-bundle.md"))
-        for binding in ["two rootless Podman containers";"host/fsgg-coord-orchestration-host";"runner/fsgg-coord-orchestration-runner";"no Podman socket"] do
+        for binding in ["two rootless Podman containers";"host/fsgg-coord-orchestration-host";"runner/fsgg-coord-orchestration-runner";"no Podman socket";"no HTTP executor relay";"`podman exec`";"development-container dependency";"actor remoting"] do
             Assert.Contains(binding,documentation,StringComparison.Ordinal)
+        let program=File.ReadAllText(Path.Combine(root,"src/FS.GG.Coordination.Orchestration.Host/Program.fs"))
+        let transport=File.ReadAllText(Path.Combine(root,"src/FS.GG.Coordination.Orchestration.Host/LocalExecutorTransport.fs"))
+        for binding in ["LocalExecutorTransport";"serveMainLocal"] do Assert.Contains(binding,program,StringComparison.Ordinal)
+        Assert.DoesNotContain("HostExecutorRelay",program,StringComparison.Ordinal)
+        for binding in ["ProcessStartInfo(configuration.RunnerExecutable";"info.ArgumentList.Add argument";"executor-stdio";"childProcess.Kill(true)";"maximumAggregateBytes"] do
+            Assert.Contains(binding,transport,StringComparison.Ordinal)

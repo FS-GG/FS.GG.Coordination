@@ -191,14 +191,16 @@ let ``serve configuration requires private files loopback and explicit identitie
     let root = Path.Combine(Path.GetTempPath(), "fsgg-host-test-" + Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory root |> ignore
     try
-        let connection, token, runnerToken = Path.Combine(root, "connection"), Path.Combine(root, "token"), Path.Combine(root,"runner-token")
+        let connection, token, runnerToken, githubToken = Path.Combine(root, "connection"), Path.Combine(root, "token"), Path.Combine(root,"runner-token"), Path.Combine(root,"github-token")
         File.WriteAllText(connection, "Host=127.0.0.1;Database=fixture")
         File.WriteAllText(token, String.replicate 32 "t")
         File.WriteAllText(runnerToken, String.replicate 32 "r")
+        File.WriteAllText(githubToken, String.replicate 32 "g")
         if OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() then
             File.SetUnixFileMode(connection, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
             File.SetUnixFileMode(token, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
             File.SetUnixFileMode(runnerToken, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            File.SetUnixFileMode(githubToken, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
         let arguments =
             [| "--connection-file"; connection; "--token-file"; token; "--runner-token-file"; runnerToken; "--prefix"; "http://127.0.0.1:5109/"
                "--store-id"; "main-pilot"; "--backup-identity"; Guid.NewGuid().ToString()
@@ -219,6 +221,20 @@ let ``serve configuration requires private files loopback and explicit identitie
         let linkArguments = arguments |> Array.copy
         linkArguments[3] <- tokenLink
         Assert.Equal(Error "secret-file-must-be-regular", HostConfiguration.parseServe linkArguments)
+        let localOptions =
+            [| "--github-token-file";githubToken;"--github-repository";"FS-GG/.github";"--github-issue-number";"3421";"--github-base-ref";"main"
+               "--runner-executable";"/app/runner/fsgg-coord-orchestration-runner";"--runner-repository-root";"/srv/repository"
+               "--runner-workspace-root";"/srv/workspaces";"--runner-input-root";"/srv/inputs";"--runner-state-root";"/srv/state"
+               "--runner-artifact-root";"/srv/artifacts";"--codex-executable";"/usr/bin/codex";"--executor-binding";"codex-main" |]
+        let localArguments=Array.append arguments localOptions
+        let parsed=HostConfiguration.parseServe localArguments
+        Assert.True(Result.isOk parsed)
+        Assert.Equal(Some "/app/runner/fsgg-coord-orchestration-runner",parsed|>Result.toOption|>Option.bind(fun value->value.LocalExecutor|>Option.map _.RunnerExecutable))
+        Assert.Equal(Error "incomplete-local-executor-configuration",HostConfiguration.parseServe(localArguments[..localArguments.Length-3]))
+        let relative=localArguments|>Array.copy
+        let workspaceIndex=Array.findIndex((=) "--runner-workspace-root") relative
+        relative[workspaceIndex+1]<-"relative"
+        Assert.Equal(Error "local-executor-path-must-be-absolute",HostConfiguration.parseServe relative)
     finally Directory.Delete(root, true)
 
 let private freePrefix () =
@@ -234,7 +250,7 @@ let ``http host bounds malformed and slow control requests without stopping stat
     let configuration =
         { ConnectionString = "unused"; Token = token; RunnerToken=String.replicate 32 "r"; Prefix = prefix; StoreId = "fixture"
           BackupIdentity = Guid.NewGuid().ToString(); MinimumGenerationFence = 0L; PermitId = Fixture.permitId
-          PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.permit.SubjectId; GitHub=None
+          PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.permit.SubjectId; GitHub=None; LocalExecutor=None
           RequestTimeout = TimeSpan.FromMilliseconds 150.; MaximumConcurrentRequests = 2 }
     let store, _ = Fixture.durableStore { Fixture.pilotOwned with ReadbackCurrent = false }
     use shutdown = new CancellationTokenSource()

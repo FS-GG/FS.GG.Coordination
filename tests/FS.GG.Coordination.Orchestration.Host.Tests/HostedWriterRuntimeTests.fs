@@ -366,6 +366,98 @@ let ``Host relay cancellation leaves original request available for reconciliati
     let! polled=relay.Poll(CancellationToken.None)
     Assert.Equal(Some{CommandId=command.CommandId;Frames=frames},polled) }
 
+let private localRunnerFixture (mode:string) =
+    let root=Directory.CreateTempSubdirectory("local-executor-transport-").FullName
+    for name in ["repository";"workspaces";"inputs";"state";"artifacts"] do Directory.CreateDirectory(Path.Combine(root,name))|>ignore
+    File.WriteAllText(Path.Combine(root,"state/mode"),mode)
+    let runner=Path.Combine(root,"runner.py")
+    let script =
+        [ "#!/usr/bin/python3"; "import json, os, struct, sys, time"
+          "args=dict(zip(sys.argv[2::2],sys.argv[3::2]))"
+          "state=args['--state-root']; count_path=os.path.join(state,'starts')"
+          "count=(int(open(count_path).read()) if os.path.exists(count_path) else 0)+1"
+          "open(count_path,'w').write(str(count)); mode=open(os.path.join(state,'mode')).read().strip()"
+          "if mode=='exit-once' and count==1: sys.exit(17)"
+          "while True:"
+          "    header=sys.stdin.buffer.read(4)"
+          "    if not header: break"
+          "    if len(header)!=4: sys.exit(18)"
+          "    size=struct.unpack('>i',header)[0]; payload=sys.stdin.buffer.read(size)"
+          "    if len(payload)!=size: sys.exit(19)"
+          "    value=json.loads(payload)"
+          "    if value.get('schema')!='fsgg.orchestration.executor-command/2': continue"
+          "    mode=open(os.path.join(state,'mode')).read().strip()"
+          "    if mode=='sleep': time.sleep(30)"
+          "    command_id=value['commandId']"
+          "    if mode=='stale': command_id='ffffffff-ffff-ffff-ffff-ffffffffffff'"
+          "    response={'schema':'fsgg.orchestration.executor-operation-outcome/1','commandId':command_id,'bodySha256':value['bodySha256'],'operation':'reconcile','disposition':'unknown','providerSessionReference':None,'observedAt':'2026-09-14T00:00:00+00:00','reason':'fixture'}"
+          "    encoded=json.dumps(response,separators=(',',':')).encode()"
+          "    if mode=='malformed': encoded=b'{'"
+          "    sys.stdout.buffer.write(struct.pack('>i',len(encoded))+encoded); sys.stdout.buffer.flush()" ]
+        |> String.concat "\n"
+    File.WriteAllText(runner,script+"\n")
+    File.SetUnixFileMode(runner,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
+    root,runner,
+        { RunnerExecutable=runner;RepositoryRoot=Path.Combine(root,"repository");WorkspaceRoot=Path.Combine(root,"workspaces")
+          InputRoot=Path.Combine(root,"inputs");StateRoot=Path.Combine(root,"state");ArtifactRoot=Path.Combine(root,"artifacts")
+          CodexExecutable="/bin/false";ExecutorBinding="fixture-executor" }
+
+[<Fact>]
+let ``local executor child exchanges bounded frames and survives sequential commands`` () = task {
+    let root,_,configuration=localRunnerFixture "ok"
+    use transport=new LocalExecutorTransport(configuration)
+    let first=Fixture.executorCommand(Guid.NewGuid())
+    let! firstResult=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2 first],CancellationToken.None)
+    Assert.True(Result.isOk firstResult,sprintf "%A" firstResult)
+    let second=Fixture.executorCommand(Guid.NewGuid())
+    let! secondResult=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2 second],CancellationToken.None)
+    Assert.True(Result.isOk secondResult)
+    Assert.Equal("1",File.ReadAllText(Path.Combine(root,"state/starts")))
+    Assert.True(transport.IsRunning) }
+
+[<Fact>]
+let ``local executor child restarts after exit and refuses stale or malformed output`` () = task {
+    let root,_,configuration=localRunnerFixture "exit-once"
+    use transport=new LocalExecutorTransport(configuration)
+    let command=Fixture.executorCommand(Guid.NewGuid())
+    let! failed=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2 command],CancellationToken.None)
+    Assert.Equal(Error "executor-child-exited",failed)
+    let! recovered=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2 command],CancellationToken.None)
+    Assert.True(Result.isOk recovered,sprintf "%A" recovered)
+    Assert.Equal("2",File.ReadAllText(Path.Combine(root,"state/starts")))
+    File.WriteAllText(Path.Combine(root,"state/mode"),"stale")
+    let! stale=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2(Fixture.executorCommand(Guid.NewGuid()))],CancellationToken.None)
+    Assert.Equal(Error "executor-child-stale-or-malformed-frame-refused",stale)
+    File.WriteAllText(Path.Combine(root,"state/mode"),"malformed")
+    let! malformed=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2(Fixture.executorCommand(Guid.NewGuid()))],CancellationToken.None)
+    Assert.Equal(Error "executor-child-stale-or-malformed-frame-refused",malformed) }
+
+[<Fact>]
+let ``local executor cancellation terminates child and permits clean restart`` () = task {
+    let root,_,configuration=localRunnerFixture "sleep"
+    use transport=new LocalExecutorTransport(configuration,shutdownTimeout=TimeSpan.FromMilliseconds 200.)
+    use deadline=new CancellationTokenSource(TimeSpan.FromMilliseconds 150.)
+    let command=Fixture.executorCommand(Guid.NewGuid())
+    let! cancelled=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2 command],deadline.Token)
+    Assert.True((cancelled = Error "executor-child-exchange-cancelled"),sprintf "%A" cancelled)
+    Assert.False(transport.IsRunning)
+    File.WriteAllText(Path.Combine(root,"state/mode"),"ok")
+    let! recovered=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2(Fixture.executorCommand(Guid.NewGuid()))],CancellationToken.None)
+    Assert.True(Result.isOk recovered) }
+
+[<Fact>]
+let ``local executor refuses oversized exchanges and clean shutdown terminates its child`` () = task {
+    let _,_,configuration=localRunnerFixture "ok"
+    let transport=new LocalExecutorTransport(configuration)
+    let oversized=List.replicate 65 (ExecutorWire.encodeCommandV2(Fixture.executorCommand(Guid.NewGuid())))
+    let! refused=(transport :> IAuthenticatedExecutorTransport).Exchange(oversized,CancellationToken.None)
+    Assert.Equal(Error "executor-child-request-bounds-refused",refused)
+    let! accepted=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2(Fixture.executorCommand(Guid.NewGuid()))],CancellationToken.None)
+    Assert.True(Result.isOk accepted)
+    Assert.True(transport.IsRunning)
+    (transport :> IDisposable).Dispose()
+    Assert.False(transport.IsRunning) }
+
 [<Fact>]
 let ``work item recovery refuses an untyped snapshot instead of inventing state`` () = task {
     let persistenceId = WorkItemIdentity.persistenceId Fixture.workItem

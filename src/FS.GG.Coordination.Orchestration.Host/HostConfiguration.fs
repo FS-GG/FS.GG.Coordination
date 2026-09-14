@@ -7,6 +7,16 @@ open System.Runtime.InteropServices
 open Microsoft.Win32.SafeHandles
 open FS.GG.Coordination.Core.Orchestration
 
+type LocalExecutorConfiguration =
+    { RunnerExecutable:string
+      RepositoryRoot:string
+      WorkspaceRoot:string
+      InputRoot:string
+      StateRoot:string
+      ArtifactRoot:string
+      CodexExecutable:string
+      ExecutorBinding:string }
+
 type HostConfiguration =
     { ConnectionString: string
       Token: string
@@ -19,6 +29,7 @@ type HostConfiguration =
       PilotPrincipalId: string
       WorkItemId: WorkItemId
       GitHub: MainGitHubConfiguration option
+      LocalExecutor: LocalExecutorConfiguration option
       RequestTimeout: TimeSpan
       MaximumConcurrentRequests: int }
 
@@ -112,7 +123,7 @@ module HostConfiguration =
 
     let parseServe arguments =
         result {
-            do! validateArguments (set [ "--connection-file"; "--token-file"; "--runner-token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id"; "--github-token-file"; "--github-repository"; "--github-issue-number"; "--github-base-ref" ]) arguments
+            do! validateArguments (set [ "--connection-file"; "--token-file"; "--runner-token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id"; "--github-token-file"; "--github-repository"; "--github-issue-number"; "--github-base-ref"; "--runner-executable"; "--runner-repository-root"; "--runner-workspace-root"; "--runner-input-root"; "--runner-state-root"; "--runner-artifact-root"; "--codex-executable"; "--executor-binding" ]) arguments
             let! connectionPath = value "--connection-file" arguments
             let! tokenPath = value "--token-file" arguments
             let! runnerTokenPath = value "--runner-token-file" arguments
@@ -142,6 +153,25 @@ module HostConfiguration =
                         Ok(Some{Token=githubToken;Repository=repository;IssueNumber=issueNumber;BaseRef=baseRef;ApiRoot=Uri "https://api.github.com/";RemoteUri=Uri($"https://github.com/{repository}.git");RoutineOperation="internal-docs"})
                     | _->Error "invalid-github-main-configuration"
                 | _->Error "incomplete-github-main-configuration"
+            let localValues =
+                [ "--runner-executable"; "--runner-repository-root"; "--runner-workspace-root"; "--runner-input-root"
+                  "--runner-state-root"; "--runner-artifact-root"; "--codex-executable"; "--executor-binding" ]
+                |> List.map(fun name->name,optionalValue name arguments)
+            let! localExecutor =
+                match github,localValues|>List.forall(fun (_,value)->value.IsNone),localValues|>List.forall(fun (_,value)->value.IsSome) with
+                | None,true,_ -> Ok None
+                | Some _,_,true ->
+                    let get name=localValues|>List.find(fun (key,_)->key=name)|>snd|>Option.get
+                    let paths=[ "--runner-executable";"--runner-repository-root";"--runner-workspace-root";"--runner-input-root";"--runner-state-root";"--runner-artifact-root";"--codex-executable" ]
+                    if paths|>List.exists(fun name->not(Path.IsPathFullyQualified(get name))) then Error "local-executor-path-must-be-absolute"
+                    elif String.IsNullOrWhiteSpace(get "--executor-binding") then Error "local-executor-binding-required"
+                    else Ok(Some
+                        { RunnerExecutable=get "--runner-executable";RepositoryRoot=get "--runner-repository-root"
+                          WorkspaceRoot=get "--runner-workspace-root";InputRoot=get "--runner-input-root"
+                          StateRoot=get "--runner-state-root";ArtifactRoot=get "--runner-artifact-root"
+                          CodexExecutable=get "--codex-executable";ExecutorBinding=get "--executor-binding" })
+                | Some _,_,_ -> Error "incomplete-local-executor-configuration"
+                | None,false,_ -> Error "local-executor-requires-github-main-configuration"
             match Int64.TryParse fenceText, Guid.TryParse backupIdentity, Guid.TryParse permitText,
                   Int64.TryParse repositoryDatabaseText, Int64.TryParse issueDatabaseText with
             | (true, fence), (true, backup), (true, permit), (true, repositoryDatabaseId), (true, issueDatabaseId)
@@ -155,7 +185,7 @@ module HostConfiguration =
                       BackupIdentity = backup.ToString(); MinimumGenerationFence = fence; PermitId = permit
                       PilotPrincipalId = principal
                       WorkItemId = WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
-                      GitHub=github
+                      GitHub=github; LocalExecutor=localExecutor
                       RequestTimeout = TimeSpan.FromSeconds 5.; MaximumConcurrentRequests = 4 }
             | _ -> return! Error "invalid-fence-backup-permit-or-work-item-identity"
         }

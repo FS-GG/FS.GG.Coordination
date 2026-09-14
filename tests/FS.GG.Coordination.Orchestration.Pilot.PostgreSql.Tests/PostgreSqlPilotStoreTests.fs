@@ -342,6 +342,7 @@ type PostgreSqlPilotStoreTests() =
               StoreId = "pilot-pg18-lab"; BackupIdentity = identity; MinimumGenerationFence = 0L
               PermitId = Fixture.permitId; PilotPrincipalId = "pilot-route"; WorkItemId = Fixture.subject
               GitHub = None
+              LocalExecutor = None
               RequestTimeout = TimeSpan.FromSeconds 1.
               MaximumConcurrentRequests = 1 }
         let hostSource, hostStore = HostRuntime.createStore configuration

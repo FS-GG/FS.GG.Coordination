@@ -24,6 +24,9 @@ RUNNER_PATH = f"{ROOT}/runner/{RUNNER_NAME}"
 MANIFEST_PATH = f"{ROOT}/manifest.json"
 FIXED_TIME = (2000, 1, 1, 0, 0, 0)
 LIMIT = 200 * 1024 * 1024
+MANIFEST_KEYS = {"schema", "repository", "sourceRevision", "sourceTree", "rid", "processModel", "inputs", "payloads"}
+INPUT_KEYS = {"archive", "manifestSha256", "preparedSha256"}
+ARCHIVE_KEYS = {"file", "bytes", "sha256"}
 
 
 def require(value: bool, code: str, detail: str) -> None:
@@ -41,6 +44,10 @@ def digest_bytes(value: bytes) -> str:
 
 def digest_file(path: Path) -> str:
     return digest_bytes(path.read_bytes())
+
+
+def sha256(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
 def info(name: str, mode: int) -> zipfile.ZipInfo:
@@ -101,6 +108,20 @@ def validate(path: Path, expected_manifest: bytes | None = None) -> dict:
         host, runner, manifest_bytes = (zipped.read(entry.filename) for entry in entries)
     manifest = json.loads(manifest_bytes)
     require(canonical(manifest) == manifest_bytes and manifest.get("schema") == SCHEMA, "OCB-MANIFEST", "bundle manifest differs")
+    require(set(manifest) == MANIFEST_KEYS, "OCB-MANIFEST", "bundle manifest shape differs")
+    require(manifest["repository"] == "FS-GG/FS.GG.Coordination", "OCB-MANIFEST", "repository binding differs")
+    require(manifest["rid"] == "linux-x64", "OCB-MANIFEST", "runtime binding differs")
+    require(manifest["processModel"] == "host-supervises-local-runner-child", "OCB-MANIFEST", "process model differs")
+    require(re.fullmatch(r"[0-9a-f]{40}", manifest["sourceRevision"]) is not None and re.fullmatch(r"[0-9a-f]{40}", manifest["sourceTree"]) is not None, "OCB-MANIFEST", "source identity differs")
+    inputs = manifest.get("inputs")
+    require(isinstance(inputs, dict) and set(inputs) == {"host", "runner"}, "OCB-INPUT", "component bindings differ")
+    for role, prefix in (("host", "fsgg-coord-orchestration-host-linux-x64-"), ("runner", "fsgg-coord-orchestration-runner-linux-x64-")):
+        binding = inputs[role]
+        require(isinstance(binding, dict) and set(binding) == INPUT_KEYS, "OCB-INPUT", f"{role} component shape differs")
+        archive = binding.get("archive")
+        require(isinstance(archive, dict) and set(archive) == ARCHIVE_KEYS, "OCB-INPUT", f"{role} archive shape differs")
+        require(archive["file"] == f"{prefix}{manifest['sourceRevision']}.zip" and isinstance(archive["bytes"], int) and archive["bytes"] > 0 and sha256(archive["sha256"]), "OCB-INPUT", f"{role} archive binding differs")
+        require(sha256(binding["manifestSha256"]) and sha256(binding["preparedSha256"]), "OCB-INPUT", f"{role} receipt binding differs")
     if expected_manifest is not None:
         require(manifest_bytes == expected_manifest, "OCB-MANIFEST", "bundle manifest bytes differ")
     for role, binary, expected_path in (("host", host, HOST_PATH), ("runner", runner, RUNNER_PATH)):
@@ -144,7 +165,7 @@ def assemble(host_directory: Path, runner_directory: Path, output: Path) -> Path
 def verify(prepared_path: Path, archive_override: Path | None = None) -> None:
     receipt_bytes = prepared_path.read_bytes()
     receipt = json.loads(receipt_bytes)
-    require(canonical(receipt) == receipt_bytes and receipt.get("schema") == "fsgg.coordination.orchestration-container-bundle-prepared/1", "OCB-PREPARED", "prepared receipt differs")
+    require(canonical(receipt) == receipt_bytes and set(receipt) == {"schema", "archive", "manifestSha256", "sourceRevision", "sourceTree"} and receipt.get("schema") == "fsgg.coordination.orchestration-container-bundle-prepared/1", "OCB-PREPARED", "prepared receipt differs")
     archive = archive_override or prepared_path.parent / receipt["archive"]["file"]
     binding = receipt["archive"]
     require(archive.name == binding["file"] and archive.stat().st_size == binding["bytes"] and digest_file(archive) == binding["sha256"], "OCB-PREPARED", "bundle bytes differ")
@@ -163,7 +184,7 @@ def fixture(directory: Path, role: str, schema: str, payload_name: str, source: 
     root = f"fixture-{role}"
     manifest = {"schema": f"fixture/{role}", "sourceRevision": source, "sourceTree": tree, "payload": {"path": f"{root}/{payload_name}", "bytes": len(binary), "sha256": digest_bytes(binary)}}
     manifest_bytes = canonical(manifest)
-    archive = directory / f"{role}.zip"
+    archive = directory / f"fsgg-coord-orchestration-{role}-linux-x64-{source}.zip"
     with zipfile.ZipFile(archive, "w") as zipped:
         zipped.writestr(f"{root}/{payload_name}", binary)
         zipped.writestr(f"{root}/manifest.json", manifest_bytes)
@@ -182,6 +203,32 @@ def self_test() -> None:
         second = assemble(root / "host", root / "runner", root / "second")
         require(first.read_bytes() == second.read_bytes(), "OCB-SELFTEST", "repeated assembly differs")
         verify(root / "first/prepared.json")
+        with zipfile.ZipFile(first) as zipped:
+            original = {entry.filename: zipped.read(entry.filename) for entry in zipped.infolist()}
+            modes = {entry.filename: (entry.external_attr >> 16) & 0xFFFF for entry in zipped.infolist()}
+        base_manifest = json.loads(original[MANIFEST_PATH])
+        mutations = {
+            "top-level": lambda value: value.update({"unexpected": True}),
+            "repository": lambda value: value.update({"repository": "FS-GG/other"}),
+            "rid": lambda value: value.update({"rid": "linux-arm64"}),
+            "process-model": lambda value: value.update({"processModel": "relay"}),
+            "input-roles": lambda value: value["inputs"].pop("runner"),
+            "input-binding": lambda value: value["inputs"]["host"]["archive"].update({"file": "host.zip"}),
+        }
+        for name, mutate in mutations.items():
+            changed = json.loads(json.dumps(base_manifest))
+            mutate(changed)
+            target = root / f"mutated-{name}.zip"
+            with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zipped:
+                for path in (HOST_PATH, RUNNER_PATH, MANIFEST_PATH):
+                    payload = canonical(changed) if path == MANIFEST_PATH else original[path]
+                    zipped.writestr(info(path, modes[path]), payload, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+            try:
+                validate(target)
+            except SystemExit:
+                pass
+            else:
+                require(False, "OCB-SELFTEST", f"{name} manifest mutation was accepted")
         damaged = json.loads((root / "first/prepared.json").read_text())
         damaged["archive"]["sha256"] = "0" * 64
         (root / "first/prepared.json").write_bytes(canonical(damaged))
