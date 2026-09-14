@@ -104,6 +104,12 @@ type MainProductionCallbacks
         | StoreCandidate ->
             let! found=candidates.Read(route.CandidateId,token)
             match found with
+            | Error "candidate-not-found" ->
+                // The first StoreCandidate observation can race a still-running
+                // executor. Re-observe that same bound session until its candidate
+                // is available; storeCandidate retains all identity and byte checks.
+                let! observed=storeCandidate route intent token
+                return observed|>Result.map HostedEffect
             | Error reason->return Error reason
             | Ok value->
                 let! replay=candidates.Put(value,token)
