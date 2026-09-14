@@ -281,6 +281,33 @@ module Cases =
         Assert.Equal(Accepted,(decide now retried (command "27400000-0000-0000-0000-000000000007") "" (MarkEffectDispatching storeIntent.OperationId)).Receipt.Disposition)
 
     [<Fact>]
+    let ``historical hosted observation settles only proven absence after generation advance`` () =
+        let active,attemptId,_,route = hostedReady()
+        let intent = routeEffect route.ProcessOperationId DispatchRunner (Id.attemptValue attemptId |> string) route
+        let recorded = decide now active (command "27410000-0000-0000-0000-000000000001") "" (RecordEffectIntent intent) |> fun d -> apply d active
+        let dispatching = decide now recorded (command "27410000-0000-0000-0000-000000000002") "" (MarkEffectDispatching intent.OperationId) |> fun d -> apply d recorded
+        let unknown = decide now dispatching (command "27410000-0000-0000-0000-000000000003") "" (ObserveEffect(intent.OperationId,Unknown "process-launch-not-observed")) |> fun d -> apply d dispatching
+        Assert.Equal("hosted-effect-readback-required",(decide now unknown (command "27410000-0000-0000-0000-000000000004") "" (ObserveEffect(intent.OperationId,ProvenAbsent))).Receipt.Detail)
+        let revoked = decide now unknown (command "27410000-0000-0000-0000-000000000005") "" (Revoke "generation-replaced") |> fun d -> apply d unknown
+        Assert.Equal("hosted-effect-readback-required",(decide now revoked (command "27410000-0000-0000-0000-000000000006") "" (ObserveEffect(intent.OperationId,Applied "ambiguous-provider-claim"))).Receipt.Detail)
+        let notAwaitingObservation = { revoked with Operations=Map.add intent.OperationId (Dispatching intent) revoked.Operations }
+        Assert.Equal("hosted-effect-readback-required",(decide now notAwaitingObservation (command "27410000-0000-0000-0000-000000000008") "" (ObserveEffect(intent.OperationId,ProvenAbsent))).Receipt.Detail)
+        Assert.Equal("hosted-effect-readback-required",(decide now revoked (command "27410000-0000-0000-0000-000000000009") "" (ObserveEffect(route.CandidateOperationId,ProvenAbsent))).Receipt.Detail)
+        let commandId = command "27410000-0000-0000-0000-000000000007"
+        let envelope =
+            { CommandId=commandId;ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=revoked.Revision
+              ExpectedGeneration=revoked.Generation;PrincipalId="test-principal";SessionId=None;IssuedAt=now
+              ExpiresAt=now.AddMinutes 1.;Command=ObserveEffect(intent.OperationId,ProvenAbsent) }
+        let settled = FS.GG.Coordination.Core.Orchestration.decide now revoked envelope
+        Assert.Equal(Accepted,settled.Receipt.Disposition)
+        Assert.Equal("historical-hosted-effect-absence-settled",settled.Receipt.Detail)
+        let final = apply settled revoked
+        Assert.Equal(Settled(intent,ProvenAbsent),final.Operations[intent.OperationId])
+        Assert.Equal(Duplicate,(FS.GG.Coordination.Core.Orchestration.decide now final envelope).Receipt.Disposition)
+        let conflicting = { envelope with Command=ObserveEffect(intent.OperationId,Applied "changed") }
+        Assert.Equal(Conflict,(FS.GG.Coordination.Core.Orchestration.decide now final conflicting).Receipt.Disposition)
+
+    [<Fact>]
     let ``adapter claim cannot complete hosted delivery without native readback`` () =
         let active,attemptId,candidateId,route = hostedReady()
         let processed = recordDispatchReadback "27500000-0000-0000-0000-00000000000" route (routeEffect route.ProcessOperationId DispatchRunner (Id.attemptValue attemptId |> string) route) (Id.attemptValue attemptId |> string) None None active
