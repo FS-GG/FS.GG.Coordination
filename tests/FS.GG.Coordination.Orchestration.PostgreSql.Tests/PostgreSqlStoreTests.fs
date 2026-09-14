@@ -1114,6 +1114,7 @@ type PostgreSqlStoreTests() =
                     Task.FromResult outcome}
         let github=GitHubRouteClient(githubTransport,GitBundlePublisher(Uri(bare),String.replicate 40 "t",1024*1024),{ApiRoot=Uri "https://api.github.test/";Repository="FS-GG/.github";IssueNumber=3421;Principal="pilot";BaseRef="main";RoutineOperation="internal-docs";ClaimLease=TimeSpan.FromMinutes 30.},TimeProvider.System)
         let codex=Path.Combine(root,"codex-fixture")
+        let completionGate=Path.Combine(root,"release-codex-completion")
         let scriptTemplate="""#!/bin/sh
 if [ "$1" = --version ]; then echo 'codex-cli 0.154.0'; exit 0; fi
 if [ "$1" = login ]; then echo 'Logged in using ChatGPT'; exit 0; fi
@@ -1122,10 +1123,11 @@ while [ $# -gt 0 ]; do if [ "$1" = -C ]; then workspace="$2"; shift 2; elif [ "$
 printf '%s\n' '{"type":"thread.started","thread_id":"thread-main-fixture"}'
 cat >/dev/null
 cd "$workspace"; printf 'candidate\n' > docs/item.md
+while [ ! -f "__COMPLETION_GATE__" ]; do sleep 0.05; done
 printf '{"status":"completed","summary":"requested edits and checks completed"}\n' > "$final"
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}'
 """
-        let script=scriptTemplate
+        let script=scriptTemplate.Replace("__COMPLETION_GATE__",completionGate)
         File.WriteAllText(codex,script)
         File.SetUnixFileMode(codex,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
         let repositoryRoot=let rec find (d:DirectoryInfo)=if File.Exists(Path.Combine(d.FullName,"FS.GG.Coordination.sln")) then d.FullName else find d.Parent in find(DirectoryInfo(AppContext.BaseDirectory))
@@ -1258,6 +1260,19 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         let! conflicting=client.SendAsync conflictingRequest
         Assert.Equal(HttpStatusCode.Conflict,conflicting.StatusCode)
         let running=admission.Running|>Option.defaultWith(fun()->failwith "production graph was not restarted by admission")
+        let mutable candidateObservationPending=false
+        let mutable observationChecks=0
+        while not candidateObservationPending&&observationChecks<100 do
+            do! Task.Delay 50
+            let! recovered=HostedWriterJournal.recover workItems workItem CancellationToken.None
+            candidateObservationPending <-
+                recovered|>Result.exists(fun value->
+                    match Map.tryFind route.CandidateOperationId value.State.Operations with
+                    | Some(OperationState.NeedsObservation(intent,"execution-observation-missing")) when intent.Kind=StoreCandidate->true
+                    | _->false)
+            observationChecks<-observationChecks+1
+        Assert.True(candidateObservationPending,"StoreCandidate did not observe the running executor before completion")
+        File.WriteAllText(completionGate,"release")
         let getMainStatus ()=task {
             use request=new HttpRequestMessage(HttpMethod.Get,Uri(hostConfiguration.Prefix+"v1/status"))
             request.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
