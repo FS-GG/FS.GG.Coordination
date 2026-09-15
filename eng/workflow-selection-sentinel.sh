@@ -267,13 +267,13 @@ while IFS= read -r project; do
   name="$(basename "$project" .fsproj)"
   dotnet test "$project" -c Release --no-build --no-restore --nologo \
     --logger "trx;LogFileName=$name.trx" --results-directory "$output_root" || test_exit=1
-done < <(find tests -name '*.Tests.fsproj' -type f | sort)
+done < <(find tests -name '*Tests.fsproj' -type f | sort)
 while IFS= read -r project; do
   directory="$(dirname "$project")"
   name="$(basename "$project" .fsproj)"
   (
     cd "$directory"
-    DOTNET_EXE="$(command -v dotnet)" bash run-private-postgres.sh --no-build --no-restore --nologo \
+    FSGG_PG_MODE=docker DOTNET_EXE="$(command -v dotnet)" bash run-private-postgres.sh --no-build --no-restore --nologo \
       --logger "trx;LogFileName=$name.trx" --results-directory "$output_root"
   ) || test_exit=1
 done < <(find tests -name '*PostgreSql.Tests.fsproj' -type f | sort)

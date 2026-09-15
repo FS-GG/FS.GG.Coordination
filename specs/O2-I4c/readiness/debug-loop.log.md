@@ -46,4 +46,20 @@
 - `eng/workflow-selection-sentinel.sh` — canonicalize the result directory before PostgreSQL launchers change their working directory, so every TRX path remains rooted at the sentinel output directory even when `RUNNER_TEMP` is relative.
 
 **Narrow re-run result:** pass — both Observer boundary tests passed in three consecutive focused runs; the sentinel architecture contract and shell syntax check passed.
-**Full verify result:** deferred
+**Full verify result:** fail — run `34966512789` passed every project selected by the repaired loop and all policy/package validators, then correctly disabled selection because its PostgreSQL launchers defaulted to unavailable runner-local binaries. The `*.Tests.fsproj` glob also omitted the repository's `UnitTests` and `ArchitectureTests` projects.
+
+## Iteration 4 — 2026-09-15T12:22:00Z
+
+**Verify command:** focused sentinel project-census and provisioner contract
+**Exit code:** 0
+
+**Primary failure:** environment-mismatch
+- Signal: the exact-head sentinel emitted no PostgreSQL test run because every private provisioner stopped at its binary-mode prerequisite; its ordinary glob selected 7 projects and skipped the two test projects whose names end in `UnitTests.fsproj` and `ArchitectureTests.fsproj`.
+- Hypothesis: selecting every top-level `*Tests.fsproj` project and explicitly using the workflow runner's Docker provisioner mode covers the complete repository test census through the existing isolated launchers.
+
+**Fix applied:**
+- `eng/workflow-selection-sentinel.sh` — widen the test-project suffix to `*Tests.fsproj` and bind PostgreSQL launches to Docker mode.
+- `tests/FS.GG.Coordination.ArchitectureTests/GitHubWorkflowSelectionArchitectureTests.fs` — pin the complete suffix and Docker provisioner contract.
+
+**Narrow re-run result:** pass — the census selects exactly 9 test projects, including 3 PostgreSQL projects and both Unit/Architecture suites; the architecture contract and shell syntax pass.
+**Full verify result:** deferred — no additional optional full-suite dispatch under the operator's cost constraint.
