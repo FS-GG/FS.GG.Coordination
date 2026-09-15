@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
+import os
 import sys
 import xml.etree.ElementTree as ET
 
-path, obligation = sys.argv[1:]
+path, obligation, started_ns = sys.argv[1:]
+if not os.path.isfile(path):
+    raise SystemExit(f"{obligation} test census missing")
+if os.stat(path).st_mtime_ns + 1_000_000_000 < int(started_ns):
+    raise SystemExit(f"{obligation} test census is stale")
 root = ET.parse(path).getroot()
 counters = next((node for node in root.iter() if node.tag.endswith("Counters")), None)
 if counters is None:

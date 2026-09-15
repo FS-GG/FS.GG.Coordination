@@ -29,6 +29,15 @@ Acceptance requires focused Core and Host tests plus the real PostgreSQL replace
 test. The replacement test must show a fresh post-start readback, a separately
 authorized resume, exact identity reuse, and no repeated provider mutation.
 
+## CI prerequisite — bounded formal partition fanout
+
+- [x] Split the optimistic formal obligation into the existing canonical base,
+  15 semantic scenarios, and the independently bounded epoch scenario under one
+  six-execution matrix cap. Strict candidate-bound aggregation restores logical
+  partition 1, preserving the final six-receipt coherent contract. Focused
+  fixtures cover complete, missing, foreign, failed, stale-envelope, stale-base,
+  and test-census cases; native workflow timing remains the performance evidence.
+
 ## C — lost-host administrative retirement
 
 When the original private journal is unavailable, retirement records
