@@ -294,7 +294,7 @@ type CodexExecutionProvider(options:CodexExecutionProviderOptions,input:ICodexEx
             return {Provider=identity;Session=session;Resolved={Model=intent.Requested.Model;Effort=intent.Requested.Effort};Lifecycle=lifecycle
                     Output=outputs;LifecycleReferences=lifecycleReferences;Usage=usage |> Option.defaultValue(unknownUsage "codex-exec-jsonl:usage-absent-or-malformed");Candidate=candidate;ObservedAt=clock.GetUtcNow()} }
         let! first=Task.WhenAny(threadStarted.Task,completion,Task.Delay(options.StartupTimeout,cancellationToken))
-        if obj.ReferenceEquals(first,threadStarted.Task) then
+        if threadStarted.Task.IsCompletedSuccessfully then
             let! threadId=threadStarted.Task
             let reference=ProviderSessionReference.create("codex-thread:"+threadId) |> Result.defaultWith failwith
             let running={Intent=intent;Reference=reference;Process=proc;Directory=directory;StdoutPath=stdoutPath;StderrPath=stderrPath;FinalPath=finalPath;StartedAt=startedAt;Completion=completion;CancelRequested=cancelRequested}
