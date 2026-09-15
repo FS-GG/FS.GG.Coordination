@@ -12,7 +12,7 @@ candidate="$(printf 'a%.0s' {1..40})"
 obligation="$(printf 'b%.0s' {1..64})"
 formal_digest="$(printf 'c%.0s' {1..64})"
 printf '{"candidate":"%s","obligationSha256":"%s","sourceSha256":"%s","compiledContractSha256":"%s"}\n' "$candidate" "$obligation" "$formal_digest" "$formal_digest" > "$plan_root/candidate-obligation.json"
-printf '{"schema":"fsgg.coordination.coherent-partition-plan/1","candidateObligationSha256":"%s","partitions":[{"index":1,"obligations":["formal"]}]}\n' "$obligation" > "$plan_root/partition-plan.json"
+printf '{"schema":"fsgg.coordination.coherent-partition-plan/1","candidateObligationSha256":"%s","qualificationPlanSha256":"%s","partitions":[{"index":1,"obligations":["formal"]}]}\n' "$obligation" "$formal_digest" > "$plan_root/partition-plan.json"
 
 mapfile -t semantic < <(jq -r '.formalFanout.semanticShards[]' "$repo/eng/optimistic-qualification-plan.json")
 performance="$(jq -r '.formalFanout.performanceShard' "$repo/eng/optimistic-qualification-plan.json")"
@@ -87,4 +87,54 @@ if python "$repo/eng/validate-test-census.py" "$trx" unit "$started" >/dev/null 
 touch -d '@1' "$trx"
 if python "$repo/eng/validate-test-census.py" "$trx" unit "$started" >/dev/null 2>&1; then echo "stale census was accepted" >&2; exit 1; fi
 if python "$repo/eng/validate-test-census.py" "$scratch/missing.trx" unit "$started" >/dev/null 2>&1; then echo "missing census was accepted" >&2; exit 1; fi
-printf 'OPTIMISTIC_FANOUT_FIXTURES_OK complete=1 delegated-aggregate=1 missing=1 foreign=1 failed=1 stale-envelope=1 stale-base=1 census-empty=1 census-failed=1 census-stale=1 census-missing=1\n'
+
+export CLASSIFY_MOCK_ROOT="$scratch/classify-mock"
+mkdir -p "$CLASSIFY_MOCK_ROOT/prior"
+printf '{"qualificationPlanSha256":"%s"}\n' "$(printf 'e%.0s' {1..64})" > "$CLASSIFY_MOCK_ROOT/prior/partition-plan.json"
+printf '{}\n' > "$CLASSIFY_MOCK_ROOT/prior/candidate-obligation.json"
+printf '{}\n' > "$CLASSIFY_MOCK_ROOT/prior/coherent-aggregate-receipt.json"
+python - "$CLASSIFY_MOCK_ROOT/prior" "$CLASSIFY_MOCK_ROOT/prior.zip" <<'PY'
+import pathlib, sys, zipfile
+source, target = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+with zipfile.ZipFile(target, "w") as archive:
+    for path in source.glob("*.json"):
+        archive.write(path, path.name)
+PY
+jq -n --arg head "$(printf 'f%.0s' {1..40})" '[{artifacts:[range(1;31) | {id:.,expired:false,name:("coherent-aggregate-" + ($head)),workflow_run:{id:.,head_sha:$head},created_at:"2026-09-15T00:00:00Z",expires_at:"2026-12-15T00:00:00Z"}]}]' > "$CLASSIFY_MOCK_ROOT/artifact-pages.json"
+gh() {
+  if [[ "$*" == *"actions/artifacts?per_page=100"* ]]; then
+    /usr/bin/cat "$CLASSIFY_MOCK_ROOT/artifact-pages.json"
+  elif [[ "$*" == *"/zip"* ]]; then
+    printf 'download\n' >> "$CLASSIFY_MOCK_ROOT/downloads"
+    /usr/bin/cat "$CLASSIFY_MOCK_ROOT/prior.zip"
+  else
+    printf 'unexpected-api %s\n' "$*" >> "$CLASSIFY_MOCK_ROOT/forbidden"
+    echo "unexpected unbounded classifier API call: $*" >&2
+    return 1
+  fi
+}
+dotnet() {
+  if [[ "$*" == *"validate-prior"* ]]; then
+    printf 'typed-prior\n' >> "$CLASSIFY_MOCK_ROOT/forbidden"
+    echo "mismatched plan reached typed prior validation" >&2
+    return 1
+  fi
+  if [[ "$*" == *"--prior-"* ]]; then
+    printf 'prior-authority\n' >> "$CLASSIFY_MOCK_ROOT/forbidden"
+    echo "old-plan fallback attached prior authority" >&2
+    return 1
+  fi
+  local output next=false
+  for argument in "$@"; do
+    if $next; then output="$argument"; next=false; elif [[ "$argument" == --output ]]; then next=true; fi
+  done
+  printf '{"disposition":"current"}\n' > "$output"
+}
+export -f gh dotnet
+export GH_TOKEN=fixture GITHUB_REPOSITORY=FS-GG/FS.GG.Coordination GITHUB_RUN_ID=999
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-classify.sh) >/dev/null 2>&1
+test "$(wc -l < "$CLASSIFY_MOCK_ROOT/downloads")" -eq 25
+test ! -e "$CLASSIFY_MOCK_ROOT/forbidden"
+test "$(jq -r '.disposition' "$RUNNER_TEMP/optimistic-selection/selection.json")" = current
+
+printf 'OPTIMISTIC_FANOUT_FIXTURES_OK complete=1 delegated-aggregate=1 missing=1 foreign=1 failed=1 stale-envelope=1 stale-base=1 census-empty=1 census-failed=1 census-stale=1 census-missing=1 bounded-old-plan-fallback=25\n'

@@ -8,6 +8,7 @@ let document = JsonDocument.Parse(File.ReadAllBytes planPath)
 let plan = document.RootElement
 if plan.GetProperty("schema").GetString() <> "fsgg.coordination.optimistic-qualification-plan/1" then failwith "unsupported plan"
 if plan.GetProperty("selection").GetProperty("nightlyRecoveryMaxConcurrentCandidates").GetInt32() <> 2 then failwith "nightly recovery candidate bound must be two"
+if plan.GetProperty("selection").GetProperty("priorAggregateCandidateLimit").GetInt32() <> 25 then failwith "prior aggregate candidate search bound must be twenty-five"
 if plan.GetProperty("coherent").GetProperty("maxPartitionsPerCandidate").GetInt32() <> 6 then failwith "partition bound must be six"
 if plan.GetProperty("coherent").GetProperty("cancelInProgress").GetBoolean() then failwith "coherent runs cannot be cancelled"
 let fanout = plan.GetProperty("formalFanout")

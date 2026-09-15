@@ -339,6 +339,8 @@ let private inspectOptimisticProjection root =
                   yield violation "optimistic-plan-schema" "unsupported"
               if selection.GetProperty("nightlyRecoveryMaxConcurrentCandidates").GetInt32() <> 2 then
                   yield violation "optimistic-nightly-recovery-candidate-bound" "must equal two"
+              if selection.GetProperty("priorAggregateCandidateLimit").GetInt32() <> 25 then
+                  yield violation "optimistic-prior-search-bound" "must equal twenty-five"
               if coherent.GetProperty("maxPartitionsPerCandidate").GetInt32() <> 6 then
                   yield violation "optimistic-partition-bound" "must equal six"
               if formalFanout.GetProperty("logicalPartition").GetInt32() <> 1
