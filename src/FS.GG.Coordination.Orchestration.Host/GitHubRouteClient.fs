@@ -6,12 +6,14 @@ open System.Diagnostics
 open System.IO
 open System.Net.Http
 open System.Net.Http.Headers
+open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Coordination.GitHub
+open FS.GG.Coordination.Core.Orchestration
 
 type IGitHubRequestExecutor = abstract Send:GitHubRequest * CancellationToken -> Task<TransportOutcome>
 type IGitCandidatePublisher = abstract Publish:string * string * string option * string * byte array * CancellationToken -> Task<Result<string,string>>
@@ -179,6 +181,7 @@ type GitHubRouteClient(executor:IGitHubRequestExecutor,publisher:IGitCandidatePu
     let marker=Regex("^<!-- fsgg:claim worker=(?<worker>[^ ]+) lease=(?<lease>[0-9]+) renewed=(?<renewed>[0-9]+)(?: session=(?<session>[a-f0-9]{32}))?(?: prev=(?<prev>[^ ]+))?(?: pathRepo=(?<pathRepo>[^ ]+))?(?: agentContract=(?<agentContract>[^ ]+))? -->$",RegexOptions.CultureInvariant)
     let routineMarker=Regex("<!-- fsgg:routine-development/v1 head=(?<head>[a-f0-9]{40}) operation=(?<operation>[a-z-]+) -->",RegexOptions.CultureInvariant)
     let paginated (headers:Map<string,string>)=headers|>Map.exists(fun key content->key.Equals("Link",StringComparison.OrdinalIgnoreCase)&&content.Contains("rel=\"next\"",StringComparison.Ordinal))
+    let sha256Text (value:string)=SHA256.HashData(Encoding.UTF8.GetBytes value)|>Convert.ToHexString|>fun value->value.ToLowerInvariant()
     let readComments (ct:CancellationToken) : Task<Result<(int64*string*string) list,string>>=task {
         let! response=send RestMethod.Get $"issues/{target.IssueNumber}/comments?per_page=100" None None ct
         match response with
@@ -222,20 +225,59 @@ type GitHubRouteClient(executor:IGitHubRequestExecutor,publisher:IGitCandidatePu
                 return values|>List.tryHead|>Option.map(fun (item:JsonElement)->
                     let baseValue=item.GetProperty("base")
                     {Number=item.GetProperty("number").GetInt32();NodeId=item.GetProperty("node_id").GetString();State=item.GetProperty("state").GetString();Merged=(match item.TryGetProperty "merged_at" with true,v->v.ValueKind=JsonValueKind.String|_->false);HeadSha=item.GetProperty("head").GetProperty("sha").GetString();HeadRef=item.GetProperty("head").GetProperty("ref").GetString();BaseRef=baseValue.GetProperty("ref").GetString();BaseSha=baseValue.GetProperty("sha").GetString();BaseRepository=baseValue.GetProperty("repo").GetProperty("full_name").GetString();Body=defaultArg(property "body" item) "";MergeCommitSha=property "merge_commit_sha" item;Revision=defaultArg value.ETag "github-pr-observed"})|>Ok }
-    member _.AcquireClaim(claimId:string,operationId:Guid,ct:CancellationToken)=task {
+    /// Reads repository and issue identity from GitHub. Recovery never accepts the
+    /// admission document's historical readback as current after process startup.
+    member _.ReadHostedRoute(route:HostedRoutePlan,ct:CancellationToken)=task {
+        let! repository=send RestMethod.Get "" None None ct
+        let! issue=send RestMethod.Get $"issues/{target.IssueNumber}" None None ct
+        match repository,issue with
+        | Ok repository,Ok issue->
+            match parse repository.Body,parse issue.Body with
+            | Ok repositoryDocument,Ok issueDocument->
+                use repositoryDocument=repositoryDocument
+                use issueDocument=issueDocument
+                let root=repositoryDocument.RootElement
+                let item=issueDocument.RootElement
+                let number=match item.TryGetProperty "number" with true,value when value.ValueKind=JsonValueKind.Number->Some(value.GetInt32())|_->None
+                let repositoryId=match root.TryGetProperty "id" with true,value when value.ValueKind=JsonValueKind.Number->Some(value.GetInt64())|_->None
+                match property "node_id" root,repositoryId,property "node_id" item,number with
+                | Some repositoryNode,Some databaseId,Some issueNode,Some issueNumber
+                    when repositoryNode=route.RepositoryNodeId
+                         && repositoryNode=WorkItemIdentity.repositoryNodeId route.WorkItemId
+                         && databaseId=WorkItemIdentity.repositoryDatabaseId route.WorkItemId
+                         && issueNode=WorkItemIdentity.issueNodeId route.WorkItemId
+                         && int64 issueNumber=WorkItemIdentity.issueNumber route.WorkItemId->
+                    let evidence=sha256Text $"{repositoryNode}\n{databaseId}\n{issueNode}\n{issueNumber}\n{sha256Text repository.Body}\n{sha256Text issue.Body}\n"
+                    let revision=[repository.ETag;issue.ETag]|>List.choose id|>String.concat ":"|>fun value->if String.IsNullOrWhiteSpace value then evidence else value
+                    return Ok{RouteId=route.RouteId;WorkItemId=route.WorkItemId;RepositoryNodeId=route.RepositoryNodeId;ProviderRevision=revision;EvidenceSha256=evidence;Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=clock.GetUtcNow()}
+                | _->return Error "github-route-identity-mismatch"
+            | _->return Error "github-route-readback-json-refused"
+        | Error reason,_|_,Error reason->return Error reason }
+
+    member _.AcquireClaim(claimId:string,operationId:Guid,leaseUntil:DateTimeOffset,ct:CancellationToken)=task {
         let session=operationId.ToString("N")
-        let! before=readComments ct
-        match before with
-        | Error reason->return Error reason
-        | Ok ((_,worker,observed)::_) when worker=target.Principal&&observed=session->return Ok(claimId,observed)
-        | Ok ((_,_,_)::_)->return Error "github-claim-held-by-competitor"
-        | Ok []->
-            let lease=max 1 (int target.ClaimLease.TotalMinutes)
-            let body=$"<!-- fsgg:claim worker={target.Principal} lease={lease} renewed={clock.GetUtcNow().Ticks} session={session} -->"
-            let! posted=send RestMethod.Post $"issues/{target.IssueNumber}/comments" (Some(JsonSerializer.Serialize {|body=body|})) (Some session) ct
-            match posted with
-            | Error _ -> let! reconciled=readComments ct in return match reconciled with Ok((id,worker,found)::_) when worker=target.Principal&&found=session->Ok(claimId,string id)|Ok _->Error "github-claim-outcome-unknown"|Error reason->Error reason
-            | Ok _ -> let! observed=readComments ct in return match observed with Ok((id,worker,found)::_) when worker=target.Principal&&found=session->Ok(claimId,string id)|Ok _->Error "github-claim-lost"|Error reason->Error reason }
+        let now=clock.GetUtcNow()
+        let remaining=leaseUntil-now
+        if remaining<=TimeSpan.Zero || remaining>TimeSpan.FromHours 2. then
+            return Error "github-claim-delivery-deadline-refused"
+        else
+            let! before=readComments ct
+            match before with
+            | Error reason->return Error reason
+            | Ok ((_,worker,observed)::_) when worker=target.Principal&&observed=session->return Ok(claimId,observed)
+            | Ok ((_,_,_)::_)->return Error "github-claim-held-by-competitor"
+            | Ok []->
+                // Canonical claim markers express their lease in whole minutes. Round
+                // upward so ownership covers the immutable delivery window; Core still
+                // refuses every new effect at the exact DeliveryDeadline.
+                let lease=max 1 (int(Math.Ceiling remaining.TotalMinutes))
+                let body=$"<!-- fsgg:claim worker={target.Principal} lease={lease} renewed={clock.GetUtcNow().Ticks} session={session} -->"
+                let! posted=send RestMethod.Post $"issues/{target.IssueNumber}/comments" (Some(JsonSerializer.Serialize {|body=body|})) (Some session) ct
+                match posted with
+                | Error _ -> let! reconciled=readComments ct in return match reconciled with Ok((id,worker,found)::_) when worker=target.Principal&&found=session->Ok(claimId,string id)|Ok _->Error "github-claim-outcome-unknown"|Error reason->Error reason
+                | Ok _ -> let! observed=readComments ct in return match observed with Ok((id,worker,found)::_) when worker=target.Principal&&found=session->Ok(claimId,string id)|Ok _->Error "github-claim-lost"|Error reason->Error reason }
+    member this.AcquireClaim(claimId:string,operationId:Guid,ct:CancellationToken)=
+        this.AcquireClaim(claimId,operationId,clock.GetUtcNow().Add(target.ClaimLease),ct)
     member _.ReadClaim(claimId:string,operationId:Guid,ct:CancellationToken)=task {
         let session=operationId.ToString("N")
         let! observed=readComments ct

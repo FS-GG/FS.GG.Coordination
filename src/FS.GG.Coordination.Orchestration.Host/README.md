@@ -11,6 +11,22 @@ Authenticated `/v1/status`, `/v1/pause`, `/v1/resume`, `/v1/revoke`, and
 effects; cancel separately persists its request and reconciles the execution actor,
 and never reports process termination merely because the request was accepted.
 
+After a process restart, submit the exact original admission bytes to the
+authenticated `/v1/main/recover` route. The Host validates those bytes against the
+durable Core, execution, input, and workspace records, reads the current repository,
+issue, and external claim from GitHub, records a new route readback, and returns an
+`fsgg.orchestration.main-route-recovery-receipt/1` document while remaining paused.
+Read `/v1/status`; only then may the operator submit a distinct
+`fsgg.orchestration.host-control/1` request to `/v1/resume` using that status
+sequence and generation. Recovery never accepts reconstructed admission content,
+renews a claim, creates another attempt, or implicitly resumes delivery.
+If the delivery deadline or external claim is no longer current, the same route
+binds an observation-only graph: `/v1/status` keeps readback and dispatch disabled,
+while the Host may reconcile an already exposed provider operation under its
+durable operation identity. It cannot launch a model or issue a new GitHub effect.
+The PostgreSQL composition qualification uses the packaged executor with controlled
+GitHub responses; only an external pilot can establish native GitHub delivery.
+
 Main owns the PostgreSQL journals, effect intents, candidate object, GitHub delivery
 identity, and native delivery readback. A launcher authenticates to the Host-owned
 `/v1/executor/poll` and `/v1/executor/complete` routes and relays bounded frames to

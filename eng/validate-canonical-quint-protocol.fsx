@@ -30,7 +30,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
+    "3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118"
 
 let expectedContract =
     "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"

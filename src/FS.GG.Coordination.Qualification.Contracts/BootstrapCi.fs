@@ -959,7 +959,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
               if stringProperty name tools <> Some expected then
                   yield violation "quint-receipt-tool-digest" name
           let expectedInputs =
-              [ "sourceSha256", "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f"
+              [ "sourceSha256", "3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118"
                 "contractSha256", "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b" ]
           for name, expected in expectedInputs do
               if stringProperty name inputs <> Some expected then

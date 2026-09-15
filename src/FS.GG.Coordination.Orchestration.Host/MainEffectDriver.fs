@@ -28,14 +28,18 @@ type MainEffectDriver
     let advance=defaultArg advance (fun _ _ _ _->Task.FromResult(Ok()))
     let preflight=defaultArg preflight (fun _ _ _->Task.FromResult(Ok()))
 
-    let authorityCurrent now (state:State) =
+    let authorityCurrent now (intent:EffectIntent) (state:State) =
+        let subscriptionDeadline (budget:SubscriptionExecutionBudget) =
+            match intent.Kind with
+            | EffectKind.AcquireExternalClaim | EffectKind.DispatchRunner -> budget.ExecutionDeadline
+            | _ -> budget.DeliveryDeadline
         state.Control=ControlState.Running
         && ((state.Budget|>Option.exists(fun budget->
                 now<=budget.Deadline
                 && state.Used.Tokens<=budget.TokenLimit
                 && state.Used.RuntimeSeconds<=budget.RuntimeSecondsLimit
                 && state.Used.CostMicros<=budget.CostMicrosLimit))
-            || (state.SubscriptionBudget|>Option.exists(fun budget->now<budget.ExecutionDeadline)))
+            || (state.SubscriptionBudget|>Option.exists(fun budget->budget.Schema="fsgg.coordination.subscription-execution-budget/2" && now<subscriptionDeadline budget)))
 
     let derivedCommandId (operationId:OperationId) stage (revision:WorkflowRevision) =
         let seed = Id.operationValue operationId
@@ -75,7 +79,7 @@ type MainEffectDriver
                 // is still IntentRecorded. A pending check therefore remains
                 // safely retryable. Once Dispatching is appended, the mutation
                 // may have happened and every restart is reconcile-only.
-                if not(authorityCurrent (clock.GetUtcNow()) current.State) then
+                if not(authorityCurrent (clock.GetUtcNow()) intent current.State) then
                     return EffectDriveRefused "effect-authority-not-current"
                 else
                     let! allowed=preflight route intent cancellationToken
@@ -85,7 +89,7 @@ type MainEffectDriver
                         let! authorized=HostedWriterJournal.recover store workItemId cancellationToken
                         match authorized with
                         | Error failures->return EffectDriveRefused(sprintf "%A" failures)
-                        | Ok latest when not(authorityCurrent (clock.GetUtcNow()) latest.State)->return EffectDriveRefused "effect-authority-not-current"
+                        | Ok latest when not(authorityCurrent (clock.GetUtcNow()) intent latest.State)->return EffectDriveRefused "effect-authority-not-current"
                         | Ok latest->
                             let! marked=append latest.State operationId "dispatch" (MarkEffectDispatching operationId) cancellationToken
                             match marked with

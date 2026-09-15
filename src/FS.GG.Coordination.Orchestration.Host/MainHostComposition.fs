@@ -80,13 +80,21 @@ module MainHostComposition =
         let advance (route:HostedRoutePlan) intent _ token=workflow.Advance(preparation,intent,callbacks.TryCandidateReceipt route.CandidateId,token)
         let reconcile route intent token=callbacks.Reconcile(route,intent,token)
         let preflight (route:HostedRoutePlan) (intent:EffectIntent) token=task {
-            if intent.Kind<>MergePullRequest then return Ok() else
-            let! candidate=candidates.Read(route.CandidateId,token)
-            match candidate with
+            let! ownership =
+                if intent.Kind=AcquireExternalClaim then Task.FromResult(Ok())
+                else task {
+                    let! claim=github.ReadClaim(route.ClaimResourceId,Id.operationValue route.ClaimOperationId,token)
+                    return claim|>Result.map ignore }
+            match ownership with
             | Error reason->return Error reason
-            | Ok value->
-                let! qualification=github.CheckProtectedHead(route.BranchRef,value.Candidate.HeadSha,token)
-                return qualification|>Result.map ignore }
+            | Ok() when intent.Kind<>MergePullRequest->return Ok()
+            | Ok()->
+                let! candidate=candidates.Read(route.CandidateId,token)
+                match candidate with
+                | Error reason->return Error reason
+                | Ok value->
+                    let! qualification=github.CheckProtectedHead(route.BranchRef,value.Candidate.HeadSha,token)
+                    return qualification|>Result.map ignore }
         let hosted=HostedWriterProviderAdapter.Create callbacks.Calls
         let driver=MainEffectDriver(clock,workItems,workItemId,principal,hosted,reconcile,advance,preflight)
         let loop=task {
@@ -115,35 +123,69 @@ type MainProductionAdmission
     let mutable running:RunningProductionMainHost option=None
     let mutable boundDigest:string option=None
     let mutable boundPreparation:MainRoutePreparation option=None
+    let decode bytes =
+        match MainRouteAdmission.decode workItemId principal bytes with
+        | Error reason->Error reason
+        | Ok preparation->
+            let admissionDigest=SHA256.HashData bytes|>Convert.ToHexString|>fun value->value.ToLowerInvariant()
+            Ok(preparation,admissionDigest)
+    let bind preparation admissionDigest =
+            lock gate (fun ()->
+                match running,boundDigest with
+                | Some value,Some existing when existing=admissionDigest->Ok(value,preparation)
+                | Some _,_->Error "main-route-admission-binding-conflict"
+                | None,_->
+                    let resolver=
+                        PostgreSqlExecutorBindingResolver(
+                            executions :> IExecutorCommandStore,
+                            executions :> IExecutionSessionJournal,
+                            preparation.LaunchIntent.Key.AssignmentId,
+                            preparation.LaunchIntent.Key.AttemptId) :> IExecutorBindingResolver
+                    let value=
+                        MainHostComposition.startProduction system clock workItems candidates executions
+                            workItemId principal resolver github transport preparation cancellationToken
+                    running<-Some value
+                    boundDigest<-Some admissionDigest
+                    boundPreparation<-Some preparation
+                    Ok(value,preparation))
     member _.Running = lock gate (fun ()->running)
     interface IMainRouteAdmissionHandler with
         member _.Admit(bytes,token)=task {
-            match MainRouteAdmission.decode workItemId principal bytes with
+            match decode bytes with
             | Error reason->return Error reason
-            | Ok preparation->
-                let admissionDigest=SHA256.HashData bytes|>Convert.ToHexString|>fun value->value.ToLowerInvariant()
-                let selected =
-                    lock gate (fun ()->
-                        match running,boundDigest with
-                        | Some value,Some existing when existing=admissionDigest->Ok value
-                        | Some _,_->Error "main-route-admission-binding-conflict"
-                        | None,_->
-                            let resolver=
-                                PostgreSqlExecutorBindingResolver(
-                                    executions :> IExecutorCommandStore,
-                                    executions :> IExecutionSessionJournal,
-                                    preparation.LaunchIntent.Key.AssignmentId,
-                                    preparation.LaunchIntent.Key.AttemptId) :> IExecutorBindingResolver
-                            let value=
-                                MainHostComposition.startProduction system clock workItems candidates executions
-                                    workItemId principal resolver github transport preparation cancellationToken
-                            running<-Some value
-                            boundDigest<-Some admissionDigest
-                            boundPreparation<-Some preparation
-                            Ok value)
-                match selected with
+            | Ok(preparation,digest)->
+                match bind preparation digest with
                 | Error reason->return Error reason
-                | Ok value->return! value.Workflow.Prepare(preparation,token) }
+                | Ok(value,_)->return! value.Workflow.Prepare(preparation,token) }
+        member _.RecoverPaused(bytes,token)=task {
+            match decode bytes with
+            | Error reason->return Error reason
+            | Ok(preparation,digest)->
+                // Validate every immutable preparation field against the durable
+                // Core and execution journals before starting or caching a graph.
+                // A canonical but altered recovery document therefore cannot
+                // poison a later retry of the exact original bytes.
+                let validator=MainRouteWorkflow(clock,workItems,candidates,executions :> IExecutorCommandStore,executions :> IExecutionSessionJournal,workItemId,principal)
+                let! validated=validator.ValidatePausedBinding(preparation,token)
+                match validated with
+                | Error reason->return Error reason
+                | Ok()->
+                    let! readback=github.ReadHostedRoute(preparation.Route,token)
+                    let! claim=github.ReadClaim(preparation.Route.ClaimResourceId,Id.operationValue preparation.Route.ClaimOperationId,token)
+                    match readback,claim with
+                    | Error reason,_->return Error reason
+                    | Ok fresh,claimReadback->
+                        match bind preparation digest with
+                        | Error reason->return Error reason
+                        | Ok(value,_)->
+                            // A lost claim or expired delivery clock leaves the
+                            // exact graph paused and observation-only. Its pump may
+                            // reconcile an already exposed PR, but status cannot
+                            // become dispatch-enabled and Resume remains refused.
+                            match claimReadback with
+                            | Error _->return Ok()
+                            | Ok _ when clock.GetUtcNow()>=preparation.Budget.DeliveryDeadline->return Ok()
+                            | Ok _->return! value.Workflow.ReconnectPaused(preparation,fresh,token) }
         member _.Status(token)=task {
             let! recovered=HostedWriterJournal.recover workItems workItemId token
             match recovered with
@@ -156,6 +198,13 @@ type MainProductionAdmission
                     | ControlState.Running->"running"|ControlState.Paused _->"paused"|ControlState.CancelPending _->"cancel-pending"
                     | ControlState.Cancelled _->"cancelled"|ControlState.Revoked _->"revoked"
                 let unknown=value.State.Operations|>Map.values|>Seq.filter(function NeedsObservation _->true|_->false)|>Seq.length
+                let executionRequired =
+                    value.State.HostedRoute
+                    |> Option.forall(fun route->
+                        value.State.HostedEffectReadbacks
+                        |> Map.tryFind route.ProcessOperationId
+                        |> Option.exists _.Exists
+                        |> not)
                 let findings=ResizeArray<string>()
                 if not admitted then findings.Add "main-route-admission-required"
                 if value.State.Control<>ControlState.Running then findings.Add "main-route-control-not-running"
@@ -169,13 +218,17 @@ type MainProductionAdmission
                     | Some {Status=AttemptStatus.OutcomeUnknown _}->findings.Add "main-route-attempt-observation-required"
                     | _->()
                 match value.State.SubscriptionBudget with
-                | Some budget when budget.AttemptLimit=1 && budget.MaximumRuntime>TimeSpan.Zero && budget.MaximumRuntime<=TimeSpan.FromMinutes 30. && budget.ExecutionDeadline>now->()
+                | Some budget when budget.Schema=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.budgetSchema && budget.AttemptLimit=1 && budget.MaximumRuntime>TimeSpan.Zero && budget.MaximumRuntime<=TimeSpan.FromMinutes 30. && budget.DeliveryDeadline>now->()
                 | _->findings.Add "main-route-budget-not-current"
+                match value.State.SubscriptionBudget with
+                | Some budget when not executionRequired || budget.ExecutionDeadline>now->()
+                | _->findings.Add "main-route-execution-budget-not-current"
                 match value.State.Reservation with
-                | Some reservation when reservation.Generation=value.State.Generation && reservation.ExpiresAt>now->()
+                | Some reservation when reservation.Generation=value.State.Generation && (not executionRequired || reservation.ExpiresAt>now)->()
                 | _->findings.Add "main-route-reservation-not-current"
                 match preparation with
-                | Some prep when prep.Runner.Generation=value.State.Generation && prep.Runner.ExpiresAt>now && prep.ExecutionReservation.Generation=Id.generationValue value.State.Generation && prep.ExecutionReservation.Deadline>now->()
+                | Some prep when prep.Runner.Generation=value.State.Generation && prep.ExecutionReservation.Generation=Id.generationValue value.State.Generation
+                                 && (not executionRequired || (prep.Runner.ExpiresAt>now && prep.ExecutionReservation.Deadline>now))->()
                 | _->findings.Add "main-route-executor-authority-not-current"
                 if unknown>0 then findings.Add "main-route-observation-required"
                 let dispatch=findings.Count=0

@@ -67,7 +67,7 @@ module Cases =
     [<Fact>]
     let ``revoked subscription generation admits one fresh scoped budget without rewriting receipts`` () =
         let subscription deadline =
-            { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=deadline
+            { Schema="fsgg.coordination.subscription-execution-budget/2";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=deadline;DeliveryDeadline=now.AddHours 2.
               Usage=TokensUnknown "provider-not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="not-attributed"} }
         let append protocol state id body =
             FS.GG.Coordination.Core.Orchestration.decide now state
@@ -93,7 +93,7 @@ module Cases =
     [<Fact>]
     let ``cancelled subscription admits one fresh scoped budget only after terminal cleanup`` () =
         let subscription deadline =
-            { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=deadline
+            { Schema="fsgg.coordination.subscription-execution-budget/2";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=deadline;DeliveryDeadline=now.AddHours 2.
               Usage=TokensUnknown "provider-not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="not-attributed"} }
         let append protocol state id body =
             FS.GG.Coordination.Core.Orchestration.decide now state
@@ -123,7 +123,7 @@ module Cases =
     [<Fact>]
     let ``invalid hosted route is rejected before selection and exact paused recovery is append only`` () =
         let subscription =
-            { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.
+            { Schema="fsgg.coordination.subscription-execution-budget/2";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.;DeliveryDeadline=now.AddHours 2.
               Usage=TokensUnknown "provider-not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="not-attributed"} }
         let append protocol state id body =
             FS.GG.Coordination.Core.Orchestration.decide now state
@@ -434,8 +434,8 @@ module Cases =
     [<Fact>]
     let ``subscription admission reaches durable dispatch without fabricated token or cost ceilings`` () =
         let subscription =
-            { Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1
-              MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.
+            { Schema="fsgg.coordination.subscription-execution-budget/2";AttemptLimit=1
+              MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.;DeliveryDeadline=now.AddHours 2.
               Usage=TokensUnknown "provider-has-not-reported-usage"
               Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="subscription-cost-not-attributable"} }
         let decideV2 at state id body =
@@ -454,6 +454,7 @@ module Cases =
         let runner={RunnerId=Id.runner(guid "45000000-0000-0000-0000-000000000001");PrincipalId="runner";FingerprintSha256=digest "4";Generation=claimed.Generation;ExpiresAt=now.AddMinutes 5.}
         let started=decide now claimed (command "25000000-0000-0000-0000-000000000004") "" (StartAttempt(Id.attempt(guid "55000000-0000-0000-0000-000000000001"),Id.session(guid "65000000-0000-0000-0000-000000000001"),runner))
         Assert.Equal(Accepted,started.Receipt.Disposition)
+
         let active=apply started claimed
         let accounting={ObservedAt=now.AddMinutes 40.;RuntimeSeconds=2400L;RuntimeWithinBound=false;Usage=TokensUnknown "provider-not-reported";Cost=subscription.Cost}
         let late=decideV2 (now.AddMinutes 40.) active "25000000-0000-0000-0000-000000000005" (RecordSubscriptionAccounting accounting)
@@ -463,6 +464,37 @@ module Cases =
         Assert.Single replayed.Attempts |> ignore
         let downgraded={CommandId=command "25000000-0000-0000-0000-000000000006";ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation;PrincipalId="test";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=AdmitSubscription(snapshot [],subscription)}
         Assert.Equal("unsupported-command-version",(FS.GG.Coordination.Core.Orchestration.decide now initial downgraded).Receipt.Detail)
+
+    [<Fact>]
+    let ``delivery authority survives execution expiry but cannot be retimed or silently upgraded`` () =
+        let current =
+            { Schema="fsgg.coordination.subscription-execution-budget/2";AttemptLimit=1
+              MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.;DeliveryDeadline=now.AddHours 2.
+              Usage=TokensUnknown "provider-has-not-reported-usage"
+              Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="subscription-cost-not-attributable"} }
+        let admitBudget id budget =
+            FS.GG.Coordination.Core.Orchestration.decide now initial
+                {CommandId=command id;ProtocolVersion=Id.protocolVersion 2 0;ExpectedRevision=initial.Revision;ExpectedGeneration=initial.Generation
+                 PrincipalId="test-principal";SessionId=None;IssuedAt=now;ExpiresAt=now.AddMinutes 1.;Command=AdmitSubscription(snapshot [],budget)}
+        Assert.Equal(Accepted,(admitBudget "25100000-0000-0000-0000-000000000001" current).Receipt.Disposition)
+        Assert.Equal(Rejected,(admitBudget "25100000-0000-0000-0000-000000000002" {current with Schema="fsgg.coordination.subscription-execution-budget/1"}).Receipt.Disposition)
+        Assert.Equal(Rejected,(admitBudget "25100000-0000-0000-0000-000000000003" {current with DeliveryDeadline=now.AddHours 2. |> fun value->value.AddTicks 1L}).Receipt.Disposition)
+        let admitted=apply (admitBudget "25100000-0000-0000-0000-000000000004" current) initial
+        let paused={admitted with Control=Paused "reboot";ReadbackCurrent=true}
+        Assert.Equal(Accepted,(decide (now.AddMinutes 31.) paused (command "25100000-0000-0000-0000-000000000007") "" Resume).Receipt.Disposition)
+        Assert.Equal(Rejected,(decide (now.AddHours 2.) paused (command "25100000-0000-0000-0000-000000000008") "" Resume).Receipt.Disposition)
+
+        let attemptId=Id.attempt(guid "55100000-0000-0000-0000-000000000001")
+        let route=hostedRoute admitted attemptId (Id.candidate(guid "85100000-0000-0000-0000-000000000001"))
+        let claim={ClaimId=route.ClaimResourceId;Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=now}
+        let runner={RunnerId=Id.runner(guid "45100000-0000-0000-0000-000000000001");PrincipalId="runner";FingerprintSha256=digest "4";Generation=route.Generation;ExpiresAt=current.ExecutionDeadline}
+        let attempt={AttemptId=attemptId;SessionId=Id.session(guid "65100000-0000-0000-0000-000000000001");Runner=runner;Generation=route.Generation;StartedAt=now;Status=Active}
+        let processReadback={OperationId=route.ProcessOperationId;RouteId=route.RouteId;AttemptId=route.AttemptId;CandidateId=route.CandidateId;RepositoryNodeId=route.RepositoryNodeId;ProviderResourceId=string(Id.attemptValue attemptId);CandidateHeadSha=None;ResultSha=None;ProviderRevision="process";Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=now;Exists=true}
+        let deliveryState={admitted with HostedRoute=Some route;Reservation=Some{ReservationId=Id.reservation(guid "35100000-0000-0000-0000-000000000001");Generation=route.Generation;ExpiresAt=current.ExecutionDeadline;RequiredClaimIds=set[route.ClaimResourceId]};ExternalClaims=Map.ofList[route.ClaimResourceId,claim];Attempts=Map.ofList[attemptId,attempt];HostedEffectReadbacks=Map.ofList[route.ProcessOperationId,processReadback]}
+        let storeIntent=routeEffect route.CandidateOperationId StoreCandidate (string(Id.candidateValue route.CandidateId)) route
+        let recorded=decide (now.AddMinutes 31.) deliveryState (command "25100000-0000-0000-0000-000000000009") "" (RecordEffectIntent storeIntent)|>fun value->apply value deliveryState
+        Assert.Equal(Accepted,(decide (now.AddMinutes 31.) recorded (command "25100000-0000-0000-0000-000000000010") "" (MarkEffectDispatching storeIntent.OperationId)).Receipt.Disposition)
+        Assert.Equal(Rejected,(decide (now.AddHours 2.) recorded (command "25100000-0000-0000-0000-000000000011") "" (MarkEffectDispatching storeIntent.OperationId)).Receipt.Disposition)
 
     [<Fact>]
     let ``revocation advances durable generation`` () =

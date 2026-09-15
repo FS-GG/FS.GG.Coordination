@@ -332,12 +332,12 @@ type SubscriptionSettlement =
 
 [<RequireQualifiedAccess>]
 module SubscriptionPilot =
-    let budgetSchema="fsgg.coordination.subscription-execution-budget/1"
+    let budgetSchema="fsgg.coordination.subscription-execution-budget/2"
     let reservationSchema="fsgg.coordination.subscription-reservation/1"
     let settlementSchema="fsgg.coordination.subscription-settlement/1"
     let maximumRuntime=TimeSpan.FromMinutes 30.
     let createBudget (now:DateTimeOffset) : SubscriptionExecutionBudget =
-        { Schema=budgetSchema;AttemptLimit=1;MaximumRuntime=maximumRuntime;ExecutionDeadline=now.Add maximumRuntime
+        { Schema=budgetSchema;AttemptLimit=1;MaximumRuntime=maximumRuntime;ExecutionDeadline=now.Add maximumRuntime;DeliveryDeadline=now.AddHours 2.
           Usage=TokensUnknown "provider-has-not-reported-usage"
           Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="subscription-cost-not-attributable-to-invocation"} }
     let reserve now reservationId assignmentId attemptId generation expectedRevision (budget:SubscriptionExecutionBudget) =

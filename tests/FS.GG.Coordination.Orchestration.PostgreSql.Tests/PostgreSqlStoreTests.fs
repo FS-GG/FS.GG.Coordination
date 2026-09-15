@@ -25,6 +25,10 @@ open FS.GG.Coordination.Orchestration.Host
 open FS.GG.Coordination.GitHub
 open System.Buffers.Binary
 
+type private FixedClock(now:DateTimeOffset) =
+    inherit TimeProvider()
+    override _.GetUtcNow()=now
+
 module private Fixture =
     let private environment name fallback =
         match Environment.GetEnvironmentVariable name with
@@ -938,7 +942,7 @@ type PostgreSqlStoreTests() =
         let binding0={Schema=ExecutorWire.routeBindingSchema;BindingSha256="";WorkItemPersistenceId=WorkItemIdentity.persistenceId workItem;RouteId=routeId;RouteOperationId=assignment;ProcessOperationId=assignment;AssignmentId=assignment;AttemptId=attempt;CandidateId=candidateId;Generation=generation;RepositoryBinding="selected-repository";BaselineObjectId=baseline;PromptDigest=inputDigest;WorkspaceManifestSha256=workspaceDigest;ExecutorBinding="fixture-executor"}
         let binding={binding0 with BindingSha256=ExecutorWire.routeBindingDigest binding0}
         let inputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=inputDigest;MediaType="text/markdown; charset=utf-8";SizeBytes=prompt.LongLength;ChunkBytes=prompt.Length}
-        let budget={Schema=SubscriptionPilot.budgetSchema;AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.;Usage=TokensUnknown "provider-has-not-reported-usage";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="subscription-cost-not-attributable-to-invocation"}}
+        let budget={Schema=SubscriptionPilot.budgetSchema;AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=now.AddMinutes 30.;DeliveryDeadline=now.AddHours 2.;Usage=TokensUnknown "provider-has-not-reported-usage";Cost={InvocationState="not-applicable";InvocationProvenance="subscription-session";BroaderAttributionState="unknown";BroaderAttributionProvenance="subscription-cost-not-attributable-to-invocation"}}
         let executionReservation=SubscriptionPilot.reserve now (Guid.NewGuid()) assignment attempt generation 1L budget|>Result.defaultWith failwith
         let route={RouteId=routeId;WorkItemId=workItem;JobClass="routine-documentation-delivery";AttemptId=Id.attempt attempt;CandidateId=Id.candidate candidateId;RepositoryNodeId="R_main";BranchRef="refs/heads/fsgg/pilot/o2";ClaimResourceId="claim-pilot";ClaimOperationId=Id.operation operations[0];ProcessOperationId=Id.operation operations[1];CandidateOperationId=Id.operation operations[2];BranchOperationId=Id.operation operations[3];PullRequestOperationId=Id.operation operations[4];MergeOperationId=Id.operation operations[5];ReadbackOperationId=Id.operation operations[6];Generation=Id.generation generation;WorkflowRevision=Id.revision workflowRevision;SelectedAt=now}
         let preparation={Snapshot={ProjectId=Id.project(Guid.NewGuid());WorkItemId=workItem;WorkflowRevision=route.WorkflowRevision;CanonicalSha256=String.replicate 64 "c";BoardMembershipIds=[];CapturedAt=now};Budget=budget;Reservation={ReservationId=Id.reservation(Guid.NewGuid());Generation=route.Generation;ExpiresAt=now.AddMinutes 20.;RequiredClaimIds=set[route.ClaimResourceId]};Route=route;Readback={RouteId=routeId;WorkItemId=workItem;RepositoryNodeId=route.RepositoryNodeId;ProviderRevision="fresh-route";EvidenceSha256=String.replicate 64 "d";Generation=route.Generation;WorkflowRevision=route.WorkflowRevision;ObservedAt=now};Runner={RunnerId=Id.runner(Guid.NewGuid());PrincipalId="pilot";FingerprintSha256=String.replicate 64 "e";Generation=route.Generation;ExpiresAt=now.AddMinutes 20.};SessionId=Id.session(Guid.NewGuid());LaunchIntent=launch;Binding=binding;InputManifest=inputManifest;InputBytes=prompt;WorkspaceManifest=workspace;ExecutionReservation=executionReservation}
@@ -1056,26 +1060,34 @@ type PostgreSqlStoreTests() =
         git root ["init";"--bare";bare]|>ignore
         git repository ["push";bare;$"{baseline}:refs/heads/main"]|>ignore
         let mutable claimBody:string option=None
+        let mutable claimUpdatedAt=DateTimeOffset.UtcNow
         let mutable pullCreated=false
+        let mutable pullCreateCount=0
         let mutable merged=false
         let mutable pullHead=""
         let mutable mutationCount=0
         let mutable mergePutCount=0
         let mutable checkReads=0
         let mutable checksReleased=false
+        use firstShutdown=new CancellationTokenSource()
         let jsonResponse status body=Response{StatusCode=status;Headers=Map.empty;Body=body;ETag=Some(Guid.NewGuid().ToString("N"));RateBudget={Limit=None;Remaining=None;ResetAt=None;Cost=None}}
         let githubTransport=
             {new IGitHubRequestExecutor with
                 member _.Send(request,_)=
                     let methodValue,path,body=match request with Rest value->value.Method,value.Uri.PathAndQuery,value.Body|_->RestMethod.Post,"",None
                     let outcome=
-                        if path.Contains("issues/3421/comments")&&methodValue=RestMethod.Get then
-                            let comments=match claimBody with None -> "[]" | Some value -> $"[{{\"id\":11,\"updated_at\":\"{DateTimeOffset.UtcNow:O}\",\"body\":{JsonSerializer.Serialize value}}}]"
+                        if path="/repos/FS-GG/.github/"&&methodValue=RestMethod.Get then
+                            jsonResponse 200 "{\"id\":4242,\"node_id\":\"R_main\"}"
+                        elif path.EndsWith("issues/3421")&&methodValue=RestMethod.Get then
+                            jsonResponse 200 "{\"number\":3421,\"node_id\":\"I_main\"}"
+                        elif path.Contains("issues/3421/comments")&&methodValue=RestMethod.Get then
+                            let comments=match claimBody with None -> "[]" | Some value -> $"[{{\"id\":11,\"updated_at\":\"{claimUpdatedAt:O}\",\"body\":{JsonSerializer.Serialize value}}}]"
                             jsonResponse 200 comments
                         elif path.Contains("issues/3421/comments")&&methodValue=RestMethod.Post then
                             mutationCount<-mutationCount+1
                             use doc=JsonDocument.Parse(body.Value)
                             claimBody<-Some(doc.RootElement.GetProperty("body").GetString())
+                            claimUpdatedAt<-DateTimeOffset.UtcNow
                             jsonResponse 201 "{\"id\":11}"
                         elif path.Contains("git/ref/heads/") then
                             let head=git bare ["rev-parse";"refs/heads/fsgg/pilot/o2"]
@@ -1092,7 +1104,11 @@ type PostgreSqlStoreTests() =
                             if not(marker.Contains("fsgg:routine-development/v1")) then jsonResponse 422 "{}"
                             else
                                 pullCreated<-true
+                                pullCreateCount<-pullCreateCount+1
                                 pullHead<-git bare ["rev-parse";"refs/heads/fsgg/pilot/o2"]
+                                // Expose the PR mutation, then stop the first Host before
+                                // its provider response can be durably settled.
+                                firstShutdown.Cancel()
                                 jsonResponse 201 "{}"
                         elif path.EndsWith("pulls/42")&&methodValue=RestMethod.Get then
                             jsonResponse 200 $"{{\"draft\":false,\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{{\"sha\":\"{pullHead}\"}},\"base\":{{\"ref\":\"main\"}}}}"
@@ -1188,17 +1204,6 @@ finally:
         use localTransport=new LocalExecutorTransport(localConfiguration)
         let executorTransport=localTransport :> IAuthenticatedExecutorTransport
         let relay=HostExecutorRelay(4,2*1024*1024)
-        use firstShutdown=new CancellationTokenSource()
-        let crashAfterSettlement =
-            { new IJournalStore with
-                member _.CheckReadiness token=workItems.CheckReadiness token
-                member _.Recover(id,token)=workItems.Recover(id,token)
-                member _.SaveSnapshot(value,token)=workItems.SaveSnapshot(value,token)
-                member _.SaveProjectionCheckpoint(value,token)=workItems.SaveProjectionCheckpoint(value,token)
-                member _.Append(request,token)=task {
-                    let! outcome=workItems.Append(request,token)
-                    if request.Events|>List.exists(fun event->event.EffectChange=Settled route.ClaimOperationId) then firstShutdown.Cancel()
-                    return outcome } }
         let hostStore journal : HostStore =
             { CheckReadiness=(fun _->Task.FromResult<Result<unit,ReadinessFailure list>>(Ok()))
               WorkItems=journal
@@ -1215,9 +1220,9 @@ finally:
               StoreId="fixture";BackupIdentity=Guid.NewGuid().ToString();MinimumGenerationFence=0L;PermitId=Guid.NewGuid()
               PilotPrincipalId="pilot";WorkItemId=workItem;GitHub=None;LocalExecutor=None;RequestTimeout=TimeSpan.FromSeconds 10.;MaximumConcurrentRequests=4 }
         use firstActorSystem=ActorSystem.Create("main-composed-before-crash")
-        let firstAdmission=MainProductionAdmission(firstActorSystem,TimeProvider.System,crashAfterSettlement,candidates,executions,workItem,"pilot",github,executorTransport,firstShutdown.Token)
+        let firstAdmission=MainProductionAdmission(firstActorSystem,TimeProvider.System,workItems,candidates,executions,workItem,"pilot",github,executorTransport,firstShutdown.Token)
         let invalidPreparation={preparation with Route={preparation.Route with BranchRef="refs/heads/fsgg/not-pilot"}}
-        let! invalidAdmission=(firstAdmission :> IMainRouteAdmissionHandler).Admit(MainRouteAdmission.encode (Guid.NewGuid()) invalidPreparation,CancellationToken.None)
+        let! invalidAdmission=(firstAdmission :> IMainRouteAdmissionHandler).Admit(MainRouteAdmission.encode (MainRouteAdmission.commandId invalidPreparation) invalidPreparation,CancellationToken.None)
         Assert.Equal(Error "main-route-admission-route-refused",invalidAdmission)
         let! afterInvalid=HostedWriterJournal.recover workItems workItem CancellationToken.None
         let afterInvalidState=match afterInvalid with Ok value->value.State|Error failures->failwithf "unexpected recovery failure: %A" failures
@@ -1225,10 +1230,10 @@ finally:
         Assert.Equal(ControlState.Cancelled "prior-attempt-ended",afterInvalidState.Control)
         Assert.True(afterInvalidState.Reservation.IsNone)
         Assert.True(afterInvalidState.HostedRoute.IsNone)
-        let firstServer=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore crashAfterSettlement) relay (firstAdmission :> IMainRouteAdmissionHandler) firstShutdown.Token
+        let firstServer=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore workItems) relay (firstAdmission :> IMainRouteAdmissionHandler) firstShutdown.Token
         do! Task.Delay 50
         use client=new HttpClient()
-        let admissionBytes=MainRouteAdmission.encode (Guid.NewGuid()) preparation
+        let admissionBytes=MainRouteAdmission.encode (MainRouteAdmission.commandId preparation) preparation
         use deniedContent=new ByteArrayContent(admissionBytes)
         deniedContent.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
         let! denied=client.PostAsync(Uri(hostConfiguration.Prefix+"v1/main/admit"),deniedContent)
@@ -1239,6 +1244,7 @@ finally:
             request.Content<-new ByteArrayContent(admissionBytes)
             request.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
             return! client.SendAsync request }
+        File.WriteAllText(completionGate,"release")
         let! admitted=admit()
         let! admissionDetail=admitted.Content.ReadAsStringAsync()
         Assert.True(admitted.StatusCode=HttpStatusCode.OK,$"admission refused: {admitted.StatusCode} {admissionDetail}")
@@ -1249,16 +1255,42 @@ finally:
             do! Task.Delay 100
             let! recovered=HostedWriterJournal.recover workItems workItem CancellationToken.None
             settlementVisible <-
-                recovered|>Result.exists(fun value->
-                    match Map.tryFind route.ClaimOperationId value.State.Operations,Map.tryFind route.ProcessOperationId value.State.Operations with
-                    | Some(OperationState.Settled _),None->true
-                    | _->false)
+                pullCreated && (recovered|>Result.exists(fun value->
+                    match Map.tryFind route.PullRequestOperationId value.State.Operations,Map.tryFind route.MergeOperationId value.State.Operations with
+                    | Some(OperationState.Dispatching _),None->true
+                    | Some(OperationState.NeedsObservation _),None->true
+                    | _->false))
             settlementChecks<-settlementChecks+1
-        Assert.True(settlementVisible,"claim settlement was not durably isolated before continuation")
+        Assert.True(settlementVisible,"PR mutation was not exposed before its durable receipt")
+        let transportStartsBeforeRestart=Int32.Parse(File.ReadAllText proxyState)
+        let mutationsBeforeRestart=mutationCount
+        Assert.True(pullCreated)
+        Assert.Equal(1,pullCreateCount)
         try do! firstServer.WaitAsync(TimeSpan.FromSeconds 2.) with _->()
         do! firstActorSystem.Terminate()
 
-        // Replace the whole Host actor graph and retry the exact admission bytes.
+        // Replace the whole Host actor graph and bind the exact admission bytes
+        // through the paused recovery route. Startup invalidates historical
+        // readback, and recovery records a fresh GitHub identity observation
+        // without running Prepare or resuming the effect pump.
+        let! startupPaused=HostedWriterJournal.persistStartupPause TimeProvider.System workItems workItem "pilot" CancellationToken.None
+        Assert.True(Result.isOk startupPaused,$"startup pause refused: {startupPaused}")
+        // An expired delivery clock may still observe the exposed PR through the
+        // driver, but cannot bind a graph, resume, or start another executor.
+        use expiredActorSystem=ActorSystem.Create("main-composed-expired-recovery")
+        use expiredShutdown=new CancellationTokenSource()
+        expiredShutdown.Cancel()
+        let expiredAdmission=MainProductionAdmission(expiredActorSystem,FixedClock(now.AddHours 2.),workItems,candidates,executions,workItem,"pilot",github,executorTransport,expiredShutdown.Token)
+        let! expiredRecovery=(expiredAdmission :> IMainRouteAdmissionHandler).RecoverPaused(admissionBytes,CancellationToken.None)
+        Assert.True(Result.isOk expiredRecovery,sprintf "expired observation recovery refused: %A" expiredRecovery)
+        Assert.True(expiredAdmission.Running.IsSome,"expired exact recovery did not bind its observation-only graph")
+        let! expiredStatus=(expiredAdmission :> IMainRouteAdmissionHandler).Status(CancellationToken.None)
+        let expiredStatus=expiredStatus|>Result.defaultWith failwith
+        Assert.False(expiredStatus.DispatchEnabled)
+        Assert.Contains("main-route-readback-not-current",expiredStatus.Findings)
+        Assert.Equal(transportStartsBeforeRestart,Int32.Parse(File.ReadAllText proxyState))
+        Assert.Equal(mutationsBeforeRestart,mutationCount)
+        do! expiredActorSystem.Terminate()
         // Durable settled evidence, rather than an in-memory callback receipt,
         // must create the next intent without replaying the external claim.
         use actorSystem=ActorSystem.Create("main-composed-after-crash")
@@ -1266,9 +1298,85 @@ finally:
         let admission=MainProductionAdmission(actorSystem,TimeProvider.System,workItems,candidates,executions,workItem,"pilot",github,executorTransport,shutdown.Token)
         let server=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore workItems) relay (admission :> IMainRouteAdmissionHandler) shutdown.Token
         do! Task.Delay 50
-        let! readmitted=admit()
+        let! beforeRecovery=HostedWriterJournal.recover workItems workItem CancellationToken.None
+        let beforeRecoveryState=beforeRecovery|>Result.map _.State|>Result.defaultWith(failwithf "%A")
+        let staleResumeIssued=DateTimeOffset.UtcNow
+        let staleResumeBytes=JsonSerializer.SerializeToUtf8Bytes(
+            {|schema="fsgg.orchestration.host-control/1";permitId=hostConfiguration.PermitId;commandId=Guid.NewGuid();
+              expectedSequence=Id.revisionValue beforeRecoveryState.Revision;expectedGeneration=Id.generationValue beforeRecoveryState.Generation;principalId="pilot";issuedAt=staleResumeIssued;expiresAt=staleResumeIssued.AddMinutes 1.;reason="fixture-stale-readback-resume"|})
+        use staleResumeRequest=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/resume"))
+        staleResumeRequest.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+        staleResumeRequest.Content<-new ByteArrayContent(staleResumeBytes)
+        staleResumeRequest.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+        let! staleResume=client.SendAsync staleResumeRequest
+        Assert.Equal(HttpStatusCode.Conflict,staleResume.StatusCode)
+        Assert.True(admission.Running.IsNone)
+
+        use alteredRecoveryRequest=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/main/recover"))
+        alteredRecoveryRequest.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+        let alteredPreparation={preparation with Runner={preparation.Runner with RunnerId=Id.runner(Guid.NewGuid())}}
+        alteredRecoveryRequest.Content<-new ByteArrayContent(MainRouteAdmission.encode (MainRouteAdmission.commandId alteredPreparation) alteredPreparation)
+        alteredRecoveryRequest.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+        let! alteredRecovery=client.SendAsync alteredRecoveryRequest
+        Assert.Equal(HttpStatusCode.Conflict,alteredRecovery.StatusCode)
+        Assert.True(admission.Running.IsNone,"altered canonical authority constructed a production graph")
+
+        let originalClaim=claimBody|>Option.defaultWith(fun()->failwith "claim was not exposed before restart")
+        claimBody<-Some($"<!-- fsgg:claim worker=other lease=120 renewed=1 session={Id.operationValue route.ClaimOperationId:N} -->")
+        claimUpdatedAt<-DateTimeOffset.UtcNow
+        use displacedRecoveryRequest=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/main/recover"))
+        displacedRecoveryRequest.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+        displacedRecoveryRequest.Content<-new ByteArrayContent(admissionBytes)
+        displacedRecoveryRequest.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+        let! displacedRecovery=client.SendAsync displacedRecoveryRequest
+        Assert.Equal(HttpStatusCode.OK,displacedRecovery.StatusCode)
+        Assert.True(admission.Running.IsSome,"displaced claim did not retain observation-only recovery")
+        let mutable exposedObserved=false
+        let mutable exposedChecks=0
+        while not exposedObserved&&exposedChecks<50 do
+            do! Task.Delay 50
+            let! recovered=HostedWriterJournal.recover workItems workItem CancellationToken.None
+            exposedObserved<-recovered|>Result.exists(fun value->Map.tryFind route.PullRequestOperationId value.State.Operations|>Option.exists(function OperationState.Settled _->true|_->false))
+            exposedChecks<-exposedChecks+1
+        Assert.True(exposedObserved,"claim-lost observation-only graph did not reconcile the exposed PR")
+        Assert.Equal(mutationsBeforeRestart,mutationCount)
+
+        claimBody<-Some originalClaim
+        claimUpdatedAt<-DateTimeOffset.UtcNow.AddHours(-3.)
+        use expiredClaimRecoveryRequest=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/main/recover"))
+        expiredClaimRecoveryRequest.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+        expiredClaimRecoveryRequest.Content<-new ByteArrayContent(admissionBytes)
+        expiredClaimRecoveryRequest.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+        let! expiredClaimRecovery=client.SendAsync expiredClaimRecoveryRequest
+        Assert.Equal(HttpStatusCode.OK,expiredClaimRecovery.StatusCode)
+        let! claimLostStatus=(admission :> IMainRouteAdmissionHandler).Status(CancellationToken.None)
+        let claimLostStatus=claimLostStatus|>Result.defaultWith failwith
+        Assert.False(claimLostStatus.DispatchEnabled)
+        Assert.Contains("main-route-readback-not-current",claimLostStatus.Findings)
+        claimUpdatedAt<-DateTimeOffset.UtcNow
+
+        use recoveryRequest=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/main/recover"))
+        recoveryRequest.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+        recoveryRequest.Content<-new ByteArrayContent(admissionBytes)
+        recoveryRequest.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+        let! readmitted=client.SendAsync recoveryRequest
         let! readmissionDetail=readmitted.Content.ReadAsStringAsync()
-        Assert.True(readmitted.StatusCode=HttpStatusCode.OK,$"restart admission refused: {readmitted.StatusCode} {readmissionDetail}")
+        Assert.True(readmitted.StatusCode=HttpStatusCode.OK,$"paused recovery refused: {readmitted.StatusCode} {readmissionDetail}")
+        Assert.Contains("main-route-recovery-receipt/1",readmissionDetail)
+        let! recoveredPaused=HostedWriterJournal.recover workItems workItem CancellationToken.None
+        let recoveredPausedState=recoveredPaused|>Result.map _.State|>Result.defaultWith(failwithf "%A")
+        Assert.True(recoveredPausedState.ReadbackCurrent)
+        Assert.True(recoveredPausedState.Control|>function ControlState.Paused _->true|_->false)
+        let resumeIssued=DateTimeOffset.UtcNow
+        let resumeBytes=JsonSerializer.SerializeToUtf8Bytes(
+            {|schema="fsgg.orchestration.host-control/1";permitId=hostConfiguration.PermitId;commandId=Guid.NewGuid();
+              expectedSequence=Id.revisionValue recoveredPausedState.Revision;expectedGeneration=Id.generationValue recoveredPausedState.Generation;principalId="pilot";issuedAt=resumeIssued;expiresAt=resumeIssued.AddMinutes 1.;reason="fixture-post-start-recovery"|})
+        use resumeRequest=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/resume"))
+        resumeRequest.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
+        resumeRequest.Content<-new ByteArrayContent(resumeBytes)
+        resumeRequest.Content.Headers.ContentType<-System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+        let! resumed=client.SendAsync resumeRequest
+        Assert.Equal(HttpStatusCode.OK,resumed.StatusCode)
         use conflictingRequest=new HttpRequestMessage(HttpMethod.Post,Uri(hostConfiguration.Prefix+"v1/main/admit"))
         conflictingRequest.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
         conflictingRequest.Content<-new ByteArrayContent(MainRouteAdmission.encode (Guid.NewGuid()) preparation)
@@ -1276,19 +1384,8 @@ finally:
         let! conflicting=client.SendAsync conflictingRequest
         Assert.Equal(HttpStatusCode.Conflict,conflicting.StatusCode)
         let running=admission.Running|>Option.defaultWith(fun()->failwith "production graph was not restarted by admission")
-        let mutable candidateObservationPending=false
-        let mutable observationChecks=0
-        while not candidateObservationPending&&observationChecks<100 do
-            do! Task.Delay 50
-            let! recovered=HostedWriterJournal.recover workItems workItem CancellationToken.None
-            candidateObservationPending <-
-                recovered|>Result.exists(fun value->
-                    match Map.tryFind route.CandidateOperationId value.State.Operations with
-                    | Some(OperationState.NeedsObservation(intent,"execution-observation-missing")) when intent.Kind=StoreCandidate->true
-                    | _->false)
-            observationChecks<-observationChecks+1
-        Assert.True(candidateObservationPending,"StoreCandidate did not observe the running executor before completion")
-        File.WriteAllText(completionGate,"release")
+        Assert.Equal(transportStartsBeforeRestart,Int32.Parse(File.ReadAllText proxyState))
+        Assert.Equal(mutationsBeforeRestart,mutationCount)
         let getMainStatus ()=task {
             use request=new HttpRequestMessage(HttpMethod.Get,Uri(hostConfiguration.Prefix+"v1/status"))
             request.Headers.Authorization<-System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",operatorToken)
@@ -1343,7 +1440,7 @@ finally:
         let mutable complete=false
         let mutable checks=0
         let mutable routeState="not-read"
-        while not complete&&checks<200 do
+        while not complete&&checks<400 do
             do! Task.Delay 100
             let! recovered=HostedWriterJournal.recover workItems workItem CancellationToken.None
             routeState<-
@@ -1365,7 +1462,7 @@ finally:
         let! recovery=running.Workflow.RecoverContinuation(preparation,CancellationToken.None)
         let recoveryText=sprintf "%A" recovery
         let transportStarts=if File.Exists proxyState then File.ReadAllText proxyState else "0"
-        Assert.True(complete,$"seven-effect route did not reach native delivery; effectLoop={running.EffectLoop.Status}/{running.EffectLoop.Exception}; checks={checkReads}/released={checksReleased}; transportStarts={transportStarts}; dbPending={dbPending.Length}; recovery={recoveryText}; execution={executionState}; state={routeState}")
+        Assert.True(complete,$"seven-effect route did not reach native delivery; effectLoop={running.EffectLoop.Status}/{running.EffectLoop.Exception}; checks={checkReads}/released={checksReleased}; mutations={mutationCount}; mergePuts={mergePutCount}; merged={merged}; transportStarts={transportStarts}; dbPending={dbPending.Length}; recovery={recoveryText}; execution={executionState}; state={routeState}")
         Assert.True(File.Exists proxyState,"production composition did not start the local executor transport")
         Assert.True(Int32.Parse(File.ReadAllText proxyState)>=3,"production composition did not replace and replay the recovered artifact response")
         Assert.Equal(3,mutationCount)
