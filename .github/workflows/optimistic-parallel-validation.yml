@@ -113,7 +113,7 @@ jobs:
     needs: [prepare, classify-reuse]
     runs-on: ubuntu-latest
     env:
-      FSGG_QUINT_TOOLCHAIN_OUTPUT: ${{ runner.temp }}/canonical-quint-toolchain/toolchain.tar.gz
+      FSGG_QUINT_TOOLCHAIN_OUTPUT: /tmp/fsgg-${{ github.run_id }}-formal-toolchain/toolchain.tar.gz
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 1 }
@@ -204,8 +204,8 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     env:
-      FSGG_FORMAL_FRAGMENT_ROOT: ${{ runner.temp }}/coherent-formal-fragments
-      FSGG_FORMAL_OUTPUT_ROOT: ${{ runner.temp }}/coherent-partition-1
+      FSGG_FORMAL_FRAGMENT_ROOT: /tmp/fsgg-${{ github.run_id }}-coherent-formal-fragments
+      FSGG_FORMAL_OUTPUT_ROOT: /tmp/fsgg-${{ github.run_id }}-coherent-partition-1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 1 }
