@@ -8,8 +8,8 @@ module AdministrativeRetirementTests =
     let now=DateTimeOffset.Parse("2026-09-15T15:00:00Z")
     let oid c=String.replicate 40 c
     let digest c=String.replicate 64 c
-    let identity={Repository="FS-GG/example";RepositoryId=1L;IssueNumber=3421;PullRequestNumber=3481;BranchRef="refs/heads/fsgg/pilot/old";CandidateHead=oid "a";CandidateTree=oid "b";CandidateParent=oid "c";AcceptedClientSource=digest "d";OperationAuthorityDigest=digest "e"}
-    let observation={ObservedAt=now;CompleteNativeCensus=true;PullRequestDisposition=ClosedUnmerged;PullRequestHead=identity.CandidateHead;MergeCommit=None;AutoMergeEnabled=false;MergeQueueEntry=None;CandidateArchiveDigest=digest "f";CandidateArchiveIndependent=true;BranchFenceRuleId=Some 42L;BranchFenceDigest=Some(digest "1");BranchFenceActive=true;BranchFenceHasBypass=false;TemporaryMainRuleId=None;TemporaryMainRuleDigest=None;TemporaryMainRuleActive=false;SubjectExcluded=true;IssueClosedNotPlanned=true}
+    let identity={Repository="FS-GG/example";RepositoryId=1L;IssueNumber=3421;PullRequestNumber=3481;BranchRef="refs/heads/fsgg/pilot/old";CandidateHead=oid "a";CandidateTree=oid "b";CandidateParent=oid "c";AcceptedClientCommit=oid "d";AcceptedClientArtifactDigest=digest "2";OperationAuthorityDigest=digest "e"}
+    let observation={ObservedAt=now;CompleteNativeCensus=true;PullRequestDisposition=ClosedUnmerged;PullRequestHead=identity.CandidateHead;MergeCommit=None;MergedCandidateHead=None;MergedCandidateTree=None;MergedCandidateParent=None;ProtectedBaseRef=None;DeliveredPathDigest=None;AutoMergeEnabled=false;MergeQueueEntry=None;CandidateArchiveDigest=digest "f";CandidateArchiveLocation="archive://candidate";ArchivedHead=identity.CandidateHead;ArchivedTree=identity.CandidateTree;ArchivedParent=identity.CandidateParent;CandidateArchiveIndependent=true;NativeCensusDigest=digest "3";NativeCensusLocation="evidence://census";BranchFenceRuleId=Some 42L;BranchFenceDigest=Some(digest "1");BranchFenceActive=true;BranchFenceHasBypass=false;TemporaryMainRuleId=None;TemporaryMainRuleDigest=None;TemporaryMainRuleActive=false;SubjectExcluded=true;IssueDisposition=ClosedNotPlanned}
 
     [<Fact>]
     let ``lost host retirement is distinct and never fabricates original settlement`` () =
@@ -24,10 +24,10 @@ module AdministrativeRetirementTests =
 
     [<Fact>]
     let ``terminal retirement requires exact closed outcome permanent fence exclusion and complete census`` () =
-        let altered={observation with CompleteNativeCensus=false;PullRequestDisposition=MergedOther;PullRequestHead=oid "9";AutoMergeEnabled=true;CandidateArchiveIndependent=false;BranchFenceActive=false;BranchFenceHasBypass=true;SubjectExcluded=false;IssueClosedNotPlanned=false;TemporaryMainRuleId=Some 9L;TemporaryMainRuleActive=true}
+        let altered={observation with CompleteNativeCensus=false;NativeCensusDigest="";PullRequestDisposition=MergedOther;PullRequestHead=oid "9";AutoMergeEnabled=true;CandidateArchiveIndependent=false;BranchFenceActive=false;BranchFenceHasBypass=true;SubjectExcluded=false;IssueDisposition=IssueOpen;TemporaryMainRuleId=Some 9L;TemporaryMainRuleActive=true}
         match AdministrativeRetirement.settle now (TimeSpan.FromMinutes 5.) identity altered with
         | Error failures ->
-            [IncompleteNativeCensus;CandidateIdentityMismatch;CandidateNotIndependentlyPreserved;UnexpectedMergeOutcome;PullRequestMutationStillEnabled;BranchFenceMissing;BranchFenceHasBypass;SubjectExclusionMissing;IssueDispositionMissing;TemporaryMainHoldStillActive]
+            [IncompleteNativeCensus;NativeCensusEvidenceMissing;CandidateIdentityMismatch;CandidateNotIndependentlyPreserved;UnexpectedMergeOutcome;PullRequestMutationStillEnabled;BranchFenceMissing;BranchFenceHasBypass;SubjectExclusionMissing;IssueDispositionMissing;TemporaryMainHoldStillActive]
             |> List.iter(fun expected -> Assert.Contains(expected,failures))
         | value -> failwithf "unexpected %A" value
 

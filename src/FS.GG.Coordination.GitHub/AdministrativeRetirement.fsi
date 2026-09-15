@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.GitHub
 open System
 
 type RetirementPullRequestDisposition = Open | ClosedUnmerged | MergedExactBeforeRetirement | MergedOther
+type RetirementIssueDisposition = IssueOpen | ClosedNotPlanned | ClosedCompleted
 
 type RetirementIdentity =
     { Repository: string
@@ -13,7 +14,8 @@ type RetirementIdentity =
       CandidateHead: string
       CandidateTree: string
       CandidateParent: string
-      AcceptedClientSource: string
+      AcceptedClientCommit: string
+      AcceptedClientArtifactDigest: string
       OperationAuthorityDigest: string }
 
 type RetirementObservation =
@@ -22,10 +24,21 @@ type RetirementObservation =
       PullRequestDisposition: RetirementPullRequestDisposition
       PullRequestHead: string
       MergeCommit: string option
+      MergedCandidateHead: string option
+      MergedCandidateTree: string option
+      MergedCandidateParent: string option
+      ProtectedBaseRef: string option
+      DeliveredPathDigest: string option
       AutoMergeEnabled: bool
       MergeQueueEntry: string option
       CandidateArchiveDigest: string
+      CandidateArchiveLocation: string
+      ArchivedHead: string
+      ArchivedTree: string
+      ArchivedParent: string
       CandidateArchiveIndependent: bool
+      NativeCensusDigest: string
+      NativeCensusLocation: string
       BranchFenceRuleId: int64 option
       BranchFenceDigest: string option
       BranchFenceActive: bool
@@ -34,7 +47,7 @@ type RetirementObservation =
       TemporaryMainRuleDigest: string option
       TemporaryMainRuleActive: bool
       SubjectExcluded: bool
-      IssueClosedNotPlanned: bool }
+      IssueDisposition: RetirementIssueDisposition }
 
 type AdministrativeRetirementReceipt =
     { Schema: string
@@ -61,6 +74,7 @@ type AdministrativeRetirementFailure =
     | IncompleteNativeCensus
     | CandidateIdentityMismatch
     | CandidateNotIndependentlyPreserved
+    | NativeCensusEvidenceMissing
     | PullRequestOutcomeUnresolved
     | UnexpectedMergeOutcome
     | PullRequestMutationStillEnabled
