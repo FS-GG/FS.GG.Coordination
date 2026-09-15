@@ -260,8 +260,22 @@ fi
 set +e
 dotnet build FS.GG.Coordination.sln -c Release --nologo /warnaserror
 build_exit=$?
-dotnet test FS.GG.Coordination.sln -c Release --no-build --no-restore --nologo --logger "trx;LogFileName=full-suite.trx" --results-directory "$output_root"
-test_exit=$?
+test_exit=0
+while IFS= read -r project; do
+  if [[ "$project" == *PostgreSql.Tests* ]]; then continue; fi
+  name="$(basename "$project" .fsproj)"
+  dotnet test "$project" -c Release --no-build --no-restore --nologo \
+    --logger "trx;LogFileName=$name.trx" --results-directory "$output_root" || test_exit=1
+done < <(find tests -name '*.Tests.fsproj' -type f | sort)
+while IFS= read -r project; do
+  directory="$(dirname "$project")"
+  name="$(basename "$project" .fsproj)"
+  (
+    cd "$directory"
+    DOTNET_EXE="$(command -v dotnet)" bash run-private-postgres.sh --no-build --no-restore --nologo \
+      --logger "trx;LogFileName=$name.trx" --results-directory "$output_root"
+  ) || test_exit=1
+done < <(find tests -name '*PostgreSql.Tests.fsproj' -type f | sort)
 RUNNER_TEMP="$output_root/policy" bash eng/bootstrap-gates/dependency-and-security.sh
 policy_exit=$?
 dotnet fsi eng/validate-github-workflow-selection.fsx -- .

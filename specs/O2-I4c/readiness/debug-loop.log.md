@@ -19,14 +19,30 @@
 ## Iteration 2 — 2026-09-15T11:30:00Z
 
 **Verify command:** repository-native bootstrap qualification and full-suite sentinel on the committed candidate
+**Exit code:** 1
+
+**Primary failure:** runtime-exception
+- Signal: exact-head sentinel run `34964808046` reported `FileNotFoundException: /tmp/o0-postgresql-current-path` from every PostgreSQL test project; the repaired Codex suite passed 37/37.
+- Hypothesis: the sentinel's direct solution-wide test command bypasses the repository-owned PostgreSQL provisioners.
+
+**Fix applied:**
+- `eng/workflow-selection-sentinel.sh` — enumerate all test projects, run ordinary projects directly, and run every PostgreSQL project through its isolated private provisioner.
+- `tests/FS.GG.Coordination.ArchitectureTests/GitHubWorkflowSelectionArchitectureTests.fs` — require complete project discovery and the provisioned PostgreSQL path.
+
+**Narrow re-run result:** pass
+**Full verify result:** fail — the sentinel itself bypassed required database provisioning.
+
+## Iteration 3 — 2026-09-15T11:51:00Z
+
+**Verify command:** repository-native bootstrap qualification and full-suite sentinel on the repaired exact head
 **Exit code:** pending
 
 **Primary failure:** runtime-exception
-- Signal: `FileNotFoundException: /tmp/o0-postgresql-current-path` from an unprovisioned raw solution test invocation.
-- Hypothesis: repository-native gates must provision each PostgreSQL suite and preserve their intended isolation; the raw solution invocation is not a valid final qualification command for this repository.
+- Signal: `eng/workflow-selection-sentinel.sh` launched PostgreSQL assemblies without `run-private-postgres.sh`.
+- Hypothesis: explicit repository-owned provisioning will make the full test census representative and deterministic.
 
 **Fix applied:**
-- None — this is a verification-environment boundary, not a product defect.
+- Same as iteration 2; this iteration validates the repaired sentinel.
 
-**Narrow re-run result:** pass
-**Full verify result:** deferred to the committed candidate's native checks
+**Narrow re-run result:** pass — sentinel contract architecture test and shell syntax validation.
+**Full verify result:** deferred
