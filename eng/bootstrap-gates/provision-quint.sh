@@ -6,7 +6,12 @@ quint_sha="939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
 quint_root="$RUNNER_TEMP/fsgg-quint-0.32.0" quint_bin="$RUNNER_TEMP/fsgg-quint-0.32.0/quint"
 if [[ ! -x "$quint_bin" ]]; then
   mkdir -p "$quint_root"
-  curl --fail --location --retry 5 --retry-all-errors --silent --show-error "https://github.com/quint-co/quint/releases/download/v0.32.0/quint-linux-amd64" --output "$quint_bin"
+  if [[ -n "${FSGG_QUINT_TOOLCHAIN_ARCHIVE:-}" ]]; then
+    test -f "$FSGG_QUINT_TOOLCHAIN_ARCHIVE"
+    tar -xOf "$FSGG_QUINT_TOOLCHAIN_ARCHIVE" "cache/objects/$quint_sha" > "$quint_bin"
+  else
+    curl --fail --location --retry 5 --retry-all-errors --silent --show-error "https://github.com/quint-co/quint/releases/download/v0.32.0/quint-linux-amd64" --output "$quint_bin"
+  fi
   printf '%s  %s\n' "$quint_sha" "$quint_bin" | sha256sum --check --status
   chmod +x "$quint_bin"
 fi

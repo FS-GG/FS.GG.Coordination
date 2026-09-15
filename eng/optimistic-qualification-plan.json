@@ -2,6 +2,7 @@
   "schema": "fsgg.coordination.optimistic-qualification-plan/1",
   "selection": {
     "nightlyRecoveryMaxConcurrentCandidates": 2,
+    "priorAggregateCandidateLimit": 25,
     "requiredIdentity": ["behavioralSha256", "compiledContractSha256", "toolchainProfileSha256", "verificationBoundsSha256", "formalCorpusSha256", "harnessSha256"],
     "changedBindingRequiresCorrespondence": true,
     "priorExecutionRequires": ["authentic", "complete", "current"],
@@ -16,6 +17,13 @@
     "nightly": "17 3 * * *",
     "nightlyEnumeration": "complete-protected-main-ancestry-and-pending-candidates",
     "nightlyRecovery": "dispatch-up-to-available-two-candidate-capacity"
+  },
+  "formalFanout": {
+    "logicalPartition": 1,
+    "maxConcurrentExecutions": 6,
+    "semanticShards": ["base", "authority-reconciliation", "claim-election", "cutover-observation", "hosted-writer-fault-safety", "hosted-writer-progress", "journal-fencing", "journal-reconciliation", "lifecycle", "operation-saga", "pilot-permit-fault-safety", "pilot-permit-major-action-coverage", "pilot-permit-transfer", "relation-mutation", "review-epoch", "rollback"],
+    "performanceShard": "epoch",
+    "fragmentEnvelope": ["candidate-obligation.json", "partition-plan.json", "receipt.json"]
   },
   "obligations": ["unit", "architecture", "formal", "security", "package", "recovery"]
 }

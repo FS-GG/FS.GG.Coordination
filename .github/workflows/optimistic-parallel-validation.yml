@@ -109,13 +109,52 @@ jobs:
             tests/**/obj/**
           if-no-files-found: error
 
+  formal-prepare:
+    needs: [prepare, classify-reuse]
+    runs-on: ubuntu-latest
+    env:
+      FSGG_QUINT_TOOLCHAIN_OUTPUT: /tmp/fsgg-${{ github.run_id }}-formal-toolchain/toolchain.tar.gz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 1 }
+      - name: Prepare the pinned canonical toolchain once
+        run: bash eng/bootstrap-gates/canonical-quint-prepare.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: coherent-formal-toolchain-${{ needs.prepare.outputs.candidate }}
+          path: ${{ env.FSGG_QUINT_TOOLCHAIN_OUTPUT }}
+          if-no-files-found: error
+
   run-partition:
-    needs: [prepare, shared-build]
+    name: coherent-execution (${{ matrix.kind }}-${{ matrix.partition }}${{ matrix.shard }})
+    needs: [prepare, shared-build, formal-prepare]
     strategy:
       fail-fast: false
       max-parallel: 6
       matrix:
-        partition: [0, 1, 2, 3, 4, 5]
+        include:
+          - { kind: formal, shard: base }
+          - { kind: partition, partition: 0 }
+          - { kind: partition, partition: 2 }
+          - { kind: partition, partition: 3 }
+          - { kind: partition, partition: 4 }
+          - { kind: partition, partition: 5 }
+          - { kind: formal, shard: authority-reconciliation }
+          - { kind: formal, shard: claim-election }
+          - { kind: formal, shard: cutover-observation }
+          - { kind: formal, shard: hosted-writer-fault-safety }
+          - { kind: formal, shard: hosted-writer-progress }
+          - { kind: formal, shard: journal-fencing }
+          - { kind: formal, shard: journal-reconciliation }
+          - { kind: formal, shard: lifecycle }
+          - { kind: formal, shard: operation-saga }
+          - { kind: formal, shard: pilot-permit-fault-safety }
+          - { kind: formal, shard: pilot-permit-major-action-coverage }
+          - { kind: formal, shard: pilot-permit-transfer }
+          - { kind: formal, shard: relation-mutation }
+          - { kind: formal, shard: review-epoch }
+          - { kind: formal, shard: rollback }
+          - { kind: formal, shard: epoch }
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -125,24 +164,73 @@ jobs:
           name: candidate-obligation-${{ needs.prepare.outputs.candidate }}
           path: ${{ runner.temp }}/optimistic-validation
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        if: ${{ matrix.partition == 0 || matrix.partition == 1 }}
+        if: ${{ matrix.kind == 'partition' && (matrix.partition == 0 || matrix.partition == 5) }}
         with:
           name: shared-build-${{ needs.prepare.outputs.candidate }}
           path: .
-      - name: Run isolated coherent partition
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        if: ${{ matrix.kind == 'formal' || matrix.partition == 0 }}
+        with:
+          name: coherent-formal-toolchain-${{ needs.prepare.outputs.candidate }}
+          path: ${{ runner.temp }}/canonical-quint-toolchain
+      - name: Bind the prepared Quint toolchain for architecture tests
+        if: ${{ matrix.kind == 'partition' && matrix.partition == 0 }}
+        run: printf 'FSGG_QUINT_TOOLCHAIN_ARCHIVE=%s\n' '${{ runner.temp }}/canonical-quint-toolchain/toolchain.tar.gz' >> "$GITHUB_ENV"
+      - name: Run isolated coherent nonformal partition
+        if: ${{ matrix.kind == 'partition' }}
         env:
           FSGG_PARTITION: ${{ matrix.partition }}
           NUGET_PACKAGES: ${{ runner.temp }}/nuget-${{ matrix.partition }}
         run: bash eng/bootstrap-gates/optimistic-run-partition.sh
+      - name: Run one independently isolated formal shard
+        if: ${{ matrix.kind == 'formal' }}
+        env:
+          FSGG_QUINT_SHARD: ${{ matrix.shard }}
+          FSGG_QUINT_TOOLCHAIN_ARCHIVE: ${{ runner.temp }}/canonical-quint-toolchain/toolchain.tar.gz
+          NUGET_PACKAGES: ${{ runner.temp }}/nuget-formal-${{ matrix.shard }}
+        run: bash eng/optimistic-run-formal-fragment.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: ${{ always() && matrix.kind == 'partition' }}
+        with:
+          name: coherent-partition-${{ needs.prepare.outputs.candidate }}-${{ matrix.partition }}
+          path: ${{ runner.temp }}/coherent-partition-${{ matrix.partition }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: ${{ always() && matrix.kind == 'formal' }}
+        with:
+          name: coherent-formal-fragment-${{ needs.prepare.outputs.candidate }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/coherent-formal-fragment-${{ matrix.shard }}
+          if-no-files-found: error
+
+  formal-aggregate:
+    needs: [prepare, run-partition]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    env:
+      FSGG_FORMAL_FRAGMENT_ROOT: /tmp/fsgg-${{ github.run_id }}-coherent-formal-fragments
+      FSGG_FORMAL_OUTPUT_ROOT: /tmp/fsgg-${{ github.run_id }}-coherent-partition-1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 1 }
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: coherent-formal-fragment-${{ needs.prepare.outputs.candidate }}-*
+          path: ${{ env.FSGG_FORMAL_FRAGMENT_ROOT }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: candidate-obligation-${{ needs.prepare.outputs.candidate }}
+          path: ${{ runner.temp }}/optimistic-validation
+      - name: Aggregate a complete candidate-bound formal partition
+        run: bash eng/optimistic-aggregate-formal.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: ${{ always() }}
         with:
-          name: coherent-partition-${{ needs.prepare.outputs.candidate }}-${{ matrix.partition }}
-          path: ${{ runner.temp }}/coherent-partition-${{ matrix.partition }}/receipt.json
+          name: coherent-partition-${{ needs.prepare.outputs.candidate }}-1
+          path: ${{ env.FSGG_FORMAL_OUTPUT_ROOT }}
           if-no-files-found: error
 
   aggregate:
-    needs: [prepare, classify-reuse, run-partition]
+    needs: [prepare, classify-reuse, run-partition, formal-aggregate]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:

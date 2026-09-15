@@ -2,7 +2,11 @@
 set -euo pipefail
 partition="${FSGG_PARTITION:?partition required}"
 receipt_root="${RUNNER_TEMP:-/tmp}/coherent-partition-$partition"
-mkdir -p "$receipt_root"
+if [[ -e "$receipt_root" ]]; then
+  printf 'partition scratch already exists: %s\n' "$receipt_root" >&2
+  exit 1
+fi
+mkdir "$receipt_root"
 finish() {
   code=$?
   if [[ $code -eq 0 ]]; then passed=True; else passed=False; fi
@@ -18,9 +22,16 @@ obligation=$(dotnet fsi eng/optimistic-validation.fsx -- partition-obligation \
   --plan "$RUNNER_TEMP/optimistic-validation/partition-plan.json" \
   --partition "$partition")
 case "$obligation" in
-  unit) dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj -c Release --no-restore --no-build ;;
-  architecture) dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj -c Release --no-restore --no-build ;;
-  formal) bash eng/bootstrap-gates/canonical-quint.sh ;;
+  unit|architecture)
+    if [[ "$obligation" == architecture ]]; then source eng/bootstrap-gates/provision-quint.sh; unset FSGG_QUINT_TOOLCHAIN_ARCHIVE; fi
+    results="$(mktemp -d "$receipt_root/test-results.XXXXXX")"
+    started_ns="$(date +%s%N)"
+    project="tests/FS.GG.Coordination.$(if [[ "$obligation" == unit ]]; then printf UnitTests; else printf ArchitectureTests; fi)/FS.GG.Coordination.$(if [[ "$obligation" == unit ]]; then printf UnitTests; else printf ArchitectureTests; fi).fsproj"
+    dotnet restore "$project" --locked-mode
+    dotnet test "$project" -c Release --no-restore --no-build --logger "trx;LogFileName=$obligation.trx" --results-directory "$results"
+    python eng/validate-test-census.py "$results/$obligation.trx" "$obligation" "$started_ns"
+    ;;
+  formal) echo "formal partition is executed only by the bounded shard fanout" >&2; exit 1 ;;
   security) bash eng/bootstrap-gates/dependency-and-security.sh ;;
   package) bash eng/bootstrap-gates/package-install-smoke.sh ;;
   recovery) bash eng/bootstrap-gates/bootstrap-recovery.sh ;;
