@@ -306,6 +306,7 @@ let ``repository owns callable reusable composite aggregate and sentinel contrac
     let testIndex = sentinelScript.IndexOf("find tests -name '*.Tests.fsproj'", StringComparison.Ordinal)
     Assert.True(provisionIndex < testIndex, "the full suite must provision pinned Quint before architecture tests start")
     Assert.Contains("run-private-postgres.sh", sentinelScript)
+    Assert.Contains("output_root=\"$(cd \"$output_root\" && pwd -P)\"", sentinelScript)
     Assert.DoesNotContain("dotnet test FS.GG.Coordination.sln", sentinelScript)
     Assert.DoesNotContain("gh api", reusable + sentinel)
     Assert.DoesNotContain("fleetSelectionEnabled=true", reusable + sentinel)

@@ -35,14 +35,15 @@
 ## Iteration 3 — 2026-09-15T11:51:00Z
 
 **Verify command:** repository-native bootstrap qualification and full-suite sentinel on the repaired exact head
-**Exit code:** pending
+**Exit code:** 1
 
-**Primary failure:** runtime-exception
-- Signal: `eng/workflow-selection-sentinel.sh` launched PostgreSQL assemblies without `run-private-postgres.sh`.
-- Hypothesis: explicit repository-owned provisioning will make the full test census representative and deterministic.
+**Primary failure:** test-failure
+- Signal: exact-head sentinel run `34965698496` provisioned the PostgreSQL projects and passed the repaired Codex suite, then two Observer deadline tests refused planner launch.
+- Hypothesis: the real-clock tests reused a fixture budget whose absolute deadline was 2026-09-10, so the fixture expired as the calendar advanced; their 75 ms and 100 ms command windows also measured thread-pool admission latency on a loaded runner rather than the bounded-planner contract.
 
 **Fix applied:**
-- Same as iteration 2; this iteration validates the repaired sentinel.
+- `tests/FS.GG.Coordination.Orchestration.Observer.Tests/ObserverTests.fs` — bind the fixture budget deadline to the test's current clock, give both real-clock boundary tests a two-second launch window, and assert the call still returns inside a ten-second wall-clock bound. The noncooperative planner, synchronous-entry assertion, expiry outcome, and retained reservation assertions remain intact.
+- `eng/workflow-selection-sentinel.sh` — canonicalize the result directory before PostgreSQL launchers change their working directory, so every TRX path remains rooted at the sentinel output directory even when `RUNNER_TEMP` is relative.
 
-**Narrow re-run result:** pass — sentinel contract architecture test and shell syntax validation.
+**Narrow re-run result:** pass — both Observer boundary tests passed in three consecutive focused runs; the sentinel architecture contract and shell syntax check passed.
 **Full verify result:** deferred

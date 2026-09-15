@@ -237,6 +237,7 @@ fi
 
 output_root="${RUNNER_TEMP:-/tmp}/workflow-selection-sentinel"
 mkdir -p "$output_root"
+output_root="$(cd "$output_root" && pwd -P)"
 decision="$output_root/decision.json"
 q7_decision="$output_root/q7-decision.json"
 selection="$output_root/current-selection.json"
