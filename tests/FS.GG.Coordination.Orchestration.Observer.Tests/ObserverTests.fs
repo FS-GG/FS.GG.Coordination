@@ -364,34 +364,44 @@ let ``reservation append consuming deadline prevents planner launch`` () = task 
 
 [<Fact>]
 let ``noncooperative planner is bounded by command expiry and cannot release reservation`` () = task {
-    let state = observed()
     let current = TimeProvider.System.GetUtcNow()
+    let state = { observed() with Budget = Some { budget with Deadline = current.AddMinutes 1. } }
     let journal = RecordingJournal([ ObserverAppended(state.Sequence + 1L); ObserverAppended(state.Sequence + 2L) ])
     let planner = NonCooperativePlanner()
     let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
-    let request = { executionRequest state with IssuedAt = current.AddMilliseconds -10.; ExpiresAt = current.AddMilliseconds 75. }
+    // Keep enough launch margin for a loaded CI thread pool while retaining a short,
+    // externally measured bound on a planner that never cooperates.
+    let request = { executionRequest state with IssuedAt = current.AddSeconds -1.; ExpiresAt = current.AddSeconds 2. }
+    let elapsed = Diagnostics.Stopwatch.StartNew()
     let! outcome = ObserverRuntime.executePlanning TimeProvider.System composition request CancellationToken.None
+    elapsed.Stop()
     match outcome with
     | PlanningOutcomePersistedUnknown(finalState, "planning-window-expired") -> Assert.Equal(request.Reservation, finalState.Reserved)
     | other -> failwithf "unexpected %A" other
+    Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds 10., $"observer exceeded its wall-clock bound: {elapsed.Elapsed}")
 }
 
 [<Fact>]
 let ``synchronously blocking planner entry is bounded off the observer caller`` () = task {
-    let state = observed()
     let current = TimeProvider.System.GetUtcNow()
+    let state = { observed() with Budget = Some { budget with Deadline = current.AddMinutes 1. } }
     let journal = RecordingJournal([ ObserverAppended(state.Sequence + 1L); ObserverAppended(state.Sequence + 2L) ])
     use entered = new ManualResetEventSlim(false)
     use release = new ManualResetEventSlim(false)
     let planner = SynchronouslyBlockingPlanner(entered, release)
     let composition = ObserverComposition.create (ReadCapability()) planner (ReadbackCapability()) journal
-    let request = { executionRequest state with IssuedAt = current.AddMilliseconds -10.; ExpiresAt = current.AddMilliseconds 100. }
+    // The deadline must cover ordinary CI scheduling latency so the assertion tests
+    // synchronous planner isolation rather than thread-pool admission speed.
+    let request = { executionRequest state with IssuedAt = current.AddSeconds -1.; ExpiresAt = current.AddSeconds 2. }
+    let elapsed = Diagnostics.Stopwatch.StartNew()
     try
         let! outcome = ObserverRuntime.executePlanning TimeProvider.System composition request CancellationToken.None
+        elapsed.Stop()
         Assert.True(entered.IsSet)
         match outcome with
         | PlanningOutcomePersistedUnknown(finalState, "planning-window-expired") -> Assert.Equal(request.Reservation, finalState.Reserved)
         | other -> failwithf "unexpected %A" other
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds 10., $"observer exceeded its wall-clock bound: {elapsed.Elapsed}")
     finally
         release.Set()
 }

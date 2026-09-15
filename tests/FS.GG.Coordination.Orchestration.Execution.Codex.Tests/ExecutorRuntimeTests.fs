@@ -29,6 +29,8 @@ module private RuntimeFixture =
         Assert.True(child.ExitCode=0,error)
         output.Trim()
     let git cwd args=run cwd ("git"::args)
+    let gitCommit cwd message =
+        git cwd ["-c";"user.name=Fixture";"-c";"user.email=fixture@example.invalid";"commit";"-m";message]
     let sha (bytes:byte array)=SHA256.HashData bytes|>Convert.ToHexString|>_.ToLowerInvariant()
     let repo () =
         let root=Directory.CreateTempSubdirectory("executor-repo-").FullName
@@ -187,7 +189,7 @@ type ExecutorRuntimeTests() =
         let workspace=ExecutorWorkspace.materialize repository workspaceRoot assignment attempt 1L manifest|>Result.defaultWith failwith
         File.WriteAllText(Path.Combine(workspace,"docs/item.md"),"accepted\n")
         RuntimeFixture.git workspace ["add";"docs/item.md"]|>ignore
-        RuntimeFixture.git workspace ["commit";"-m";"candidate"]|>ignore
+        RuntimeFixture.gitCommit workspace "candidate"|>ignore
         let head=RuntimeFixture.git workspace ["rev-parse";"HEAD"]
         let tree=RuntimeFixture.git workspace ["rev-parse";"HEAD^{tree}"]
         let candidate={CandidateId=Guid.NewGuid();HeadSha=head;TreeSha=tree}
@@ -259,7 +261,7 @@ type ExecutorRuntimeTests() =
         let driftWorkspace,driftBase,driftId,drift=make()
         File.WriteAllText(Path.Combine(driftWorkspace,"docs/item.md"),"first\n")
         RuntimeFixture.git driftWorkspace ["add";"docs/item.md"]|>ignore
-        RuntimeFixture.git driftWorkspace ["commit";"-m";"untrusted commit"]|>ignore
+        RuntimeFixture.gitCommit driftWorkspace "untrusted commit"|>ignore
         File.WriteAllText(Path.Combine(driftWorkspace,"docs/item.md"),"second\n")
         Assert.Equal(Error "candidate-baseline-drift",drift.CreateCandidate(driftId,CancellationToken.None))
         let driftHead=RuntimeFixture.git driftWorkspace ["rev-parse";"HEAD"]
@@ -285,7 +287,7 @@ type ExecutorRuntimeTests() =
         let workspace=ExecutorWorkspace.materialize repository workspaceRoot (Guid.NewGuid()) (Guid.NewGuid()) 1L manifest|>Result.defaultWith failwith
         File.WriteAllText(Path.Combine(workspace,"docs/item.md"),"bad trailing space  \n")
         RuntimeFixture.git workspace ["add";"."]|>ignore
-        RuntimeFixture.git workspace ["commit";"-m";"bad"]|>ignore
+        RuntimeFixture.gitCommit workspace "bad"|>ignore
         let candidate={CandidateId=Guid.NewGuid();HeadSha=RuntimeFixture.git workspace ["rev-parse";"HEAD"];TreeSha=RuntimeFixture.git workspace ["rev-parse";"HEAD^{tree}"]}
         let inspector=GitCandidateInspector(workspace,manifest,artifactRoot,Guid.NewGuid(),candidate.CandidateId,DateTimeOffset.UnixEpoch):>FS.GG.Coordination.Orchestration.Execution.Codex.ICodexCandidateInspector
         let result=inspector.Verify(workspace,candidate,CancellationToken.None).Result
@@ -293,7 +295,7 @@ type ExecutorRuntimeTests() =
         RuntimeFixture.git workspace ["reset";"--hard";baseline]|>ignore
         File.WriteAllText(Path.Combine(workspace,"docs/item.md"),"valid\n")
         RuntimeFixture.git workspace ["add";"docs/item.md"]|>ignore
-        RuntimeFixture.git workspace ["commit";"-m";"valid"]|>ignore
+        RuntimeFixture.gitCommit workspace "valid"|>ignore
         File.WriteAllText(Path.Combine(workspace,"untracked.txt"),"tamper")
         let validHead=RuntimeFixture.git workspace ["rev-parse";"HEAD"]
         let dirtyCandidate={candidate with HeadSha=validHead;TreeSha=RuntimeFixture.git workspace ["rev-parse";validHead+"^{tree}"]}
@@ -303,7 +305,7 @@ type ExecutorRuntimeTests() =
         Directory.CreateDirectory(Path.Combine(workspace,"docs2"))|>ignore
         File.WriteAllText(Path.Combine(workspace,"docs2/item.md"),"outside directory boundary\n")
         RuntimeFixture.git workspace ["add";"docs2/item.md"]|>ignore
-        RuntimeFixture.git workspace ["commit";"-m";"outside touch set"]|>ignore
+        RuntimeFixture.gitCommit workspace "outside touch set"|>ignore
         let outsideHead=RuntimeFixture.git workspace ["rev-parse";"HEAD"]
         let outside={candidate with HeadSha=outsideHead;TreeSha=RuntimeFixture.git workspace ["rev-parse";outsideHead+"^{tree}"]}
         Assert.Equal(Error "candidate-touch-set-refused",inspector.Verify(workspace,outside,CancellationToken.None).Result)

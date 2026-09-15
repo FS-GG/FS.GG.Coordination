@@ -242,6 +242,7 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     let template = File.ReadAllText(Path.Combine(root, "eng/optimistic-parallel-validation.yml.template"))
     let plan = File.ReadAllText(Path.Combine(root, "eng/optimistic-qualification-plan.json"))
     let recovery = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-recovery.sh"))
+    let dispatch = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/optimistic-dispatch-recovery.sh"))
     Assert.Contains("nightlyRecoveryMaxConcurrentCandidates", plan)
     Assert.DoesNotContain("\"maxConcurrentCandidates\"", plan)
     Assert.Contains("group: optimistic-coherent-${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}", workflow)
@@ -260,6 +261,9 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     Assert.Contains("shared-build:\n    # Cheap reuse classification is the admission boundary", workflow)
     Assert.Contains("needs: [prepare, classify-reuse]", workflow)
     Assert.Contains("optimistic-dispatch-recovery.sh", workflow)
+    Assert.Contains("gh api --paginate --slurp", dispatch)
+    Assert.Contains("| jq", dispatch)
+    Assert.DoesNotContain("--slurp \"repos/$repo/actions/workflows/optimistic-parallel-validation.yml/runs?per_page=100\" --jq", dispatch)
     Assert.Contains("coherent-aggregate-", workflow)
     for forbidden in [ "git commit"; "git push"; "gh release"; "npm publish"; "dotnet nuget push" ] do
         Assert.DoesNotContain(forbidden, workflow + recovery)
