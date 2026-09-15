@@ -125,7 +125,7 @@ jobs:
           name: candidate-obligation-${{ needs.prepare.outputs.candidate }}
           path: ${{ runner.temp }}/optimistic-validation
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        if: ${{ matrix.partition == 0 || matrix.partition == 1 }}
+        if: ${{ matrix.partition == 0 || matrix.partition == 5 }}
         with:
           name: shared-build-${{ needs.prepare.outputs.candidate }}
           path: .

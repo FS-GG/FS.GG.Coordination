@@ -18,8 +18,13 @@ obligation=$(dotnet fsi eng/optimistic-validation.fsx -- partition-obligation \
   --plan "$RUNNER_TEMP/optimistic-validation/partition-plan.json" \
   --partition "$partition")
 case "$obligation" in
-  unit) dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj -c Release --no-restore --no-build ;;
-  architecture) dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj -c Release --no-restore --no-build ;;
+  unit|architecture)
+    results="$receipt_root/test-results"
+    project="tests/FS.GG.Coordination.$(if [[ "$obligation" == unit ]]; then printf UnitTests; else printf ArchitectureTests; fi)/FS.GG.Coordination.$(if [[ "$obligation" == unit ]]; then printf UnitTests; else printf ArchitectureTests; fi).fsproj"
+    dotnet restore "$project" --locked-mode
+    dotnet test "$project" -c Release --no-restore --no-build --logger "trx;LogFileName=$obligation.trx" --results-directory "$results"
+    python eng/validate-test-census.py "$results/$obligation.trx" "$obligation"
+    ;;
   formal) bash eng/bootstrap-gates/canonical-quint.sh ;;
   security) bash eng/bootstrap-gates/dependency-and-security.sh ;;
   package) bash eng/bootstrap-gates/package-install-smoke.sh ;;
