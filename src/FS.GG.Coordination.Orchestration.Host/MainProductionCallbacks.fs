@@ -135,5 +135,5 @@ type MainProductionCallbacks
         | _->return Error "main-production-reconciliation-kind-refused" }
     member _.TryCandidateReceipt(candidateId:CandidateId)=match stored.TryGetValue candidateId with true,value->Some value|_->None
     member _.Calls =
-        {AcquireExternalClaim=fun (route:HostedRoutePlan) (intent:EffectIntent) token->task {let! value=github.AcquireClaim(route.ClaimResourceId,Id.operationValue intent.OperationId,token) in return value|>Result.map(fun(resource,revision)->hosted route intent resource None None revision true)}
+        {AcquireExternalClaim=fun (route:HostedRoutePlan) (intent:EffectIntent) token->task {let! value=github.AcquireClaim(route.ClaimResourceId,Id.operationValue intent.OperationId,preparation.Budget.DeliveryDeadline,token) in return value|>Result.map(fun(resource,revision)->hosted route intent resource None None revision true)}
          DispatchRunner=dispatch;StoreCandidate=storeCandidate;PublishCandidateBranch=publish;CreatePullRequest=createPull;MergePullRequest=merge;ReadNativeDelivery=native}

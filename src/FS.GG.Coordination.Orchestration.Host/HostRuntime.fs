@@ -305,7 +305,7 @@ module HostRuntime =
                     | Error reason -> do! writeJson response (if parsed then 409 else 400) {| error=reason |} cancellationToken
         elif not (authorize configuration.Token (Option.ofObj request.Headers["Authorization"])) then
             do! writeJson response 401 {| error = "unauthorized" |} cancellationToken
-        elif request.HttpMethod="POST" && request.Url.AbsolutePath="/v1/main/admit" then
+        elif request.HttpMethod="POST" && (request.Url.AbsolutePath="/v1/main/admit" || request.Url.AbsolutePath="/v1/main/recover") then
             match mainAdmission with
             | None->do! writeJson response 503 {|error="main-route-admission-not-configured"|} cancellationToken
             | Some admission->
@@ -313,9 +313,9 @@ module HostRuntime =
                 match body with
                 | Error reason->do! writeJson response 400 {|error=reason|} cancellationToken
                 | Ok bytes->
-                    let! admitted=admission.Admit(bytes,cancellationToken)
+                    let! admitted=if request.Url.AbsolutePath="/v1/main/recover" then admission.RecoverPaused(bytes,cancellationToken) else admission.Admit(bytes,cancellationToken)
                     match admitted with
-                    | Ok()->do! writeJson response 200 {|schema="fsgg.orchestration.main-route-admission-receipt/1";accepted=true|} cancellationToken
+                    | Ok()->do! writeJson response 200 {|schema=(if request.Url.AbsolutePath="/v1/main/recover" then "fsgg.orchestration.main-route-recovery-receipt/1" else "fsgg.orchestration.main-route-admission-receipt/1");accepted=true|} cancellationToken
                     | Error reason->do! writeJson response 409 {|error=reason|} cancellationToken
         elif request.HttpMethod = "GET" && (request.Url.AbsolutePath = "/health/ready" || request.Url.AbsolutePath = "/v1/status") then
             match mainAdmission with

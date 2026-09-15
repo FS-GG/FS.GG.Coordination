@@ -193,10 +193,22 @@ let ``startup pause is established before work item admission`` () = task {
 
 let private activeClaimEvents () =
     let snapshot={ProjectId=Id.project(Guid.NewGuid());WorkItemId=Fixture.workItem;WorkflowRevision=Fixture.route.WorkflowRevision;CanonicalSha256=String.replicate 64 "b";BoardMembershipIds=[];CapturedAt=Fixture.now.AddMinutes(-2.)}
-    let budget={Schema="fsgg.coordination.subscription-execution-budget/1";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=Fixture.now.AddMinutes 25.;Usage=TokensUnknown "not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription";BroaderAttributionState="unknown";BroaderAttributionProvenance="unattributed"}}
+    let budget={Schema="fsgg.coordination.subscription-execution-budget/2";AttemptLimit=1;MaximumRuntime=TimeSpan.FromMinutes 30.;ExecutionDeadline=Fixture.now.AddMinutes 25.;DeliveryDeadline=Fixture.now.AddHours 2.;Usage=TokensUnknown "not-reported";Cost={InvocationState="not-applicable";InvocationProvenance="subscription";BroaderAttributionState="unknown";BroaderAttributionProvenance="unattributed"}}
     let reservation={ReservationId=Id.reservation(Guid.NewGuid());Generation=Fixture.route.Generation;ExpiresAt=Fixture.now.AddMinutes 20.;RequiredClaimIds=Set.empty}
     let intent=Fixture.intent AcquireExternalClaim Fixture.route.ClaimOperationId
     [SubscriptionWorkAdmitted(snapshot,budget);GenerationAdvanced Fixture.route.Generation;ReservationCreated reservation;HostedRouteSelected Fixture.route;ResumedEvent;EffectIntentRecorded intent],intent
+
+[<Fact>]
+let ``legacy subscription event cannot gain a delivery deadline during replay`` () =
+    let events,_=activeClaimEvents()
+    let current=EventEnvelope.encode events.Head
+    Assert.True(EventEnvelope.tryDecode current|>Result.isOk)
+    let json=Encoding.UTF8.GetString current
+    let legacy=
+        Text.RegularExpressions.Regex.Replace(json,",?\"deliveryDeadline\":\"[^\"]+\"","")
+            .Replace("fsgg.coordination.subscription-execution-budget/2","fsgg.coordination.subscription-execution-budget/1")
+        |>Encoding.UTF8.GetBytes
+    Assert.True(EventEnvelope.tryDecode legacy|>Result.isError)
 
 [<Fact>]
 let ``duplicate durable command returns original accepted receipt after response loss`` () = task {
@@ -239,7 +251,7 @@ let ``historical hosted absence survives durable append and restart`` () = task 
     Assert.False(recoveredResult.RequiresExternalReconciliation) }
 
 [<Fact>]
-let ``paused restart reconciles dispatch without repeating provider mutation`` () = task {
+let ``paused restart after delivery expiry reconciles dispatch without repeating provider mutation`` () = task {
     let events,intent=activeClaimEvents()
     let store=MemoryStore(events@[EffectDispatchStarted intent.OperationId;StartupPausedEvent "restart"]) :> IJournalStore
     let mutable writes=0
@@ -248,7 +260,7 @@ let ``paused restart reconciles dispatch without repeating provider mutation`` (
     let call _ _ _=writes<-writes+1;Task.FromResult(Ok hosted)
     let adapter=HostedWriterProviderAdapter.Create{AcquireExternalClaim=call;DispatchRunner=call;StoreCandidate=call;PublishCandidateBranch=call;CreatePullRequest=call;MergePullRequest=call;ReadNativeDelivery=fun _ _ _->Task.FromResult(Error "unused")}
     let reconcile _ _ _=reconciles<-reconciles+1;Task.FromResult(Ok(HostedEffect hosted))
-    let driver=MainEffectDriver(FixedClock Fixture.now,store,Fixture.workItem,"pilot",adapter,reconcile)
+    let driver=MainEffectDriver(FixedClock(Fixture.now.AddHours 2.),store,Fixture.workItem,"pilot",adapter,reconcile)
     let! result=driver.Drive(intent.OperationId,CancellationToken.None)
     match result with EffectCompleted _->()|other->failwithf "%A" other
     Assert.Equal(0,writes)
@@ -281,16 +293,16 @@ let ``pending preflight remains undispatched then lost response is reconcile onl
     Assert.Equal(1,reconciles) }
 
 [<Fact>]
-let ``expired authority refuses before external preflight`` () = task {
+let ``expired delivery authority refuses before external preflight`` () = task {
     let events,intent=activeClaimEvents()
     let store=MemoryStore events :> IJournalStore
     let mutable preflights=0
     let preflight _ _ _=preflights<-preflights+1;Task.FromResult(Ok())
     let unused _ _ _=Task.FromResult(Error "unused")
     let adapter=HostedWriterProviderAdapter.Create{AcquireExternalClaim=unused;DispatchRunner=unused;StoreCandidate=unused;PublishCandidateBranch=unused;CreatePullRequest=unused;MergePullRequest=unused;ReadNativeDelivery=fun _ _ _->Task.FromResult(Error "unused")}
-    let driver=MainEffectDriver(FixedClock(Fixture.now.AddMinutes 31.),store,Fixture.workItem,"pilot",adapter,(fun _ _ _->Task.FromResult(Error "unused")),preflight=preflight)
-    let! result=driver.Drive(intent.OperationId,CancellationToken.None)
-    Assert.Equal(EffectDriveRefused "effect-authority-not-current",result)
+    let expired=MainEffectDriver(FixedClock(Fixture.now.AddHours 2.),store,Fixture.workItem,"pilot",adapter,(fun _ _ _->Task.FromResult(Error "unused")),preflight=preflight)
+    let! refused=expired.Drive(intent.OperationId,CancellationToken.None)
+    Assert.Equal(EffectDriveRefused "effect-authority-not-current",refused)
     Assert.Equal(0,preflights) }
 
 [<Fact>]
@@ -615,6 +627,51 @@ let private prDetail head =
 let private routinePolicy =
     let bytes=Encoding.UTF8.GetBytes "{\"schema\":\"fsgg.routine-development-policy/v1\",\"allowedOperations\":[\"source-change\",\"internal-docs\"]}"
     $"{{\"content\":\"{Convert.ToBase64String bytes}\"}}"
+
+[<Fact>]
+let ``GitHub route recovery reads fresh immutable repository and issue identity`` () = task {
+    let executor=QueuedGitHub[response "{\"id\":7,\"node_id\":\"R_writer\"}";response "{\"number\":11,\"node_id\":\"I_writer\"}"]
+    let target={githubTarget with IssueNumber=11}
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok(String.replicate 40 "a")),target,FixedClock Fixture.now)
+    let route={Fixture.route with RepositoryNodeId="R_writer"}
+    let! result=client.ReadHostedRoute(route,CancellationToken.None)
+    let readback=result|>Result.defaultWith failwith
+    Assert.Equal(route.RouteId,readback.RouteId)
+    Assert.Equal(route.Generation,readback.Generation)
+    Assert.Equal(Fixture.now,readback.ObservedAt)
+    Assert.Equal(64,readback.EvidenceSha256.Length)
+    Assert.Equal(2,executor.Requests.Length)
+    let mismatch=QueuedGitHub[response "{\"id\":8,\"node_id\":\"R_other\"}";response "{\"number\":11,\"node_id\":\"I_writer\"}"]
+    let mismatchClient=GitHubRouteClient(mismatch,FixedPublisher(Ok(String.replicate 40 "a")),target,FixedClock Fixture.now)
+    let! refused=mismatchClient.ReadHostedRoute(route,CancellationToken.None)
+    Assert.Equal(Error "github-route-identity-mismatch",refused) }
+
+[<Fact>]
+let ``GitHub claim covers the immutable delivery window and expired ownership refuses`` () = task {
+    let operation=Guid.Parse "80000000-0000-0000-0000-000000000001"
+    let session=operation.ToString "N"
+    let marker=$"<!-- fsgg:claim worker=pilot-worker lease=91 renewed=1 session={session} -->"
+    let comments=$"[{{\"id\":1,\"updated_at\":\"2026-09-10T19:00:00Z\",\"body\":\"{marker}\"}}]"
+    let executor=QueuedGitHub[response "[]";response "{}";response comments]
+    let client=GitHubRouteClient(executor,FixedPublisher(Ok(String.replicate 40 "a")),githubTarget,FixedClock Fixture.now)
+    let! acquired=client.AcquireClaim("claim-1",operation,Fixture.now.AddMinutes 90.5,CancellationToken.None)
+    Assert.True(Result.isOk acquired)
+    let posted=executor.Requests[1]
+    let postedBody=match posted with Rest (value:RestRequest)->defaultArg value.Body ""|GraphQL _->failwith "expected REST claim mutation"
+    Assert.Contains("lease=91",postedBody)
+
+    let tooLong=QueuedGitHub[]
+    let tooLongClient=GitHubRouteClient(tooLong,FixedPublisher(Ok(String.replicate 40 "a")),githubTarget,FixedClock Fixture.now)
+    let beyondDelivery=(Fixture.now.AddHours 2.).AddTicks 1L
+    let! refused=tooLongClient.AcquireClaim("claim-1",operation,beyondDelivery,CancellationToken.None)
+    Assert.Equal(Error "github-claim-delivery-deadline-refused",refused)
+    Assert.Empty tooLong.Requests
+
+    let expired=$"[{{\"id\":1,\"updated_at\":\"2026-09-10T18:29:00Z\",\"body\":\"<!-- fsgg:claim worker=pilot-worker lease=30 renewed=1 session={session} -->\"}}]"
+    let expiredExecutor=QueuedGitHub[response expired]
+    let expiredClient=GitHubRouteClient(expiredExecutor,FixedPublisher(Ok(String.replicate 40 "a")),githubTarget,FixedClock Fixture.now)
+    let! absent=expiredClient.ReadClaim("claim-1",operation,CancellationToken.None)
+    Assert.Equal(Error "github-claim-not-observed",absent) }
 
 [<Fact>]
 let ``GitHub route refuses competing canonical claim marker`` () = task {

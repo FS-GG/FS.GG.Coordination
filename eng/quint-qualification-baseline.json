@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "d40ccaf16f280c3a80b6ac45ab67ec93dd76d255e107d8e630cb41f603612b1f",
-  "configurationSha256": "b65e129e2b98c4e6675a4b4827d59f5f764038d6e5d2ee91bb060473d852eea6",
+  "sourceSha256": "3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118",
+  "configurationSha256": "3c1eaca5aefd6de72faae23684466d51070d20556cb6fd3b51e14ddaff9ae0bb",
   "assembledQuintSha256": "e3a955d18822c18ac9c05c4545a722954bcac2c856994ac9ece7bd4a3d56c2ca",
   "runnerClass": "linux-x64-local-calibration",
   "measuredAt": "2026-09-14T15:00:00Z",
@@ -77,8 +77,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 26450,
-      "peakMiB": 729,
+      "elapsedMs": 56792,
+      "peakMiB": 1117,
       "artifactBytes": 5674
     },
     {
@@ -86,8 +86,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 27145,
-      "peakMiB": 730,
+      "elapsedMs": 57359,
+      "peakMiB": 1137,
       "artifactBytes": 4919
     },
     {
@@ -95,8 +95,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 67580,
-      "peakMiB": 1043,
+      "elapsedMs": 58475,
+      "peakMiB": 1129,
       "artifactBytes": 4586
     },
     {
@@ -104,8 +104,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 66172,
-      "peakMiB": 1037,
+      "elapsedMs": 58485,
+      "peakMiB": 1133,
       "artifactBytes": 4559
     },
     {
@@ -113,8 +113,8 @@
       "stateCount": 4,
       "transitionCount": 4,
       "sampleCount": 100,
-      "elapsedMs": 26549,
-      "peakMiB": 723,
+      "elapsedMs": 57526,
+      "peakMiB": 1092,
       "artifactBytes": 9392
     },
     {
@@ -122,8 +122,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 26364,
-      "peakMiB": 754,
+      "elapsedMs": 58144,
+      "peakMiB": 1101,
       "artifactBytes": 4582
     },
     {
@@ -131,8 +131,8 @@
       "stateCount": 20,
       "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 65024,
-      "peakMiB": 962,
+      "elapsedMs": 55643,
+      "peakMiB": 1028,
       "artifactBytes": 7536
     },
     {
@@ -140,8 +140,8 @@
       "stateCount": 20,
       "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 25979,
-      "peakMiB": 628,
+      "elapsedMs": 55263,
+      "peakMiB": 1014,
       "artifactBytes": 9097
     },
     {
@@ -149,8 +149,8 @@
       "stateCount": 51,
       "transitionCount": 163,
       "sampleCount": 1000,
-      "elapsedMs": 25658,
-      "peakMiB": 619,
+      "elapsedMs": 55171,
+      "peakMiB": 1019,
       "artifactBytes": 4615
     },
     {
@@ -158,8 +158,8 @@
       "stateCount": 10,
       "transitionCount": 22,
       "sampleCount": 100,
-      "elapsedMs": 26000,
-      "peakMiB": 608,
+      "elapsedMs": 55119,
+      "peakMiB": 1006,
       "artifactBytes": 7322
     },
     {
@@ -167,8 +167,8 @@
       "stateCount": 136,
       "transitionCount": 532,
       "sampleCount": 10000,
-      "elapsedMs": 26155,
-      "peakMiB": 625,
+      "elapsedMs": 55919,
+      "peakMiB": 1025,
       "artifactBytes": 3412
     },
     {
@@ -176,8 +176,8 @@
       "stateCount": 5,
       "transitionCount": 5,
       "sampleCount": 10000,
-      "elapsedMs": 29352,
-      "peakMiB": 640,
+      "elapsedMs": 59647,
+      "peakMiB": 1057,
       "artifactBytes": 9669
     },
     {
@@ -185,8 +185,8 @@
       "stateCount": 3032,
       "transitionCount": 8002,
       "sampleCount": 10000,
-      "elapsedMs": 30238,
-      "peakMiB": 686,
+      "elapsedMs": 58993,
+      "peakMiB": 1086,
       "artifactBytes": 9678
     },
     {
@@ -194,27 +194,28 @@
       "stateCount": 14,
       "transitionCount": 14,
       "sampleCount": 10000,
-      "elapsedMs": 76322,
-      "peakMiB": 1226,
+      "elapsedMs": 61213,
+      "peakMiB": 1062,
       "artifactBytes": 9697
     },
     {
       "id": "hosted-writer-progress",
       "stateCount": 23,
-      "transitionCount": 23,
+      "transitionCount": 33,
       "sampleCount": 10000,
-      "elapsedMs": 29729,
-      "peakMiB": 680,
-      "artifactBytes": 67460
+      "elapsedMs": 59060,
+      "peakMiB": 1041,
+      "artifactBytes": 73625
     },
     {
       "id": "hosted-writer-fault-safety",
-      "stateCount": 428,
-      "transitionCount": 1231,
+      "stateCount": 2376,
+      "transitionCount": 9678,
       "sampleCount": 10000,
-      "elapsedMs": 29510,
-      "peakMiB": 682,
-      "artifactBytes": 67480
+      "elapsedMs": 58165,
+      "peakMiB": 1025,
+      "artifactBytes": 73642
     }
-  ]
+  ],
+  "formalMeasuredAt": "2026-09-15T13:59:00Z"
 }

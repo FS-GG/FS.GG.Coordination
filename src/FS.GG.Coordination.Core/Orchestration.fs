@@ -67,6 +67,10 @@ module Orchestration =
         let persistenceId item =
             canonicalBytes item |> SHA256.HashData |> Convert.ToHexString
             |> fun digest -> $"work-item-v1-{digest.ToLowerInvariant()}"
+        let repositoryNodeId item = item.Repository.NodeId
+        let repositoryDatabaseId item = item.Repository.DatabaseId
+        let issueNodeId item = item.IssueNodeId
+        let issueNumber item = item.IssueNumber
 
     type Budget = { TokenLimit: int64; RuntimeSecondsLimit: int64; CostMicrosLimit: int64; Deadline: DateTimeOffset }
     type BudgetUse = { Tokens: int64; RuntimeSeconds: int64; CostMicros: int64 }
@@ -79,7 +83,7 @@ module Orchestration =
           BroaderAttributionState:string; BroaderAttributionProvenance:string }
     type SubscriptionExecutionBudget =
         { Schema:string; AttemptLimit:int; MaximumRuntime:TimeSpan; ExecutionDeadline:DateTimeOffset
-          Usage:SubscriptionUsage; Cost:SubscriptionCost }
+          DeliveryDeadline:DateTimeOffset; Usage:SubscriptionUsage; Cost:SubscriptionCost }
     type SubscriptionAccountingObservation =
         { ObservedAt:DateTimeOffset; RuntimeSeconds:int64; RuntimeWithinBound:bool
           Usage:SubscriptionUsage; Cost:SubscriptionCost }
@@ -248,13 +252,17 @@ module Orchestration =
         cost.InvocationState="not-applicable" && not(String.IsNullOrWhiteSpace cost.InvocationProvenance)
         && cost.BroaderAttributionState="unknown" && not(String.IsNullOrWhiteSpace cost.BroaderAttributionProvenance)
     let private validSubscriptionBudget now budget =
-        budget.Schema="fsgg.coordination.subscription-execution-budget/1"
+        budget.Schema="fsgg.coordination.subscription-execution-budget/2"
         && budget.AttemptLimit=1 && budget.MaximumRuntime=TimeSpan.FromMinutes 30.
         && budget.ExecutionDeadline>now && budget.ExecutionDeadline<=now.AddMinutes 30.
+        && budget.DeliveryDeadline>=budget.ExecutionDeadline && budget.DeliveryDeadline<=now.AddHours 2.
         && validSubscriptionUsage budget.Usage && validSubscriptionCost budget.Cost
-    let private budgetAvailable now state =
+    let private executionBudgetAvailable now state =
         (state.Budget |> Option.exists(fun budget->within now budget state.Used))
-        || (state.SubscriptionBudget |> Option.exists(fun budget->now<budget.ExecutionDeadline))
+        || (state.SubscriptionBudget |> Option.exists(fun budget->budget.Schema="fsgg.coordination.subscription-execution-budget/2" && now<budget.ExecutionDeadline))
+    let private deliveryBudgetAvailable now state =
+        (state.Budget |> Option.exists(fun budget->within now budget state.Used))
+        || (state.SubscriptionBudget |> Option.exists(fun budget->budget.Schema="fsgg.coordination.subscription-execution-budget/2" && now<budget.DeliveryDeadline))
     let private hasCurrentClaims state reservation =
         reservation.RequiredClaimIds
         |> Set.forall(fun claimId ->
@@ -353,12 +361,17 @@ module Orchestration =
     let private currentRouteAuthorization now (state: State) (route: HostedRoutePlan) (intent: EffectIntent) requireAttempt =
         let currentRevision = state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=intent.WorkflowRevision)
         let currentGeneration = sameGeneration intent.Generation state.Generation
-        let budgetAvailable = budgetAvailable now state
+        let budgetAvailable =
+            match intent.Kind with
+            | AcquireExternalClaim | DispatchRunner -> executionBudgetAvailable now state
+            | _ -> deliveryBudgetAvailable now state
         let reservationReady =
             state.Reservation
             |> Option.exists(fun reservation ->
                 let claimReady = intent.Kind=AcquireExternalClaim || hasCurrentClaims state reservation
-                reservation.ExpiresAt>now && sameGeneration reservation.Generation route.Generation && claimReady)
+                let executionWindowRequired = intent.Kind=AcquireExternalClaim || intent.Kind=DispatchRunner
+                (not executionWindowRequired || reservation.ExpiresAt>now)
+                && sameGeneration reservation.Generation route.Generation && claimReady)
         state.Control=Running && state.ReadbackCurrent && currentGeneration && currentRevision && budgetAvailable
         && state.WorkItemId=Some route.WorkItemId && routeIntentMatches route intent
         && Set.isEmpty state.RecoveryObligations && not(conflictingUnsettledOperation intent.OperationId state)
@@ -368,7 +381,7 @@ module Orchestration =
     let private effectAuthorized now state (intent: EffectIntent) =
         let currentRevision = state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=intent.WorkflowRevision)
         let currentGeneration = sameGeneration intent.Generation state.Generation
-        let budgetAvailable = budgetAvailable now state
+        let budgetAvailable = executionBudgetAvailable now state
         match intent.Kind with
         | DispatchRunner ->
             match state.HostedRoute with
@@ -400,7 +413,7 @@ module Orchestration =
             not session.Closed && attempt.Status=Active && attempt.Runner.RunnerId=session.RunnerId
             && attempt.Generation=session.Generation && session.Generation=state.Generation
             && attempt.Runner.Generation=state.Generation && attempt.Runner.ExpiresAt>now
-            && state.Control=Running && state.ReadbackCurrent && budgetAvailable now state
+            && state.Control=Running && state.ReadbackCurrent && executionBudgetAvailable now state
             && Set.isEmpty state.RecoveryObligations
         | _ -> false
 
@@ -549,7 +562,7 @@ module Orchestration =
                 && validHostedRouteShape now correctedRoute.WorkItemId correctedRoute
                 && correctedRoute.Generation=state.Generation
                 && state.Snapshot |> Option.exists(fun snapshot -> snapshot.WorkflowRevision=correctedRoute.WorkflowRevision)
-                && state.SubscriptionBudget |> Option.exists(fun budget -> budget.ExecutionDeadline>now)
+                && state.SubscriptionBudget |> Option.exists(fun budget -> budget.Schema="fsgg.coordination.subscription-execution-budget/2" && budget.DeliveryDeadline>now)
                 && state.Reservation |> Option.exists(fun reservation -> reservation.ExpiresAt>now && reservation.Generation=state.Generation)
             if valid then accept [HostedRouteRecovered(correctedRoute,rejectedCommandId)] [] "hosted-route-recovered-after-invalid-branch"
             else reject "hosted-route-recovery-refused"
@@ -559,7 +572,7 @@ module Orchestration =
             | Some _ -> conflict "attempt-identity-conflict"
             | None ->
                 match state.Control,state.Reservation with
-                | Running,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && budgetAvailable now state && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation && (state.HostedRoute |> Option.forall(fun route -> route.AttemptId=a && predecessorReadbackPresent DispatchRunner route state)) ->
+                | Running,Some reservation when reservation.ExpiresAt>now && r.ExpiresAt>now && executionBudgetAvailable now state && sameGeneration reservation.Generation state.Generation && sameGeneration r.Generation state.Generation && (state.Attempts |> Map.forall(fun _ attempt -> match attempt.Status with Completed|CancelledByRunner|ReconciledAbsent _ -> true | _ -> false)) && hasCurrentClaims state reservation && (state.HostedRoute |> Option.forall(fun route -> route.AttemptId=a && predecessorReadbackPresent DispatchRunner route state)) ->
                     let attempt={AttemptId=a;SessionId=s;Runner=r;Generation=state.Generation;StartedAt=now;Status=Active}
                     let session:SessionState={SessionId=s;RunnerId=r.RunnerId;Generation=state.Generation;LastClientSequence=0L;LastServerSequence=0L;Closed=false}
                     accept [AttemptStarted attempt;RunnerSessionOpened session] [] "attempt-and-runner-session-started"
@@ -607,7 +620,7 @@ module Orchestration =
         | Pause r when state.Control=Running -> accept [PausedEvent r] [] "paused"
         | Pause _ when (match state.Control with Paused _ -> true | _ -> false) -> accept [] [] "already-paused"
         | Pause _ -> reject "not-running"
-        | Resume -> match state.Control with | Paused _ when state.ReadbackCurrent && budgetAvailable now state -> accept [ResumedEvent] [] "resumed" | _ -> reject "resume-refused"
+        | Resume -> match state.Control with | Paused _ when state.ReadbackCurrent && deliveryBudgetAvailable now state -> accept [ResumedEvent] [] "resumed" | _ -> reject "resume-refused"
         | RecordStartupPause reason when not(String.IsNullOrWhiteSpace reason) && reason=reason.Trim() ->
             accept [StartupPausedEvent reason] [] "startup-paused-readback-invalidated"
         | RecordStartupPause _ -> reject "invalid-startup-pause"
@@ -736,7 +749,7 @@ module Orchestration =
     let private subscriptionCostParts cost =
         [cost.InvocationState;cost.InvocationProvenance;cost.BroaderAttributionState;cost.BroaderAttributionProvenance]
     let private subscriptionBudgetParts budget =
-        [budget.Schema;invariant budget.AttemptLimit;invariant (int64 budget.MaximumRuntime.TotalSeconds);timeText budget.ExecutionDeadline]
+        [budget.Schema;invariant budget.AttemptLimit;invariant (int64 budget.MaximumRuntime.TotalSeconds);timeText budget.ExecutionDeadline;timeText budget.DeliveryDeadline]
         @ subscriptionUsageParts budget.Usage @ subscriptionCostParts budget.Cost
     let private candidateParts (candidate:CandidateArtifact) =
         let location = match candidate.Location with | ContentAddressedObject key -> frame["object";key] | ImmutableRemoteGitRef(repo,commit,reference) -> frame["git";repo;commit;reference]

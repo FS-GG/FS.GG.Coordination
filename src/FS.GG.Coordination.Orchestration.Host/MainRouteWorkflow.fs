@@ -65,6 +65,50 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
         | _ -> None
     let runIf value condition stage command token = task { if condition then return! append value stage command token else return Ok() }
 
+    let validatePausedBinding (value:MainRoutePreparation) token = task {
+        let! durableRoute=executions.ReadRoute(value.LaunchIntent.Key.AssignmentId,value.LaunchIntent.Key.AttemptId,token)
+        let! durableAttempt=executionJournal.ReadAttempt(value.LaunchIntent.Key.AssignmentId,value.LaunchIntent.Key.AttemptId,token)
+        let! durableSubscription=executions.ReadSubscription(value.ExecutionReservation.ReservationId,token)
+        let! durableInput=executions.ReadInput(value.InputManifest.InputDigest,token)
+        let workspaceBytes=ExecutorWire.encodeWorkspaceManifest value.WorkspaceManifest
+        let workspaceDigest=SHA256.HashData workspaceBytes|>Convert.ToHexString|>fun digest->digest.ToLowerInvariant()
+        let! durableWorkspace=executions.ReadWorkspaceManifest(workspaceDigest,token)
+        let! durableJournal=workItems.Recover(WorkItemIdentity.persistenceId workItemId,token)
+        let! recovered=HostedWriterJournal.recover workItems workItemId token
+        let routeBound =
+            durableRoute
+            |>Result.toOption
+            |>Option.bind(fun bytes->ExecutorWire.parseRouteBinding bytes|>Result.toOption)
+            |>Option.exists((=) value.Binding)
+        let launchBound=durableAttempt|>Option.bind(fun stored->SessionState.replay stored.Events)|>Option.exists(fun state->state.Intent=value.LaunchIntent)
+        let subscriptionBound=durableSubscription|>Result.toOption|>Option.bind(fun(bytes,_)->SubscriptionAccountingCodec.decodeReservation bytes|>Result.toOption)|>Option.exists((=) value.ExecutionReservation)
+        let inputBound=durableInput|>Result.toOption|>Option.exists(fun bytes->ReadOnlySpan<byte>(bytes).SequenceEqual(ReadOnlySpan<byte>(value.InputBytes)))
+        let workspaceBound=durableWorkspace|>Result.toOption|>Option.exists(fun bytes->ReadOnlySpan<byte>(bytes).SequenceEqual(ReadOnlySpan<byte>(workspaceBytes)))
+        match recovered with
+        | Error failures->return Error(sprintf "%A" failures)
+        | Ok recovery->
+            let current=recovery.State
+            let originalReadback =
+                durableJournal
+                |>Result.toOption
+                |>Option.bind(fun (journal:RecoveryResult)->
+                    journal.Events
+                    |>List.choose(fun stored->EventEnvelope.tryDecode stored.Payload|>Result.toOption)
+                    |>List.tryPick(function HostedRouteReadbackAccepted readback->Some readback|_->None))
+            let attemptBound =
+                current.Attempts
+                |>Map.tryFind value.Route.AttemptId
+                |>Option.exists(fun attempt->attempt.SessionId=value.SessionId && attempt.Runner=value.Runner)
+            let failures =
+                ["execution-route",routeBound;"launch-intent",launchBound;"subscription",subscriptionBound;"input",inputBound;"workspace",workspaceBound
+                 "attempt",attemptBound;"paused",(current.Control|>function Paused _->true|_->false);"readback-stale",not current.ReadbackCurrent
+                 "work-item",current.WorkItemId=Some workItemId;"snapshot",current.Snapshot=Some value.Snapshot;"hosted-route",current.HostedRoute=Some value.Route
+                 "budget",current.SubscriptionBudget=Some value.Budget;"reservation",current.Reservation=Some value.Reservation
+                 "original-readback",originalReadback=Some value.Readback;"budget-schema",value.Budget.Schema=SubscriptionPilot.budgetSchema]
+                |>List.choose(fun(name,valid)->if valid then None else Some name)
+            let failureDetail=String.concat "," failures
+            return if failures.IsEmpty then Ok current else Error($"main-route-paused-recovery-binding-refused:{failureDetail}") }
+
     member _.Prepare(value:MainRoutePreparation,token:CancellationToken)=task {
         let bindingFailures =
             ["work-item",value.Route.WorkItemId=workItemId
@@ -83,7 +127,9 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
              // revision one. The actor then records the sole launch attempt at
              // revision two before any executor command becomes visible.
              "reservation-revision",value.ExecutionReservation.ExpectedRevision=1L
-             "reservation-deadline",value.ExecutionReservation.Deadline=value.Budget.ExecutionDeadline]
+             "reservation-deadline",value.ExecutionReservation.Deadline=value.Budget.ExecutionDeadline
+             "launch-deadline",value.LaunchIntent.Limits.Deadline<=value.Budget.ExecutionDeadline
+             "launch-runtime",value.LaunchIntent.Limits.MaximumRuntime<=value.Budget.MaximumRuntime]
             |>List.choose(fun(name,valid)->if valid then None else Some name)
         let bindingFailureDetail=String.concat "," bindingFailures
         if not bindingFailures.IsEmpty then return Error($"main-route-preparation-binding-refused:{bindingFailureDetail}")
@@ -131,6 +177,7 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
                 if failure.IsNone then
                     let! current=state token
                     let rejectedCommandId=legacyCommandId "select-route"
+                    let routeSelectedNow=current|>Result.exists _.HostedRoute.IsNone
                     let recoverable=
                         current|>Result.exists(fun state->
                             state.HostedRoute.IsNone && (match state.Control with ControlState.Paused _->true|_->false)
@@ -138,11 +185,15 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
                     let priorRoute={value.Route with BranchRef=value.Route.BranchRef.Replace("refs/heads/fsgg/pilot/","refs/heads/fsgg/")}
                     let! result=
                         if recoverable then append value "recover-select-route" (RecoverHostedRoute(rejectedCommandId,priorRoute,value.Route)) token
-                        else runIf value (current|>Result.exists _.HostedRoute.IsNone) "select-route" (SelectHostedRoute value.Route) token
+                        else runIf value routeSelectedNow "select-route" (SelectHostedRoute value.Route) token
                     match result with Error reason->failure<-Some reason|_->()
+                    if failure.IsNone && routeSelectedNow then
+                        let! selected=state token
+                        let! invalidated=runIf value (selected|>Result.exists _.ReadbackCurrent) "prepare-pause" (RecordStartupPause "route-selection") token
+                        match invalidated with Error reason->failure<-Some reason|_->()
                 if failure.IsNone then
                     let! current=state token
-                    let! result=runIf value (current|>Result.exists(fun value->value.Control=ControlState.Running && not value.ReadbackCurrent)) "prepare-pause" (Command.Pause "route-readback") token
+                    let! result=runIf value (current|>Result.exists(fun value->value.Control=ControlState.Running && not value.ReadbackCurrent)) "pause-for-route-readback" (Command.Pause "route-readback") token
                     match result with Error reason->failure<-Some reason|_->()
                 if failure.IsNone then
                     let! current=state token
@@ -162,6 +213,30 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
                     match failure with
                     | Some reason -> Error reason
                     | None -> Ok() }
+
+    /// Reconnects an already admitted route after startup without replaying
+    /// admission, reserving execution, recording an intent, or resuming effects.
+    member _.ValidatePausedBinding(value:MainRoutePreparation,token:CancellationToken)=task {
+        let! result=validatePausedBinding value token
+        return result|>Result.map ignore }
+
+    member _.ReconnectPaused(value:MainRoutePreparation,readback:HostedRouteReadback,token:CancellationToken)=task {
+        let! validated=validatePausedBinding value token
+        match validated with
+        | Error reason->return Error reason
+        | Ok current->
+            let now=clock.GetUtcNow()
+            let bound =
+                now<value.Budget.DeliveryDeadline
+                && readback.RouteId=value.Route.RouteId
+                && readback.WorkItemId=value.Route.WorkItemId
+                && readback.RepositoryNodeId=value.Route.RepositoryNodeId
+                && readback.Generation=value.Route.Generation
+                && readback.WorkflowRevision=value.Route.WorkflowRevision
+                && readback.ObservedAt>value.Readback.ObservedAt
+                && readback.ObservedAt<=now
+            if not bound then return Error "main-route-paused-recovery-binding-refused"
+            else return! append value $"reconnect-route-readback-{Id.revisionValue current.Revision}" (RecordHostedRouteReadback readback) token }
 
     member _.Advance(value:MainRoutePreparation,intent:EffectIntent,candidateReceipt:CandidateStorageReceipt option,token:CancellationToken)=task {
         let payload=value.Binding.BindingSha256

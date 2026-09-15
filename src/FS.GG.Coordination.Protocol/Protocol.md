@@ -1206,6 +1206,17 @@ reconnect, image update, timer, or orchestration command. Startup and every repl
 paused until the current permit generation, runner fingerprint, stable-route exclusion, and native
 provider readback are re-established.
 
+The subscription authority carries two immutable deadlines. The execution deadline is at most
+thirty minutes and binds the one model invocation and executor reservation. The delivery deadline
+is at most two hours from admission and bounds paused recovery, resume, and new GitHub effects.
+New admissions bind their GitHub claim lease to that delivery deadline, and every later mutation
+requires fresh observation of the same unexpired claim; lost ownership fails closed without renewal.
+Older serialized budgets have no delivery deadline and therefore fail closed after upgrade. The
+authenticated `/v1/main/recover` route binds the unchanged admission bytes, performs fresh native
+repository and issue identity readback, and records it while remaining paused; `/v1/resume` is a
+separate command. Observation of an already exposed operation remains permitted after expiry, but
+expiry never authorizes another model invocation, reservation, or provider mutation.
+
 The supported route has seven ordered external stages: claim, process creation, durable candidate
 storage, candidate-branch publication, pull-request creation, merge, and native delivery readback.
 Every stage uses a stable operation identity and records intent before invoking the effect. A lost
@@ -3297,7 +3308,8 @@ module O2HostedWriterModel {
   type HostedWriterState = {
     subjectId: str, jobClass: str, capacity: int, activeAssignments: int,
     budgetLimit: int, budgetUsed: int, permitGeneration: int, currentGeneration: int,
-    paused: bool, readbackCurrent: bool, restarted: bool,
+    paused: bool, readbackCurrent: bool, restarted: bool, freshReadback: bool, claimCurrent: bool,
+    executionOpen: bool, deliveryOpen: bool,
     stage: int, operationId: str, operationStatus: str,
     routeId: str, attemptId: str, candidateId: str, repositoryId: str,
     evidenceRouteId: str, evidenceAttemptId: str, evidenceCandidateId: str,
@@ -3340,15 +3352,19 @@ module O2HostedWriterModel {
     s.stage == 7 implies and { s.nativeReadbackObserved, s.activeAssignments == 0 },
   }
   pure def mayRecordIntent(s: HostedWriterState): bool = and {
-    writerStateIsValid(s), not(s.paused), s.readbackCurrent,
+    writerStateIsValid(s), not(s.paused), s.readbackCurrent, s.deliveryOpen,
+    s.stage == 0 or s.claimCurrent,
+    s.stage > 1 or s.executionOpen,
     s.currentGeneration == s.permitGeneration, s.stage < 7,
     s.operationStatus == "none", s.activeAssignments == 1,
     s.budgetUsed == 1,
   }
   pure def mayDispatch(s: HostedWriterState): bool = and {
-    writerStateIsValid(s), not(s.paused), s.readbackCurrent,
+    writerStateIsValid(s), not(s.paused), s.readbackCurrent, s.deliveryOpen,
+    s.stage == 0 or s.claimCurrent,
     s.currentGeneration == s.permitGeneration,
     s.operationStatus == "intent", s.operationId == operationFor(s.stage),
+    s.stage > 1 or s.executionOpen,
   }
   pure def appliedStage(s: HostedWriterState): HostedWriterState = {
     ...s, stage: s.stage + 1, operationId: "", operationStatus: "none",
@@ -3357,6 +3373,7 @@ module O2HostedWriterModel {
     pullRequestObserved: s.pullRequestObserved or s.stage == 4,
     mergeObserved: s.mergeObserved or s.stage == 5,
     nativeReadbackObserved: s.nativeReadbackObserved or s.stage == 6,
+    claimCurrent: s.claimCurrent or s.stage == 0,
     evidenceRouteId: s.routeId, evidenceAttemptId: s.attemptId,
     evidenceCandidateId: s.candidateId, evidenceRepositoryId: s.repositoryId,
     evidenceGeneration: s.permitGeneration,
@@ -3368,7 +3385,8 @@ module O2HostedWriterModel {
     subjectId: "MDU6SXNzdWUx", jobClass: "routine-documentation-delivery",
     capacity: 1, activeAssignments: 0, budgetLimit: 1, budgetUsed: 0,
     permitGeneration: 1, currentGeneration: 1,
-    paused: true, readbackCurrent: true, restarted: false,
+    paused: true, readbackCurrent: true, restarted: false, freshReadback: false, claimCurrent: false,
+    executionOpen: true, deliveryOpen: true,
     stage: 0, operationId: "", operationStatus: "none",
     routeId: "route-1", attemptId: "attempt-1", candidateId: "candidate-1",
     repositoryId: "repository-1", evidenceRouteId: "", evidenceAttemptId: "",
@@ -3378,7 +3396,8 @@ module O2HostedWriterModel {
     unknownObserved: false, sameOperationRetried: false,
   }
   action manualStart = all {
-    state.paused, state.readbackCurrent, state.activeAssignments == 0,
+    state.paused, state.readbackCurrent, state.executionOpen, state.deliveryOpen,
+    state.activeAssignments == 0,
     state.budgetUsed < state.budgetLimit,
     state' = { ...state, paused: false, activeAssignments: 1, budgetUsed: state.budgetUsed + 1 },
   }
@@ -3398,17 +3417,18 @@ module O2HostedWriterModel {
     state' = { ...state, operationStatus: "unknown", unknownObserved: true },
   }
   action reconcileApplied = all {
-    state.operationStatus == "unknown", state.readbackCurrent,
+    state.operationStatus == "unknown",
     state.currentGeneration == state.permitGeneration,
     state' = appliedStage(state),
   }
   action observeProvenAbsent = all {
-    state.operationStatus == "unknown", state.readbackCurrent,
+    state.operationStatus == "unknown",
     state.currentGeneration == state.permitGeneration,
     state' = { ...state, operationStatus: "absent" },
   }
   action retrySameOperation = all {
     state.operationStatus == "absent", state.operationId == operationFor(state.stage),
+    state.deliveryOpen, state.claimCurrent, state.stage != 1 or state.executionOpen,
     state' = { ...state, operationStatus: "intent", sameOperationRetried: true },
   }
   action adapterClaimsCompletion = all {
@@ -3421,19 +3441,33 @@ module O2HostedWriterModel {
   }
   action reconnect = all {
     state.restarted, not(state.readbackCurrent),
-    state.currentGeneration == state.permitGeneration,
-    state' = { ...state, readbackCurrent: true },
+    state.currentGeneration == state.permitGeneration, state.deliveryOpen,
+    state' = { ...state, readbackCurrent: true, freshReadback: true },
   }
   action resume = all {
-    state.restarted, state.paused, state.readbackCurrent,
+    state.restarted, state.paused, state.readbackCurrent, state.freshReadback,
+    state.deliveryOpen,
     state.currentGeneration == state.permitGeneration,
     state' = { ...state, paused: false },
+  }
+  action expireExecution = all {
+    state.executionOpen,
+    state' = { ...state, executionOpen: false },
+  }
+  action expireDelivery = all {
+    state.deliveryOpen,
+    state' = { ...state, executionOpen: false, deliveryOpen: false },
+  }
+  action loseClaim = all {
+    state.claimCurrent, state.stage > 0,
+    state' = { ...state, claimCurrent: false },
   }
   action hold = state' = state
   action step = any {
     manualStart, recordIntent, dispatch, observeApplied, loseResponse,
     reconcileApplied, observeProvenAbsent, retrySameOperation,
-    adapterClaimsCompletion, restartPaused, reconnect, resume, hold,
+    adapterClaimsCompletion, restartPaused, reconnect, resume,
+    expireExecution, expireDelivery, loseClaim, hold,
   }
   action normalProgressStep =
     if (state.paused) manualStart
@@ -3465,6 +3499,8 @@ module O2HostedWriterModel {
     state.adapterClaimedComplete and not(state.nativeReadbackObserved) implies state.stage < 7,
     state.operationStatus == "unknown" implies not(mayDispatch(state)),
     state.restarted and not(state.readbackCurrent) implies state.paused,
+    state.executionOpen implies state.deliveryOpen,
+    state.restarted and not(state.freshReadback) implies state.paused,
   }
   val reached = state.stage == 7 and state.nativeReadbackObserved
   val unknownReached = state.unknownObserved
