@@ -330,10 +330,7 @@ let private inspectOptimisticProjection root =
             use quintPlan = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification.json")))
             let performanceShard = stringProperty "performanceShard" formalFanout |> Option.defaultValue ""
             let semanticShards = formalFanout.GetProperty("semanticShards").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
-            let expectedSemanticShards =
-                "base" :: (quintPlan.RootElement.GetProperty("formalTests").EnumerateArray()
-                           |> Seq.map (fun item -> item.GetProperty("id").GetString())
-                           |> Seq.filter ((<>) performanceShard) |> Seq.toList)
+            let expectedSemanticShards = "base" :: (quintPlan.RootElement.GetProperty("formalTests").EnumerateArray() |> Seq.map (fun item -> item.GetProperty("id").GetString()) |> Seq.filter ((<>) performanceShard) |> Seq.toList)
             let workflow = File.ReadAllText workflowPath
             [ if stringProperty "schema" plan.RootElement <> Some "fsgg.coordination.optimistic-qualification-plan/1" then
                   yield violation "optimistic-plan-schema" "unsupported"
@@ -343,26 +340,20 @@ let private inspectOptimisticProjection root =
                   yield violation "optimistic-prior-search-bound" "must equal twenty-five"
               if coherent.GetProperty("maxPartitionsPerCandidate").GetInt32() <> 6 then
                   yield violation "optimistic-partition-bound" "must equal six"
-              if formalFanout.GetProperty("logicalPartition").GetInt32() <> 1
-                 || formalFanout.GetProperty("maxConcurrentExecutions").GetInt32() <> 6
-                 || semanticShards.Head <> "base"
-                 || Set.ofList semanticShards <> Set.ofList expectedSemanticShards
-                 || semanticShards.Length <> (semanticShards |> List.distinct |> List.length)
-                 || performanceShard <> "epoch" then
+              if formalFanout.GetProperty("logicalPartition").GetInt32() <> 1 || formalFanout.GetProperty("maxConcurrentExecutions").GetInt32() <> 6
+                 || semanticShards.Head <> "base" || Set.ofList semanticShards <> Set.ofList expectedSemanticShards
+                 || semanticShards.Length <> (semanticShards |> List.distinct |> List.length) || performanceShard <> "epoch" then
                   yield violation "optimistic-formal-fanout" "must preserve partition one, sixteen semantic shards, epoch, and the six-execution bound"
               if boolProperty "failFast" coherent <> Some false || boolProperty "cancelInProgress" coherent <> Some false then
                   yield violation "optimistic-continuation" "coherent validation must continue completely"
               for token in [ "cancel-in-progress: false"; "fail-fast: false"; "max-parallel: 6"; "cron: '17 3 * * *'"; "  prepare:"; "  run-partition:"; "  formal-aggregate:"; "  aggregate:"; "shard: base"; "shard: epoch" ] do
                   if not (workflow.Contains token) then yield violation "optimistic-workflow-projection" token
               for shard in semanticShards @ [ performanceShard ] do
-                  let token = $"- {{ kind: formal, shard: %s{shard} }}"
-                  if workflow.Split(token, StringSplitOptions.None).Length <> 2 then yield violation "optimistic-workflow-formal-schedule" shard
+                  if workflow.Split($"- {{ kind: formal, shard: %s{shard} }}", StringSplitOptions.None).Length <> 2 then yield violation "optimistic-workflow-formal-schedule" shard
               for partition in [ 0; 2; 3; 4; 5 ] do
-                  let token = $"- {{ kind: partition, partition: %d{partition} }}"
-                  if workflow.Split(token, StringSplitOptions.None).Length <> 2 then yield violation "optimistic-workflow-partition-schedule" (string partition)
+                  if workflow.Split($"- {{ kind: partition, partition: %d{partition} }}", StringSplitOptions.None).Length <> 2 then yield violation "optimistic-workflow-partition-schedule" (string partition)
               if workflow.Contains("kind: partition, partition: 1") then yield violation "optimistic-workflow-formal-partition" "partition one must be emitted by formal aggregation" ]
         with error -> [ violation "optimistic-plan-invalid" error.Message ]
-
 let private optionValue name (arguments: string list) =
     arguments
     |> List.tryFindIndex ((=) name)

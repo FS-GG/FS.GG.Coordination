@@ -169,10 +169,13 @@ jobs:
           name: shared-build-${{ needs.prepare.outputs.candidate }}
           path: .
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        if: ${{ matrix.kind == 'formal' }}
+        if: ${{ matrix.kind == 'formal' || matrix.partition == 0 }}
         with:
           name: coherent-formal-toolchain-${{ needs.prepare.outputs.candidate }}
           path: ${{ runner.temp }}/canonical-quint-toolchain
+      - name: Bind the prepared Quint toolchain for architecture tests
+        if: ${{ matrix.kind == 'partition' && matrix.partition == 0 }}
+        run: printf 'FSGG_QUINT_TOOLCHAIN_ARCHIVE=%s\n' '${{ runner.temp }}/canonical-quint-toolchain/toolchain.tar.gz' >> "$GITHUB_ENV"
       - name: Run isolated coherent nonformal partition
         if: ${{ matrix.kind == 'partition' }}
         env:

@@ -23,6 +23,7 @@ obligation=$(dotnet fsi eng/optimistic-validation.fsx -- partition-obligation \
   --partition "$partition")
 case "$obligation" in
   unit|architecture)
+    if [[ "$obligation" == architecture ]]; then source eng/bootstrap-gates/provision-quint.sh; fi
     results="$(mktemp -d "$receipt_root/test-results.XXXXXX")"
     started_ns="$(date +%s%N)"
     project="tests/FS.GG.Coordination.$(if [[ "$obligation" == unit ]]; then printf UnitTests; else printf ArchitectureTests; fi)/FS.GG.Coordination.$(if [[ "$obligation" == unit ]]; then printf UnitTests; else printf ArchitectureTests; fi).fsproj"
