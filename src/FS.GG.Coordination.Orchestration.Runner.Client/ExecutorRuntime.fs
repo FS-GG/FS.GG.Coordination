@@ -142,6 +142,16 @@ type ExecutorRuntime(options:ExecutorRuntimeOptions,clock:TimeProvider) =
                 let existing=File.ReadAllBytes path|>ExecutorWire.parseCommandV2
                 match existing with Ok value when sameAuthority value command->ExistingLaunch|_->ConflictingLaunch
             with _->ConflictingLaunch
+    let matchesDurableLaunch (command:ExecutorCommandV2) =
+        let path=Path.Combine(options.StateRoot,"executor-control",command.AssignmentId.ToString("N"),command.AttemptId.ToString("N"),command.Generation.ToString(CultureInfo.InvariantCulture),"launch-command.json")
+        try
+            let info=FileInfo path
+            if not info.Exists || not(isNull info.LinkTarget) || info.Length<1L || info.Length>int64 ExecutorWire.maximumControlBytes then false
+            else
+                match File.ReadAllBytes path|>ExecutorWire.parseCommandV2 with
+                | Ok launch->launch.Kind="launch" && sameAuthority launch command
+                | Error _->false
+        with _->false
     let findArtifact candidateId =
         match artifacts.TryGetValue candidateId with
         | true,value->Some value
@@ -160,6 +170,18 @@ type ExecutorRuntime(options:ExecutorRuntimeOptions,clock:TimeProvider) =
                         Some value
                     | _->None
                 with _->None
+    let verifiedArtifact (selected:Supervised) candidateId =
+        match findArtifact candidateId with
+        | Some artifact when artifact.Manifest.BaselineObjectId=selected.Manifest.BaselineObjectId ->
+            try
+                let info=FileInfo artifact.BundlePath
+                if not info.Exists || not(isNull info.LinkTarget) || info.Length<>artifact.Manifest.BundleSizeBytes then None
+                else
+                    use stream=File.OpenRead artifact.BundlePath
+                    let digest=SHA256.HashData stream|>Convert.ToHexString|>_.ToLowerInvariant()
+                    if digest=artifact.Manifest.BundleSha256 then Some artifact else None
+            with _ -> None
+        | _ -> None
     let ensureReadiness (value:Supervised) = task {
         match value.Readiness with
         | Some readiness->return readiness
@@ -244,22 +266,33 @@ type ExecutorRuntime(options:ExecutorRuntimeOptions,clock:TimeProvider) =
                             | LaunchAmbiguous reason->do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "launch" "ambiguous" None reason))
                         | NotAuthenticated reason|AuthenticationUnknown reason->do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "launch" "refused" None reason))
                   | "observe"->
-                    match selected.Session with
-                    | None->do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "reconcile" "unknown" None "provider-session-not-observed"))
-                    | Some session->
-                        let! observed=selected.Provider.Observe(session,CancellationToken.None)
-                        match observed with
-                        | Error reason->do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "reconcile" "unknown" (Some session) reason))
-                        | Ok observation->
-                            match observation.Lifecycle,observation.Candidate with
-                            | Succeeded,Some candidate->
-                                match if artifacts.Count>=4 && not(artifacts.ContainsKey candidate.CandidateId) then Error "executor-artifact-capacity-refused" else selected.Inspector.CreateArtifact(candidate,ExecutorWire.maximumContentBytes) with
-                                | Ok artifact->
-                                    artifacts[candidate.CandidateId]<-artifact
-                                    do! writeFrame output (ExecutorWire.encodeArtifactManifest artifact.Manifest)
-                                    do! writeFrame output (ExecutorWire.encodeResponse(observationResponse command selected.Readiness observation))
-                                | Error reason->do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "reconcile" "unknown" (Some session) reason))
-                            | _->do! writeFrame output (ExecutorWire.encodeResponse(observationResponse command selected.Readiness observation))
+                    match ProviderSessionReference.create command.ProviderSessionReference,verifiedArtifact selected command.CandidateId with
+                    | Ok session,Some artifact when matchesDurableLaunch command->
+                        // Keep terminal recovery replayable. A response may be lost after the
+                        // replacement has reconstructed it, so every later exact observation
+                        // continues to use the verified durable artifact instead of an empty
+                        // in-memory provider session table.
+                        let candidate=Some{CandidateId=artifact.Manifest.CandidateId;HeadSha=artifact.Manifest.HeadObjectId;TreeSha=artifact.Manifest.TreeObjectId}
+                        let recovered=response command "session-observation" "Codex" "codex-subscription-exec/1" "unknown" "durable-artifact-recovery" true (ProviderSessionReference.value session) "succeeded" command.RequestedModel command.RequestedEffort command.RequestedModel command.RequestedEffort [] [] (unknownUsage "durable-artifact-recovery") (CostNotApplicable "codex-chatgpt-subscription-no-per-invocation-price") (CostUnknown "broader-monetary-attribution-unavailable") candidate "completed-artifact-recovered-after-runner-replacement"
+                        do! writeFrame output (ExecutorWire.encodeArtifactManifest artifact.Manifest)
+                        do! writeFrame output (ExecutorWire.encodeResponse recovered)
+                    | _->
+                        match selected.Session with
+                        | None->do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "reconcile" "unknown" None "provider-session-not-observed"))
+                        | Some session->
+                            let! observed=selected.Provider.Observe(session,CancellationToken.None)
+                            match observed with
+                            | Error reason->do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "reconcile" "unknown" (Some session) reason))
+                            | Ok observation->
+                                match observation.Lifecycle,observation.Candidate with
+                                | Succeeded,Some candidate->
+                                    match if artifacts.Count>=4 && not(artifacts.ContainsKey candidate.CandidateId) then Error "executor-artifact-capacity-refused" else selected.Inspector.CreateArtifact(candidate,ExecutorWire.maximumContentBytes) with
+                                    | Ok artifact->
+                                        artifacts[candidate.CandidateId]<-artifact
+                                        do! writeFrame output (ExecutorWire.encodeArtifactManifest artifact.Manifest)
+                                        do! writeFrame output (ExecutorWire.encodeResponse(observationResponse command selected.Readiness observation))
+                                    | Error reason->do! writeFrame output (ExecutorWire.encodeOperationOutcome(operation command "reconcile" "unknown" (Some session) reason))
+                                | _->do! writeFrame output (ExecutorWire.encodeResponse(observationResponse command selected.Readiness observation))
                   | "reconcile"->
                     let intent={Schema=ExecutionProtocol.launchSchema;Key={AssignmentId=command.AssignmentId;AttemptId=command.AttemptId;Generation=command.Generation};InputDigest=command.InputDigest;Workspace=Path.Combine(options.WorkspaceRoot,command.AssignmentId.ToString("N"),command.AttemptId.ToString("N"),command.Generation.ToString());Requested={Model=Option.ofObj command.RequestedModel;Effort=Option.ofObj command.RequestedEffort};Limits={Deadline=command.Deadline;MaximumRuntime=TimeSpan.FromSeconds(float command.MaximumRuntimeSeconds);MaximumAttempts=command.MaximumAttempts};RecordedAt=command.RecordedAt}
                     let! _=ensureReadiness selected

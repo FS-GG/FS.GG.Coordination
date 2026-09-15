@@ -139,22 +139,37 @@ type RemoteExecutorProvider(store:IExecutorCommandStore,resolver:IExecutorBindin
         | CommandConflict -> return Error "executor-command-persistence-conflict"
         | CommandRefused reason -> return Error($"executor-command-persistence-refused:{reason}")
         | CommandPersisted _ | CommandDuplicate _ ->
-            let frames=if kind="launch" then [ExecutorWire.encodeInputManifest binding.InputManifest;ExecutorWire.encodeContent {Schema=ExecutorWire.contentSchema;CommandId=commandValue.CommandId;InputDigest=intent.InputDigest;Offset=0L;Final=true;ContentBase64=Convert.ToBase64String binding.InputBytes};ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest;commandBytes] else [commandBytes]
+            let frames=
+                if kind="launch" then
+                    [ExecutorWire.encodeInputManifest binding.InputManifest
+                     ExecutorWire.encodeContent {Schema=ExecutorWire.contentSchema;CommandId=commandValue.CommandId;InputDigest=intent.InputDigest;Offset=0L;Final=true;ContentBase64=Convert.ToBase64String binding.InputBytes}
+                     ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest
+                     commandBytes]
+                else
+                    // A supervised runner may be replaced between observations. Re-send the
+                    // immutable PostgreSQL-bound manifest so the replacement can reconstruct
+                    // the exact workspace authority without replaying the launch or its input.
+                    [ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest;commandBytes]
             let! exchanged=transport.Exchange(frames,token)
             match exchanged with
             | Error reason -> return Error reason
             | Ok value ->
-                value.Frames
-                |>List.choose(fun bytes->ExecutorWire.parseArtifactManifest bytes|>Result.toOption)
-                |>List.iter(fun manifest->if manifest.CandidateId=binding.CandidateId then artifacts[intent.Key]<-manifest)
+                let observedArtifacts=value.Frames|>List.choose(fun bytes->ExecutorWire.parseArtifactManifest bytes|>Result.toOption)
                 let receipts=value.Frames|>List.choose(fun bytes->ExecutorWire.parseReceipt bytes|>Result.toOption)
                 let outcome=value.Frames|>List.choose(fun bytes->ExecutorWire.parseOperationOutcome bytes|>Result.toOption)|>List.tryLast
                 let response=value.Frames|>List.choose(fun bytes->ExecutorWire.parseResponse bytes|>Result.toOption)|>List.tryLast
                 let bound id body=id=commandValue.CommandId && body=commandValue.BodySha256
-                let valid=receipts|>List.forall(fun item->bound item.CommandId item.BodySha256) && outcome|>Option.forall(fun item->bound item.CommandId item.BodySha256) && response|>Option.forall(fun item->bound item.CommandId item.BodySha256)
+                let artifactsBound =
+                    observedArtifacts
+                    |>List.forall(fun manifest->
+                        manifest.CandidateId=binding.CandidateId
+                        && manifest.BaselineObjectId=binding.WorkspaceManifest.BaselineObjectId
+                        && response|>Option.exists(fun item->item.CandidateId=manifest.CandidateId && item.CandidateHeadSha=manifest.HeadObjectId && item.CandidateTreeSha=manifest.TreeObjectId))
+                let valid=artifactsBound && receipts|>List.forall(fun item->bound item.CommandId item.BodySha256) && outcome|>Option.forall(fun item->bound item.CommandId item.BodySha256) && response|>Option.forall(fun item->bound item.CommandId item.BodySha256)
                 let terminal=value.Frames|>List.tryLast
                 if not valid || terminal.IsNone then return Error "executor-readback-binding-refused"
                 else
+                    observedArtifacts|>List.iter(fun manifest->artifacts[intent.Key]<-manifest)
                     let! settled=store.SettleCommand(commandValue.CommandId,terminal.Value,token)
                     return settled |> Result.map(fun ()->outcome,response,value) }
     let readiness intent binding token = task {
