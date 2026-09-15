@@ -18,6 +18,8 @@ let ``lost host retirement is distinct and never fabricates original settlement`
         Assert.False(receipt.OriginalCompletionRecorded)
         Assert.False(receipt.OriginalUsageKnown)
         Assert.Equal(identity.CandidateHead,receipt.CandidateHead)
+        Assert.Equal(observation.NativeCensusDigest,receipt.NativeCensusDigest)
+        Assert.Equal(AdministrativeRetirement.observationDigest identity observation,receipt.ObservationDigest)
         Assert.Equal(receipt.ReceiptDigest,AdministrativeRetirement.receiptDigest receipt)
     | value -> failwithf "unexpected %A" value
 

@@ -24,7 +24,7 @@ type RetirementObservation =
       SubjectExcluded: bool; IssueDisposition: RetirementIssueDisposition }
 
 type AdministrativeRetirementReceipt =
-    { Schema: string; IdentityDigest: string; NativeCensusDigest: string; Disposition: RetirementPullRequestDisposition
+    { Schema: string; IdentityDigest: string; NativeCensusDigest: string; ObservationDigest: string; Disposition: RetirementPullRequestDisposition
       CandidateHead: string; CandidateArchiveDigest: string; BranchFenceRuleId: int64; SubjectExcluded: bool
       OriginalJournalAvailable: bool; OriginalCompletionRecorded: bool; OriginalUsageKnown: bool
       RetiredAt: DateTimeOffset; ReceiptDigest: string }
@@ -67,7 +67,7 @@ module AdministrativeRetirement =
           (match value.IssueDisposition with IssueOpen->"open" | ClosedNotPlanned->"closed-not-planned" | ClosedCompleted->"closed-completed") ] |> join |> sha256
 
     let receiptDigest value =
-        [ value.Schema; value.IdentityDigest; value.NativeCensusDigest; disposition value.Disposition; value.CandidateHead
+        [ value.Schema; value.IdentityDigest; value.NativeCensusDigest; value.ObservationDigest; disposition value.Disposition; value.CandidateHead
           value.CandidateArchiveDigest; string value.BranchFenceRuleId; string value.SubjectExcluded
           string value.OriginalJournalAvailable; string value.OriginalCompletionRecorded; string value.OriginalUsageKnown
           value.RetiredAt.ToUniversalTime().ToString("O") ] |> join |> sha256
@@ -114,7 +114,7 @@ module AdministrativeRetirement =
         validatePreview now maxAge identity observation
         |> Result.map(fun value ->
             let receipt =
-                { Schema=ReceiptSchema; IdentityDigest=identityDigest identity; NativeCensusDigest=observationDigest identity value
+                { Schema=ReceiptSchema; IdentityDigest=identityDigest identity; NativeCensusDigest=value.NativeCensusDigest; ObservationDigest=observationDigest identity value
                   Disposition=value.PullRequestDisposition; CandidateHead=identity.CandidateHead; CandidateArchiveDigest=value.CandidateArchiveDigest
                   BranchFenceRuleId=value.BranchFenceRuleId.Value; SubjectExcluded=true; OriginalJournalAvailable=false
                   OriginalCompletionRecorded=false; OriginalUsageKnown=false; RetiredAt=value.ObservedAt; ReceiptDigest="" }

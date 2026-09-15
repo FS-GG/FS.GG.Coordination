@@ -53,6 +53,7 @@ type AdministrativeRetirementReceipt =
     { Schema: string
       IdentityDigest: string
       NativeCensusDigest: string
+      ObservationDigest: string
       Disposition: RetirementPullRequestDisposition
       CandidateHead: string
       CandidateArchiveDigest: string
