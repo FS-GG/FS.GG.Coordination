@@ -1135,68 +1135,59 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         Assert.True(File.Exists runner,$"packaged runner missing: {runner}")
         let roots names=names|>List.map(fun name->Directory.CreateDirectory(Path.Combine(root,name)).FullName)
         let workspaceRoot,inputRoot,stateRoot,artifactRoot=match roots["workspaces";"inputs";"state";"artifacts"] with [a;b;c;d]->a,b,c,d|_->failwith "roots"
-        let start=ProcessStartInfo(runner,UseShellExecute=false,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true)
-        for argument in ["executor-stdio";"--repository-root";repository;"--workspace-root";workspaceRoot;"--input-root";inputRoot;"--state-root";stateRoot;"--artifact-root";artifactRoot;"--codex-executable";codex;"--executor-binding";"fixture-executor"] do start.ArgumentList.Add argument
-        let startRunner ()=Process.Start start
-        let mutable runnerProcess=startRunner()
-        let mutable runnerError=runnerProcess.StandardError.ReadToEndAsync()
+        // Exercise the installed composition through LocalExecutorTransport. The test-only
+        // proxy replaces the compiled child after forwarding its first artifact frame twice:
+        // once for child loss and once for a lost recovered response. The third child must
+        // replay the durable artifact and complete the same observation.
+        let proxyState=Path.Combine(root,"transport-starts")
+        let proxy=Path.Combine(root,"runner-proxy.py")
+        let quoted value=JsonSerializer.Serialize value
+        let proxyScript=$"""#!/usr/bin/python3
+import json, os, struct, subprocess, sys
+runner={quoted runner}
+counter={quoted proxyState}
+count=(int(open(counter).read()) if os.path.exists(counter) else 0)+1
+open(counter,'w').write(str(count))
+child=subprocess.Popen([runner]+sys.argv[1:],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+def read_frame(stream):
+    header=stream.read(4)
+    if not header: return None
+    if len(header)!=4: raise RuntimeError('short-header')
+    size=struct.unpack('>i',header)[0]
+    body=stream.read(size)
+    if len(body)!=size: raise RuntimeError('short-body')
+    return header,body
+try:
+    while True:
+        while True:
+            frame=read_frame(sys.stdin.buffer)
+            if frame is None: sys.exit(0)
+            header,body=frame
+            child.stdin.write(header+body)
+            value=json.loads(body)
+            if value.get('schema')=='fsgg.orchestration.executor-command/2': break
+        child.stdin.flush()
+        while True:
+            frame=read_frame(child.stdout)
+            if frame is None: sys.exit(21)
+            header,body=frame
+            value=json.loads(body)
+            sys.stdout.buffer.write(header+body);sys.stdout.buffer.flush()
+            schema=value.get('schema')
+            if schema=='fsgg.orchestration.executor-artifact-manifest/1' and count<=2:
+                child.kill();child.wait();sys.exit(0)
+            if schema in ('fsgg.orchestration.executor-response/1','fsgg.orchestration.executor-operation-outcome/1'): break
+finally:
+    if child.poll() is None: child.kill()
+"""
+        File.WriteAllText(proxy,proxyScript)
+        File.SetUnixFileMode(proxy,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
+        let localConfiguration =
+            { RunnerExecutable=proxy;RepositoryRoot=repository;WorkspaceRoot=workspaceRoot;InputRoot=inputRoot
+              StateRoot=stateRoot;ArtifactRoot=artifactRoot;CodexExecutable=codex;ExecutorBinding="fixture-executor" }
+        use localTransport=new LocalExecutorTransport(localConfiguration)
+        let executorTransport=localTransport :> IAuthenticatedExecutorTransport
         let relay=HostExecutorRelay(4,2*1024*1024)
-        use relayStop=new CancellationTokenSource()
-        let mutable relayStage="starting"
-        let mutable runnerReplacedAfterArtifact=false
-        let mutable recoveredArtifactResponseRetried=false
-        let readFrame()=task {
-            let header=Array.zeroCreate<byte> 4
-            do! runnerProcess.StandardOutput.BaseStream.ReadExactlyAsync header
-            let length=BinaryPrimitives.ReadInt32BigEndian header
-            let bytes=Array.zeroCreate<byte> length
-            do! runnerProcess.StandardOutput.BaseStream.ReadExactlyAsync bytes
-            return bytes }
-        let relayLoop=task {
-            while not relayStop.IsCancellationRequested do
-                let! pending=relay.Poll(relayStop.Token)
-                match pending with
-                | None->()
-                | Some request->
-                    relayStage<-"writing-request"
-                    for frame in request.Frames do
-                        let header=Array.zeroCreate<byte> 4
-                        BinaryPrimitives.WriteInt32BigEndian(header,frame.Length)
-                        do! runnerProcess.StandardInput.BaseStream.WriteAsync header
-                        do! runnerProcess.StandardInput.BaseStream.WriteAsync frame
-                    do! runnerProcess.StandardInput.BaseStream.FlushAsync()
-                    relayStage<-"reading-response"
-                    let frames=ResizeArray<byte array>()
-                    let mutable terminal=false
-                    while not terminal do
-                        let! frame=readFrame()
-                        frames.Add frame
-                        relayStage <- $"reading-response-{frames.Count}"
-                        terminal<-(ExecutorWire.parseResponse frame|>Result.isOk)||(ExecutorWire.parseOperationOutcome frame|>Result.isOk)
-                    if not runnerReplacedAfterArtifact && frames|>Seq.exists(fun frame->ExecutorWire.parseArtifactManifest frame|>Result.isOk) then
-                        // Simulate the production failure precisely: the first runner has
-                        // durably created the candidate artifact, but is replaced before its
-                        // terminal response reaches Host. The relay leaves the request pending
-                        // so the replacement child receives the same observation.
-                        runnerReplacedAfterArtifact<-true
-                        try runnerProcess.Kill(true) with _->()
-                        try do! runnerProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds 2.) with _->()
-                        try
-                            let! _=runnerError.WaitAsync(TimeSpan.FromSeconds 2.)
-                            ()
-                        with _->()
-                        runnerProcess.Dispose()
-                        runnerProcess<-startRunner()
-                        runnerError<-runnerProcess.StandardError.ReadToEndAsync()
-                        relayStage<-"runner-replaced-after-artifact"
-                    elif runnerReplacedAfterArtifact && not recoveredArtifactResponseRetried && frames|>Seq.exists(fun frame->ExecutorWire.parseArtifactManifest frame|>Result.isOk) then
-                        // Drop the replacement's first reconstructed response too. The same
-                        // pending observation must be replayable through durable settlement.
-                        recoveredArtifactResponseRetried<-true
-                        relayStage<-"recovered-artifact-response-retried"
-                    else
-                        relay.Complete(request.CommandId,List.ofSeq frames)|>Result.defaultWith failwith
-                        relayStage<-"completed" }
         use firstShutdown=new CancellationTokenSource()
         let crashAfterSettlement =
             { new IJournalStore with
@@ -1224,7 +1215,7 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
               StoreId="fixture";BackupIdentity=Guid.NewGuid().ToString();MinimumGenerationFence=0L;PermitId=Guid.NewGuid()
               PilotPrincipalId="pilot";WorkItemId=workItem;GitHub=None;LocalExecutor=None;RequestTimeout=TimeSpan.FromSeconds 10.;MaximumConcurrentRequests=4 }
         use firstActorSystem=ActorSystem.Create("main-composed-before-crash")
-        let firstAdmission=MainProductionAdmission(firstActorSystem,TimeProvider.System,crashAfterSettlement,candidates,executions,workItem,"pilot",github,relay,firstShutdown.Token)
+        let firstAdmission=MainProductionAdmission(firstActorSystem,TimeProvider.System,crashAfterSettlement,candidates,executions,workItem,"pilot",github,executorTransport,firstShutdown.Token)
         let invalidPreparation={preparation with Route={preparation.Route with BranchRef="refs/heads/fsgg/not-pilot"}}
         let! invalidAdmission=(firstAdmission :> IMainRouteAdmissionHandler).Admit(MainRouteAdmission.encode (Guid.NewGuid()) invalidPreparation,CancellationToken.None)
         Assert.Equal(Error "main-route-admission-route-refused",invalidAdmission)
@@ -1272,7 +1263,7 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         // must create the next intent without replaying the external claim.
         use actorSystem=ActorSystem.Create("main-composed-after-crash")
         use shutdown=new CancellationTokenSource()
-        let admission=MainProductionAdmission(actorSystem,TimeProvider.System,workItems,candidates,executions,workItem,"pilot",github,relay,shutdown.Token)
+        let admission=MainProductionAdmission(actorSystem,TimeProvider.System,workItems,candidates,executions,workItem,"pilot",github,executorTransport,shutdown.Token)
         let server=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore workItems) relay (admission :> IMainRouteAdmissionHandler) shutdown.Token
         do! Task.Delay 50
         let! readmitted=admit()
@@ -1373,10 +1364,10 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         let! dbPending=(executions :> IExecutorCommandStore).ReadPending(4,CancellationToken.None)
         let! recovery=running.Workflow.RecoverContinuation(preparation,CancellationToken.None)
         let recoveryText=sprintf "%A" recovery
-        let stderr=if runnerError.IsCompletedSuccessfully then runnerError.Result else "runner-stderr-pending"
-        Assert.True(complete,$"seven-effect route did not reach native delivery; effectLoop={running.EffectLoop.Status}/{running.EffectLoop.Exception}; checks={checkReads}/released={checksReleased}; relay={relayLoop.Status}/{relayStage}; pending={relay.PendingCount}; dbPending={dbPending.Length}; recovery={recoveryText}; runnerExited={runnerProcess.HasExited}; stderr={stderr}; execution={executionState}; state={routeState}")
-        Assert.True(runnerReplacedAfterArtifact,"production composition did not replace the runner after durable artifact creation")
-        Assert.True(recoveredArtifactResponseRetried,"production composition did not replay the replacement's recovered artifact response")
+        let transportStarts=if File.Exists proxyState then File.ReadAllText proxyState else "0"
+        Assert.True(complete,$"seven-effect route did not reach native delivery; effectLoop={running.EffectLoop.Status}/{running.EffectLoop.Exception}; checks={checkReads}/released={checksReleased}; transportStarts={transportStarts}; dbPending={dbPending.Length}; recovery={recoveryText}; execution={executionState}; state={routeState}")
+        Assert.True(File.Exists proxyState,"production composition did not start the local executor transport")
+        Assert.True(Int32.Parse(File.ReadAllText proxyState)>=3,"production composition did not replace and replay the recovered artifact response")
         Assert.Equal(3,mutationCount)
         Assert.Equal(1,mergePutCount)
         Assert.True(checkReads>=2,"pending routine eligibility was not rechecked before the first merge")
@@ -1402,10 +1393,6 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         Assert.True(cancelReceipt.RootElement.GetProperty("requestPersisted").GetBoolean())
         Assert.True(cancelReceipt.RootElement.GetProperty("processTerminationObserved").GetBoolean(),cancelReceipt.RootElement.GetRawText())
         shutdown.Cancel()
-        relayStop.Cancel()
-        try runnerProcess.Kill(true) with _->()
-        runnerProcess.Dispose()
-        try do! relayLoop.WaitAsync(TimeSpan.FromSeconds 2.) with _->()
         try do! server.WaitAsync(TimeSpan.FromSeconds 2.) with _->()
         do! actorSystem.Terminate()
     }

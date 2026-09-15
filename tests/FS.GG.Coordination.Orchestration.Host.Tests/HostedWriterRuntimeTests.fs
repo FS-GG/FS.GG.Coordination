@@ -417,6 +417,9 @@ let private localRunnerFixture (mode:string) =
           "    if mode=='sleep': time.sleep(30)"
           "    command_id=value['commandId']"
           "    if mode=='stale': command_id='ffffffff-ffff-ffff-ffff-ffffffffffff'"
+          "    if mode.startswith('artifact'):"
+          "        artifact=open(os.path.join(state,'artifact.json'),'rb').read()"
+          "        sys.stdout.buffer.write(struct.pack('>i',len(artifact))+artifact); sys.stdout.buffer.flush()"
           "    response={'schema':'fsgg.orchestration.executor-operation-outcome/1','commandId':command_id,'bodySha256':value['bodySha256'],'operation':'reconcile','disposition':'unknown','providerSessionReference':None,'observedAt':'2026-09-14T00:00:00+00:00','reason':'fixture'}"
           "    encoded=json.dumps(response,separators=(',',':')).encode()"
           "    if mode=='malformed': encoded=b'{'"
@@ -458,6 +461,53 @@ let ``local executor child restarts after exit and refuses stale or malformed ou
     File.WriteAllText(Path.Combine(root,"state/mode"),"malformed")
     let! malformed=(transport :> IAuthenticatedExecutorTransport).Exchange([ExecutorWire.encodeCommandV2(Fixture.executorCommand(Guid.NewGuid()))],CancellationToken.None)
     Assert.Equal(Error "executor-child-stale-or-malformed-frame-refused",malformed) }
+
+[<Fact>]
+let ``local executor accepts a bound historical artifact before the current terminal frame`` () = task {
+    let root,_,configuration=localRunnerFixture "artifact"
+    use transport=new LocalExecutorTransport(configuration)
+    let command=Fixture.executorCommand(Guid.NewGuid())
+    let workspace =
+        { Schema=ExecutorWire.workspaceManifestSchema;Workspace="pilot";RepositoryBinding="FS-GG/.github"
+          BaselineObjectId=String.replicate 40 "a";AllowedPaths=[|"docs/item.md"|]
+          Validations=[|"git-diff-check"|];InputDigest=command.InputDigest }
+    let unsigned =
+        { Schema=ExecutorWire.artifactManifestSchema;CommandId=Guid.NewGuid();CandidateId=command.CandidateId
+          BaselineObjectId=workspace.BaselineObjectId;HeadObjectId=String.replicate 40 "b";TreeObjectId=String.replicate 40 "c"
+          BundleSha256=String.replicate 64 "d";BundleSizeBytes=741L;ManifestSha256="";ChunkBytes=1024 }
+    let artifact={unsigned with ManifestSha256=ExecutorWire.artifactManifestDigest unsigned}
+    File.WriteAllBytes(Path.Combine(root,"state/artifact.json"),ExecutorWire.encodeArtifactManifest artifact)
+    let request=[ExecutorWire.encodeWorkspaceManifest workspace;ExecutorWire.encodeCommandV2 command]
+    let! result=(transport :> IAuthenticatedExecutorTransport).Exchange(request,CancellationToken.None)
+    let frames=result|>Result.defaultWith failwith|>_.Frames
+    Assert.Equal(2,frames.Length)
+    Assert.Equal(artifact,frames[0]|>ExecutorWire.parseArtifactManifest|>Result.defaultWith failwith)
+    let terminal=frames[1]|>ExecutorWire.parseOperationOutcome|>Result.defaultWith failwith
+    Assert.Equal(command.CommandId,terminal.CommandId)
+    Assert.Equal(command.BodySha256,terminal.BodySha256) }
+
+[<Theory>]
+[<InlineData(true,false)>]
+[<InlineData(false,true)>]
+let ``local executor refuses a historical artifact outside the current candidate and baseline`` wrongCandidate wrongBaseline = task {
+    let root,_,configuration=localRunnerFixture "artifact"
+    use transport=new LocalExecutorTransport(configuration)
+    let command=Fixture.executorCommand(Guid.NewGuid())
+    let workspace =
+        { Schema=ExecutorWire.workspaceManifestSchema;Workspace="pilot";RepositoryBinding="FS-GG/.github"
+          BaselineObjectId=String.replicate 40 "a";AllowedPaths=[|"docs/item.md"|]
+          Validations=[|"git-diff-check"|];InputDigest=command.InputDigest }
+    let unsigned =
+        { Schema=ExecutorWire.artifactManifestSchema;CommandId=Guid.NewGuid()
+          CandidateId=(if wrongCandidate then Guid.NewGuid() else command.CandidateId)
+          BaselineObjectId=(if wrongBaseline then String.replicate 40 "e" else workspace.BaselineObjectId)
+          HeadObjectId=String.replicate 40 "b";TreeObjectId=String.replicate 40 "c"
+          BundleSha256=String.replicate 64 "d";BundleSizeBytes=741L;ManifestSha256="";ChunkBytes=1024 }
+    let artifact={unsigned with ManifestSha256=ExecutorWire.artifactManifestDigest unsigned}
+    File.WriteAllBytes(Path.Combine(root,"state/artifact.json"),ExecutorWire.encodeArtifactManifest artifact)
+    let request=[ExecutorWire.encodeWorkspaceManifest workspace;ExecutorWire.encodeCommandV2 command]
+    let! result=(transport :> IAuthenticatedExecutorTransport).Exchange(request,CancellationToken.None)
+    Assert.Equal(Error "executor-child-stale-or-malformed-frame-refused",result) }
 
 [<Fact>]
 let ``local executor cancellation terminates child and permits clean restart`` () = task {
