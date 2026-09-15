@@ -44,7 +44,7 @@ for id in "${semantic[@]}" "$performance"; do
 done
 printf '{"schema":"fsgg.coordination.canonical-quint-performance/1","outcome":"passed","shardCount":16,"epochBudgetMs":105000}\n' > "$FSGG_FORMAL_FRAGMENT_ROOT/coherent-formal-fragment-$candidate-$performance/performance.json"
 
-run_validate() { (cd "$repo" && bash eng/bootstrap-gates/optimistic-aggregate-formal.sh validate-only) >/dev/null 2>&1; }
+run_validate() { (cd "$repo" && bash eng/optimistic-aggregate-formal.sh validate-only) >/dev/null 2>&1; }
 run_validate
 
 missing="$FSGG_FORMAL_FRAGMENT_ROOT/coherent-formal-fragment-$candidate-${semantic[1]}"
@@ -72,7 +72,7 @@ sed -i "s/$formal_digest/$(printf 'd%.0s' {1..64})/g" "$base_receipt"
 if run_validate; then echo "stale canonical base was accepted" >&2; exit 1; fi
 sed -i "s/$(printf 'd%.0s' {1..64})/$formal_digest/g" "$base_receipt"
 
-(cd "$repo" && bash eng/bootstrap-gates/optimistic-aggregate-formal.sh formal-only) >/dev/null
+(cd "$repo" && bash eng/optimistic-aggregate-formal.sh formal-only) >/dev/null
 test -s "$FSGG_FORMAL_OUTPUT_ROOT/qualification.json"
 test -s "$FSGG_FORMAL_OUTPUT_ROOT/accounting.json"
 

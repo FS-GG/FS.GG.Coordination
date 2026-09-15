@@ -284,7 +284,7 @@ let ``hosted partition scripts use typed receipts and complete suites`` () =
     Assert.Contains("eng/optimistic-parallel-validation.yml.template", prepare)
     Assert.Contains("eng/generate-optimistic-validation-workflow.fsx", prepare)
     Assert.Contains("eng/bootstrap-gates/optimistic-classify.sh", prepare)
-    Assert.Contains("eng/bootstrap-gates/optimistic-aggregate-formal.sh", prepare)
+    Assert.Contains("eng/optimistic-aggregate-formal.sh", prepare)
     Assert.Contains("eng/validate-test-census.py", prepare)
     Assert.Contains("eng/bootstrap-gates/canonical-quint-prepare.sh", prepare)
     Assert.Contains("eng/bootstrap-gates/canonical-quint-shard.sh", prepare)

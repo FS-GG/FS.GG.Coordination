@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 : "${GH_TOKEN:?GH_TOKEN is required}"
-root="${RUNNER_TEMP:?RUNNER_TEMP is required}/optimistic-selection"
-mkdir -p "$root"
-current="${RUNNER_TEMP}/optimistic-validation/candidate-obligation.json"
-candidate="$(jq -er '.candidate' "$current")"
-current_plan="${RUNNER_TEMP}/optimistic-validation/partition-plan.json"
-current_plan_sha="$(jq -er '.qualificationPlanSha256' "$current_plan")"
-candidate_limit="$(jq -er '.selection.priorAggregateCandidateLimit' eng/optimistic-qualification-plan.json)"
-test "$candidate_limit" -eq 25
-repository="${GITHUB_REPOSITORY:?repository required}"
-args=(classify --obligation "$current" --current-plan "$current_plan" --output "$root/selection.json")
-stale_diagnostics=0
+root="${RUNNER_TEMP:?RUNNER_TEMP is required}/optimistic-selection"; mkdir -p "$root"
+current="${RUNNER_TEMP}/optimistic-validation/candidate-obligation.json"; candidate="$(jq -er '.candidate' "$current")"
+current_plan="${RUNNER_TEMP}/optimistic-validation/partition-plan.json"; current_plan_sha="$(jq -er '.qualificationPlanSha256' "$current_plan")"
+candidate_limit="$(jq -er '.selection.priorAggregateCandidateLimit' eng/optimistic-qualification-plan.json)"; test "$candidate_limit" -eq 25
+repository="${GITHUB_REPOSITORY:?repository required}"; args=(classify --obligation "$current" --current-plan "$current_plan" --output "$root/selection.json"); stale_diagnostics=0
 skip_prior() {
   if [[ $stale_diagnostics -lt 3 ]]; then
     echo "qualification prior skipped: $1" >&2

@@ -188,7 +188,7 @@ jobs:
           FSGG_QUINT_SHARD: ${{ matrix.shard }}
           FSGG_QUINT_TOOLCHAIN_ARCHIVE: ${{ runner.temp }}/canonical-quint-toolchain/toolchain.tar.gz
           NUGET_PACKAGES: ${{ runner.temp }}/nuget-formal-${{ matrix.shard }}
-        run: bash eng/bootstrap-gates/optimistic-run-formal-fragment.sh
+        run: bash eng/optimistic-run-formal-fragment.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: ${{ always() && matrix.kind == 'partition' }}
         with:
@@ -221,7 +221,7 @@ jobs:
           name: candidate-obligation-${{ needs.prepare.outputs.candidate }}
           path: ${{ runner.temp }}/optimistic-validation
       - name: Aggregate a complete candidate-bound formal partition
-        run: bash eng/bootstrap-gates/optimistic-aggregate-formal.sh
+        run: bash eng/optimistic-aggregate-formal.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: ${{ always() }}
         with:
