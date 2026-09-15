@@ -75,8 +75,14 @@ type LocalExecutorTransport(configuration:LocalExecutorConfiguration, ?maximumAg
         && frames|>List.forall(fun frame->not(isNull frame)&&frame.Length>0&&frame.Length<=2*ExecutorWire.maximumContentBytes)
         && frames|>List.sumBy(fun frame->int64 frame.Length)<=int64 maximumAggregateBytes
 
-    let commandId frames =
-        frames|>List.tryLast|>Option.bind(fun frame->ExecutorWire.parseCommandV2 frame|>Result.toOption)|>Option.map _.CommandId
+    let command frames =
+        frames|>List.tryLast|>Option.bind(fun frame->ExecutorWire.parseCommandV2 frame|>Result.toOption)
+
+    let workspaceBaseline frames =
+        frames
+        |>List.choose(fun frame->ExecutorWire.parseWorkspaceManifest frame|>Result.toOption)
+        |>List.tryExactlyOne
+        |>Option.map _.BaselineObjectId
 
     let frameCommandId (bytes:byte array) =
         try
@@ -87,6 +93,13 @@ type LocalExecutorTransport(configuration:LocalExecutorConfiguration, ?maximumAg
         with :? JsonException -> None
 
     let terminal bytes = Result.isOk(ExecutorWire.parseResponse bytes) || Result.isOk(ExecutorWire.parseOperationOutcome bytes)
+
+    let responseFrameBound expected candidate baseline bytes =
+        match ExecutorWire.parseArtifactManifest bytes with
+        | Ok manifest ->
+            manifest.CandidateId=candidate
+            && baseline|>Option.exists((=) manifest.BaselineObjectId)
+        | Error _ -> frameCommandId bytes=Some expected
 
     let writeFrame (stream:Stream) (bytes:byte array) token = task {
         let header=Array.zeroCreate<byte> 4
@@ -105,9 +118,11 @@ type LocalExecutorTransport(configuration:LocalExecutorConfiguration, ?maximumAg
         if disposed then return Error "executor-child-disposed"
         elif not(boundedRequest frames) then return Error "executor-child-request-bounds-refused"
         else
-            match commandId frames with
+            match command frames with
             | None -> return Error "executor-child-command-refused"
-            | Some expected ->
+            | Some commandValue ->
+                let expected=commandValue.CommandId
+                let baseline=workspaceBaseline frames
                 try
                     do! gate.WaitAsync token
                     let! result = task {
@@ -126,9 +141,8 @@ type LocalExecutorTransport(configuration:LocalExecutorConfiguration, ?maximumAg
                                     raise(InvalidDataException "executor-child-response-bounds-refused")
                                 let bytes=Array.zeroCreate<byte> size
                                 do! readExact childProcess.StandardOutput.BaseStream bytes token
-                                match frameCommandId bytes with
-                                | Some actual when actual=expected -> ()
-                                | _ -> raise(InvalidDataException "executor-child-stale-or-malformed-frame-refused")
+                                if not(responseFrameBound expected commandValue.CandidateId baseline bytes) then
+                                    raise(InvalidDataException "executor-child-stale-or-malformed-frame-refused")
                                 output.Add bytes;total<-total+size
                                 complete<-terminal bytes
                             return Ok{Frames=List.ofSeq output}
