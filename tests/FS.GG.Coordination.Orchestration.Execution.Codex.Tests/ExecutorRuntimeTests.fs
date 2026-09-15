@@ -512,6 +512,29 @@ type ExecutorRuntimeTests() =
             if artifact.IsNone then do! Threading.Tasks.Task.Delay 10
         Assert.True(artifact.IsSome,"candidate artifact was not observed")
         let candidateArtifact=artifact.Value
+        let replacement=ExecutorRuntime(options,TimeProvider.System)
+        let replacementUnsigned={launch with CommandId=Guid.NewGuid();BodySha256="";Kind="observe";ProviderSessionReference=started.ProviderSessionReference}
+        let replacementObserve={replacementUnsigned with BodySha256=ExecutorWire.commandV2Digest replacementUnsigned}
+        use replacementInput=new MemoryStream(RuntimeFixture.frames [|manifestBytes;ExecutorWire.encodeCommandV2 replacementObserve|])
+        use replacementOutput=new MemoryStream()
+        do! replacement.Run(replacementInput,replacementOutput,CancellationToken.None)
+        let replacementFrames=RuntimeFixture.readFrames(replacementOutput.ToArray())
+        let recoveredManifest=replacementFrames|>List.pick(fun frame->ExecutorWire.parseArtifactManifest frame|>Result.toOption)
+        let recoveredResponse=replacementFrames|>List.pick(fun frame->ExecutorWire.parseResponse frame|>Result.toOption)
+        Assert.Equal(candidateArtifact.ManifestSha256,recoveredManifest.ManifestSha256)
+        Assert.Equal(started.ProviderSessionReference,recoveredResponse.ProviderSessionReference)
+        Assert.Equal("succeeded",recoveredResponse.Lifecycle)
+        Assert.Equal(candidateArtifact.CandidateId,recoveredResponse.CandidateId)
+        Assert.Equal("completed-artifact-recovered-after-runner-replacement",recoveredResponse.Detail)
+        let replayUnsigned={replacementObserve with CommandId=Guid.NewGuid();BodySha256=""}
+        let replayObserve={replayUnsigned with BodySha256=ExecutorWire.commandV2Digest replayUnsigned}
+        use replayObserveInput=new MemoryStream(RuntimeFixture.frames [|manifestBytes;ExecutorWire.encodeCommandV2 replayObserve|])
+        use replayObserveOutput=new MemoryStream()
+        do! replacement.Run(replayObserveInput,replayObserveOutput,CancellationToken.None)
+        let replayResponse=RuntimeFixture.readFrames(replayObserveOutput.ToArray())|>List.pick(fun frame->ExecutorWire.parseResponse frame|>Result.toOption)
+        Assert.Equal(recoveredResponse.ProviderSessionReference,replayResponse.ProviderSessionReference)
+        Assert.Equal(recoveredResponse.CandidateId,replayResponse.CandidateId)
+        Assert.Equal("completed-artifact-recovered-after-runner-replacement",replayResponse.Detail)
         let unsigned={launch with CommandId=Guid.NewGuid();BodySha256="";Kind="content-read";ArtifactDigest=candidateArtifact.BundleSha256;ContentOffset=0L;ContentLength=int candidateArtifact.BundleSizeBytes}
         let read={unsigned with BodySha256=ExecutorWire.commandV2Digest unsigned}
         use readInput=new MemoryStream(RuntimeFixture.frames [|ExecutorWire.encodeCommandV2 read|])

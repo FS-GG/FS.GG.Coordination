@@ -1137,11 +1137,14 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         let workspaceRoot,inputRoot,stateRoot,artifactRoot=match roots["workspaces";"inputs";"state";"artifacts"] with [a;b;c;d]->a,b,c,d|_->failwith "roots"
         let start=ProcessStartInfo(runner,UseShellExecute=false,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true)
         for argument in ["executor-stdio";"--repository-root";repository;"--workspace-root";workspaceRoot;"--input-root";inputRoot;"--state-root";stateRoot;"--artifact-root";artifactRoot;"--codex-executable";codex;"--executor-binding";"fixture-executor"] do start.ArgumentList.Add argument
-        use runnerProcess=Process.Start start
-        let runnerError=runnerProcess.StandardError.ReadToEndAsync()
+        let startRunner ()=Process.Start start
+        let mutable runnerProcess=startRunner()
+        let mutable runnerError=runnerProcess.StandardError.ReadToEndAsync()
         let relay=HostExecutorRelay(4,2*1024*1024)
         use relayStop=new CancellationTokenSource()
         let mutable relayStage="starting"
+        let mutable runnerReplacedAfterArtifact=false
+        let mutable recoveredArtifactResponseRetried=false
         let readFrame()=task {
             let header=Array.zeroCreate<byte> 4
             do! runnerProcess.StandardOutput.BaseStream.ReadExactlyAsync header
@@ -1170,8 +1173,30 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
                         frames.Add frame
                         relayStage <- $"reading-response-{frames.Count}"
                         terminal<-(ExecutorWire.parseResponse frame|>Result.isOk)||(ExecutorWire.parseOperationOutcome frame|>Result.isOk)
-                    relay.Complete(request.CommandId,List.ofSeq frames)|>Result.defaultWith failwith
-                    relayStage<-"completed" }
+                    if not runnerReplacedAfterArtifact && frames|>Seq.exists(fun frame->ExecutorWire.parseArtifactManifest frame|>Result.isOk) then
+                        // Simulate the production failure precisely: the first runner has
+                        // durably created the candidate artifact, but is replaced before its
+                        // terminal response reaches Host. The relay leaves the request pending
+                        // so the replacement child receives the same observation.
+                        runnerReplacedAfterArtifact<-true
+                        try runnerProcess.Kill(true) with _->()
+                        try do! runnerProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds 2.) with _->()
+                        try
+                            let! _=runnerError.WaitAsync(TimeSpan.FromSeconds 2.)
+                            ()
+                        with _->()
+                        runnerProcess.Dispose()
+                        runnerProcess<-startRunner()
+                        runnerError<-runnerProcess.StandardError.ReadToEndAsync()
+                        relayStage<-"runner-replaced-after-artifact"
+                    elif runnerReplacedAfterArtifact && not recoveredArtifactResponseRetried && frames|>Seq.exists(fun frame->ExecutorWire.parseArtifactManifest frame|>Result.isOk) then
+                        // Drop the replacement's first reconstructed response too. The same
+                        // pending observation must be replayable through durable settlement.
+                        recoveredArtifactResponseRetried<-true
+                        relayStage<-"recovered-artifact-response-retried"
+                    else
+                        relay.Complete(request.CommandId,List.ofSeq frames)|>Result.defaultWith failwith
+                        relayStage<-"completed" }
         use firstShutdown=new CancellationTokenSource()
         let crashAfterSettlement =
             { new IJournalStore with
@@ -1350,6 +1375,8 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         let recoveryText=sprintf "%A" recovery
         let stderr=if runnerError.IsCompletedSuccessfully then runnerError.Result else "runner-stderr-pending"
         Assert.True(complete,$"seven-effect route did not reach native delivery; effectLoop={running.EffectLoop.Status}/{running.EffectLoop.Exception}; checks={checkReads}/released={checksReleased}; relay={relayLoop.Status}/{relayStage}; pending={relay.PendingCount}; dbPending={dbPending.Length}; recovery={recoveryText}; runnerExited={runnerProcess.HasExited}; stderr={stderr}; execution={executionState}; state={routeState}")
+        Assert.True(runnerReplacedAfterArtifact,"production composition did not replace the runner after durable artifact creation")
+        Assert.True(recoveredArtifactResponseRetried,"production composition did not replay the replacement's recovered artifact response")
         Assert.Equal(3,mutationCount)
         Assert.Equal(1,mergePutCount)
         Assert.True(checkReads>=2,"pending routine eligibility was not rechecked before the first merge")
@@ -1377,6 +1404,7 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
         shutdown.Cancel()
         relayStop.Cancel()
         try runnerProcess.Kill(true) with _->()
+        runnerProcess.Dispose()
         try do! relayLoop.WaitAsync(TimeSpan.FromSeconds 2.) with _->()
         try do! server.WaitAsync(TimeSpan.FromSeconds 2.) with _->()
         do! actorSystem.Terminate()
