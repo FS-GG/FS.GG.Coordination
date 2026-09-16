@@ -130,7 +130,7 @@ let generatedMutation =
             8
     | GitHubLifecycleProjectionControl.QuintAndPrerequisite ->
         receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.6"
-        && sha256 quintPath = "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90"
+        && sha256 quintPath = "cf464a5206981dbf99b5ece74e284046f19b7f0431087fc38d42963541d892bd"
 
 let independentMutation =
     function

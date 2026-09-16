@@ -1,6 +1,6 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; C0 merged; C1 implementation in progress
+Status: accepted design; C0 and C1 merged; C2 foundation implemented
 
 Decision date: 2026-09-16
 
@@ -309,7 +309,7 @@ origin. No Choreo bytes are added in C0.
 - [x] Add positive and mutation architecture tests for copied bytes, commit/hash changes, missing license, local
   `.qnt`, and forbidden network fetching.
 - [x] Add a minimal imported smoke module and typecheck/run it with Quint 0.32.0 in the canonical preparation path.
-- [ ] Confirm all existing nineteen formal workloads and published-kernel architecture tests remain unchanged.
+- [x] Confirm all existing nineteen formal workloads and published-kernel architecture tests remain unchanged.
 
 Exit evidence: deterministic offline extraction, exact hashes, smoke run, full architecture tests, and no formal
 catalog switch.
@@ -325,9 +325,9 @@ when all nineteen independent shards contend for hosted-runner capacity.
 
 ### C2 — implement and review the four-process model
 
-- [ ] Add typed identities, local process states, message payloads, and the unordered message soup.
-- [ ] Implement Host, Journal, Runner, and GitHubProvider listeners incrementally, typechecking each slice.
-- [ ] Add the seven effect kinds through one parameteric protocol rather than copied transition families.
+- [x] Add typed identities, local process states, message payloads, and the unordered message soup.
+- [x] Implement the non-faulting Host, Journal, Runner, and GitHubProvider listener slice and typecheck it.
+- [x] Add the seven effect kinds through one parameteric protocol rather than copied transition families.
 - [ ] Add `legacyProjection`, retained safety invariants, explicit progress assumptions, and per-listener witnesses.
 - [ ] Run small randomized exploration after every participant, then bounded invariants and all named scenarios.
 - [ ] Conduct a structural/runtime model review: dead actions, vacuous invariants, unconstrained messages, accidental
@@ -335,6 +335,21 @@ when all nineteen independent shards contend for hosted-runner capacity.
 
 Exit evidence: model-review checklist, typecheck, randomized runs, bounded checks within an initial measured budget,
 and traceable coverage for every message/listener.
+
+C2 foundation evidence (2026-09-16): `O2HostedWriterChoreoModel` closes Choreo's string process carrier to four
+constants, then gives each process a tagged local-state variant. This carrier choice is required because the pinned
+Choreo module has global state and can be instantiated only once in the canonical combined source; it does not
+weaken the closed four-process set. Nine typed message variants traverse an unordered per-process set and are
+removed only by an explicit `Consume` custom effect. The happy-path listener chain has separate request/reply
+steps for durable intent, dispatch, external application, durable observation, and Host settlement. `ProcessWork`
+routes to `Runner`; the other six effect kinds route to `GitHubProvider` through the same parameteric transition.
+The stable C1 smoke entry point now executes this complete chain.
+
+Exact Quint 0.32.0 evidence used the accepted binary SHA-256
+`939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f`: typecheck passed; all seven named effect
+witnesses and the smoke witness each passed 10,000 executions; and seed `0xC2F0` completed 200 samples of 30 steps
+against `safety` without a violation. This is foundation evidence, not the C2 exit: fault listeners, projection,
+progress assumptions, negative witnesses, bounded checking, and the structural/runtime review remain unchecked.
 
 ### C3 — make Quint traces the executable contract
 

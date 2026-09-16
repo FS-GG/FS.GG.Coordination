@@ -631,7 +631,7 @@ else
         | ExactPinsReplay -> GitHubImmutableExecutionPinsQualification.verify report.Seal snapshot = Ok report
         | QuintPinsUnchanged ->
             sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) =
-                "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90"
+                "cf464a5206981dbf99b5ece74e284046f19b7f0431087fc38d42963541d892bd"
         | NoPinsMutationSurface
         | NoWorkflowPublicationSurface ->
             let surface =

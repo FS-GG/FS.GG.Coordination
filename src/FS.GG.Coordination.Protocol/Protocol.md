@@ -4937,23 +4937,120 @@ module choreo {
 }
 // END PINNED quint-co/choreo choreo.qnt
 
-module ChoreoSourcePinSmoke {
+// C2 foundation: the hosted-writer boundary as four independently scheduled authorities.
+// This first slice deliberately models only the non-faulting append/dispatch/apply/settle
+// path. Fault injection, restart gates, reconciliation, and legacy projection are added by
+// the remaining C2 checkpoints; the types and message boundaries below are their stable base.
+module O2HostedWriterChoreoModel {
+  import basicSpells.*
   import choreo(processes = PROCESSES) as choreo
 
-  type Message = PinPing | PinUnused
+  // Choreo's pinned module is instantiated once per combined source. The C1 smoke uses
+  // string process identifiers, so the production-shaped model retains that carrier and
+  // closes it to these four typed constants.
+  type Process = str
+  type EffectKind = Claim | ProcessWork | Candidate | Branch | PullRequest | Merge | NativeReadback
+  type JournalStatus = JournalEmpty | Intent | Dispatching | Applied
+  type HostPhase = HostReady | AwaitingIntent | AwaitingDispatch | AwaitingEffect | AwaitingApplied
+
+  type OperationRef = {
+    route: str,
+    attempt: str,
+    operation: str,
+    effectKind: EffectKind,
+    candidate: str,
+    repository: str,
+    generation: int,
+    session: str,
+    revision: int,
+  }
+
+  type HostState = {
+    phase: HostPhase,
+    current: Option[OperationRef],
+    completed: Set[EffectKind],
+  }
+
+  type JournalState = {
+    status: JournalStatus,
+    current: Option[OperationRef],
+    appendCount: int,
+  }
+
+  type RunnerState = {
+    applied: Set[EffectKind],
+    generation: int,
+    session: str,
+    revision: int,
+  }
+
+  type ProviderState = { applied: Set[EffectKind] }
+
+  type ProcessState =
+    | HostLocal(HostState)
+    | JournalLocal(JournalState)
+    | RunnerLocal(RunnerState)
+    | ProviderLocal(ProviderState)
+
+  type Message =
+    | RecordIntent(OperationRef)
+    | IntentRecorded(OperationRef)
+    | RecordDispatch(OperationRef)
+    | DispatchRecorded(OperationRef)
+    | RunEffect(OperationRef)
+    | PerformEffect(OperationRef)
+    | EffectApplied(OperationRef)
+    | RecordApplied(OperationRef)
+    | AppliedRecorded(OperationRef)
+
+  type CustomEffect = Consume({ at: Process, message: Message })
   type Event = ()
-  type CustomEffect = ()
   type Extension = ()
-  type StateFields = { ready: bool }
+  type StateFields = { local: ProcessState }
 
-  pure val PROCESSES: Set[str] = Set("Host", "Journal", "Runner", "GitHubProvider")
+  pure val HOST: Process = "Host"
+  pure val JOURNAL: Process = "Journal"
+  pure val RUNNER: Process = "Runner"
+  pure val GITHUB_PROVIDER: Process = "GitHubProvider"
+  pure val PROCESSES: Set[Process] = Set(HOST, JOURNAL, RUNNER, GITHUB_PROVIDER)
+  pure val EFFECTS: Set[EffectKind] =
+    Set(Claim, ProcessWork, Candidate, Branch, PullRequest, Merge, NativeReadback)
 
-  type LocalState = choreo::LocalState[str, StateFields]
-  type LocalContext = choreo::LocalContext[str, StateFields, Message, Event, Extension]
-  type Transition = choreo::Transition[str, StateFields, Message, Event, CustomEffect]
+  type LocalState = choreo::LocalState[Process, StateFields]
+  type LocalContext = choreo::LocalContext[Process, StateFields, Message, Event, Extension]
+  type Transition = choreo::Transition[Process, StateFields, Message, Event, CustomEffect]
+  type Effect = choreo::Effect[Process, Message, Event, CustomEffect]
+  type GlobalContext = choreo::GlobalContext[Process, StateFields, Message, Event, Extension]
 
-  pure def initialState(process: str): LocalState = {
-    { process_id: process, ready: false }
+  pure def operationName(effect: EffectKind): str = match effect {
+    | Claim => "op-claim"
+    | ProcessWork => "op-process"
+    | Candidate => "op-candidate"
+    | Branch => "op-branch"
+    | PullRequest => "op-pr"
+    | Merge => "op-merge"
+    | NativeReadback => "op-readback"
+  }
+
+  pure def operationFor(effect: EffectKind): OperationRef = {
+    route: "route-1",
+    attempt: "attempt-1",
+    operation: operationName(effect),
+    effectKind: effect,
+    candidate: "candidate-1",
+    repository: "repository-1",
+    generation: 1,
+    session: "session-1",
+    revision: 1,
+  }
+
+  pure def initialState(process: Process): LocalState = {
+    process_id: process,
+    local:
+      if (process == HOST) HostLocal({ phase: HostReady, current: None, completed: Set() })
+      else if (process == JOURNAL) JournalLocal({ status: JournalEmpty, current: None, appendCount: 0 })
+      else if (process == RUNNER) RunnerLocal({ applied: Set(), generation: 1, session: "session-1", revision: 1 })
+      else ProviderLocal({ applied: Set() }),
   }
 
   action init = choreo::init({
@@ -4963,22 +5060,303 @@ module ChoreoSourcePinSmoke {
     extensions: (),
   })
 
-  pure def hostSendsPin(ctx: LocalContext): Set[Transition] = {
-    if (ctx.state.process_id == "Host" and not(ctx.state.ready)) {
-      Set({
-        post_state: { ...ctx.state, ready: true },
-        effects: Set(choreo::Send({ to: "Journal", message: PinPing })),
-      })
-    } else {
-      Set()
+  pure def consume(at: Process, message: Message): Effect =
+    choreo::CustomEffect(Consume({ at: at, message: message }))
+
+  pure def applyCustomEffect(context: GlobalContext, effect: CustomEffect): GlobalContext =
+    match effect {
+      | Consume(record) => {
+          ...context,
+          messages: context.messages.setBy(record.at, messages => messages.setRemove(record.message)),
+        }
     }
+
+  pure def beginEffect(ctx: LocalContext, effect: EffectKind): Set[Transition] =
+    match ctx.state.local {
+      | HostLocal(host) => {
+          if (host.phase == HostReady and host.current == None and not(host.completed.contains(effect))) {
+            val operation = operationFor(effect)
+            Set({
+              post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingIntent, current: Some(operation) }) },
+              effects: Set(choreo::Send({ to: JOURNAL, message: RecordIntent(operation) })),
+            })
+          } else Set()
+        }
+      | _ => Set()
+    }
+
+  pure def journalRecordsIntent(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | JournalLocal(journal) => ctx.messages.filterMap(message => match message {
+          | RecordIntent(operation) => {
+              if (journal.status == JournalEmpty or journal.status == Applied) {
+                Some({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: Intent, current: Some(operation), appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: IntentRecorded(operation) })
+                  ),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def hostAcceptsIntent(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | HostLocal(host) => ctx.messages.filterMap(message => match message {
+          | IntentRecorded(operation) => {
+              if (host.phase == AwaitingIntent and host.current == Some(operation)) {
+                Some({
+                  post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingDispatch }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: JOURNAL, message: RecordDispatch(operation) })
+                  ),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def journalRecordsDispatch(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | JournalLocal(journal) => ctx.messages.filterMap(message => match message {
+          | RecordDispatch(operation) => {
+              if (journal.status == Intent and journal.current == Some(operation)) {
+                Some({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: Dispatching, appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: DispatchRecorded(operation) })
+                  ),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def hostDispatches(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | HostLocal(host) => ctx.messages.filterMap(message => match message {
+          | DispatchRecorded(operation) => {
+              if (host.phase == AwaitingDispatch and host.current == Some(operation)) {
+                val request = if (operation.effectKind == ProcessWork) RunEffect(operation) else PerformEffect(operation)
+                val destination = if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
+                Some({
+                  post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingEffect }) },
+                  effects: Set(consume(HOST, message), choreo::Send({ to: destination, message: request })),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def runnerPerforms(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | RunnerLocal(runner) => ctx.messages.filterMap(message => match message {
+          | RunEffect(operation) => {
+              if (operation.effectKind == ProcessWork
+                  and operation.generation == runner.generation
+                  and operation.session == runner.session
+                  and operation.revision == runner.revision) {
+                Some({
+                  post_state: { ...ctx.state, local: RunnerLocal({
+                    ...runner, applied: runner.applied.setAdd(operation.effectKind),
+                  }) },
+                  effects: Set(
+                    consume(RUNNER, message),
+                    choreo::Send({ to: HOST, message: EffectApplied(operation) })
+                  ),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def providerPerforms(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | ProviderLocal(provider) => ctx.messages.filterMap(message => match message {
+          | PerformEffect(operation) => {
+              if (operation.effectKind != ProcessWork) {
+                Some({
+                  post_state: { ...ctx.state, local: ProviderLocal({
+                    ...provider, applied: provider.applied.setAdd(operation.effectKind),
+                  }) },
+                  effects: Set(
+                    consume(GITHUB_PROVIDER, message),
+                    choreo::Send({ to: HOST, message: EffectApplied(operation) })
+                  ),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def hostObservesApplied(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | HostLocal(host) => ctx.messages.filterMap(message => match message {
+          | EffectApplied(operation) => {
+              if (host.phase == AwaitingEffect and host.current == Some(operation)) {
+                Some({
+                  post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingApplied }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: JOURNAL, message: RecordApplied(operation) })
+                  ),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def journalRecordsApplied(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | JournalLocal(journal) => ctx.messages.filterMap(message => match message {
+          | RecordApplied(operation) => {
+              if (journal.status == Dispatching and journal.current == Some(operation)) {
+                Some({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: Applied, appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: AppliedRecorded(operation) })
+                  ),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def hostSettles(ctx: LocalContext): Set[Transition] =
+    match ctx.state.local {
+      | HostLocal(host) => ctx.messages.filterMap(message => match message {
+          | AppliedRecorded(operation) => {
+              if (host.phase == AwaitingApplied and host.current == Some(operation)) {
+                Some({
+                  post_state: { ...ctx.state, local: HostLocal({
+                    phase: HostReady, current: None, completed: host.completed.setAdd(operation.effectKind),
+                  }) },
+                  effects: Set(consume(HOST, message)),
+                })
+              } else None
+            }
+          | _ => None
+        })
+      | _ => Set()
+    }
+
+  pure def mainListener(ctx: LocalContext): Set[Transition] = Set(
+    EFFECTS.map(effect => beginEffect(ctx, effect)).flatten(),
+    journalRecordsIntent(ctx),
+    hostAcceptsIntent(ctx),
+    journalRecordsDispatch(ctx),
+    hostDispatches(ctx),
+    runnerPerforms(ctx),
+    providerPerforms(ctx),
+    hostObservesApplied(ctx),
+    journalRecordsApplied(ctx),
+    hostSettles(ctx)
+  ).flatten()
+
+  action step = choreo::step(mainListener, applyCustomEffect)
+  action stepWith(process: Process, listener: LocalContext => Set[Transition]): bool =
+    choreo::step_with(process, listener, applyCustomEffect)
+  action start(effect: EffectKind): bool = stepWith(HOST, ctx => beginEffect(ctx, effect))
+  action externalApplies = any {
+    stepWith(RUNNER, runnerPerforms),
+    stepWith(GITHUB_PROVIDER, providerPerforms),
   }
 
-  action sendPin = choreo::step_with("Host", hostSendsPin, (context, _) => context)
+  action completeEffect(effect: EffectKind): bool = init
+    .then(start(effect))
+    .then(stepWith(JOURNAL, journalRecordsIntent))
+    .then(stepWith(HOST, hostAcceptsIntent))
+    .then(stepWith(JOURNAL, journalRecordsDispatch))
+    .then(stepWith(HOST, hostDispatches))
+    .then(externalApplies)
+    .then(stepWith(HOST, hostObservesApplied))
+    .then(stepWith(JOURNAL, journalRecordsApplied))
+    .then(stepWith(HOST, hostSettles))
 
-  val pinDelivered = choreo::s.messages.get("Journal").contains(PinPing)
+  def hostCompleted(effect: EffectKind): bool = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.completed.contains(effect) and host.current == None and host.phase == HostReady
+    | _ => false
+  }
 
-  run choreoSourcePinSmoke = init.then(sendPin).expect(pinDelivered)
+  pure def messageAllowedAt(process: Process, message: Message): bool = {
+    if (process == HOST) match message {
+        | IntentRecorded(_) => true
+        | DispatchRecorded(_) => true
+        | EffectApplied(_) => true
+        | AppliedRecorded(_) => true
+        | _ => false
+      }
+    else if (process == JOURNAL) match message {
+        | RecordIntent(_) => true
+        | RecordDispatch(_) => true
+        | RecordApplied(_) => true
+        | _ => false
+      }
+    else if (process == RUNNER) match message { | RunEffect(_) => true | _ => false }
+    else match message { | PerformEffect(_) => true | _ => false }
+  }
+
+  val typedMessageSoup = PROCESSES.forall(process =>
+    choreo::s.messages.get(process).forall(message => messageAllowedAt(process, message)))
+
+  val safety = and {
+    typedMessageSoup,
+    match choreo::s.system.get(JOURNAL).local {
+      | JournalLocal(journal) => journal.appendCount >= 0
+      | _ => false
+    },
+    match choreo::s.system.get(RUNNER).local {
+      | RunnerLocal(runner) => runner.applied.forall(effect => effect == ProcessWork)
+      | _ => false
+    },
+    match choreo::s.system.get(GITHUB_PROVIDER).local {
+      | ProviderLocal(provider) => not(provider.applied.contains(ProcessWork))
+      | _ => false
+    },
+  }
+
+  run claimFoundation = completeEffect(Claim).expect(hostCompleted(Claim) and safety)
+  run processFoundation = completeEffect(ProcessWork).expect(hostCompleted(ProcessWork) and safety)
+  run candidateFoundation = completeEffect(Candidate).expect(hostCompleted(Candidate) and safety)
+  run branchFoundation = completeEffect(Branch).expect(hostCompleted(Branch) and safety)
+  run pullRequestFoundation = completeEffect(PullRequest).expect(hostCompleted(PullRequest) and safety)
+  run mergeFoundation = completeEffect(Merge).expect(hostCompleted(Merge) and safety)
+  run nativeReadbackFoundation = completeEffect(NativeReadback).expect(hostCompleted(NativeReadback) and safety)
+}
+
+module ChoreoSourcePinSmoke {
+  import O2HostedWriterChoreoModel.*
+
+  // C1's source-pin smoke now exercises the smallest complete C2 message path while
+  // retaining its stable manifest entry point.
+  run choreoSourcePinSmoke = completeEffect(Claim).expect(hostCompleted(Claim) and safety)
 }
 
 ```

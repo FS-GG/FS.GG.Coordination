@@ -1578,7 +1578,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
 
             let expectedInputs =
                 [
-                    "sourceSha256", "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90"
+                    "sourceSha256", "cf464a5206981dbf99b5ece74e284046f19b7f0431087fc38d42963541d892bd"
                     "contractSha256", "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
                 ]
 

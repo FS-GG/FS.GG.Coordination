@@ -154,3 +154,39 @@ let ``Choreo stays inside the canonical literate source`` () =
         |> Seq.toList
 
     Assert.Empty(trackedQnt)
+
+[<Fact>]
+let ``hosted writer Choreo foundation keeps four closed authorities and explicit message consumption`` () =
+    let protocol, _, _ = fixture ()
+
+    let modelStart = protocol.IndexOf("module O2HostedWriterChoreoModel {", StringComparison.Ordinal)
+    let modelEnd = protocol.IndexOf("module ChoreoSourcePinSmoke {", modelStart, StringComparison.Ordinal)
+    Assert.True(modelStart >= 0 && modelEnd > modelStart)
+    let model = protocol.Substring(modelStart, modelEnd - modelStart)
+
+    Assert.Contains("Set(HOST, JOURNAL, RUNNER, GITHUB_PROVIDER)", model)
+    Assert.Contains("type ProcessState =", model)
+    Assert.Contains("type Message =", model)
+    Assert.Contains("type CustomEffect = Consume", model)
+    Assert.Contains("messages.setRemove(record.message)", model)
+    Assert.Contains("val typedMessageSoup", model)
+    Assert.DoesNotContain("action hold", model)
+
+[<Fact>]
+let ``hosted writer Choreo routes all seven effects through one protocol`` () =
+    let protocol, _, _ = fixture ()
+
+    for witness in
+        [
+            "claimFoundation"
+            "processFoundation"
+            "candidateFoundation"
+            "branchFoundation"
+            "pullRequestFoundation"
+            "mergeFoundation"
+            "nativeReadbackFoundation"
+        ] do
+        Assert.Contains($"run %s{witness}", protocol)
+
+    Assert.Contains("operation.effectKind == ProcessWork", protocol)
+    Assert.Contains("else GITHUB_PROVIDER", protocol)

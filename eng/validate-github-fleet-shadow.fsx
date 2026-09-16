@@ -373,7 +373,7 @@ let quint = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
 
 if
     sha256 quint
-    <> "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90"
+    <> "cf464a5206981dbf99b5ece74e284046f19b7f0431087fc38d42963541d892bd"
 then
     failwith "canonical Quint source changed"
 
@@ -540,7 +540,7 @@ let generatedMutation control =
     | PartialUnreadable ->
         FleetShadowAdapter.compare asOf (TimeSpan.FromHours 1) { observation with Complete = false }
         |> Result.isError
-    | QuintAndPrerequisite -> sha256 quint = "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90"
+    | QuintAndPrerequisite -> sha256 quint = "cf464a5206981dbf99b5ece74e284046f19b7f0431087fc38d42963541d892bd"
     | LiveEvidence ->
         text v1Source "command" = "fsgg-coord ready --all --json"
         && text v2Source "command" = "gh api graphql --paginate --slurp"
