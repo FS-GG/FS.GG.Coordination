@@ -24,6 +24,7 @@ module QualificationManifestCommand =
             | "--json" :: tail -> loop file inventory "json" tail
             | "--text" :: tail -> loop file inventory "text" tail
             | token :: _ -> Error $"unknown or repeated argument: %s{token}"
+
         loop None None "json" arguments
 
     let run arguments =
@@ -44,19 +45,43 @@ module QualificationManifestCommand =
             | Ok(Some path, Some inventoryPath, format) ->
                 let bytes = File.ReadAllBytes path
                 let inventory = File.ReadAllBytes inventoryPath
-                match QualificationManifest.validate (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(bytes)) with
+
+                match
+                    QualificationManifest.validate (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(bytes))
+                with
                 | Ok canonical ->
                     let digest = sha256 canonical
+
                     if format = "text" then
                         printfn "QUALIFICATION_MANIFEST_OK path=%s bytes=%d sha256=%s" path canonical.Length digest
                     else
-                        printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coordination.qualification-manifest-result/1"; outcome = "passed"; path = path; bytes = canonical.Length; sha256 = digest; findings = [||] |})
+                        printfn
+                            "%s"
+                            (JsonSerializer.Serialize
+                                {|
+                                    schema = "fsgg.coordination.qualification-manifest-result/1"
+                                    outcome = "passed"
+                                    path = path
+                                    bytes = canonical.Length
+                                    sha256 = digest
+                                    findings = [||]
+                                |})
+
                     0
                 | Error findings ->
                     if format = "text" then
                         for item in findings do
                             eprintfn "%s path=%s expected=%s actual=%s" item.Code item.Path item.Expected item.Actual
                     else
-                        eprintfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coordination.qualification-manifest-result/1"; outcome = "failed"; path = path; findings = findings |})
+                        eprintfn
+                            "%s"
+                            (JsonSerializer.Serialize
+                                {|
+                                    schema = "fsgg.coordination.qualification-manifest-result/1"
+                                    outcome = "failed"
+                                    path = path
+                                    findings = findings
+                                |})
+
                     3
         | _ -> usage ()

@@ -27,21 +27,36 @@ let rec parse root output remaining =
 
 let root, outputOption = parse (Path.GetFullPath ".") None arguments
 let sourcePath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
-let contractPath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/contract.json")
-let authorityPath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/typed-authority.json")
-let receiptPath = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/receipt.json")
+
+let contractPath =
+    Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/contract.json")
+
+let authorityPath =
+    Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/typed-authority.json")
+
+let receiptPath =
+    Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/receipt.json")
 
 let outputRoot =
     outputOption
     |> Option.map (fun path ->
-        if Path.IsPathRooted path then Path.GetFullPath path
-        else Path.GetFullPath(Path.Combine(root, path)))
+        if Path.IsPathRooted path then
+            Path.GetFullPath path
+        else
+            Path.GetFullPath(Path.Combine(root, path)))
     |> Option.defaultValue (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs"))
 
-if not (File.Exists sourcePath) then fail "SOURCE-MISSING" sourcePath
-if not (File.Exists contractPath) then fail "CONTRACT-MISSING" contractPath
-if not (File.Exists authorityPath) then fail "AUTHORITY-MISSING" authorityPath
-if not (File.Exists receiptPath) then fail "RECEIPT-MISSING" receiptPath
+if not (File.Exists sourcePath) then
+    fail "SOURCE-MISSING" sourcePath
+
+if not (File.Exists contractPath) then
+    fail "CONTRACT-MISSING" contractPath
+
+if not (File.Exists authorityPath) then
+    fail "AUTHORITY-MISSING" authorityPath
+
+if not (File.Exists receiptPath) then
+    fail "RECEIPT-MISSING" receiptPath
 
 let sourceText = File.ReadAllText(sourcePath, Encoding.UTF8)
 let sourceSha256 = sha256File sourcePath
@@ -57,7 +72,9 @@ if contract.GetProperty("schema").GetString() <> "fsgg.quint.compiled-contract/v
     fail "CONTRACT-SCHEMA" "wrong"
 
 let profile = contract.GetProperty("profile").GetString()
-if profile <> "fsgg-quint-profile/2" then fail "PROFILE" profile
+
+if profile <> "fsgg-quint-profile/2" then
+    fail "PROFILE" profile
 
 let catalogue = contract.GetProperty("catalogue").EnumerateArray() |> Seq.toList
 
@@ -87,33 +104,82 @@ let normalizationAuthority = requiredString "normalizationAuthority"
 let versionContract = requiredString "versionContract"
 let semanticDiffContract = requiredString "semanticDiffContract"
 
-if identityContract <> "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content" then fail "IDENTITY-CONTRACT" identityContract
-if qualificationContract <> "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review" then fail "QUALIFICATION-CONTRACT" qualificationContract
-if projectionViewFormats <> "markdown|json" then fail "PROJECTION-FORMATS" projectionViewFormats
-if refusalContract <> "missing|duplicate|substituted|unsupported|incomplete|reordered|stale" then
+if
+    identityContract
+    <> "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content"
+then
+    fail "IDENTITY-CONTRACT" identityContract
+
+if
+    qualificationContract
+    <> "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review"
+then
+    fail "QUALIFICATION-CONTRACT" qualificationContract
+
+if projectionViewFormats <> "markdown|json" then
+    fail "PROJECTION-FORMATS" projectionViewFormats
+
+if
+    refusalContract
+    <> "missing|duplicate|substituted|unsupported|incomplete|reordered|stale"
+then
     fail "REFUSAL-CONTRACT" refusalContract
-if normalizationAuthority <> "typed-effect-json" then fail "NORMALIZATION-AUTHORITY" normalizationAuthority
-if semanticDiffContract <> "ordinal|json-pointer|value-sha256" then fail "SEMANTIC-DIFF-CONTRACT" semanticDiffContract
+
+if normalizationAuthority <> "typed-effect-json" then
+    fail "NORMALIZATION-AUTHORITY" normalizationAuthority
+
+if semanticDiffContract <> "ordinal|json-pointer|value-sha256" then
+    fail "SEMANTIC-DIFF-CONTRACT" semanticDiffContract
 
 let versionParts = versionContract.Split('|')
 
-if versionParts.Length <> 5 then fail "VERSION-CONTRACT" versionContract
+if versionParts.Length <> 5 then
+    fail "VERSION-CONTRACT" versionContract
 
 let sourceVersion, extractorVersion, quintVersion, profileVersion, schemaVersion =
     versionParts[0], versionParts[1], versionParts[2], versionParts[3], versionParts[4]
 
-if sourceVersion <> "fsgg.quint.literate-source/1" then fail "SOURCE-VERSION" sourceVersion
-if extractorVersion <> "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0" then fail "EXTRACTOR-VERSION" extractorVersion
-if quintVersion <> "sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f" then fail "QUINT-VERSION" quintVersion
-if profileVersion <> profile then fail "PROFILE-VERSION" profileVersion
-if schemaVersion <> contract.GetProperty("schema").GetString() then fail "SCHEMA-VERSION" schemaVersion
+if sourceVersion <> "fsgg.quint.literate-source/1" then
+    fail "SOURCE-VERSION" sourceVersion
 
-if authority.GetProperty("backend").GetString() <> "quint-specification-v1" then fail "AUTHORITY-BACKEND" "wrong"
-if authority.GetProperty("packageIdentity").GetString() <> "FS.GG.SDD.Artifacts/1.5.0" then fail "AUTHORITY-PACKAGE" "wrong"
-if authority.GetProperty("profileIdentity").GetString() <> profileVersion then fail "AUTHORITY-PROFILE" "wrong"
-if receipt.GetProperty("schema").GetString() <> "fsgg.quint.observed-compilation-receipt/v2" then fail "RECEIPT-SCHEMA" "wrong"
-if receipt.GetProperty("sourceSha256").GetString() <> sourceSha256 then fail "RECEIPT-SOURCE" "mismatch"
-if receipt.GetProperty("contractSha256").GetString() <> contractSha256 then fail "RECEIPT-CONTRACT" "mismatch"
+if extractorVersion <> "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0" then
+    fail "EXTRACTOR-VERSION" extractorVersion
+
+if
+    quintVersion
+    <> "sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+then
+    fail "QUINT-VERSION" quintVersion
+
+if profileVersion <> profile then
+    fail "PROFILE-VERSION" profileVersion
+
+if schemaVersion <> contract.GetProperty("schema").GetString() then
+    fail "SCHEMA-VERSION" schemaVersion
+
+if authority.GetProperty("backend").GetString() <> "quint-specification-v1" then
+    fail "AUTHORITY-BACKEND" "wrong"
+
+if
+    authority.GetProperty("packageIdentity").GetString()
+    <> "FS.GG.SDD.Artifacts/1.5.0"
+then
+    fail "AUTHORITY-PACKAGE" "wrong"
+
+if authority.GetProperty("profileIdentity").GetString() <> profileVersion then
+    fail "AUTHORITY-PROFILE" "wrong"
+
+if
+    receipt.GetProperty("schema").GetString()
+    <> "fsgg.quint.observed-compilation-receipt/v2"
+then
+    fail "RECEIPT-SCHEMA" "wrong"
+
+if receipt.GetProperty("sourceSha256").GetString() <> sourceSha256 then
+    fail "RECEIPT-SOURCE" "mismatch"
+
+if receipt.GetProperty("contractSha256").GetString() <> contractSha256 then
+    fail "RECEIPT-CONTRACT" "mismatch"
 
 let behavioralSha256 = receipt.GetProperty("typedEffectSha256").GetString()
 
@@ -141,8 +207,11 @@ let families =
         | _ -> fail "FAMILY-CONTRACT" value)
     |> Array.toList
 
-if families |> List.map (fun (ordinal, _, _) -> ordinal) <> [ 1 .. 9 ] then fail "FAMILY-ORDER" familyContract
-if families |> List.map (fun (_, _, id) -> id) |> Set.ofList |> Set.count <> 9 then fail "FAMILY-DUPLICATE" familyContract
+if families |> List.map (fun (ordinal, _, _) -> ordinal) <> [ 1..9 ] then
+    fail "FAMILY-ORDER" familyContract
+
+if families |> List.map (fun (_, _, id) -> id) |> Set.ofList |> Set.count <> 9 then
+    fail "FAMILY-DUPLICATE" familyContract
 
 let jsonOptions =
     JsonSerializerOptions(WriteIndented = false, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
@@ -225,7 +294,9 @@ schemasContent.Add("recordShapes", schemaRows)
 let commandContent = JsonObject()
 commandContent.Add("actions", contract.GetProperty("actionEffects") |> clone)
 
-let permissionPattern = Regex("requiredPermission:\\s*\"([^\"]+)\"", RegexOptions.CultureInvariant)
+let permissionPattern =
+    Regex("requiredPermission:\\s*\"([^\"]+)\"", RegexOptions.CultureInvariant)
+
 let permissions =
     permissionPattern.Matches sourceText
     |> Seq.cast<Match>
@@ -235,7 +306,9 @@ let permissions =
     |> Seq.map stringNode
     |> array
 
-if permissions.Count <> 6 then fail "PERMISSION-CENSUS" $"expected-six; actual={permissions.Count}"
+if permissions.Count <> 6 then
+    fail "PERMISSION-CENSUS" $"expected-six; actual={permissions.Count}"
+
 let permissionContent = JsonObject()
 permissionContent.Add("requiredPermissions", permissions)
 
@@ -243,12 +316,16 @@ let mutationRows =
     catalogue
     |> Seq.filter (fun entry ->
         let id = entry.GetProperty("id").GetString()
-        id.StartsWith("MUT-", StringComparison.Ordinal) || id.StartsWith("MOUT-", StringComparison.Ordinal))
+
+        id.StartsWith("MUT-", StringComparison.Ordinal)
+        || id.StartsWith("MOUT-", StringComparison.Ordinal))
     |> Seq.sortBy (fun entry -> entry.GetProperty("id").GetString())
     |> Seq.map clone
     |> array
 
-if mutationRows.Count <> 16 then fail "MUTATION-CENSUS" $"expected-sixteen; actual={mutationRows.Count}"
+if mutationRows.Count <> 16 then
+    fail "MUTATION-CENSUS" $"expected-sixteen; actual={mutationRows.Count}"
+
 let mutationContent = JsonObject()
 mutationContent.Add("entries", mutationRows)
 
@@ -277,20 +354,28 @@ semanticDiffContent.Add("qualificationFields", qualificationContract.Split('|') 
 semanticDiffContent.Add("refusalKinds", refusalContract.Split('|') |> Seq.map stringNode |> array)
 semanticDiffContent.Add("familyOrder", families |> Seq.map (fun (_, _, id) -> stringNode id) |> array)
 
-let pointerEscape (value: string) = value.Replace("~", "~0").Replace("/", "~1")
+let pointerEscape (value: string) =
+    value.Replace("~", "~0").Replace("/", "~1")
 
 let rec semanticLeaves path (value: JsonElement) =
     seq {
         match value.ValueKind with
         | JsonValueKind.Object ->
-            let properties = value.EnumerateObject() |> Seq.sortBy (fun property -> property.Name) |> Seq.toList
-            if List.isEmpty properties then yield path, value.GetRawText()
+            let properties =
+                value.EnumerateObject()
+                |> Seq.sortBy (fun property -> property.Name)
+                |> Seq.toList
+
+            if List.isEmpty properties then
+                yield path, value.GetRawText()
             else
                 for property in properties do
                     yield! semanticLeaves ($"{path}/{pointerEscape property.Name}") property.Value
         | JsonValueKind.Array ->
             let items = value.EnumerateArray() |> Seq.toList
-            if List.isEmpty items then yield path, value.GetRawText()
+
+            if List.isEmpty items then
+                yield path, value.GetRawText()
             else
                 for index, item in items |> List.indexed do
                     yield! semanticLeaves ($"{path}/{index}") item
@@ -316,7 +401,9 @@ semanticDiffContent.Add("rows", semanticRows)
 let relationshipLines =
     contract.GetProperty("relationships").EnumerateArray()
     |> Seq.map (fun edge ->
-        let clean (value: string) = Regex.Replace(value, "[^A-Za-z0-9_]", "_")
+        let clean (value: string) =
+            Regex.Replace(value, "[^A-Za-z0-9_]", "_")
+
         let fromId = edge.GetProperty("from").GetString()
         let toId = edge.GetProperty("to").GetString()
         let kind = edge.GetProperty("kind").GetString()
@@ -343,25 +430,69 @@ Directory.CreateDirectory(outputRoot) |> ignore
 
 let actionCount = contract.GetProperty("actionEffects").GetArrayLength()
 let relationshipCount = contract.GetProperty("relationships").GetArrayLength()
-let verificationCount = contract.GetProperty("verificationProfiles").GetArrayLength()
+
+let verificationCount =
+    contract.GetProperty("verificationProfiles").GetArrayLength()
+
 let boundCount = contract.GetProperty("bounds").GetArrayLength()
+
 let projectionMarkdown =
     $"# Compiled contract projection\n\nSource: `{sourceSha256}`\n\nBehavior: `{behavioralSha256}`\n\nProfile: `{profile}`\n\nContract: `{contractSha256}`\n\n- Catalogue entries: {catalogue.Length}\n- Actions: {actionCount}\n- Relationships: {relationshipCount}\n- Verification profiles: {verificationCount}\n- Bounds: {boundCount}\n"
 
 let outputs =
-    [ ("COUT-Schemas", 1, [ ("schemas.json", writeJson "schemas.json" (common "COUT-Schemas" 1 schemasContent)) ])
-      ("COUT-CommandMetadata", 2, [ ("command-metadata.json", writeJson "command-metadata.json" (common "COUT-CommandMetadata" 2 commandContent)) ])
-      ("COUT-PermissionCensus", 3, [ ("permission-census.json", writeJson "permission-census.json" (common "COUT-PermissionCensus" 3 permissionContent)) ])
-      ("COUT-MutationCensus", 4, [ ("mutation-census.json", writeJson "mutation-census.json" (common "COUT-MutationCensus" 4 mutationContent)) ])
-      ("COUT-SettingsPlans", 5, [ ("settings-plans.json", writeJson "settings-plans.json" (common "COUT-SettingsPlans" 5 settingsContent)) ])
-      ("COUT-ProjectionViews", 6,
-        [ ("projection-view.json", writeJson "projection-view.json" (common "COUT-ProjectionViews" 6 projectionContent))
-          ("projection-view.md", writeText "projection-view.md" projectionMarkdown) ])
-      ("COUT-SemanticDiff", 7, [ ("semantic-diff.json", writeJson "semantic-diff.json" (common "COUT-SemanticDiff" 7 semanticDiffContent)) ])
-      ("COUT-Diagrams", 8, [ ("diagrams.md", writeText "diagrams.md" diagrams) ])
-      ("COUT-ModelTestInventory", 9, [ ("model-test-inventory.json", writeJson "model-test-inventory.json" (common "COUT-ModelTestInventory" 9 modelInventoryContent)) ]) ]
+    [
+        ("COUT-Schemas",
+         1,
+         [
+             ("schemas.json", writeJson "schemas.json" (common "COUT-Schemas" 1 schemasContent))
+         ])
+        ("COUT-CommandMetadata",
+         2,
+         [
+             ("command-metadata.json",
+              writeJson "command-metadata.json" (common "COUT-CommandMetadata" 2 commandContent))
+         ])
+        ("COUT-PermissionCensus",
+         3,
+         [
+             ("permission-census.json",
+              writeJson "permission-census.json" (common "COUT-PermissionCensus" 3 permissionContent))
+         ])
+        ("COUT-MutationCensus",
+         4,
+         [
+             ("mutation-census.json", writeJson "mutation-census.json" (common "COUT-MutationCensus" 4 mutationContent))
+         ])
+        ("COUT-SettingsPlans",
+         5,
+         [
+             ("settings-plans.json", writeJson "settings-plans.json" (common "COUT-SettingsPlans" 5 settingsContent))
+         ])
+        ("COUT-ProjectionViews",
+         6,
+         [
+             ("projection-view.json",
+              writeJson "projection-view.json" (common "COUT-ProjectionViews" 6 projectionContent))
+             ("projection-view.md", writeText "projection-view.md" projectionMarkdown)
+         ])
+        ("COUT-SemanticDiff",
+         7,
+         [
+             ("semantic-diff.json", writeJson "semantic-diff.json" (common "COUT-SemanticDiff" 7 semanticDiffContent))
+         ])
+        ("COUT-Diagrams", 8, [ ("diagrams.md", writeText "diagrams.md" diagrams) ])
+        ("COUT-ModelTestInventory",
+         9,
+         [
+             ("model-test-inventory.json",
+              writeJson "model-test-inventory.json" (common "COUT-ModelTestInventory" 9 modelInventoryContent))
+         ])
+    ]
 
-if (outputs |> List.map (fun (family, _, _) -> family)) <> (families |> List.map (fun (_, _, family) -> family)) then
+if
+    (outputs |> List.map (fun (family, _, _) -> family))
+    <> (families |> List.map (fun (_, _, family) -> family))
+then
     fail "OUTPUT-FAMILY-ORDER" "generator differs from authority"
 
 let manifestEntries =
@@ -378,6 +509,7 @@ let manifestEntries =
         row.Add("supported", true)
         row.Add("complete", true)
         row.Add("fresh", true)
+
         row.Add(
             "files",
             files
@@ -388,6 +520,7 @@ let manifestEntries =
                 file :> JsonNode)
             |> array
         )
+
         row :> JsonNode)
     |> array
 
@@ -404,4 +537,9 @@ manifest.Add("refusalContract", refusalContract)
 manifest.Add("outputs", manifestEntries)
 let manifestPath = writeJson "manifest.json" manifest
 
-printfn "COMPILED_OUTPUT_OK manifest=%s source=%s contract=%s families=%d" (sha256File manifestPath) sourceSha256 contractSha256 outputs.Length
+printfn
+    "COMPILED_OUTPUT_OK manifest=%s source=%s contract=%s families=%d"
+    (sha256File manifestPath)
+    sourceSha256
+    contractSha256
+    outputs.Length

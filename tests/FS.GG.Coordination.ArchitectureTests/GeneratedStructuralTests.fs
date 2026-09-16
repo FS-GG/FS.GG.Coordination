@@ -10,32 +10,46 @@ open System.Text.Json.Nodes
 open FS.GG.Coordination.Qualification.Contracts
 open Xunit
 
-let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
-let private artifactRelative = "src/FS.GG.Coordination.Protocol/Generated/generated-structural-tests.json"
+let private root =
+    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+
+let private artifactRelative =
+    "src/FS.GG.Coordination.Protocol/Generated/generated-structural-tests.json"
+
 let private artifactPath = Path.Combine(root, artifactRelative)
 
 let private sha256 (bytes: byte array) =
     SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
 
-let private parseObject path = JsonNode.Parse(File.ReadAllText path).AsObject()
+let private parseObject path =
+    JsonNode.Parse(File.ReadAllText path).AsObject()
 
 let private setString (node: JsonObject) (name: string) (value: string) = node[name] <- JsonValue.Create(value)
 let private setBoolean (node: JsonObject) (name: string) (value: bool) = node[name] <- JsonValue.Create(value)
 let private setInteger (node: JsonObject) (name: string) (value: int) = node[name] <- JsonValue.Create(value)
 
 let private mutationBytes name =
-    if name = "malformed" then Encoding.UTF8.GetBytes("{not-json")
+    if name = "malformed" then
+        Encoding.UTF8.GetBytes("{not-json")
     else
         let document = parseObject artifactPath
         let cases = document["cases"].AsArray()
+
         match name with
         | value when value.StartsWith("missing-", StringComparison.Ordinal) ->
             let category = value.Substring("missing-".Length)
-            let index = cases |> Seq.findIndex (fun item -> item["category"].GetValue<string>() = category)
+
+            let index =
+                cases
+                |> Seq.findIndex (fun item -> item["category"].GetValue<string>() = category)
+
             cases.RemoveAt(index)
         | value when value.StartsWith("source-", StringComparison.Ordinal) ->
             let category = value.Substring("source-".Length)
-            let item = cases |> Seq.find (fun item -> item["category"].GetValue<string>() = category)
+
+            let item =
+                cases |> Seq.find (fun item -> item["category"].GetValue<string>() = category)
+
             setString (item.AsObject()) "sourceSha256" (String.replicate 64 "0")
         | "missing" -> cases.RemoveAt(0)
         | "duplicate" -> cases.Add(cases[0].DeepClone())
@@ -53,6 +67,7 @@ let private mutationBytes name =
         | "digest" -> setString document "selfSha256" (String.replicate 64 "0")
         | "canonical" -> ()
         | unknown -> invalidArg "name" unknown
+
         let options = JsonSerializerOptions(WriteIndented = (name = "canonical"))
         document.ToJsonString(options) |> Encoding.UTF8.GetBytes
 
@@ -63,23 +78,28 @@ let private assertArtifactMutation name expectedCode =
 
 let private withQualifiedCopy action =
     let scratch = Directory.CreateTempSubdirectory("fsgg-generated-structural-")
+
     try
         let protocolRelative = "src/FS.GG.Coordination.Protocol/Protocol.md"
         let protocolDestination = Path.Combine(scratch.FullName, protocolRelative)
         Directory.CreateDirectory(Path.GetDirectoryName protocolDestination) |> ignore
         File.Copy(Path.Combine(root, protocolRelative), protocolDestination)
         let source = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated")
+
         for path in Directory.GetFiles(source, "*", SearchOption.AllDirectories) do
             let relative = Path.GetRelativePath(root, path)
             let destination = Path.Combine(scratch.FullName, relative)
             Directory.CreateDirectory(Path.GetDirectoryName destination) |> ignore
             File.Copy(path, destination)
+
         action scratch.FullName
     finally
         scratch.Delete(true)
 
 let private rewriteCompiledOutput scratch fileName family mutate =
-    let outputRoot = Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs")
+    let outputRoot =
+        Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs")
+
     let outputPath = Path.Combine(outputRoot, fileName)
     let output = parseObject outputPath
     mutate output
@@ -87,10 +107,12 @@ let private rewriteCompiledOutput scratch fileName family mutate =
     let outputDigest = File.ReadAllBytes outputPath |> sha256
     let manifestPath = Path.Combine(outputRoot, "manifest.json")
     let manifest = parseObject manifestPath
+
     let entry =
         manifest["outputs"].AsArray()
         |> Seq.map _.AsObject()
         |> Seq.find (fun candidate -> candidate["family"].GetValue<string>() = family)
+
     let firstFile = ((entry["files"].AsArray())[0]).AsObject()
     setString firstFile "contentSha256" outputDigest
     File.WriteAllText(manifestPath, manifest.ToJsonString() + "\n", UTF8Encoding(false))
@@ -100,7 +122,10 @@ let private runScript script arguments =
     startInfo.ArgumentList.Add "fsi"
     startInfo.ArgumentList.Add script
     startInfo.ArgumentList.Add "--"
-    for argument in arguments do startInfo.ArgumentList.Add argument
+
+    for argument in arguments do
+        startInfo.ArgumentList.Add argument
+
     startInfo.WorkingDirectory <- root
     startInfo.RedirectStandardOutput <- true
     startInfo.RedirectStandardError <- true
@@ -114,14 +139,31 @@ let private runScript script arguments =
 [<Fact>]
 let ``committed generated suite is complete deterministic and source bound`` () =
     let committed = File.ReadAllBytes artifactPath
-    let generated = GeneratedStructuralTests.generate root |> Result.defaultWith failwith
+
+    let generated =
+        GeneratedStructuralTests.generate root |> Result.defaultWith failwith
+
     Assert.Equal<byte>(committed, generated)
-    let summary = GeneratedStructuralTests.validate root committed |> Result.defaultWith failwith
+
+    let summary =
+        GeneratedStructuralTests.validate root committed |> Result.defaultWith failwith
+
     Assert.Equal(225, summary.TotalCount)
+
     Assert.True(
         summary.CategoryCounts =
-            [ "vocabulary", 136; "transition", 14; "command", 14; "mutation", 16; "permission", 6; "schema", 30; "projection", 9 ],
-        $"unexpected category counts: %A{summary.CategoryCounts}")
+            [
+                "vocabulary", 136
+                "transition", 14
+                "command", 14
+                "mutation", 16
+                "permission", 6
+                "schema", 30
+                "projection", 9
+            ],
+        $"unexpected category counts: %A{summary.CategoryCounts}"
+    )
+
     Assert.Equal("3425b136872c98239e4884231b112cb08245530e7632927d6eb6977e9e4d3854", summary.SelfSha256)
     Assert.Equal("26c4a95c1c7fda017331f5c968c50763a1da8167b57ffa728619d860af708f67", sha256 committed)
 
@@ -164,7 +206,9 @@ let ``every generated category rejects source substitution`` category =
 [<Fact>]
 let ``stale typed output is rejected before generated evidence`` () =
     withQualifiedCopy (fun scratch ->
-        rewriteCompiledOutput scratch "command-metadata.json" "COUT-CommandMetadata" (fun output -> setBoolean output "fresh" false)
+        rewriteCompiledOutput scratch "command-metadata.json" "COUT-CommandMetadata" (fun output ->
+            setBoolean output "fresh" false)
+
         match GeneratedStructuralTests.check scratch artifactRelative with
         | Ok _ -> failwith "stale typed output unexpectedly validated"
         | Error error -> Assert.StartsWith("GST-INPUT-STALE", error))
@@ -174,16 +218,20 @@ let ``unregistered command mutation and projection changes are rejected`` () =
     let assertSourceMutation fileName family expectedCode mutate =
         withQualifiedCopy (fun scratch ->
             rewriteCompiledOutput scratch fileName family mutate
+
             match GeneratedStructuralTests.check scratch artifactRelative with
             | Ok _ -> failwith $"%s{family} source mutation unexpectedly validated"
             | Error error -> Assert.StartsWith(expectedCode, error))
+
     assertSourceMutation "command-metadata.json" "COUT-CommandMetadata" "GST-COMMAND-REGISTRATION" (fun output ->
         let actions = (output["content"]["actions"]).AsArray()
         let added = actions[0].DeepClone().AsObject()
         setString added "actionId" "ACT-Unregistered"
         actions.Add added)
+
     assertSourceMutation "mutation-census.json" "COUT-MutationCensus" "GST-MUTATION-REGISTRATION" (fun output ->
         (output["content"]["entries"]).AsArray().RemoveAt(0))
+
     assertSourceMutation "projection-view.json" "COUT-ProjectionViews" "GST-PROJECTION-REGISTRATION" (fun output ->
         (output["content"]["catalogue"]).AsArray().RemoveAt(0))
 
@@ -195,16 +243,28 @@ let ``schema and permission censuses agree with their independent producers`` ()
                 let collection = (output["content"][collectionName]).AsArray()
                 Assert.Equal(expectedCount, collection.Count)
                 mutate output)
+
             match GeneratedStructuralTests.check scratch artifactRelative with
             | Ok _ -> failwith $"%s{family} producer omission unexpectedly validated"
             | Error error -> Assert.StartsWith(expectedCode, error))
+
     assertProducerOmission "schemas.json" "COUT-Schemas" "recordShapes" 30 "GST-SCHEMA-REGISTRATION" (fun output ->
         (output["content"]["recordShapes"]).AsArray().RemoveAt(0))
-    assertProducerOmission "permission-census.json" "COUT-PermissionCensus" "requiredPermissions" 6 "GST-PERMISSION-REGISTRATION" (fun output ->
-        (output["content"]["requiredPermissions"]).AsArray().RemoveAt(0))
+
+    assertProducerOmission
+        "permission-census.json"
+        "COUT-PermissionCensus"
+        "requiredPermissions"
+        6
+        "GST-PERMISSION-REGISTRATION"
+        (fun output -> (output["content"]["requiredPermissions"]).AsArray().RemoveAt(0))
+
     withQualifiedCopy (fun scratch ->
-        let protocolPath = Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Protocol.md")
+        let protocolPath =
+            Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Protocol.md")
+
         File.AppendAllText(protocolPath, "\n", UTF8Encoding(false))
+
         match GeneratedStructuralTests.check scratch artifactRelative with
         | Ok _ -> failwith "qualified source digest drift unexpectedly validated"
         | Error error -> Assert.StartsWith("GST-INPUT-DIGEST", error))
@@ -213,19 +273,24 @@ let ``schema and permission censuses agree with their independent producers`` ()
 let ``compiled output family contract and safe paths are authoritative`` () =
     let assertManifestMutation expectedCode mutate =
         withQualifiedCopy (fun scratch ->
-            let manifestPath = Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/manifest.json")
+            let manifestPath =
+                Path.Combine(scratch, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/manifest.json")
+
             let manifest = parseObject manifestPath
             mutate manifest
             File.WriteAllText(manifestPath, manifest.ToJsonString() + "\n", UTF8Encoding(false))
+
             match GeneratedStructuralTests.check scratch artifactRelative with
             | Ok _ -> failwith "compiled output manifest mutation unexpectedly validated"
             | Error error -> Assert.StartsWith(expectedCode, error))
+
     assertManifestMutation "GST-INPUT-MANIFEST" (fun manifest ->
         let outputs = manifest["outputs"].AsArray()
         let invented = outputs[0].DeepClone().AsObject()
         setString invented "family" "COUT-Invented"
         setInteger invented "ordinal" 10
         outputs.Add invented)
+
     assertManifestMutation "GST-INPUT-MANIFEST" (fun manifest ->
         let firstOutput = ((manifest["outputs"].AsArray())[0]).AsObject()
         let firstFile = ((firstOutput["files"].AsArray())[0]).AsObject()
@@ -235,11 +300,14 @@ let ``compiled output family contract and safe paths are authoritative`` () =
 let ``stable generator and validator adapters execute the committed artifact`` () =
     let generatorExit, generatorOutput, generatorError =
         runScript "eng/generate-generated-structural-tests.fsx" [ "--root"; "."; "--check"; artifactRelative ]
+
     Assert.Equal(0, generatorExit)
     Assert.Contains("GENERATED_STRUCTURAL_TESTS_OK total=225", generatorOutput)
     Assert.Equal("", generatorError)
+
     let validatorExit, validatorOutput, validatorError =
         runScript "eng/validate-generated-structural-tests.fsx" [ "--root"; "."; "--artifact"; artifactRelative ]
+
     Assert.Equal(0, validatorExit)
     Assert.Contains("GENERATED_STRUCTURAL_TESTS_VALID total=225", validatorOutput)
     Assert.Contains("vocabulary=136", validatorOutput)
@@ -247,11 +315,22 @@ let ``stable generator and validator adapters execute the committed artifact`` (
 
 [<Fact>]
 let ``accepted GS2-03.3 evidence remains bound to its accepted generated bytes`` () =
-    let evidencePath = Path.Combine(root, "evidence/github-substrate-v2/generated/GS2-03.3.json")
+    let evidencePath =
+        Path.Combine(root, "evidence/github-substrate-v2/generated/GS2-03.3.json")
+
     use document = JsonDocument.Parse(File.ReadAllBytes evidencePath)
     let evidence = document.RootElement
     Assert.Equal("fsgg.coordination.generated-case/1", evidence.GetProperty("schema").GetString())
     Assert.Equal("GS2-03.3-generated-structural-tests", evidence.GetProperty("id").GetString())
-    Assert.Equal("51abd02a655f8ee282c818b3085f32e79927ea160226b4778f9f35798fe60f17", evidence.GetProperty("sha256").GetString())
+
+    Assert.Equal(
+        "51abd02a655f8ee282c818b3085f32e79927ea160226b4778f9f35798fe60f17",
+        evidence.GetProperty("sha256").GetString()
+    )
+
     Assert.NotEqual(sha256 (File.ReadAllBytes artifactPath), evidence.GetProperty("sha256").GetString())
-    Assert.Equal("4d492fb04e73c30f81ad8b96426afc13bc784595336c5a07e866da2e057cf804", evidence.GetProperty("seed").GetString())
+
+    Assert.Equal(
+        "4d492fb04e73c30f81ad8b96426afc13bc784595336c5a07e866da2e057cf804",
+        evidence.GetProperty("seed").GetString()
+    )

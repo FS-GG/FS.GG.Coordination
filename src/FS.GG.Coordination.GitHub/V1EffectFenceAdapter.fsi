@@ -1,6 +1,8 @@
 namespace FS.GG.Coordination.GitHub
 
-type V1EffectClass = NewV1Admission | EligibleIncumbentV1
+type V1EffectClass =
+    | NewV1Admission
+    | EligibleIncumbentV1
 
 type V1EpochPhase =
     | V1OperatingV1
@@ -16,22 +18,24 @@ type V1EpochPhase =
     | V1RollingBack
 
 type V1EpochEvidence =
-    { Schema: string
-      FleetId: string
-      Repository: string
-      RepositoryId: int64
-      Ref: string
-      Tag: string
-      GenesisCommit: string
-      TrustAnchorSha256: string
-      ManifestSha256: string
-      Phase: V1EpochPhase
-      Commit: string
-      Parent: string option
-      Generation: int64
-      Complete: bool
-      Fresh: bool
-      CacheUsedAsAuthority: bool }
+    {
+        Schema: string
+        FleetId: string
+        Repository: string
+        RepositoryId: int64
+        Ref: string
+        Tag: string
+        GenesisCommit: string
+        TrustAnchorSha256: string
+        ManifestSha256: string
+        Phase: V1EpochPhase
+        Commit: string
+        Parent: string option
+        Generation: int64
+        Complete: bool
+        Fresh: bool
+        CacheUsedAsAuthority: bool
+    }
 
 type FreshEpochRead =
     | FreshEpochBytes of byte array
@@ -40,17 +44,23 @@ type FreshEpochRead =
     | EpochContradictory of string
 
 type V1EffectExpectation =
-    { EffectClass: V1EffectClass
-      EligibleIncumbent: bool
-      ManifestSha256: string
-      EpochCommit: string
-      EpochGeneration: int64
-      ExpectedClaimGeneration: int64 option
-      CurrentClaimGeneration: int64 option
-      ExpectedOperationGeneration: int64
-      CurrentOperationGeneration: int64 }
+    {
+        EffectClass: V1EffectClass
+        EligibleIncumbent: bool
+        ManifestSha256: string
+        EpochCommit: string
+        EpochGeneration: int64
+        ExpectedClaimGeneration: int64 option
+        CurrentClaimGeneration: int64 option
+        ExpectedOperationGeneration: int64
+        CurrentOperationGeneration: int64
+    }
 
-type V1EffectRequest = { OperationId: string; PayloadDigest: string }
+type V1EffectRequest =
+    {
+        OperationId: string
+        PayloadDigest: string
+    }
 
 type V1EffectAttempt =
     | EffectApplied of effectDigest: string
@@ -66,11 +76,16 @@ type V1EffectOutcome =
     | V1Indeterminate of reason: string
 
 type FreshEpochReader = { ReadFresh: unit -> FreshEpochRead }
-type V1EffectPort = { ApplyOnce: V1EffectRequest -> V1EffectAttempt }
+
+type V1EffectPort =
+    {
+        ApplyOnce: V1EffectRequest -> V1EffectAttempt
+    }
 
 [<RequireQualifiedAccess>]
 module V1EffectFenceAdapter =
     val parseStrict: byte array -> Result<V1EpochEvidence, string list>
+
     val execute:
         reader: FreshEpochReader ->
         effect: V1EffectPort ->

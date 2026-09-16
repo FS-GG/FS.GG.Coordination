@@ -16,8 +16,10 @@ let private runSelfTest () =
     info.RedirectStandardOutput <- true
     info.RedirectStandardError <- true
     info.Environment["DOTNET_ROLL_FORWARD"] <- "Disable"
+
     for argument in [ "fsi"; "eng/supply-chain-candidate.fsx"; "--"; "selftest"; "--repo"; "." ] do
         info.ArgumentList.Add argument
+
     use child = Process.Start info
     let output = child.StandardOutput.ReadToEnd()
     let error = child.StandardError.ReadToEnd()
@@ -31,8 +33,10 @@ let private runReproducibilityTest () =
     info.RedirectStandardOutput <- true
     info.RedirectStandardError <- true
     info.Environment["DOTNET_ROLL_FORWARD"] <- "Disable"
+
     for argument in [ "fsi"; "eng/supply-chain-candidate.fsx"; "--"; "reprotest"; "--repo"; "." ] do
         info.ArgumentList.Add argument
+
     use child = Process.Start info
     let output = child.StandardOutput.ReadToEnd()
     let error = child.StandardError.ReadToEnd()
@@ -41,22 +45,35 @@ let private runReproducibilityTest () =
 
 [<Fact>]
 let ``repository SDK selection matches the exact candidate supply-chain pin`` () =
-    use globalJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "global.json")))
+    use globalJson =
+        JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "global.json")))
+
     let sdk = globalJson.RootElement.GetProperty("sdk")
     let sdkVersion = sdk.GetProperty("version").GetString()
     let rollForward = sdk.GetProperty("rollForward").GetString()
-    let implementation = File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
+
+    let implementation =
+        File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
+
     Assert.Equal("10.0.400", sdkVersion)
     Assert.Equal("disable", rollForward)
     Assert.Contains($"let pinnedDotnetSdkVersion = \"{sdkVersion}\"", implementation)
     Assert.Contains("Environment.SetEnvironmentVariable(\"DOTNET_ROLL_FORWARD\", null)", implementation)
+
     for relativePath in
-        [ ".github/actions/coordination-setup/action.yml"
-          ".github/workflows/bootstrap-qualification.yml"
-          ".github/workflows/candidate-supply-chain.yml" ] do
+        [
+            ".github/actions/coordination-setup/action.yml"
+            ".github/workflows/bootstrap-qualification.yml"
+            ".github/workflows/candidate-supply-chain.yml"
+        ] do
         let setup = File.ReadAllText(Path.Combine(root, relativePath))
-        let setupCount = setup.Split("uses: actions/setup-dotnet@", StringSplitOptions.None).Length - 1
-        let exactPinCount = setup.Split($"dotnet-version: {sdkVersion}", StringSplitOptions.None).Length - 1
+
+        let setupCount =
+            setup.Split("uses: actions/setup-dotnet@", StringSplitOptions.None).Length - 1
+
+        let exactPinCount =
+            setup.Split($"dotnet-version: {sdkVersion}", StringSplitOptions.None).Length - 1
+
         Assert.True(setupCount > 0, $"{relativePath} must contain a setup-dotnet invocation")
         Assert.Equal(setupCount, exactPinCount)
 
@@ -66,7 +83,36 @@ let ``candidate supply chain proves positive and independent negative controls``
     Assert.Equal(0, exitCode)
     Assert.Equal("", error)
     Assert.StartsWith("SUPPLY_CHAIN_SELFTEST_OK positive=3 negative=26", output)
-    for caseName in [ "package-tamper"; "symbol-tamper"; "assembly-digest-tamper"; "sbom-tamper"; "source-projection-tamper"; "channel-substitution"; "stable-version"; "repack-count"; "workflow-channel-substitution"; "workflow-bypass"; "workflow-unreadable"; "workflow-unprotected"; "workflow-dynamic-source"; "workflow-detached-source"; "served-route-owner"; "served-route-package"; "served-route-version"; "served-route-file"; "served-route-query"; "served-route-fragment"; "served-route-extra-segment"; "served-route-trailing-slash"; "served-route-double-slash"; "served-route-percent-encoding"; "served-route-channel-binding"; "served-route-source-binding" ] do
+
+    for caseName in
+        [
+            "package-tamper"
+            "symbol-tamper"
+            "assembly-digest-tamper"
+            "sbom-tamper"
+            "source-projection-tamper"
+            "channel-substitution"
+            "stable-version"
+            "repack-count"
+            "workflow-channel-substitution"
+            "workflow-bypass"
+            "workflow-unreadable"
+            "workflow-unprotected"
+            "workflow-dynamic-source"
+            "workflow-detached-source"
+            "served-route-owner"
+            "served-route-package"
+            "served-route-version"
+            "served-route-file"
+            "served-route-query"
+            "served-route-fragment"
+            "served-route-extra-segment"
+            "served-route-trailing-slash"
+            "served-route-double-slash"
+            "served-route-percent-encoding"
+            "served-route-channel-binding"
+            "served-route-source-binding"
+        ] do
         Assert.Contains(caseName, output)
 
 [<Fact>]
@@ -75,16 +121,26 @@ let ``candidate package portable symbols assembly and pdb are reproducible acros
     Assert.Equal(0, exitCode)
     Assert.Equal("", error)
     Assert.Contains("SUPPLY_CHAIN_REPRODUCIBLE package=", output)
-    for field in [ "symbols="; "assembly="; "pdb=" ] do Assert.Contains(field, output)
+
+    for field in [ "symbols="; "assembly="; "pdb=" ] do
+        Assert.Contains(field, output)
 
 [<Fact>]
 let ``candidate workflow is manual exact-sha and pre-production only`` () =
-    let workflow = File.ReadAllText(Path.Combine(root, ".github/workflows/candidate-supply-chain.yml"))
+    let workflow =
+        File.ReadAllText(Path.Combine(root, ".github/workflows/candidate-supply-chain.yml"))
+
     Assert.Contains("workflow_dispatch:", workflow)
     Assert.Contains("expected_sha:", workflow)
     Assert.Contains("permissions:\n  contents: read\n  packages: write", workflow)
     Assert.Contains("dotnet fsi eng/supply-chain-candidate.fsx -- prepare", workflow)
-    Assert.Equal(3, workflow.Split("DOTNET_ROLL_FORWARD: Disable", StringSplitOptions.None).Length - 1)
+
+    Assert.Equal(
+        3,
+        workflow.Split("DOTNET_ROLL_FORWARD: Disable", StringSplitOptions.None).Length
+        - 1
+    )
+
     Assert.Contains("git merge-base --is-ancestor", workflow)
     Assert.Contains("--protected-ref refs/remotes/origin/main", workflow)
     Assert.Contains("https://nuget.pkg.github.com/FS-GG/index.json", workflow)
@@ -100,11 +156,20 @@ let ``candidate workflow is manual exact-sha and pre-production only`` () =
 
 [<Fact>]
 let ``candidate implementation has one pack call and two clean consumers`` () =
-    let implementation = File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
-    let qualification = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/compiler-and-tests.sh"))
-    let runnerTemp = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/runner-temp.sh"))
-    let packToken = "\"pack\"; packageProject"
-    Assert.Equal(1, implementation.Split(packToken, StringSplitOptions.None).Length - 1)
+    let implementation =
+        File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
+
+    let qualification =
+        File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/compiler-and-tests.sh"))
+
+    let runnerTemp =
+        File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/runner-temp.sh"))
+
+    let compactImplementation =
+        new string (implementation |> Seq.filter (Char.IsWhiteSpace >> not) |> Seq.toArray)
+
+    let packToken = "\"pack\"packageProject"
+    Assert.Equal(1, compactImplementation.Split(packToken, StringSplitOptions.None).Length - 1)
     Assert.Contains("SPDX-2.3", implementation)
     Assert.Contains("https://in-toto.io/Statement/v1", implementation)
     Assert.Contains("packInvocations", implementation)
@@ -123,7 +188,13 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("pinnedDotnetRuntimeVersion", implementation)
     Assert.Contains("pinnedFSharpCompilerSha256", implementation)
     Assert.Contains("requireServedRoute", implementation)
-    Assert.Equal(3, implementation.Split("--disable-build-servers", StringSplitOptions.None).Length - 1)
+
+    Assert.Equal(
+        3,
+        implementation.Split("--disable-build-servers", StringSplitOptions.None).Length
+        - 1
+    )
+
     Assert.Contains("projectTrackedSource", implementation)
     Assert.Contains("git status --porcelain --untracked-files=all", qualification)
     Assert.Contains("identity-bound qualification requires a clean committed candidate", qualification)
@@ -131,16 +202,28 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
     Assert.Contains("${RUNNER_TEMP:-}", runnerTemp)
     Assert.Contains("mktemp -d", runnerTemp)
     Assert.Contains("trap 'rm -rf", runnerTemp)
-    for gate in [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"; "deterministic-build"; "evidence-manifest"; "package-install-smoke"; "workflow-static" ] do
+
+    for gate in
+        [
+            "bootstrap-recovery"
+            "compiler-and-tests"
+            "dependency-and-security"
+            "deterministic-build"
+            "evidence-manifest"
+            "package-install-smoke"
+            "workflow-static"
+        ] do
         let source = File.ReadAllText(Path.Combine(root, $"eng/bootstrap-gates/{gate}.sh"))
         Assert.Contains("${BASH_SOURCE[0]}", source)
         Assert.Contains("runner-temp.sh", source)
         Assert.Contains("fsgg_resolve_runner_temp", source)
+
     Assert.Contains("\"archive\"; \"--format=zip\"", implementation)
     Assert.Contains("tracked-source", implementation)
     Assert.Contains("SequenceEqual", implementation)
     Assert.Contains("supply-chain-consumer-a", implementation)
     Assert.Contains("supply-chain-consumer-b", implementation)
+
     for fixture in [ "supply-chain-consumer-a"; "supply-chain-consumer-b" ] do
         let directory = Path.Combine(root, "tests/fixtures", fixture)
         Assert.True(Directory.Exists directory)

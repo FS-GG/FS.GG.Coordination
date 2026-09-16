@@ -11,48 +11,62 @@ open System.Text.Json.Nodes
 open System.Text.RegularExpressions
 
 type RoadmapWorkFinding =
-    { Code: string
-      Path: string
-      Message: string }
+    {
+        Code: string
+        Path: string
+        Message: string
+    }
 
 type RoadmapGateContract =
-    { Id: string
-      QGate: string
-      CommandSha256: string }
+    {
+        Id: string
+        QGate: string
+        CommandSha256: string
+    }
 
 type RoadmapGateCommand =
-    { Id: string
-      QGate: string
-      Executable: string
-      Arguments: string list
-      CommandSha256: string }
+    {
+        Id: string
+        QGate: string
+        Executable: string
+        Arguments: string list
+        CommandSha256: string
+    }
 
 type RoadmapUnit =
-    { Id: string
-      Title: string
-      Owner: string
-      Prerequisites: string list
-      PermissionCeiling: string list
-      ExitGate: string
-      QGates: string list
-      GateCommands: string list
-      GateContracts: RoadmapGateContract list
-      ContractSha256: string }
+    {
+        Id: string
+        Title: string
+        Owner: string
+        Prerequisites: string list
+        PermissionCeiling: string list
+        ExitGate: string
+        QGates: string list
+        GateCommands: string list
+        GateContracts: RoadmapGateContract list
+        ContractSha256: string
+    }
 
 type RoadmapInspection =
-    { RoadmapRevision: string
-      RoadmapSha256: string
-      Unit: RoadmapUnit }
+    {
+        RoadmapRevision: string
+        RoadmapSha256: string
+        Unit: RoadmapUnit
+    }
 
 type PrerequisiteStatus =
-    { UnitId: string
-      Ready: bool
-      AcceptedReceiptDigests: string list }
+    {
+        UnitId: string
+        Ready: bool
+        AcceptedReceiptDigests: string list
+    }
 
 type RoadmapArtifactInput =
-    { Name: string
-      Path: string
-      Bytes: ReadOnlyMemory<byte> }
+    {
+        Name: string
+        Path: string
+        Bytes: ReadOnlyMemory<byte>
+    }
 
 type RoadmapCandidate = { Commit: string; Tree: string }
 
@@ -71,9 +85,11 @@ module RoadmapWork =
         SHA256.HashData(bytes.Span) |> Convert.ToHexString |> _.ToLowerInvariant()
 
     let private finding code path message =
-        { Code = code
-          Path = path
-          Message = message }
+        {
+            Code = code
+            Path = path
+            Message = message
+        }
 
     let private isSha (value: string) length =
         not (isNull value)
@@ -100,12 +116,14 @@ module RoadmapWork =
             let properties = element.EnumerateObject() |> Seq.toList
 
             let errors =
-                [ for property in properties do
-                      if not (names.Add property.Name) then
-                          yield finding "RW-JSON-DUPLICATE" $"{path}/{property.Name}" "duplicate member"
+                [
+                    for property in properties do
+                        if not (names.Add property.Name) then
+                            yield finding "RW-JSON-DUPLICATE" $"{path}/{property.Name}" "duplicate member"
 
-                      if not (Set.contains property.Name allowed) then
-                          yield finding "RW-JSON-UNKNOWN" $"{path}/{property.Name}" "unknown member" ]
+                        if not (Set.contains property.Name allowed) then
+                            yield finding "RW-JSON-UNKNOWN" $"{path}/{property.Name}" "unknown member"
+                ]
 
             if List.isEmpty errors then Ok properties else Error errors
 
@@ -132,14 +150,16 @@ module RoadmapWork =
             let values = value.EnumerateArray() |> Seq.toList
 
             let errors =
-                [ if not allowEmpty && List.isEmpty values then
-                      yield finding "RW-JSON-REQUIRED" $"{path}/{name}" "array must not be empty"
-                  for index, item in values |> List.indexed do
-                      if
-                          item.ValueKind <> JsonValueKind.String
-                          || String.IsNullOrWhiteSpace(item.GetString())
-                      then
-                          yield finding "RW-JSON-TYPE" $"{path}/{name}/{index}" "expected a non-empty string" ]
+                [
+                    if not allowEmpty && List.isEmpty values then
+                        yield finding "RW-JSON-REQUIRED" $"{path}/{name}" "array must not be empty"
+                    for index, item in values |> List.indexed do
+                        if
+                            item.ValueKind <> JsonValueKind.String
+                            || String.IsNullOrWhiteSpace(item.GetString())
+                        then
+                            yield finding "RW-JSON-TYPE" $"{path}/{name}/{index}" "expected a non-empty string"
+                ]
 
             if List.isEmpty errors then
                 let result = values |> List.map _.GetString()
@@ -171,25 +191,31 @@ module RoadmapWork =
 
             match
                 combine
-                    [ id |> Result.map ignore
-                      qGate |> Result.map ignore
-                      digest |> Result.map ignore ]
+                    [
+                        id |> Result.map ignore
+                        qGate |> Result.map ignore
+                        digest |> Result.map ignore
+                    ]
             with
             | Error errors -> Error errors
             | Ok _ ->
                 let value =
-                    { Id = Result.defaultValue "" id
-                      QGate = Result.defaultValue "" qGate
-                      CommandSha256 = Result.defaultValue "" digest }
+                    {
+                        Id = Result.defaultValue "" id
+                        QGate = Result.defaultValue "" qGate
+                        CommandSha256 = Result.defaultValue "" digest
+                    }
 
                 let errors =
-                    [ if not (Regex.IsMatch(value.QGate, "^Q(?:[0-9]|10)$", RegexOptions.CultureInvariant)) then
-                          yield finding "RW-Q-GATE" $"{path}/qGate" $"unknown qualification gate: {value.QGate}"
-                      if
-                          not (isSha value.CommandSha256 64)
-                          || value.CommandSha256 <> value.CommandSha256.ToLowerInvariant()
-                      then
-                          yield finding "RW-SHA256" $"{path}/commandSha256" "expected lowercase 64-hex SHA-256" ]
+                    [
+                        if not (Regex.IsMatch(value.QGate, "^Q(?:[0-9]|10)$", RegexOptions.CultureInvariant)) then
+                            yield finding "RW-Q-GATE" $"{path}/qGate" $"unknown qualification gate: {value.QGate}"
+                        if
+                            not (isSha value.CommandSha256 64)
+                            || value.CommandSha256 <> value.CommandSha256.ToLowerInvariant()
+                        then
+                            yield finding "RW-SHA256" $"{path}/commandSha256" "expected lowercase 64-hex SHA-256"
+                    ]
 
                 if List.isEmpty errors then Ok value else Error errors
 
@@ -216,7 +242,9 @@ module RoadmapWork =
 
             let errors =
                 errors
-                @ [ for id in duplicateIds -> finding "RW-JSON-DUPLICATE" $"{path}/{name}" $"duplicate command id: {id}" ]
+                @ [
+                    for id in duplicateIds -> finding "RW-JSON-DUPLICATE" $"{path}/{name}" $"duplicate command id: {id}"
+                ]
 
             if List.isEmpty errors then Ok contracts else Error errors
         | None -> Ok []
@@ -255,26 +283,30 @@ module RoadmapWork =
         stream.ToArray()
 
     type private Index =
-        { Revision: string
-          RoadmapPath: string
-          RoadmapSha: string
-          Units: RoadmapUnit list }
+        {
+            Revision: string
+            RoadmapPath: string
+            RoadmapSha: string
+            Units: RoadmapUnit list
+        }
 
     let private parseUnit index (element: JsonElement) =
         let path = $"/units/{index}"
 
         let allowed =
             Set.ofList
-                [ "id"
-                  "title"
-                  "owner"
-                  "prerequisites"
-                  "permissionCeiling"
-                  "exitGate"
-                  "qGates"
-                  "gateCommands"
-                  "gateContracts"
-                  "contractSha256" ]
+                [
+                    "id"
+                    "title"
+                    "owner"
+                    "prerequisites"
+                    "permissionCeiling"
+                    "exitGate"
+                    "qGates"
+                    "gateCommands"
+                    "gateContracts"
+                    "contractSha256"
+                ]
 
         match strictObject path allowed element with
         | Error errors -> Error errors
@@ -292,67 +324,73 @@ module RoadmapWork =
 
             match
                 combine
-                    [ id |> Result.map ignore
-                      title |> Result.map ignore
-                      owner |> Result.map ignore
-                      prerequisites |> Result.map ignore
-                      permissionCeiling |> Result.map ignore
-                      exitGate |> Result.map ignore
-                      qGates |> Result.map ignore
-                      gateCommands |> Result.map ignore
-                      gateContracts |> Result.map ignore
-                      contractSha |> Result.map ignore ]
+                    [
+                        id |> Result.map ignore
+                        title |> Result.map ignore
+                        owner |> Result.map ignore
+                        prerequisites |> Result.map ignore
+                        permissionCeiling |> Result.map ignore
+                        exitGate |> Result.map ignore
+                        qGates |> Result.map ignore
+                        gateCommands |> Result.map ignore
+                        gateContracts |> Result.map ignore
+                        contractSha |> Result.map ignore
+                    ]
             with
             | Error errors -> Error errors
             | Ok _ ->
                 let unitValue =
-                    { Id = Result.defaultValue "" id
-                      Title = Result.defaultValue "" title
-                      Owner = Result.defaultValue "" owner
-                      Prerequisites = Result.defaultValue [] prerequisites
-                      PermissionCeiling = Result.defaultValue [] permissionCeiling
-                      ExitGate = Result.defaultValue "" exitGate
-                      QGates = Result.defaultValue [] qGates
-                      GateCommands = Result.defaultValue [] gateCommands
-                      GateContracts = Result.defaultValue [] gateContracts
-                      ContractSha256 = Result.defaultValue "" contractSha }
+                    {
+                        Id = Result.defaultValue "" id
+                        Title = Result.defaultValue "" title
+                        Owner = Result.defaultValue "" owner
+                        Prerequisites = Result.defaultValue [] prerequisites
+                        PermissionCeiling = Result.defaultValue [] permissionCeiling
+                        ExitGate = Result.defaultValue "" exitGate
+                        QGates = Result.defaultValue [] qGates
+                        GateCommands = Result.defaultValue [] gateCommands
+                        GateContracts = Result.defaultValue [] gateContracts
+                        ContractSha256 = Result.defaultValue "" contractSha
+                    }
 
                 let errors =
-                    [ if
-                          not (Regex.IsMatch(unitValue.Id, "^GS2-[0-9]{2}\\.[0-9]+$", RegexOptions.CultureInvariant))
-                      then
-                          yield finding "RW-UNIT-ID" $"{path}/id" "unit id must use the stable GS2-NN.N form"
-                      let calculated =
-                          sha256 (ReadOnlyMemory<byte>(canonicalBytesOmitting "contractSha256" element))
+                    [
+                        if
+                            not (Regex.IsMatch(unitValue.Id, "^GS2-[0-9]{2}\\.[0-9]+$", RegexOptions.CultureInvariant))
+                        then
+                            yield finding "RW-UNIT-ID" $"{path}/id" "unit id must use the stable GS2-NN.N form"
+                        let calculated =
+                            sha256 (ReadOnlyMemory<byte>(canonicalBytesOmitting "contractSha256" element))
 
-                      if unitValue.ContractSha256 <> calculated then
-                          yield
-                              finding
-                                  "RW-UNIT-CONTRACT"
-                                  $"{path}/contractSha256"
-                                  $"expected canonical digest {calculated}"
+                        if unitValue.ContractSha256 <> calculated then
+                            yield
+                                finding
+                                    "RW-UNIT-CONTRACT"
+                                    $"{path}/contractSha256"
+                                    $"expected canonical digest {calculated}"
 
-                      for gate in unitValue.QGates do
-                          if not (Regex.IsMatch(gate, "^Q(?:[0-9]|10)$", RegexOptions.CultureInvariant)) then
-                              yield finding "RW-Q-GATE" $"{path}/qGates" $"unknown qualification gate: {gate}"
+                        for gate in unitValue.QGates do
+                            if not (Regex.IsMatch(gate, "^Q(?:[0-9]|10)$", RegexOptions.CultureInvariant)) then
+                                yield finding "RW-Q-GATE" $"{path}/qGates" $"unknown qualification gate: {gate}"
 
-                      if not unitValue.GateContracts.IsEmpty then
-                          if (unitValue.GateContracts |> List.map _.Id) <> unitValue.GateCommands then
-                              yield
-                                  finding
-                                      "RW-GATE-CONTRACT"
-                                      $"{path}/gateContracts"
-                                      "ordered contract ids must exactly match gateCommands"
+                        if not unitValue.GateContracts.IsEmpty then
+                            if (unitValue.GateContracts |> List.map _.Id) <> unitValue.GateCommands then
+                                yield
+                                    finding
+                                        "RW-GATE-CONTRACT"
+                                        $"{path}/gateContracts"
+                                        "ordered contract ids must exactly match gateCommands"
 
-                          if
-                              (unitValue.GateContracts |> List.map _.QGate |> Set.ofList)
-                              <> Set.ofList unitValue.QGates
-                          then
-                              yield
-                                  finding
-                                      "RW-GATE-CONTRACT"
-                                      $"{path}/gateContracts"
-                                      "contract Q gates must exactly cover qGates" ]
+                            if
+                                (unitValue.GateContracts |> List.map _.QGate |> Set.ofList)
+                                <> Set.ofList unitValue.QGates
+                            then
+                                yield
+                                    finding
+                                        "RW-GATE-CONTRACT"
+                                        $"{path}/gateContracts"
+                                        "contract Q gates must exactly cover qGates"
+                    ]
 
                 if List.isEmpty errors then Ok unitValue else Error errors
 
@@ -370,11 +408,13 @@ module RoadmapWork =
                 let units = property "units" root
 
                 let mutable errors =
-                    [ match schema with
-                      | Ok value when value = IndexSchema -> ()
-                      | Ok value ->
-                          yield finding "RW-INDEX-SCHEMA" "/schema" $"expected {IndexSchema}, observed {value}"
-                      | Error values -> yield! values ]
+                    [
+                        match schema with
+                        | Ok value when value = IndexSchema -> ()
+                        | Ok value ->
+                            yield finding "RW-INDEX-SCHEMA" "/schema" $"expected {IndexSchema}, observed {value}"
+                        | Error values -> yield! values
+                    ]
 
                 let roadmapResult =
                     match roadmap with
@@ -391,10 +431,12 @@ module RoadmapWork =
 
                             match
                                 combine
-                                    [ repository |> Result.map ignore
-                                      revision |> Result.map ignore
-                                      path |> Result.map ignore
-                                      digest |> Result.map ignore ]
+                                    [
+                                        repository |> Result.map ignore
+                                        revision |> Result.map ignore
+                                        path |> Result.map ignore
+                                        digest |> Result.map ignore
+                                    ]
                             with
                             | Error values -> Error values
                             | Ok _ ->
@@ -404,29 +446,35 @@ module RoadmapWork =
                                 let sha = Result.defaultValue "" digest
 
                                 let validation =
-                                    [ if repo <> "FS-GG/.github" then
-                                          yield
-                                              finding
-                                                  "RW-ROADMAP-REPOSITORY"
-                                                  "/roadmap/repository"
-                                                  "expected FS-GG/.github"
-                                      if not (isSha rev 40) then
-                                          yield
-                                              finding
-                                                  "RW-ROADMAP-REVISION"
-                                                  "/roadmap/revision"
-                                                  "expected exact 40-hex revision"
-                                      if
-                                          Path.IsPathRooted roadmapPath || roadmapPath.Split('/') |> Array.contains ".."
-                                      then
-                                          yield
-                                              finding
-                                                  "RW-PATH"
-                                                  "/roadmap/path"
-                                                  "roadmap path must be repository-relative"
-                                      if not (isSha sha 64) then
-                                          yield
-                                              finding "RW-SHA256" "/roadmap/sha256" "expected lowercase 64-hex SHA-256" ]
+                                    [
+                                        if repo <> "FS-GG/.github" then
+                                            yield
+                                                finding
+                                                    "RW-ROADMAP-REPOSITORY"
+                                                    "/roadmap/repository"
+                                                    "expected FS-GG/.github"
+                                        if not (isSha rev 40) then
+                                            yield
+                                                finding
+                                                    "RW-ROADMAP-REVISION"
+                                                    "/roadmap/revision"
+                                                    "expected exact 40-hex revision"
+                                        if
+                                            Path.IsPathRooted roadmapPath
+                                            || roadmapPath.Split('/') |> Array.contains ".."
+                                        then
+                                            yield
+                                                finding
+                                                    "RW-PATH"
+                                                    "/roadmap/path"
+                                                    "roadmap path must be repository-relative"
+                                        if not (isSha sha 64) then
+                                            yield
+                                                finding
+                                                    "RW-SHA256"
+                                                    "/roadmap/sha256"
+                                                    "expected lowercase 64-hex SHA-256"
+                                    ]
 
                                 if List.isEmpty validation then
                                     Ok(rev, roadmapPath, sha)
@@ -468,18 +516,22 @@ module RoadmapWork =
                         if not (Set.contains prerequisite known) then
                             errors <-
                                 errors
-                                @ [ finding
+                                @ [
+                                    finding
                                         "RW-PREREQUISITE-UNKNOWN"
                                         $"/units/{unitValue.Id}/prerequisites"
-                                        prerequisite ]
+                                        prerequisite
+                                ]
 
                     if unitValue.QGates.IsEmpty <> unitValue.GateCommands.IsEmpty then
                         errors <-
                             errors
-                            @ [ finding
+                            @ [
+                                finding
                                     "RW-GATE-INCOMPLETE"
                                     $"/units/{unitValue.Id}"
-                                    "qGates and gateCommands must both be empty or both be populated" ]
+                                    "qGates and gateCommands must both be empty or both be populated"
+                            ]
 
                 if not (List.isEmpty errors) then
                     Error errors
@@ -487,10 +539,12 @@ module RoadmapWork =
                     let revision, roadmapPath, digest = Result.defaultValue ("", "", "") roadmapResult
 
                     Ok
-                        { Revision = revision
-                          RoadmapPath = roadmapPath
-                          RoadmapSha = digest
-                          Units = parsedUnits }
+                        {
+                            Revision = revision
+                            RoadmapPath = roadmapPath
+                            RoadmapSha = digest
+                            Units = parsedUnits
+                        }
         with :? JsonException as error ->
             Error [ finding "RW-INDEX-JSON" "/" error.Message ]
 
@@ -498,8 +552,11 @@ module RoadmapWork =
         let digest = sha256 bytes
 
         let errors =
-            [ if digest <> index.RoadmapSha then
-                  yield finding "RW-ROADMAP-DIGEST" index.RoadmapPath $"expected {index.RoadmapSha}, observed {digest}" ]
+            [
+                if digest <> index.RoadmapSha then
+                    yield
+                        finding "RW-ROADMAP-DIGEST" index.RoadmapPath $"expected {index.RoadmapSha}, observed {digest}"
+            ]
 
         if not (List.isEmpty errors) then
             Error errors
@@ -540,14 +597,18 @@ module RoadmapWork =
     let inspect index roadmap unitId =
         validated index roadmap unitId
         |> Result.map (fun (indexValue, unitValue) ->
-            { RoadmapRevision = indexValue.Revision
-              RoadmapSha256 = indexValue.RoadmapSha
-              Unit = unitValue })
+            {
+                RoadmapRevision = indexValue.Revision
+                RoadmapSha256 = indexValue.RoadmapSha
+                Unit = unitValue
+            })
 
     type private Receipt =
-        { UnitId: string
-          UnitContractSha256: string
-          Digest: string }
+        {
+            UnitId: string
+            UnitContractSha256: string
+            Digest: string
+        }
 
     let private parseReceipt (bytes: ReadOnlyMemory<byte>) =
         try
@@ -556,14 +617,16 @@ module RoadmapWork =
 
             let allowed =
                 Set.ofList
-                    [ "schema"
-                      "unitId"
-                      "state"
-                      "unitContractSha256"
-                      "sourceRevision"
-                      "artifacts"
-                      "acceptedAt"
-                      "digest" ]
+                    [
+                        "schema"
+                        "unitId"
+                        "state"
+                        "unitContractSha256"
+                        "sourceRevision"
+                        "artifacts"
+                        "acceptedAt"
+                        "digest"
+                    ]
 
             match strictObject "" allowed root with
             | Error errors -> Error errors
@@ -578,35 +641,42 @@ module RoadmapWork =
                 let artifacts = property "artifacts" root
 
                 let mutable errors =
-                    [ match schema with
-                      | Ok value when value = ReceiptSchema -> ()
-                      | Ok value -> yield finding "RW-RECEIPT-SCHEMA" "/schema" value
-                      | Error values -> yield! values
-                      match state with
-                      | Ok "accepted" -> ()
-                      | Ok value -> yield finding "RW-RECEIPT-STATE" "/state" $"expected accepted, observed {value}"
-                      | Error values -> yield! values
-                      match unitContractSha with
-                      | Ok value when isSha value 64 -> ()
-                      | Ok _ ->
-                          yield finding "RW-RECEIPT-CONTRACT" "/unitContractSha256" "expected lowercase 64-hex SHA-256"
-                      | Error values -> yield! values
-                      match sourceRevision with
-                      | Ok value when isSha value 40 -> ()
-                      | Ok _ -> yield finding "RW-RECEIPT-SOURCE" "/sourceRevision" "expected exact 40-hex revision"
-                      | Error values -> yield! values
-                      match acceptedAt with
-                      | Ok value ->
-                          match
-                              DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
-                          with
-                          | true, _ -> ()
-                          | _ -> yield finding "RW-RECEIPT-TIME" "/acceptedAt" "expected ISO-8601 instant"
-                      | Error values -> yield! values
-                      match digest with
-                      | Ok value when isSha value 64 -> ()
-                      | Ok _ -> yield finding "RW-RECEIPT-DIGEST" "/digest" "expected lowercase 64-hex SHA-256"
-                      | Error values -> yield! values ]
+                    [
+                        match schema with
+                        | Ok value when value = ReceiptSchema -> ()
+                        | Ok value -> yield finding "RW-RECEIPT-SCHEMA" "/schema" value
+                        | Error values -> yield! values
+                        match state with
+                        | Ok "accepted" -> ()
+                        | Ok value -> yield finding "RW-RECEIPT-STATE" "/state" $"expected accepted, observed {value}"
+                        | Error values -> yield! values
+                        match unitContractSha with
+                        | Ok value when isSha value 64 -> ()
+                        | Ok _ ->
+                            yield
+                                finding "RW-RECEIPT-CONTRACT" "/unitContractSha256" "expected lowercase 64-hex SHA-256"
+                        | Error values -> yield! values
+                        match sourceRevision with
+                        | Ok value when isSha value 40 -> ()
+                        | Ok _ -> yield finding "RW-RECEIPT-SOURCE" "/sourceRevision" "expected exact 40-hex revision"
+                        | Error values -> yield! values
+                        match acceptedAt with
+                        | Ok value ->
+                            match
+                                DateTimeOffset.TryParse(
+                                    value,
+                                    CultureInfo.InvariantCulture,
+                                    DateTimeStyles.RoundtripKind
+                                )
+                            with
+                            | true, _ -> ()
+                            | _ -> yield finding "RW-RECEIPT-TIME" "/acceptedAt" "expected ISO-8601 instant"
+                        | Error values -> yield! values
+                        match digest with
+                        | Ok value when isSha value 64 -> ()
+                        | Ok _ -> yield finding "RW-RECEIPT-DIGEST" "/digest" "expected lowercase 64-hex SHA-256"
+                        | Error values -> yield! values
+                    ]
 
                 match artifacts with
                 | Some value when value.ValueKind = JsonValueKind.Array && value.GetArrayLength() > 0 ->
@@ -623,10 +693,12 @@ module RoadmapWork =
                             | Ok _ ->
                                 errors <-
                                     errors
-                                    @ [ finding
+                                    @ [
+                                        finding
                                             "RW-SHA256"
                                             $"/artifacts/{index}/sha256"
-                                            "expected lowercase 64-hex SHA-256" ]
+                                            "expected lowercase 64-hex SHA-256"
+                                    ]
                             | Error values -> errors <- errors @ values
                 | _ -> errors <- errors @ [ finding "RW-JSON-REQUIRED" "/artifacts" "required non-empty array" ]
 
@@ -636,14 +708,18 @@ module RoadmapWork =
                 | Ok value when value <> calculated ->
                     errors <-
                         errors
-                        @ [ finding "RW-RECEIPT-TAMPERED" "/digest" $"expected canonical digest {calculated}" ]
+                        @ [
+                            finding "RW-RECEIPT-TAMPERED" "/digest" $"expected canonical digest {calculated}"
+                        ]
                 | _ -> ()
 
                 if List.isEmpty errors then
                     Ok
-                        { UnitId = Result.defaultValue "" unitId
-                          UnitContractSha256 = Result.defaultValue "" unitContractSha
-                          Digest = Result.defaultValue "" digest }
+                        {
+                            UnitId = Result.defaultValue "" unitId
+                            UnitContractSha256 = Result.defaultValue "" unitContractSha
+                            Digest = Result.defaultValue "" digest
+                        }
                 else
                     Error errors
         with :? JsonException as error ->
@@ -675,21 +751,27 @@ module RoadmapWork =
                 | None ->
                     findings <-
                         findings
-                        @ [ finding "RW-RECEIPT-UNIT" "/receipts" $"receipt unit is not registered: {receipt.UnitId}" ]
+                        @ [
+                            finding "RW-RECEIPT-UNIT" "/receipts" $"receipt unit is not registered: {receipt.UnitId}"
+                        ]
                 | Some unitValue when unitValue.ContractSha256 <> receipt.UnitContractSha256 ->
                     findings <-
                         findings
-                        @ [ finding
+                        @ [
+                            finding
                                 "RW-RECEIPT-STALE"
                                 "/receipts"
-                                $"receipt contract for {receipt.UnitId} does not match the current unit definition" ]
+                                $"receipt contract for {receipt.UnitId} does not match the current unit definition"
+                        ]
                 | Some _ -> ()
 
             for prerequisite in unitValue.Prerequisites do
                 if receipts |> List.exists (fun receipt -> receipt.UnitId = prerequisite) |> not then
                     findings <-
                         findings
-                        @ [ finding "RW-PREREQUISITE-MISSING" "/receipts" $"accepted receipt missing for {prerequisite}" ]
+                        @ [
+                            finding "RW-PREREQUISITE-MISSING" "/receipts" $"accepted receipt missing for {prerequisite}"
+                        ]
 
             if not (List.isEmpty findings) then
                 Error findings
@@ -706,28 +788,32 @@ module RoadmapWork =
         | Ok(index, unitValue) ->
             prerequisites index unitValue receiptDocuments
             |> Result.map (fun receipts ->
-                { UnitId = unitId
-                  Ready = true
-                  AcceptedReceiptDigests = receipts |> List.map _.Digest })
+                {
+                    UnitId = unitId
+                    Ready = true
+                    AcceptedReceiptDigests = receipts |> List.map _.Digest
+                })
 
     let private validArtifact (artifact: RoadmapArtifactInput) =
         let path = artifact.Path.Replace('\\', '/')
         let segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries)
 
-        [ if String.IsNullOrWhiteSpace artifact.Name then
-              yield finding "RW-ARTIFACT-NAME" "/artifacts" "artifact name is required"
-          if
-              String.IsNullOrWhiteSpace path
-              || Path.IsPathRooted path
-              || segments |> Array.contains ".."
-          then
-              yield
-                  finding
-                      "RW-PATH"
-                      $"/artifacts/{artifact.Name}/path"
-                      "artifact path must be repository-relative and contained"
-          if artifact.Bytes.IsEmpty then
-              yield finding "RW-ARTIFACT-EMPTY" $"/artifacts/{artifact.Name}" "artifact must not be empty" ]
+        [
+            if String.IsNullOrWhiteSpace artifact.Name then
+                yield finding "RW-ARTIFACT-NAME" "/artifacts" "artifact name is required"
+            if
+                String.IsNullOrWhiteSpace path
+                || Path.IsPathRooted path
+                || segments |> Array.contains ".."
+            then
+                yield
+                    finding
+                        "RW-PATH"
+                        $"/artifacts/{artifact.Name}/path"
+                        "artifact path must be repository-relative and contained"
+            if artifact.Bytes.IsEmpty then
+                yield finding "RW-ARTIFACT-EMPTY" $"/artifacts/{artifact.Name}" "artifact must not be empty"
+        ]
 
     let private manifestNode
         (indexSha: string)
@@ -797,27 +883,25 @@ module RoadmapWork =
         | Error errors -> Error errors
         | Ok(index, unitValue) ->
             let validation =
-                [ if not (isSha candidate.Commit 40) then
-                      yield finding "RW-CANDIDATE-COMMIT" "/candidateCommit" "expected exact 40-hex commit"
-                  if not (isSha candidate.Tree 40) then
-                      yield finding "RW-CANDIDATE-TREE" "/candidateTree" "expected exact 40-hex tree"
-                  if not (isCanonicalUtcInstant createdAt) then
-                      yield
-                          finding
-                              "RW-CREATED-AT"
-                              "/createdAt"
-                              "expected canonical UTC instant YYYY-MM-DDTHH:MM:SSZ"
-                  if List.isEmpty artifacts then
-                      yield finding "RW-ARTIFACTS" "/artifacts" "at least one artifact is required"
-                  yield! artifacts |> List.collect validArtifact
-                  if artifacts.Length <> (artifacts |> List.map _.Name |> List.distinct).Length then
-                      yield finding "RW-ARTIFACT-DUPLICATE" "/artifacts" "artifact names must be unique"
-                  if not unitValue.GateCommands.IsEmpty && unitValue.GateContracts.IsEmpty then
-                      yield
-                          finding
-                              "RW-GATE-CONTRACT-INCOMPLETE"
-                              "/gateContracts"
-                              "selected unit has no independently pinned gate command contracts" ]
+                [
+                    if not (isSha candidate.Commit 40) then
+                        yield finding "RW-CANDIDATE-COMMIT" "/candidateCommit" "expected exact 40-hex commit"
+                    if not (isSha candidate.Tree 40) then
+                        yield finding "RW-CANDIDATE-TREE" "/candidateTree" "expected exact 40-hex tree"
+                    if not (isCanonicalUtcInstant createdAt) then
+                        yield finding "RW-CREATED-AT" "/createdAt" "expected canonical UTC instant YYYY-MM-DDTHH:MM:SSZ"
+                    if List.isEmpty artifacts then
+                        yield finding "RW-ARTIFACTS" "/artifacts" "at least one artifact is required"
+                    yield! artifacts |> List.collect validArtifact
+                    if artifacts.Length <> (artifacts |> List.map _.Name |> List.distinct).Length then
+                        yield finding "RW-ARTIFACT-DUPLICATE" "/artifacts" "artifact names must be unique"
+                    if not unitValue.GateCommands.IsEmpty && unitValue.GateContracts.IsEmpty then
+                        yield
+                            finding
+                                "RW-GATE-CONTRACT-INCOMPLETE"
+                                "/gateContracts"
+                                "selected unit has no independently pinned gate command contracts"
+                ]
 
             if not (List.isEmpty validation) then
                 Error validation
@@ -854,47 +938,53 @@ module RoadmapWork =
 
                     let allowed =
                         Set.ofList
-                            [ "schema"
-                              "state"
-                              "unitId"
-                              "indexSha256"
-                              "roadmapRevision"
-                              "roadmapSha256"
-                              "candidateCommit"
-                              "candidateTree"
-                              "prerequisiteReceiptDigests"
-                              "qGates"
-                              "gateCommands"
-                              "gateContracts"
-                              "artifacts"
-                              "generator"
-                              "createdAt" ]
+                            [
+                                "schema"
+                                "state"
+                                "unitId"
+                                "indexSha256"
+                                "roadmapRevision"
+                                "roadmapSha256"
+                                "candidateCommit"
+                                "candidateTree"
+                                "prerequisiteReceiptDigests"
+                                "qGates"
+                                "gateCommands"
+                                "gateContracts"
+                                "artifacts"
+                                "generator"
+                                "createdAt"
+                            ]
 
                     match strictObject "" allowed root with
                     | Error errors -> Error errors
                     | Ok _ ->
                         let expectedStrings =
-                            [ "schema", ManifestSchema
-                              "state", "candidate"
-                              "unitId", unitId
-                              "indexSha256", sha256 indexBytes
-                              "roadmapRevision", index.Revision
-                              "roadmapSha256", index.RoadmapSha
-                              "candidateCommit", candidate.Commit
-                              "candidateTree", candidate.Tree
-                              "generator", "FS.GG.Coordination.RoadmapWork/1" ]
+                            [
+                                "schema", ManifestSchema
+                                "state", "candidate"
+                                "unitId", unitId
+                                "indexSha256", sha256 indexBytes
+                                "roadmapRevision", index.Revision
+                                "roadmapSha256", index.RoadmapSha
+                                "candidateCommit", candidate.Commit
+                                "candidateTree", candidate.Tree
+                                "generator", "FS.GG.Coordination.RoadmapWork/1"
+                            ]
 
                         let mutable errors =
-                            [ for name, expected in expectedStrings do
-                                  match requiredString "" name root with
-                                  | Ok actual when actual = expected -> ()
-                                  | Ok actual ->
-                                      yield
-                                          finding
-                                              "RW-MANIFEST-MISMATCH"
-                                              $"/{name}"
-                                              $"expected {expected}, observed {actual}"
-                                  | Error values -> yield! values ]
+                            [
+                                for name, expected in expectedStrings do
+                                    match requiredString "" name root with
+                                    | Ok actual when actual = expected -> ()
+                                    | Ok actual ->
+                                        yield
+                                            finding
+                                                "RW-MANIFEST-MISMATCH"
+                                                $"/{name}"
+                                                $"expected {expected}, observed {actual}"
+                                    | Error values -> yield! values
+                            ]
 
                         let checkList name expected =
                             match stringList "" name true root with
@@ -902,10 +992,12 @@ module RoadmapWork =
                             | Ok _ ->
                                 errors <-
                                     errors
-                                    @ [ finding
+                                    @ [
+                                        finding
                                             "RW-MANIFEST-MISMATCH"
                                             $"/{name}"
-                                            "ordered values differ from the selected unit" ]
+                                            "ordered values differ from the selected unit"
+                                    ]
                             | Error values -> errors <- errors @ values
 
                         checkList "prerequisiteReceiptDigests" (receipts |> List.map _.Digest)
@@ -917,29 +1009,35 @@ module RoadmapWork =
                         | Ok _ ->
                             errors <-
                                 errors
-                                @ [ finding
+                                @ [
+                                    finding
                                         "RW-MANIFEST-MISMATCH"
                                         "/gateContracts"
-                                        "ordered values differ from the selected unit" ]
+                                        "ordered values differ from the selected unit"
+                                ]
                         | Error values -> errors <- errors @ values
 
                         if not unitValue.GateCommands.IsEmpty && unitValue.GateContracts.IsEmpty then
                             errors <-
                                 errors
-                                @ [ finding
+                                @ [
+                                    finding
                                         "RW-GATE-CONTRACT-INCOMPLETE"
                                         "/gateContracts"
-                                        "selected unit has no independently pinned gate command contracts" ]
+                                        "selected unit has no independently pinned gate command contracts"
+                                ]
 
                         match requiredString "" "createdAt" root with
                         | Ok value when isCanonicalUtcInstant value -> ()
                         | Ok _ ->
                             errors <-
                                 errors
-                                @ [ finding
+                                @ [
+                                    finding
                                         "RW-CREATED-AT"
                                         "/createdAt"
-                                        "expected canonical UTC instant YYYY-MM-DDTHH:MM:SSZ" ]
+                                        "expected canonical UTC instant YYYY-MM-DDTHH:MM:SSZ"
+                                ]
                         | Error values -> errors <- errors @ values
 
                         match property "artifacts" root with
@@ -988,10 +1086,12 @@ module RoadmapWork =
         |> Result.bind (fun value ->
             if not value.Unit.GateCommands.IsEmpty && value.Unit.GateContracts.IsEmpty then
                 Error
-                    [ finding
-                          "RW-GATE-CONTRACT-INCOMPLETE"
-                          "/gateContracts"
-                          "selected unit has no independently pinned gate command contracts" ]
+                    [
+                        finding
+                            "RW-GATE-CONTRACT-INCOMPLETE"
+                            "/gateContracts"
+                            "selected unit has no independently pinned gate command contracts"
+                    ]
             else
                 Ok value.Unit.GateContracts)
 
@@ -1013,7 +1113,9 @@ module RoadmapWork =
                 | Ok value ->
                     errors <-
                         errors
-                        @ [ finding "RW-GATE-CATALOG-SCHEMA" "/schema" $"unsupported gate catalog schema: {value}" ]
+                        @ [
+                            finding "RW-GATE-CATALOG-SCHEMA" "/schema" $"unsupported gate catalog schema: {value}"
+                        ]
                 | Error values -> errors <- errors @ values
 
                 let parsed =
@@ -1033,10 +1135,12 @@ module RoadmapWork =
 
                                 match
                                     combine
-                                        [ id |> Result.map ignore
-                                          qGate |> Result.map ignore
-                                          executable |> Result.map ignore
-                                          arguments |> Result.map ignore ]
+                                        [
+                                            id |> Result.map ignore
+                                            qGate |> Result.map ignore
+                                            executable |> Result.map ignore
+                                            arguments |> Result.map ignore
+                                        ]
                                 with
                                 | Error values -> Error values
                                 | Ok _ ->
@@ -1056,34 +1160,38 @@ module RoadmapWork =
                                         | [] -> false
 
                                     let validation =
-                                        [ if executableValue <> "dotnet" then
-                                              yield
-                                                  finding
-                                                      "RW-GATE-EXECUTABLE"
-                                                      $"{path}/executable"
-                                                      $"not admitted: {executableValue}"
-                                          if not admittedVerb then
-                                              yield
-                                                  finding
-                                                      "RW-GATE-VERB"
-                                                      $"{path}/args"
-                                                      $"dotnet verb is not admitted: {idValue}"
-                                          if argumentValues |> List.exists unsafeArgument then
-                                              yield
-                                                  finding
-                                                      "RW-GATE-ARGUMENT"
-                                                      $"{path}/args"
-                                                      $"unsafe argument in: {idValue}" ]
+                                        [
+                                            if executableValue <> "dotnet" then
+                                                yield
+                                                    finding
+                                                        "RW-GATE-EXECUTABLE"
+                                                        $"{path}/executable"
+                                                        $"not admitted: {executableValue}"
+                                            if not admittedVerb then
+                                                yield
+                                                    finding
+                                                        "RW-GATE-VERB"
+                                                        $"{path}/args"
+                                                        $"dotnet verb is not admitted: {idValue}"
+                                            if argumentValues |> List.exists unsafeArgument then
+                                                yield
+                                                    finding
+                                                        "RW-GATE-ARGUMENT"
+                                                        $"{path}/args"
+                                                        $"unsafe argument in: {idValue}"
+                                        ]
 
                                     if not validation.IsEmpty then
                                         Error validation
                                     else
                                         Ok
-                                            { Id = idValue
-                                              QGate = qGateValue
-                                              Executable = executableValue
-                                              Arguments = argumentValues
-                                              CommandSha256 = identityDigest executableValue argumentValues })
+                                            {
+                                                Id = idValue
+                                                QGate = qGateValue
+                                                Executable = executableValue
+                                                Arguments = argumentValues
+                                                CommandSha256 = identityDigest executableValue argumentValues
+                                            })
                         |> Seq.toList
                     | _ -> [ Error [ finding "RW-JSON-REQUIRED" "/commands" "required command array" ] ]
 
@@ -1109,28 +1217,34 @@ module RoadmapWork =
                         | None ->
                             errors <-
                                 errors
-                                @ [ finding
+                                @ [
+                                    finding
                                         "RW-GATE-COMMAND-MISSING"
                                         "/commands"
-                                        $"missing declared command: {contract.Id}" ]
+                                        $"missing declared command: {contract.Id}"
+                                ]
 
                             None
                         | Some command when command.QGate <> contract.QGate ->
                             errors <-
                                 errors
-                                @ [ finding
+                                @ [
+                                    finding
                                         "RW-GATE-CONTRACT-MISMATCH"
                                         $"/commands/{contract.Id}/qGate"
-                                        $"expected {contract.QGate}, observed {command.QGate}" ]
+                                        $"expected {contract.QGate}, observed {command.QGate}"
+                                ]
 
                             None
                         | Some command when command.CommandSha256 <> contract.CommandSha256 ->
                             errors <-
                                 errors
-                                @ [ finding
+                                @ [
+                                    finding
                                         "RW-GATE-CONTRACT-MISMATCH"
                                         $"/commands/{contract.Id}/commandSha256"
-                                        $"expected {contract.CommandSha256}, observed {command.CommandSha256}" ]
+                                        $"expected {contract.CommandSha256}, observed {command.CommandSha256}"
+                                ]
 
                             None
                         | Some command -> Some command)

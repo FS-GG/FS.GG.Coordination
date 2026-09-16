@@ -9,82 +9,96 @@ open System.Text
 open System.Text.Json
 
 type GateContract =
-    { Id: string
-      Artifact: string
-      TimeoutMinutes: int
-      EntryPoint: string
-      FetchDepth: int
-      AlwaysUpload: bool
-      DownloadArtifacts: bool
-      Environment: (string * string) list
-      UploadName: string
-      UploadPath: string
-      ReceiptKind: string option
-      Needs: string list
-      Shards: string list
-      Commands: string list }
+    {
+        Id: string
+        Artifact: string
+        TimeoutMinutes: int
+        EntryPoint: string
+        FetchDepth: int
+        AlwaysUpload: bool
+        DownloadArtifacts: bool
+        Environment: (string * string) list
+        UploadName: string
+        UploadPath: string
+        ReceiptKind: string option
+        Needs: string list
+        Shards: string list
+        Commands: string list
+    }
 
 type ActionPins =
-    { Checkout: string
-      SetupDotnet: string
-      UploadArtifact: string
-      DownloadArtifact: string }
+    {
+        Checkout: string
+        SetupDotnet: string
+        UploadArtifact: string
+        DownloadArtifact: string
+    }
 
 type ReuseContract =
-    { JobId: string
-      Artifact: string
-      TimeoutMinutes: int
-      EntryPoint: string
-      UploadName: string
-      WorkflowPath: string
-      MaxCandidateArtifacts: int
-      NotBefore: string
-      Runner: string
-      Architecture: string
-      ReviewPolicy: string }
+    {
+        JobId: string
+        Artifact: string
+        TimeoutMinutes: int
+        EntryPoint: string
+        UploadName: string
+        WorkflowPath: string
+        MaxCandidateArtifacts: int
+        NotBefore: string
+        Runner: string
+        Architecture: string
+        ReviewPolicy: string
+    }
 
 type MilestoneContract =
-    { StatePath: string
-      DefaultMode: string
-      ComprehensiveBoundaryKinds: string list }
+    {
+        StatePath: string
+        DefaultMode: string
+        ComprehensiveBoundaryKinds: string list
+    }
 
 type FormalReuseContract =
-    { Artifact: string
-      IndexedArtifactPrefix: string
-      NotBefore: string
-      ExactPaths: string list
-      PathPrefixes: string list }
+    {
+        Artifact: string
+        IndexedArtifactPrefix: string
+        NotBefore: string
+        ExactPaths: string list
+        PathPrefixes: string list
+    }
 
 type EconomicsContract =
-    { JobId: string
-      TimeoutMinutes: int
-      EntryPoint: string
-      UploadName: string
-      UploadPath: string
-      WindowDays: int
-      FreshnessHours: int
-      MinimumObservations: int
-      ExpensiveRunnerMinutes: decimal
-      LowYieldMaximum: decimal
-      PolicyVersion: string
-      AttributionPath: string
-      MinimumCadence: (string * string) list }
+    {
+        JobId: string
+        TimeoutMinutes: int
+        EntryPoint: string
+        UploadName: string
+        UploadPath: string
+        WindowDays: int
+        FreshnessHours: int
+        MinimumObservations: int
+        ExpensiveRunnerMinutes: decimal
+        LowYieldMaximum: decimal
+        PolicyVersion: string
+        AttributionPath: string
+        MinimumCadence: (string * string) list
+    }
 
 type BootstrapContract =
-    { EvidenceSchema: string
-      Actions: ActionPins
-      ConcurrencyGroup: string
-      CancelInProgress: bool
-      RequiredProjectCount: int
-      RequiredGateCount: int
-      RequiredProjects: string list
-      RequiredVulnerabilitySources: string list
-      Reuse: ReuseContract
-      Milestone: MilestoneContract
-      FormalReuse: FormalReuseContract
-      Economics: EconomicsContract
-      Jobs: GateContract list
-      Bytes: byte array }
+    {
+        EvidenceSchema: string
+        Actions: ActionPins
+        ConcurrencyGroup: string
+        CancelInProgress: bool
+        RequiredProjectCount: int
+        RequiredGateCount: int
+        RequiredProjects: string list
+        RequiredVulnerabilitySources: string list
+        Reuse: ReuseContract
+        Milestone: MilestoneContract
+        FormalReuse: FormalReuseContract
+        Economics: EconomicsContract
+        Jobs: GateContract list
+        Bytes: byte array
+    }
 
 let private violation rule detail =
     $"BOOTSTRAP_CI_VIOLATION rule=%s{rule} detail=%s{detail}"
@@ -96,6 +110,7 @@ let private sha256File path = File.ReadAllBytes path |> sha256Bytes
 
 let private stringProperty (name: string) (element: JsonElement) =
     let mutable value = Unchecked.defaultof<JsonElement>
+
     if element.TryGetProperty(name, &value) && value.ValueKind = JsonValueKind.String then
         value.GetString() |> Option.ofObj
     else
@@ -103,6 +118,7 @@ let private stringProperty (name: string) (element: JsonElement) =
 
 let private arrayProperty (name: string) (element: JsonElement) =
     let mutable value = Unchecked.defaultof<JsonElement>
+
     if element.TryGetProperty(name, &value) && value.ValueKind = JsonValueKind.Array then
         Some(value.EnumerateArray() |> Seq.toList)
     else
@@ -111,14 +127,23 @@ let private arrayProperty (name: string) (element: JsonElement) =
 let private int64Property (name: string) (element: JsonElement) =
     let mutable value = Unchecked.defaultof<JsonElement>
     let mutable number = 0L
-    if element.TryGetProperty(name, &value) && value.ValueKind = JsonValueKind.Number && value.TryGetInt64(&number) then
+
+    if
+        element.TryGetProperty(name, &value)
+        && value.ValueKind = JsonValueKind.Number
+        && value.TryGetInt64(&number)
+    then
         Some number
     else
         None
 
 let private boolProperty (name: string) (element: JsonElement) =
     let mutable value = Unchecked.defaultof<JsonElement>
-    if element.TryGetProperty(name, &value) && (value.ValueKind = JsonValueKind.True || value.ValueKind = JsonValueKind.False) then
+
+    if
+        element.TryGetProperty(name, &value)
+        && (value.ValueKind = JsonValueKind.True || value.ValueKind = JsonValueKind.False)
+    then
         Some(value.GetBoolean())
     else
         None
@@ -126,19 +151,34 @@ let private boolProperty (name: string) (element: JsonElement) =
 let private decimalProperty (name: string) (element: JsonElement) =
     let mutable value = Unchecked.defaultof<JsonElement>
     let mutable number = 0m
-    if element.TryGetProperty(name, &value) && value.ValueKind = JsonValueKind.Number && value.TryGetDecimal(&number) then Some number else None
+
+    if
+        element.TryGetProperty(name, &value)
+        && value.ValueKind = JsonValueKind.Number
+        && value.TryGetDecimal(&number)
+    then
+        Some number
+    else
+        None
 
 let private stringArray (name: string) element =
     arrayProperty name element
     |> Option.defaultValue []
-    |> List.choose (fun item -> if item.ValueKind = JsonValueKind.String then item.GetString() |> Option.ofObj else None)
+    |> List.choose (fun item ->
+        if item.ValueKind = JsonValueKind.String then
+            item.GetString() |> Option.ofObj
+        else
+            None)
 
 let private stringProperties (name: string) (element: JsonElement) =
     let mutable value = Unchecked.defaultof<JsonElement>
+
     if element.TryGetProperty(name, &value) && value.ValueKind = JsonValueKind.Object then
         value.EnumerateObject()
         |> Seq.map (fun property ->
-            if property.Value.ValueKind <> JsonValueKind.String then failwith $"%s{name} values must be strings"
+            if property.Value.ValueKind <> JsonValueKind.String then
+                failwith $"%s{name} values must be strings"
+
             property.Name, property.Value.GetString())
         |> Seq.toList
     else
@@ -149,167 +189,404 @@ let private loadContract root =
     let bytes = File.ReadAllBytes path
     use document = JsonDocument.Parse bytes
     let value = document.RootElement
-    if stringProperty "schema" value <> Some "fsgg.coordination.bootstrap-qualification-plan/4" then
+
+    if
+        stringProperty "schema" value
+        <> Some "fsgg.coordination.bootstrap-qualification-plan/4"
+    then
         failwith "bootstrap qualification plan schema is unsupported"
-    let evidenceSchema = stringProperty "evidenceSchema" value |> Option.defaultWith (fun () -> failwith "evidenceSchema is missing")
+
+    let evidenceSchema =
+        stringProperty "evidenceSchema" value
+        |> Option.defaultWith (fun () -> failwith "evidenceSchema is missing")
+
     let actionsValue = value.GetProperty("actions")
+
     let action name =
         stringProperty name actionsValue
         |> Option.defaultWith (fun () -> failwith $"action pin is missing: %s{name}")
+
     let actions =
-        { Checkout = action "checkout"
-          SetupDotnet = action "setupDotnet"
-          UploadArtifact = action "uploadArtifact"
-          DownloadArtifact = action "downloadArtifact" }
+        {
+            Checkout = action "checkout"
+            SetupDotnet = action "setupDotnet"
+            UploadArtifact = action "uploadArtifact"
+            DownloadArtifact = action "downloadArtifact"
+        }
+
     let approvedActions =
-        [ actions.Checkout, "3d3c42e5aac5ba805825da76410c181273ba90b1"
-          actions.SetupDotnet, "a98b56852c35b8e3190ac28c8c2271da59106c68"
-          actions.UploadArtifact, "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-          actions.DownloadArtifact, "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" ]
+        [
+            actions.Checkout, "3d3c42e5aac5ba805825da76410c181273ba90b1"
+            actions.SetupDotnet, "a98b56852c35b8e3190ac28c8c2271da59106c68"
+            actions.UploadArtifact, "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+            actions.DownloadArtifact, "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+        ]
+
     for actionPin, approvedPin in approvedActions do
-        if not (isNull actionPin) && (actionPin.Length <> 40 || actionPin |> Seq.exists (Uri.IsHexDigit >> not)) then
+        if
+            not (isNull actionPin)
+            && (actionPin.Length <> 40 || actionPin |> Seq.exists (Uri.IsHexDigit >> not))
+        then
             failwith "every action must use an exact immutable SHA"
-        if actionPin <> approvedPin then failwith "action pin is not the reviewed Node 24 revision"
+
+        if actionPin <> approvedPin then
+            failwith "action pin is not the reviewed Node 24 revision"
+
     let actionRuntimes = value.GetProperty("actionRuntimes")
+
     for name in [ "checkout"; "setupDotnet"; "uploadArtifact"; "downloadArtifact" ] do
-        if stringProperty name actionRuntimes <> Some "node24" then failwith $"action runtime must be node24: %s{name}"
-    if stringArray "triggers" value <> [ "pull_request"; "push:main"; "schedule:17 3 * * *" ] then failwith "triggers must include pull_request, push:main, and the reviewed daily schedule"
-    if stringArray "permissions" value <> [ "actions:read"; "contents:read" ] then failwith "permissions must be actions:read and contents:read"
+        if stringProperty name actionRuntimes <> Some "node24" then
+            failwith $"action runtime must be node24: %s{name}"
+
+    if
+        stringArray "triggers" value
+        <> [ "pull_request"; "push:main"; "schedule:17 3 * * *" ]
+    then
+        failwith "triggers must include pull_request, push:main, and the reviewed daily schedule"
+
+    if stringArray "permissions" value <> [ "actions:read"; "contents:read" ] then
+        failwith "permissions must be actions:read and contents:read"
+
     let concurrency = value.GetProperty("concurrency")
-    let concurrencyGroup = stringProperty "group" concurrency |> Option.defaultWith (fun () -> failwith "concurrency group is missing")
-    let cancelInProgress = boolProperty "cancelInProgress" concurrency |> Option.defaultWith (fun () -> failwith "cancelInProgress is missing")
-    if concurrencyGroup <> "bootstrap-qualification-${{ github.ref }}" || not cancelInProgress then
+
+    let concurrencyGroup =
+        stringProperty "group" concurrency
+        |> Option.defaultWith (fun () -> failwith "concurrency group is missing")
+
+    let cancelInProgress =
+        boolProperty "cancelInProgress" concurrency
+        |> Option.defaultWith (fun () -> failwith "cancelInProgress is missing")
+
+    if
+        concurrencyGroup <> "bootstrap-qualification-${{ github.ref }}"
+        || not cancelInProgress
+    then
         failwith "concurrency must cancel superseded attempts within the candidate ref"
+
     let requiredProjectCount = value.GetProperty("requiredProjectCount").GetInt32()
     let requiredGateCount = value.GetProperty("requiredGateCount").GetInt32()
     let requiredProjects = stringArray "requiredProjects" value
-    if requiredProjects.Length <> requiredProjectCount || (requiredProjects |> List.distinct |> List.length) <> requiredProjectCount then
+
+    if
+        requiredProjects.Length <> requiredProjectCount
+        || (requiredProjects |> List.distinct |> List.length) <> requiredProjectCount
+    then
         failwith "requiredProjects must contain the exact distinct project census"
+
     let requiredVulnerabilitySources = stringArray "requiredVulnerabilitySources" value
-    if List.isEmpty requiredVulnerabilitySources || requiredVulnerabilitySources |> List.exists (fun source -> not (source.StartsWith("https://", StringComparison.OrdinalIgnoreCase))) then
+
+    if
+        List.isEmpty requiredVulnerabilitySources
+        || requiredVulnerabilitySources
+           |> List.exists (fun source -> not (source.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+    then
         failwith "requiredVulnerabilitySources must be a non-empty HTTPS-only set"
+
     let reuseValue = value.GetProperty("reuse")
+
     let reuse =
-        { JobId = stringProperty "jobId" reuseValue |> Option.defaultWith (fun () -> failwith "reuse jobId is missing")
-          Artifact = stringProperty "artifact" reuseValue |> Option.defaultWith (fun () -> failwith "reuse artifact is missing")
-          TimeoutMinutes = reuseValue.GetProperty("timeoutMinutes").GetInt32()
-          EntryPoint = stringProperty "entryPoint" reuseValue |> Option.defaultWith (fun () -> failwith "reuse entryPoint is missing")
-          UploadName = stringProperty "uploadName" reuseValue |> Option.defaultWith (fun () -> failwith "reuse uploadName is missing")
-          WorkflowPath = stringProperty "workflowPath" reuseValue |> Option.defaultWith (fun () -> failwith "reuse workflowPath is missing")
-          MaxCandidateArtifacts = reuseValue.GetProperty("maxCandidateArtifacts").GetInt32()
-          NotBefore = stringProperty "notBefore" reuseValue |> Option.defaultWith (fun () -> failwith "reuse notBefore is missing")
-          Runner = stringProperty "runner" reuseValue |> Option.defaultWith (fun () -> failwith "reuse runner is missing")
-          Architecture = stringProperty "architecture" reuseValue |> Option.defaultWith (fun () -> failwith "reuse architecture is missing")
-          ReviewPolicy = stringProperty "reviewPolicy" reuseValue |> Option.defaultWith (fun () -> failwith "reuse reviewPolicy is missing") }
-    if reuse <> { JobId = "reuse-decision"; Artifact = "reuse-decision/decision.json"; TimeoutMinutes = 5; EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"; UploadName = "reuse-decision"; WorkflowPath = ".github/workflows/bootstrap-qualification.yml"; MaxCandidateArtifacts = 100; NotBefore = "2026-08-29T13:32:00Z"; Runner = "ubuntu-latest"; Architecture = "x64"; ReviewPolicy = "critique-and-mutation-proof/1" } then
+        {
+            JobId =
+                stringProperty "jobId" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse jobId is missing")
+            Artifact =
+                stringProperty "artifact" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse artifact is missing")
+            TimeoutMinutes = reuseValue.GetProperty("timeoutMinutes").GetInt32()
+            EntryPoint =
+                stringProperty "entryPoint" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse entryPoint is missing")
+            UploadName =
+                stringProperty "uploadName" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse uploadName is missing")
+            WorkflowPath =
+                stringProperty "workflowPath" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse workflowPath is missing")
+            MaxCandidateArtifacts = reuseValue.GetProperty("maxCandidateArtifacts").GetInt32()
+            NotBefore =
+                stringProperty "notBefore" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse notBefore is missing")
+            Runner =
+                stringProperty "runner" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse runner is missing")
+            Architecture =
+                stringProperty "architecture" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse architecture is missing")
+            ReviewPolicy =
+                stringProperty "reviewPolicy" reuseValue
+                |> Option.defaultWith (fun () -> failwith "reuse reviewPolicy is missing")
+        }
+
+    if
+        reuse
+        <> {
+               JobId = "reuse-decision"
+               Artifact = "reuse-decision/decision.json"
+               TimeoutMinutes = 5
+               EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"
+               UploadName = "reuse-decision"
+               WorkflowPath = ".github/workflows/bootstrap-qualification.yml"
+               MaxCandidateArtifacts = 100
+               NotBefore = "2026-08-29T13:32:00Z"
+               Runner = "ubuntu-latest"
+               Architecture = "x64"
+               ReviewPolicy = "critique-and-mutation-proof/1"
+           }
+    then
         failwith "reuse policy differs from the reviewed fail-closed contract"
+
     let milestoneValue = value.GetProperty("milestone")
+
     let milestone =
-        { StatePath = stringProperty "statePath" milestoneValue |> Option.defaultWith (fun () -> failwith "milestone statePath is missing")
-          DefaultMode = stringProperty "defaultMode" milestoneValue |> Option.defaultWith (fun () -> failwith "milestone defaultMode is missing")
-          ComprehensiveBoundaryKinds = stringArray "comprehensiveBoundaryKinds" milestoneValue }
-    if milestone.StatePath <> "eng/milestone-qualification.json" || milestone.DefaultMode <> "scoped"
-       || milestone.ComprehensiveBoundaryKinds <> [ "milestone-closure"; "freeze"; "release"; "cutover"; "open-v2"; "rollback-authority" ] then
+        {
+            StatePath =
+                stringProperty "statePath" milestoneValue
+                |> Option.defaultWith (fun () -> failwith "milestone statePath is missing")
+            DefaultMode =
+                stringProperty "defaultMode" milestoneValue
+                |> Option.defaultWith (fun () -> failwith "milestone defaultMode is missing")
+            ComprehensiveBoundaryKinds = stringArray "comprehensiveBoundaryKinds" milestoneValue
+        }
+
+    if
+        milestone.StatePath <> "eng/milestone-qualification.json"
+        || milestone.DefaultMode <> "scoped"
+        || milestone.ComprehensiveBoundaryKinds
+           <> [
+               "milestone-closure"
+               "freeze"
+               "release"
+               "cutover"
+               "open-v2"
+               "rollback-authority"
+           ]
+    then
         failwith "milestone qualification policy differs from the reviewed generic contract"
+
     let formalValue = value.GetProperty("formalReuse")
+
     let formalReuse =
-        { Artifact = stringProperty "artifact" formalValue |> Option.defaultWith (fun () -> failwith "formal reuse artifact is missing")
-          IndexedArtifactPrefix = stringProperty "indexedArtifactPrefix" formalValue |> Option.defaultWith (fun () -> failwith "formal indexed prefix is missing")
-          NotBefore = stringProperty "notBefore" formalValue |> Option.defaultWith (fun () -> failwith "formal reuse epoch is missing")
-          ExactPaths = stringArray "exactPaths" formalValue
-          PathPrefixes = stringArray "pathPrefixes" formalValue }
-    if formalReuse.Artifact <> "formal-decision/decision.json" || formalReuse.IndexedArtifactPrefix <> "canonical-quint-"
-       || formalReuse.ExactPaths.IsEmpty || formalReuse.PathPrefixes.IsEmpty then failwith "formal reuse policy is incomplete"
+        {
+            Artifact =
+                stringProperty "artifact" formalValue
+                |> Option.defaultWith (fun () -> failwith "formal reuse artifact is missing")
+            IndexedArtifactPrefix =
+                stringProperty "indexedArtifactPrefix" formalValue
+                |> Option.defaultWith (fun () -> failwith "formal indexed prefix is missing")
+            NotBefore =
+                stringProperty "notBefore" formalValue
+                |> Option.defaultWith (fun () -> failwith "formal reuse epoch is missing")
+            ExactPaths = stringArray "exactPaths" formalValue
+            PathPrefixes = stringArray "pathPrefixes" formalValue
+        }
+
+    if
+        formalReuse.Artifact <> "formal-decision/decision.json"
+        || formalReuse.IndexedArtifactPrefix <> "canonical-quint-"
+        || formalReuse.ExactPaths.IsEmpty
+        || formalReuse.PathPrefixes.IsEmpty
+    then
+        failwith "formal reuse policy is incomplete"
+
     let selectorValues = formalReuse.ExactPaths @ formalReuse.PathPrefixes
-    if selectorValues.Length <> (selectorValues |> List.distinct |> List.length) then failwith "formal subject selectors must be distinct"
-    if formalReuse.PathPrefixes |> List.exists (fun prefix -> not (prefix.EndsWith('/'))) then failwith "formal path prefixes must end with slash"
+
+    if selectorValues.Length <> (selectorValues |> List.distinct |> List.length) then
+        failwith "formal subject selectors must be distinct"
+
+    if
+        formalReuse.PathPrefixes
+        |> List.exists (fun prefix -> not (prefix.EndsWith('/')))
+    then
+        failwith "formal path prefixes must end with slash"
+
     let economicsValue = value.GetProperty("economics")
+
     let economics =
-        { JobId = stringProperty "jobId" economicsValue |> Option.defaultWith (fun () -> failwith "economics jobId is missing")
-          TimeoutMinutes = economicsValue.GetProperty("timeoutMinutes").GetInt32()
-          EntryPoint = stringProperty "entryPoint" economicsValue |> Option.defaultWith (fun () -> failwith "economics entryPoint is missing")
-          UploadName = stringProperty "uploadName" economicsValue |> Option.defaultWith (fun () -> failwith "economics uploadName is missing")
-          UploadPath = stringProperty "uploadPath" economicsValue |> Option.defaultWith (fun () -> failwith "economics uploadPath is missing")
-          WindowDays = economicsValue.GetProperty("windowDays").GetInt32()
-          FreshnessHours = economicsValue.GetProperty("freshnessHours").GetInt32()
-          MinimumObservations = economicsValue.GetProperty("minimumObservations").GetInt32()
-          ExpensiveRunnerMinutes = decimalProperty "expensiveRunnerMinutes" economicsValue |> Option.defaultWith (fun () -> failwith "economics expensive threshold is missing")
-          LowYieldMaximum = decimalProperty "lowYieldMaximum" economicsValue |> Option.defaultWith (fun () -> failwith "economics yield threshold is missing")
-          PolicyVersion = stringProperty "policyVersion" economicsValue |> Option.defaultWith (fun () -> failwith "economics policyVersion is missing")
-          AttributionPath = stringProperty "attributionPath" economicsValue |> Option.defaultWith (fun () -> failwith "economics attributionPath is missing")
-          MinimumCadence = stringProperties "minimumCadence" economicsValue }
-    if economics.JobId <> "qualification-economics" || economics.EntryPoint <> "bash eng/bootstrap-gates/qualification-economics.sh"
-       || economics.TimeoutMinutes < 1 || economics.WindowDays <> 14 || economics.FreshnessHours <> 36 || economics.MinimumObservations <> 5
-       || economics.ExpensiveRunnerMinutes <> 8m || economics.LowYieldMaximum <> 0.05m || economics.PolicyVersion <> "adr-0081/1"
-       || economics.AttributionPath <> "eng/qualification-defect-attributions.json" || economics.MinimumCadence.Length <> 3 then
+        {
+            JobId =
+                stringProperty "jobId" economicsValue
+                |> Option.defaultWith (fun () -> failwith "economics jobId is missing")
+            TimeoutMinutes = economicsValue.GetProperty("timeoutMinutes").GetInt32()
+            EntryPoint =
+                stringProperty "entryPoint" economicsValue
+                |> Option.defaultWith (fun () -> failwith "economics entryPoint is missing")
+            UploadName =
+                stringProperty "uploadName" economicsValue
+                |> Option.defaultWith (fun () -> failwith "economics uploadName is missing")
+            UploadPath =
+                stringProperty "uploadPath" economicsValue
+                |> Option.defaultWith (fun () -> failwith "economics uploadPath is missing")
+            WindowDays = economicsValue.GetProperty("windowDays").GetInt32()
+            FreshnessHours = economicsValue.GetProperty("freshnessHours").GetInt32()
+            MinimumObservations = economicsValue.GetProperty("minimumObservations").GetInt32()
+            ExpensiveRunnerMinutes =
+                decimalProperty "expensiveRunnerMinutes" economicsValue
+                |> Option.defaultWith (fun () -> failwith "economics expensive threshold is missing")
+            LowYieldMaximum =
+                decimalProperty "lowYieldMaximum" economicsValue
+                |> Option.defaultWith (fun () -> failwith "economics yield threshold is missing")
+            PolicyVersion =
+                stringProperty "policyVersion" economicsValue
+                |> Option.defaultWith (fun () -> failwith "economics policyVersion is missing")
+            AttributionPath =
+                stringProperty "attributionPath" economicsValue
+                |> Option.defaultWith (fun () -> failwith "economics attributionPath is missing")
+            MinimumCadence = stringProperties "minimumCadence" economicsValue
+        }
+
+    if
+        economics.JobId <> "qualification-economics"
+        || economics.EntryPoint <> "bash eng/bootstrap-gates/qualification-economics.sh"
+        || economics.TimeoutMinutes < 1
+        || economics.WindowDays <> 14
+        || economics.FreshnessHours <> 36
+        || economics.MinimumObservations <> 5
+        || economics.ExpensiveRunnerMinutes <> 8m
+        || economics.LowYieldMaximum <> 0.05m
+        || economics.PolicyVersion <> "adr-0081/1"
+        || economics.AttributionPath <> "eng/qualification-defect-attributions.json"
+        || economics.MinimumCadence.Length <> 3
+    then
         failwith "qualification economics policy differs from the reviewed adaptive contract"
+
     let jobs =
         arrayProperty "jobs" value
         |> Option.defaultWith (fun () -> failwith "jobs are missing")
         |> List.map (fun job ->
-            let entryPoint = stringProperty "entryPoint" job |> Option.defaultWith (fun () -> failwith "job entryPoint is missing")
-            { Id = stringProperty "id" job |> Option.defaultWith (fun () -> failwith "job id is missing")
-              Artifact = stringProperty "artifact" job |> Option.defaultWith (fun () -> failwith "job artifact is missing")
-              TimeoutMinutes = job.GetProperty("timeoutMinutes").GetInt32()
-              EntryPoint = entryPoint
-              FetchDepth = job.GetProperty("fetchDepth").GetInt32()
-              AlwaysUpload = boolProperty "alwaysUpload" job |> Option.defaultValue false
-              DownloadArtifacts = boolProperty "downloadArtifacts" job |> Option.defaultValue false
-              Environment = stringProperties "environment" job
-              UploadName = stringProperty "uploadName" job |> Option.defaultWith (fun () -> failwith "job uploadName is missing")
-              UploadPath = stringProperty "uploadPath" job |> Option.defaultWith (fun () -> failwith "job uploadPath is missing")
-              ReceiptKind = stringProperty "receiptKind" job
-              Needs = stringArray "needs" job
-              Shards = stringArray "shards" job
-              Commands = [ entryPoint ] })
+            let entryPoint =
+                stringProperty "entryPoint" job
+                |> Option.defaultWith (fun () -> failwith "job entryPoint is missing")
+
+            {
+                Id =
+                    stringProperty "id" job
+                    |> Option.defaultWith (fun () -> failwith "job id is missing")
+                Artifact =
+                    stringProperty "artifact" job
+                    |> Option.defaultWith (fun () -> failwith "job artifact is missing")
+                TimeoutMinutes = job.GetProperty("timeoutMinutes").GetInt32()
+                EntryPoint = entryPoint
+                FetchDepth = job.GetProperty("fetchDepth").GetInt32()
+                AlwaysUpload = boolProperty "alwaysUpload" job |> Option.defaultValue false
+                DownloadArtifacts = boolProperty "downloadArtifacts" job |> Option.defaultValue false
+                Environment = stringProperties "environment" job
+                UploadName =
+                    stringProperty "uploadName" job
+                    |> Option.defaultWith (fun () -> failwith "job uploadName is missing")
+                UploadPath =
+                    stringProperty "uploadPath" job
+                    |> Option.defaultWith (fun () -> failwith "job uploadPath is missing")
+                ReceiptKind = stringProperty "receiptKind" job
+                Needs = stringArray "needs" job
+                Shards = stringArray "shards" job
+                Commands = [ entryPoint ]
+            })
+
     let jobIds = jobs |> List.map _.Id
     let jobIdSet = Set.ofList jobIds
-    if jobs.Length <> requiredGateCount || requiredGateCount < 2 || jobIdSet.Count <> requiredGateCount then
+
+    if
+        jobs.Length <> requiredGateCount
+        || requiredGateCount < 2
+        || jobIdSet.Count <> requiredGateCount
+    then
         failwith "jobs must match requiredGateCount with distinct identities"
+
     let terminalJobs = jobs |> List.filter _.DownloadArtifacts
-    if terminalJobs.Length <> 1 then failwith "exactly one terminal evidence job must download prerequisite artifacts"
+
+    if terminalJobs.Length <> 1 then
+        failwith "exactly one terminal evidence job must download prerequisite artifacts"
+
     let terminalJob = terminalJobs.Head
     let prerequisiteIds = jobIdSet.Remove terminalJob.Id
+
     for job in jobs do
-        if String.IsNullOrWhiteSpace job.Id || job.Id |> Seq.exists (fun character -> not (Char.IsLower character || Char.IsDigit character || character = '-')) then
+        if
+            String.IsNullOrWhiteSpace job.Id
+            || job.Id
+               |> Seq.exists (fun character ->
+                   not (Char.IsLower character || Char.IsDigit character || character = '-'))
+        then
             failwith "job identities must be lowercase kebab-case"
-        if job.TimeoutMinutes < 1 || job.TimeoutMinutes > 35 then failwith $"job timeout is outside the bounded policy: %s{job.Id}"
-        if job.EntryPoint <> $"bash eng/bootstrap-gates/%s{job.Id}.sh" then failwith $"job entryPoint is not stable: %s{job.Id}"
-        if job.FetchDepth < 0 || job.FetchDepth > 1 then failwith $"job fetch depth is invalid: %s{job.Id}"
-        if String.IsNullOrWhiteSpace job.UploadName || String.IsNullOrWhiteSpace job.UploadPath then failwith $"job upload contract is incomplete: %s{job.Id}"
-        if job.UploadPath.Contains("${{ runner.") && not (job.UploadPath.StartsWith("${{ runner.temp }}/", StringComparison.Ordinal)) then
+
+        if job.TimeoutMinutes < 1 || job.TimeoutMinutes > 35 then
+            failwith $"job timeout is outside the bounded policy: %s{job.Id}"
+
+        if job.EntryPoint <> $"bash eng/bootstrap-gates/%s{job.Id}.sh" then
+            failwith $"job entryPoint is not stable: %s{job.Id}"
+
+        if job.FetchDepth < 0 || job.FetchDepth > 1 then
+            failwith $"job fetch depth is invalid: %s{job.Id}"
+
+        if
+            String.IsNullOrWhiteSpace job.UploadName
+            || String.IsNullOrWhiteSpace job.UploadPath
+        then
+            failwith $"job upload contract is incomplete: %s{job.Id}"
+
+        if
+            job.UploadPath.Contains("${{ runner.")
+            && not (job.UploadPath.StartsWith("${{ runner.temp }}/", StringComparison.Ordinal))
+        then
             failwith $"job upload path uses an unavailable runner context: %s{job.Id}"
+
         let environmentNames = job.Environment |> List.map fst
-        if environmentNames.Length <> (environmentNames |> List.distinct |> List.length) then failwith $"job environment names must be distinct: %s{job.Id}"
-        if job.Environment |> List.exists (fun (name, environmentValue) -> String.IsNullOrWhiteSpace name || environmentValue.Contains("${{ runner.")) then
+
+        if environmentNames.Length <> (environmentNames |> List.distinct |> List.length) then
+            failwith $"job environment names must be distinct: %s{job.Id}"
+
+        if
+            job.Environment
+            |> List.exists (fun (name, environmentValue) ->
+                String.IsNullOrWhiteSpace name || environmentValue.Contains("${{ runner."))
+        then
             failwith $"job environment is invalid: %s{job.Id}"
+
         if job.DownloadArtifacts then
-            if Set.ofList job.Needs <> prerequisiteIds || job.Needs.Length <> prerequisiteIds.Count then
+            if
+                Set.ofList job.Needs <> prerequisiteIds
+                || job.Needs.Length <> prerequisiteIds.Count
+            then
                 failwith "terminal evidence must depend on every prerequisite exactly once"
         elif not (List.isEmpty job.Needs) then
             failwith $"prerequisite gate must remain independently scheduled: %s{job.Id}"
+
         if job.ReceiptKind = Some "formal" then
-            if job.Shards.Length <> 19 || job.Shards.Length <> (job.Shards |> List.distinct |> List.length)
-               || job.Shards |> List.exists (fun shard -> String.IsNullOrWhiteSpace shard || shard |> Seq.exists (fun character -> not (Char.IsLower character || Char.IsDigit character || character = '-'))) then
+            if
+                job.Shards.Length <> 19
+                || job.Shards.Length <> (job.Shards |> List.distinct |> List.length)
+                || job.Shards
+                   |> List.exists (fun shard ->
+                       String.IsNullOrWhiteSpace shard
+                       || shard
+                          |> Seq.exists (fun character ->
+                              not (Char.IsLower character || Char.IsDigit character || character = '-')))
+            then
                 failwith "formal gate must bind nineteen distinct canonical shard identities"
         elif not job.Shards.IsEmpty then
             failwith $"non-formal gate cannot declare shards: %s{job.Id}"
+
     let receiptKinds = jobs |> List.choose _.ReceiptKind
-    if receiptKinds.Length <> (receiptKinds |> List.distinct |> List.length) then failwith "receipt kinds must be unique"
-    { EvidenceSchema = evidenceSchema
-      Actions = actions
-      ConcurrencyGroup = concurrencyGroup
-      CancelInProgress = cancelInProgress
-      RequiredProjectCount = requiredProjectCount
-      RequiredGateCount = requiredGateCount
-      RequiredProjects = requiredProjects
-      RequiredVulnerabilitySources = requiredVulnerabilitySources
-      Reuse = reuse
-      Milestone = milestone
-      FormalReuse = formalReuse
-      Economics = economics
-      Jobs = jobs
-      Bytes = bytes }
+
+    if receiptKinds.Length <> (receiptKinds |> List.distinct |> List.length) then
+        failwith "receipt kinds must be unique"
+
+    {
+        EvidenceSchema = evidenceSchema
+        Actions = actions
+        ConcurrencyGroup = concurrencyGroup
+        CancelInProgress = cancelInProgress
+        RequiredProjectCount = requiredProjectCount
+        RequiredGateCount = requiredGateCount
+        RequiredProjects = requiredProjects
+        RequiredVulnerabilitySources = requiredVulnerabilitySources
+        Reuse = reuse
+        Milestone = milestone
+        FormalReuse = formalReuse
+        Economics = economics
+        Jobs = jobs
+        Bytes = bytes
+    }
 
 let private isSha value =
     not (String.IsNullOrWhiteSpace value)
@@ -318,42 +595,108 @@ let private isSha value =
 
 let private inspectOptimisticProjection root =
     let planPath = Path.Combine(root, "eng/optimistic-qualification-plan.json")
-    let workflowPath = Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml")
+
+    let workflowPath =
+        Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml")
+
     if not (File.Exists planPath) || not (File.Exists workflowPath) then
-        [ violation "optimistic-projection-missing" "plan or generated workflow is absent" ]
+        [
+            violation "optimistic-projection-missing" "plan or generated workflow is absent"
+        ]
     else
         try
             use plan = JsonDocument.Parse(File.ReadAllBytes planPath)
             let selection = plan.RootElement.GetProperty("selection")
             let coherent = plan.RootElement.GetProperty("coherent")
             let formalFanout = plan.RootElement.GetProperty("formalFanout")
-            use quintPlan = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification.json")))
-            let performanceShard = stringProperty "performanceShard" formalFanout |> Option.defaultValue ""
-            let semanticShards = formalFanout.GetProperty("semanticShards").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
-            let expectedSemanticShards = "base" :: (quintPlan.RootElement.GetProperty("formalTests").EnumerateArray() |> Seq.map (fun item -> item.GetProperty("id").GetString()) |> Seq.filter ((<>) performanceShard) |> Seq.toList)
+
+            use quintPlan =
+                JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification.json")))
+
+            let performanceShard =
+                stringProperty "performanceShard" formalFanout |> Option.defaultValue ""
+
+            let semanticShards =
+                formalFanout.GetProperty("semanticShards").EnumerateArray()
+                |> Seq.map _.GetString()
+                |> Seq.toList
+
+            let expectedSemanticShards =
+                "base"
+                :: (quintPlan.RootElement.GetProperty("formalTests").EnumerateArray()
+                    |> Seq.map (fun item -> item.GetProperty("id").GetString())
+                    |> Seq.filter ((<>) performanceShard)
+                    |> Seq.toList)
+
             let workflow = File.ReadAllText workflowPath
-            [ if stringProperty "schema" plan.RootElement <> Some "fsgg.coordination.optimistic-qualification-plan/1" then
-                  yield violation "optimistic-plan-schema" "unsupported"
-              if selection.GetProperty("nightlyRecoveryMaxConcurrentCandidates").GetInt32() <> 2 then
-                  yield violation "optimistic-nightly-recovery-candidate-bound" "must equal two"
-              if selection.GetProperty("priorAggregateCandidateLimit").GetInt32() <> 25 then
-                  yield violation "optimistic-prior-search-bound" "must equal twenty-five"
-              if coherent.GetProperty("maxPartitionsPerCandidate").GetInt32() <> 6 then
-                  yield violation "optimistic-partition-bound" "must equal six"
-              if formalFanout.GetProperty("logicalPartition").GetInt32() <> 1 || formalFanout.GetProperty("maxConcurrentExecutions").GetInt32() <> 6
-                 || semanticShards.Head <> "base" || Set.ofList semanticShards <> Set.ofList expectedSemanticShards
-                 || semanticShards.Length <> (semanticShards |> List.distinct |> List.length) || performanceShard <> "epoch" then
-                  yield violation "optimistic-formal-fanout" "must preserve partition one, nineteen semantic shards, epoch, and the six-execution bound"
-              if boolProperty "failFast" coherent <> Some false || boolProperty "cancelInProgress" coherent <> Some false then
-                  yield violation "optimistic-continuation" "coherent validation must continue completely"
-              for token in [ "cancel-in-progress: false"; "fail-fast: false"; "max-parallel: 6"; "cron: '17 3 * * *'"; "  prepare:"; "  run-partition:"; "  formal-aggregate:"; "  aggregate:"; "shard: base"; "shard: epoch" ] do
-                  if not (workflow.Contains token) then yield violation "optimistic-workflow-projection" token
-              for shard in semanticShards @ [ performanceShard ] do
-                  if workflow.Split($"- {{ kind: formal, shard: %s{shard} }}", StringSplitOptions.None).Length <> 2 then yield violation "optimistic-workflow-formal-schedule" shard
-              for partition in [ 0; 2; 3; 4; 5 ] do
-                  if workflow.Split($"- {{ kind: partition, partition: %d{partition} }}", StringSplitOptions.None).Length <> 2 then yield violation "optimistic-workflow-partition-schedule" (string partition)
-              if workflow.Contains("kind: partition, partition: 1") then yield violation "optimistic-workflow-formal-partition" "partition one must be emitted by formal aggregation" ]
-        with error -> [ violation "optimistic-plan-invalid" error.Message ]
+
+            [
+                if
+                    stringProperty "schema" plan.RootElement
+                    <> Some "fsgg.coordination.optimistic-qualification-plan/1"
+                then
+                    yield violation "optimistic-plan-schema" "unsupported"
+                if selection.GetProperty("nightlyRecoveryMaxConcurrentCandidates").GetInt32() <> 2 then
+                    yield violation "optimistic-nightly-recovery-candidate-bound" "must equal two"
+                if selection.GetProperty("priorAggregateCandidateLimit").GetInt32() <> 25 then
+                    yield violation "optimistic-prior-search-bound" "must equal twenty-five"
+                if coherent.GetProperty("maxPartitionsPerCandidate").GetInt32() <> 6 then
+                    yield violation "optimistic-partition-bound" "must equal six"
+                if
+                    formalFanout.GetProperty("logicalPartition").GetInt32() <> 1
+                    || formalFanout.GetProperty("maxConcurrentExecutions").GetInt32() <> 6
+                    || semanticShards.Head <> "base"
+                    || Set.ofList semanticShards <> Set.ofList expectedSemanticShards
+                    || semanticShards.Length <> (semanticShards |> List.distinct |> List.length)
+                    || performanceShard <> "epoch"
+                then
+                    yield
+                        violation
+                            "optimistic-formal-fanout"
+                            "must preserve partition one, nineteen semantic shards, epoch, and the six-execution bound"
+                if
+                    boolProperty "failFast" coherent <> Some false
+                    || boolProperty "cancelInProgress" coherent <> Some false
+                then
+                    yield violation "optimistic-continuation" "coherent validation must continue completely"
+                for token in
+                    [
+                        "cancel-in-progress: false"
+                        "fail-fast: false"
+                        "max-parallel: 6"
+                        "cron: '17 3 * * *'"
+                        "  prepare:"
+                        "  run-partition:"
+                        "  formal-aggregate:"
+                        "  aggregate:"
+                        "shard: base"
+                        "shard: epoch"
+                    ] do
+                    if not (workflow.Contains token) then
+                        yield violation "optimistic-workflow-projection" token
+                for shard in semanticShards @ [ performanceShard ] do
+                    if
+                        workflow.Split($"- {{ kind: formal, shard: %s{shard} }}", StringSplitOptions.None).Length
+                        <> 2
+                    then
+                        yield violation "optimistic-workflow-formal-schedule" shard
+                for partition in [ 0; 2; 3; 4; 5 ] do
+                    if
+                        workflow
+                            .Split($"- {{ kind: partition, partition: %d{partition} }}", StringSplitOptions.None)
+                            .Length
+                        <> 2
+                    then
+                        yield violation "optimistic-workflow-partition-schedule" (string partition)
+                if workflow.Contains("kind: partition, partition: 1") then
+                    yield
+                        violation
+                            "optimistic-workflow-formal-partition"
+                            "partition one must be emitted by formal aggregation"
+            ]
+        with error ->
+            [ violation "optimistic-plan-invalid" error.Message ]
+
 let private optionValue name (arguments: string list) =
     arguments
     |> List.tryFindIndex ((=) name)
@@ -425,14 +768,27 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "            ${{ env.FSGG_RUNNER_TEMP }}/milestone.json"
     line "          if-no-files-found: error"
     line ""
-    let formalGate = contract.Jobs |> List.find (fun gate -> gate.ReceiptKind = Some "formal")
-    let semanticIds = formalGate.Shards |> List.filter ((<>) "epoch") |> fun shards -> shards @ [ "base" ]
+
+    let formalGate =
+        contract.Jobs |> List.find (fun gate -> gate.ReceiptKind = Some "formal")
+
+    let semanticIds =
+        formalGate.Shards
+        |> List.filter ((<>) "epoch")
+        |> fun shards -> shards @ [ "base" ]
+
     let renderedFormalIds = String.concat ", " semanticIds
-    let formalReceiptPath = formalGate.Environment |> List.find (fst >> (=) "FSGG_QUINT_RECEIPT") |> snd
+
+    let formalReceiptPath =
+        formalGate.Environment |> List.find (fst >> (=) "FSGG_QUINT_RECEIPT") |> snd
+
     line "  canonical-quint-prepare:"
     line "    name: canonical-quint-prepare"
     line $"    needs: [%s{contract.Reuse.JobId}]"
-    line "    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
+
+    line
+        "    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
+
     line $"    runs-on: %s{contract.Reuse.Runner}"
     line "    timeout-minutes: 10"
     line "    env:"
@@ -508,7 +864,10 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "      FSGG_QUINT_SHARD: epoch"
     line "      FSGG_QUINT_SHARD_ROOT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance"
     line "      FSGG_QUINT_TOOLCHAIN_ARCHIVE: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain/toolchain.tar.gz"
-    line "      FSGG_QUINT_PERFORMANCE_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance/performance.json"
+
+    line
+        "      FSGG_QUINT_PERFORMANCE_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance/performance.json"
+
     line "    steps:"
     line "      - name: Check out the exact candidate"
     line $"        uses: actions/checkout@%s{contract.Actions.Checkout}"
@@ -539,12 +898,18 @@ let private renderWorkflow (contract: BootstrapContract) =
     line $"  %s{formalGate.Id}:"
     line $"    name: %s{formalGate.Id}"
     line "    needs: [reuse-decision, canonical-quint-prepare, canonical-quint-semantic, canonical-quint-performance]"
-    line "    if: ${{ always() && needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
+
+    line
+        "    if: ${{ always() && needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
+
     line $"    runs-on: %s{contract.Reuse.Runner}"
     line "    timeout-minutes: 5"
     line "    env:"
     line "      FSGG_QUINT_SHARD_ROOT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-shards"
-    line "      FSGG_QUINT_PERFORMANCE_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance/performance.json"
+
+    line
+        "      FSGG_QUINT_PERFORMANCE_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance/performance.json"
+
     line $"      FSGG_QUINT_RECEIPT: %s{formalReceiptPath}"
     line "      FSGG_QUINT_ACCOUNTING_RECEIPT: /tmp/fsgg-${{ github.run_id }}-canonical-quint/accounting.json"
     line "    steps:"
@@ -584,34 +949,47 @@ let private renderWorkflow (contract: BootstrapContract) =
     line $"          path: %s{formalGate.UploadPath}"
     line "          if-no-files-found: error"
     line ""
+
     for gate in contract.Jobs |> List.filter (fun gate -> gate.ReceiptKind <> Some "formal") do
         line $"  %s{gate.Id}:"
         line $"    name: %s{gate.Id}"
         let needs = contract.Reuse.JobId :: gate.Needs
         let renderedNeeds = String.concat ", " needs
         line $"    needs: [%s{renderedNeeds}]"
+
         if gate.DownloadArtifacts then
-            line "    if: ${{ always() && github.event_name != 'schedule' && needs.reuse-decision.result == 'success' }}"
+            line
+                "    if: ${{ always() && github.event_name != 'schedule' && needs.reuse-decision.result == 'success' }}"
         elif gate.ReceiptKind = Some "formal" then
-            line "    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
+            line
+                "    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
         else
             line "    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}"
+
         line $"    runs-on: %s{contract.Reuse.Runner}"
         line $"    timeout-minutes: %d{gate.TimeoutMinutes}"
+
         if not (List.isEmpty gate.Environment) then
             line "    env:"
-            for name, value in gate.Environment do line $"      %s{name}: %s{value}"
+
+            for name, value in gate.Environment do
+                line $"      %s{name}: %s{value}"
+
         line "    steps:"
         line "      - name: Check out the exact candidate"
         line $"        uses: actions/checkout@%s{contract.Actions.Checkout}"
         line "        with:"
         line "          ref: ${{ github.event.pull_request.head.sha || github.sha }}"
-        if gate.FetchDepth <> 1 then line $"          fetch-depth: %d{gate.FetchDepth}"
+
+        if gate.FetchDepth <> 1 then
+            line $"          fetch-depth: %d{gate.FetchDepth}"
+
         line "      - name: Set up the pinned .NET SDK"
         line $"        uses: actions/setup-dotnet@%s{contract.Actions.SetupDotnet}"
         line "        with:"
         line "          dotnet-version: 10.0.400"
         line "          global-json-file: global.json"
+
         if gate.DownloadArtifacts then
             line "      - name: Download the current route receipt"
             line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
@@ -624,7 +1002,10 @@ let private renderWorkflow (contract: BootstrapContract) =
             line "        with:"
             line "          path: ${{ runner.temp }}/bootstrap-artifacts"
             line "      - name: Download selected prior canonical evidence"
-            line "        if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}"
+
+            line
+                "        if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}"
+
             line $"        uses: actions/download-artifact@%s{contract.Actions.DownloadArtifact}"
             line "        with:"
             line "          name: canonical-quint-${{ needs.reuse-decision.outputs.formal-subject-sha }}"
@@ -638,23 +1019,33 @@ let private renderWorkflow (contract: BootstrapContract) =
             line "          run-id: ${{ needs.reuse-decision.outputs.prior-run-id }}"
             line "          github-token: ${{ github.token }}"
             line "          path: ${{ runner.temp }}/prior-bootstrap-artifacts"
+
         line "      - name: Run the stable qualification gate"
         line $"        run: %s{gate.EntryPoint}"
+
         if gate.DownloadArtifacts then
             line "      - name: Retain normalized current-run formal evidence"
-            line "        if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}"
+
+            line
+                "        if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}"
+
             line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
             line "        with:"
             line $"          name: %s{formalGate.UploadName}"
             line $"          path: ${{{{ runner.temp }}}}/bootstrap-artifacts/%s{formalGate.Artifact}"
             line "          if-no-files-found: error"
+
         line "      - name: Upload qualification evidence"
-        if gate.AlwaysUpload then line "        if: ${{ always() }}"
+
+        if gate.AlwaysUpload then
+            line "        if: ${{ always() }}"
+
         line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
         line "        with:"
         line $"          name: %s{gate.UploadName}"
         line $"          path: %s{gate.UploadPath}"
         line "          if-no-files-found: error"
+
         if gate.ReceiptKind = Some "formal" then
             line "      - name: Upload content-addressed canonical evidence"
             line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
@@ -662,7 +1053,9 @@ let private renderWorkflow (contract: BootstrapContract) =
             line "          name: canonical-quint-${{ needs.reuse-decision.outputs.formal-subject-sha }}"
             line $"          path: %s{gate.UploadPath}"
             line "          if-no-files-found: error"
+
         line ""
+
     line $"  %s{contract.Economics.JobId}:"
     line $"    name: %s{contract.Economics.JobId}"
     line "    if: ${{ github.event_name == 'schedule' }}"
@@ -692,20 +1085,32 @@ let private renderWorkflow (contract: BootstrapContract) =
 
 let private inspectWorkflow root (contract: BootstrapContract) =
     let path = Path.Combine(root, ".github/workflows/bootstrap-qualification.yml")
+
     if not (File.Exists path) then
         [ violation "workflow-missing" ".github/workflows/bootstrap-qualification.yml" ]
     else
         let text = File.ReadAllText(path).Replace("\r\n", "\n")
-        if text = renderWorkflow contract then []
-        else [ violation "workflow-projection-stale" "workflow differs from the canonical qualification plan projection" ]
+
+        if text = renderWorkflow contract then
+            []
+        else
+            [
+                violation
+                    "workflow-projection-stale"
+                    "workflow differs from the canonical qualification plan projection"
+            ]
 
 let rec private vulnerabilityCounts (element: JsonElement) =
     seq {
         match element.ValueKind with
         | JsonValueKind.Object ->
             for property in element.EnumerateObject() do
-                if property.NameEquals "vulnerabilities" && property.Value.ValueKind = JsonValueKind.Array then
+                if
+                    property.NameEquals "vulnerabilities"
+                    && property.Value.ValueKind = JsonValueKind.Array
+                then
                     yield property.Value.GetArrayLength()
+
                 yield! vulnerabilityCounts property.Value
         | JsonValueKind.Array ->
             for item in element.EnumerateArray() do
@@ -720,37 +1125,64 @@ let private inspectVulnerabilityReport path repoRoot (contract: BootstrapContrac
         let sources = stringArray "sources" root
         let projects = arrayProperty "projects" root |> Option.defaultValue []
         let projectPaths = projects |> List.choose (stringProperty "path")
+
         let normalizedProjectPaths =
             projectPaths
             |> List.map (fun projectPath ->
                 let absolute =
-                    if Path.IsPathRooted projectPath then Path.GetFullPath projectPath
-                    else Path.GetFullPath(Path.Combine(repoRoot, projectPath))
+                    if Path.IsPathRooted projectPath then
+                        Path.GetFullPath projectPath
+                    else
+                        Path.GetFullPath(Path.Combine(repoRoot, projectPath))
+
                 Path.GetRelativePath(repoRoot, absolute).Replace('\\', '/'))
+
         let expectedProjects = contract.RequiredProjects |> Set.ofList
         let observedProjects = normalizedProjectPaths |> Set.ofList
-        [ if root.GetProperty("version").GetInt32() <> 1 then
-              yield violation "vulnerability-report-version" "expected version 1"
-          if stringProperty "parameters" root <> Some "--vulnerable --include-transitive" then
-              yield violation "vulnerability-report-parameters" "expected exact vulnerable and transitive parameters"
-          if Set.ofList sources <> Set.ofList contract.RequiredVulnerabilitySources || sources.Length <> contract.RequiredVulnerabilitySources.Length then
-              yield violation "vulnerability-report-source" (String.concat "," sources)
-          if projects.Length <> contract.RequiredProjectCount
-             || projectPaths.Length <> projects.Length
-             || normalizedProjectPaths.Length <> (normalizedProjectPaths |> List.distinct |> List.length)
-             || observedProjects <> expectedProjects then
-              let observed = observedProjects |> Set.toList |> String.concat ","
-              yield violation "vulnerability-report-completeness" $"expected exact solution census; observed=%s{observed}"
-          let vulnerable = vulnerabilityCounts root |> Seq.sum
-          if vulnerable <> 0 then
-              yield violation "vulnerable-package" $"count=%d{vulnerable}" ]
+
+        [
+            if root.GetProperty("version").GetInt32() <> 1 then
+                yield violation "vulnerability-report-version" "expected version 1"
+            if stringProperty "parameters" root <> Some "--vulnerable --include-transitive" then
+                yield violation "vulnerability-report-parameters" "expected exact vulnerable and transitive parameters"
+            if
+                Set.ofList sources <> Set.ofList contract.RequiredVulnerabilitySources
+                || sources.Length <> contract.RequiredVulnerabilitySources.Length
+            then
+                yield violation "vulnerability-report-source" (String.concat "," sources)
+            if
+                projects.Length <> contract.RequiredProjectCount
+                || projectPaths.Length <> projects.Length
+                || normalizedProjectPaths.Length
+                   <> (normalizedProjectPaths |> List.distinct |> List.length)
+                || observedProjects <> expectedProjects
+            then
+                let observed = observedProjects |> Set.toList |> String.concat ","
+
+                yield
+                    violation
+                        "vulnerability-report-completeness"
+                        $"expected exact solution census; observed=%s{observed}"
+            let vulnerable = vulnerabilityCounts root |> Seq.sum
+
+            if vulnerable <> 0 then
+                yield violation "vulnerable-package" $"count=%d{vulnerable}"
+        ]
     with exceptionValue ->
         [ violation "vulnerability-report-unreadable" exceptionValue.Message ]
 
 let private safeArtifactPath (root: string) (relative: string) =
-    let combined = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)))
-    let normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + string Path.DirectorySeparatorChar
-    if combined.StartsWith(normalizedRoot, StringComparison.Ordinal) then Some combined else None
+    let combined =
+        Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)))
+
+    let normalizedRoot =
+        Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar)
+        + string Path.DirectorySeparatorChar
+
+    if combined.StartsWith(normalizedRoot, StringComparison.Ordinal) then
+        Some combined
+    else
+        None
 
 let private trackedFiles root =
     let startInfo = ProcessStartInfo("git")
@@ -765,38 +1197,67 @@ let private trackedFiles root =
     let output = childProcess.StandardOutput.ReadToEnd()
     let error = childProcess.StandardError.ReadToEnd()
     childProcess.WaitForExit()
-    if childProcess.ExitCode <> 0 then failwith $"cannot enumerate the tracked qualification tree: %s{error.Trim()}"
+
+    if childProcess.ExitCode <> 0 then
+        failwith $"cannot enumerate the tracked qualification tree: %s{error.Trim()}"
+
     output.Split('\000', StringSplitOptions.RemoveEmptyEntries)
     |> Array.map (fun entry ->
         let tab = entry.IndexOf('\t')
-        if tab < 0 then failwith "tracked tree entry is malformed"
-        let identity = entry.Substring(0, tab).Split(' ', StringSplitOptions.RemoveEmptyEntries)
-        if identity.Length <> 3 || identity[2] <> "0" then failwith "tracked tree entry has an unsupported stage"
+
+        if tab < 0 then
+            failwith "tracked tree entry is malformed"
+
+        let identity =
+            entry.Substring(0, tab).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+
+        if identity.Length <> 3 || identity[2] <> "0" then
+            failwith "tracked tree entry has an unsupported stage"
+
         let mode = identity[0]
         let relative = entry.Substring(tab + 1)
-        let absolute = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar))
+
+        let absolute =
+            Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar))
+
         let bytes =
             if mode = "120000" then
                 let target = FileInfo(absolute).LinkTarget
-                if isNull target then failwith $"tracked symbolic link is unreadable: %s{relative}"
+
+                if isNull target then
+                    failwith $"tracked symbolic link is unreadable: %s{relative}"
+
                 Encoding.UTF8.GetBytes target
-            else File.ReadAllBytes absolute
-        ({ Mode = mode
-           Path = relative
-           Bytes = bytes }: QualificationReuse.TrackedFile))
+            else
+                File.ReadAllBytes absolute
+
+        ({
+            Mode = mode
+            Path = relative
+            Bytes = bytes
+        }
+        : QualificationReuse.TrackedFile))
     |> Array.toList
 
 let private qualificationSubject root (contract: BootstrapContract) =
     let planBytes = contract.Bytes
-    let workflowBytes = File.ReadAllBytes(Path.Combine(root, contract.Reuse.WorkflowPath))
+
+    let workflowBytes =
+        File.ReadAllBytes(Path.Combine(root, contract.Reuse.WorkflowPath))
+
     let environment =
         Encoding.UTF8.GetBytes(
-            String.concat "|"
-                [ contract.Reuse.Runner
-                  contract.Reuse.Architecture
-                  contract.ConcurrencyGroup
-                  string contract.CancelInProgress
-                  String.concat "," [ "actions:read"; "contents:read" ] ])
+            String.concat
+                "|"
+                [
+                    contract.Reuse.Runner
+                    contract.Reuse.Architecture
+                    contract.ConcurrencyGroup
+                    string contract.CancelInProgress
+                    String.concat "," [ "actions:read"; "contents:read" ]
+                ]
+        )
+
     let reviewPolicy = Encoding.UTF8.GetBytes contract.Reuse.ReviewPolicy
     QualificationReuse.createSubject (trackedFiles root) planBytes workflowBytes environment reviewPolicy
 
@@ -804,29 +1265,46 @@ let private formalSubject root (contract: BootstrapContract) =
     let selectors =
         (contract.FormalReuse.ExactPaths |> List.map QualificationReuse.Exact)
         @ (contract.FormalReuse.PathPrefixes |> List.map QualificationReuse.Prefix)
+
     QualificationReuse.createFormalSubject (trackedFiles root) selectors contract.Bytes
 
 let private milestoneValidation root (contract: BootstrapContract) =
     let statePath = Path.Combine(root, contract.Milestone.StatePath)
+
     let state =
         match MilestoneQualification.parse (File.ReadAllBytes statePath) with
         | Ok value -> value
         | Error problem -> failwith $"milestone qualification state is invalid: {problem}"
+
     let receipts =
         state.Children
-        |> List.choose (fun child -> child.Acceptance |> Option.map (fun acceptance -> acceptance.ReceiptPath, File.ReadAllBytes(Path.Combine(root, acceptance.ReceiptPath))))
+        |> List.choose (fun child ->
+            child.Acceptance
+            |> Option.map (fun acceptance ->
+                acceptance.ReceiptPath, File.ReadAllBytes(Path.Combine(root, acceptance.ReceiptPath))))
         |> Map.ofList
+
     match MilestoneQualification.validate state receipts with
     | Ok value -> value
     | Error problem -> failwith $"milestone qualification state is invalid: {problem}"
 
 let private recoveryStages =
-    [ "clone"; "restore"; "build"; "unit-tests"; "architecture-tests"; "pack"; "install"; "execute" ]
+    [
+        "clone"
+        "restore"
+        "build"
+        "unit-tests"
+        "architecture-tests"
+        "pack"
+        "install"
+        "execute"
+    ]
 
 let private isLowerSha256 (value: string) =
     not (String.IsNullOrWhiteSpace value)
     && value.Length = 64
-    && value |> Seq.forall (fun character -> character >= '0' && character <= '9' || character >= 'a' && character <= 'f')
+    && value
+       |> Seq.forall (fun character -> character >= '0' && character <= '9' || character >= 'a' && character <= 'f')
 
 let private recoveryCanonicalBytes (head: string) (packageDigest: string) =
     use stream = new MemoryStream()
@@ -839,7 +1317,10 @@ let private recoveryCanonicalBytes (head: string) (packageDigest: string) =
     writer.WriteStringValue("https://api.nuget.org/v3/index.json")
     writer.WriteEndArray()
     writer.WriteStartArray("stages")
-    for stage in recoveryStages do writer.WriteStringValue stage
+
+    for stage in recoveryStages do
+        writer.WriteStringValue stage
+
     writer.WriteEndArray()
     writer.WriteEndObject()
     writer.Flush()
@@ -851,24 +1332,36 @@ let private inspectRecoveryReceipt (path: string) (head: string) =
         use document = JsonDocument.Parse bytes
         let root = document.RootElement
         let properties = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
-        let expectedProperties = [ "schema"; "candidate"; "packageSha256"; "publishedSources"; "stages" ]
+
+        let expectedProperties =
+            [ "schema"; "candidate"; "packageSha256"; "publishedSources"; "stages" ]
+
         let packageDigest = stringProperty "packageSha256" root |> Option.defaultValue ""
         let sources = stringArray "publishedSources" root
         let stages = stringArray "stages" root
-        [ if root.ValueKind <> JsonValueKind.Object || properties <> expectedProperties then
-              yield violation "recovery-receipt-properties" (String.concat "," properties)
-          if stringProperty "schema" root <> Some "fsgg.coordination.bootstrap-recovery/1" then
-              yield violation "recovery-receipt-schema" "unsupported or absent schema"
-          if stringProperty "candidate" root <> Some(head.ToLowerInvariant()) then
-              yield violation "recovery-receipt-candidate" $"expected=%s{head}"
-          if not (isLowerSha256 packageDigest) then
-              yield violation "recovery-receipt-package-digest" packageDigest
-          if sources <> [ "https://api.nuget.org/v3/index.json" ] then
-              yield violation "recovery-receipt-source" (String.concat "," sources)
-          if stages <> recoveryStages then
-              yield violation "recovery-receipt-stages" (String.concat "," stages)
-          if not (bytes.AsSpan().SequenceEqual((recoveryCanonicalBytes (head.ToLowerInvariant()) packageDigest).AsSpan())) then
-              yield violation "recovery-receipt-canonical" "bytes differ from the compact exact contract" ]
+
+        [
+            if root.ValueKind <> JsonValueKind.Object || properties <> expectedProperties then
+                yield violation "recovery-receipt-properties" (String.concat "," properties)
+            if stringProperty "schema" root <> Some "fsgg.coordination.bootstrap-recovery/1" then
+                yield violation "recovery-receipt-schema" "unsupported or absent schema"
+            if stringProperty "candidate" root <> Some(head.ToLowerInvariant()) then
+                yield violation "recovery-receipt-candidate" $"expected=%s{head}"
+            if not (isLowerSha256 packageDigest) then
+                yield violation "recovery-receipt-package-digest" packageDigest
+            if sources <> [ "https://api.nuget.org/v3/index.json" ] then
+                yield violation "recovery-receipt-source" (String.concat "," sources)
+            if stages <> recoveryStages then
+                yield violation "recovery-receipt-stages" (String.concat "," stages)
+            if
+                not (
+                    bytes
+                        .AsSpan()
+                        .SequenceEqual((recoveryCanonicalBytes (head.ToLowerInvariant()) packageDigest).AsSpan())
+                )
+            then
+                yield violation "recovery-receipt-canonical" "bytes differ from the compact exact contract"
+        ]
     with exceptionValue ->
         [ violation "recovery-receipt-unreadable" exceptionValue.Message ]
 
@@ -886,23 +1379,51 @@ let private inspectCanonicalQuintReceipt (path: string) =
         use document = JsonDocument.Parse(File.ReadAllBytes path)
         let root = document.RootElement
         let properties = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+
         let expectedProperties =
-            [ "schema"; "q1Outcome"; "q2Outcome"; "positiveInvariantCount"; "negativeControlCount"
-              "preparationDurationMs"; "q2DurationMs"; "totalDurationMs"; "processCounts"; "processAccounting"
-              "physicalProcessCounts"; "startupRetries"; "formalCounterexamples"; "tools"; "inputs"
-              "preparationSha256"; "failure"; "resultSha256" ]
+            [
+                "schema"
+                "q1Outcome"
+                "q2Outcome"
+                "positiveInvariantCount"
+                "negativeControlCount"
+                "preparationDurationMs"
+                "q2DurationMs"
+                "totalDurationMs"
+                "processCounts"
+                "processAccounting"
+                "physicalProcessCounts"
+                "startupRetries"
+                "formalCounterexamples"
+                "tools"
+                "inputs"
+                "preparationSha256"
+                "failure"
+                "resultSha256"
+            ]
+
         let processCounts = root.GetProperty("processCounts")
         let physicalProcessCounts = root.GetProperty("physicalProcessCounts")
         let startupRetries = root.GetProperty("startupRetries")
         let formalCounterexamples = root.GetProperty("formalCounterexamples")
         let tools = root.GetProperty("tools")
         let inputs = root.GetProperty("inputs")
-        let processProperties = processCounts.EnumerateObject() |> Seq.map _.Name |> Seq.toList
-        let physicalProcessProperties = physicalProcessCounts.EnumerateObject() |> Seq.map _.Name |> Seq.toList
-        let startupRetryProperties = startupRetries.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+
+        let processProperties =
+            processCounts.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+
+        let physicalProcessProperties =
+            physicalProcessCounts.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+
+        let startupRetryProperties =
+            startupRetries.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+
         let toolProperties = tools.EnumerateObject() |> Seq.map _.Name |> Seq.toList
         let inputProperties = inputs.EnumerateObject() |> Seq.map _.Name |> Seq.toList
-        let preparationDigest = stringProperty "preparationSha256" root |> Option.defaultValue ""
+
+        let preparationDigest =
+            stringProperty "preparationSha256" root |> Option.defaultValue ""
+
         let formalRows =
             formalCounterexamples.EnumerateArray()
             |> Seq.map (fun item ->
@@ -912,80 +1433,165 @@ let private inspectCanonicalQuintReceipt (path: string) =
                 item.GetProperty("itfSha256").GetString())
             |> Seq.sortBy (fun (id, _, _, _) -> id)
             |> Seq.toList
+
         let formalIdentity =
             formalRows
             |> List.map (fun (id, manifest, trace, itf) -> $"%s{id}|%s{manifest}|%s{trace}|%s{itf}")
             |> String.concat ";"
-        let startupRetryCount = int64Property "total" startupRetries |> Option.defaultValue -1L
-        let verifyRetryCount = int64Property "verify" startupRetries |> Option.defaultValue -1L
-        let reflectionRetryCount = int64Property "reflectionDeadline" startupRetries |> Option.defaultValue -1L
-        let earlyLifecycleRetryCount = int64Property "earlyLifecycleExit" startupRetries |> Option.defaultValue -1L
+
+        let startupRetryCount =
+            int64Property "total" startupRetries |> Option.defaultValue -1L
+
+        let verifyRetryCount =
+            int64Property "verify" startupRetries |> Option.defaultValue -1L
+
+        let reflectionRetryCount =
+            int64Property "reflectionDeadline" startupRetries |> Option.defaultValue -1L
+
+        let earlyLifecycleRetryCount =
+            int64Property "earlyLifecycleExit" startupRetries |> Option.defaultValue -1L
+
         let expectedResult =
-            sha256Bytes
-                (Encoding.UTF8.GetBytes(
-                    $"passed|passed|8|166|242|217|71|%d{startupRetryCount}|%d{verifyRetryCount}|%d{reflectionRetryCount}|%d{earlyLifecycleRetryCount}|%s{preparationDigest}|%s{formalIdentity}|none|none"))
-        let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
+            sha256Bytes (
+                Encoding.UTF8.GetBytes(
+                    $"passed|passed|8|166|242|217|71|%d{startupRetryCount}|%d{verifyRetryCount}|%d{reflectionRetryCount}|%d{earlyLifecycleRetryCount}|%s{preparationDigest}|%s{formalIdentity}|none|none"
+                )
+            )
+
+        let preparationMs =
+            int64Property "preparationDurationMs" root |> Option.defaultValue -1L
+
         let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
         let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
-        [ if root.ValueKind <> JsonValueKind.Object || properties <> expectedProperties then
-              yield violation "quint-receipt-properties" (String.concat "," properties)
-          if stringProperty "schema" root <> Some "fsgg.coordination.canonical-quint-qualification/1" then
-              yield violation "quint-receipt-schema" "unsupported or absent schema"
-          if stringProperty "q1Outcome" root <> Some "passed" || stringProperty "q2Outcome" root <> Some "passed" then
-              yield violation "quint-receipt-outcome" "Q1 and Q2 must both pass"
-          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 166L then
-              yield violation "quint-receipt-inventory" "expected eight positive invariants and 166 observed negative-control rejections"
-          if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
-              yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
-          if int64Property "external" processCounts <> Some 242L
-             || int64Property "quintCli" processCounts <> Some 217L
-             || int64Property "apalacheVerify" processCounts <> Some 71L then
-            yield violation "quint-receipt-process-count" "expected labeled retained process inventory 242/217/71"
-          if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
-              yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
-          if stringProperty "processAccounting" root <> Some "logical-invocations-plus-explicit-startup-retries/v1" then
-              yield violation "quint-receipt-process-accounting" "unsupported accounting method"
-          if physicalProcessProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
-              yield violation "quint-receipt-physical-process-properties" (String.concat "," physicalProcessProperties)
-          if startupRetryProperties <> [ "total"; "verify"; "reflectionDeadline"; "earlyLifecycleExit" ]
-             || startupRetryCount < 0L || verifyRetryCount < 0L || verifyRetryCount > startupRetryCount
-             || startupRetryCount <> reflectionRetryCount + earlyLifecycleRetryCount then
-              yield violation "quint-receipt-startup-retries" "retry command/class counts are inconsistent"
-          if int64Property "external" physicalProcessCounts <> Some(242L + startupRetryCount)
-             || int64Property "quintCli" physicalProcessCounts <> Some(217L + startupRetryCount)
-             || int64Property "apalacheVerify" physicalProcessCounts <> Some(71L + verifyRetryCount) then
-              yield violation "quint-receipt-physical-process-count" "physical process inventory does not match logical invocations and retry commands"
-          let expectedFormalIds =
-              [ "administrative-retirement-closure"; "administrative-retirement-old-plan-counterexample"; "administrative-retirement-race"
-                "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
-                "journal-reconciliation"; "lifecycle"; "operation-saga"; "pilot-permit-fault-safety"; "pilot-permit-major-action-coverage"; "pilot-permit-transfer"; "relation-mutation"; "review-epoch"; "rollback" ]
-          if formalRows |> List.map (fun (id, _, _, _) -> id) <> expectedFormalIds
-             || formalRows |> List.exists (fun (_, manifest, trace, itf) ->
-                 not (isLowerSha256 manifest && isLowerSha256 trace && isLowerSha256 itf)) then
-              yield violation "quint-receipt-formal-counterexamples" "expected nineteen digest-bound formal counterexamples"
-          if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then
-              yield violation "quint-receipt-tool-properties" (String.concat "," toolProperties)
-          if inputProperties <> [ "sourceSha256"; "contractSha256" ] then
-              yield violation "quint-receipt-input-properties" (String.concat "," inputProperties)
-          let expectedTools =
-              [ "toolchainSha256", "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
-                "quintSha256", "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
-                "apalacheJarSha256", "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b" ]
-          for name, expected in expectedTools do
-              if stringProperty name tools <> Some expected then
-                  yield violation "quint-receipt-tool-digest" name
-          let expectedInputs =
-              [ "sourceSha256", "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
-                "contractSha256", "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b" ]
-          for name, expected in expectedInputs do
-              if stringProperty name inputs <> Some expected then
-                  yield violation "quint-receipt-input-digest" name
-          if not (isLowerSha256 preparationDigest) then
-              yield violation "quint-receipt-preparation-digest" preparationDigest
-          if root.GetProperty("failure").ValueKind <> JsonValueKind.Null then
-              yield violation "quint-receipt-failure" "a passing receipt must not carry a failure"
-          if stringProperty "resultSha256" root <> Some expectedResult then
-              yield violation "quint-receipt-result-digest" "result digest does not bind the outcomes and inventories" ]
+
+        [
+            if root.ValueKind <> JsonValueKind.Object || properties <> expectedProperties then
+                yield violation "quint-receipt-properties" (String.concat "," properties)
+            if
+                stringProperty "schema" root
+                <> Some "fsgg.coordination.canonical-quint-qualification/1"
+            then
+                yield violation "quint-receipt-schema" "unsupported or absent schema"
+            if
+                stringProperty "q1Outcome" root <> Some "passed"
+                || stringProperty "q2Outcome" root <> Some "passed"
+            then
+                yield violation "quint-receipt-outcome" "Q1 and Q2 must both pass"
+            if
+                int64Property "positiveInvariantCount" root <> Some 8L
+                || int64Property "negativeControlCount" root <> Some 166L
+            then
+                yield
+                    violation
+                        "quint-receipt-inventory"
+                        "expected eight positive invariants and 166 observed negative-control rejections"
+            if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
+                yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
+            if
+                int64Property "external" processCounts <> Some 242L
+                || int64Property "quintCli" processCounts <> Some 217L
+                || int64Property "apalacheVerify" processCounts <> Some 71L
+            then
+                yield violation "quint-receipt-process-count" "expected labeled retained process inventory 242/217/71"
+            if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
+                yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
+            if
+                stringProperty "processAccounting" root
+                <> Some "logical-invocations-plus-explicit-startup-retries/v1"
+            then
+                yield violation "quint-receipt-process-accounting" "unsupported accounting method"
+            if physicalProcessProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
+                yield
+                    violation "quint-receipt-physical-process-properties" (String.concat "," physicalProcessProperties)
+            if
+                startupRetryProperties
+                <> [ "total"; "verify"; "reflectionDeadline"; "earlyLifecycleExit" ]
+                || startupRetryCount < 0L
+                || verifyRetryCount < 0L
+                || verifyRetryCount > startupRetryCount
+                || startupRetryCount <> reflectionRetryCount + earlyLifecycleRetryCount
+            then
+                yield violation "quint-receipt-startup-retries" "retry command/class counts are inconsistent"
+            if
+                int64Property "external" physicalProcessCounts <> Some(242L + startupRetryCount)
+                || int64Property "quintCli" physicalProcessCounts <> Some(217L + startupRetryCount)
+                || int64Property "apalacheVerify" physicalProcessCounts
+                   <> Some(71L + verifyRetryCount)
+            then
+                yield
+                    violation
+                        "quint-receipt-physical-process-count"
+                        "physical process inventory does not match logical invocations and retry commands"
+            let expectedFormalIds =
+                [
+                    "administrative-retirement-closure"
+                    "administrative-retirement-old-plan-counterexample"
+                    "administrative-retirement-race"
+                    "authority-reconciliation"
+                    "claim-election"
+                    "cutover-observation"
+                    "epoch"
+                    "hosted-writer-fault-safety"
+                    "hosted-writer-progress"
+                    "journal-fencing"
+                    "journal-reconciliation"
+                    "lifecycle"
+                    "operation-saga"
+                    "pilot-permit-fault-safety"
+                    "pilot-permit-major-action-coverage"
+                    "pilot-permit-transfer"
+                    "relation-mutation"
+                    "review-epoch"
+                    "rollback"
+                ]
+
+            if
+                formalRows |> List.map (fun (id, _, _, _) -> id) <> expectedFormalIds
+                || formalRows
+                   |> List.exists (fun (_, manifest, trace, itf) ->
+                       not (isLowerSha256 manifest && isLowerSha256 trace && isLowerSha256 itf))
+            then
+                yield
+                    violation
+                        "quint-receipt-formal-counterexamples"
+                        "expected nineteen digest-bound formal counterexamples"
+
+            if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then
+                yield violation "quint-receipt-tool-properties" (String.concat "," toolProperties)
+
+            if inputProperties <> [ "sourceSha256"; "contractSha256" ] then
+                yield violation "quint-receipt-input-properties" (String.concat "," inputProperties)
+
+            let expectedTools =
+                [
+                    "toolchainSha256", "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
+                    "quintSha256", "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+                    "apalacheJarSha256", "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
+                ]
+
+            for name, expected in expectedTools do
+                if stringProperty name tools <> Some expected then
+                    yield violation "quint-receipt-tool-digest" name
+
+            let expectedInputs =
+                [
+                    "sourceSha256", "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
+                    "contractSha256", "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
+                ]
+
+            for name, expected in expectedInputs do
+                if stringProperty name inputs <> Some expected then
+                    yield violation "quint-receipt-input-digest" name
+
+            if not (isLowerSha256 preparationDigest) then
+                yield violation "quint-receipt-preparation-digest" preparationDigest
+
+            if root.GetProperty("failure").ValueKind <> JsonValueKind.Null then
+                yield violation "quint-receipt-failure" "a passing receipt must not carry a failure"
+
+            if stringProperty "resultSha256" root <> Some expectedResult then
+                yield violation "quint-receipt-result-digest" "result digest does not bind the outcomes and inventories"
+        ]
     with exceptionValue ->
         [ violation "quint-receipt-unreadable" exceptionValue.Message ]
 
@@ -998,7 +1604,8 @@ let private inspectCanonicalQuintArtifact (artifactRoot: string) (contract: Boot
         | _ -> [ violation "quint-receipt-missing" job.Artifact ])
     |> Option.defaultValue [ violation "quint-receipt-contract" "formal receipt kind is absent" ]
 
-let private decisionText = function
+let private decisionText =
+    function
     | QualificationReuse.Reuse -> "reuse"
     | QualificationReuse.Execute -> "execute"
     | QualificationReuse.Refuse -> "refuse"
@@ -1008,10 +1615,21 @@ type private MilestoneEvidence = { Mode: string; SubjectSha256: string }
 let private loadMilestoneEvidence path =
     use document = JsonDocument.Parse(File.ReadAllBytes path)
     let root = document.RootElement
-    if stringProperty "schema" root <> Some "fsgg.coordination.milestone-validation/1" then failwith "milestone validation schema is unsupported"
-    let mode = stringProperty "mode" root |> Option.defaultWith (fun () -> failwith "milestone validation mode is missing")
-    let subject = stringProperty "subjectSha256" root |> Option.defaultWith (fun () -> failwith "milestone validation subject is missing")
-    if (mode <> "scoped" && mode <> "comprehensive") || not (isLowerSha256 subject) then failwith "milestone validation identity is invalid"
+
+    if stringProperty "schema" root <> Some "fsgg.coordination.milestone-validation/1" then
+        failwith "milestone validation schema is unsupported"
+
+    let mode =
+        stringProperty "mode" root
+        |> Option.defaultWith (fun () -> failwith "milestone validation mode is missing")
+
+    let subject =
+        stringProperty "subjectSha256" root
+        |> Option.defaultWith (fun () -> failwith "milestone validation subject is missing")
+
+    if (mode <> "scoped" && mode <> "comprehensive") || not (isLowerSha256 subject) then
+        failwith "milestone validation identity is invalid"
+
     { Mode = mode; SubjectSha256 = subject }
 
 let private writePrior (writer: Utf8JsonWriter) (propertyName: string) (prior: QualificationReuse.PriorRun option) =
@@ -1026,14 +1644,30 @@ let private writePrior (writer: Utf8JsonWriter) (propertyName: string) (prior: Q
         writer.WriteString("artifactExpiresAt", value.ArtifactExpiresAt)
         writer.WriteEndObject()
 
-let private writeEvidence (output: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) (decision: QualificationReuse.Decision) (formalDecision: QualificationReuse.Decision) (milestone: MilestoneEvidence) =
-    if not (isSha head) then failwith "candidate head must be an exact 40-hex SHA"
+let private writeEvidence
+    (output: string)
+    (head: string)
+    (artifactRoot: string)
+    (contract: BootstrapContract)
+    (decision: QualificationReuse.Decision)
+    (formalDecision: QualificationReuse.Decision)
+    (milestone: MilestoneEvidence)
+    =
+    if not (isSha head) then
+        failwith "candidate head must be an exact 40-hex SHA"
+
     let artifacts =
         contract.Jobs
         |> List.map (fun gate ->
-            let path = safeArtifactPath artifactRoot gate.Artifact |> Option.defaultWith (fun () -> failwith $"unsafe artifact path: %s{gate.Artifact}")
-            if not (File.Exists path) then failwith $"required gate artifact is missing: %s{gate.Artifact}"
+            let path =
+                safeArtifactPath artifactRoot gate.Artifact
+                |> Option.defaultWith (fun () -> failwith $"unsafe artifact path: %s{gate.Artifact}")
+
+            if not (File.Exists path) then
+                failwith $"required gate artifact is missing: %s{gate.Artifact}"
+
             gate, sha256File path)
+
     let options = JsonWriterOptions(Indented = true)
     use stream = File.Create output
     use writer = new Utf8JsonWriter(stream, options)
@@ -1052,20 +1686,33 @@ let private writeEvidence (output: string) (head: string) (artifactRoot: string)
     writePrior writer "formalPrior" formalDecision.Prior
     writer.WriteString("planSha256", sha256Bytes contract.Bytes)
     writer.WriteStartArray("gates")
+
     for gate, digest in artifacts do
         writer.WriteStartObject()
         writer.WriteString("id", gate.Id)
         writer.WriteString("artifact", gate.Artifact)
         writer.WriteString("sha256", digest)
         writer.WriteStartArray("commands")
-        for command in gate.Commands do writer.WriteStringValue command
+
+        for command in gate.Commands do
+            writer.WriteStringValue command
+
         writer.WriteEndArray()
         writer.WriteEndObject()
+
     writer.WriteEndArray()
     writer.WriteEndObject()
     writer.Flush()
 
-let private inspectEvidence (path: string) (head: string) (artifactRoot: string) (contract: BootstrapContract) (decision: QualificationReuse.Decision) (formalDecision: QualificationReuse.Decision) (milestone: MilestoneEvidence) =
+let private inspectEvidence
+    (path: string)
+    (head: string)
+    (artifactRoot: string)
+    (contract: BootstrapContract)
+    (decision: QualificationReuse.Decision)
+    (formalDecision: QualificationReuse.Decision)
+    (milestone: MilestoneEvidence)
+    =
     try
         use document = JsonDocument.Parse(File.ReadAllBytes path)
         let root = document.RootElement
@@ -1073,75 +1720,110 @@ let private inspectEvidence (path: string) (head: string) (artifactRoot: string)
         let expected = contract.Jobs |> List.map (fun gate -> gate.Id, gate) |> Map.ofList
         let ids = gates |> List.choose (stringProperty "id")
         let artifactHead = decision.Prior |> Option.map _.Head |> Option.defaultValue head
-        [ yield! inspectRecoveryArtifact artifactRoot artifactHead contract
-          yield! inspectCanonicalQuintArtifact artifactRoot contract
-          if stringProperty "schema" root <> Some contract.EvidenceSchema then
-              yield violation "evidence-schema" "unsupported or absent schema"
-          if stringProperty "candidate" root <> Some(head.ToLowerInvariant()) then
-              yield violation "evidence-candidate" $"expected=%s{head}"
-          if stringProperty "route" root <> Some(decisionText decision.Kind) then
-              yield violation "evidence-route" "terminal route does not match the decision receipt"
-          if stringProperty "subjectSha256" root <> Some decision.SubjectSha256 then
-              yield violation "evidence-subject-digest" "terminal subject does not match the decision receipt"
-          if stringProperty "decisionSha256" root <> Some decision.SelfSha256 then
-              yield violation "evidence-decision-digest" "terminal decision digest does not match"
-          if stringProperty "qualificationMode" root <> Some milestone.Mode
-             || stringProperty "milestoneSubjectSha256" root <> Some milestone.SubjectSha256 then
-              yield violation "evidence-milestone" "terminal milestone mode or subject differs"
-          if stringProperty "formalRoute" root <> Some(decisionText formalDecision.Kind)
-             || stringProperty "formalSubjectSha256" root <> Some formalDecision.SubjectSha256
-             || stringProperty "formalDecisionSha256" root <> Some formalDecision.SelfSha256 then
-              yield violation "evidence-formal-decision" "terminal formal route differs from the selected decision"
-          if milestone.Mode = "comprehensive" && (decision.Kind <> QualificationReuse.Execute || formalDecision.Kind <> QualificationReuse.Execute) then
-              yield violation "evidence-comprehensive-reuse" "comprehensive qualification requires cold whole and formal execution"
-          let priorElement = root.GetProperty("prior")
-          match decision.Prior with
-          | None when priorElement.ValueKind <> JsonValueKind.Null ->
-              yield violation "evidence-prior" "execute evidence must not carry prior authority"
-          | Some prior when priorElement.ValueKind <> JsonValueKind.Object ->
-              yield violation "evidence-prior" "reuse evidence must carry prior authority"
-          | Some prior ->
-              if stringProperty "head" priorElement <> Some prior.Head
-                 || int64Property "runId" priorElement <> Some prior.RunId
-                 || priorElement.GetProperty("attempt").GetInt32() <> prior.Attempt
-                 || stringProperty "evidenceSha256" priorElement <> Some prior.EvidenceSha256
-                 || stringProperty "artifactExpiresAt" priorElement <> Some prior.ArtifactExpiresAt then
-                  yield violation "evidence-prior" "prior authority differs from the decision receipt"
-          | None -> ()
-          let formalPriorElement = root.GetProperty("formalPrior")
-          match formalDecision.Prior with
-          | None when formalPriorElement.ValueKind <> JsonValueKind.Null ->
-              yield violation "evidence-formal-prior" "formal execution must not carry prior authority"
-          | Some prior when formalPriorElement.ValueKind <> JsonValueKind.Object ->
-              yield violation "evidence-formal-prior" "formal reuse must carry prior authority"
-          | Some prior ->
-              if stringProperty "head" formalPriorElement <> Some prior.Head
-                 || int64Property "runId" formalPriorElement <> Some prior.RunId
-                 || formalPriorElement.GetProperty("attempt").GetInt32() <> prior.Attempt
-                 || stringProperty "evidenceSha256" formalPriorElement <> Some prior.EvidenceSha256
-                 || stringProperty "artifactExpiresAt" formalPriorElement <> Some prior.ArtifactExpiresAt then
-                  yield violation "evidence-formal-prior" "formal prior authority differs from the decision receipt"
-          | None -> ()
-          if stringProperty "planSha256" root <> Some(sha256Bytes contract.Bytes) then
-              yield violation "evidence-plan-digest" "qualification plan bytes do not match"
-          if ids.Length <> gates.Length || ids |> List.distinct |> List.length <> ids.Length || Set.ofList ids <> (expected |> Map.keys |> Set.ofSeq) then
-              yield violation "evidence-gate-set" (String.concat "," ids)
-          for gateValue in gates do
-              match stringProperty "id" gateValue |> Option.bind (fun id -> Map.tryFind id expected |> Option.map (fun gate -> id, gate)) with
-              | None -> ()
-              | Some(id, gate) ->
-                  if stringProperty "artifact" gateValue <> Some gate.Artifact then
-                      yield violation "evidence-artifact-path" id
-                  if stringArray "commands" gateValue <> gate.Commands then
-                      yield violation "evidence-command-contract" id
-                  match safeArtifactPath artifactRoot gate.Artifact with
-                  | None -> yield violation "evidence-artifact-path" gate.Artifact
-                  | Some artifactPath when not (File.Exists artifactPath) ->
-                      yield violation "evidence-artifact-missing" gate.Artifact
-                  | Some artifactPath ->
-                      let observed = sha256File artifactPath
-                      if stringProperty "sha256" gateValue <> Some observed then
-                          yield violation "evidence-artifact-digest" $"gate=%s{id} observed=%s{observed}" ]
+
+        [
+            yield! inspectRecoveryArtifact artifactRoot artifactHead contract
+            yield! inspectCanonicalQuintArtifact artifactRoot contract
+            if stringProperty "schema" root <> Some contract.EvidenceSchema then
+                yield violation "evidence-schema" "unsupported or absent schema"
+            if stringProperty "candidate" root <> Some(head.ToLowerInvariant()) then
+                yield violation "evidence-candidate" $"expected=%s{head}"
+            if stringProperty "route" root <> Some(decisionText decision.Kind) then
+                yield violation "evidence-route" "terminal route does not match the decision receipt"
+            if stringProperty "subjectSha256" root <> Some decision.SubjectSha256 then
+                yield violation "evidence-subject-digest" "terminal subject does not match the decision receipt"
+            if stringProperty "decisionSha256" root <> Some decision.SelfSha256 then
+                yield violation "evidence-decision-digest" "terminal decision digest does not match"
+            if
+                stringProperty "qualificationMode" root <> Some milestone.Mode
+                || stringProperty "milestoneSubjectSha256" root <> Some milestone.SubjectSha256
+            then
+                yield violation "evidence-milestone" "terminal milestone mode or subject differs"
+            if
+                stringProperty "formalRoute" root <> Some(decisionText formalDecision.Kind)
+                || stringProperty "formalSubjectSha256" root <> Some formalDecision.SubjectSha256
+                || stringProperty "formalDecisionSha256" root <> Some formalDecision.SelfSha256
+            then
+                yield violation "evidence-formal-decision" "terminal formal route differs from the selected decision"
+            if
+                milestone.Mode = "comprehensive"
+                && (decision.Kind <> QualificationReuse.Execute
+                    || formalDecision.Kind <> QualificationReuse.Execute)
+            then
+                yield
+                    violation
+                        "evidence-comprehensive-reuse"
+                        "comprehensive qualification requires cold whole and formal execution"
+            let priorElement = root.GetProperty("prior")
+
+            match decision.Prior with
+            | None when priorElement.ValueKind <> JsonValueKind.Null ->
+                yield violation "evidence-prior" "execute evidence must not carry prior authority"
+            | Some prior when priorElement.ValueKind <> JsonValueKind.Object ->
+                yield violation "evidence-prior" "reuse evidence must carry prior authority"
+            | Some prior ->
+                if
+                    stringProperty "head" priorElement <> Some prior.Head
+                    || int64Property "runId" priorElement <> Some prior.RunId
+                    || priorElement.GetProperty("attempt").GetInt32() <> prior.Attempt
+                    || stringProperty "evidenceSha256" priorElement <> Some prior.EvidenceSha256
+                    || stringProperty "artifactExpiresAt" priorElement <> Some prior.ArtifactExpiresAt
+                then
+                    yield violation "evidence-prior" "prior authority differs from the decision receipt"
+            | None -> ()
+
+            let formalPriorElement = root.GetProperty("formalPrior")
+
+            match formalDecision.Prior with
+            | None when formalPriorElement.ValueKind <> JsonValueKind.Null ->
+                yield violation "evidence-formal-prior" "formal execution must not carry prior authority"
+            | Some prior when formalPriorElement.ValueKind <> JsonValueKind.Object ->
+                yield violation "evidence-formal-prior" "formal reuse must carry prior authority"
+            | Some prior ->
+                if
+                    stringProperty "head" formalPriorElement <> Some prior.Head
+                    || int64Property "runId" formalPriorElement <> Some prior.RunId
+                    || formalPriorElement.GetProperty("attempt").GetInt32() <> prior.Attempt
+                    || stringProperty "evidenceSha256" formalPriorElement <> Some prior.EvidenceSha256
+                    || stringProperty "artifactExpiresAt" formalPriorElement
+                       <> Some prior.ArtifactExpiresAt
+                then
+                    yield violation "evidence-formal-prior" "formal prior authority differs from the decision receipt"
+            | None -> ()
+
+            if stringProperty "planSha256" root <> Some(sha256Bytes contract.Bytes) then
+                yield violation "evidence-plan-digest" "qualification plan bytes do not match"
+
+            if
+                ids.Length <> gates.Length
+                || ids |> List.distinct |> List.length <> ids.Length
+                || Set.ofList ids <> (expected |> Map.keys |> Set.ofSeq)
+            then
+                yield violation "evidence-gate-set" (String.concat "," ids)
+
+            for gateValue in gates do
+                match
+                    stringProperty "id" gateValue
+                    |> Option.bind (fun id -> Map.tryFind id expected |> Option.map (fun gate -> id, gate))
+                with
+                | None -> ()
+                | Some(id, gate) ->
+                    if stringProperty "artifact" gateValue <> Some gate.Artifact then
+                        yield violation "evidence-artifact-path" id
+
+                    if stringArray "commands" gateValue <> gate.Commands then
+                        yield violation "evidence-command-contract" id
+
+                    match safeArtifactPath artifactRoot gate.Artifact with
+                    | None -> yield violation "evidence-artifact-path" gate.Artifact
+                    | Some artifactPath when not (File.Exists artifactPath) ->
+                        yield violation "evidence-artifact-missing" gate.Artifact
+                    | Some artifactPath ->
+                        let observed = sha256File artifactPath
+
+                        if stringProperty "sha256" gateValue <> Some observed then
+                            yield violation "evidence-artifact-digest" $"gate=%s{id} observed=%s{observed}"
+        ]
     with exceptionValue ->
         [ violation "evidence-unreadable" exceptionValue.Message ]
 
@@ -1151,37 +1833,65 @@ let private loadDecision path =
     | Error problem -> failwith $"reuse decision is invalid: %s{problem}"
 
 let private writeDecision path decision =
-    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath path)) |> ignore
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath path))
+    |> ignore
+
     File.WriteAllBytes(path, QualificationReuse.decisionBytes decision)
 
-let private effectiveFormalDecision artifactRoot (contract: BootstrapContract) (wholeDecision: QualificationReuse.Decision) supplied =
+let private effectiveFormalDecision
+    artifactRoot
+    (contract: BootstrapContract)
+    (wholeDecision: QualificationReuse.Decision)
+    supplied
+    =
     match wholeDecision.Prior with
     | None -> supplied
     | Some _ ->
-        let priorPath = Path.Combine(artifactRoot, contract.Reuse.UploadName, "formal-decision.json")
-        if File.Exists priorPath then loadDecision priorPath
-        elif supplied.SelfSha256 = wholeDecision.SelfSha256 then supplied
-        else failwith "selected prior formal decision is missing"
+        let priorPath =
+            Path.Combine(artifactRoot, contract.Reuse.UploadName, "formal-decision.json")
+
+        if File.Exists priorPath then
+            loadDecision priorPath
+        elif supplied.SelfSha256 = wholeDecision.SelfSha256 then
+            supplied
+        else
+            failwith "selected prior formal decision is missing"
 
 let private suppliedEvidenceBindings arguments decision =
     let formalDecision =
         optionValue "--formal-decision" arguments
         |> Option.map (Path.GetFullPath >> loadDecision)
         |> Option.defaultValue decision
+
     let milestone =
         optionValue "--milestone" arguments
         |> Option.map (Path.GetFullPath >> loadMilestoneEvidence)
-        |> Option.defaultValue { Mode = "scoped"; SubjectSha256 = decision.SubjectSha256 }
+        |> Option.defaultValue
+            {
+                Mode = "scoped"
+                SubjectSha256 = decision.SubjectSha256
+            }
+
     formalDecision, milestone
 
 let private selectPriorManifest (path: string) (priorHead: string) (contract: BootstrapContract) =
     use document = JsonDocument.Parse(File.ReadAllBytes path)
     let root = document.RootElement
-    if stringProperty "schema" root <> Some contract.EvidenceSchema then failwith "prior terminal evidence schema is unsupported"
-    if stringProperty "candidate" root <> Some(priorHead.ToLowerInvariant()) then failwith "prior terminal evidence head does not match its run"
-    if stringProperty "route" root <> Some "execute" then failwith "transitive qualification reuse is not selectable"
-    if stringProperty "planSha256" root <> Some(sha256Bytes contract.Bytes) then failwith "prior qualification plan differs"
-    stringProperty "subjectSha256" root |> Option.defaultWith (fun () -> failwith "prior subject digest is missing")
+
+    if stringProperty "schema" root <> Some contract.EvidenceSchema then
+        failwith "prior terminal evidence schema is unsupported"
+
+    if stringProperty "candidate" root <> Some(priorHead.ToLowerInvariant()) then
+        failwith "prior terminal evidence head does not match its run"
+
+    if stringProperty "route" root <> Some "execute" then
+        failwith "transitive qualification reuse is not selectable"
+
+    if stringProperty "planSha256" root <> Some(sha256Bytes contract.Bytes) then
+        failwith "prior qualification plan differs"
+
+    stringProperty "subjectSha256" root
+    |> Option.defaultWith (fun () -> failwith "prior subject digest is missing")
 
 let private requiredInt64 name arguments =
     match optionValue name arguments with
@@ -1193,7 +1903,10 @@ let private requiredInt64 name arguments =
 
 let private requiredInt name arguments =
     let value = requiredInt64 name arguments
-    if value > int64 Int32.MaxValue then failwith $"%s{name} is too large"
+
+    if value > int64 Int32.MaxValue then
+        failwith $"%s{name} is too large"
+
     int value
 
 let private optionalNonNegativeDecimal name arguments =
@@ -1204,8 +1917,16 @@ let private optionalNonNegativeDecimal name arguments =
         | true, parsed when parsed >= 0M -> Some parsed
         | _ -> failwith $"%s{name} must be a non-negative invariant decimal"
 
-let private writeCadenceRecommendations (input: string) (completeness: string) (output: string) (now: DateTimeOffset) (dataStatus: string) (contract: BootstrapContract) =
+let private writeCadenceRecommendations
+    (input: string)
+    (completeness: string)
+    (output: string)
+    (now: DateTimeOffset)
+    (dataStatus: string)
+    (contract: BootstrapContract)
+    =
     use document = JsonDocument.Parse(File.ReadAllBytes input)
+
     let observations =
         document.RootElement.EnumerateArray()
         |> Seq.map (fun item ->
@@ -1216,49 +1937,111 @@ let private writeCadenceRecommendations (input: string) (completeness: string) (
                 | Some "infrastructure-failure" -> QualificationCadence.InfrastructureFailure
                 | Some "unattributed-failure" -> QualificationCadence.UnattributedFailure
                 | _ -> failwith "observation outcome is unsupported"
+
             let boundary =
                 match stringProperty "boundary" item with
                 | Some "child" -> QualificationCadence.Child
                 | Some "closure" -> QualificationCadence.Closure
                 | Some "production" -> QualificationCadence.Production
                 | _ -> failwith "observation boundary is unsupported"
-            let observedAt = stringProperty "observedAt" item |> Option.map DateTimeOffset.Parse |> Option.defaultWith (fun () -> failwith "observation time is missing")
+
+            let observedAt =
+                stringProperty "observedAt" item
+                |> Option.map DateTimeOffset.Parse
+                |> Option.defaultWith (fun () -> failwith "observation time is missing")
+
             let duration = item.GetProperty("durationSeconds").GetInt32()
             let runnerMinutes = item.GetProperty("runnerMinutes").GetDecimal()
-            let reused = boolProperty "reused" item |> Option.defaultWith (fun () -> failwith "observation reused is missing")
-            let equivalent = boolProperty "closureEquivalent" item |> Option.defaultWith (fun () -> failwith "observation closureEquivalent is missing")
+
+            let reused =
+                boolProperty "reused" item
+                |> Option.defaultWith (fun () -> failwith "observation reused is missing")
+
+            let equivalent =
+                boolProperty "closureEquivalent" item
+                |> Option.defaultWith (fun () -> failwith "observation closureEquivalent is missing")
+
             let delay =
                 let value = item.GetProperty("detectionDelayHours")
-                if value.ValueKind = JsonValueKind.Null then None else Some(value.GetDecimal())
-            ({ Gate = stringProperty "gate" item |> Option.defaultWith (fun () -> failwith "observation gate is missing")
-               RunId = int64Property "runId" item |> Option.defaultWith (fun () -> failwith "observation runId is missing")
-               Attempt = item.GetProperty("attempt").GetInt32(); ObservedAt = observedAt; DurationSeconds = duration
-               RunnerMinutes = runnerMinutes; Reused = reused; Outcome = outcome; Boundary = boundary
-               ClosureEquivalent = equivalent; DetectionDelayHours = delay }: QualificationCadence.Observation))
+
+                if value.ValueKind = JsonValueKind.Null then
+                    None
+                else
+                    Some(value.GetDecimal())
+
+            ({
+                Gate =
+                    stringProperty "gate" item
+                    |> Option.defaultWith (fun () -> failwith "observation gate is missing")
+                RunId =
+                    int64Property "runId" item
+                    |> Option.defaultWith (fun () -> failwith "observation runId is missing")
+                Attempt = item.GetProperty("attempt").GetInt32()
+                ObservedAt = observedAt
+                DurationSeconds = duration
+                RunnerMinutes = runnerMinutes
+                Reused = reused
+                Outcome = outcome
+                Boundary = boundary
+                ClosureEquivalent = equivalent
+                DetectionDelayHours = delay
+            }
+            : QualificationCadence.Observation))
         |> Seq.toList
+
     let policy: QualificationCadence.Policy =
-        { Version = contract.Economics.PolicyVersion; WindowDays = contract.Economics.WindowDays
-          FreshnessHours = contract.Economics.FreshnessHours; MinimumObservations = contract.Economics.MinimumObservations
-          ExpensiveRunnerMinutes = contract.Economics.ExpensiveRunnerMinutes; LowYieldMaximum = contract.Economics.LowYieldMaximum
-          MinimumCadence = Map.ofList contract.Economics.MinimumCadence }
-    let gates = contract.Jobs |> List.filter (fun job -> not job.DownloadArtifacts) |> List.map _.Id
-    let recommendations = gates |> List.map (fun gate -> QualificationCadence.evaluate now policy gate observations)
-    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath output)) |> ignore
+        {
+            Version = contract.Economics.PolicyVersion
+            WindowDays = contract.Economics.WindowDays
+            FreshnessHours = contract.Economics.FreshnessHours
+            MinimumObservations = contract.Economics.MinimumObservations
+            ExpensiveRunnerMinutes = contract.Economics.ExpensiveRunnerMinutes
+            LowYieldMaximum = contract.Economics.LowYieldMaximum
+            MinimumCadence = Map.ofList contract.Economics.MinimumCadence
+        }
+
+    let gates =
+        contract.Jobs
+        |> List.filter (fun job -> not job.DownloadArtifacts)
+        |> List.map _.Id
+
+    let recommendations =
+        gates
+        |> List.map (fun gate -> QualificationCadence.evaluate now policy gate observations)
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath output))
+    |> ignore
+
     use completenessDocument = JsonDocument.Parse(File.ReadAllBytes completeness)
     let completenessRoot = completenessDocument.RootElement
-    if stringProperty "schema" completenessRoot <> Some "fsgg.coordination.qualification-census-completeness/1"
-       || stringProperty "status" completenessRoot <> Some dataStatus then
+
+    if
+        stringProperty "schema" completenessRoot
+        <> Some "fsgg.coordination.qualification-census-completeness/1"
+        || stringProperty "status" completenessRoot <> Some dataStatus
+    then
         failwith "qualification census completeness is unsupported or disagrees with data status"
+
     use stream = File.Create output
     use writer = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false))
-    writer.WriteStartObject(); writer.WriteString("schema", "fsgg.coordination.qualification-cadence-report/2")
-    writer.WriteString("evaluatedAt", now.ToUniversalTime().ToString("O")); writer.WriteString("policyVersion", policy.Version); writer.WriteString("dataStatus", dataStatus)
-    writer.WritePropertyName("completeness"); completenessRoot.WriteTo writer
+    writer.WriteStartObject()
+    writer.WriteString("schema", "fsgg.coordination.qualification-cadence-report/2")
+    writer.WriteString("evaluatedAt", now.ToUniversalTime().ToString("O"))
+    writer.WriteString("policyVersion", policy.Version)
+    writer.WriteString("dataStatus", dataStatus)
+    writer.WritePropertyName("completeness")
+    completenessRoot.WriteTo writer
     writer.WriteStartArray("recommendations")
+
     for recommendation in recommendations do
-        use valueDocument = JsonDocument.Parse(QualificationCadence.recommendationBytes recommendation)
+        use valueDocument =
+            JsonDocument.Parse(QualificationCadence.recommendationBytes recommendation)
+
         valueDocument.RootElement.WriteTo writer
-    writer.WriteEndArray(); writer.WriteEndObject(); writer.Flush()
+
+    writer.WriteEndArray()
+    writer.WriteEndObject()
+    writer.Flush()
 
 let execute (arguments: string list) =
     let arguments = arguments |> List.filter ((<>) "--")
@@ -1279,6 +2062,7 @@ let execute (arguments: string list) =
                     optionValue "--output" arguments
                     |> Option.defaultValue (Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
                     |> Path.GetFullPath
+
                 Directory.CreateDirectory(Path.GetDirectoryName output) |> ignore
                 File.WriteAllText(output, renderWorkflow contract, UTF8Encoding(false))
                 []
@@ -1290,6 +2074,7 @@ let execute (arguments: string list) =
                     qualificationSubject root contract
                     |> QualificationReuse.subjectBytes
                     |> fun bytes -> File.WriteAllBytes(Path.GetFullPath output, bytes)
+
                     []
                 | None -> [ violation "argument" "subject requires --output" ]
             | "formal-subject" ->
@@ -1298,6 +2083,7 @@ let execute (arguments: string list) =
                     formalSubject root contract
                     |> QualificationReuse.formalSubjectBytes
                     |> fun bytes -> File.WriteAllBytes(Path.GetFullPath output, bytes)
+
                     []
                 | None -> [ violation "argument" "formal-subject requires --output" ]
             | "milestone" ->
@@ -1309,10 +2095,21 @@ let execute (arguments: string list) =
                     writer.WriteStartObject()
                     writer.WriteString("schema", "fsgg.coordination.milestone-validation/1")
                     writer.WriteString("parent", validation.State.Parent)
-                    writer.WriteString("mode", if validation.State.Mode = MilestoneQualification.Scoped then "scoped" else "comprehensive")
+
+                    writer.WriteString(
+                        "mode",
+                        if validation.State.Mode = MilestoneQualification.Scoped then
+                            "scoped"
+                        else
+                            "comprehensive"
+                    )
+
                     writer.WriteNumber("acceptedPrefixLength", validation.AcceptedPrefixLength)
                     writer.WriteStartArray("contractDrift")
-                    for child in validation.ContractDrift do writer.WriteStringValue child
+
+                    for child in validation.ContractDrift do
+                        writer.WriteStringValue child
+
                     writer.WriteEndArray()
                     writer.WriteString("subjectSha256", validation.SubjectSha256)
                     writer.WriteEndObject()
@@ -1323,6 +2120,7 @@ let execute (arguments: string list) =
                 match optionValue "--head" arguments, optionValue "--output" arguments with
                 | Some head, Some output when isSha head ->
                     let subject = qualificationSubject root contract
+
                     let decision =
                         match optionValue "--refuse" arguments with
                         | Some reason -> QualificationReuse.refuse head subject.SubjectSha256 reason
@@ -1331,16 +2129,25 @@ let execute (arguments: string list) =
                             | None, None -> QualificationReuse.decide head subject.SubjectSha256 None None
                             | Some manifest, Some priorHead when isSha priorHead ->
                                 let evidenceDigest = sha256File (Path.GetFullPath manifest)
+
                                 let prior: QualificationReuse.PriorRun =
-                                    { Head = priorHead.ToLowerInvariant()
-                                      RunId = requiredInt64 "--prior-run" arguments
-                                      Attempt = requiredInt "--prior-attempt" arguments
-                                      EvidenceSha256 = evidenceDigest
-                                      ArtifactExpiresAt = optionValue "--expires" arguments |> Option.defaultWith (fun () -> failwith "--expires is required")
-                                      RunnerMinutes = optionalNonNegativeDecimal "--runner-minutes" arguments }
-                                let priorSubject = selectPriorManifest (Path.GetFullPath manifest) prior.Head contract
+                                    {
+                                        Head = priorHead.ToLowerInvariant()
+                                        RunId = requiredInt64 "--prior-run" arguments
+                                        Attempt = requiredInt "--prior-attempt" arguments
+                                        EvidenceSha256 = evidenceDigest
+                                        ArtifactExpiresAt =
+                                            optionValue "--expires" arguments
+                                            |> Option.defaultWith (fun () -> failwith "--expires is required")
+                                        RunnerMinutes = optionalNonNegativeDecimal "--runner-minutes" arguments
+                                    }
+
+                                let priorSubject =
+                                    selectPriorManifest (Path.GetFullPath manifest) prior.Head contract
+
                                 QualificationReuse.decide head subject.SubjectSha256 (Some prior) (Some priorSubject)
                             | _ -> QualificationReuse.refuse head subject.SubjectSha256 "incomplete-prior-selection"
+
                     writeDecision (Path.GetFullPath output) decision
                     []
                 | _ -> [ violation "argument" "select requires an exact --head and --output" ]
@@ -1348,34 +2155,72 @@ let execute (arguments: string list) =
                 match optionValue "--head" arguments, optionValue "--output" arguments with
                 | Some head, Some output when isSha head ->
                     let subject = formalSubject root contract
+
                     let decision =
                         match optionValue "--prior-receipt" arguments with
                         | None -> QualificationReuse.decide head subject.SubjectSha256 None None
                         | Some receipt ->
                             let receiptPath = Path.GetFullPath receipt
                             let violations = inspectCanonicalQuintReceipt receiptPath
-                            if not violations.IsEmpty then QualificationReuse.refuse head subject.SubjectSha256 "selected-formal-evidence-invalid"
+
+                            if not violations.IsEmpty then
+                                QualificationReuse.refuse head subject.SubjectSha256 "selected-formal-evidence-invalid"
                             else
                                 let prior: QualificationReuse.PriorRun =
-                                    { Head = optionValue "--prior-head" arguments |> Option.filter isSha |> Option.defaultWith (fun () -> failwith "--prior-head is required")
-                                      RunId = requiredInt64 "--prior-run" arguments
-                                      Attempt = requiredInt "--prior-attempt" arguments
-                                      EvidenceSha256 = sha256File receiptPath
-                                      ArtifactExpiresAt = optionValue "--expires" arguments |> Option.defaultWith (fun () -> failwith "--expires is required")
-                                      RunnerMinutes = optionalNonNegativeDecimal "--runner-minutes" arguments }
-                                let priorSubject = optionValue "--prior-subject" arguments |> Option.defaultWith (fun () -> failwith "--prior-subject is required")
+                                    {
+                                        Head =
+                                            optionValue "--prior-head" arguments
+                                            |> Option.filter isSha
+                                            |> Option.defaultWith (fun () -> failwith "--prior-head is required")
+                                        RunId = requiredInt64 "--prior-run" arguments
+                                        Attempt = requiredInt "--prior-attempt" arguments
+                                        EvidenceSha256 = sha256File receiptPath
+                                        ArtifactExpiresAt =
+                                            optionValue "--expires" arguments
+                                            |> Option.defaultWith (fun () -> failwith "--expires is required")
+                                        RunnerMinutes = optionalNonNegativeDecimal "--runner-minutes" arguments
+                                    }
+
+                                let priorSubject =
+                                    optionValue "--prior-subject" arguments
+                                    |> Option.defaultWith (fun () -> failwith "--prior-subject is required")
+
                                 QualificationReuse.decide head subject.SubjectSha256 (Some prior) (Some priorSubject)
+
                     writeDecision (Path.GetFullPath output) decision
                     []
                 | _ -> [ violation "argument" "formal-select requires an exact --head and --output" ]
             | "cadence" ->
-                match optionValue "--observations" arguments, optionValue "--completeness" arguments, optionValue "--output" arguments, optionValue "--now" arguments with
+                match
+                    optionValue "--observations" arguments,
+                    optionValue "--completeness" arguments,
+                    optionValue "--output" arguments,
+                    optionValue "--now" arguments
+                with
                 | Some input, Some completeness, Some output, Some now ->
-                    let dataStatus = optionValue "--data-status" arguments |> Option.defaultValue "available"
-                    if dataStatus <> "available" && dataStatus <> "partial" && dataStatus <> "unavailable" then failwith "cadence data status is unsupported"
-                    writeCadenceRecommendations (Path.GetFullPath input) (Path.GetFullPath completeness) (Path.GetFullPath output) (DateTimeOffset.Parse now) dataStatus contract
+                    let dataStatus =
+                        optionValue "--data-status" arguments |> Option.defaultValue "available"
+
+                    if
+                        dataStatus <> "available"
+                        && dataStatus <> "partial"
+                        && dataStatus <> "unavailable"
+                    then
+                        failwith "cadence data status is unsupported"
+
+                    writeCadenceRecommendations
+                        (Path.GetFullPath input)
+                        (Path.GetFullPath completeness)
+                        (Path.GetFullPath output)
+                        (DateTimeOffset.Parse now)
+                        dataStatus
+                        contract
+
                     []
-                | _ -> [ violation "argument" "cadence requires --observations, --completeness, --output, and --now" ]
+                | _ ->
+                    [
+                        violation "argument" "cadence requires --observations, --completeness, --output, and --now"
+                    ]
             | "vulnerability" ->
                 optionValue "--report" arguments
                 |> Option.map (fun path -> inspectVulnerabilityReport (Path.GetFullPath path) root contract)
@@ -1391,41 +2236,91 @@ let execute (arguments: string list) =
                     let artifactRoot = Path.GetFullPath artifacts
                     let decision = loadDecision (Path.GetFullPath decisionPath)
                     let suppliedFormal, milestone = suppliedEvidenceBindings arguments decision
-                    let formalDecision = effectiveFormalDecision artifactRoot contract decision suppliedFormal
+
+                    let formalDecision =
+                        effectiveFormalDecision artifactRoot contract decision suppliedFormal
 
                     let qualificationViolations =
-                        [ if decision.Candidate <> head.ToLowerInvariant() then
-                              yield violation "reuse-candidate" "decision is not bound to the current exact head"
-                          if decision.Kind = QualificationReuse.Refuse then
-                              yield violation "reuse-refused" decision.Reason
-                          match decision.Prior with
-                          | None ->
-                              yield! inspectRecoveryArtifact artifactRoot head contract
-                              yield! inspectCanonicalQuintArtifact artifactRoot contract
-                          | Some prior ->
-                              let priorDecisionPath = Path.Combine(artifactRoot, contract.Reuse.Artifact)
-                              let priorManifestPath = Path.Combine(artifactRoot, "bootstrap-evidence-manifest/bootstrap-evidence.json")
-                              if not (File.Exists priorDecisionPath) then
-                                  yield violation "reuse-prior-decision-missing" contract.Reuse.Artifact
-                              elif not (File.Exists priorManifestPath) then
-                                  yield violation "reuse-prior-evidence-missing" "bootstrap-evidence-manifest/bootstrap-evidence.json"
-                              else
-                                  let priorDecision = loadDecision priorDecisionPath
-                                  if priorDecision.Kind <> QualificationReuse.Execute
-                                     || priorDecision.Candidate <> prior.Head
-                                     || priorDecision.SubjectSha256 <> decision.SubjectSha256 then
-                                      yield violation "reuse-prior-decision" "prior execution decision is not equivalent"
-                                  if sha256File priorManifestPath <> prior.EvidenceSha256 then
-                                      yield violation "reuse-prior-evidence-digest" "selected prior manifest bytes changed"
-                                      let priorFormalPath = Path.Combine(artifactRoot, contract.Reuse.UploadName, "formal-decision.json")
-                                      let priorFormal = if File.Exists priorFormalPath then loadDecision priorFormalPath else priorDecision
-                                      yield! inspectEvidence priorManifestPath prior.Head artifactRoot contract priorDecision priorFormal milestone ]
+                        [
+                            if decision.Candidate <> head.ToLowerInvariant() then
+                                yield violation "reuse-candidate" "decision is not bound to the current exact head"
+                            if decision.Kind = QualificationReuse.Refuse then
+                                yield violation "reuse-refused" decision.Reason
+                            match decision.Prior with
+                            | None ->
+                                yield! inspectRecoveryArtifact artifactRoot head contract
+                                yield! inspectCanonicalQuintArtifact artifactRoot contract
+                            | Some prior ->
+                                let priorDecisionPath = Path.Combine(artifactRoot, contract.Reuse.Artifact)
+
+                                let priorManifestPath =
+                                    Path.Combine(artifactRoot, "bootstrap-evidence-manifest/bootstrap-evidence.json")
+
+                                if not (File.Exists priorDecisionPath) then
+                                    yield violation "reuse-prior-decision-missing" contract.Reuse.Artifact
+                                elif not (File.Exists priorManifestPath) then
+                                    yield
+                                        violation
+                                            "reuse-prior-evidence-missing"
+                                            "bootstrap-evidence-manifest/bootstrap-evidence.json"
+                                else
+                                    let priorDecision = loadDecision priorDecisionPath
+
+                                    if
+                                        priorDecision.Kind <> QualificationReuse.Execute
+                                        || priorDecision.Candidate <> prior.Head
+                                        || priorDecision.SubjectSha256 <> decision.SubjectSha256
+                                    then
+                                        yield
+                                            violation
+                                                "reuse-prior-decision"
+                                                "prior execution decision is not equivalent"
+
+                                    if sha256File priorManifestPath <> prior.EvidenceSha256 then
+                                        yield
+                                            violation
+                                                "reuse-prior-evidence-digest"
+                                                "selected prior manifest bytes changed"
+
+                                        let priorFormalPath =
+                                            Path.Combine(
+                                                artifactRoot,
+                                                contract.Reuse.UploadName,
+                                                "formal-decision.json"
+                                            )
+
+                                        let priorFormal =
+                                            if File.Exists priorFormalPath then
+                                                loadDecision priorFormalPath
+                                            else
+                                                priorDecision
+
+                                        yield!
+                                            inspectEvidence
+                                                priorManifestPath
+                                                prior.Head
+                                                artifactRoot
+                                                contract
+                                                priorDecision
+                                                priorFormal
+                                                milestone
+                        ]
 
                     if List.isEmpty qualificationViolations then
-                        writeEvidence (Path.GetFullPath output) head artifactRoot contract decision formalDecision milestone
+                        writeEvidence
+                            (Path.GetFullPath output)
+                            head
+                            artifactRoot
+                            contract
+                            decision
+                            formalDecision
+                            milestone
 
                     qualificationViolations
-                | _ -> [ violation "argument" "collect requires --head, --artifacts, --output, and --decision" ]
+                | _ ->
+                    [
+                        violation "argument" "collect requires --head, --artifacts, --output, and --decision"
+                    ]
             | "evidence" ->
                 match
                     optionValue "--head" arguments,
@@ -1437,9 +2332,17 @@ let execute (arguments: string list) =
                     let decision = loadDecision (Path.GetFullPath decisionPath)
                     let artifactRoot = Path.GetFullPath artifacts
                     let suppliedFormal, milestone = suppliedEvidenceBindings arguments decision
-                    let formalDecision = effectiveFormalDecision artifactRoot contract decision suppliedFormal
+
+                    let formalDecision =
+                        effectiveFormalDecision artifactRoot contract decision suppliedFormal
+
                     inspectEvidence (Path.GetFullPath path) head artifactRoot contract decision formalDecision milestone
-                | _ -> [ violation "argument" "evidence requires an exact --head plus --artifacts, --file, and --decision" ]
+                | _ ->
+                    [
+                        violation
+                            "argument"
+                            "evidence requires an exact --head plus --artifacts, --file, and --decision"
+                    ]
             | unknown -> [ violation "argument" $"unknown mode: %s{unknown}" ]
         with exceptionValue ->
             [ violation "qualification-plan-invalid" exceptionValue.Message ]

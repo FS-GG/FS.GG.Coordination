@@ -7,7 +7,9 @@ open System.Text.Json
 open System.Xml.Linq
 open Xunit
 
-let private repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+let private repositoryRoot =
+    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+
 let private verifier = Path.Combine(repositoryRoot, "eng/verify-dependencies.fsx")
 
 let private runVerifier root =
@@ -32,16 +34,20 @@ let private withRepositoryMutation mutate verify =
 
     try
         for fileName in
-            [ "Directory.Build.props"
-              "Directory.Build.local.props"
-              "Directory.Packages.props"
-              "Directory.Packages.local.props"
-              "global.json" ] do
+            [
+                "Directory.Build.props"
+                "Directory.Build.local.props"
+                "Directory.Packages.props"
+                "Directory.Packages.local.props"
+                "global.json"
+            ] do
             File.Copy(Path.Combine(repositoryRoot, fileName), Path.Combine(scratch.FullName, fileName))
 
         for source in Directory.EnumerateFiles(Path.Combine(repositoryRoot, "src"), "*", SearchOption.AllDirectories) do
-            if not (source.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-               && not (source.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")) then
+            if
+                not (source.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                && not (source.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            then
                 let relative = Path.GetRelativePath(repositoryRoot, source)
                 let destination = Path.Combine(scratch.FullName, relative)
                 Directory.CreateDirectory(Path.GetDirectoryName destination) |> ignore
@@ -62,18 +68,17 @@ let ``production graph satisfies dependency policy`` () =
 [<Fact>]
 let ``published kernel lock is exact and feed-served`` () =
     let lockPath =
-        Path.Combine(
-            repositoryRoot,
-            "src/FS.GG.Coordination.Qualification.Contracts/packages.lock.json"
-        )
+        Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/packages.lock.json")
 
     use document = JsonDocument.Parse(File.ReadAllBytes lockPath)
+
     let package =
         document.RootElement.GetProperty("dependencies").GetProperty("net10.0").GetProperty("FS.GG.SDD.Artifacts")
 
     Assert.Equal("Direct", package.GetProperty("type").GetString())
     Assert.Equal("[1.5.0, 1.5.0]", package.GetProperty("requested").GetString())
     Assert.Equal("1.5.0", package.GetProperty("resolved").GetString())
+
     Assert.Equal(
         "RAVNLuyPScmeoH+v5fSs5Ahd5DlR+S8kO1wSbX+xIOJ6WsLsF9iDIkXbqTCuwZFOWx72fARJEw4nZrBClUUxGw==",
         package.GetProperty("contentHash").GetString()
@@ -84,10 +89,24 @@ let ``source project reference to the published kernel producer is independently
     withRepositoryMutation
         (fun root ->
             let projectPath =
-                Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj")
+                Path.Combine(
+                    root,
+                    "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
+                )
+
             let document = XDocument.Load projectPath
             let group = XElement(XName.Get "ItemGroup")
-            group.Add(XElement(XName.Get "ProjectReference", XAttribute(XName.Get "Include", "../../FS.GG.SDD/src/FS.GG.SDD.Artifacts/FS.GG.SDD.Artifacts.fsproj")))
+
+            group.Add(
+                XElement(
+                    XName.Get "ProjectReference",
+                    XAttribute(
+                        XName.Get "Include",
+                        "../../FS.GG.SDD/src/FS.GG.SDD.Artifacts/FS.GG.SDD.Artifacts.fsproj"
+                    )
+                )
+            )
+
             document.Root.Add group
             document.Save projectPath)
         (fun root ->
@@ -99,7 +118,9 @@ let ``source project reference to the published kernel producer is independently
 let ``published kernel package consumption outside qualification is independently rejected`` () =
     withRepositoryMutation
         (fun root ->
-            let projectPath = Path.Combine(root, "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj")
+            let projectPath =
+                Path.Combine(root, "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj")
+
             let document = XDocument.Load projectPath
             let group = XElement(XName.Get "ItemGroup")
             group.Add(XElement(XName.Get "PackageReference", XAttribute(XName.Get "Include", "FS.GG.SDD.Artifacts")))
@@ -171,6 +192,7 @@ let ``NuGet config checkout relative package source is independently rejected`` 
                         )
                     )
                 )
+
             config.Save(Path.Combine(root, "NuGet.Config")))
         (fun root ->
             let exitCode, _, error = runVerifier root
@@ -182,7 +204,9 @@ let ``NuGet config checkout relative package source is independently rejected`` 
 let ``local producer machinery copy is independently rejected`` () =
     withRepositoryMutation
         (fun root ->
-            let path = Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/QuintCompiler.fs")
+            let path =
+                Path.Combine(root, "src/FS.GG.Coordination.Qualification.Contracts/QuintCompiler.fs")
+
             File.WriteAllText(path, "// forbidden producer copy"))
         (fun root ->
             let exitCode, _, error = runVerifier root
@@ -195,9 +219,11 @@ let ``non exact central published kernel pin is independently rejected`` () =
         (fun root ->
             let propsPath = Path.Combine(root, "Directory.Packages.local.props")
             let document = XDocument.Load propsPath
+
             let pin =
                 document.Descendants(XName.Get "PackageVersion")
                 |> Seq.find (fun element -> element.Attribute(XName.Get "Include").Value = "FS.GG.SDD.Artifacts")
+
             pin.SetAttributeValue(XName.Get "Version", "1.4.0")
             document.Save propsPath)
         (fun root ->
@@ -207,10 +233,13 @@ let ``non exact central published kernel pin is independently rejected`` () =
 
 [<Fact>]
 let ``forbidden pure-core edge is independently rejected`` () =
-    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-dependency")
+    let fixtureRoot =
+        Path.Combine(repositoryRoot, "tests/fixtures/forbidden-dependency")
+
     let exitCode, _, error = runVerifier fixtureRoot
 
     Assert.NotEqual(0, exitCode)
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=FS.GG.Coordination.GitHub rule=project-edge-not-allowed",
         error
@@ -218,10 +247,13 @@ let ``forbidden pure-core edge is independently rejected`` () =
 
 [<Fact>]
 let ``forbidden pure-core framework reference is independently rejected`` () =
-    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-framework-reference")
+    let fixtureRoot =
+        Path.Combine(repositoryRoot, "tests/fixtures/forbidden-framework-reference")
+
     let exitCode, _, error = runVerifier fixtureRoot
 
     Assert.NotEqual(0, exitCode)
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=Microsoft.AspNetCore.App rule=runtime-reference-not-allowed-in-pure-layer",
         error
@@ -229,10 +261,13 @@ let ``forbidden pure-core framework reference is independently rejected`` () =
 
 [<Fact>]
 let ``unapproved pure-core HTTP client package is independently rejected`` () =
-    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-http-client-package")
+    let fixtureRoot =
+        Path.Combine(repositoryRoot, "tests/fixtures/forbidden-http-client-package")
+
     let exitCode, _, error = runVerifier fixtureRoot
 
     Assert.NotEqual(0, exitCode)
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=RestSharp rule=runtime-reference-not-allowed-in-pure-layer",
         error
@@ -240,14 +275,13 @@ let ``unapproved pure-core HTTP client package is independently rejected`` () =
 
 [<Fact>]
 let ``failed pure-core project evaluation is independently rejected`` () =
-    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/failed-project-evaluation")
+    let fixtureRoot =
+        Path.Combine(repositoryRoot, "tests/fixtures/failed-project-evaluation")
+
     let exitCode, _, error = runVerifier fixtureRoot
 
     Assert.NotEqual(0, exitCode)
-    Assert.Contains(
-        "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core",
-        error
-    )
+    Assert.Contains("DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core", error)
     Assert.Contains("rule=project-evaluation-failed", error)
     Assert.DoesNotContain("rule=project-edge-not-allowed", error)
     Assert.DoesNotContain("rule=runtime-reference-not-allowed-in-pure-layer", error)
@@ -260,6 +294,7 @@ let ``forbidden pure-core web SDK forms are independently rejected`` fixture =
     let exitCode, _, error = runVerifier fixtureRoot
 
     Assert.NotEqual(0, exitCode)
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.Core dependency=Microsoft.NET.Sdk.Web rule=transport-sdk-in-pure-layer",
         error
@@ -267,22 +302,28 @@ let ``forbidden pure-core web SDK forms are independently rejected`` fixture =
 
 [<Fact>]
 let ``forbidden App hosting and imported runtime binding forms are independently rejected`` () =
-    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-app-hosting")
+    let fixtureRoot =
+        Path.Combine(repositoryRoot, "tests/fixtures/forbidden-app-hosting")
+
     let exitCode, _, error = runVerifier fixtureRoot
 
     Assert.NotEqual(0, exitCode)
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=Microsoft.NET.Sdk.Web rule=app-host-runtime-sdk-forbidden",
         error
     )
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=OutputType=Exe rule=app-host-must-not-be-executable",
         error
     )
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=Microsoft.Extensions.Hosting rule=app-host-runtime-binding-forbidden",
         error
     )
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=Microsoft.AspNetCore.App rule=app-host-runtime-binding-forbidden",
         error
@@ -290,10 +331,13 @@ let ``forbidden App hosting and imported runtime binding forms are independently
 
 [<Fact>]
 let ``forbidden App import SDK is independently rejected`` () =
-    let fixtureRoot = Path.Combine(repositoryRoot, "tests/fixtures/forbidden-app-import-web-sdk")
+    let fixtureRoot =
+        Path.Combine(repositoryRoot, "tests/fixtures/forbidden-app-import-web-sdk")
+
     let exitCode, _, error = runVerifier fixtureRoot
 
     Assert.NotEqual(0, exitCode)
+
     Assert.Contains(
         "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Coordination.App dependency=Microsoft.NET.Sdk.Web rule=app-host-runtime-sdk-forbidden",
         error

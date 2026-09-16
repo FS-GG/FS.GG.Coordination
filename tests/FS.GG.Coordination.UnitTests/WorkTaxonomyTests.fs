@@ -4,18 +4,20 @@ open Xunit
 open FS.GG.Coordination.Core
 
 let private observation stableId nativeType legacyClass legacyKind =
-    { StableRowId = stableId
-      RepositoryScope = "FS-GG/repository"
-      Revision = "node-1@2026-09-01T00:00:00Z"
-      NativeIssueType = nativeType
-      LegacyClass = legacyClass
-      LegacyKind = legacyKind
-      HierarchyPresent = false
-      HierarchyPreservable = true
-      RepositoryScopePreservable = true
-      Complete = true
-      Current = true
-      Readable = true }
+    {
+        StableRowId = stableId
+        RepositoryScope = "FS-GG/repository"
+        Revision = "node-1@2026-09-01T00:00:00Z"
+        NativeIssueType = nativeType
+        LegacyClass = legacyClass
+        LegacyKind = legacyKind
+        HierarchyPresent = false
+        HierarchyPreservable = true
+        RepositoryScopePreservable = true
+        Complete = true
+        Current = true
+        Readable = true
+    }
 
 let private target item =
     match WorkTaxonomy.classify item with
@@ -30,18 +32,25 @@ let private codes item =
 [<Fact>]
 let ``legacy authority maps to the seven native issue types`` () =
     let cases =
-        [ observation "1" None None (Some "anchor"), (NativeIssueType.Epic, LifecycleApplicability.Work)
-          observation "2" None (Some "capability") None, (NativeIssueType.Feature, LifecycleApplicability.Work)
-          observation "3" None (Some "hardening") (Some "work"), (NativeIssueType.Task, LifecycleApplicability.Work)
-          observation "4" None (Some "defect") None, (NativeIssueType.Bug, LifecycleApplicability.Work)
-          observation "5" None (Some "decision") None, (NativeIssueType.Decision, LifecycleApplicability.Work)
-          observation "6" None None (Some "register"), (NativeIssueType.Register, LifecycleApplicability.StandingExempt)
-          observation "7" None None (Some "directive"), (NativeIssueType.Directive, LifecycleApplicability.StandingExempt) ]
-    for item, expected in cases do Assert.Equal(expected, target item)
+        [
+            observation "1" None None (Some "anchor"), (NativeIssueType.Epic, LifecycleApplicability.Work)
+            observation "2" None (Some "capability") None, (NativeIssueType.Feature, LifecycleApplicability.Work)
+            observation "3" None (Some "hardening") (Some "work"), (NativeIssueType.Task, LifecycleApplicability.Work)
+            observation "4" None (Some "defect") None, (NativeIssueType.Bug, LifecycleApplicability.Work)
+            observation "5" None (Some "decision") None, (NativeIssueType.Decision, LifecycleApplicability.Work)
+            observation "6" None None (Some "register"),
+            (NativeIssueType.Register, LifecycleApplicability.StandingExempt)
+            observation "7" None None (Some "directive"),
+            (NativeIssueType.Directive, LifecycleApplicability.StandingExempt)
+        ]
+
+    for item, expected in cases do
+        Assert.Equal(expected, target item)
 
 [<Fact>]
 let ``already native rows are explicit no ops and native authority rejects contradiction`` () =
     let native = observation "8" (Some "Bug") None None
+
     match WorkTaxonomy.plan [ native ] with
     | Ok [ disposition ] ->
         Assert.True(disposition.NoOp)
@@ -53,27 +62,42 @@ let ``already native rows are explicit no ops and native authority rejects contr
     Assert.Contains("WTX-CONTRADICTORY", codes contradictory)
     let standingAsWork = observation "9b" (Some "Register") None (Some "work")
     Assert.Contains("WTX-CONTRADICTORY", codes standingAsWork)
-    let ambiguousLegacySignals = observation "9c" (Some "Feature") (Some "defect") (Some "anchor")
+
+    let ambiguousLegacySignals =
+        observation "9c" (Some "Feature") (Some "defect") (Some "anchor")
+
     Assert.Contains("WTX-AMBIGUOUS", codes ambiguousLegacySignals)
 
 [<Fact>]
 let ``every fail closed observation family has a stable diagnostic`` () =
     let valid = observation "10" None (Some "hardening") None
+
     let cases =
-        [ { valid with Readable = false }, "WTX-UNREADABLE"
-          { valid with Complete = false }, "WTX-INCOMPLETE"
-          { valid with Current = false }, "WTX-STALE"
-          { valid with StableRowId = "" }, "WTX-MISSING-STABLE-ID"
-          { valid with RepositoryScope = "" }, "WTX-MISSING-REPOSITORY-SCOPE"
-          { valid with Revision = "" }, "WTX-MISSING-REVISION"
-          observation "11" None None None, "WTX-MISSING-CLASSIFICATION"
-          observation "12" None (Some "mystery") None, "WTX-UNKNOWN-CLASS:mystery"
-          observation "13" None None (Some "mystery"), "WTX-UNKNOWN-KIND:mystery"
-          observation "14" (Some "Incident") None None, "WTX-UNSUPPORTED-NATIVE:incident"
-          observation "15" None (Some "defect") (Some "anchor"), "WTX-AMBIGUOUS"
-          { valid with HierarchyPresent = true; HierarchyPreservable = false }, "WTX-LOSSY-HIERARCHY"
-          { valid with RepositoryScopePreservable = false }, "WTX-LOSSY-REPOSITORY-SCOPE" ]
-    for item, expected in cases do Assert.Contains(expected, codes item)
+        [
+            { valid with Readable = false }, "WTX-UNREADABLE"
+            { valid with Complete = false }, "WTX-INCOMPLETE"
+            { valid with Current = false }, "WTX-STALE"
+            { valid with StableRowId = "" }, "WTX-MISSING-STABLE-ID"
+            { valid with RepositoryScope = "" }, "WTX-MISSING-REPOSITORY-SCOPE"
+            { valid with Revision = "" }, "WTX-MISSING-REVISION"
+            observation "11" None None None, "WTX-MISSING-CLASSIFICATION"
+            observation "12" None (Some "mystery") None, "WTX-UNKNOWN-CLASS:mystery"
+            observation "13" None None (Some "mystery"), "WTX-UNKNOWN-KIND:mystery"
+            observation "14" (Some "Incident") None None, "WTX-UNSUPPORTED-NATIVE:incident"
+            observation "15" None (Some "defect") (Some "anchor"), "WTX-AMBIGUOUS"
+            { valid with
+                HierarchyPresent = true
+                HierarchyPreservable = false
+            },
+            "WTX-LOSSY-HIERARCHY"
+            { valid with
+                RepositoryScopePreservable = false
+            },
+            "WTX-LOSSY-REPOSITORY-SCOPE"
+        ]
+
+    for item, expected in cases do
+        Assert.Contains(expected, codes item)
 
 [<Fact>]
 let ``planning is total ordered all or nothing and byte stable`` () =
@@ -81,6 +105,7 @@ let ``planning is total ordered all or nothing and byte stable`` () =
     let b = observation "row-a" None (Some "hardening") (Some "work")
     let first = WorkTaxonomy.plan [ a; b ]
     let second = WorkTaxonomy.plan [ b; a ]
+
     match first, second with
     | Ok firstPlan, Ok secondPlan ->
         Assert.Equal<string list>([ "row-a"; "row-b" ], firstPlan |> List.map _.StableRowId)
@@ -93,13 +118,18 @@ let ``planning is total ordered all or nothing and byte stable`` () =
     match WorkTaxonomy.plan [ a; a ] with
     | Error refusals ->
         Assert.Equal(2, refusals.Length)
-        Assert.All(refusals, fun refusal -> Assert.Contains(WorkTaxonomyDiagnostic.DuplicateStableRowId, refusal.Diagnostics))
+
+        Assert.All(
+            refusals,
+            fun refusal -> Assert.Contains(WorkTaxonomyDiagnostic.DuplicateStableRowId, refusal.Diagnostics)
+        )
     | Ok _ -> failwith "duplicate identity produced a partial plan"
 
 [<Fact>]
 let ``invalid member refuses the complete migration plan`` () =
     let valid = observation "row-a" None (Some "defect") None
     let invalid = observation "row-b" None None None
+
     match WorkTaxonomy.plan [ valid; invalid ] with
     | Error [ refusal ] ->
         Assert.Equal(Some "row-b", refusal.StableRowId)

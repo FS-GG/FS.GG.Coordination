@@ -6,20 +6,37 @@ open System.IO
 open System.Text.Json
 open Xunit
 
-let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+let private root =
+    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+
 let private desiredPath = Path.Combine(root, "eng/repository-settings/desired.json")
 let private fixturePath = Path.Combine(root, "eng/repository-settings/fixture.json")
-let private fixturePreStatePath = Path.Combine(root, "eng/repository-settings/fixture-prestate.json")
+
+let private fixturePreStatePath =
+    Path.Combine(root, "eng/repository-settings/fixture-prestate.json")
+
 let private receiptPath = Path.Combine(root, "eng/repository-settings/receipt.json")
-let private preStatePath = Path.Combine(root, "eng/repository-settings/prestate.json")
+
+let private preStatePath =
+    Path.Combine(root, "eng/repository-settings/prestate.json")
 
 let private verify preStatePath receiptPath =
     let startInfo = ProcessStartInfo("dotnet")
     startInfo.WorkingDirectory <- root
     startInfo.RedirectStandardOutput <- true
     startInfo.RedirectStandardError <- true
-    for argument in [ "fsi"; "eng/repository-settings/verify.fsx"; "--"; desiredPath; preStatePath; receiptPath ] do
+
+    for argument in
+        [
+            "fsi"
+            "eng/repository-settings/verify.fsx"
+            "--"
+            desiredPath
+            preStatePath
+            receiptPath
+        ] do
         startInfo.ArgumentList.Add(argument)
+
     use child = Process.Start(startInfo)
     let output = child.StandardOutput.ReadToEnd()
     let error = child.StandardError.ReadToEnd()
@@ -31,7 +48,10 @@ let private withMutation (oldValue: string) (newValue: string) (assertion: strin
     Assert.Contains(oldValue, original)
     let changed = original.Replace(oldValue, newValue)
     Assert.NotEqual<string>(original, changed)
-    let path = Path.Combine(Path.GetTempPath(), $"repository-settings-{Guid.NewGuid():N}.json")
+
+    let path =
+        Path.Combine(Path.GetTempPath(), $"repository-settings-{Guid.NewGuid():N}.json")
+
     try
         File.WriteAllText(path, changed)
         assertion path
@@ -43,7 +63,10 @@ let private withPreStateMutation (oldValue: string) (newValue: string) (assertio
     Assert.Contains(oldValue, original)
     let changed = original.Replace(oldValue, newValue)
     Assert.NotEqual<string>(original, changed)
-    let path = Path.Combine(Path.GetTempPath(), $"repository-settings-prestate-{Guid.NewGuid():N}.json")
+
+    let path =
+        Path.Combine(Path.GetTempPath(), $"repository-settings-prestate-{Guid.NewGuid():N}.json")
+
     try
         File.WriteAllText(path, changed)
         assertion path
@@ -52,7 +75,9 @@ let private withPreStateMutation (oldValue: string) (newValue: string) (assertio
 
 [<Fact>]
 let ``repository provisioning contract is closed and least privilege`` () =
-    use desired = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "eng/repository-settings/desired.json")))
+    use desired =
+        JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "eng/repository-settings/desired.json")))
+
     let value = desired.RootElement
     Assert.Equal("fsgg.coordination.repository-settings-desired/2", value.GetProperty("schema").GetString())
     Assert.Equal("selected", value.GetProperty("actions").GetProperty("allowedActions").GetString())
@@ -62,9 +87,22 @@ let ``repository provisioning contract is closed and least privilege`` () =
     let checks = value.GetProperty("checks").EnumerateArray() |> Seq.toList
     Assert.Equal(6, checks.Length)
     Assert.All(checks, fun check -> Assert.Equal(15368, check.GetProperty("integrationId").GetInt32()))
-    Assert.All(value.GetProperty("rulesets").EnumerateArray(), fun ruleset -> Assert.Equal(0, ruleset.GetProperty("bypassActorCount").GetInt32()))
-    Assert.Equal("attached", value.GetProperty("codeSecurityConfiguration").GetProperty("associationStatus").GetString())
-    Assert.Equal(17, value.GetProperty("codeSecurityConfiguration").GetProperty("configuration").GetProperty("id").GetInt32())
+
+    Assert.All(
+        value.GetProperty("rulesets").EnumerateArray(),
+        fun ruleset -> Assert.Equal(0, ruleset.GetProperty("bypassActorCount").GetInt32())
+    )
+
+    Assert.Equal(
+        "attached",
+        value.GetProperty("codeSecurityConfiguration").GetProperty("associationStatus").GetString()
+    )
+
+    Assert.Equal(
+        17,
+        value.GetProperty("codeSecurityConfiguration").GetProperty("configuration").GetProperty("id").GetInt32()
+    )
+
     Assert.Equal("configured", value.GetProperty("codeqlDefaultSetup").GetProperty("state").GetString())
     Assert.Equal("enabled", value.GetProperty("security").GetProperty("privateVulnerabilityReporting").GetString())
     Assert.Equal("disabled", value.GetProperty("security").GetProperty("secretScanningNonProviderPatterns").GetString())
@@ -92,11 +130,19 @@ let ``exact live provisioning receipt passes the strict validator`` () =
 [<InlineData("\"associationStatus\":\"attached\"", "\"associationStatus\":\"detached\"", "RS-STATE-MISMATCH")>]
 [<InlineData("\"enforcement\":\"unenforced\",\"id\":17", "\"enforcement\":\"unenforced\",\"id\":18", "RS-STATE-MISMATCH")>]
 [<InlineData("\"enforcement\":\"unenforced\",\"id\":17", "\"enforcement\":\"enforced\",\"id\":17", "RS-STATE-MISMATCH")>]
-[<InlineData("\"schedule\":\"weekly\",\"state\":\"configured\"", "\"schedule\":\"weekly\",\"state\":\"not-configured\"", "RS-STATE-MISMATCH")>]
+[<InlineData("\"schedule\":\"weekly\",\"state\":\"configured\"",
+             "\"schedule\":\"weekly\",\"state\":\"not-configured\"",
+             "RS-STATE-MISMATCH")>]
 [<InlineData("\"languages\":[\"actions\"]", "\"languages\":[\"javascript-typescript\"]", "RS-STATE-MISMATCH")>]
-[<InlineData("\"privateVulnerabilityReporting\":\"enabled\"", "\"privateVulnerabilityReporting\":\"disabled\"", "RS-STATE-MISMATCH")>]
-[<InlineData("\"secretScanningNonProviderPatterns\":\"disabled\"", "\"secretScanningNonProviderPatterns\":\"enabled\"", "RS-STATE-MISMATCH")>]
-[<InlineData("\"secretScanningValidityChecks\":\"disabled\"", "\"secretScanningValidityChecks\":\"enabled\"", "RS-STATE-MISMATCH")>]
+[<InlineData("\"privateVulnerabilityReporting\":\"enabled\"",
+             "\"privateVulnerabilityReporting\":\"disabled\"",
+             "RS-STATE-MISMATCH")>]
+[<InlineData("\"secretScanningNonProviderPatterns\":\"disabled\"",
+             "\"secretScanningNonProviderPatterns\":\"enabled\"",
+             "RS-STATE-MISMATCH")>]
+[<InlineData("\"secretScanningValidityChecks\":\"disabled\"",
+             "\"secretScanningValidityChecks\":\"enabled\"",
+             "RS-STATE-MISMATCH")>]
 [<InlineData("\"bypassActorCount\":0", "\"bypassActorCount\":1", "RS-RULESET-MISMATCH")>]
 [<InlineData("\"requireCodeOwnerReview\":false", "\"requireCodeOwnerReview\":true", "RS-RULESET-MISMATCH")>]
 [<InlineData("\"doNotEnforceOnCreate\":true", "\"doNotEnforceOnCreate\":false", "RS-RULESET-MISMATCH")>]
@@ -110,15 +156,29 @@ let ``exact live provisioning receipt passes the strict validator`` () =
 [<InlineData("vulnerability-alerts", "actions/artifacts", "RS-OPERATION-CONTRACT")>]
 [<InlineData("Coordination/teams", "Coordination/collaborators", "RS-OPERATION-CONTRACT")>]
 [<InlineData("configurations/17/repositories", "configurations/18/repositories", "RS-OPERATION-CONTRACT")>]
-[<InlineData("/repos/FS-GG/FS.GG.Coordination/code-security-configuration\"", "/repos/FS-GG/FS.GG.Coordination/code-security-configuration-wrong\"", "RS-OPERATION-CONTRACT")>]
+[<InlineData("/repos/FS-GG/FS.GG.Coordination/code-security-configuration\"",
+             "/repos/FS-GG/FS.GG.Coordination/code-security-configuration-wrong\"",
+             "RS-OPERATION-CONTRACT")>]
 [<InlineData("code-scanning/default-setup", "code-scanning/analyses", "RS-OPERATION-CONTRACT")>]
-[<InlineData("/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting\"", "/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting-wrong\"", "RS-OPERATION-CONTRACT")>]
-[<InlineData("/repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow\"", "/repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow-wrong\"", "RS-OPERATION-CONTRACT")>]
+[<InlineData("/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting\"",
+             "/repos/FS-GG/FS.GG.Coordination/private-vulnerability-reporting-wrong\"",
+             "RS-OPERATION-CONTRACT")>]
+[<InlineData("/repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow\"",
+             "/repos/FS-GG/FS.GG.Coordination/actions/permissions/workflow-wrong\"",
+             "RS-OPERATION-CONTRACT")>]
 [<InlineData("/orgs/FS-GG/actions/permissions\"", "/orgs/FS-GG/actions/permissions-wrong\"", "RS-OPERATION-CONTRACT")>]
-[<InlineData("\"httpStatus\":403,\"method\":\"GET\",\"name\":\"organization-actions-permissions\"", "\"httpStatus\":200,\"method\":\"GET\",\"name\":\"organization-actions-permissions\"", "RS-OPERATION-STATUS")>]
-[<InlineData("\"name\":\"organization-actions-permissions\",\"path\":\"/orgs/FS-GG/actions/permissions\",\"responseSha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"status\":\"unsupported\"", "\"name\":\"organization-actions-permissions\",\"path\":\"/orgs/FS-GG/actions/permissions\",\"responseSha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"status\":\"verified\"", "RS-OPERATION-STATUS")>]
-[<InlineData("\"method\":\"GET\",\"name\":\"dependency-graph\"", "\"method\":\"POST\",\"name\":\"dependency-graph\"", "RS-OPERATION-CONTRACT")>]
-[<InlineData("\"httpStatus\":200,\"method\":\"GET\",\"name\":\"main-ruleset\"", "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"", "RS-RULESET-RESPONSE")>]
+[<InlineData("\"httpStatus\":403,\"method\":\"GET\",\"name\":\"organization-actions-permissions\"",
+             "\"httpStatus\":200,\"method\":\"GET\",\"name\":\"organization-actions-permissions\"",
+             "RS-OPERATION-STATUS")>]
+[<InlineData("\"name\":\"organization-actions-permissions\",\"path\":\"/orgs/FS-GG/actions/permissions\",\"responseSha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"status\":\"unsupported\"",
+             "\"name\":\"organization-actions-permissions\",\"path\":\"/orgs/FS-GG/actions/permissions\",\"responseSha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"status\":\"verified\"",
+             "RS-OPERATION-STATUS")>]
+[<InlineData("\"method\":\"GET\",\"name\":\"dependency-graph\"",
+             "\"method\":\"POST\",\"name\":\"dependency-graph\"",
+             "RS-OPERATION-CONTRACT")>]
+[<InlineData("\"httpStatus\":200,\"method\":\"GET\",\"name\":\"main-ruleset\"",
+             "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"",
+             "RS-RULESET-RESPONSE")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
 [<InlineData("\"digest\":\"5", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
 [<InlineData("\"preStateSha256\":\"9", "\"preStateSha256\":\"8", "RS-PRESTATE-DIGEST")>]
@@ -137,22 +197,47 @@ let ``validator rejects noncanonical receipt bytes`` () =
 
 [<Fact>]
 let ``validator rejects altered canonical pre-state bytes`` () =
-    withPreStateMutation "\"observedAt\":\"2026-08-27T00:00:00Z\"" "\"observedAt\":\"2026-08-27T00:00:01Z\"" (fun path ->
-        let exitCode, output = verify path fixturePath
-        Assert.NotEqual(0, exitCode)
-        Assert.Contains("RS-PRESTATE-SELF-DIGEST", output))
+    withPreStateMutation
+        "\"observedAt\":\"2026-08-27T00:00:00Z\""
+        "\"observedAt\":\"2026-08-27T00:00:01Z\""
+        (fun path ->
+            let exitCode, output = verify path fixturePath
+            Assert.NotEqual(0, exitCode)
+            Assert.Contains("RS-PRESTATE-SELF-DIGEST", output))
 
 [<Fact>]
 let ``ruleset requests bind one-author review checks signatures and no bypass`` () =
-    let branch = File.ReadAllText(Path.Combine(root, "eng/repository-settings/main-ruleset.json"))
-    let tags = File.ReadAllText(Path.Combine(root, "eng/repository-settings/release-tag-ruleset.json"))
-    for token in [ "required_status_checks"; "require_code_owner_review"; "require_last_push_approval"; "required_review_thread_resolution"; "strict_required_status_checks_policy" ] do
+    let branch =
+        File.ReadAllText(Path.Combine(root, "eng/repository-settings/main-ruleset.json"))
+
+    let tags =
+        File.ReadAllText(Path.Combine(root, "eng/repository-settings/release-tag-ruleset.json"))
+
+    for token in
+        [
+            "required_status_checks"
+            "require_code_owner_review"
+            "require_last_push_approval"
+            "required_review_thread_resolution"
+            "strict_required_status_checks_policy"
+        ] do
         Assert.Contains(token, branch)
+
     Assert.Contains("\"required_approving_review_count\":0", branch)
     Assert.Contains("\"require_code_owner_review\":false", branch)
     Assert.Contains("\"require_last_push_approval\":false", branch)
-    for check in [ "deterministic-build"; "compiler-and-tests"; "dependency-and-security"; "package-install-smoke"; "bootstrap-recovery"; "evidence-manifest" ] do
+
+    for check in
+        [
+            "deterministic-build"
+            "compiler-and-tests"
+            "dependency-and-security"
+            "package-install-smoke"
+            "bootstrap-recovery"
+            "evidence-manifest"
+        ] do
         Assert.Contains(check, branch)
+
     Assert.Contains("\"bypass_actors\":[]", branch)
     Assert.Contains("\"bypass_actors\":[]", tags)
     Assert.Contains("required_signatures", tags)
@@ -162,5 +247,14 @@ let ``ruleset requests bind one-author review checks signatures and no bypass`` 
 [<Fact>]
 let ``codeowners protects every provisioning authority surface`` () =
     let owners = File.ReadAllText(Path.Combine(root, ".github/CODEOWNERS"))
-    for path in [ "*"; "/.github/"; "/eng/"; "/evidence/"; "/src/FS.GG.Coordination.Protocol/"; "/src/FS.GG.Coordination.Qualification.Contracts/" ] do
+
+    for path in
+        [
+            "*"
+            "/.github/"
+            "/eng/"
+            "/evidence/"
+            "/src/FS.GG.Coordination.Protocol/"
+            "/src/FS.GG.Coordination.Qualification.Contracts/"
+        ] do
         Assert.Contains($"%s{path} @FS-GG/coordination-maintainers", owners)

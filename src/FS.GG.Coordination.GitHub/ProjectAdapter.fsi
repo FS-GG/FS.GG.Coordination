@@ -10,12 +10,19 @@ type ProjectContent =
     | UnknownContent of kind: string * contentId: LiveId
 
 type ProjectItem =
-    { ProjectId: LiveId
-      ItemId: LiveId
-      Content: ProjectContent
-      Archived: bool }
+    {
+        ProjectId: LiveId
+        ItemId: LiveId
+        Content: ProjectContent
+        Archived: bool
+    }
 
-type ProjectItemPage = { Number: int; Items: ProjectItem list; TerminalPage: bool }
+type ProjectItemPage =
+    {
+        Number: int
+        Items: ProjectItem list
+        TerminalPage: bool
+    }
 
 type ProjectObservation =
     | ProjectComplete of revision: string * pages: ProjectItemPage list
@@ -26,10 +33,12 @@ type ProjectObservation =
     | ProjectIndeterminate of reason: string
 
 type ProjectSnapshot =
-    { Revision: string
-      PageCount: int
-      NodeCount: int
-      Items: ProjectItem list }
+    {
+        Revision: string
+        PageCount: int
+        NodeCount: int
+        Items: ProjectItem list
+    }
 
 type ProjectReadFailure =
     | ProjectObservationRefused of ObservationRefusal
@@ -48,19 +57,23 @@ type ProjectMembership =
     | UnknownMembership of ProjectItem
     | MissingMembership
 
-type MembershipResolutionFailure = InvalidExpectedRepository | InvalidTargetContentIdentity
+type MembershipResolutionFailure =
+    | InvalidExpectedRepository
+    | InvalidTargetContentIdentity
 
 type ProjectionNature = ProjectionOnly
 
 type StatusOptionProjection = { Id: LiveId; Name: SemanticName }
 
 type StatusFieldProjection =
-    { ProjectId: LiveId
-      ItemId: LiveId
-      FieldId: LiveId
-      FieldName: SemanticName
-      Options: StatusOptionProjection list
-      SelectedOptionId: LiveId option }
+    {
+        ProjectId: LiveId
+        ItemId: LiveId
+        FieldId: LiveId
+        FieldName: SemanticName
+        Options: StatusOptionProjection list
+        SelectedOptionId: LiveId option
+    }
 
 type StatusObservation =
     | StatusComplete of revision: string * evidence: PageEvidence * fields: StatusFieldProjection list
@@ -71,14 +84,16 @@ type StatusObservation =
     | StatusIndeterminate of reason: string
 
 type StatusSnapshot =
-    { Revision: string
-      Nature: ProjectionNature
-      ProjectId: LiveId
-      ItemId: LiveId
-      FieldId: LiveId
-      FieldName: SemanticName
-      Options: StatusOptionProjection list
-      SelectedOptionId: LiveId option }
+    {
+        Revision: string
+        Nature: ProjectionNature
+        ProjectId: LiveId
+        ItemId: LiveId
+        FieldId: LiveId
+        FieldName: SemanticName
+        Options: StatusOptionProjection list
+        SelectedOptionId: LiveId option
+    }
 
 type StatusReadFailure =
     | StatusObservationRefused of ObservationRefusal
@@ -91,18 +106,33 @@ type StatusReadFailure =
     | DuplicateStatusOptionName of SemanticName
     | UnknownSelectedStatusOption of LiveId
 
-type MembershipIntent = EnsureMember of projectId: LiveId * contentId: LiveId | EnsureNotMember of itemId: LiveId * contentId: LiveId
-type MembershipOperation = AddMembershipOperation of projectId: LiveId * contentId: LiveId | RemoveMembershipOperation of projectId: LiveId * itemId: LiveId * contentId: LiveId
+type MembershipIntent =
+    | EnsureMember of projectId: LiveId * contentId: LiveId
+    | EnsureNotMember of itemId: LiveId * contentId: LiveId
+
+type MembershipOperation =
+    | AddMembershipOperation of projectId: LiveId * contentId: LiveId
+    | RemoveMembershipOperation of projectId: LiveId * itemId: LiveId * contentId: LiveId
 
 type MembershipPlan =
-    { Before: ProjectSnapshot
-      Repository: RepositoryCoordinates
-      CausationIdentity: string
-      IdempotencyIdentity: string
-      Operation: MembershipOperation }
+    {
+        Before: ProjectSnapshot
+        Repository: RepositoryCoordinates
+        CausationIdentity: string
+        IdempotencyIdentity: string
+        Operation: MembershipOperation
+    }
 
-type MembershipNoOpReceipt = { ObservedRevision: string; IdempotencyIdentity: string; Intent: MembershipIntent }
-type MembershipPlanDecision = MembershipPlanned of MembershipPlan | MembershipNoOp of MembershipNoOpReceipt
+type MembershipNoOpReceipt =
+    {
+        ObservedRevision: string
+        IdempotencyIdentity: string
+        Intent: MembershipIntent
+    }
+
+type MembershipPlanDecision =
+    | MembershipPlanned of MembershipPlan
+    | MembershipNoOp of MembershipNoOpReceipt
 
 type MembershipPlanRefusal =
     | InvalidMembershipExpectedRevision
@@ -124,17 +154,32 @@ type MembershipPostStateRefusal =
     | InvalidResultingProjectItem
     | MembershipPostStateMismatch
 
-type StatusIntent = SetStatus of optionId: LiveId | ClearStatus
-type StatusOperation = SetStatusOperation of optionId: LiveId | ClearStatusOperation
+type StatusIntent =
+    | SetStatus of optionId: LiveId
+    | ClearStatus
+
+type StatusOperation =
+    | SetStatusOperation of optionId: LiveId
+    | ClearStatusOperation
 
 type StatusPlan =
-    { Before: StatusSnapshot
-      CausationIdentity: string
-      IdempotencyIdentity: string
-      Operation: StatusOperation }
+    {
+        Before: StatusSnapshot
+        CausationIdentity: string
+        IdempotencyIdentity: string
+        Operation: StatusOperation
+    }
 
-type StatusNoOpReceipt = { ObservedRevision: string; IdempotencyIdentity: string; Intent: StatusIntent }
-type StatusPlanDecision = StatusPlanned of StatusPlan | StatusNoOp of StatusNoOpReceipt
+type StatusNoOpReceipt =
+    {
+        ObservedRevision: string
+        IdempotencyIdentity: string
+        Intent: StatusIntent
+    }
+
+type StatusPlanDecision =
+    | StatusPlanned of StatusPlan
+    | StatusNoOp of StatusNoOpReceipt
 
 type StatusPlanRefusal =
     | InvalidStatusExpectedRevision
@@ -158,11 +203,45 @@ type StatusPostStateRefusal =
 [<RequireQualifiedAccess>]
 module ProjectAdapter =
     val readProject: ProjectObservation -> Result<ProjectSnapshot, ProjectReadFailure>
-    val resolveMembership: expectedRepository: RepositoryCoordinates -> targetContentId: LiveId -> ProjectSnapshot -> Result<ProjectMembership, MembershipResolutionFailure>
-    val readStatus: projectId: LiveId -> itemId: LiveId -> StatusObservation -> Result<StatusSnapshot, StatusReadFailure>
-    val planMembership: expectedRevision: string -> causationIdentity: string -> repository: RepositoryCoordinates -> MembershipIntent -> ProjectSnapshot -> Result<MembershipPlanDecision, MembershipPlanRefusal>
-    val checkMembershipPreState: MembershipPlan -> ProjectObservation -> Result<ProjectSnapshot, MembershipPreStateRefusal>
-    val verifyMembershipPostState: expectedResultRevision: string -> resultingItem: ProjectItem option -> MembershipPlan -> ProjectObservation -> Result<ProjectSnapshot, MembershipPostStateRefusal>
-    val planStatus: expectedRevision: string -> causationIdentity: string -> StatusIntent -> StatusSnapshot -> Result<StatusPlanDecision, StatusPlanRefusal>
+
+    val resolveMembership:
+        expectedRepository: RepositoryCoordinates ->
+        targetContentId: LiveId ->
+        ProjectSnapshot ->
+            Result<ProjectMembership, MembershipResolutionFailure>
+
+    val readStatus:
+        projectId: LiveId -> itemId: LiveId -> StatusObservation -> Result<StatusSnapshot, StatusReadFailure>
+
+    val planMembership:
+        expectedRevision: string ->
+        causationIdentity: string ->
+        repository: RepositoryCoordinates ->
+        MembershipIntent ->
+        ProjectSnapshot ->
+            Result<MembershipPlanDecision, MembershipPlanRefusal>
+
+    val checkMembershipPreState:
+        MembershipPlan -> ProjectObservation -> Result<ProjectSnapshot, MembershipPreStateRefusal>
+
+    val verifyMembershipPostState:
+        expectedResultRevision: string ->
+        resultingItem: ProjectItem option ->
+        MembershipPlan ->
+        ProjectObservation ->
+            Result<ProjectSnapshot, MembershipPostStateRefusal>
+
+    val planStatus:
+        expectedRevision: string ->
+        causationIdentity: string ->
+        StatusIntent ->
+        StatusSnapshot ->
+            Result<StatusPlanDecision, StatusPlanRefusal>
+
     val checkStatusPreState: StatusPlan -> StatusObservation -> Result<StatusSnapshot, StatusPreStateRefusal>
-    val verifyStatusPostState: expectedResultRevision: string -> StatusPlan -> StatusObservation -> Result<StatusSnapshot, StatusPostStateRefusal>
+
+    val verifyStatusPostState:
+        expectedResultRevision: string ->
+        StatusPlan ->
+        StatusObservation ->
+            Result<StatusSnapshot, StatusPostStateRefusal>

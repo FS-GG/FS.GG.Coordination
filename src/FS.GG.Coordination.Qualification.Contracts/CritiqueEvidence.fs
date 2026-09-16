@@ -23,42 +23,50 @@ type CritiqueDecision =
     | ChangesRequired
 
 type CritiqueCandidate =
-    { CommitSha: string
-      TreeSha256: string
-      UnitContractSha256: string }
+    {
+        CommitSha: string
+        TreeSha256: string
+        UnitContractSha256: string
+    }
 
-type CritiqueEvidenceFingerprint =
-    { Id: string
-      Sha256: string }
+type CritiqueEvidenceFingerprint = { Id: string; Sha256: string }
 
 type CritiqueFindingInput =
-    { Id: string
-      Perspective: CritiquePerspective
-      PhaseId: string
-      Author: string
-      Decision: CritiqueDecision
-      ContentSha256: string
-      CompletedAt: DateTimeOffset }
+    {
+        Id: string
+        Perspective: CritiquePerspective
+        PhaseId: string
+        Author: string
+        Decision: CritiqueDecision
+        ContentSha256: string
+        CompletedAt: DateTimeOffset
+    }
 
 type CritiqueEvidenceInput =
-    { Candidate: CritiqueCandidate
-      Evidence: CritiqueEvidenceFingerprint list
-      AccountableOwner: string
-      Findings: CritiqueFindingInput list
-      CreatedAt: DateTimeOffset }
+    {
+        Candidate: CritiqueCandidate
+        Evidence: CritiqueEvidenceFingerprint list
+        AccountableOwner: string
+        Findings: CritiqueFindingInput list
+        CreatedAt: DateTimeOffset
+    }
 
 type CritiqueEvidenceSummary =
-    { CandidateFingerprintSha256: string
-      EvidenceSetSha256: string
-      FindingSetSha256: string
-      Outcome: string
-      Digest: string }
+    {
+        CandidateFingerprintSha256: string
+        EvidenceSetSha256: string
+        FindingSetSha256: string
+        Outcome: string
+        Digest: string
+    }
 
 type CritiqueEvidenceFinding =
-    { Code: string
-      Path: string
-      Expected: string
-      Actual: string }
+    {
+        Code: string
+        Path: string
+        Expected: string
+        Actual: string
+    }
 
 [<RequireQualifiedAccess>]
 module CritiqueEvidence =
@@ -66,28 +74,34 @@ module CritiqueEvidence =
     let Schema = "fsgg.coordination.critique-evidence/1"
 
     let private requiredPerspectives =
-        [ CritiquePerspective.Architecture
-          CritiquePerspective.Security
-          CritiquePerspective.Adapter
-          CritiquePerspective.Migration
-          CritiquePerspective.Cutover ]
+        [
+            CritiquePerspective.Architecture
+            CritiquePerspective.Security
+            CritiquePerspective.Adapter
+            CritiquePerspective.Migration
+            CritiquePerspective.Cutover
+        ]
 
-    let private perspectiveName = function
+    let private perspectiveName =
+        function
         | CritiquePerspective.Architecture -> "architecture"
         | CritiquePerspective.Security -> "security"
         | CritiquePerspective.Adapter -> "adapter"
         | CritiquePerspective.Migration -> "migration"
         | CritiquePerspective.Cutover -> "cutover"
 
-    let private decisionName = function
+    let private decisionName =
+        function
         | CritiqueDecision.Passed -> "passed"
         | CritiqueDecision.ChangesRequired -> "changes-required"
 
     let private finding code path expected actual =
-        { Code = code
-          Path = path
-          Expected = expected
-          Actual = actual }
+        {
+            Code = code
+            Path = path
+            Expected = expected
+            Actual = actual
+        }
 
     let private sha256 (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -101,11 +115,13 @@ module CritiqueEvidence =
             | null -> writer.WriteNullValue()
             | :? JsonObject as objectValue ->
                 writer.WriteStartObject()
+
                 objectValue
                 |> Seq.sortWith (fun left right -> String.CompareOrdinal(left.Key, right.Key))
                 |> Seq.iter (fun property ->
                     writer.WritePropertyName property.Key
                     write property.Value)
+
                 writer.WriteEndObject()
             | :? JsonArray as arrayValue ->
                 writer.WriteStartArray()
@@ -143,49 +159,103 @@ module CritiqueEvidence =
         addString node "sha256" entry.Sha256
         node
 
-    let private idPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant)
+    let private idPattern =
+        Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant)
+
     let private shaPattern = Regex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)
     let private revisionPattern = Regex("^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
 
     let private validateInput (input: CritiqueEvidenceInput) =
         let mutable findings = []
-        let add code path expected actual = findings <- finding code path expected actual :: findings
-        if isNull input.Candidate.CommitSha || not (revisionPattern.IsMatch input.Candidate.CommitSha) then
-            add "CE-CANDIDATE-REVISION" "/candidate/commitSha" "lowercase 40-character Git revision" input.Candidate.CommitSha
+
+        let add code path expected actual =
+            findings <- finding code path expected actual :: findings
+
+        if
+            isNull input.Candidate.CommitSha
+            || not (revisionPattern.IsMatch input.Candidate.CommitSha)
+        then
+            add
+                "CE-CANDIDATE-REVISION"
+                "/candidate/commitSha"
+                "lowercase 40-character Git revision"
+                input.Candidate.CommitSha
+
         for name, value in
-            [ "treeSha256", input.Candidate.TreeSha256
-              "unitContractSha256", input.Candidate.UnitContractSha256 ] do
+            [
+                "treeSha256", input.Candidate.TreeSha256
+                "unitContractSha256", input.Candidate.UnitContractSha256
+            ] do
             if isNull value || not (shaPattern.IsMatch value) then
                 add "CE-CANDIDATE-DIGEST" ($"/candidate/%s{name}") "lowercase SHA-256" value
+
         if isNull input.AccountableOwner || not (idPattern.IsMatch input.AccountableOwner) then
             add "CE-OWNER" "/accountableOwner" "stable owner identity" input.AccountableOwner
-        if input.Evidence.IsEmpty then add "CE-EVIDENCE-EMPTY" "/evidence" "at least one fingerprint" "empty"
+
+        if input.Evidence.IsEmpty then
+            add "CE-EVIDENCE-EMPTY" "/evidence" "at least one fingerprint" "empty"
+
         let evidenceIds = input.Evidence |> List.map _.Id
-        if evidenceIds |> List.exists (fun value -> isNull value || not (idPattern.IsMatch value)) then
+
+        if
+            evidenceIds
+            |> List.exists (fun value -> isNull value || not (idPattern.IsMatch value))
+        then
             add "CE-EVIDENCE-ID" "/evidence" "stable evidence ids" (String.concat "," evidenceIds)
+
         if evidenceIds |> List.distinct |> List.length <> evidenceIds.Length then
             add "CE-EVIDENCE-DUPLICATE" "/evidence" "unique evidence ids" (String.concat "," evidenceIds)
+
         input.Evidence
         |> List.iteri (fun index entry ->
             if isNull entry.Sha256 || not (shaPattern.IsMatch entry.Sha256) then
                 add "CE-EVIDENCE-DIGEST" ($"/evidence/%d{index}/sha256") "lowercase SHA-256" entry.Sha256)
+
         let perspectives = input.Findings |> List.map _.Perspective
-        if (perspectives |> List.sortBy perspectiveName) <> (requiredPerspectives |> List.sortBy perspectiveName) then
-            add "CE-PERSPECTIVE-INVENTORY" "/findings" (requiredPerspectives |> List.map perspectiveName |> String.concat ",") (perspectives |> List.map perspectiveName |> String.concat ",")
+
+        if
+            (perspectives |> List.sortBy perspectiveName)
+            <> (requiredPerspectives |> List.sortBy perspectiveName)
+        then
+            add
+                "CE-PERSPECTIVE-INVENTORY"
+                "/findings"
+                (requiredPerspectives |> List.map perspectiveName |> String.concat ",")
+                (perspectives |> List.map perspectiveName |> String.concat ",")
+
         let findingIds = input.Findings |> List.map _.Id
-        if findingIds |> List.exists (fun value -> isNull value || not (idPattern.IsMatch value)) || (findingIds |> List.distinct |> List.length <> findingIds.Length) then
+
+        if
+            findingIds
+            |> List.exists (fun value -> isNull value || not (idPattern.IsMatch value))
+            || (findingIds |> List.distinct |> List.length <> findingIds.Length)
+        then
             add "CE-FINDING-ID" "/findings" "unique stable finding ids" (String.concat "," findingIds)
+
         let phases = input.Findings |> List.map _.PhaseId
-        if phases |> List.exists (fun value -> isNull value || not (idPattern.IsMatch value)) || (phases |> List.distinct |> List.length <> phases.Length) then
+
+        if
+            phases
+            |> List.exists (fun value -> isNull value || not (idPattern.IsMatch value))
+            || (phases |> List.distinct |> List.length <> phases.Length)
+        then
             add "CE-PHASE-IDENTITY" "/findings" "five unique stable phase identities" (String.concat "," phases)
+
         input.Findings
         |> List.iteri (fun index item ->
             if item.Author <> input.AccountableOwner then
                 add "CE-AUTHORITY" ($"/findings/%d{index}/author") input.AccountableOwner item.Author
+
             if isNull item.ContentSha256 || not (shaPattern.IsMatch item.ContentSha256) then
                 add "CE-CONTENT-DIGEST" ($"/findings/%d{index}/contentSha256") "lowercase SHA-256" item.ContentSha256
+
             if item.CompletedAt > input.CreatedAt then
-                add "CE-TIME-ORDER" ($"/findings/%d{index}/completedAt") "not later than createdAt" (canonicalTime item.CompletedAt))
+                add
+                    "CE-TIME-ORDER"
+                    ($"/findings/%d{index}/completedAt")
+                    "not later than createdAt"
+                    (canonicalTime item.CompletedAt))
+
         List.rev findings
 
     let private render (input: CritiqueEvidenceInput) =
@@ -217,13 +287,26 @@ module CritiqueEvidence =
         let findingsArray = JsonArray()
         findingNodes |> List.iter findingsArray.Add
         let findingSet = canonicalBytes findingsArray |> sha256
+
         let passing =
             input.Findings
             |> List.filter (fun item -> item.Decision = CritiqueDecision.Passed)
             |> List.map (fun item -> perspectiveName item.Perspective)
             |> List.sort
-        let outcome = if passing.Length = requiredPerspectives.Length then "passed" else "changes-required"
-        let stringArray (values: string list) = JsonArray(values |> List.map (fun value -> JsonValue.Create value :> JsonNode) |> List.toArray)
+
+        let outcome =
+            if passing.Length = requiredPerspectives.Length then
+                "passed"
+            else
+                "changes-required"
+
+        let stringArray (values: string list) =
+            JsonArray(
+                values
+                |> List.map (fun value -> JsonValue.Create value :> JsonNode)
+                |> List.toArray
+            )
+
         let rollup = JsonObject()
         addString rollup "acceptanceAuthority" "accountable-owner-only"
         addString rollup "accountableOwner" input.AccountableOwner
@@ -245,12 +328,15 @@ module CritiqueEvidence =
         addString root "schema" Schema
         let root, digest = selfBoundNode root
         let bytes = Array.append (canonicalBytes root) [| byte '\n' |]
+
         bytes,
-        { CandidateFingerprintSha256 = candidateFingerprint
-          EvidenceSetSha256 = evidenceSet
-          FindingSetSha256 = findingSet
-          Outcome = outcome
-          Digest = digest }
+        {
+            CandidateFingerprintSha256 = candidateFingerprint
+            EvidenceSetSha256 = evidenceSet
+            FindingSetSha256 = findingSet
+            Outcome = outcome
+            Digest = digest
+        }
 
     let generate input =
         match validateInput input with
@@ -262,15 +348,27 @@ module CritiqueEvidence =
         | _ :: _ as findings -> Error findings
         | [] ->
             let bytes, summary = render expected
-            if artifact.Span.SequenceEqual(ReadOnlySpan<byte>(bytes)) then Ok summary
+
+            if artifact.Span.SequenceEqual(ReadOnlySpan<byte>(bytes)) then
+                Ok summary
             else
                 let actual =
                     try
                         use document = JsonDocument.Parse artifact
+
                         if document.RootElement.ValueKind = JsonValueKind.Object then
                             let mutable schema = Unchecked.defaultof<JsonElement>
-                            if document.RootElement.TryGetProperty("schema", &schema) && schema.ValueKind = JsonValueKind.String then schema.GetString()
-                            else "<missing>"
-                        else document.RootElement.ValueKind.ToString()
-                    with :? JsonException -> "<malformed>"
+
+                            if
+                                document.RootElement.TryGetProperty("schema", &schema)
+                                && schema.ValueKind = JsonValueKind.String
+                            then
+                                schema.GetString()
+                            else
+                                "<missing>"
+                        else
+                            document.RootElement.ValueKind.ToString()
+                    with :? JsonException ->
+                        "<malformed>"
+
                 Error [ finding "CE-BUNDLE-MISMATCH" "" Schema actual ]

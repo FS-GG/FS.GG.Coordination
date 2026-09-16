@@ -24,11 +24,18 @@ type GitHubClaimTouchSetControl =
     | QuintAndPrerequisite
 
 type GitHubClaimTouchSetControlResult =
-    { Control: GitHubClaimTouchSetControl
-      MutationRed: bool
-      BaselineGreen: bool }
+    {
+        Control: GitHubClaimTouchSetControl
+        MutationRed: bool
+        BaselineGreen: bool
+    }
 
-type GitHubClaimTouchSetFinding = { Code: string; ControlId: string; Message: string }
+type GitHubClaimTouchSetFinding =
+    {
+        Code: string
+        ControlId: string
+        Message: string
+    }
 
 [<RequireQualifiedAccess>]
 module GitHubClaimTouchSetQualification =
@@ -36,26 +43,29 @@ module GitHubClaimTouchSetQualification =
     let Schema = "fsgg.coordination.github-claim-touch-set-qualification/1"
 
     let requiredControls =
-        [ GitHubClaimTouchSetControl.CanonicalIdentity
-          GitHubClaimTouchSetControl.UnsafeTouch
-          GitHubClaimTouchSetControl.SiblingCas
-          GitHubClaimTouchSetControl.MonotonicGeneration
-          GitHubClaimTouchSetControl.ActiveLease
-          GitHubClaimTouchSetControl.ExpiredLease
-          GitHubClaimTouchSetControl.SuccessorCas
-          GitHubClaimTouchSetControl.ProjectionNotAuthority
-          GitHubClaimTouchSetControl.TouchOverlap
-          GitHubClaimTouchSetControl.RepositoryPartition
-          GitHubClaimTouchSetControl.AcquisitionOrder
-          GitHubClaimTouchSetControl.FullPlanPersistence
-          GitHubClaimTouchSetControl.StaleFence
-          GitHubClaimTouchSetControl.TerminalAuthority
-          GitHubClaimTouchSetControl.ReverseCompensation
-          GitHubClaimTouchSetControl.ExactReplay
-          GitHubClaimTouchSetControl.BoundedCost
-          GitHubClaimTouchSetControl.QuintAndPrerequisite ]
+        [
+            GitHubClaimTouchSetControl.CanonicalIdentity
+            GitHubClaimTouchSetControl.UnsafeTouch
+            GitHubClaimTouchSetControl.SiblingCas
+            GitHubClaimTouchSetControl.MonotonicGeneration
+            GitHubClaimTouchSetControl.ActiveLease
+            GitHubClaimTouchSetControl.ExpiredLease
+            GitHubClaimTouchSetControl.SuccessorCas
+            GitHubClaimTouchSetControl.ProjectionNotAuthority
+            GitHubClaimTouchSetControl.TouchOverlap
+            GitHubClaimTouchSetControl.RepositoryPartition
+            GitHubClaimTouchSetControl.AcquisitionOrder
+            GitHubClaimTouchSetControl.FullPlanPersistence
+            GitHubClaimTouchSetControl.StaleFence
+            GitHubClaimTouchSetControl.TerminalAuthority
+            GitHubClaimTouchSetControl.ReverseCompensation
+            GitHubClaimTouchSetControl.ExactReplay
+            GitHubClaimTouchSetControl.BoundedCost
+            GitHubClaimTouchSetControl.QuintAndPrerequisite
+        ]
 
-    let controlId = function
+    let controlId =
+        function
         | GitHubClaimTouchSetControl.CanonicalIdentity -> "canonical-identity"
         | GitHubClaimTouchSetControl.UnsafeTouch -> "unsafe-touch"
         | GitHubClaimTouchSetControl.SiblingCas -> "sibling-cas"
@@ -86,23 +96,34 @@ module GitHubClaimTouchSetQualification =
             else
                 let expectedText = String.concat "," expected
                 let observedText = String.concat "," observed
-                [ { Code = "GCTQ-INVENTORY"
-                    ControlId = producer
-                    Message = $"expected {expectedText}; observed {observedText}" } ]
+
+                [
+                    {
+                        Code = "GCTQ-INVENTORY"
+                        ControlId = producer
+                        Message = $"expected {expectedText}; observed {observedText}"
+                    }
+                ]
 
         let outcomes (producer: string) (results: GitHubClaimTouchSetControlResult list) =
-            [ for result in results do
-                  if not result.MutationRed then
-                      yield
-                          { Code = $"GCTQ-{producer.ToUpperInvariant()}-NOT-RED"
-                            ControlId = controlId result.Control
-                            Message = "mutation did not turn red" }
+            [
+                for result in results do
+                    if not result.MutationRed then
+                        yield
+                            {
+                                Code = $"GCTQ-{producer.ToUpperInvariant()}-NOT-RED"
+                                ControlId = controlId result.Control
+                                Message = "mutation did not turn red"
+                            }
 
-                  if not result.BaselineGreen then
-                      yield
-                          { Code = $"GCTQ-{producer.ToUpperInvariant()}-BASELINE-NOT-GREEN"
-                            ControlId = controlId result.Control
-                            Message = "baseline did not remain green" } ]
+                    if not result.BaselineGreen then
+                        yield
+                            {
+                                Code = $"GCTQ-{producer.ToUpperInvariant()}-BASELINE-NOT-GREEN"
+                                ControlId = controlId result.Control
+                                Message = "baseline did not remain green"
+                            }
+            ]
 
         let findings =
             inventory "generated" generated
