@@ -41,13 +41,13 @@ let private execute selfTest = executeWith selfTest []
 let ``bounded roots classifications selection and admission are complete`` () =
     let exitCode, output, error = execute false
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=16 oracles=11 negativeControls=0", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=19 oracles=11 negativeControls=0", output)
 
 [<Fact>]
 let ``independent oracles and qualification contracts reject every focused mutation`` () =
     let exitCode, output, error = execute true
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=16 oracles=11 negativeControls=27", output)
+    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=19 oracles=11 negativeControls=27", output)
 
 [<Fact>]
 let ``native formal catalogue covers all domains and retains normalized ITF counterexamples`` () =
@@ -70,7 +70,8 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
               "journal-reconciliation"; "journal-fencing"; "authority-reconciliation"; "review-epoch"
               "cutover-observation"; "pilot-permit-transfer"; "pilot-permit-fault-safety"
               "pilot-permit-major-action-coverage"; "hosted-writer-progress"
-              "hosted-writer-fault-safety" ]
+              "hosted-writer-fault-safety"; "administrative-retirement-closure"
+              "administrative-retirement-race"; "administrative-retirement-old-plan-counterexample" ]
     if ids <> expectedIds then failwithf "unexpected formal-test catalogue: %A" ids
     let elapsedBudget id =
         tests
@@ -83,7 +84,9 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
               "authority-reconciliation", 105000; "review-epoch", 90000
               "cutover-observation", 105000; "pilot-permit-transfer", 105000
               "pilot-permit-fault-safety", 105000; "pilot-permit-major-action-coverage", 105000
-              "hosted-writer-progress", 105000; "hosted-writer-fault-safety", 105000 ]
+              "hosted-writer-progress", 105000; "hosted-writer-fault-safety", 105000
+              "administrative-retirement-closure", 105000; "administrative-retirement-race", 105000
+              "administrative-retirement-old-plan-counterexample", 105000 ]
     let actualElapsedBudgets = expectedIds |> Seq.map (fun id -> id, elapsedBudget id) |> Map
     Assert.True((expectedElapsedBudgets = actualElapsedBudgets), sprintf "unexpected formal elapsed budgets: %A" actualElapsedBudgets)
     Assert.Equal(90000, elapsedBudget "operation-saga")
