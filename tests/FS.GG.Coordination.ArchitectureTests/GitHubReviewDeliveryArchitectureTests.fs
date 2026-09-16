@@ -21,7 +21,7 @@ let ``review delivery adapter composes journals and exposes no production transp
 
 [<Fact>]
 let ``review delivery preserves canonical Quint source`` () =
-    Assert.Equal("3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118", sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md"))
+    Assert.Equal("735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9", sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md"))
 
 [<Fact>]
 let ``GS2-05-6 registration binds accepted predecessor and exact gate`` () =

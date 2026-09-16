@@ -1,10 +1,10 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118",
-  "configurationSha256": "3c1eaca5aefd6de72faae23684466d51070d20556cb6fd3b51e14ddaff9ae0bb",
-  "assembledQuintSha256": "e3a955d18822c18ac9c05c4545a722954bcac2c856994ac9ece7bd4a3d56c2ca",
-  "runnerClass": "linux-x64-local-calibration",
-  "measuredAt": "2026-09-14T15:00:00Z",
+  "sourceSha256": "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9",
+  "configurationSha256": "5581ffd8c441ff8604bd51afda7e9cb54bc23fbfba150a20480042ad9e1ee327",
+  "assembledQuintSha256": "162edfd5c25cf8f81aa1be17adfeb7bd30c81d504e95c4c47ad4f7f6229cd637",
+  "runnerClass": "linux-x64-local-exact-sdk-10.0.400-refresh",
+  "measuredAt": "2026-09-16T06:15:00Z",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v1",
   "measurements": [
     {
@@ -77,8 +77,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 56792,
-      "peakMiB": 1117,
+      "elapsedMs": 64376,
+      "peakMiB": 1115,
       "artifactBytes": 5674
     },
     {
@@ -86,8 +86,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 57359,
-      "peakMiB": 1137,
+      "elapsedMs": 68660,
+      "peakMiB": 1161,
       "artifactBytes": 4919
     },
     {
@@ -95,8 +95,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 58475,
-      "peakMiB": 1129,
+      "elapsedMs": 67360,
+      "peakMiB": 1194,
       "artifactBytes": 4586
     },
     {
@@ -104,8 +104,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 58485,
-      "peakMiB": 1133,
+      "elapsedMs": 68512,
+      "peakMiB": 1152,
       "artifactBytes": 4559
     },
     {
@@ -113,8 +113,8 @@
       "stateCount": 4,
       "transitionCount": 4,
       "sampleCount": 100,
-      "elapsedMs": 57526,
-      "peakMiB": 1092,
+      "elapsedMs": 65671,
+      "peakMiB": 1132,
       "artifactBytes": 9392
     },
     {
@@ -122,8 +122,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 58144,
-      "peakMiB": 1101,
+      "elapsedMs": 68533,
+      "peakMiB": 1146,
       "artifactBytes": 4582
     },
     {
@@ -131,8 +131,8 @@
       "stateCount": 20,
       "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 55643,
-      "peakMiB": 1028,
+      "elapsedMs": 78564,
+      "peakMiB": 966,
       "artifactBytes": 7536
     },
     {
@@ -140,8 +140,8 @@
       "stateCount": 20,
       "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 55263,
-      "peakMiB": 1014,
+      "elapsedMs": 104704,
+      "peakMiB": 1023,
       "artifactBytes": 9097
     },
     {
@@ -149,8 +149,8 @@
       "stateCount": 51,
       "transitionCount": 163,
       "sampleCount": 1000,
-      "elapsedMs": 55171,
-      "peakMiB": 1019,
+      "elapsedMs": 104795,
+      "peakMiB": 998,
       "artifactBytes": 4615
     },
     {
@@ -158,8 +158,8 @@
       "stateCount": 10,
       "transitionCount": 22,
       "sampleCount": 100,
-      "elapsedMs": 55119,
-      "peakMiB": 1006,
+      "elapsedMs": 67397,
+      "peakMiB": 1012,
       "artifactBytes": 7322
     },
     {
@@ -167,8 +167,8 @@
       "stateCount": 136,
       "transitionCount": 532,
       "sampleCount": 10000,
-      "elapsedMs": 55919,
-      "peakMiB": 1025,
+      "elapsedMs": 64848,
+      "peakMiB": 1019,
       "artifactBytes": 3412
     },
     {
@@ -176,8 +176,8 @@
       "stateCount": 5,
       "transitionCount": 5,
       "sampleCount": 10000,
-      "elapsedMs": 59647,
-      "peakMiB": 1057,
+      "elapsedMs": 63678,
+      "peakMiB": 1109,
       "artifactBytes": 9669
     },
     {
@@ -185,8 +185,8 @@
       "stateCount": 3032,
       "transitionCount": 8002,
       "sampleCount": 10000,
-      "elapsedMs": 58993,
-      "peakMiB": 1086,
+      "elapsedMs": 67993,
+      "peakMiB": 1092,
       "artifactBytes": 9678
     },
     {
@@ -194,8 +194,8 @@
       "stateCount": 14,
       "transitionCount": 14,
       "sampleCount": 10000,
-      "elapsedMs": 61213,
-      "peakMiB": 1062,
+      "elapsedMs": 69110,
+      "peakMiB": 1046,
       "artifactBytes": 9697
     },
     {
@@ -203,8 +203,8 @@
       "stateCount": 23,
       "transitionCount": 33,
       "sampleCount": 10000,
-      "elapsedMs": 59060,
-      "peakMiB": 1041,
+      "elapsedMs": 100461,
+      "peakMiB": 985,
       "artifactBytes": 73625
     },
     {
@@ -212,10 +212,37 @@
       "stateCount": 2376,
       "transitionCount": 9678,
       "sampleCount": 10000,
-      "elapsedMs": 58165,
-      "peakMiB": 1025,
+      "elapsedMs": 83918,
+      "peakMiB": 1000,
       "artifactBytes": 73642
+    },
+    {
+      "id": "administrative-retirement-closure",
+      "stateCount": 15,
+      "transitionCount": 29,
+      "sampleCount": 10000,
+      "elapsedMs": 72773,
+      "peakMiB": 1036,
+      "artifactBytes": 6539
+    },
+    {
+      "id": "administrative-retirement-race",
+      "stateCount": 13,
+      "transitionCount": 25,
+      "sampleCount": 10000,
+      "elapsedMs": 64845,
+      "peakMiB": 1131,
+      "artifactBytes": 6532
+    },
+    {
+      "id": "administrative-retirement-old-plan-counterexample",
+      "stateCount": 7,
+      "transitionCount": 13,
+      "sampleCount": 10000,
+      "elapsedMs": 63927,
+      "peakMiB": 986,
+      "artifactBytes": 7620
     }
   ],
-  "formalMeasuredAt": "2026-09-15T13:59:00Z"
+  "formalMeasuredAt": "2026-09-16T07:21:21Z"
 }

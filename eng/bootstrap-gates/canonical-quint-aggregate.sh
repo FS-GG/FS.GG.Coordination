@@ -23,11 +23,11 @@ jq -e '
   .physicalProcessCounts.apalacheVerify == (.processCounts.apalacheVerify + .startupRetries.verify) and
   (.formalCounterexamples | length) == 0 and .failure == null
 ' "$base" >/dev/null
-jq -e '.schema == "fsgg.coordination.canonical-quint-performance/1" and .outcome == "passed" and .shardCount == 16 and .epochBudgetMs == 105000' \
+jq -e '.schema == "fsgg.coordination.canonical-quint-performance/1" and .outcome == "passed" and .shardCount == 19 and .epochBudgetMs == 105000' \
   "$FSGG_QUINT_PERFORMANCE_RECEIPT" >/dev/null
 
 mapfile -t expected < <(jq -r '.formalTests[].id' eng/quint-qualification.json | sort)
-test "${#expected[@]}" -eq 16
+test "${#expected[@]}" -eq 19
 rows='[]'
 q2_ms="$(jq -r '.q2DurationMs' "$base")"
 negative_count="$(jq -r '.negativeControlCount' "$base")"

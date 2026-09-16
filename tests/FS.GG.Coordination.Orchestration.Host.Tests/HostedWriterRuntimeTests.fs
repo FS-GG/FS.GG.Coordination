@@ -704,6 +704,21 @@ let ``GitHub route refuses missing branch readback and unmerged delivery`` () = 
     Assert.Equal(Error "github-native-delivery-not-observed",delivery) }
 
 [<Fact>]
+let ``GitHub route adopts one exact closed pull request without reopening or duplicating it`` () = task {
+    let head=String.replicate 40 "a"
+    let executor=QueuedGitHub[response(pr "closed" None head None)]
+    let client=GitHubRouteClient(executor,FixedPublisher(Error "publisher-must-not-run"),githubTarget,FixedClock Fixture.now)
+    let! result=client.CreatePullRequest("refs/heads/pilot",head,Guid.NewGuid(),CancellationToken.None)
+    Assert.Equal(Ok("PR_node",head),result)
+    let request=Assert.Single executor.Requests
+    match request with
+    | Rest value ->
+        Assert.Equal(RestMethod.Get,value.Method)
+        Assert.EndsWith("/pulls",value.Uri.AbsolutePath)
+        Assert.Contains("state=all",value.Uri.Query)
+    | _ -> failwith "expected one read-only REST census" }
+
+[<Fact>]
 let ``GitHub merge refuses incomplete required checks before mutation`` () = task {
     let head=String.replicate 40 "a"
     let protection="{\"checks\":[{\"context\":\"compiler-and-tests\"}]}"

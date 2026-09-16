@@ -57,10 +57,13 @@ let validateDocument root (document: JsonObject) =
             Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback"
                   "journal-reconciliation"; "journal-fencing"; "authority-reconciliation"; "review-epoch"
                   "cutover-observation"; "pilot-permit-transfer"; "pilot-permit-fault-safety"
-                  "pilot-permit-major-action-coverage"; "hosted-writer-progress"; "hosted-writer-fault-safety" ]
+                  "pilot-permit-major-action-coverage"; "hosted-writer-progress"; "hosted-writer-fault-safety"
+                  "administrative-retirement-closure"; "administrative-retirement-race"
+                  "administrative-retirement-old-plan-counterexample" ]
         let allowedFormalMains =
             Set [ "CoordinationProtocolTests"; "GS20310JournalModel"; "GS20310ReconcileModel"
-                  "GS20310ReviewEpochModel"; "GS20310CutoverModel"; "O2PilotPermitModel"; "O2HostedWriterModel" ]
+                  "GS20310ReviewEpochModel"; "GS20310CutoverModel"; "O2PilotPermitModel"; "O2HostedWriterModel"
+                  "O2AdministrativeRetirementModel"; "O2AdministrativeRetirementOldPlanModel" ]
         let requiredFormalFields =
             Set [ "id"; "main"; "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"
                   "removedStep"; "violatedTemporal"; "blockedInvariant"; "backend"; "counterexample"; "counterexampleTrace"

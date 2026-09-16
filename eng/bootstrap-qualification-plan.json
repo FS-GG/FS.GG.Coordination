@@ -166,7 +166,10 @@
         "pilot-permit-transfer",
         "relation-mutation",
         "review-epoch",
-        "rollback"
+        "rollback",
+        "administrative-retirement-closure",
+        "administrative-retirement-race",
+        "administrative-retirement-old-plan-counterexample"
       ],
       "needs": []
     },

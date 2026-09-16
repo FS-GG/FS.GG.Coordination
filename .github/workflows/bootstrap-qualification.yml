@@ -98,7 +98,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [authority-reconciliation, claim-election, cutover-observation, hosted-writer-fault-safety, hosted-writer-progress, journal-fencing, journal-reconciliation, lifecycle, operation-saga, pilot-permit-fault-safety, pilot-permit-major-action-coverage, pilot-permit-transfer, relation-mutation, review-epoch, rollback, base]
+        shard: [authority-reconciliation, claim-election, cutover-observation, hosted-writer-fault-safety, hosted-writer-progress, journal-fencing, journal-reconciliation, lifecycle, operation-saga, pilot-permit-fault-safety, pilot-permit-major-action-coverage, pilot-permit-transfer, relation-mutation, review-epoch, rollback, administrative-retirement-closure, administrative-retirement-race, administrative-retirement-old-plan-counterexample, base]
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint-${{ matrix.shard }}
       FSGG_QUINT_SHARD: ${{ matrix.shard }}

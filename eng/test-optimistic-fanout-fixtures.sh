@@ -42,7 +42,7 @@ for id in "${semantic[@]}" "$performance"; do
        manifestSha256:$digest,traceSha256:$digest,itfSha256:$digest}' > "$dir/receipt.json"
   fi
 done
-printf '{"schema":"fsgg.coordination.canonical-quint-performance/1","outcome":"passed","shardCount":16,"epochBudgetMs":105000}\n' > "$FSGG_FORMAL_FRAGMENT_ROOT/coherent-formal-fragment-$candidate-$performance/performance.json"
+printf '{"schema":"fsgg.coordination.canonical-quint-performance/1","outcome":"passed","shardCount":19,"epochBudgetMs":105000}\n' > "$FSGG_FORMAL_FRAGMENT_ROOT/coherent-formal-fragment-$candidate-$performance/performance.json"
 
 run_validate() { (cd "$repo" && bash eng/optimistic-aggregate-formal.sh validate-only) >/dev/null 2>&1; }
 run_validate

@@ -21,7 +21,7 @@
   "formalFanout": {
     "logicalPartition": 1,
     "maxConcurrentExecutions": 6,
-    "semanticShards": ["base", "authority-reconciliation", "claim-election", "cutover-observation", "hosted-writer-fault-safety", "hosted-writer-progress", "journal-fencing", "journal-reconciliation", "lifecycle", "operation-saga", "pilot-permit-fault-safety", "pilot-permit-major-action-coverage", "pilot-permit-transfer", "relation-mutation", "review-epoch", "rollback"],
+    "semanticShards": ["base", "authority-reconciliation", "claim-election", "cutover-observation", "hosted-writer-fault-safety", "hosted-writer-progress", "journal-fencing", "journal-reconciliation", "lifecycle", "operation-saga", "pilot-permit-fault-safety", "pilot-permit-major-action-coverage", "pilot-permit-transfer", "relation-mutation", "review-epoch", "rollback", "administrative-retirement-closure", "administrative-retirement-race", "administrative-retirement-old-plan-counterexample"],
     "performanceShard": "epoch",
     "fragmentEnvelope": ["candidate-obligation.json", "partition-plan.json", "receipt.json"]
   },

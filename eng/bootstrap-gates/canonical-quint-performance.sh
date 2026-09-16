@@ -17,6 +17,6 @@ if (( elapsed > epoch_budget )); then
   exit 1
 fi
 mkdir -p "$(dirname "$FSGG_QUINT_PERFORMANCE_RECEIPT")"
-jq -cn --argjson count 16 --argjson epochBudgetMs "$epoch_budget" --argjson epochElapsedMs "$elapsed" \
+jq -cn --argjson count 19 --argjson epochBudgetMs "$epoch_budget" --argjson epochElapsedMs "$elapsed" \
   '{schema:"fsgg.coordination.canonical-quint-performance/1",outcome:"passed",shardCount:$count,epochBudgetMs:$epochBudgetMs,epochElapsedMs:$epochElapsedMs}' \
   > "$FSGG_QUINT_PERFORMANCE_RECEIPT"
