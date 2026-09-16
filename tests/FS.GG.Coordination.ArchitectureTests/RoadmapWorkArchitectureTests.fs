@@ -1554,6 +1554,50 @@ let ``GS2-08-1 acceptance binds repaired correspondence and protected delivery``
     Assert.Equal<Map<string, string>>(expected, artifacts)
 
 [<Fact>]
+let ``GS2-08-3 acceptance binds both exact census sources and native gates`` () =
+    use receipt =
+        JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json")))
+
+    let value = receipt.RootElement
+    Assert.Equal("accepted", value.GetProperty("state").GetString())
+
+    Assert.Equal(
+        "686482156555baf835958726ab3750c06c6df5d7ca2ff90bec6dadd83e6cf8ea",
+        value.GetProperty("unitContractSha256").GetString()
+    )
+
+    Assert.Equal("4b4e699c8e811d21c22f6586137eaa78bbe61b80", value.GetProperty("sourceRevision").GetString())
+
+    Assert.Equal(
+        "d58c5fa9a6e51731e49df84ec50f471275283e7570867e66488d4ed912fdac15",
+        value.GetProperty("digest").GetString()
+    )
+
+    let artifacts =
+        value.GetProperty("artifacts").EnumerateArray()
+        |> Seq.map (fun artifact ->
+            artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString())
+        |> Map.ofSeq
+
+    Assert.Equal(24, artifacts.Count)
+
+    let expected =
+        [
+            "accepted-GS2-08.1-receipt", "49c70359ebfbc00331ba90c7c5b100a292efa4cc95a5dfa8007867ceceec5c31"
+            "producer-v1-writer-census", "589ab3d20bbdfb78d4863e9fd11bc48dbbd0b222d47b635a7fe13fec02239812"
+            "producer-source-binding", "47e5e5736bb3e8c9cb74e127493cf4c885c53c0c8d43b5516b7df259a874c708"
+            "receiver-v1-writer-census", "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db"
+            "receiver-source-binding", "e177d95df0fabc8fc9644453a1b9ad582abc3d3dd85245bc2d391eeccc19f332"
+            "producer-bootstrap-run-34308423469", "14618d563460fef8734d65f2da09aae979d7754c13949e905a96d6af68c4bba0"
+            "receiver-bootstrap-run-34316395953", "3a52d6aa92edc4141a5ef0b4465f733b0a5461e284a225ef80e9598510f13629"
+            "receiver-protected-bootstrap-run-34317858300",
+            "12cecaabf60fe2793b999affad52358a7bb01ddd79278d7bd1be3f4bb4ea3860"
+        ]
+
+    for name, digest in expected do
+        Assert.Equal(digest, artifacts[name])
+
+[<Fact>]
 let ``roadmap unit index advances through GS2-08-4 common effect fence`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
