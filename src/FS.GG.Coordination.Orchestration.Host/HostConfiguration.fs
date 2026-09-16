@@ -36,6 +36,10 @@ type HostConfiguration =
 and MainGitHubConfiguration =
     { Token:string; Repository:string; IssueNumber:int; BaseRef:string; ApiRoot:Uri; RemoteUri:Uri; RoutineOperation:string }
 
+type MainAdmissionPreparerConfiguration =
+    { ConnectionString:string; StoreId:string; BackupIdentity:string; MinimumGenerationFence:int64
+      PilotPrincipalId:string; WorkItemId:WorkItemId; RequestFile:string; InputFile:string; OutputFile:string }
+
 [<RequireQualifiedAccess>]
 module HostConfiguration =
     [<Struct; StructLayout(LayoutKind.Sequential)>]
@@ -217,4 +221,33 @@ module HostConfiguration =
             let! connection = privateFile 16384 connectionPath
             do! if String.IsNullOrWhiteSpace connection then Error "connection-string-required" else Ok()
             return connection
+        }
+
+    let parseMainAdmissionPreparer arguments =
+        result {
+            do! validateArguments (set [ "--connection-file"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id"; "--request-file"; "--input-file"; "--output-file" ]) arguments
+            let! connectionPath=value "--connection-file" arguments
+            let! connection=privateFile 16384 connectionPath
+            let! storeId=value "--store-id" arguments
+            let! backupText=value "--backup-identity" arguments
+            let! fenceText=value "--minimum-generation-fence" arguments
+            let! principal=value "--pilot-principal" arguments
+            let! repositoryNodeId=value "--repository-node-id" arguments
+            let! repositoryDatabaseText=value "--repository-database-id" arguments
+            let! issueNodeId=value "--issue-node-id" arguments
+            let! issueDatabaseText=value "--issue-database-id" arguments
+            let! requestFile=value "--request-file" arguments
+            let! inputFile=value "--input-file" arguments
+            let! outputFile=value "--output-file" arguments
+            match Guid.TryParse backupText,Int64.TryParse fenceText,Int64.TryParse repositoryDatabaseText,Int64.TryParse issueDatabaseText with
+            | (true,backup),(true,fence),(true,repositoryDatabaseId),(true,issueDatabaseId)
+                when backup<>Guid.Empty && fence>=0L && repositoryDatabaseId>0L && issueDatabaseId>0L
+                     && not(String.IsNullOrWhiteSpace storeId) && principal=principal.Trim() && principal.Length>0 && principal.Length<=128
+                     && repositoryNodeId=repositoryNodeId.Trim() && repositoryNodeId.Length>0 && repositoryNodeId.Length<=128
+                     && issueNodeId=issueNodeId.Trim() && issueNodeId.Length>0 && issueNodeId.Length<=128
+                     && [requestFile;inputFile;outputFile]|>List.forall Path.IsPathFullyQualified ->
+                return { ConnectionString=connection;StoreId=storeId;BackupIdentity=backup.ToString();MinimumGenerationFence=fence
+                         PilotPrincipalId=principal;WorkItemId=WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
+                         RequestFile=requestFile;InputFile=inputFile;OutputFile=outputFile }
+            | _ -> return! Error "invalid-preparer-configuration"
         }

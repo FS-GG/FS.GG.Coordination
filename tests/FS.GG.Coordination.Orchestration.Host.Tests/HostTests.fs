@@ -15,6 +15,9 @@ open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Host
 open FS.GG.Coordination.Orchestration.Pilot
+open FS.GG.Coordination.Orchestration.Execution
+open FS.GG.Coordination.Orchestration.PostgreSql
+open FS.GG.Coordination.Orchestration.Runner.Protocol
 
 module private Fixture =
     let now = DateTimeOffset.Parse "2026-09-10T15:00:00Z"
@@ -47,6 +50,95 @@ module private Fixture =
         |> Pilot.replay
 
     type FixedClock() = inherit TimeProvider() override _.GetUtcNow() = now
+
+    type MemoryJournal() =
+        let mutable events : SerializedEvent list=[]
+        let accepted=Dictionary<CommandId,string*int64>()
+        member _.State=events|>List.map(fun stored->EventEnvelope.tryDecode stored.Payload|>Result.defaultWith failwith)|>replay
+        interface IJournalStore with
+            member _.CheckReadiness _=Task.FromResult(Ok())
+            member _.Recover(_, _)=Task.FromResult(Ok{Events=events;Snapshot=None;UnsettledEffects=[];RequiresExternalReconciliation=false})
+            member _.Append(request,_)=
+                match accepted.TryGetValue request.Inbox.CommandId with
+                | true,(digest,sequence) when digest=request.Inbox.BodySha256->Task.FromResult(AppendOutcome.Duplicate sequence)
+                | true,_->Task.FromResult AppendOutcome.Conflict
+                | false,_->
+                    let sequence=request.Events|>List.tryLast|>Option.map _.Sequence|>Option.defaultValue request.ExpectedSequence
+                    accepted.Add(request.Inbox.CommandId,(request.Inbox.BodySha256,sequence))
+                    events<-events@request.Events
+                    Task.FromResult(AppendOutcome.Appended sequence)
+            member _.SaveSnapshot(_, _)=Task.FromResult(Ok())
+            member _.SaveProjectionCheckpoint(_, _)=Task.FromResult(Ok())
+
+    type MemoryExecutor(state:unit->State) =
+        let inputs=Dictionary<string,byte array>()
+        let workspaces=Dictionary<string,byte array>()
+        let routes=Dictionary<Guid*Guid,byte array>()
+        let attempts=Dictionary<Guid*Guid,StoredSession>()
+        let subscriptions=Dictionary<Guid,byte array>()
+        let mutable writes=0
+        let mutable admissionObserved=false
+        member _.Writes=writes
+        member _.AdmissionObserved=admissionObserved
+        interface IExecutorCommandStore with
+            member _.StageInput(manifestBytes,bytes,_)=
+                writes<-writes+1
+                let current=state()
+                admissionObserved<-current.WorkItemId.IsSome&&current.HostedRoute.IsSome&&(match current.Control with Paused _->true|_->false)&&not current.ReadbackCurrent
+                match ExecutorWire.parseInputManifest manifestBytes with
+                | Error reason->Task.FromResult(Error reason)
+                | Ok manifest->
+                    match inputs.TryGetValue manifest.InputDigest with
+                    | true,prior when not(ReadOnlySpan<byte>(prior).SequenceEqual(ReadOnlySpan<byte>(bytes)))->Task.FromResult(Error "input-conflict")
+                    | _->inputs[manifest.InputDigest]<-bytes;Task.FromResult(Ok())
+            member _.ReadInput(digest,_)=match inputs.TryGetValue digest with true,value->Task.FromResult(Ok value)|_->Task.FromResult(Error "missing")
+            member _.StageWorkspaceManifest(bytes,_)=
+                writes<-writes+1
+                let digest=RunnerWire.sha256 bytes
+                match workspaces.TryGetValue digest with true,prior when not(ReadOnlySpan<byte>(prior).SequenceEqual(ReadOnlySpan<byte>(bytes)))->Task.FromResult(Error "workspace-conflict")|_->workspaces[digest]<-bytes;Task.FromResult(Ok digest)
+            member _.ReadWorkspaceManifest(digest,_)=match workspaces.TryGetValue digest with true,value->Task.FromResult(Ok value)|_->Task.FromResult(Error "missing")
+            member _.BindRoute(bytes,_)=
+                writes<-writes+1
+                match ExecutorWire.parseRouteBinding bytes with
+                | Error reason->Task.FromResult(Error reason)
+                | Ok binding->
+                    let key=binding.AssignmentId,binding.AttemptId
+                    match routes.TryGetValue key with true,prior when not(ReadOnlySpan<byte>(prior).SequenceEqual(ReadOnlySpan<byte>(bytes)))->Task.FromResult(Error "route-conflict")|_->routes[key]<-bytes;Task.FromResult(Ok binding.BindingSha256)
+            member _.ReadRoute(assignment,attempt,_)=match routes.TryGetValue((assignment,attempt)) with true,value->Task.FromResult(Ok value)|_->Task.FromResult(Error "missing")
+            member _.FindAttemptBySession(_, _)=Task.FromResult(Error "unused")
+            member _.PersistCommand(_, _)=Task.FromResult CommandConflict
+            member _.ReadPending(_, _)=Task.FromResult []
+            member _.SettleCommand(_,_,_)=Task.FromResult(Ok())
+            member _.ReserveSubscription(bytes,_,_,_)=
+                writes<-writes+1
+                match SubscriptionAccountingCodec.decodeReservation bytes with
+                | Error _->Task.FromResult SubscriptionAuthorityRefused
+                | Ok reservation->
+                    match subscriptions.TryGetValue reservation.ReservationId with
+                    | true,prior when ReadOnlySpan<byte>(prior).SequenceEqual(ReadOnlySpan<byte>(bytes))->Task.FromResult SubscriptionDuplicate
+                    | true,_->Task.FromResult SubscriptionConflict
+                    | false,_->subscriptions.Add(reservation.ReservationId,bytes);Task.FromResult SubscriptionReserved
+            member _.SettleSubscription(_,_,_)=Task.FromResult(Ok())
+            member _.ReleaseSubscription(id,_,_,_)=if subscriptions.Remove id then Task.FromResult SubscriptionReleased else Task.FromResult SubscriptionReleaseDuplicate
+            member _.ReadSubscription(id,_)=match subscriptions.TryGetValue id with true,value->Task.FromResult(Ok(value,None))|_->Task.FromResult(Error "missing")
+        interface IExecutionSessionJournal with
+            member _.ReadAttempt(assignment,attempt,_)=match attempts.TryGetValue((assignment,attempt)) with true,value->Task.FromResult(Some value)|_->Task.FromResult None
+            member _.AppendAttempt(assignment,attempt,revision,eventValue,_)=
+                writes<-writes+1
+                let key=assignment,attempt
+                match attempts.TryGetValue key with
+                | false,_->attempts.Add(key,{Revision=1L;Events=[eventValue]});Task.FromResult Appended
+                | true,stored when revision=0L&&stored.Events=[eventValue]->Task.FromResult DuplicateEvent
+                | _->Task.FromResult AppendConflict
+
+    let preparationRequest () =
+        let ids=[|for index in 1..15->Guid.Parse(sprintf "71000000-0000-4000-8000-%012d" index)|]
+        { Schema=MainAdmissionPreparer.schema;PreparationId=ids[0];ProjectId=ids[1];WorkflowRevision=7L;CanonicalSha256=String.replicate 64 "a";SelectedAt=now
+          RouteId=ids[2];AttemptId=ids[3];CandidateId=ids[4];BranchRef="refs/heads/fsgg/pilot/o2-i4c";ClaimResourceId="claim-o2-i4c"
+          ClaimOperationId=ids[5];ProcessOperationId=ids[6];CandidateOperationId=ids[7];BranchOperationId=ids[8];PullRequestOperationId=ids[9];MergeOperationId=ids[10];ReadbackOperationId=ids[11]
+          RunnerId=ids[12];RunnerFingerprintSha256=String.replicate 64 "b";SessionId=ids[13];ReservationId=ids[14];ExecutionReservationId=Guid.Parse("71000000-0000-4000-8000-000000000016")
+          RouteProviderRevision="selected-route";RouteEvidenceSha256=String.replicate 64 "c";RepositoryBinding="selected-repository";BaselineObjectId=String.replicate 40 "d"
+          Workspace="pilot";AllowedPaths=[|"docs/**"|];Validations=[|"git-diff-check"|];ExecutorBinding="codex-main";RequestedModel=null;RequestedEffort=null;InputMediaType="text/markdown; charset=utf-8" }
 
     let unusedWorkItems =
         { new IJournalStore with
@@ -99,10 +191,103 @@ let ``Main route stage identity is stable inside and distinct across attempt sco
 [<Fact>]
 let ``Main route readmits only absent or terminally ended subscriptions`` () =
     Assert.True(MainRouteWorkflowPolicy.needsSubscriptionAdmission initial)
-    Assert.True(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=Revoked "ended" })
-    Assert.True(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=Cancelled "ended" })
-    Assert.False(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=Running })
-    Assert.False(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=Paused "waiting" })
+    Assert.True(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=ControlState.Revoked "ended" })
+    Assert.True(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=ControlState.Cancelled "ended" })
+    Assert.False(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=ControlState.Running })
+    Assert.False(MainRouteWorkflowPolicy.needsSubscriptionAdmission { initial with WorkItemId=Some Fixture.permit.SubjectId;Control=ControlState.Paused "waiting" })
+
+[<Fact>]
+let ``main admission preparation is ordered retry stable and required by workflow`` () = task {
+    let journal=Fixture.MemoryJournal()
+    let workItems=journal :> IJournalStore
+    let executor=Fixture.MemoryExecutor(fun()->journal.State)
+    let commands=executor :> IExecutorCommandStore
+    let attempts=executor :> IExecutionSessionJournal
+    let request=Fixture.preparationRequest()
+    let input=Encoding.UTF8.GetBytes "Deliver the bounded O2-I4c documentation change."
+    let jsonOptions=JsonSerializerOptions(PropertyNamingPolicy=JsonNamingPolicy.CamelCase)
+    jsonOptions.UnmappedMemberHandling<-System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow
+    let requestBytes=JsonSerializer.SerializeToUtf8Bytes(request,jsonOptions)
+    let decodedRequest=MainAdmissionPreparer.decodeRequest requestBytes|>Result.defaultWith failwith
+    let oversizedJournal=Fixture.MemoryJournal()
+    let oversizedExecutor=Fixture.MemoryExecutor(fun()->oversizedJournal.State)
+    let! empty=MainAdmissionPreparer.prepare (Fixture.FixedClock()) oversizedJournal oversizedExecutor oversizedExecutor Fixture.permit.SubjectId "pilot-route" decodedRequest Array.empty CancellationToken.None
+    let! oversized=MainAdmissionPreparer.prepare (Fixture.FixedClock()) oversizedJournal oversizedExecutor oversizedExecutor Fixture.permit.SubjectId "pilot-route" decodedRequest (Array.zeroCreate<byte>(1024*1024+1)) CancellationToken.None
+    let! uppercaseBaseline=MainAdmissionPreparer.prepare (Fixture.FixedClock()) oversizedJournal oversizedExecutor oversizedExecutor Fixture.permit.SubjectId "pilot-route" {decodedRequest with BaselineObjectId=String.replicate 40 "A"} input CancellationToken.None
+    let! traversalPath=MainAdmissionPreparer.prepare (Fixture.FixedClock()) oversizedJournal oversizedExecutor oversizedExecutor Fixture.permit.SubjectId "pilot-route" {decodedRequest with AllowedPaths=[|"../x"|]} input CancellationToken.None
+    Assert.Equal(Error "main-admission-preparation-input-size-refused",empty)
+    Assert.Equal(Error "main-admission-preparation-input-size-refused",oversized)
+    Assert.Equal(Error "executor-workspace-manifest-refused",uppercaseBaseline)
+    Assert.Equal(Error "executor-workspace-manifest-refused",traversalPath)
+    Assert.Equal(0,oversizedExecutor.Writes);Assert.Equal(0L,Id.generationValue oversizedJournal.State.Generation)
+    let! first=MainAdmissionPreparer.prepare (Fixture.FixedClock()) workItems commands attempts Fixture.permit.SubjectId "pilot-route" decodedRequest input CancellationToken.None
+    let firstBytes=first|>Result.defaultWith failwith
+    Assert.True(executor.AdmissionObserved)
+    Assert.Equal(1L,Id.generationValue journal.State.Generation)
+    Assert.True(journal.State.Reservation.IsNone)
+    Assert.Empty(journal.State.Attempts);Assert.Empty(journal.State.Operations);Assert.False(journal.State.ReadbackCurrent)
+    let! retry=MainAdmissionPreparer.prepare (Fixture.FixedClock()) workItems commands attempts Fixture.permit.SubjectId "pilot-route" decodedRequest input CancellationToken.None
+    let retryBytes=retry|>Result.defaultWith failwith
+    Assert.True(ReadOnlySpan<byte>(firstBytes).SequenceEqual(ReadOnlySpan<byte>(retryBytes)))
+    let! changed=MainAdmissionPreparer.prepare (Fixture.FixedClock()) workItems commands attempts Fixture.permit.SubjectId "pilot-route" {decodedRequest with BranchRef="refs/heads/fsgg/pilot/o2-i4c-changed"} input CancellationToken.None
+    Assert.Equal(Error "main-admission-preparation-route-conflict",changed)
+    let appendCore command = task {
+        let! current=HostedWriterJournal.recover workItems Fixture.permit.SubjectId CancellationToken.None
+        let state=current|>Result.defaultWith(sprintf "%A">>failwith)|>_.State
+        let envelope={CommandId=Id.command(Guid.NewGuid());ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation;PrincipalId="pilot-route";SessionId=None;IssuedAt=Fixture.now;ExpiresAt=Fixture.now.AddMinutes 1.;Command=command}
+        let! result=HostedWriterJournal.decideAndAppend (Fixture.FixedClock()) workItems Fixture.permit.SubjectId envelope CancellationToken.None
+        return result|>Result.defaultWith failwith|>fst|>_.Receipt.Disposition }
+    let terminalJournal=Fixture.MemoryJournal()
+    let terminalExecutor=Fixture.MemoryExecutor(fun()->terminalJournal.State)
+    let! terminalFirst=MainAdmissionPreparer.prepare (Fixture.FixedClock()) terminalJournal terminalExecutor terminalExecutor Fixture.permit.SubjectId "pilot-route" decodedRequest input CancellationToken.None
+    Assert.True(Result.isOk terminalFirst)
+    let terminalWorkItems=terminalJournal :> IJournalStore
+    let appendTerminal command = task {
+        let! current=HostedWriterJournal.recover terminalWorkItems Fixture.permit.SubjectId CancellationToken.None
+        let state=current|>Result.defaultWith(sprintf "%A">>failwith)|>_.State
+        let envelope={CommandId=Id.command(Guid.NewGuid());ProtocolVersion=Id.protocolVersion 1 0;ExpectedRevision=state.Revision;ExpectedGeneration=state.Generation;PrincipalId="pilot-route";SessionId=None;IssuedAt=Fixture.now;ExpiresAt=Fixture.now.AddMinutes 1.;Command=command}
+        let! result=HostedWriterJournal.decideAndAppend (Fixture.FixedClock()) terminalWorkItems Fixture.permit.SubjectId envelope CancellationToken.None
+        return result|>Result.defaultWith failwith|>fst|>_.Receipt.Disposition }
+    let! _=appendTerminal(RequestCancel "terminal-retry")
+    let! _=appendTerminal(ConfirmCancelled "terminal-retry")
+    let writesBeforeTerminalRetry=terminalExecutor.Writes
+    let! terminalRetry=MainAdmissionPreparer.prepare (Fixture.FixedClock()) terminalWorkItems terminalExecutor terminalExecutor Fixture.permit.SubjectId "pilot-route" decodedRequest input CancellationToken.None
+    Assert.Equal(Error "command-identity-conflict",terminalRetry)
+    Assert.Equal(writesBeforeTerminalRetry,terminalExecutor.Writes)
+    Assert.True(terminalJournal.State.Control|>function ControlState.Cancelled _->true|_->false)
+    let preparation=MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" firstBytes|>Result.defaultWith failwith
+    let guessedJournal=Fixture.MemoryJournal()
+    let guessedExecutor=Fixture.MemoryExecutor(fun()->guessedJournal.State)
+    let guessedWorkflow=MainRouteWorkflow(Fixture.FixedClock(),guessedJournal,Fixture.unusedCandidates,guessedExecutor,guessedExecutor,Fixture.permit.SubjectId,"pilot-route")
+    let! guessed=guessedWorkflow.Prepare(preparation,CancellationToken.None)
+    Assert.Equal(Error "main-route-pre-admission-required",guessed);Assert.Equal(0,guessedExecutor.Writes)
+    let workflow=MainRouteWorkflow(Fixture.FixedClock(),workItems,Fixture.unusedCandidates,commands,attempts,Fixture.permit.SubjectId,"pilot-route")
+    let! advanced=workflow.Prepare(preparation,CancellationToken.None)
+    Assert.Equal(Ok(),advanced)
+    Assert.Equal(Some preparation.Reservation,journal.State.Reservation);Assert.Equal(ControlState.Running,journal.State.Control)
+    Assert.True(journal.State.ReadbackCurrent);Assert.True(journal.State.Operations.ContainsKey preparation.Route.ClaimOperationId);Assert.Empty(journal.State.Attempts)
+    let runningExecutor=Fixture.MemoryExecutor(fun()->journal.State)
+    let runningWorkflow=MainRouteWorkflow(Fixture.FixedClock(),workItems,Fixture.unusedCandidates,runningExecutor,runningExecutor,Fixture.permit.SubjectId,"pilot-route")
+    let! running=runningWorkflow.Prepare(preparation,CancellationToken.None)
+    Assert.Equal(Error "main-route-pre-admission-required",running);Assert.Equal(0,runningExecutor.Writes)
+    let! pauseDisposition=appendCore(Command.Pause "test-current-readback")
+    Assert.Equal(ReceiptDisposition.Accepted,pauseDisposition)
+    let currentReadbackExecutor=Fixture.MemoryExecutor(fun()->journal.State)
+    let currentReadbackWorkflow=MainRouteWorkflow(Fixture.FixedClock(),workItems,Fixture.unusedCandidates,currentReadbackExecutor,currentReadbackExecutor,Fixture.permit.SubjectId,"pilot-route")
+    let! currentReadback=currentReadbackWorkflow.Prepare(preparation,CancellationToken.None)
+    Assert.Equal(Error "main-route-pre-admission-required",currentReadback);Assert.Equal(0,currentReadbackExecutor.Writes)
+    let root=Directory.CreateTempSubdirectory("main-admission-output-")
+    try
+        let output=Path.Combine(root.FullName,"admission.json")
+        Assert.Equal(Ok(),MainAdmissionPreparer.writeAtomicPrivate output firstBytes)
+        Assert.Equal(Ok(),MainAdmissionPreparer.writeAtomicPrivate output retryBytes)
+        if OperatingSystem.IsLinux()||OperatingSystem.IsMacOS() then
+            File.SetUnixFileMode(output,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.GroupRead)
+            Assert.Equal(Ok(),MainAdmissionPreparer.writeAtomicPrivate output retryBytes)
+            Assert.Equal(UnixFileMode.UserRead|||UnixFileMode.UserWrite,File.GetUnixFileMode output)
+        Assert.Equal(Error "main-admission-output-conflict",MainAdmissionPreparer.writeAtomicPrivate output (Array.append firstBytes [|0uy|]))
+        if OperatingSystem.IsLinux()||OperatingSystem.IsMacOS() then Assert.Equal(UnixFileMode.UserRead|||UnixFileMode.UserWrite,File.GetUnixFileMode output)
+    finally root.Delete true }
 
 [<Fact>]
 let ``pilot permit admits only the hosted writer job class`` () =
