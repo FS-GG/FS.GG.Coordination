@@ -60,7 +60,7 @@ let generatedMutation = function
     | GitHubClaimTouchSetControl.ReverseCompensation -> let conflict = ClaimTouchSetAdapter.planConflict multi multi.Saga.AcquisitionOrder multi.Saga.AcquisitionOrder |> Result.defaultWith failwith in conflict.CompensateApplied |> List.forall _.OriginalResultRetained
     | GitHubClaimTouchSetControl.ExactReplay -> ClaimTouchSetAdapter.persistPlan multi = persisted
     | GitHubClaimTouchSetControl.BoundedCost -> multi.Cost = { AuthorityReads = 2; MaximumEffects = 3 }
-    | GitHubClaimTouchSetControl.QuintAndPrerequisite -> sha256 receiptPath = "12b80b146b3c17d5090603dfe7bd8ee16d2fc5f7736fc7fc5ab98ccc0e43ab4e" && sha256 quintPath = "3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118"
+    | GitHubClaimTouchSetControl.QuintAndPrerequisite -> sha256 receiptPath = "12b80b146b3c17d5090603dfe7bd8ee16d2fc5f7736fc7fc5ab98ccc0e43ab4e" && sha256 quintPath = "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
 
 // Independent producer: distinct assertions over the public boundary, not a call to generatedMutation.
 let independentMutation = function

@@ -52,7 +52,7 @@ let generatedMutation = function
     | GitHubLifecycleProjectionControl.RevisionFence -> LifecycleStatusPreStateRefused ConcurrentStatusChange <> AlteredLifecyclePlan
     | GitHubLifecycleProjectionControl.ExactReplay -> ({ AuthorityReads = 8; MaximumEffects = 0 }: LifecycleProjectionCost).MaximumEffects = 0
     | GitHubLifecycleProjectionControl.BoundedCost -> ({ AuthorityReads = 8; MaximumEffects = 1 }: LifecycleProjectionCost).AuthorityReads = 8
-    | GitHubLifecycleProjectionControl.QuintAndPrerequisite -> receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.6" && sha256 quintPath = "3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118"
+    | GitHubLifecycleProjectionControl.QuintAndPrerequisite -> receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.6" && sha256 quintPath = "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
 
 let independentMutation = function
     | GitHubLifecycleProjectionControl.IntentAuthority -> IntentPaused <> IntentCancelled
