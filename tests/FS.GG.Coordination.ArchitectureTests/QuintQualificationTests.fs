@@ -134,16 +134,16 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
 
     let receipt =
         JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "work/96-gs2-03-5-native-quint-formal-tests/qualification.json"))).AsObject()
-    Assert.Equal(151, receipt["negativeControlCount"].GetValue<int>())
-    Assert.Equal(221, (receipt["processCounts"].AsObject()["external"]).GetValue<int>())
-    Assert.Equal(196, (receipt["processCounts"].AsObject()["quintCli"]).GetValue<int>())
-    Assert.Equal(62, (receipt["processCounts"].AsObject()["apalacheVerify"]).GetValue<int>())
+    Assert.Equal(166, receipt["negativeControlCount"].GetValue<int>())
+    Assert.Equal(242, (receipt["processCounts"].AsObject()["external"]).GetValue<int>())
+    Assert.Equal(217, (receipt["processCounts"].AsObject()["quintCli"]).GetValue<int>())
+    Assert.Equal(71, (receipt["processCounts"].AsObject()["apalacheVerify"]).GetValue<int>())
     let receiptRows =
         receipt["formalCounterexamples"].AsArray()
         |> Seq.map _.AsObject()
         |> Seq.map (fun row -> row["id"].GetValue<string>(), row)
         |> Map.ofSeq
-    Assert.Equal(16, receiptRows.Count)
+    Assert.Equal(19, receiptRows.Count)
     for item in tests do
         let id = item["id"].GetValue<string>()
         let row = receiptRows[id]
