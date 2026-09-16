@@ -319,6 +319,9 @@ measured maximum of 12,246,193 bytes. C1 therefore raises the common root-artifa
 the existing per-root fail-closed check and all semantic workload budgets remain in force.
 The pinned regions are appended after the established formal test modules so their source locations, retained ITF
 states, and diagnostic trace bytes remain stable.
+Each semantic shard now has a 25-minute workflow envelope (formerly 15 minutes). The workload's own time, memory,
+state, transition, and sample limits are unchanged; this only accommodates the larger canonical compilation cost
+when all nineteen independent shards contend for hosted-runner capacity.
 
 ### C2 — implement and review the four-process model
 

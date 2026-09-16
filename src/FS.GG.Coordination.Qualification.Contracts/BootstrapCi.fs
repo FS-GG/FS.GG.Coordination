@@ -818,7 +818,10 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "    needs: [reuse-decision, canonical-quint-prepare]"
     line "    if: ${{ needs.canonical-quint-prepare.result == 'success' }}"
     line $"    runs-on: %s{contract.Reuse.Runner}"
-    line "    timeout-minutes: 15"
+    // Every semantic shard independently compiles the canonical roots before its bounded
+    // checks. The pinned Choreo source increases that fixed preparation cost, and runners
+    // under full matrix contention need enough wall-clock headroom to emit their receipt.
+    line "    timeout-minutes: 25"
     line "    strategy:"
     line "      fail-fast: false"
     line "      matrix:"
