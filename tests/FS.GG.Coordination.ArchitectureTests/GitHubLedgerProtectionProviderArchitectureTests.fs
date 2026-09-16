@@ -128,6 +128,35 @@ let ``App identities are distinct and capture tests prove the private transport 
     Assert.Equal(4882399L, desiredRoot.GetProperty("cutoverWriter").GetProperty("appId").GetInt64())
     Assert.Equal(160261436L, desiredRoot.GetProperty("cutoverWriter").GetProperty("installationId").GetInt64())
 
+    let environment = desiredRoot.GetProperty("environment")
+
+    Assert.Equal<int64 list>(
+        [ 1645484L; 4456104L ],
+        environment.GetProperty("reviewerIds").EnumerateArray()
+        |> Seq.map _.GetInt64()
+        |> Seq.toList
+    )
+
+    Assert.Equal<string list>(
+        [ "EHotwagner"; "nuklearwanze" ],
+        environment.GetProperty("reviewers").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
+    Assert.False(environment.GetProperty("preventSelfReview").GetBoolean())
+    Assert.False(environment.GetProperty("canAdminsBypass").GetBoolean())
+    let deployment = environment.GetProperty("deploymentBranches")
+    Assert.False(deployment.GetProperty("protectedBranches").GetBoolean())
+    Assert.True(deployment.GetProperty("customBranchPolicies").GetBoolean())
+
+    Assert.Equal<string list>(
+        [ "main" ],
+        deployment.GetProperty("patterns").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+    )
+
     let info =
         ProcessStartInfo("python3", "eng/test-capture-github-ledger-protection.py")
 
