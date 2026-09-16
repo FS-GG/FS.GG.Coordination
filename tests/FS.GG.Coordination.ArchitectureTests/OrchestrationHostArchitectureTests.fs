@@ -83,3 +83,39 @@ let ``host contract records paused startup and runner authority limit`` () =
             "Telemetry is neither referenced"
         ] do
         Assert.Contains(required, contract, StringComparison.Ordinal)
+
+[<Fact>]
+let ``installed adoption verifier is fenced to offline journal and subscription stores`` () =
+    let verifier =
+        read "src/FS.GG.Coordination.Orchestration.Host/InstalledAdoptionVerification.fs"
+
+    for required in
+        [
+            "IExecutionSessionJournal"
+            "IExecutorCommandStore"
+            "PostgreSqlExecutionStore"
+            "pg_try_advisory_lock"
+            "offline-installed-store-qualification"
+        ] do
+        Assert.Contains(required, verifier, StringComparison.Ordinal)
+
+    for forbidden in
+        [
+            "IExecutionProvider"
+            "HostRuntime"
+            "MainHostComposition"
+            "HttpClient"
+            "ProcessStartInfo"
+            "ICandidateStore"
+            ".PersistCommand("
+            ".StageInput("
+            ".StageWorkspaceManifest("
+            ".BindRoute("
+        ] do
+        Assert.DoesNotContain(forbidden, verifier, StringComparison.Ordinal)
+
+    let program = read "src/FS.GG.Coordination.Orchestration.Host/Program.fs"
+    Assert.Contains("verify-installed-adoption", program, StringComparison.Ordinal)
+
+    let candidate = read "eng/orchestration-host-candidate.py"
+    Assert.Contains("-p:FsggSourceRevision={candidate}", candidate, StringComparison.Ordinal)

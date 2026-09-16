@@ -43,6 +43,19 @@ Its `recoveryCapacity` argument validates the accepted configuration but does no
   [the O3-04 installed-adoption preview](../operations/o3-04-installed-adoption-preview.md). This source window
   does not dispatch that workflow or perform the installed operation.
 
+- [x] **O3-03a — installed-store verification surface.** The Host binary now exposes the offline
+  `verify-installed-adoption` command needed by the protected operation. It accepts only owner-private connection
+  and request files, binds a strict `fsgg.orchestration.installed-adoption-request/1` to the embedded source
+  revision, the running executable digest, and an exact empty schema-2 store identity/fence, then holds a
+  PostgreSQL advisory lock. It records deterministic A/B launch intents through the production execution journal
+  and exercises the production subscription interface at ordinary capacity 1: A reserves, B is refused, durable
+  reopen retains both histories, unknown settlement retains A's slot, a mismatched release fails, and exact
+  release admits the original unexpired B request. The terminal result proves zero active reservations, commands,
+  candidates, and external effects while retaining both immutable intents and inactive reservation history.
+  Prewrite binding, expiry, permissions, nonempty-store, and concurrent-verifier refusals plus an interruption
+  after A are covered on real PostgreSQL. The verifier creates no Host, provider, runner, model, HTTP, GitHub,
+  process, route, command, input, workspace, or candidate path and performs no migration.
+
 ## Retained authority and impact
 
 The unchanged model/native/reboot basis is `.github` PR 3515 at
@@ -51,8 +64,8 @@ The unchanged model/native/reboot basis is `.github` PR 3515 at
 `9046d2b3`, and terminal mailbox commit `aed85031815706ebe5675311004c23bde9aceb3b`.
 O3 does not repeat those formal scenarios, call another model, or perform another physical reboot.
 
-There is no SDD, Templates, generated-workspace, or default-workspace change. O3-03 changes source evidence and
-artifact preparation only. O3-04 is the first installed behavior change and remains explicit and opt-in. A fresh
-store adoption and an existing-store adoption are separate operations and require separate readback. Telemetry
-coverage remains `not-configured`; native collaboration usage is `native-collaboration-usage-unsupported`.
-No usage, cost, or overhead is inferred.
+There is no SDD, Templates, generated-workspace, or default-workspace change. O3-03/O3-03a change source evidence,
+artifact preparation, and the offline verifier only. O3-04 is the first installed behavior change and remains
+explicit and opt-in. A fresh store adoption and an existing-store adoption are separate operations and require
+separate readback. Telemetry coverage remains `not-configured`; native collaboration usage is
+`native-collaboration-usage-unsupported`. No usage, cost, or overhead is inferred.

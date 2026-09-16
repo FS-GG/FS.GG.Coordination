@@ -106,6 +106,7 @@ def project_contract(source: Path) -> str:
         "<RuntimeIdentifier>linux-x64</RuntimeIdentifier>",
         "<SelfContained>true</SelfContained>",
         "<PublishSingleFile>true</PublishSingleFile>",
+        '<AssemblyMetadata Include="FsggSourceRevision" Value="$(FsggSourceRevision)" />',
     ):
         require(project.count(exact) == 1, "OHC-PROJECT", f"missing or ambiguous {exact}")
     lock = source / LOCK
@@ -177,6 +178,7 @@ def usage_readback(binary: bytes) -> str:
         process = subprocess.run([str(path)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         require(process.returncode == 2, "OHC-USAGE", f"expected usage exit 2, observed {process.returncode}")
         require(process.stdout.startswith("usage: fsgg-coord-orchestration-host init"), "OHC-USAGE", "native usage readback differs")
+        require("verify-installed-adoption" in process.stdout, "OHC-USAGE", "installed-adoption verifier is absent")
         return digest_bytes(process.stdout.encode())
 
 
@@ -205,6 +207,7 @@ def build_once(repo: Path, candidate: str, tree: str, commit_time: str, identity
     properties = [
         "-p:ContinuousIntegrationBuild=true", "-p:Deterministic=true", "-p:DeterministicSourcePaths=true",
         "-p:UseSharedCompilation=false", "-p:DebugType=None", "-p:DebugSymbols=false", f"-p:PathMap={source}=/_/",
+        f"-p:FsggSourceRevision={candidate}",
     ]
     run(source, ["dotnet", "restore", PROJECT, "--locked-mode", "--disable-build-servers", *properties], env)
     output.mkdir()
