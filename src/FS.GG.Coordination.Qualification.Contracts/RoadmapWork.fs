@@ -251,36 +251,7 @@ module RoadmapWork =
         | _ -> Error [ finding "RW-JSON-REQUIRED" $"{path}/{name}" "expected gate contract array" ]
 
     let private canonicalBytesOmitting omittedRootMember (element: JsonElement) =
-        use stream = new MemoryStream()
-        use writer = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false))
-
-        let rec write isRoot (value: JsonElement) =
-            match value.ValueKind with
-            | JsonValueKind.Object ->
-                writer.WriteStartObject()
-
-                value.EnumerateObject()
-                |> Seq.filter (fun memberValue -> not (isRoot && memberValue.Name = omittedRootMember))
-                |> Seq.sortBy _.Name
-                |> Seq.iter (fun memberValue ->
-                    writer.WritePropertyName(memberValue.Name)
-                    write false memberValue.Value)
-
-                writer.WriteEndObject()
-            | JsonValueKind.Array ->
-                writer.WriteStartArray()
-                value.EnumerateArray() |> Seq.iter (write false)
-                writer.WriteEndArray()
-            | JsonValueKind.String -> writer.WriteStringValue(value.GetString())
-            | JsonValueKind.Number -> writer.WriteRawValue(value.GetRawText(), true)
-            | JsonValueKind.True -> writer.WriteBooleanValue(true)
-            | JsonValueKind.False -> writer.WriteBooleanValue(false)
-            | JsonValueKind.Null -> writer.WriteNullValue()
-            | _ -> invalidOp "unsupported JSON token"
-
-        write true element
-        writer.Flush()
-        stream.ToArray()
+        AcceptanceReceiptDigest.canonicalBytesOmitting omittedRootMember element
 
     type private Index =
         {
@@ -702,15 +673,19 @@ module RoadmapWork =
                             | Error values -> errors <- errors @ values
                 | _ -> errors <- errors @ [ finding "RW-JSON-REQUIRED" "/artifacts" "required non-empty array" ]
 
-                let calculated = sha256 (ReadOnlyMemory<byte>(canonicalBytesOmitting "digest" root))
-
-                match digest with
-                | Ok value when value <> calculated ->
-                    errors <-
-                        errors
-                        @ [
-                            finding "RW-RECEIPT-TAMPERED" "/digest" $"expected canonical digest {calculated}"
-                        ]
+                match unitId, digest with
+                | Ok receiptUnitId, Ok value ->
+                    match AcceptanceReceiptDigest.verify bytes receiptUnitId value root with
+                    | Ok _ -> ()
+                    | Error detail ->
+                        errors <-
+                            errors
+                            @ [
+                                finding
+                                    "RW-RECEIPT-TAMPERED"
+                                    $"/receipts/{receiptUnitId}/digest"
+                                    detail
+                            ]
                 | _ -> ()
 
                 if List.isEmpty errors then

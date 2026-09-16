@@ -17,6 +17,8 @@
     <Compile Include="FaultInjectionOracle.fs" />
     <Compile Include="BootstrapCi.fsi" />
     <Compile Include="BootstrapCi.fs" />
+    <Compile Include="AcceptanceReceiptDigest.fsi" />
+    <Compile Include="AcceptanceReceiptDigest.fs" />
     <Compile Include="RoadmapWork.fsi" />
     <Compile Include="RoadmapWork.fs" />
     <Compile Include="QualificationManifest.fsi" />

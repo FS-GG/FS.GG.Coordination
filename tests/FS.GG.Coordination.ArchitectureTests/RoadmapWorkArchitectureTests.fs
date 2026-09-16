@@ -1555,8 +1555,15 @@ let ``GS2-08-1 acceptance binds repaired correspondence and protected delivery``
 
 [<Fact>]
 let ``GS2-08-3 acceptance binds both exact census sources and native gates`` () =
-    use receipt =
-        JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json")))
+    let receiptBytes =
+        File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json"))
+
+    Assert.Equal(
+        AcceptanceReceiptDigest.Gs2083RawReceiptSha256,
+        receiptBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    )
+
+    use receipt = JsonDocument.Parse(receiptBytes)
 
     let value = receipt.RootElement
     Assert.Equal("accepted", value.GetProperty("state").GetString())
@@ -1569,8 +1576,16 @@ let ``GS2-08-3 acceptance binds both exact census sources and native gates`` () 
     Assert.Equal("4b4e699c8e811d21c22f6586137eaa78bbe61b80", value.GetProperty("sourceRevision").GetString())
 
     Assert.Equal(
-        "d58c5fa9a6e51731e49df84ec50f471275283e7570867e66488d4ed912fdac15",
+        AcceptanceReceiptDigest.Gs2083LegacyDigest,
         value.GetProperty("digest").GetString()
+    )
+
+    Assert.Equal(
+        AcceptanceReceiptDigest.Gs2083CanonicalDigest,
+        AcceptanceReceiptDigest.canonicalBytesOmitting "digest" value
+        |> SHA256.HashData
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
     )
 
     let artifacts =
@@ -4143,6 +4158,81 @@ let ``manifest refuses an external untracked unit index before evidence creation
 
         Assert.Contains("index: path escapes repository root", error)
         Assert.Equal(2, exitCode)
+    finally
+        if Directory.Exists(tempRoot) then
+            Directory.Delete(tempRoot, true)
+
+[<Fact>]
+let ``full receipt directory prerequisites accepts exact GS2-08-3 migration and names its mutations`` () =
+    let tempRoot =
+        Path.Combine(Path.GetTempPath(), $"fsgg-roadmap-receipts-{Guid.NewGuid():N}")
+
+    Directory.CreateDirectory(tempRoot) |> ignore
+
+    try
+        let index =
+            JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json"))).AsObject()
+
+        let roadmap =
+            index["units"].AsArray()
+            |> Seq.map (fun unitValue ->
+                let unitObject = unitValue.AsObject()
+                let unitId = unitObject["id"].GetValue<string>()
+                let title = unitObject["title"].GetValue<string>()
+                $"- [ ] **{unitId} — {title}.**")
+            |> String.concat "\n"
+            |> fun value -> value + "\n"
+
+        let roadmapBytes = Encoding.UTF8.GetBytes roadmap
+
+        index["roadmap"].AsObject()["sha256"] <-
+            roadmapBytes
+            |> SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        let indexPath = Path.Combine(tempRoot, "units.json")
+        let roadmapPath = Path.Combine(tempRoot, "roadmap.md")
+        File.WriteAllText(indexPath, index.ToJsonString(), UTF8Encoding(false))
+        File.WriteAllBytes(roadmapPath, roadmapBytes)
+
+        let cli =
+            Path.Combine(root, "src/FS.GG.Coordination.Cli/bin/Release/net10.0/FS.GG.Coordination.Cli.dll")
+
+        let runPrerequisites receipts =
+            run
+                "dotnet"
+                [
+                    cli
+                    "roadmap-work"
+                    "prerequisites"
+                    "--index"
+                    indexPath
+                    "--roadmap"
+                    roadmapPath
+                    "--unit"
+                    "GS2-08.4"
+                    "--receipts"
+                    receipts
+                ]
+
+        let accepted = Path.Combine(root, "evidence/github-substrate-v2/accepted")
+        let acceptedExit, acceptedOutput, acceptedError = runPrerequisites accepted
+        Assert.Equal(0, acceptedExit)
+        Assert.Contains("\"unitId\":\"GS2-08.4\"", acceptedOutput)
+        Assert.Equal("", acceptedError)
+
+        let mutated = Path.Combine(tempRoot, "accepted")
+        Directory.CreateDirectory(mutated) |> ignore
+
+        for source in Directory.EnumerateFiles(accepted, "*.json", SearchOption.TopDirectoryOnly) do
+            File.Copy(source, Path.Combine(mutated, Path.GetFileName source))
+
+        File.AppendAllText(Path.Combine(mutated, "GS2-08.3.json"), " ", UTF8Encoding(false))
+        let mutatedExit, _, mutatedError = runPrerequisites mutated
+        Assert.Equal(3, mutatedExit)
+        Assert.Contains("RW-RECEIPT-TAMPERED", mutatedError)
+        Assert.Contains("path=/receipts/GS2-08.3/digest", mutatedError)
     finally
         if Directory.Exists(tempRoot) then
             Directory.Delete(tempRoot, true)
