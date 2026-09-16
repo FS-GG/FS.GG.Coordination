@@ -173,7 +173,7 @@ let private createArtifacts root =
             let preparationDigest = String.replicate 64 "c"
 
             let sourceDigest =
-                "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
+                "be430a56332a9f5067e717ef58eaa86c800f143a9a81b999ee6dcbb0f8b80f0d"
 
             let contractDigest =
                 "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"

@@ -162,6 +162,6 @@ let ``ruleset plan Q3 validator rejects its closed mutation inventory`` () =
 [<Fact>]
 let ``ruleset plans preserve canonical Quint source`` () =
     Assert.Equal(
-        "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9",
+        "be430a56332a9f5067e717ef58eaa86c800f143a9a81b999ee6dcbb0f8b80f0d",
         sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md")
     )
