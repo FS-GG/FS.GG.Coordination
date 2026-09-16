@@ -1,0 +1,29 @@
+{
+  "schema": "fsgg.github-substrate.v1-admission-independent-cases/1",
+  "cases": [
+    { "name": "admission-seal-cas-race", "outcome": "passed", "journalAppends": 1, "providerEffects": 0 },
+    { "name": "lost-admission-response-restart", "outcome": "passed", "journalAppends": 1, "providerEffects": 0 },
+    { "name": "sealed-member-preparing", "outcome": "passed", "journalAppends": 1, "providerEffects": 1 },
+    { "name": "sealed-nonmember-refused", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "claim-generation-replaced", "outcome": "passed", "journalAppends": 1, "providerEffects": 0 },
+    { "name": "operation-generation-replaced", "outcome": "passed", "journalAppends": 1, "providerEffects": 0 },
+    { "name": "changed-manifest-refused", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "changed-target-refused", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "changed-payload-refused", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "changed-receiver-refused", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "changed-generation-refused", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "two-workers-one-effect", "outcome": "passed", "journalAppends": 1, "providerEffects": 1 },
+    { "name": "crash-before-send", "outcome": "passed", "journalAppends": 1, "providerEffects": 0 },
+    { "name": "crash-after-send-indeterminate", "outcome": "passed", "journalAppends": 2, "providerEffects": 1 },
+    { "name": "proven-absence-fresh-retry", "outcome": "passed", "journalAppends": 3, "providerEffects": 1 },
+    { "name": "partial-no-retry", "outcome": "passed", "journalAppends": 2, "providerEffects": 1 },
+    { "name": "freeze-between-effects", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "read-only-no-admission", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "mutation-as-read-refused", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "legacy-open-adoption", "outcome": "passed", "journalAppends": 1, "providerEffects": 0 },
+    { "name": "legacy-preparing-refused", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "closing-drains-member", "outcome": "passed", "journalAppends": 2, "providerEffects": 1 },
+    { "name": "closing-refuses-new", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 },
+    { "name": "real-initializer-git-objects", "outcome": "passed", "journalAppends": 0, "providerEffects": 0 }
+  ]
+}
