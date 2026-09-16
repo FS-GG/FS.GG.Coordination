@@ -2401,6 +2401,159 @@ type PostgreSqlStoreTests() =
         )
 
     [<Fact>]
+    member _.``distinct projects share one durable ordinary subscription slot``() =
+        task {
+            let! dataSource, identity = Fixture.reset ()
+            use dataSource = dataSource
+
+            let options =
+                { Fixture.options dataSource identity 0L with
+                    RuntimeSchemaVersion = 2
+                }
+
+            do! PostgreSqlExecutionSchema.migrate dataSource cancellationToken
+            let journal = PostgreSqlExecutionStore(options) :> IExecutionSessionJournal
+            let transport = PostgreSqlExecutionStore(options) :> IExecutorCommandStore
+            let now = DateTimeOffset.UtcNow
+            let projectA = Id.project (Guid.NewGuid())
+            let projectB = Id.project (Guid.NewGuid())
+            let subjectA = WorkItemIdentity.create "R_project_a" 8101L "I_subject_a" 9101L
+            let subjectB = WorkItemIdentity.create "R_project_b" 8102L "I_subject_b" 9102L
+
+            Assert.NotEqual(projectA, projectB)
+
+            Assert.False(
+                (WorkItemIdentity.persistenceId subjectA)
+                    .Equals(WorkItemIdentity.persistenceId subjectB, StringComparison.Ordinal)
+            )
+
+            let createAuthority project subject =
+                task {
+                    let assignmentId = Guid.NewGuid()
+                    let attemptId = Guid.NewGuid()
+                    let budget = SubscriptionPilot.createBudget now
+
+                    let intent: LaunchIntent =
+                        {
+                            Schema = ExecutionProtocol.launchSchema
+                            Key =
+                                {
+                                    AssignmentId = assignmentId
+                                    AttemptId = attemptId
+                                    Generation = 1L
+                                }
+                            InputDigest = Fixture.sha (Encoding.UTF8.GetBytes(WorkItemIdentity.persistenceId subject))
+                            Workspace = "project-" + (Id.projectValue project).ToString("D")
+                            Requested = { Model = None; Effort = None }
+                            Limits =
+                                {
+                                    Deadline = budget.ExecutionDeadline
+                                    MaximumRuntime = budget.MaximumRuntime
+                                    MaximumAttempts = 1
+                                }
+                            RecordedAt = now
+                        }
+
+                    let! appended =
+                        journal.AppendAttempt(
+                            assignmentId,
+                            attemptId,
+                            0L,
+                            SessionEvent.LaunchIntentRecorded intent,
+                            cancellationToken
+                        )
+
+                    Assert.Equal(AppendResult.Appended, appended)
+
+                    return
+                        SubscriptionPilot.reserve now (Guid.NewGuid()) assignmentId attemptId 1L 1L budget
+                        |> Result.defaultWith failwith
+                }
+
+            let! reservationA = createAuthority projectA subjectA
+            let! reservationB = createAuthority projectB subjectB
+            let bytesA = SubscriptionAccountingCodec.encodeReservation reservationA
+            let bytesB = SubscriptionAccountingCodec.encodeReservation reservationB
+
+            let! raced =
+                Task.WhenAll(
+                    transport.ReserveSubscription(bytesA, 1, 7, cancellationToken),
+                    transport.ReserveSubscription(bytesB, 1, 7, cancellationToken)
+                )
+
+            Assert.Equal(1, raced |> Array.filter ((=) SubscriptionReserved) |> Array.length)
+            Assert.Equal(1, raced |> Array.filter ((=) SubscriptionCapacityRefused) |> Array.length)
+
+            let winner, winnerBytes, loserBytes =
+                if raced[0] = SubscriptionReserved then
+                    reservationA, bytesA, bytesB
+                else
+                    reservationB, bytesB, bytesA
+
+            let restarted = PostgreSqlExecutionStore(options) :> IExecutorCommandStore
+
+            let! duplicateAfterRestart =
+                restarted.ReserveSubscription(winnerBytes, 1, 1, cancellationToken)
+
+            let! stillFullAfterRestart =
+                restarted.ReserveSubscription(loserBytes, 1, 1, cancellationToken)
+
+            Assert.Equal(SubscriptionDuplicate, duplicateAfterRestart)
+            Assert.Equal(SubscriptionCapacityRefused, stillFullAfterRestart)
+
+            let changedWinner =
+                { winner with
+                    ReservedAt = winner.ReservedAt.AddTicks 1L
+                }
+                |> SubscriptionAccountingCodec.encodeReservation
+
+            let! changedRetry =
+                restarted.ReserveSubscription(changedWinner, 1, 1, cancellationToken)
+
+            Assert.Equal(SubscriptionConflict, changedRetry)
+
+            let unknownAccounting =
+                SubscriptionPilot.settle now 0L None "provider-outcome-unknown" winner
+                |> Result.defaultWith failwith
+                |> SubscriptionAccountingCodec.encodeSettlement
+
+            let! accountingRecorded =
+                restarted.SettleSubscription(winner.ReservationId, unknownAccounting, cancellationToken)
+
+            Assert.Equal(Ok(), accountingRecorded)
+
+            let! refusedUnsafeRelease =
+                restarted.ReleaseSubscription(
+                    winner.ReservationId,
+                    Guid.NewGuid(),
+                    winner.Generation,
+                    cancellationToken
+                )
+
+            Assert.Equal(SubscriptionReleaseConflict, refusedUnsafeRelease)
+
+            let! fullAfterUnknownAccounting =
+                restarted.ReserveSubscription(loserBytes, 1, 1, cancellationToken)
+
+            Assert.Equal(SubscriptionCapacityRefused, fullAfterUnknownAccounting)
+
+            let! released =
+                restarted.ReleaseSubscription(
+                    winner.ReservationId,
+                    winner.AttemptId,
+                    winner.Generation,
+                    cancellationToken
+                )
+
+            Assert.Equal(SubscriptionReleased, released)
+
+            let! admittedAfterRelease =
+                restarted.ReserveSubscription(loserBytes, 1, 1, cancellationToken)
+
+            Assert.Equal(SubscriptionReserved, admittedAfterRelease)
+        }
+
+    [<Fact>]
     member _.``main admission preparer retries lost output against one durable PostgreSQL binding``() =
         task {
             let! dataSource, identity = Fixture.reset ()
