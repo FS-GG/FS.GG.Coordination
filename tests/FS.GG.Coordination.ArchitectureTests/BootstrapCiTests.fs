@@ -147,7 +147,8 @@ let private createArtifacts root =
             let quintDigest = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
             let apalacheDigest = "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
             let formalRows =
-                [ "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
+                [ "administrative-retirement-closure"; "administrative-retirement-old-plan-counterexample"; "administrative-retirement-race"
+                  "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
                   "journal-reconciliation"; "lifecycle"; "operation-saga"; "pilot-permit-fault-safety"; "pilot-permit-major-action-coverage"; "pilot-permit-transfer"; "relation-mutation"; "review-epoch"; "rollback" ]
                 |> List.mapi (fun index id ->
                     let suffix = (index + 1).ToString("x2")

@@ -956,7 +956,8 @@ let private inspectCanonicalQuintReceipt (path: string) =
              || int64Property "apalacheVerify" physicalProcessCounts <> Some(71L + verifyRetryCount) then
               yield violation "quint-receipt-physical-process-count" "physical process inventory does not match logical invocations and retry commands"
           let expectedFormalIds =
-              [ "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
+              [ "administrative-retirement-closure"; "administrative-retirement-old-plan-counterexample"; "administrative-retirement-race"
+                "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
                 "journal-reconciliation"; "lifecycle"; "operation-saga"; "pilot-permit-fault-safety"; "pilot-permit-major-action-coverage"; "pilot-permit-transfer"; "relation-mutation"; "review-epoch"; "rollback" ]
           if formalRows |> List.map (fun (id, _, _, _) -> id) <> expectedFormalIds
              || formalRows |> List.exists (fun (_, manifest, trace, itf) ->
