@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="InstalledAdoptionVerificationTests.fs" />
     <Compile Include="PostgreSqlStoreTests.fs" />
   </ItemGroup>
   <ItemGroup>

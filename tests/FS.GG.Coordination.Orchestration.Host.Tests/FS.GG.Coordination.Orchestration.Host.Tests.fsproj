@@ -7,6 +7,7 @@
     <Compile Include="HostedWriterRuntimeTests.fs" />
     <Compile Include="RunnerWireTests.fs" />
     <Compile Include="RunnerWireRuntimeTests.fs" />
+    <Compile Include="InstalledAdoptionVerificationTests.fs" />
     <Compile Include="HostTests.fs" />
   </ItemGroup>
   <ItemGroup>

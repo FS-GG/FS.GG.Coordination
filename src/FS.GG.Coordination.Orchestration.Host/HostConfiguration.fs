@@ -61,6 +61,12 @@ type MainAdmissionPreparerConfiguration =
         OutputFile: string
     }
 
+type InstalledAdoptionVerificationConfiguration =
+    {
+        ConnectionString: string
+        RequestBytes: byte array
+    }
+
 [<RequireQualifiedAccess>]
 module HostConfiguration =
     [<Struct; StructLayout(LayoutKind.Sequential)>]
@@ -136,7 +142,7 @@ module HostConfiguration =
             else
                 Ok()
 
-    let private privateFile maximumBytes (path: string) =
+    let private privateFileBytes maximumBytes (path: string) =
         if
             not (OperatingSystem.IsLinux())
             || RuntimeInformation.ProcessArchitecture <> Architecture.X64
@@ -203,16 +209,19 @@ module HostConfiguration =
                             then
                                 Error "secret-file-changed-during-open"
                             else
-                                use reader = new StreamReader(stream)
-                                let buffer = Array.zeroCreate<char>(maximumBytes + 1)
-                                let count = reader.ReadBlock(buffer, 0, buffer.Length)
+                                use memory = new MemoryStream()
+                                stream.CopyTo memory
 
-                                if count > maximumBytes then
+                                if memory.Length > int64 maximumBytes then
                                     Error "secret-file-size-refused"
                                 else
-                                    Ok(String(buffer, 0, count).Trim())
+                                    Ok(memory.ToArray())
             with _ ->
                 Error "secret-file-refused"
+
+    let private privateFile maximumBytes path =
+        privateFileBytes maximumBytes path
+        |> Result.map (fun bytes -> Text.Encoding.UTF8.GetString(bytes).Trim())
 
     let private loopbackPrefix (value: string) =
         match Uri.TryCreate(value, UriKind.Absolute) with
@@ -470,6 +479,28 @@ module HostConfiguration =
                     Ok()
 
             return connection
+        }
+
+    let parseInstalledAdoptionVerification arguments =
+        result {
+            do! validateArguments (set [ "--connection-file"; "--request-file" ]) arguments
+
+            let! connectionPath = value "--connection-file" arguments
+            let! requestPath = value "--request-file" arguments
+            let! connection = privateFile 16384 connectionPath
+            let! requestBytes = privateFileBytes 65536 requestPath
+
+            do!
+                if String.IsNullOrWhiteSpace connection then
+                    Error "connection-string-required"
+                else
+                    Ok()
+
+            return
+                {
+                    ConnectionString = connection
+                    RequestBytes = requestBytes
+                }
         }
 
     let parseMainAdmissionPreparer arguments =
