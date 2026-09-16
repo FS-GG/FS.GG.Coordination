@@ -5,7 +5,9 @@ open System.IO
 let root = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, ".."))
 let sourceRoot = Path.Combine(root, "src/FS.GG.Coordination.GitHub")
 let source = File.ReadAllText(Path.Combine(sourceRoot, "RulesetPlanAdapter.fs"))
-let probe = """#load "RepositoryProfileAdapter.fs"
+
+let probe =
+    """#load "RepositoryProfileAdapter.fs"
 #load "RequiredCheckCensusAdapter.fs"
 #load "RulesetPlanAdapter.fs"
 open System
@@ -50,25 +52,42 @@ let runProbe directory =
     child.ExitCode, output, error
 
 let mutations =
-    [ "default-branch-target", "Include = [ \"~DEFAULT_BRANCH\" ]", "Include = [ \"refs/heads/main\" ]"
-      "release-tag-target", "Include = [ \"refs/tags/v*\" ]", "Include = [ \"refs/tags/release-*\" ]"
-      "merge-methods", "AllowedMergeMethods = [ Squash ]", "AllowedMergeMethods = [ MergeCommit ]"
-      "auto-merge", "AllowAutoMerge = true", "AllowAutoMerge = false"
-      "branch-deletion", "DeleteBranchOnMerge = true", "DeleteBranchOnMerge = false" ]
+    [
+        "default-branch-target", "Include = [ \"~DEFAULT_BRANCH\" ]", "Include = [ \"refs/heads/main\" ]"
+        "release-tag-target", "Include = [ \"refs/tags/v*\" ]", "Include = [ \"refs/tags/release-*\" ]"
+        "merge-methods", "AllowedMergeMethods = [ Squash ]", "AllowedMergeMethods = [ MergeCommit ]"
+        "auto-merge", "AllowAutoMerge = true", "AllowAutoMerge = false"
+        "branch-deletion", "DeleteBranchOnMerge = true", "DeleteBranchOnMerge = false"
+    ]
 
-let temporary = Path.Combine(Path.GetTempPath(), $"fsgg-ruleset-plan-mutants-{Guid.NewGuid():N}")
+let temporary =
+    Path.Combine(Path.GetTempPath(), $"fsgg-ruleset-plan-mutants-{Guid.NewGuid():N}")
+
 Directory.CreateDirectory temporary |> ignore
+
 try
-    for name in [ "RepositoryProfileAdapter.fs"; "RequiredCheckCensusAdapter.fs" ] do File.Copy(Path.Combine(sourceRoot, name), Path.Combine(temporary, name))
+    for name in [ "RepositoryProfileAdapter.fs"; "RequiredCheckCensusAdapter.fs" ] do
+        File.Copy(Path.Combine(sourceRoot, name), Path.Combine(temporary, name))
+
     File.WriteAllText(Path.Combine(temporary, "probe.fsx"), probe)
     File.WriteAllText(Path.Combine(temporary, "RulesetPlanAdapter.fs"), source)
     let baselineCode, _, baselineError = runProbe temporary
-    if baselineCode <> 0 then failwith $"baseline probe failed: {baselineError}"
+
+    if baselineCode <> 0 then
+        failwith $"baseline probe failed: {baselineError}"
+
     for control, original, replacement in mutations do
-        if not (source.Contains original) then failwith $"mutation anchor missing: {control}"
+        if not (source.Contains original) then
+            failwith $"mutation anchor missing: {control}"
+
         File.WriteAllText(Path.Combine(temporary, "RulesetPlanAdapter.fs"), source.Replace(original, replacement))
         let code, _, _ = runProbe temporary
-        if code = 0 then failwith $"mutation survived: {control}"
-    printfn "RULESET_PLAN_MUTANTS_OK controls=%s" (mutations |> List.map (fun (name, _, _) -> name) |> String.concat ",")
+
+        if code = 0 then
+            failwith $"mutation survived: {control}"
+
+    printfn
+        "RULESET_PLAN_MUTANTS_OK controls=%s"
+        (mutations |> List.map (fun (name, _, _) -> name) |> String.concat ",")
 finally
     Directory.Delete(temporary, true)

@@ -8,7 +8,8 @@ open System.Text
 open System.Text.Json.Nodes
 open Xunit
 
-let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+let private root =
+    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
 let private executeWith selfTest extraArguments =
     let info = ProcessStartInfo("dotnet")
@@ -23,12 +24,18 @@ let private executeWith selfTest extraArguments =
     info.ArgumentList.Add "fsi"
     info.ArgumentList.Add "eng/validate-quint-qualification.fsx"
     info.ArgumentList.Add "--"
-    if selfTest then info.ArgumentList.Add "--self-test"
+
+    if selfTest then
+        info.ArgumentList.Add "--self-test"
+
     info.ArgumentList.Add "--root"
     info.ArgumentList.Add "."
     info.ArgumentList.Add "--config"
     info.ArgumentList.Add "eng/quint-qualification.json"
-    for argument in extraArguments do info.ArgumentList.Add argument
+
+    for argument in extraArguments do
+        info.ArgumentList.Add argument
+
     use child = Process.Start info
     let output = child.StandardOutput.ReadToEnd()
     let error = child.StandardError.ReadToEnd()
@@ -41,62 +48,141 @@ let private execute selfTest = executeWith selfTest []
 let ``bounded roots classifications selection and admission are complete`` () =
     let exitCode, output, error = execute false
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=19 oracles=11 negativeControls=0", output)
+
+    Assert.Contains(
+        "roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=19 oracles=11 negativeControls=0",
+        output
+    )
 
 [<Fact>]
 let ``independent oracles and qualification contracts reject every focused mutation`` () =
     let exitCode, output, error = execute true
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
-    Assert.Contains("roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=19 oracles=11 negativeControls=27", output)
+
+    Assert.Contains(
+        "roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=19 oracles=11 negativeControls=27",
+        output
+    )
 
 [<Fact>]
 let ``native formal catalogue covers all domains and retains normalized ITF counterexamples`` () =
     let configuration =
         JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification.json"))).AsObject()
-    let source = File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
-    let tests = configuration["formalTests"].AsArray() |> Seq.map _.AsObject() |> Seq.toList
-    let baseline = JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification-baseline.json"))).AsObject()
+
+    let source =
+        File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
+
+    let tests =
+        configuration["formalTests"].AsArray() |> Seq.map _.AsObject() |> Seq.toList
+
+    let baseline =
+        JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification-baseline.json"))).AsObject()
+
     let measurements =
         baseline["formalMeasurements"].AsArray()
         |> Seq.map _.AsObject()
         |> Seq.map (fun item -> item["id"].GetValue<string>(), item)
         |> Map.ofSeq
+
     Assert.Equal("canonical-runner-observed-tlc-and-rust-v1", baseline["formalMeasurementMethod"].GetValue<string>())
-    let validator = File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+
+    let validator =
+        File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+
     Assert.Contains("actualInvocationInventory.TryAdd(label, 0)", validator)
-    let ids = tests |> List.map (fun item -> item["id"].GetValue<string>()) |> Set.ofList
+
+    let ids =
+        tests |> List.map (fun item -> item["id"].GetValue<string>()) |> Set.ofList
+
     let expectedIds =
-        Set [ "claim-election"; "relation-mutation"; "lifecycle"; "operation-saga"; "epoch"; "rollback"
-              "journal-reconciliation"; "journal-fencing"; "authority-reconciliation"; "review-epoch"
-              "cutover-observation"; "pilot-permit-transfer"; "pilot-permit-fault-safety"
-              "pilot-permit-major-action-coverage"; "hosted-writer-progress"
-              "hosted-writer-fault-safety"; "administrative-retirement-closure"
-              "administrative-retirement-race"; "administrative-retirement-old-plan-counterexample" ]
-    if ids <> expectedIds then failwithf "unexpected formal-test catalogue: %A" ids
+        Set
+            [
+                "claim-election"
+                "relation-mutation"
+                "lifecycle"
+                "operation-saga"
+                "epoch"
+                "rollback"
+                "journal-reconciliation"
+                "journal-fencing"
+                "authority-reconciliation"
+                "review-epoch"
+                "cutover-observation"
+                "pilot-permit-transfer"
+                "pilot-permit-fault-safety"
+                "pilot-permit-major-action-coverage"
+                "hosted-writer-progress"
+                "hosted-writer-fault-safety"
+                "administrative-retirement-closure"
+                "administrative-retirement-race"
+                "administrative-retirement-old-plan-counterexample"
+            ]
+
+    if ids <> expectedIds then
+        failwithf "unexpected formal-test catalogue: %A" ids
+
     let elapsedBudget id =
         tests
         |> List.find (fun item -> item["id"].GetValue<string>() = id)
         |> fun item -> (item["budget"].AsObject()["elapsedMs"]).GetValue<int>()
+
     let expectedElapsedBudgets =
-        Map [ "claim-election", 105000; "relation-mutation", 105000; "lifecycle", 90000
-              "operation-saga", 90000; "epoch", 105000; "rollback", 105000
-              "journal-reconciliation", 90000; "journal-fencing", 105000
-              "authority-reconciliation", 105000; "review-epoch", 90000
-              "cutover-observation", 105000; "pilot-permit-transfer", 105000
-              "pilot-permit-fault-safety", 105000; "pilot-permit-major-action-coverage", 105000
-              "hosted-writer-progress", 105000; "hosted-writer-fault-safety", 105000
-              "administrative-retirement-closure", 105000; "administrative-retirement-race", 105000
-              "administrative-retirement-old-plan-counterexample", 105000 ]
-    let actualElapsedBudgets = expectedIds |> Seq.map (fun id -> id, elapsedBudget id) |> Map
-    Assert.True((expectedElapsedBudgets = actualElapsedBudgets), sprintf "unexpected formal elapsed budgets: %A" actualElapsedBudgets)
+        Map
+            [
+                "claim-election", 105000
+                "relation-mutation", 105000
+                "lifecycle", 90000
+                "operation-saga", 90000
+                "epoch", 105000
+                "rollback", 105000
+                "journal-reconciliation", 90000
+                "journal-fencing", 105000
+                "authority-reconciliation", 105000
+                "review-epoch", 90000
+                "cutover-observation", 105000
+                "pilot-permit-transfer", 105000
+                "pilot-permit-fault-safety", 105000
+                "pilot-permit-major-action-coverage", 105000
+                "hosted-writer-progress", 105000
+                "hosted-writer-fault-safety", 105000
+                "administrative-retirement-closure", 105000
+                "administrative-retirement-race", 105000
+                "administrative-retirement-old-plan-counterexample", 105000
+            ]
+
+    let actualElapsedBudgets =
+        expectedIds |> Seq.map (fun id -> id, elapsedBudget id) |> Map
+
+    Assert.True(
+        (expectedElapsedBudgets = actualElapsedBudgets),
+        sprintf "unexpected formal elapsed budgets: %A" actualElapsedBudgets
+    )
+
     Assert.Equal(90000, elapsedBudget "operation-saga")
+
     for item in tests do
         Assert.Equal("tlc", item["backend"].GetValue<string>())
-        for field in [ "init"; "step"; "invariant"; "witness"; "temporal"; "invalid"; "removedStep"; "violatedTemporal"; "blockedInvariant" ] do
+
+        for field in
+            [
+                "init"
+                "step"
+                "invariant"
+                "witness"
+                "temporal"
+                "invalid"
+                "removedStep"
+                "violatedTemporal"
+                "blockedInvariant"
+            ] do
             Assert.Contains(item[field].GetValue<string>(), source)
+
         let counterexample = Path.Combine(root, item["counterexample"].GetValue<string>())
         let tracePath = Path.Combine(root, item["counterexampleTrace"].GetValue<string>())
-        let manifestPath = Path.Combine(root, item["counterexampleManifest"].GetValue<string>())
+
+        let manifestPath =
+            Path.Combine(root, item["counterexampleManifest"].GetValue<string>())
+
         let itf = JsonNode.Parse(File.ReadAllBytes counterexample).AsObject()
         let trace = JsonNode.Parse(File.ReadAllBytes tracePath).AsObject()
         let manifest = JsonNode.Parse(File.ReadAllBytes manifestPath).AsObject()
@@ -109,15 +195,29 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         Assert.Equal(itf["states"].ToJsonString(), trace["states"].ToJsonString())
         Assert.Contains("behavior constitutes a counter-example", trace["temporalDiagnostic"].GetValue<string>())
         Assert.Contains("Stuttering", trace["temporalDiagnostic"].GetValue<string>())
-        let fileSha path = SHA256.HashData(File.ReadAllBytes path) |> Convert.ToHexString |> _.ToLowerInvariant()
+
+        let fileSha path =
+            SHA256.HashData(File.ReadAllBytes path)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
         Assert.Equal(configuration["sourceSha256"].GetValue<string>(), manifest["sourceSha256"].GetValue<string>())
         Assert.Equal(item["main"].GetValue<string>(), manifest["main"].GetValue<string>())
         Assert.Equal(item["init"].GetValue<string>(), manifest["init"].GetValue<string>())
         Assert.Equal(item["removedStep"].GetValue<string>(), manifest["removedStep"].GetValue<string>())
         Assert.Equal(item["violatedTemporal"].GetValue<string>(), manifest["violatedTemporal"].GetValue<string>())
         Assert.Equal(item["blockedInvariant"].GetValue<string>(), manifest["blockedInvariant"].GetValue<string>())
-        Assert.Equal((item["budget"].AsObject()["depth"]).GetValue<int>(), (manifest["bounds"].AsObject()["maxSteps"]).GetValue<int>())
-        Assert.Equal("79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486", manifest["toolchainSha256"].GetValue<string>())
+
+        Assert.Equal(
+            (item["budget"].AsObject()["depth"]).GetValue<int>(),
+            (manifest["bounds"].AsObject()["maxSteps"]).GetValue<int>()
+        )
+
+        Assert.Equal(
+            "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486",
+            manifest["toolchainSha256"].GetValue<string>()
+        )
+
         Assert.Equal("temporal-violation", manifest["outcome"].GetValue<string>())
         Assert.Equal(fileSha counterexample, manifest["itfSha256"].GetValue<string>())
         Assert.Equal(fileSha tracePath, manifest["traceSha256"].GetValue<string>())
@@ -133,24 +233,42 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         Assert.NotEqual(item["violatedTemporal"].GetValue<string>(), rebound["violatedTemporal"].GetValue<string>())
 
     let receipt =
-        JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "work/96-gs2-03-5-native-quint-formal-tests/qualification.json"))).AsObject()
+        JsonNode
+            .Parse(
+                File.ReadAllBytes(Path.Combine(root, "work/96-gs2-03-5-native-quint-formal-tests/qualification.json"))
+            )
+            .AsObject()
+
     Assert.Equal(166, receipt["negativeControlCount"].GetValue<int>())
     Assert.Equal(242, (receipt["processCounts"].AsObject()["external"]).GetValue<int>())
     Assert.Equal(217, (receipt["processCounts"].AsObject()["quintCli"]).GetValue<int>())
     Assert.Equal(71, (receipt["processCounts"].AsObject()["apalacheVerify"]).GetValue<int>())
+
     let receiptRows =
         receipt["formalCounterexamples"].AsArray()
         |> Seq.map _.AsObject()
         |> Seq.map (fun row -> row["id"].GetValue<string>(), row)
         |> Map.ofSeq
+
     Assert.Equal(19, receiptRows.Count)
+
     for item in tests do
         let id = item["id"].GetValue<string>()
         let row = receiptRows[id]
-        let manifestPath = Path.Combine(root, item["counterexampleManifest"].GetValue<string>())
+
+        let manifestPath =
+            Path.Combine(root, item["counterexampleManifest"].GetValue<string>())
+
         let tracePath = Path.Combine(root, item["counterexampleTrace"].GetValue<string>())
-        let counterexamplePath = Path.Combine(root, item["counterexample"].GetValue<string>())
-        let fileSha path = SHA256.HashData(File.ReadAllBytes path) |> Convert.ToHexString |> _.ToLowerInvariant()
+
+        let counterexamplePath =
+            Path.Combine(root, item["counterexample"].GetValue<string>())
+
+        let fileSha path =
+            SHA256.HashData(File.ReadAllBytes path)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
         Assert.Equal(fileSha manifestPath, row["manifestSha256"].GetValue<string>())
         Assert.Equal(fileSha tracePath, row["traceSha256"].GetValue<string>())
         Assert.Equal(fileSha counterexamplePath, row["itfSha256"].GetValue<string>())
@@ -160,15 +278,28 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
     let plan = Path.GetTempFileName()
     let proposal = Path.GetTempFileName()
     let invalidProposedSource = Path.GetTempFileName()
-    let proposedSource = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
-    let compilerReceipt = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/receipt.json")
+
+    let proposedSource =
+        Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
+
+    let compilerReceipt =
+        Path.Combine(root, "src/FS.GG.Coordination.Protocol/Generated/receipt.json")
+
     let reuseReceipt = Path.GetTempFileName()
+
     try
         let behaviorSha =
-            SHA256.HashData(File.ReadAllBytes proposedSource) |> Convert.ToHexString |> _.ToLowerInvariant()
+            SHA256.HashData(File.ReadAllBytes proposedSource)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
         let compilerReceiptSha =
-            SHA256.HashData(File.ReadAllBytes compilerReceipt) |> Convert.ToHexString |> _.ToLowerInvariant()
-        let proposalText = """{
+            SHA256.HashData(File.ReadAllBytes compilerReceipt)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        let proposalText =
+            """{
           "schema":"fsgg.coordination.quint-proposal/1",
           "owner":"future-audit", "source":"SOURCE_PATH", "behaviorSha256":"BEHAVIOR_SHA",
           "compilerReceipt":"COMPILER_RECEIPT", "compilerReceiptSha256":"COMPILER_RECEIPT_SHA",
@@ -180,68 +311,134 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
           "projections":["qualification-manifest"], "ciImpact":"bounded-state-root",
           "budgetEffect":"within-calibrated-envelope"
         }"""
+
         let validProposal =
             proposalText
                 .Replace("SOURCE_PATH", proposedSource)
                 .Replace("BEHAVIOR_SHA", behaviorSha)
                 .Replace("COMPILER_RECEIPT_SHA", compilerReceiptSha)
                 .Replace("COMPILER_RECEIPT", compilerReceipt)
+
         File.WriteAllText(proposal, validProposal)
+
         let pullExit, pullOutput, pullError =
-            executeWith false [ "--mode"; "pull-request"; "--changed-path"; "eng/quint-qualification.json"; "--plan-out"; plan ]
+            executeWith
+                false
+                [
+                    "--mode"
+                    "pull-request"
+                    "--changed-path"
+                    "eng/quint-qualification.json"
+                    "--plan-out"
+                    plan
+                ]
+
         Assert.True((pullExit = 0), $"%s{pullOutput}\n%s{pullError}")
         let pullPlan = JsonNode.Parse(File.ReadAllText plan).AsObject()
         Assert.Equal(7, pullPlan["roots"].AsArray().Count)
 
         let oracleExit, oracleOutput, oracleError =
-            executeWith false [ "--mode"; "pull-request"; "--changed-surface"; "oracle:dependency-concurrency" ]
+            executeWith
+                false
+                [
+                    "--mode"
+                    "pull-request"
+                    "--changed-surface"
+                    "oracle:dependency-concurrency"
+                ]
+
         Assert.True((oracleExit = 0), $"%s{oracleOutput}\n%s{oracleError}")
         Assert.Contains("selected=qualification,relations", oracleOutput)
 
-        let configuration = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification.json")))
+        let configuration =
+            JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification.json")))
+
         let sourceSha = configuration["sourceSha256"].GetValue<string>()
+
         let fileSha path =
-            SHA256.HashData(File.ReadAllBytes path) |> Convert.ToHexString |> _.ToLowerInvariant()
-        File.WriteAllText(reuseReceipt, $"""{{
+            SHA256.HashData(File.ReadAllBytes path)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        File.WriteAllText(
+            reuseReceipt,
+            $"""{{
           "schema":"fsgg.coordination.quint-reuse/1", "sourceSha256":"%s{sourceSha}",
           "configurationSha256":"%s{fileSha (Path.Combine(root, "eng/quint-qualification.json"))}",
           "baselineSha256":"%s{fileSha (Path.Combine(root, "eng/quint-qualification-baseline.json"))}",
           "backendIdentity":"quint-rust-apalache",
           "toolchainIdentity":"79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486",
           "selectedRoots":["qualification","relations"]
-        }}""")
+        }}"""
+        )
+
         let reuseExit, reuseOutput, reuseError =
-            executeWith false [ "--mode"; "reuse"; "--changed-surface"; "budget:relations"; "--reuse-source-sha256"; sourceSha; "--reuse-receipt"; reuseReceipt ]
+            executeWith
+                false
+                [
+                    "--mode"
+                    "reuse"
+                    "--changed-surface"
+                    "budget:relations"
+                    "--reuse-source-sha256"
+                    sourceSha
+                    "--reuse-receipt"
+                    reuseReceipt
+                ]
+
         Assert.True((reuseExit = 0), $"%s{reuseOutput}\n%s{reuseError}")
         Assert.Contains("selected=qualification,relations", reuseOutput)
 
         let futureExit, futureOutput, futureError =
             executeWith false [ "--mode"; "future-behavior"; "--proposal"; proposal ]
+
         Assert.NotEqual(0, futureExit)
         Assert.Contains("QQ-PROPOSAL-COMPILER-UNAVAILABLE", futureOutput + futureError)
 
         File.WriteAllText(proposal, File.ReadAllText(proposal).Replace(behaviorSha, String.replicate 64 "b"))
+
         let badFutureExit, badFutureOutput, badFutureError =
             executeWith false [ "--mode"; "future-behavior"; "--proposal"; proposal ]
+
         Assert.NotEqual(0, badFutureExit)
         Assert.Contains("QQ-PROPOSAL-BEHAVIOR", badFutureOutput + badFutureError)
 
         File.WriteAllText(invalidProposedSource, "module QualificationFutureAuditRoot { !!! invalid Quint !!! }")
+
         let invalidBehaviorSha =
-            SHA256.HashData(File.ReadAllBytes invalidProposedSource) |> Convert.ToHexString |> _.ToLowerInvariant()
-        File.WriteAllText(proposal, validProposal.Replace(proposedSource, invalidProposedSource).Replace(behaviorSha, invalidBehaviorSha))
+            SHA256.HashData(File.ReadAllBytes invalidProposedSource)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        File.WriteAllText(
+            proposal,
+            validProposal.Replace(proposedSource, invalidProposedSource).Replace(behaviorSha, invalidBehaviorSha)
+        )
+
         let invalidFutureExit, invalidFutureOutput, invalidFutureError =
             executeWith false [ "--mode"; "future-behavior"; "--proposal"; proposal ]
+
         Assert.NotEqual(0, invalidFutureExit)
         Assert.Contains("QQ-PROPOSAL-SOURCE", invalidFutureOutput + invalidFutureError)
 
         let missingPathExit, missingPathOutput, missingPathError =
             executeWith false [ "--mode"; "pull-request"; "--changed-path"; "eng/does-not-exist.qnt" ]
+
         Assert.NotEqual(0, missingPathExit)
         Assert.Contains("QQ-SELECTION-PATH-MISSING", missingPathOutput + missingPathError)
 
         let unboundReuseExit, unboundReuseOutput, unboundReuseError =
-            executeWith false [ "--mode"; "reuse"; "--changed-surface"; "budget:relations"; "--reuse-source-sha256"; sourceSha ]
+            executeWith
+                false
+                [
+                    "--mode"
+                    "reuse"
+                    "--changed-surface"
+                    "budget:relations"
+                    "--reuse-source-sha256"
+                    sourceSha
+                ]
+
         Assert.NotEqual(0, unboundReuseExit)
         Assert.Contains("QQ-SELECTION-INPUT", unboundReuseOutput + unboundReuseError)
     finally
@@ -253,26 +450,42 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
 [<Fact>]
 let ``imports from any Quint module are part of the executable closure`` () =
     let scratch = Directory.CreateTempSubdirectory("fsgg-quint-import-closure-")
+
     try
-        let protocolDirectory = Path.Combine(scratch.FullName, "src/FS.GG.Coordination.Protocol")
+        let protocolDirectory =
+            Path.Combine(scratch.FullName, "src/FS.GG.Coordination.Protocol")
+
         let engDirectory = Path.Combine(scratch.FullName, "eng")
         Directory.CreateDirectory protocolDirectory |> ignore
         Directory.CreateDirectory engDirectory |> ignore
         let sourcePath = Path.Combine(protocolDirectory, "Protocol.md")
         let configPath = Path.Combine(engDirectory, "quint-qualification.json")
         let baselinePath = Path.Combine(engDirectory, "quint-qualification-baseline.json")
+
         let mutatedSource =
-            File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
+            File
+                .ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
                 .Replace(
                     "module QualificationAuthorityRoot {",
-                    "module QualificationInjectedHelper { pure val injected = true }\nmodule QualificationAuthorityRoot {\n  import QualificationInjectedHelper.injected")
+                    "module QualificationInjectedHelper { pure val injected = true }\nmodule QualificationAuthorityRoot {\n  import QualificationInjectedHelper.injected"
+                )
+
         File.WriteAllText(sourcePath, mutatedSource)
+
         let fileSha path =
-            SHA256.HashData(File.ReadAllBytes path) |> Convert.ToHexString |> _.ToLowerInvariant()
-        let config = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification.json"))).AsObject()
+            SHA256.HashData(File.ReadAllBytes path)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        let config =
+            JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification.json"))).AsObject()
+
         config["sourceSha256"] <- JsonValue.Create(fileSha sourcePath)
         File.WriteAllText(configPath, config.ToJsonString())
-        let baseline = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification-baseline.json"))).AsObject()
+
+        let baseline =
+            JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification-baseline.json"))).AsObject()
+
         baseline["sourceSha256"] <- JsonValue.Create(fileSha sourcePath)
         baseline["configurationSha256"] <- JsonValue.Create(fileSha configPath)
         File.WriteAllText(baselinePath, baseline.ToJsonString())
@@ -281,8 +494,23 @@ let ``imports from any Quint module are part of the executable closure`` () =
         info.UseShellExecute <- false
         info.RedirectStandardOutput <- true
         info.RedirectStandardError <- true
-        for argument in [ "fsi"; "eng/validate-quint-qualification.fsx"; "--"; "--root"; scratch.FullName; "--config"; "eng/quint-qualification.json"; "--mode"; "protected"; "--protected-mode"; "main" ] do
+
+        for argument in
+            [
+                "fsi"
+                "eng/validate-quint-qualification.fsx"
+                "--"
+                "--root"
+                scratch.FullName
+                "--config"
+                "eng/quint-qualification.json"
+                "--mode"
+                "protected"
+                "--protected-mode"
+                "main"
+            ] do
             info.ArgumentList.Add argument
+
         use child = Process.Start info
         let output = child.StandardOutput.ReadToEnd()
         let error = child.StandardError.ReadToEnd()
@@ -295,14 +523,28 @@ let ``imports from any Quint module are part of the executable closure`` () =
 [<Fact>]
 let ``missing or over budget measurements are rejected before reuse`` () =
     let scratch = Directory.CreateTempSubdirectory("fsgg-quint-budget-")
+
     try
-        let protocolDirectory = Path.Combine(scratch.FullName, "src/FS.GG.Coordination.Protocol")
+        let protocolDirectory =
+            Path.Combine(scratch.FullName, "src/FS.GG.Coordination.Protocol")
+
         let engDirectory = Path.Combine(scratch.FullName, "eng")
         Directory.CreateDirectory protocolDirectory |> ignore
         Directory.CreateDirectory engDirectory |> ignore
-        File.Copy(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"), Path.Combine(protocolDirectory, "Protocol.md"))
-        File.Copy(Path.Combine(root, "eng/quint-qualification.json"), Path.Combine(engDirectory, "quint-qualification.json"))
-        let baseline = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification-baseline.json"))).AsObject()
+
+        File.Copy(
+            Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"),
+            Path.Combine(protocolDirectory, "Protocol.md")
+        )
+
+        File.Copy(
+            Path.Combine(root, "eng/quint-qualification.json"),
+            Path.Combine(engDirectory, "quint-qualification.json")
+        )
+
+        let baseline =
+            JsonNode.Parse(File.ReadAllText(Path.Combine(root, "eng/quint-qualification-baseline.json"))).AsObject()
+
         (((baseline["measurements"].AsArray())[0]).AsObject())["elapsedMs"] <- JsonValue.Create(30001)
         File.WriteAllText(Path.Combine(engDirectory, "quint-qualification-baseline.json"), baseline.ToJsonString())
         let info = ProcessStartInfo("dotnet")
@@ -310,8 +552,19 @@ let ``missing or over budget measurements are rejected before reuse`` () =
         info.UseShellExecute <- false
         info.RedirectStandardOutput <- true
         info.RedirectStandardError <- true
-        for argument in [ "fsi"; "eng/validate-quint-qualification.fsx"; "--"; "--root"; scratch.FullName; "--config"; "eng/quint-qualification.json" ] do
+
+        for argument in
+            [
+                "fsi"
+                "eng/validate-quint-qualification.fsx"
+                "--"
+                "--root"
+                scratch.FullName
+                "--config"
+                "eng/quint-qualification.json"
+            ] do
             info.ArgumentList.Add argument
+
         use child = Process.Start info
         let output = child.StandardOutput.ReadToEnd()
         let error = child.StandardError.ReadToEnd()

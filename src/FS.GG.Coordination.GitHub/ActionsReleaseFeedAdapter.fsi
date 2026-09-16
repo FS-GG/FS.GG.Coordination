@@ -1,23 +1,46 @@
 namespace FS.GG.Coordination.GitHub
 
 type ArtifactSurface =
-    | ActionsRuns | Checks | MergeGroups | Releases | Attestations | Packages | Feeds | ServedDownloads
+    | ActionsRuns
+    | Checks
+    | MergeGroups
+    | Releases
+    | Attestations
+    | Packages
+    | Feeds
+    | ServedDownloads
 
 type LifecycleOutcome =
-    | Requested | Queued | InProgress | Completed | Skipped | Cancelled | Stale | Neutral | TimedOut | ActionRequired
+    | Requested
+    | Queued
+    | InProgress
+    | Completed
+    | Skipped
+    | Cancelled
+    | Stale
+    | Neutral
+    | TimedOut
+    | ActionRequired
 
-type ArtifactState = Present | Immutable | Deleted | Tampered | Expired
+type ArtifactState =
+    | Present
+    | Immutable
+    | Deleted
+    | Tampered
+    | Expired
 
 type ArtifactEvidence =
-    { Surface: ArtifactSurface
-      Identity: string
-      Repository: string
-      Subject: string
-      Attempt: int option
-      Lifecycle: LifecycleOutcome option
-      State: ArtifactState
-      Attributes: Map<string, string>
-      Digest: string option }
+    {
+        Surface: ArtifactSurface
+        Identity: string
+        Repository: string
+        Subject: string
+        Attempt: int option
+        Lifecycle: LifecycleOutcome option
+        State: ArtifactState
+        Attributes: Map<string, string>
+        Digest: string option
+    }
 
 type ArtifactSurfaceObservation =
     | Supported of Revision: string * Complete: bool * Pages: int * Evidence: ArtifactEvidence list
@@ -30,23 +53,30 @@ type ArtifactSurfaceObservation =
     | StaleSurface of expectedRevision: string * actualRevision: string
 
 type ActionsReleaseFeedObservation =
-    { Repository: string
-      RepositoryNodeId: string
-      CapturedRevision: string
-      Surfaces: Map<ArtifactSurface, ArtifactSurfaceObservation>
-      Fingerprint: string }
+    {
+        Repository: string
+        RepositoryNodeId: string
+        CapturedRevision: string
+        Surfaces: Map<ArtifactSurface, ArtifactSurfaceObservation>
+        Fingerprint: string
+    }
 
-type RetrievalClass = AuthenticatedPackage | AuthenticatedFeed | AnonymousPublic
+type RetrievalClass =
+    | AuthenticatedPackage
+    | AuthenticatedFeed
+    | AnonymousPublic
 
 type ServedContent =
-    { RequestUri: string
-      Redirects: string list
-      FinalUri: string
-      Status: int
-      ContentType: string
-      Length: int64
-      Retrieval: RetrievalClass
-      Sha256: string }
+    {
+        RequestUri: string
+        Redirects: string list
+        FinalUri: string
+        Status: int
+        ContentType: string
+        Length: int64
+        Retrieval: RetrievalClass
+        Sha256: string
+    }
 
 type EvidenceStage =
     | UploadAccepted of requestId: string
@@ -74,7 +104,24 @@ module ActionsReleaseFeedAdapter =
     val surfaceId: ArtifactSurface -> string
     val lifecycleId: LifecycleOutcome -> string
     val sha256: byte array -> string
-    val fingerprint: repository: string -> repositoryNodeId: string -> capturedRevision: string -> Map<ArtifactSurface, ArtifactSurfaceObservation> -> string
+
+    val fingerprint:
+        repository: string ->
+        repositoryNodeId: string ->
+        capturedRevision: string ->
+        Map<ArtifactSurface, ArtifactSurfaceObservation> ->
+            string
+
     val validate: ActionsReleaseFeedObservation -> Result<ActionsReleaseFeedObservation, ArtifactFailure>
-    val observeServedContent: requestUri: string -> redirects: string list -> finalUri: string -> status: int -> contentType: string -> retrieval: RetrievalClass -> bytes: byte array -> Result<ServedContent, ArtifactFailure>
+
+    val observeServedContent:
+        requestUri: string ->
+        redirects: string list ->
+        finalUri: string ->
+        status: int ->
+        contentType: string ->
+        retrieval: RetrievalClass ->
+        bytes: byte array ->
+            Result<ServedContent, ArtifactFailure>
+
     val validateStages: EvidenceStage list -> Result<EvidenceStage list, ArtifactFailure>

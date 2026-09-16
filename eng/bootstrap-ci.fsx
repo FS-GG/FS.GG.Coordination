@@ -7,10 +7,7 @@ open System
 open FS.GG.Coordination.Qualification.Contracts
 
 let arguments =
-    fsi.CommandLineArgs
-    |> Array.skip 1
-    |> Array.filter ((<>) "--")
-    |> Array.toList
+    fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--") |> Array.toList
 
 let exitCode, output, error = BootstrapCi.execute arguments
 

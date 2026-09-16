@@ -8,37 +8,58 @@ open Microsoft.Win32.SafeHandles
 open FS.GG.Coordination.Core.Orchestration
 
 type LocalExecutorConfiguration =
-    { RunnerExecutable:string
-      RepositoryRoot:string
-      WorkspaceRoot:string
-      InputRoot:string
-      StateRoot:string
-      ArtifactRoot:string
-      CodexExecutable:string
-      ExecutorBinding:string }
+    {
+        RunnerExecutable: string
+        RepositoryRoot: string
+        WorkspaceRoot: string
+        InputRoot: string
+        StateRoot: string
+        ArtifactRoot: string
+        CodexExecutable: string
+        ExecutorBinding: string
+    }
 
 type HostConfiguration =
-    { ConnectionString: string
-      Token: string
-      RunnerToken: string option
-      Prefix: string
-      StoreId: string
-      BackupIdentity: string
-      MinimumGenerationFence: int64
-      PermitId: Guid
-      PilotPrincipalId: string
-      WorkItemId: WorkItemId
-      GitHub: MainGitHubConfiguration option
-      LocalExecutor: LocalExecutorConfiguration option
-      RequestTimeout: TimeSpan
-      MaximumConcurrentRequests: int }
+    {
+        ConnectionString: string
+        Token: string
+        RunnerToken: string option
+        Prefix: string
+        StoreId: string
+        BackupIdentity: string
+        MinimumGenerationFence: int64
+        PermitId: Guid
+        PilotPrincipalId: string
+        WorkItemId: WorkItemId
+        GitHub: MainGitHubConfiguration option
+        LocalExecutor: LocalExecutorConfiguration option
+        RequestTimeout: TimeSpan
+        MaximumConcurrentRequests: int
+    }
 
 and MainGitHubConfiguration =
-    { Token:string; Repository:string; IssueNumber:int; BaseRef:string; ApiRoot:Uri; RemoteUri:Uri; RoutineOperation:string }
+    {
+        Token: string
+        Repository: string
+        IssueNumber: int
+        BaseRef: string
+        ApiRoot: Uri
+        RemoteUri: Uri
+        RoutineOperation: string
+    }
 
 type MainAdmissionPreparerConfiguration =
-    { ConnectionString:string; StoreId:string; BackupIdentity:string; MinimumGenerationFence:int64
-      PilotPrincipalId:string; WorkItemId:WorkItemId; RequestFile:string; InputFile:string; OutputFile:string }
+    {
+        ConnectionString: string
+        StoreId: string
+        BackupIdentity: string
+        MinimumGenerationFence: int64
+        PilotPrincipalId: string
+        WorkItemId: WorkItemId
+        RequestFile: string
+        InputFile: string
+        OutputFile: string
+    }
 
 [<RequireQualifiedAccess>]
 module HostConfiguration =
@@ -47,15 +68,32 @@ module HostConfiguration =
 
     [<Struct; StructLayout(LayoutKind.Sequential)>]
     type private LinuxStat =
-        { Device: uint64; Inode: uint64; Links: uint64; Mode: uint32; UserId: uint32; GroupId: uint32
-          Padding: int32; SpecialDevice: uint64; Size: int64; BlockSize: int64; Blocks: int64
-          Access: Timespec; Modification: Timespec; Change: Timespec
-          Reserved0: int64; Reserved1: int64; Reserved2: int64 }
+        {
+            Device: uint64
+            Inode: uint64
+            Links: uint64
+            Mode: uint32
+            UserId: uint32
+            GroupId: uint32
+            Padding: int32
+            SpecialDevice: uint64
+            Size: int64
+            BlockSize: int64
+            Blocks: int64
+            Access: Timespec
+            Modification: Timespec
+            Change: Timespec
+            Reserved0: int64
+            Reserved1: int64
+            Reserved2: int64
+        }
 
     [<DllImport("libc", EntryPoint = "lstat", SetLastError = true)>]
     extern int private lstat(string path, LinuxStat& value)
+
     [<DllImport("libc", EntryPoint = "fstat", SetLastError = true)>]
     extern int private fstat(nativeint descriptor, LinuxStat& value)
+
     [<DllImport("libc", EntryPoint = "geteuid")>]
     extern uint32 private geteuid()
 
@@ -72,57 +110,132 @@ module HostConfiguration =
         |> Array.tryFindIndex ((=) name)
         |> Option.bind (fun index -> Array.tryItem (index + 1) arguments)
         |> Option.filter (String.IsNullOrWhiteSpace >> not)
-        |> function Some found -> Ok found | None -> Error $"missing {name}"
+        |> function
+            | Some found -> Ok found
+            | None -> Error $"missing {name}"
 
-    let private optionalValue name (arguments:string array) =
-        arguments|>Array.tryFindIndex((=) name)|>Option.bind(fun index->Array.tryItem(index+1) arguments)|>Option.filter(String.IsNullOrWhiteSpace>>not)
+    let private optionalValue name (arguments: string array) =
+        arguments
+        |> Array.tryFindIndex ((=) name)
+        |> Option.bind (fun index -> Array.tryItem (index + 1) arguments)
+        |> Option.filter (String.IsNullOrWhiteSpace >> not)
 
     let private validateArguments allowed (arguments: string array) =
-        if arguments.Length % 2 <> 0 then Error "options-must-be-name-value-pairs"
+        if arguments.Length % 2 <> 0 then
+            Error "options-must-be-name-value-pairs"
         else
-            let names = arguments |> Array.indexed |> Array.choose (fun (index, item) -> if index % 2 = 0 then Some item else None)
-            if names |> Array.exists (fun name -> not (Set.contains name allowed)) then Error "unknown-option"
-            elif Set.count (Set.ofArray names) <> names.Length then Error "duplicate-option"
-            else Ok()
+            let names =
+                arguments
+                |> Array.indexed
+                |> Array.choose (fun (index, item) -> if index % 2 = 0 then Some item else None)
+
+            if names |> Array.exists (fun name -> not (Set.contains name allowed)) then
+                Error "unknown-option"
+            elif Set.count (Set.ofArray names) <> names.Length then
+                Error "duplicate-option"
+            else
+                Ok()
 
     let private privateFile maximumBytes (path: string) =
-        if not (OperatingSystem.IsLinux()) || RuntimeInformation.ProcessArchitecture <> Architecture.X64 then Error "linux-x64-private-file-contract-required"
-        elif not (Path.IsPathFullyQualified path) then Error "secret-file-path-must-be-absolute"
+        if
+            not (OperatingSystem.IsLinux())
+            || RuntimeInformation.ProcessArchitecture <> Architecture.X64
+        then
+            Error "linux-x64-private-file-contract-required"
+        elif not (Path.IsPathFullyQualified path) then
+            Error "secret-file-path-must-be-absolute"
         else
             try
                 let mutable before = Unchecked.defaultof<LinuxStat>
-                if lstat(path, &before) <> 0 then Error "secret-file-missing"
-                elif before.Mode &&& 0xF000u <> 0x8000u then Error "secret-file-must-be-regular"
-                elif before.UserId <> geteuid() then Error "secret-file-owner-mismatch"
-                elif before.Size <= 0L || before.Size > int64 maximumBytes then Error "secret-file-size-refused"
+
+                if lstat (path, &before) <> 0 then
+                    Error "secret-file-missing"
+                elif before.Mode &&& 0xF000u <> 0x8000u then
+                    Error "secret-file-must-be-regular"
+                elif before.UserId <> geteuid () then
+                    Error "secret-file-owner-mismatch"
+                elif before.Size <= 0L || before.Size > int64 maximumBytes then
+                    Error "secret-file-size-refused"
                 else
                     let parent = DirectoryInfo(Path.GetDirectoryName path)
                     let parentMode = File.GetUnixFileMode parent.FullName
-                    let parentWritable = parentMode &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)
-                    if not (isNull parent.LinkTarget) then Error "secret-parent-must-not-be-link"
-                    elif parentWritable <> enum<UnixFileMode> 0 then Error "secret-parent-permissions-too-broad"
+
+                    let parentWritable =
+                        parentMode &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)
+
+                    if not (isNull parent.LinkTarget) then
+                        Error "secret-parent-must-not-be-link"
+                    elif parentWritable <> enum<UnixFileMode> 0 then
+                        Error "secret-parent-permissions-too-broad"
                     else
-                        let exposed = enum<UnixFileMode>(int before.Mode) &&& (UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute)
-                        if exposed <> enum<UnixFileMode> 0 then Error "secret-file-permissions-too-broad"
+                        let exposed =
+                            enum<UnixFileMode>(int before.Mode)
+                            &&& (UnixFileMode.GroupRead
+                                 ||| UnixFileMode.GroupWrite
+                                 ||| UnixFileMode.GroupExecute
+                                 ||| UnixFileMode.OtherRead
+                                 ||| UnixFileMode.OtherWrite
+                                 ||| UnixFileMode.OtherExecute)
+
+                        if exposed <> enum<UnixFileMode> 0 then
+                            Error "secret-file-permissions-too-broad"
                         else
-                            use stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan)
+                            use stream =
+                                new FileStream(
+                                    path,
+                                    FileMode.Open,
+                                    FileAccess.Read,
+                                    FileShare.Read,
+                                    4096,
+                                    FileOptions.SequentialScan
+                                )
+
                             let mutable opened = Unchecked.defaultof<LinuxStat>
-                            if fstat(stream.SafeFileHandle.DangerousGetHandle(), &opened) <> 0
-                               || opened.Device <> before.Device || opened.Inode <> before.Inode
-                               || opened.UserId <> before.UserId || opened.Mode <> before.Mode
-                               || opened.Size <> before.Size || opened.Size > int64 maximumBytes then Error "secret-file-changed-during-open"
+
+                            if
+                                fstat (stream.SafeFileHandle.DangerousGetHandle(), &opened) <> 0
+                                || opened.Device <> before.Device
+                                || opened.Inode <> before.Inode
+                                || opened.UserId <> before.UserId
+                                || opened.Mode <> before.Mode
+                                || opened.Size <> before.Size
+                                || opened.Size > int64 maximumBytes
+                            then
+                                Error "secret-file-changed-during-open"
                             else
                                 use reader = new StreamReader(stream)
-                                let buffer = Array.zeroCreate<char> (maximumBytes + 1)
+                                let buffer = Array.zeroCreate<char>(maximumBytes + 1)
                                 let count = reader.ReadBlock(buffer, 0, buffer.Length)
-                                if count > maximumBytes then Error "secret-file-size-refused"
-                                else Ok(String(buffer, 0, count).Trim())
-            with _ -> Error "secret-file-refused"
+
+                                if count > maximumBytes then
+                                    Error "secret-file-size-refused"
+                                else
+                                    Ok(String(buffer, 0, count).Trim())
+            with _ ->
+                Error "secret-file-refused"
 
     let private loopbackPrefix (value: string) =
         match Uri.TryCreate(value, UriKind.Absolute) with
-        | true, uri when uri.Scheme = Uri.UriSchemeHttp && uri.AbsolutePath = "/" && uri.UserInfo = "" && uri.Query = "" && uri.Fragment = "" && (match IPAddress.TryParse uri.Host with true, address -> IPAddress.IsLoopback address | _ -> false) -> Ok value
-        | true, uri when uri.Scheme = Uri.UriSchemeHttp && uri.AbsolutePath = "/" && uri.UserInfo = "" && uri.Query = "" && uri.Fragment = "" && String.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) -> Ok value
+        | true, uri when
+            uri.Scheme = Uri.UriSchemeHttp
+            && uri.AbsolutePath = "/"
+            && uri.UserInfo = ""
+            && uri.Query = ""
+            && uri.Fragment = ""
+            && (match IPAddress.TryParse uri.Host with
+                | true, address -> IPAddress.IsLoopback address
+                | _ -> false)
+            ->
+            Ok value
+        | true, uri when
+            uri.Scheme = Uri.UriSchemeHttp
+            && uri.AbsolutePath = "/"
+            && uri.UserInfo = ""
+            && uri.Query = ""
+            && uri.Fragment = ""
+            && String.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+            ->
+            Ok value
         | _ -> Error "prefix-must-be-loopback-http-root"
 
     let private localChildPrefix value =
@@ -133,21 +246,65 @@ module HostConfiguration =
 
     let parseServe arguments =
         result {
-            do! validateArguments (set [ "--connection-file"; "--token-file"; "--runner-token-file"; "--prefix"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--permit-id"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id"; "--github-token-file"; "--github-repository"; "--github-issue-number"; "--github-base-ref"; "--runner-executable"; "--runner-repository-root"; "--runner-workspace-root"; "--runner-input-root"; "--runner-state-root"; "--runner-artifact-root"; "--codex-executable"; "--executor-binding" ]) arguments
+            do!
+                validateArguments
+                    (set
+                        [
+                            "--connection-file"
+                            "--token-file"
+                            "--runner-token-file"
+                            "--prefix"
+                            "--store-id"
+                            "--backup-identity"
+                            "--minimum-generation-fence"
+                            "--permit-id"
+                            "--pilot-principal"
+                            "--repository-node-id"
+                            "--repository-database-id"
+                            "--issue-node-id"
+                            "--issue-database-id"
+                            "--github-token-file"
+                            "--github-repository"
+                            "--github-issue-number"
+                            "--github-base-ref"
+                            "--runner-executable"
+                            "--runner-repository-root"
+                            "--runner-workspace-root"
+                            "--runner-input-root"
+                            "--runner-state-root"
+                            "--runner-artifact-root"
+                            "--codex-executable"
+                            "--executor-binding"
+                        ])
+                    arguments
+
             let! connectionPath = value "--connection-file" arguments
             let! tokenPath = value "--token-file" arguments
             let! connection = privateFile 16384 connectionPath
             let! token = privateFile 4096 tokenPath
+
             let! runnerToken =
                 match optionalValue "--runner-token-file" arguments with
                 | Some path -> privateFile 4096 path |> Result.map Some
                 | None -> Ok None
-            do! if String.IsNullOrWhiteSpace connection then Error "connection-string-required" else Ok()
-            do! if token.Length < 32 then Error "operator-token-too-short" else Ok()
+
+            do!
+                if String.IsNullOrWhiteSpace connection then
+                    Error "connection-string-required"
+                else
+                    Ok()
+
+            do!
+                if token.Length < 32 then
+                    Error "operator-token-too-short"
+                else
+                    Ok()
+
             do!
                 match runnerToken with
-                | Some value when value.Length < 32 || value=token -> Error "runner-token-must-be-distinct-and-long"
+                | Some value when value.Length < 32 || value = token -> Error "runner-token-must-be-distinct-and-long"
                 | _ -> Ok()
+
             let! prefixText = value "--prefix" arguments
             let! storeId = value "--store-id" arguments
             let! backupIdentity = value "--backup-identity" arguments
@@ -158,59 +315,145 @@ module HostConfiguration =
             let! repositoryDatabaseText = value "--repository-database-id" arguments
             let! issueNodeId = value "--issue-node-id" arguments
             let! issueDatabaseText = value "--issue-database-id" arguments
-            let githubValues=optionalValue "--github-token-file" arguments,optionalValue "--github-repository" arguments,optionalValue "--github-issue-number" arguments,optionalValue "--github-base-ref" arguments
-            let! github=
+
+            let githubValues =
+                optionalValue "--github-token-file" arguments,
+                optionalValue "--github-repository" arguments,
+                optionalValue "--github-issue-number" arguments,
+                optionalValue "--github-base-ref" arguments
+
+            let! github =
                 match githubValues with
-                | None,None,None,None->Ok None
-                | Some tokenPath,Some repository,Some issueText,Some baseRef->
-                    match privateFile 4096 tokenPath,Int32.TryParse issueText with
-                    | Ok githubToken,(true,issueNumber) when githubToken.Length>=32&&repository.Split('/').Length=2&&issueNumber>0&&baseRef=baseRef.Trim()&&baseRef.Length<=128->
-                        Ok(Some{Token=githubToken;Repository=repository;IssueNumber=issueNumber;BaseRef=baseRef;ApiRoot=Uri "https://api.github.com/";RemoteUri=Uri($"https://github.com/{repository}.git");RoutineOperation="internal-docs"})
-                    | _->Error "invalid-github-main-configuration"
-                | _->Error "incomplete-github-main-configuration"
+                | None, None, None, None -> Ok None
+                | Some tokenPath, Some repository, Some issueText, Some baseRef ->
+                    match privateFile 4096 tokenPath, Int32.TryParse issueText with
+                    | Ok githubToken, (true, issueNumber) when
+                        githubToken.Length >= 32
+                        && repository.Split('/').Length = 2
+                        && issueNumber > 0
+                        && baseRef = baseRef.Trim()
+                        && baseRef.Length <= 128
+                        ->
+                        Ok(
+                            Some
+                                {
+                                    Token = githubToken
+                                    Repository = repository
+                                    IssueNumber = issueNumber
+                                    BaseRef = baseRef
+                                    ApiRoot = Uri "https://api.github.com/"
+                                    RemoteUri = Uri($"https://github.com/{repository}.git")
+                                    RoutineOperation = "internal-docs"
+                                }
+                        )
+                    | _ -> Error "invalid-github-main-configuration"
+                | _ -> Error "incomplete-github-main-configuration"
+
             let localValues =
-                [ "--runner-executable"; "--runner-repository-root"; "--runner-workspace-root"; "--runner-input-root"
-                  "--runner-state-root"; "--runner-artifact-root"; "--codex-executable"; "--executor-binding" ]
-                |> List.map(fun name->name,optionalValue name arguments)
+                [
+                    "--runner-executable"
+                    "--runner-repository-root"
+                    "--runner-workspace-root"
+                    "--runner-input-root"
+                    "--runner-state-root"
+                    "--runner-artifact-root"
+                    "--codex-executable"
+                    "--executor-binding"
+                ]
+                |> List.map (fun name -> name, optionalValue name arguments)
+
             let! localExecutor =
-                match github,localValues|>List.forall(fun (_,value)->value.IsNone),localValues|>List.forall(fun (_,value)->value.IsSome) with
-                | None,true,_ -> Ok None
-                | Some _,_,true ->
-                    let get name=localValues|>List.find(fun (key,_)->key=name)|>snd|>Option.get
-                    let paths=[ "--runner-executable";"--runner-repository-root";"--runner-workspace-root";"--runner-input-root";"--runner-state-root";"--runner-artifact-root";"--codex-executable" ]
-                    if paths|>List.exists(fun name->not(Path.IsPathFullyQualified(get name))) then Error "local-executor-path-must-be-absolute"
-                    elif String.IsNullOrWhiteSpace(get "--executor-binding") then Error "local-executor-binding-required"
-                    else Ok(Some
-                        { RunnerExecutable=get "--runner-executable";RepositoryRoot=get "--runner-repository-root"
-                          WorkspaceRoot=get "--runner-workspace-root";InputRoot=get "--runner-input-root"
-                          StateRoot=get "--runner-state-root";ArtifactRoot=get "--runner-artifact-root"
-                          CodexExecutable=get "--codex-executable";ExecutorBinding=get "--executor-binding" })
-                | Some _,_,_ -> Error "incomplete-local-executor-configuration"
-                | None,false,_ -> Error "local-executor-requires-github-main-configuration"
+                match
+                    github,
+                    localValues |> List.forall (fun (_, value) -> value.IsNone),
+                    localValues |> List.forall (fun (_, value) -> value.IsSome)
+                with
+                | None, true, _ -> Ok None
+                | Some _, _, true ->
+                    let get name =
+                        localValues |> List.find (fun (key, _) -> key = name) |> snd |> Option.get
+
+                    let paths =
+                        [
+                            "--runner-executable"
+                            "--runner-repository-root"
+                            "--runner-workspace-root"
+                            "--runner-input-root"
+                            "--runner-state-root"
+                            "--runner-artifact-root"
+                            "--codex-executable"
+                        ]
+
+                    if paths |> List.exists (fun name -> not (Path.IsPathFullyQualified(get name))) then
+                        Error "local-executor-path-must-be-absolute"
+                    elif String.IsNullOrWhiteSpace(get "--executor-binding") then
+                        Error "local-executor-binding-required"
+                    else
+                        Ok(
+                            Some
+                                {
+                                    RunnerExecutable = get "--runner-executable"
+                                    RepositoryRoot = get "--runner-repository-root"
+                                    WorkspaceRoot = get "--runner-workspace-root"
+                                    InputRoot = get "--runner-input-root"
+                                    StateRoot = get "--runner-state-root"
+                                    ArtifactRoot = get "--runner-artifact-root"
+                                    CodexExecutable = get "--codex-executable"
+                                    ExecutorBinding = get "--executor-binding"
+                                }
+                        )
+                | Some _, _, _ -> Error "incomplete-local-executor-configuration"
+                | None, false, _ -> Error "local-executor-requires-github-main-configuration"
+
             do!
-                match localExecutor,runnerToken with
-                | Some _,Some _ -> Error "runner-token-not-allowed-with-local-executor"
-                | None,None -> Error "missing --runner-token-file"
+                match localExecutor, runnerToken with
+                | Some _, Some _ -> Error "runner-token-not-allowed-with-local-executor"
+                | None, None -> Error "missing --runner-token-file"
                 | _ -> Ok()
+
             let! prefix =
                 match localExecutor with
                 | Some _ -> localChildPrefix prefixText
                 | None -> loopbackPrefix prefixText
-            match Int64.TryParse fenceText, Guid.TryParse backupIdentity, Guid.TryParse permitText,
-                  Int64.TryParse repositoryDatabaseText, Int64.TryParse issueDatabaseText with
-            | (true, fence), (true, backup), (true, permit), (true, repositoryDatabaseId), (true, issueDatabaseId)
-                when fence >= 0L && backup <> Guid.Empty && permit <> Guid.Empty
-                     && repositoryDatabaseId > 0L && issueDatabaseId > 0L
-                     && principal = principal.Trim() && principal.Length <= 128
-                     && repositoryNodeId = repositoryNodeId.Trim() && repositoryNodeId.Length <= 128
-                     && issueNodeId = issueNodeId.Trim() && issueNodeId.Length <= 128 ->
+
+            match
+                Int64.TryParse fenceText,
+                Guid.TryParse backupIdentity,
+                Guid.TryParse permitText,
+                Int64.TryParse repositoryDatabaseText,
+                Int64.TryParse issueDatabaseText
+            with
+            | (true, fence), (true, backup), (true, permit), (true, repositoryDatabaseId), (true, issueDatabaseId) when
+                fence >= 0L
+                && backup <> Guid.Empty
+                && permit <> Guid.Empty
+                && repositoryDatabaseId > 0L
+                && issueDatabaseId > 0L
+                && principal = principal.Trim()
+                && principal.Length <= 128
+                && repositoryNodeId = repositoryNodeId.Trim()
+                && repositoryNodeId.Length <= 128
+                && issueNodeId = issueNodeId.Trim()
+                && issueNodeId.Length <= 128
+                ->
                 return
-                    { ConnectionString = connection; Token = token; RunnerToken=runnerToken; Prefix = prefix; StoreId = storeId
-                      BackupIdentity = backup.ToString(); MinimumGenerationFence = fence; PermitId = permit
-                      PilotPrincipalId = principal
-                      WorkItemId = WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
-                      GitHub=github; LocalExecutor=localExecutor
-                      RequestTimeout = TimeSpan.FromSeconds 5.; MaximumConcurrentRequests = 4 }
+                    {
+                        ConnectionString = connection
+                        Token = token
+                        RunnerToken = runnerToken
+                        Prefix = prefix
+                        StoreId = storeId
+                        BackupIdentity = backup.ToString()
+                        MinimumGenerationFence = fence
+                        PermitId = permit
+                        PilotPrincipalId = principal
+                        WorkItemId =
+                            WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
+                        GitHub = github
+                        LocalExecutor = localExecutor
+                        RequestTimeout = TimeSpan.FromSeconds 5.
+                        MaximumConcurrentRequests = 4
+                    }
             | _ -> return! Error "invalid-fence-backup-permit-or-work-item-identity"
         }
 
@@ -219,35 +462,86 @@ module HostConfiguration =
             do! validateArguments (Set.singleton "--connection-file") arguments
             let! connectionPath = value "--connection-file" arguments
             let! connection = privateFile 16384 connectionPath
-            do! if String.IsNullOrWhiteSpace connection then Error "connection-string-required" else Ok()
+
+            do!
+                if String.IsNullOrWhiteSpace connection then
+                    Error "connection-string-required"
+                else
+                    Ok()
+
             return connection
         }
 
     let parseMainAdmissionPreparer arguments =
         result {
-            do! validateArguments (set [ "--connection-file"; "--store-id"; "--backup-identity"; "--minimum-generation-fence"; "--pilot-principal"; "--repository-node-id"; "--repository-database-id"; "--issue-node-id"; "--issue-database-id"; "--request-file"; "--input-file"; "--output-file" ]) arguments
-            let! connectionPath=value "--connection-file" arguments
-            let! connection=privateFile 16384 connectionPath
-            let! storeId=value "--store-id" arguments
-            let! backupText=value "--backup-identity" arguments
-            let! fenceText=value "--minimum-generation-fence" arguments
-            let! principal=value "--pilot-principal" arguments
-            let! repositoryNodeId=value "--repository-node-id" arguments
-            let! repositoryDatabaseText=value "--repository-database-id" arguments
-            let! issueNodeId=value "--issue-node-id" arguments
-            let! issueDatabaseText=value "--issue-database-id" arguments
-            let! requestFile=value "--request-file" arguments
-            let! inputFile=value "--input-file" arguments
-            let! outputFile=value "--output-file" arguments
-            match Guid.TryParse backupText,Int64.TryParse fenceText,Int64.TryParse repositoryDatabaseText,Int64.TryParse issueDatabaseText with
-            | (true,backup),(true,fence),(true,repositoryDatabaseId),(true,issueDatabaseId)
-                when backup<>Guid.Empty && fence>=0L && repositoryDatabaseId>0L && issueDatabaseId>0L
-                     && not(String.IsNullOrWhiteSpace storeId) && principal=principal.Trim() && principal.Length>0 && principal.Length<=128
-                     && repositoryNodeId=repositoryNodeId.Trim() && repositoryNodeId.Length>0 && repositoryNodeId.Length<=128
-                     && issueNodeId=issueNodeId.Trim() && issueNodeId.Length>0 && issueNodeId.Length<=128
-                     && [requestFile;inputFile;outputFile]|>List.forall Path.IsPathFullyQualified ->
-                return { ConnectionString=connection;StoreId=storeId;BackupIdentity=backup.ToString();MinimumGenerationFence=fence
-                         PilotPrincipalId=principal;WorkItemId=WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
-                         RequestFile=requestFile;InputFile=inputFile;OutputFile=outputFile }
+            do!
+                validateArguments
+                    (set
+                        [
+                            "--connection-file"
+                            "--store-id"
+                            "--backup-identity"
+                            "--minimum-generation-fence"
+                            "--pilot-principal"
+                            "--repository-node-id"
+                            "--repository-database-id"
+                            "--issue-node-id"
+                            "--issue-database-id"
+                            "--request-file"
+                            "--input-file"
+                            "--output-file"
+                        ])
+                    arguments
+
+            let! connectionPath = value "--connection-file" arguments
+            let! connection = privateFile 16384 connectionPath
+            let! storeId = value "--store-id" arguments
+            let! backupText = value "--backup-identity" arguments
+            let! fenceText = value "--minimum-generation-fence" arguments
+            let! principal = value "--pilot-principal" arguments
+            let! repositoryNodeId = value "--repository-node-id" arguments
+            let! repositoryDatabaseText = value "--repository-database-id" arguments
+            let! issueNodeId = value "--issue-node-id" arguments
+            let! issueDatabaseText = value "--issue-database-id" arguments
+            let! requestFile = value "--request-file" arguments
+            let! inputFile = value "--input-file" arguments
+            let! outputFile = value "--output-file" arguments
+
+            match
+                Guid.TryParse backupText,
+                Int64.TryParse fenceText,
+                Int64.TryParse repositoryDatabaseText,
+                Int64.TryParse issueDatabaseText
+            with
+            | (true, backup), (true, fence), (true, repositoryDatabaseId), (true, issueDatabaseId) when
+                backup <> Guid.Empty
+                && fence >= 0L
+                && repositoryDatabaseId > 0L
+                && issueDatabaseId > 0L
+                && not (String.IsNullOrWhiteSpace storeId)
+                && principal = principal.Trim()
+                && principal.Length > 0
+                && principal.Length <= 128
+                && repositoryNodeId = repositoryNodeId.Trim()
+                && repositoryNodeId.Length > 0
+                && repositoryNodeId.Length <= 128
+                && issueNodeId = issueNodeId.Trim()
+                && issueNodeId.Length > 0
+                && issueNodeId.Length <= 128
+                && [ requestFile; inputFile; outputFile ] |> List.forall Path.IsPathFullyQualified
+                ->
+                return
+                    {
+                        ConnectionString = connection
+                        StoreId = storeId
+                        BackupIdentity = backup.ToString()
+                        MinimumGenerationFence = fence
+                        PilotPrincipalId = principal
+                        WorkItemId =
+                            WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
+                        RequestFile = requestFile
+                        InputFile = inputFile
+                        OutputFile = outputFile
+                    }
             | _ -> return! Error "invalid-preparer-configuration"
         }

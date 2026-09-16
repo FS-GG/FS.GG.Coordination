@@ -9,21 +9,23 @@ open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 
 type StoreOptions =
-    { DataSource: NpgsqlDataSource
-      StoreId: string
-      BackupIdentity: string
-      MinimumGenerationFence: int64
-      RuntimeSchemaVersion: int
-      SupportedEventSchemaVersions: Set<int>
-      SupportedSerializerVersions: Set<string>
-      MaximumCandidateBytes: int64 }
+    {
+        DataSource: NpgsqlDataSource
+        StoreId: string
+        BackupIdentity: string
+        MinimumGenerationFence: int64
+        RuntimeSchemaVersion: int
+        SupportedEventSchemaVersions: Set<int>
+        SupportedSerializerVersions: Set<string>
+        MaximumCandidateBytes: int64
+    }
 
 [<RequireQualifiedAccess>]
 module EventEnvelope =
     val legacySerializerVersion: string
     val serializerVersion: string
     val encode: Event -> byte array
-    val tryDecode: byte array -> Result<Event,string>
+    val tryDecode: byte array -> Result<Event, string>
 
 [<RequireQualifiedAccess>]
 module PostgreSqlSchema =
@@ -39,4 +41,4 @@ type AkkaStoredEvent = { Envelope: byte array }
 
 [<RequireQualifiedAccess>]
 module AkkaPersistence =
-    val configuration: connectionString:string -> Config
+    val configuration: connectionString: string -> Config

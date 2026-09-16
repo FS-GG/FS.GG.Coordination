@@ -1,8 +1,10 @@
 namespace FS.GG.Coordination.Core
 
 type DependencyBoundary =
-    { AssemblyName: string
-      AllowedDependencies: Set<string> }
+    {
+        AssemblyName: string
+        AllowedDependencies: Set<string>
+    }
 
 [<RequireQualifiedAccess>]
 module SolutionBoundary =

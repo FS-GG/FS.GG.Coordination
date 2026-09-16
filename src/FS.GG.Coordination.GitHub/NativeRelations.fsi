@@ -1,16 +1,22 @@
 namespace FS.GG.Coordination.GitHub
 
-type RelationKind = ParentChild | Blocks
+type RelationKind =
+    | ParentChild
+    | Blocks
 
 type RelationEdge =
-    { Kind: RelationKind
-      Source: LiveId
-      Target: LiveId }
+    {
+        Kind: RelationKind
+        Source: LiveId
+        Target: LiveId
+    }
 
 type RelationPage =
-    { Number: int
-      Edges: RelationEdge list
-      TerminalPage: bool }
+    {
+        Number: int
+        Edges: RelationEdge list
+        TerminalPage: bool
+    }
 
 type NativeRelationObservation =
     | RelationsComplete of revision: string * scope: RelationKind * pages: RelationPage list
@@ -19,7 +25,14 @@ type NativeRelationObservation =
     | RelationsUnauthorized of reason: string
     | RelationsIndeterminate of reason: string
 
-type RelationSnapshot = { Revision: string; Scope: RelationKind; PageCount: int; NodeCount: int; Edges: RelationEdge list }
+type RelationSnapshot =
+    {
+        Revision: string
+        Scope: RelationKind
+        PageCount: int
+        NodeCount: int
+        Edges: RelationEdge list
+    }
 
 type RelationReadFailure =
     | RelationObservationRefused of ObservationRefusal
@@ -28,14 +41,32 @@ type RelationReadFailure =
     | InvalidRelationEdge of RelationEdge
     | DuplicateRelationEdge of RelationEdge
 
-type RelationIntent = AddEdge of RelationEdge | RemoveEdge of RelationEdge
-type RelationOperation = AddEdgeOperation of RelationEdge | RemoveEdgeOperation of RelationEdge
+type RelationIntent =
+    | AddEdge of RelationEdge
+    | RemoveEdge of RelationEdge
 
-type RelationMutationPlan = { Before: RelationSnapshot; CausationIdentity: string; IdempotencyIdentity: string; Operation: RelationOperation }
+type RelationOperation =
+    | AddEdgeOperation of RelationEdge
+    | RemoveEdgeOperation of RelationEdge
 
-type RelationNoOpReceipt = { ObservedRevision: string; IdempotencyIdentity: string; Intent: RelationIntent }
+type RelationMutationPlan =
+    {
+        Before: RelationSnapshot
+        CausationIdentity: string
+        IdempotencyIdentity: string
+        Operation: RelationOperation
+    }
 
-type RelationPlanDecision = RelationPlanned of RelationMutationPlan | RelationNoOp of RelationNoOpReceipt
+type RelationNoOpReceipt =
+    {
+        ObservedRevision: string
+        IdempotencyIdentity: string
+        Intent: RelationIntent
+    }
+
+type RelationPlanDecision =
+    | RelationPlanned of RelationMutationPlan
+    | RelationNoOp of RelationNoOpReceipt
 
 type RelationPlanRefusal =
     | InvalidRelationExpectedRevision
@@ -59,6 +90,19 @@ type RelationPostStateRefusal =
 [<RequireQualifiedAccess>]
 module NativeRelations =
     val read: NativeRelationObservation -> Result<RelationSnapshot, RelationReadFailure>
-    val plan: expectedRevision: string -> causationIdentity: string -> RelationIntent -> RelationSnapshot -> Result<RelationPlanDecision, RelationPlanRefusal>
-    val checkPreState: RelationMutationPlan -> NativeRelationObservation -> Result<RelationSnapshot, RelationPreStateRefusal>
-    val verifyPostState: expectedResultRevision: string -> RelationMutationPlan -> NativeRelationObservation -> Result<RelationSnapshot, RelationPostStateRefusal>
+
+    val plan:
+        expectedRevision: string ->
+        causationIdentity: string ->
+        RelationIntent ->
+        RelationSnapshot ->
+            Result<RelationPlanDecision, RelationPlanRefusal>
+
+    val checkPreState:
+        RelationMutationPlan -> NativeRelationObservation -> Result<RelationSnapshot, RelationPreStateRefusal>
+
+    val verifyPostState:
+        expectedResultRevision: string ->
+        RelationMutationPlan ->
+        NativeRelationObservation ->
+            Result<RelationSnapshot, RelationPostStateRefusal>

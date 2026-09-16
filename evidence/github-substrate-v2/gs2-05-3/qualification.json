@@ -14,11 +14,11 @@
   "unitTestsPassed": 99,
   "focusedArchitectureTestsPassed": 10,
   "artifacts": [
-    {"path":"src/FS.GG.Coordination.GitHub/IntakeAdapter.fsi","sha256":"d1db88ebb1536a5e40c9477bfc00957f3aa966948e6bca373061da515072cdde"},
-    {"path":"src/FS.GG.Coordination.GitHub/IntakeAdapter.fs","sha256":"28e60d8ce39512222b49c622795c849d8f731a59ccdf0b4c66cd7ebcbe8ee476"},
-    {"path":"src/FS.GG.Coordination.Qualification.Contracts/GitHubIntakeQualification.fsi","sha256":"3e90ce67d14b029494892a495ac84e555ef29d0835008577cee23aee91432ea8"},
-    {"path":"src/FS.GG.Coordination.Qualification.Contracts/GitHubIntakeQualification.fs","sha256":"fdf339afb00fe47c07ba2b2ff79ad133745c61293e5178f203804d05e448df97"},
-    {"path":"eng/validate-github-intake.fsx","sha256":"0ec54cc5fa01e01341c0feb4b5f3a518c3fba13b5bd035c68b82d046b5b66a23"},
+    {"path":"src/FS.GG.Coordination.GitHub/IntakeAdapter.fsi","sha256":"7d3145935a3cab05ff6b1ba7d32f6433b930355b57dc7e8e691b79540d9ba642"},
+    {"path":"src/FS.GG.Coordination.GitHub/IntakeAdapter.fs","sha256":"5e8c54ffc1baf53c55000a61e2e056e9e957e9f7b38069f8067c9006a57c6011"},
+    {"path":"src/FS.GG.Coordination.Qualification.Contracts/GitHubIntakeQualification.fsi","sha256":"7837bb3dadcad17301cbb6687767f3fbdcd961329ad0962208626bddd7c68ff9"},
+    {"path":"src/FS.GG.Coordination.Qualification.Contracts/GitHubIntakeQualification.fs","sha256":"8e51a1b5517a13064a5669a75bcaed96a9ceb82b4f54599863081504fd3d4cda"},
+    {"path":"eng/validate-github-intake.fsx","sha256":"21ba07d7b5a91789c419006763f96c96570a0ec6229bb3d8bf20766e75a5a7fd"},
     {"path":"evidence/github-substrate-v2/gs2-05-3/corpus.json","sha256":"28d61cdeb6dbe051ed004bff0cb1a0328b70bc5edeaa2c643c1b02c1d1065e6c"},
     {"path":"evidence/github-substrate-v2/gs2-05-3/independent-expectations.json","sha256":"4bcac72cbef2b7371939c730192f18310f04bc5dbcda5db79f04646e704b2613"}
   ],

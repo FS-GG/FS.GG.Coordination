@@ -10,39 +10,58 @@ module ApiVersion =
     val value: ApiVersion -> string
     val tryCreate: string -> Result<ApiVersion, string>
 
-type RestMethod = Get | Post | Put | Patch | Delete
-type IdempotencyClass = ReplaySafe | ReplayWithKey of string | NeverReplay
+type RestMethod =
+    | Get
+    | Post
+    | Put
+    | Patch
+    | Delete
+
+type IdempotencyClass =
+    | ReplaySafe
+    | ReplayWithKey of string
+    | NeverReplay
 
 type RestRequest =
-    { Method: RestMethod
-      Uri: Uri
-      Headers: Map<string, string>
-      Body: string option
-      ApiVersion: ApiVersion
-      Idempotency: IdempotencyClass }
+    {
+        Method: RestMethod
+        Uri: Uri
+        Headers: Map<string, string>
+        Body: string option
+        ApiVersion: ApiVersion
+        Idempotency: IdempotencyClass
+    }
 
 type GraphQLRequest =
-    { Uri: Uri
-      Document: string
-      Variables: Map<string, string>
-      Headers: Map<string, string>
-      ApiVersion: ApiVersion
-      Idempotency: IdempotencyClass }
+    {
+        Uri: Uri
+        Document: string
+        Variables: Map<string, string>
+        Headers: Map<string, string>
+        ApiVersion: ApiVersion
+        Idempotency: IdempotencyClass
+    }
 
-type GitHubRequest = Rest of RestRequest | GraphQL of GraphQLRequest
+type GitHubRequest =
+    | Rest of RestRequest
+    | GraphQL of GraphQLRequest
 
 type RateBudget =
-    { Limit: int option
-      Remaining: int option
-      ResetAt: DateTimeOffset option
-      Cost: int option }
+    {
+        Limit: int option
+        Remaining: int option
+        ResetAt: DateTimeOffset option
+        Cost: int option
+    }
 
 type ResponseEnvelope =
-    { StatusCode: int
-      Headers: Map<string, string>
-      Body: string
-      ETag: string option
-      RateBudget: RateBudget }
+    {
+        StatusCode: int
+        Headers: Map<string, string>
+        Body: string
+        ETag: string option
+        RateBudget: RateBudget
+    }
 
 type RequestFailure =
     | MissingApiVersion
@@ -50,34 +69,93 @@ type RequestFailure =
     | MissingGraphQLDocument
     | MissingIdempotencyKey
 
-type TransportOutcome = Response of ResponseEnvelope | NetworkFailure | TimedOut
-type RetryStop = NotTransient | ReplayForbidden | AttemptsExhausted
-type RetryDecision = RetryAfter of TimeSpan | Stop of RetryStop
+type TransportOutcome =
+    | Response of ResponseEnvelope
+    | NetworkFailure
+    | TimedOut
 
-type ExpectedRevision = Unconditional | IfMatch of string
-type ObservedRevision = RevisionAbsent | RevisionValue of string | RevisionUnreadable
-type RevisionDecision = RevisionAccepted | RevisionMissing | RevisionStale of observed: string | RevisionUnknown
+type RetryStop =
+    | NotTransient
+    | ReplayForbidden
+    | AttemptsExhausted
 
-type RateRefusal = MissingRateFacts | InvalidRateFacts | RateExhausted | CostExceedsRemaining
-type RateDecision = Scheduled of remainingAfter: int | Refused of RateRefusal
+type RetryDecision =
+    | RetryAfter of TimeSpan
+    | Stop of RetryStop
+
+type ExpectedRevision =
+    | Unconditional
+    | IfMatch of string
+
+type ObservedRevision =
+    | RevisionAbsent
+    | RevisionValue of string
+    | RevisionUnreadable
+
+type RevisionDecision =
+    | RevisionAccepted
+    | RevisionMissing
+    | RevisionStale of observed: string
+    | RevisionUnknown
+
+type RateRefusal =
+    | MissingRateFacts
+    | InvalidRateFacts
+    | RateExhausted
+    | CostExceedsRemaining
+
+type RateDecision =
+    | Scheduled of remainingAfter: int
+    | Refused of RateRefusal
 
 type RestPage<'item> =
-    { Uri: Uri
-      Items: 'item list
-      Next: Uri option }
+    {
+        Uri: Uri
+        Items: 'item list
+        Next: Uri option
+    }
 
 type GraphQLPage<'item> =
-    { Cursor: string option
-      Items: 'item list
-      HasNextPage: bool
-      EndCursor: string option }
+    {
+        Cursor: string option
+        Items: 'item list
+        HasNextPage: bool
+        EndCursor: string option
+    }
 
-type PaginationFailure = MissingPage | RepeatedContinuation | MissingContinuation | UnexpectedContinuation | MalformedContinuation | MalformedPage | AmbiguousContinuationMapping
+type PaginationFailure =
+    | MissingPage
+    | RepeatedContinuation
+    | MissingContinuation
+    | UnexpectedContinuation
+    | MalformedContinuation
+    | MalformedPage
+    | AmbiguousContinuationMapping
 
-type FieldClassification = Public | Secret | Private | Unstable | Unclassified
-type FixtureField = { Path: string; Value: string; Classification: FieldClassification }
-type CapturedFixture = { Request: FixtureField list; Response: FixtureField list }
-type FixtureFailure = InvalidFixtureField of string | UnclassifiedField of string | SensitiveFieldMisclassified of string
+type FieldClassification =
+    | Public
+    | Secret
+    | Private
+    | Unstable
+    | Unclassified
+
+type FixtureField =
+    {
+        Path: string
+        Value: string
+        Classification: FieldClassification
+    }
+
+type CapturedFixture =
+    {
+        Request: FixtureField list
+        Response: FixtureField list
+    }
+
+type FixtureFailure =
+    | InvalidFixtureField of string
+    | UnclassifiedField of string
+    | SensitiveFieldMisclassified of string
 
 [<RequireQualifiedAccess>]
 module Transport =

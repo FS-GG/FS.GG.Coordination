@@ -12,30 +12,36 @@ type SubjectDefect =
     | IgnoreRevision
 
 type TraceEvent =
-    { Ordinal: int
-      Kind: string
-      Step: string
-      Revision: int }
+    {
+        Ordinal: int
+        Kind: string
+        Step: string
+        Revision: int
+    }
 
 type Execution =
-    { Id: string
-      Fault: string
-      Step: string
-      Outcome: string
-      RefusalCode: string option
-      InitialStateSha256: string
-      FinalStateSha256: string
-      Trace: TraceEvent list }
+    {
+        Id: string
+        Fault: string
+        Step: string
+        Outcome: string
+        RefusalCode: string option
+        InitialStateSha256: string
+        FinalStateSha256: string
+        Trace: TraceEvent list
+    }
 
 type ValidationSummary =
-    { SourceSha256: string
-      BehavioralSha256: string
-      ContractSha256: string
-      ExternalStepCount: int
-      ScenarioCount: int
-      ConvergedCount: int
-      RefusedCount: int
-      SelfSha256: string }
+    {
+        SourceSha256: string
+        BehavioralSha256: string
+        ContractSha256: string
+        ExternalStepCount: int
+        ScenarioCount: int
+        ConvergedCount: int
+        RefusedCount: int
+        SelfSha256: string
+    }
 
 val execute: root: string -> defect: SubjectDefect -> Result<Execution list, string>
 val generate: root: string -> Result<byte array, string>

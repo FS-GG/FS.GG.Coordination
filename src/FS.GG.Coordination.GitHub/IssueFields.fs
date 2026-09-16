@@ -29,22 +29,33 @@ module LiveId =
 
     let value (LiveId value) = value
 
-type IdentityKind = Repository | Issue | IssueType | Field | Option
+type IdentityKind =
+    | Repository
+    | Issue
+    | IssueType
+    | Field
+    | Option
 
 type LiveIdentity =
-    { Kind: IdentityKind
-      Id: LiveId
-      Name: SemanticName }
+    {
+        Kind: IdentityKind
+        Id: LiveId
+        Name: SemanticName
+    }
 
 type PageEvidence =
-    { PageCount: int
-      NodeCount: int
-      TerminalPage: bool }
+    {
+        PageCount: int
+        NodeCount: int
+        TerminalPage: bool
+    }
 
 type CompleteObservation<'value> =
-    { Revision: string
-      Evidence: PageEvidence
-      Values: 'value list }
+    {
+        Revision: string
+        Evidence: PageEvidence
+        Values: 'value list
+    }
 
 type Observation<'value> =
     | Complete of CompleteObservation<'value>
@@ -67,20 +78,28 @@ type ResolutionFailure =
     | IdentityDuplicated
     | DuplicateLiveId of LiveId
 
-type FieldDataType = Text | Number | Date | SingleSelect
+type FieldDataType =
+    | Text
+    | Number
+    | Date
+    | SingleSelect
 
 type FieldDeclaration =
-    { Name: SemanticName
-      DataType: FieldDataType
-      Options: SemanticName list }
+    {
+        Name: SemanticName
+        DataType: FieldDataType
+        Options: SemanticName list
+    }
 
 type LiveOption = { Id: LiveId; Name: SemanticName }
 
 type LiveField =
-    { Id: LiveId
-      Name: SemanticName
-      DataType: FieldDataType
-      Options: LiveOption list }
+    {
+        Id: LiveId
+        Name: SemanticName
+        DataType: FieldDataType
+        Options: LiveOption list
+    }
 
 type SchemaFailure =
     | SchemaObservationRefused of ObservationRefusal
@@ -104,14 +123,18 @@ type FieldValue =
     | SingleSelectValue of SemanticName
 
 type CurrentFieldValue =
-    { IssueId: LiveId
-      FieldId: LiveId
-      Value: FieldValue }
+    {
+        IssueId: LiveId
+        FieldId: LiveId
+        Value: FieldValue
+    }
 
 type ObservedFieldValue =
-    { Revision: string
-      Evidence: PageEvidence
-      Value: CurrentFieldValue }
+    {
+        Revision: string
+        Evidence: PageEvidence
+        Value: CurrentFieldValue
+    }
 
 type CurrentMutationState =
     | IssueAbsent
@@ -130,15 +153,21 @@ type MutationOperation =
     | ClearFieldOperation of issueId: LiveId * fieldId: LiveId
 
 type MutationPlan =
-    { ExpectedRevision: string
-      IdempotencyIdentity: string
-      Operation: MutationOperation }
+    {
+        ExpectedRevision: string
+        IdempotencyIdentity: string
+        Operation: MutationOperation
+    }
 
 type NoOpReceipt =
-    { ObservedRevision: string
-      IdempotencyIdentity: string }
+    {
+        ObservedRevision: string
+        IdempotencyIdentity: string
+    }
 
-type PlanDecision = Planned of MutationPlan | NoOp of NoOpReceipt
+type PlanDecision =
+    | Planned of MutationPlan
+    | NoOp of NoOpReceipt
 
 type PlanRefusal =
     | PlanObservationRefused of ObservationRefusal
@@ -171,7 +200,8 @@ module IssueFields =
                 || value.Evidence.NodeCount < 0
                 || value.Evidence.NodeCount <> value.Values.Length
                 || not value.Evidence.TerminalPage
-                -> Error InvalidCompletenessEvidence
+                ->
+                Error InvalidCompletenessEvidence
             | Complete value -> Ok value
 
     let duplicateBy projection values =
@@ -186,16 +216,21 @@ module IssueFields =
             match duplicateBy (fun (identity: LiveIdentity) -> identity.Id) snapshot.Values with
             | Some id -> Error(DuplicateLiveId id)
             | None ->
-                match snapshot.Values |> List.filter (fun identity -> identity.Kind = kind && identity.Name = expected) with
+                match
+                    snapshot.Values
+                    |> List.filter (fun identity -> identity.Kind = kind && identity.Name = expected)
+                with
                 | [] -> Error IdentityMissing
                 | [ identity ] -> Ok identity
                 | _ -> Error IdentityDuplicated
 
     let validateField (declaration: FieldDeclaration) (observation: Observation<LiveField>) =
-        if obj.ReferenceEquals(declaration, null)
-           || obj.ReferenceEquals(declaration.Options, null)
-           || List.exists (fun optionName -> obj.ReferenceEquals(optionName, null)) declaration.Options
-           || (declaration.DataType <> SingleSelect && not (List.isEmpty declaration.Options)) then
+        if
+            obj.ReferenceEquals(declaration, null)
+            || obj.ReferenceEquals(declaration.Options, null)
+            || List.exists (fun optionName -> obj.ReferenceEquals(optionName, null)) declaration.Options
+            || (declaration.DataType <> SingleSelect && not (List.isEmpty declaration.Options))
+        then
             Error InvalidFieldDeclaration
         else
             match complete observation with
@@ -207,8 +242,13 @@ module IssueFields =
                     match snapshot.Values |> List.filter (fun field -> field.Name = declaration.Name) with
                     | [] -> Error FieldMissing
                     | _ :: _ :: _ -> Error FieldDuplicated
-                    | [ field ] when field.DataType <> declaration.DataType -> Error(FieldTypeDrift(declaration.DataType, field.DataType))
-                    | [ field ] when obj.ReferenceEquals(field.Options, null) || List.exists (fun optionValue -> obj.ReferenceEquals(optionValue, null)) field.Options -> Error InvalidLiveField
+                    | [ field ] when field.DataType <> declaration.DataType ->
+                        Error(FieldTypeDrift(declaration.DataType, field.DataType))
+                    | [ field ] when
+                        obj.ReferenceEquals(field.Options, null)
+                        || List.exists (fun optionValue -> obj.ReferenceEquals(optionValue, null)) field.Options
+                        ->
+                        Error InvalidLiveField
                     | [ field ] ->
                         match duplicateBy (fun (option: LiveOption) -> option.Name) field.Options with
                         | Some name -> Error(DuplicateOptionName name)
@@ -221,7 +261,11 @@ module IssueFields =
                                 | None ->
                                     let expected = declaration.Options |> Set.ofList
                                     let observed = field.Options |> List.map (fun option -> option.Name) |> Set.ofList
-                                    match Set.difference expected observed |> Set.toList, Set.difference observed expected |> Set.toList with
+
+                                    match
+                                        Set.difference expected observed |> Set.toList,
+                                        Set.difference observed expected |> Set.toList
+                                    with
                                     | missing :: _, _ -> Error(MissingOption missing)
                                     | [], extra :: _ -> Error(UnexpectedOption extra)
                                     | [], [] -> Ok field
@@ -230,9 +274,18 @@ module IssueFields =
         match complete observation with
         | Error refusal -> Error(SchemaObservationRefused refusal)
         | Ok snapshot ->
-            match snapshot.Values |> List.filter (fun value -> value.IssueId = issueId && value.FieldId = fieldId) with
+            match
+                snapshot.Values
+                |> List.filter (fun value -> value.IssueId = issueId && value.FieldId = fieldId)
+            with
             | [] -> Error CurrentValueMissing
-            | [ value ] -> Ok { Revision = snapshot.Revision; Evidence = snapshot.Evidence; Value = value }
+            | [ value ] ->
+                Ok
+                    {
+                        Revision = snapshot.Revision
+                        Evidence = snapshot.Evidence
+                        Value = value
+                    }
             | _ -> Error CurrentValueDuplicated
 
     let fieldValueText value =
@@ -250,14 +303,39 @@ module IssueFields =
     let intentText intent =
         match intent with
         | CreateIssue(repositoryId, title) ->
-            String.concat "" [ canonicalPart "create"; canonicalPart (LiveId.value repositoryId); canonicalPart title ]
+            String.concat
+                ""
+                [
+                    canonicalPart "create"
+                    canonicalPart (LiveId.value repositoryId)
+                    canonicalPart title
+                ]
         | UpdateField(issueId, fieldId, value) ->
-            String.concat "" [ canonicalPart "update"; canonicalPart (LiveId.value issueId); canonicalPart (LiveId.value fieldId); canonicalPart (fieldValueText value) ]
+            String.concat
+                ""
+                [
+                    canonicalPart "update"
+                    canonicalPart (LiveId.value issueId)
+                    canonicalPart (LiveId.value fieldId)
+                    canonicalPart (fieldValueText value)
+                ]
         | ClearField(issueId, fieldId) ->
-            String.concat "" [ canonicalPart "clear"; canonicalPart (LiveId.value issueId); canonicalPart (LiveId.value fieldId) ]
+            String.concat
+                ""
+                [
+                    canonicalPart "clear"
+                    canonicalPart (LiveId.value issueId)
+                    canonicalPart (LiveId.value fieldId)
+                ]
 
     let idempotency revision causation intent =
-        String.concat "" [ canonicalPart revision; canonicalPart causation; canonicalPart (intentText intent) ]
+        String.concat
+            ""
+            [
+                canonicalPart revision
+                canonicalPart causation
+                canonicalPart (intentText intent)
+            ]
         |> Encoding.UTF8.GetBytes
         |> SHA256.HashData
         |> Convert.ToHexString
@@ -270,9 +348,15 @@ module IssueFields =
         | _ -> true
 
     let plan expectedRevision causationIdentity intent observation =
-        if String.IsNullOrWhiteSpace expectedRevision || expectedRevision <> expectedRevision.Trim() then
+        if
+            String.IsNullOrWhiteSpace expectedRevision
+            || expectedRevision <> expectedRevision.Trim()
+        then
             Error InvalidExpectedRevision
-        elif String.IsNullOrWhiteSpace causationIdentity || causationIdentity <> causationIdentity.Trim() then
+        elif
+            String.IsNullOrWhiteSpace causationIdentity
+            || causationIdentity <> causationIdentity.Trim()
+        then
             Error InvalidCausationIdentity
         elif obj.ReferenceEquals(intent, null) then
             Error InvalidMutationIntent
@@ -286,15 +370,32 @@ module IssueFields =
                 match snapshot.Values with
                 | [ current ] ->
                     let identity = idempotency snapshot.Revision causationIdentity intent
-                    let noOp = NoOp { ObservedRevision = snapshot.Revision; IdempotencyIdentity = identity }
-                    let planned operation = Planned { ExpectedRevision = snapshot.Revision; IdempotencyIdentity = identity; Operation = operation }
+
+                    let noOp =
+                        NoOp
+                            {
+                                ObservedRevision = snapshot.Revision
+                                IdempotencyIdentity = identity
+                            }
+
+                    let planned operation =
+                        Planned
+                            {
+                                ExpectedRevision = snapshot.Revision
+                                IdempotencyIdentity = identity
+                                Operation = operation
+                            }
+
                     match intent, current with
                     | CreateIssue _, IssuePresent -> Ok noOp
-                    | CreateIssue(repositoryId, title), IssueAbsent -> Ok(planned (CreateIssueOperation(repositoryId, title)))
+                    | CreateIssue(repositoryId, title), IssueAbsent ->
+                        Ok(planned (CreateIssueOperation(repositoryId, title)))
                     | UpdateField(_, _, desired), FieldPresent currentValue when currentValue = desired -> Ok noOp
                     | UpdateField(issueId, fieldId, desired), FieldPresent _
-                    | UpdateField(issueId, fieldId, desired), FieldAbsent -> Ok(planned (UpdateFieldOperation(issueId, fieldId, desired)))
+                    | UpdateField(issueId, fieldId, desired), FieldAbsent ->
+                        Ok(planned (UpdateFieldOperation(issueId, fieldId, desired)))
                     | ClearField _, FieldAbsent -> Ok noOp
-                    | ClearField(issueId, fieldId), FieldPresent _ -> Ok(planned (ClearFieldOperation(issueId, fieldId)))
+                    | ClearField(issueId, fieldId), FieldPresent _ ->
+                        Ok(planned (ClearFieldOperation(issueId, fieldId)))
                     | _ -> Error IncompatibleCurrentState
                 | _ -> Error AmbiguousCurrentState

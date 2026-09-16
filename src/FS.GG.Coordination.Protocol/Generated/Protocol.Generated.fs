@@ -3,14 +3,20 @@ module CoordinationProtocolGenerated
 
 [<Literal>]
 let Schema = "fsgg.quint.compiled-contract/v2"
+
 [<Literal>]
 let Profile = "fsgg-quint-profile/2"
+
 [<Literal>]
 let Specification = "CoordinationProtocolGenerated"
+
 [<Literal>]
-let ContractFingerprint = "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
+let ContractFingerprint =
+    "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
+
 [<Literal>]
-let CanonicalContractJson = "{\"schema\":\"fsgg.quint.compiled-contract/v2\",\"profile\":\"fsgg-quint-profile/2\",\"specification\":\"CoordinationProtocolGenerated\",\"exports\":[{\"id\":\"EXPORT-Authorities\",\"module\":\"CoordinationProtocol\",\"declaration\":\"authorityCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-ancestry-snapshot-and-terminal-checkpoint\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ProtocolStream-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"protected-sharded-git-journal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"git-expected-parent-and-generation\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"journal-commit-and-fencing-generation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-Actions-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"actions\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-Actions\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"workflow-run-attempt\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"run-id-and-attempt\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ClassifiedExternal-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"classified-external\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"classified-external-revision\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"declared-source-revision\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-GitLedger-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"git-ledger\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"git-commit-sha\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"commit-object-id\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-NativeGitHub-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"native-github\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"github-object-version\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"node-id-and-updated-at\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-PackageFeed-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"package-feed\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"package-content-sha256\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"package-bytes-digest\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-RepositoryRegistry-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"repository-registry\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"registry-document-sha256\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"canonical-document-digest\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"EXPORT-Bounds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"boundCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-AuthorityCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":7}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":7}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-DurablePlanDispositionCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":4}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-LifecycleIntentCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":4}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-MutationKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-MutationOutcomeCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-NativeRelationKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":2}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":2}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ObservationOutcomeCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":9}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":9}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ProtocolPayloadKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ProtocolStreamKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":5}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":5}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":0}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-VocabularyCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":11}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":11}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"EXPORT-Compatibility\",\"module\":\"CoordinationProtocol\",\"declaration\":\"compatibilityCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"detail\",\"value\":{\"kind\":\"string\",\"value\":\"Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1\\u003EPreparing\\u003EFreezeRequested\\u003EFrozen\\u003ESwitchedV2\\u003EVerifiedV2\\u003EOpenV2\\u003EObservingV2\\u003EContractingV1\\u003EOperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen.\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"COMPAT-Profile2\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"compatibility\"}},{\"name\":\"requirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"surface\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg-quint-profile/2\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":332,\"startColumn\":1,\"endLine\":335,\"endColumn\":4}},{\"id\":\"EXPORT-CompiledOutputSpecification\",\"module\":\"CoordinationProtocol\",\"declaration\":\"compiledOutputSpecificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"familyContract\",\"value\":{\"kind\":\"string\",\"value\":\"1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"COUT-Specification\"}},{\"name\":\"identityContract\",\"value\":{\"kind\":\"string\",\"value\":\"family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"compiledOutputSpecification\"}},{\"name\":\"normalizationAuthority\",\"value\":{\"kind\":\"string\",\"value\":\"typed-effect-json\"}},{\"name\":\"projectionViewFormats\",\"value\":{\"kind\":\"string\",\"value\":\"markdown|json\"}},{\"name\":\"qualificationContract\",\"value\":{\"kind\":\"string\",\"value\":\"supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review\"}},{\"name\":\"refusalContract\",\"value\":{\"kind\":\"string\",\"value\":\"missing|duplicate|substituted|unsupported|incomplete|reordered|stale\"}},{\"name\":\"semanticDiffContract\",\"value\":{\"kind\":\"string\",\"value\":\"ordinal|json-pointer|value-sha256\"}},{\"name\":\"versionContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":253,\"startColumn\":1,\"endLine\":261,\"endColumn\":4}},{\"id\":\"EXPORT-DesiredStateSpecification\",\"module\":\"CoordinationProtocol\",\"declaration\":\"desiredStateSpecificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"authorityClass\",\"value\":{\"kind\":\"string\",\"value\":\"revision-bound\"}},{\"name\":\"executionClass\",\"value\":{\"kind\":\"string\",\"value\":\"pure-intent-no-writer\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DSTATE-Specification\"}},{\"name\":\"issueSchemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"issue-type|issue-field|field-type|allowed-value\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"desiredStateSpecification\"}},{\"name\":\"permissionsContract\",\"value\":{\"kind\":\"string\",\"value\":\"repository-visibility|team-access|workflow-permission|environment-protection\"}},{\"name\":\"phaseAuthorityContract\",\"value\":{\"kind\":\"string\",\"value\":\"subject|profile|family|content|authority-revision|plan-outcome|apply-receipt\"}},{\"name\":\"phaseContract\",\"value\":{\"kind\":\"string\",\"value\":\"DSPH-Inspect\\u003EDSPH-Plan\\u003E(DSPH-Apply|DSPH-Verify)\\u003EDSPH-Verify\"}},{\"name\":\"projectsContract\",\"value\":{\"kind\":\"string\",\"value\":\"project-field|project-view|project-workflow|project-visibility|project-membership-policy\"}},{\"name\":\"refusalContract\",\"value\":{\"kind\":\"string\",\"value\":\"unsupported|unauthorized|incomplete|stale|identity-mismatch\"}},{\"name\":\"releasesContract\",\"value\":{\"kind\":\"string\",\"value\":\"release-environment|immutable-release|tag-protection|trusted-publisher\"}},{\"name\":\"repositoryProfileContract\",\"value\":{\"kind\":\"string\",\"value\":\"ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy\"}},{\"name\":\"repositoryPropertiesContract\",\"value\":{\"kind\":\"string\",\"value\":\"property-schema|property-value\"}},{\"name\":\"securitySupplyChainContract\",\"value\":{\"kind\":\"string\",\"value\":\"vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy\"}},{\"name\":\"workflowPinsContract\",\"value\":{\"kind\":\"string\",\"value\":\"reusable-workflow-pin|action-pin\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":237,\"startColumn\":1,\"endLine\":252,\"endColumn\":4}},{\"id\":\"EXPORT-DurablePlanDispositions\",\"module\":\"CoordinationProtocol\",\"declaration\":\"durablePlanDispositionCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Advance\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"next-step\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-success\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"compensate-reverse\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-refusal-applied-boundary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"reread-receipt\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"compile-new-plan\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-refusal-no-applied-boundary\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"EXPORT-HostedWriterSpecification\",\"module\":\"CoordinationProtocol\",\"declaration\":\"hostedWriterSpecificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"activationContract\",\"value\":{\"kind\":\"string\",\"value\":\"accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit\"}},{\"name\":\"budgetContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-positive-no-renewal\"}},{\"name\":\"candidateContract\",\"value\":{\"kind\":\"string\",\"value\":\"owner-controlled-content-addressed-bytes-before-branch-publication\"}},{\"name\":\"capacityContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-ordinary-assignment\"}},{\"name\":\"completionContract\",\"value\":{\"kind\":\"string\",\"value\":\"native-provider-merged-pr-and-exact-head-readback\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"HOSTED-WriterV1\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"hostedWriterSpecification\"}},{\"name\":\"operationContract\",\"value\":{\"kind\":\"string\",\"value\":\"stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence\"}},{\"name\":\"runnerContract\",\"value\":{\"kind\":\"string\",\"value\":\"exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner\"}},{\"name\":\"schemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.coordination.hosted-writer/1\"}},{\"name\":\"scopeContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-immutable-work-item|routine-documentation-delivery\"}},{\"name\":\"startupContract\",\"value\":{\"kind\":\"string\",\"value\":\"manual-default-paused-no-automatic-resume\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":1148,\"startColumn\":1,\"endLine\":1161,\"endColumn\":4}},{\"id\":\"EXPORT-LifecycleIntents\",\"module\":\"CoordinationProtocol\",\"declaration\":\"lifecycleIntentCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"backlog\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"cancelled\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Paused\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"paused\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"ready\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"EXPORT-MutationKinds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"mutationKindCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-AddEdge\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"edge\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"relation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Append\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"append\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"stream\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Clear\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"scalar\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"field\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Compensate\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"compensation\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"mutation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Create\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"create\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"absent\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"subject\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-RemoveEdge\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"edge\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"relation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Set\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"scalar\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"field\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Transition\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"transition\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycle\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"EXPORT-MutationOutcomes\",\"module\":\"CoordinationProtocol\",\"declaration\":\"mutationOutcomeCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"applied\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Applied\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"conflict\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"refresh-and-new-intent\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"no-op\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"refused\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"new-authority-or-intent\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"complete-observation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"authority-window\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"observe-or-exact-replay\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"availability-window\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"EXPORT-NativeRelationKinds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"nativeRelationKindCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"direction\",\"value\":{\"kind\":\"string\",\"value\":\"blocker-to-blocked\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Blocks\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"nativeRelationKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"direction\",\"value\":{\"kind\":\"string\",\"value\":\"parent-to-child\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"nativeRelationKind\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":184,\"startColumn\":1,\"endLine\":188,\"endColumn\":4}},{\"id\":\"EXPORT-ObservationOutcomes\",\"module\":\"CoordinationProtocol\",\"declaration\":\"observationOutcomeCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"contradictory\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"resolve-contradiction\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"complete-evidence\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Observed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"positive\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"negative\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"authority-window\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Stale\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"refresh-revision\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"repair-authorization\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"repair-read\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"EXPORT-PilotPermitSpecification\",\"module\":\"CoordinationProtocol\",\"declaration\":\"pilotPermitSpecificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"activationContract\",\"value\":{\"kind\":\"string\",\"value\":\"inert-prospective-no-host-no-provider-writer\"}},{\"name\":\"budgetContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-positive-no-automatic-renewal\"}},{\"name\":\"capacityContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-with-reserved-recovery-capacity\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PILOT-PermitV1\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"pilotPermitSpecification\"}},{\"name\":\"lifecycleContract\",\"value\":{\"kind\":\"string\",\"value\":\"StableOwned\\u003ETransferIntended\\u003EPilotOwned\\u003E(OutcomeUnknown|Paused|Revoked|ReturnIntended)\\u003EStableOwned\"}},{\"name\":\"ownershipContract\",\"value\":{\"kind\":\"string\",\"value\":\"stable-until-durable-transfer-acknowledgement-and-readback\"}},{\"name\":\"recoveryContract\",\"value\":{\"kind\":\"string\",\"value\":\"generation-current|readback-current|unknown-outcome-blocks-dispatch\"}},{\"name\":\"schemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.coordination.pilot-permit/1\"}},{\"name\":\"scopeContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-canonical-work-item|routine-implementation\"}},{\"name\":\"trustContract\",\"value\":{\"kind\":\"string\",\"value\":\"trusted-cooperating-runner-supported-route-only\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":1133,\"startColumn\":1,\"endLine\":1147,\"endColumn\":4}},{\"id\":\"EXPORT-Properties\",\"module\":\"CoordinationProtocol\",\"declaration\":\"propertyCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedAuthoritiesAreQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"},{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedObservationKnowledgeIsQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedVocabularyIsQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CompensationRequiresAppliedPredecessor\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MUT-Compensate\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurablePlanCompensationIsBoundaryBound\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurablePlansAreOrderedAndResumable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PDISP-Advance\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"},{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurableProtocolCheckpointsArePreserved\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"FailureOutcomesDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"HumanIntentIsObservationIndependent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"LifecycleIntentCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"LifecycleStatusIsDerived\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"OBS-Observed\"},{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationCataloguesAreClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationResultsAreBound\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"},{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"},{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"},{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"NativeRelationEdgesAreValid\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"NativeRelationKindCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationOutcomeCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolEnvelopesAreValidAndOrdered\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamCataloguesAreClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"STREAM-Claim\"},{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"STREAM-Review\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamChangesPreservePriorSemantics\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"},{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamObservationFailuresDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"},{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProvenAbsenceCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationChangesPreserveLifecycleIntent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationChangesPreserveUnrelatedEdges\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationObservationFailuresDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"UncertainMutationOutcomesStayUnknown\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"},{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"},{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"},{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"UnknownLifecycleFactsFailClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VocabularyCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}]}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"EXPORT-ProtocolPayloadKinds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"protocolPayloadKindCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Review\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"EXPORT-ProtocolStreamKinds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"protocolStreamKindCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"delivery\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-claim-lease-touch-set-fenced\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-full-snapshot-review-epoch\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Review\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-operation-election-fenced\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"operation-receipt\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"EXPORT-Relationships\",\"module\":\"CoordinationProtocol\",\"declaration\":\"relationshipCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-Actions\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-Actions-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ClassifiedExternal-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-GitLedger-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-NativeGitHub-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-PackageFeed-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ProtocolStream-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-RepositoryRegistry-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Authority-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"CodecVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Codec-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"CommandVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Command-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"EventVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Event-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Mutation-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-ObservationPlan-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Projection-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-SettingsProfile-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Subject-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-VersionIdentity-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"EXPORT-Verifications\",\"module\":\"CoordinationProtocol\",\"declaration\":\"verificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-AuthorityCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-AuthorityBindings\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-Actions\"},{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"},{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"},{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"},{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"},{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"},{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-DurablePlanDispositionCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-DurablePlans\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PDISP-Advance\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"},{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-LifecycleIntentCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-LifecycleIntent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-MutationKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-MutationOutcomeCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-MutationAlgebra\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"},{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"},{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"},{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"},{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"},{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"},{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"},{\"kind\":\"string\",\"value\":\"MUT-AddEdge\"},{\"kind\":\"string\",\"value\":\"MUT-Append\"},{\"kind\":\"string\",\"value\":\"MUT-Clear\"},{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"MUT-Create\"},{\"kind\":\"string\",\"value\":\"MUT-RemoveEdge\"},{\"kind\":\"string\",\"value\":\"MUT-Set\"},{\"kind\":\"string\",\"value\":\"MUT-Transition\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-NativeRelationKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-NativeRelations\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-ObservationOutcomeCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-ObservationOutcomes\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-Observed\"},{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-ProtocolPayloadKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-ProtocolStreamKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-ProtocolStreams\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"},{\"kind\":\"string\",\"value\":\"STREAM-Claim\"},{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"STREAM-Review\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"},{\"kind\":\"string\",\"value\":\"BOUND-VocabularyCardinality\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-VocabularyBaseline\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"},{\"kind\":\"string\",\"value\":\"CodecVocabulary\"},{\"kind\":\"string\",\"value\":\"CommandVocabulary\"},{\"kind\":\"string\",\"value\":\"EventVocabulary\"},{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"},{\"kind\":\"string\",\"value\":\"MutationVocabulary\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"},{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"},{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"},{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"},{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"EXPORT-Vocabulary\",\"module\":\"CoordinationProtocol\",\"declaration\":\"vocabularyCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"authorities\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authority\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"codecs\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CodecVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"codec\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"commands\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CommandVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"command\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"events\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"EventVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"event\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"evidence-obligations\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"evidence\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"mutations\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"observation-plans\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationPlan\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"projections\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"projection\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"settings-profiles\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"settingsProfile\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"subjects\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"subject\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"version-identities\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"versionIdentity\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}}],\"catalogue\":[{\"id\":\"AUTH-Actions\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-Actions-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"actions\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-Actions\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"workflow-run-attempt\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"run-id-and-attempt\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-ClassifiedExternal\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ClassifiedExternal-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"classified-external\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"classified-external-revision\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"declared-source-revision\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-GitLedger\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-GitLedger-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"git-ledger\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"git-commit-sha\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"commit-object-id\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-NativeGitHub\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-NativeGitHub-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"native-github\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"github-object-version\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"node-id-and-updated-at\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-PackageFeed\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-PackageFeed-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"package-feed\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"package-content-sha256\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"package-bytes-digest\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-ProtocolStream\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-ancestry-snapshot-and-terminal-checkpoint\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ProtocolStream-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"protected-sharded-git-journal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"git-expected-parent-and-generation\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"journal-commit-and-fencing-generation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-RepositoryRegistry\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-RepositoryRegistry-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"repository-registry\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"registry-document-sha256\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"canonical-document-digest\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AcceptedAuthoritiesAreQualified\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedAuthoritiesAreQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"},{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AcceptedObservationKnowledgeIsQualified\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedObservationKnowledgeIsQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AcceptedVocabularyIsQualified\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedVocabularyIsQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AuthorityCanBeAccepted\",\"kind\":\"example\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AuthorityCatalogueIsClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AuthorityVocabulary\",\"kind\":\"authority\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"authorities\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authority\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"BOUND-AuthorityCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-AuthorityCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":7}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":7}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-DurablePlanDispositionCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-DurablePlanDispositionCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":4}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-LifecycleIntentCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-LifecycleIntentCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":4}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-MutationKindCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-MutationKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-MutationOutcomeCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-MutationOutcomeCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-NativeRelationKindCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-NativeRelationKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":2}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":2}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-ObservationOutcomeCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ObservationOutcomeCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":9}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":9}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-ProtocolPayloadKindCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ProtocolPayloadKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-ProtocolStreamKindCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ProtocolStreamKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":5}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":5}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-TraceSteps\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":0}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-VocabularyCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-VocabularyCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":11}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":11}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"COMPAT-Profile2\",\"kind\":\"compatibility\",\"exportId\":\"EXPORT-Compatibility\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"detail\",\"value\":{\"kind\":\"string\",\"value\":\"Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1\\u003EPreparing\\u003EFreezeRequested\\u003EFrozen\\u003ESwitchedV2\\u003EVerifiedV2\\u003EOpenV2\\u003EObservingV2\\u003EContractingV1\\u003EOperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen.\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"COMPAT-Profile2\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"compatibility\"}},{\"name\":\"requirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"surface\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg-quint-profile/2\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":332,\"startColumn\":1,\"endLine\":335,\"endColumn\":4}},{\"id\":\"COUT-Specification\",\"kind\":\"compiledOutputSpecification\",\"exportId\":\"EXPORT-CompiledOutputSpecification\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"familyContract\",\"value\":{\"kind\":\"string\",\"value\":\"1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"COUT-Specification\"}},{\"name\":\"identityContract\",\"value\":{\"kind\":\"string\",\"value\":\"family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"compiledOutputSpecification\"}},{\"name\":\"normalizationAuthority\",\"value\":{\"kind\":\"string\",\"value\":\"typed-effect-json\"}},{\"name\":\"projectionViewFormats\",\"value\":{\"kind\":\"string\",\"value\":\"markdown|json\"}},{\"name\":\"qualificationContract\",\"value\":{\"kind\":\"string\",\"value\":\"supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review\"}},{\"name\":\"refusalContract\",\"value\":{\"kind\":\"string\",\"value\":\"missing|duplicate|substituted|unsupported|incomplete|reordered|stale\"}},{\"name\":\"semanticDiffContract\",\"value\":{\"kind\":\"string\",\"value\":\"ordinal|json-pointer|value-sha256\"}},{\"name\":\"versionContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":253,\"startColumn\":1,\"endLine\":261,\"endColumn\":4}},{\"id\":\"CodecVocabulary\",\"kind\":\"codec\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"codecs\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CodecVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"codec\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"CommandVocabulary\",\"kind\":\"command\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"commands\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CommandVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"command\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"CompensationRequiresAppliedPredecessor\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CompensationRequiresAppliedPredecessor\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MUT-Compensate\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"DSTATE-Specification\",\"kind\":\"desiredStateSpecification\",\"exportId\":\"EXPORT-DesiredStateSpecification\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"authorityClass\",\"value\":{\"kind\":\"string\",\"value\":\"revision-bound\"}},{\"name\":\"executionClass\",\"value\":{\"kind\":\"string\",\"value\":\"pure-intent-no-writer\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DSTATE-Specification\"}},{\"name\":\"issueSchemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"issue-type|issue-field|field-type|allowed-value\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"desiredStateSpecification\"}},{\"name\":\"permissionsContract\",\"value\":{\"kind\":\"string\",\"value\":\"repository-visibility|team-access|workflow-permission|environment-protection\"}},{\"name\":\"phaseAuthorityContract\",\"value\":{\"kind\":\"string\",\"value\":\"subject|profile|family|content|authority-revision|plan-outcome|apply-receipt\"}},{\"name\":\"phaseContract\",\"value\":{\"kind\":\"string\",\"value\":\"DSPH-Inspect\\u003EDSPH-Plan\\u003E(DSPH-Apply|DSPH-Verify)\\u003EDSPH-Verify\"}},{\"name\":\"projectsContract\",\"value\":{\"kind\":\"string\",\"value\":\"project-field|project-view|project-workflow|project-visibility|project-membership-policy\"}},{\"name\":\"refusalContract\",\"value\":{\"kind\":\"string\",\"value\":\"unsupported|unauthorized|incomplete|stale|identity-mismatch\"}},{\"name\":\"releasesContract\",\"value\":{\"kind\":\"string\",\"value\":\"release-environment|immutable-release|tag-protection|trusted-publisher\"}},{\"name\":\"repositoryProfileContract\",\"value\":{\"kind\":\"string\",\"value\":\"ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy\"}},{\"name\":\"repositoryPropertiesContract\",\"value\":{\"kind\":\"string\",\"value\":\"property-schema|property-value\"}},{\"name\":\"securitySupplyChainContract\",\"value\":{\"kind\":\"string\",\"value\":\"vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy\"}},{\"name\":\"workflowPinsContract\",\"value\":{\"kind\":\"string\",\"value\":\"reusable-workflow-pin|action-pin\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":237,\"startColumn\":1,\"endLine\":252,\"endColumn\":4}},{\"id\":\"DurablePlanCompensationIsBoundaryBound\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurablePlanCompensationIsBoundaryBound\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"DurablePlansAreOrderedAndResumable\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurablePlansAreOrderedAndResumable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PDISP-Advance\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"},{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"DurableProtocolCheckpointsArePreserved\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurableProtocolCheckpointsArePreserved\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"EventVocabulary\",\"kind\":\"event\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"events\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"EventVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"event\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"EvidenceObligationVocabulary\",\"kind\":\"evidence\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"evidence-obligations\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"evidence\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"FailureOutcomesDoNotBecomeAbsence\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"FailureOutcomesDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"HOSTED-WriterV1\",\"kind\":\"hostedWriterSpecification\",\"exportId\":\"EXPORT-HostedWriterSpecification\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"activationContract\",\"value\":{\"kind\":\"string\",\"value\":\"accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit\"}},{\"name\":\"budgetContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-positive-no-renewal\"}},{\"name\":\"candidateContract\",\"value\":{\"kind\":\"string\",\"value\":\"owner-controlled-content-addressed-bytes-before-branch-publication\"}},{\"name\":\"capacityContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-ordinary-assignment\"}},{\"name\":\"completionContract\",\"value\":{\"kind\":\"string\",\"value\":\"native-provider-merged-pr-and-exact-head-readback\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"HOSTED-WriterV1\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"hostedWriterSpecification\"}},{\"name\":\"operationContract\",\"value\":{\"kind\":\"string\",\"value\":\"stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence\"}},{\"name\":\"runnerContract\",\"value\":{\"kind\":\"string\",\"value\":\"exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner\"}},{\"name\":\"schemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.coordination.hosted-writer/1\"}},{\"name\":\"scopeContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-immutable-work-item|routine-documentation-delivery\"}},{\"name\":\"startupContract\",\"value\":{\"kind\":\"string\",\"value\":\"manual-default-paused-no-automatic-resume\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":1148,\"startColumn\":1,\"endLine\":1161,\"endColumn\":4}},{\"id\":\"HumanIntentIsObservationIndependent\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"HumanIntentIsObservationIndependent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"INTENT-Backlog\",\"kind\":\"lifecycleIntent\",\"exportId\":\"EXPORT-LifecycleIntents\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"backlog\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"INTENT-Cancelled\",\"kind\":\"lifecycleIntent\",\"exportId\":\"EXPORT-LifecycleIntents\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"cancelled\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"INTENT-Paused\",\"kind\":\"lifecycleIntent\",\"exportId\":\"EXPORT-LifecycleIntents\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Paused\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"paused\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"INTENT-Ready\",\"kind\":\"lifecycleIntent\",\"exportId\":\"EXPORT-LifecycleIntents\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"ready\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"LifecycleIntentCatalogueIsClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"LifecycleIntentCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"LifecycleStatusIsDerived\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"LifecycleStatusIsDerived\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"OBS-Observed\"},{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"MOUT-Applied\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"applied\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Applied\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-Idempotent\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"no-op\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-Incomplete\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"complete-observation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-RateLimited\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"authority-window\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-Rejected\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"refused\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"new-authority-or-intent\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-RevisionConflict\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"conflict\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"refresh-and-new-intent\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-TimedOut\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"observe-or-exact-replay\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-Unavailable\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"availability-window\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MUT-AddEdge\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-AddEdge\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"edge\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"relation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Append\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Append\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"append\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"stream\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Clear\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Clear\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"scalar\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"field\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Compensate\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Compensate\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"compensation\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"mutation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Create\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Create\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"create\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"absent\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"subject\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-RemoveEdge\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-RemoveEdge\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"edge\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"relation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Set\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Set\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"scalar\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"field\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Transition\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Transition\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"transition\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycle\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MutationCataloguesAreClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationCataloguesAreClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"MutationResultsAreBound\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationResultsAreBound\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"},{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"},{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"},{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"MutationVocabulary\",\"kind\":\"mutation\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"mutations\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"NativeRelationEdgesAreValid\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"NativeRelationEdgesAreValid\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"NativeRelationKindCatalogueIsClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"NativeRelationKindCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"OBS-Contradictory\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"contradictory\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"resolve-contradiction\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Incomplete\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"complete-evidence\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Observed\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Observed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"positive\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-ProvenAbsent\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"negative\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-RateLimited\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"authority-window\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Stale\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Stale\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"refresh-revision\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Unauthorized\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"repair-authorization\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Unreadable\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"repair-read\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Unsupported\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"ObservationOutcomeCatalogueIsClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationOutcomeCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ObservationPlanVocabulary\",\"kind\":\"observationPlan\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"observation-plans\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationPlan\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"PAYLOAD-Claim\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-Delivery\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-Election\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-Lease\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-OperationLock\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-OperationReceipt\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-Review\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Review\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-TouchSet\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PDISP-Advance\",\"kind\":\"durablePlanDisposition\",\"exportId\":\"EXPORT-DurablePlanDispositions\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Advance\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"next-step\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-success\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"PDISP-Compensate\",\"kind\":\"durablePlanDisposition\",\"exportId\":\"EXPORT-DurablePlanDispositions\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"compensate-reverse\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-refusal-applied-boundary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"PDISP-ReceiptReread\",\"kind\":\"durablePlanDisposition\",\"exportId\":\"EXPORT-DurablePlanDispositions\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"reread-receipt\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"PDISP-Replan\",\"kind\":\"durablePlanDisposition\",\"exportId\":\"EXPORT-DurablePlanDispositions\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"compile-new-plan\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-refusal-no-applied-boundary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"PILOT-PermitV1\",\"kind\":\"pilotPermitSpecification\",\"exportId\":\"EXPORT-PilotPermitSpecification\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"activationContract\",\"value\":{\"kind\":\"string\",\"value\":\"inert-prospective-no-host-no-provider-writer\"}},{\"name\":\"budgetContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-positive-no-automatic-renewal\"}},{\"name\":\"capacityContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-with-reserved-recovery-capacity\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PILOT-PermitV1\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"pilotPermitSpecification\"}},{\"name\":\"lifecycleContract\",\"value\":{\"kind\":\"string\",\"value\":\"StableOwned\\u003ETransferIntended\\u003EPilotOwned\\u003E(OutcomeUnknown|Paused|Revoked|ReturnIntended)\\u003EStableOwned\"}},{\"name\":\"ownershipContract\",\"value\":{\"kind\":\"string\",\"value\":\"stable-until-durable-transfer-acknowledgement-and-readback\"}},{\"name\":\"recoveryContract\",\"value\":{\"kind\":\"string\",\"value\":\"generation-current|readback-current|unknown-outcome-blocks-dispatch\"}},{\"name\":\"schemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.coordination.pilot-permit/1\"}},{\"name\":\"scopeContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-canonical-work-item|routine-implementation\"}},{\"name\":\"trustContract\",\"value\":{\"kind\":\"string\",\"value\":\"trusted-cooperating-runner-supported-route-only\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":1133,\"startColumn\":1,\"endLine\":1147,\"endColumn\":4}},{\"id\":\"ProjectionVocabulary\",\"kind\":\"projection\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"projections\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"projection\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"ProtocolEnvelopesAreValidAndOrdered\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolEnvelopesAreValidAndOrdered\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ProtocolStreamCataloguesAreClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamCataloguesAreClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"STREAM-Claim\"},{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"STREAM-Review\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ProtocolStreamChangesPreservePriorSemantics\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamChangesPreservePriorSemantics\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"},{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ProtocolStreamObservationFailuresDoNotBecomeAbsence\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamObservationFailuresDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"},{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ProvenAbsenceCanBeAccepted\",\"kind\":\"example\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProvenAbsenceCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"REL-AUTH-Actions-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-Actions\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-Actions-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-ClassifiedExternal-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ClassifiedExternal-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-GitLedger-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-GitLedger-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-NativeGitHub-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-NativeGitHub-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-PackageFeed-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-PackageFeed-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-ProtocolStream-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ProtocolStream-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-RepositoryRegistry-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-RepositoryRegistry-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Authority-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Authority-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Blocks\",\"kind\":\"nativeRelationKind\",\"exportId\":\"EXPORT-NativeRelationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"direction\",\"value\":{\"kind\":\"string\",\"value\":\"blocker-to-blocked\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Blocks\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"nativeRelationKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":184,\"startColumn\":1,\"endLine\":188,\"endColumn\":4}},{\"id\":\"REL-Codec-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"CodecVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Codec-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Command-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"CommandVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Command-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Event-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"EventVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Event-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Mutation-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Mutation-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-ObservationPlan-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-ObservationPlan-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-ParentChild\",\"kind\":\"nativeRelationKind\",\"exportId\":\"EXPORT-NativeRelationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"direction\",\"value\":{\"kind\":\"string\",\"value\":\"parent-to-child\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"nativeRelationKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":184,\"startColumn\":1,\"endLine\":188,\"endColumn\":4}},{\"id\":\"REL-Projection-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Projection-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-SettingsProfile-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-SettingsProfile-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Subject-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Subject-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-VersionIdentity-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-VersionIdentity-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"RelationChangesPreserveLifecycleIntent\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationChangesPreserveLifecycleIntent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"RelationChangesPreserveUnrelatedEdges\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationChangesPreserveUnrelatedEdges\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"RelationObservationFailuresDoNotBecomeAbsence\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationObservationFailuresDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"STREAM-Claim\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-claim-lease-touch-set-fenced\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"STREAM-Delivery\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"delivery\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"STREAM-OperationLock\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-operation-election-fenced\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"STREAM-OperationReceipt\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"operation-receipt\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"STREAM-Review\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-full-snapshot-review-epoch\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Review\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"SettingsProfileVocabulary\",\"kind\":\"settingsProfile\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"settings-profiles\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"settingsProfile\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"SubjectVocabulary\",\"kind\":\"subject\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"subjects\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"subject\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"UncertainMutationOutcomesStayUnknown\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"UncertainMutationOutcomesStayUnknown\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"},{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"},{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"},{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"UnknownLifecycleFactsFailClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"UnknownLifecycleFactsFailClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"VERIFY-AuthorityBindings\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-AuthorityCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-AuthorityBindings\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-Actions\"},{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"},{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"},{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"},{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"},{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"},{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-DurablePlans\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-DurablePlanDispositionCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-DurablePlans\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PDISP-Advance\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"},{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-LifecycleIntent\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-LifecycleIntentCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-LifecycleIntent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-MutationAlgebra\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-MutationKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-MutationOutcomeCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-MutationAlgebra\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"},{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"},{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"},{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"},{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"},{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"},{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"},{\"kind\":\"string\",\"value\":\"MUT-AddEdge\"},{\"kind\":\"string\",\"value\":\"MUT-Append\"},{\"kind\":\"string\",\"value\":\"MUT-Clear\"},{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"MUT-Create\"},{\"kind\":\"string\",\"value\":\"MUT-RemoveEdge\"},{\"kind\":\"string\",\"value\":\"MUT-Set\"},{\"kind\":\"string\",\"value\":\"MUT-Transition\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-NativeRelations\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-NativeRelationKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-NativeRelations\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-ObservationOutcomes\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-ObservationOutcomeCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-ObservationOutcomes\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-Observed\"},{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-ProtocolStreams\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-ProtocolPayloadKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-ProtocolStreamKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-ProtocolStreams\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"},{\"kind\":\"string\",\"value\":\"STREAM-Claim\"},{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"STREAM-Review\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-VocabularyBaseline\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"},{\"kind\":\"string\",\"value\":\"BOUND-VocabularyCardinality\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-VocabularyBaseline\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"},{\"kind\":\"string\",\"value\":\"CodecVocabulary\"},{\"kind\":\"string\",\"value\":\"CommandVocabulary\"},{\"kind\":\"string\",\"value\":\"EventVocabulary\"},{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"},{\"kind\":\"string\",\"value\":\"MutationVocabulary\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"},{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"},{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"},{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"},{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VersionIdentityVocabulary\",\"kind\":\"versionIdentity\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"version-identities\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"versionIdentity\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"VocabularyCanBeAccepted\",\"kind\":\"example\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VocabularyCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}}],\"actionEffects\":[{\"actionId\":\"ACT-AcceptObservationKnowledge\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-AcceptObservedAuthority\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-AcceptVocabularyIdentity\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-AddNativeRelation\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-AppendProtocolEnvelope\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-CompactEphemeralProtocolEnvelope\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-Init\",\"reads\":[],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-ObserveAuthority\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-ObserveLifecycleFacts\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleStatus\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-ObserveProtocolEvidence\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-RefreshLifecycleStatus\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-RemoveNativeRelation\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-SetHumanIntent\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"lifecycleFacts\",\"lifecycleStatus\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-Step\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]}],\"relationships\":[{\"from\":\"AUTH-Actions\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-ClassifiedExternal\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-GitLedger\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-NativeGitHub\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-PackageFeed\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-ProtocolStream\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-RepositoryRegistry\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AuthorityVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"CodecVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"CommandVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"EventVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"MutationVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"ObservationPlanVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"ProjectionVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"SettingsProfileVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"SubjectVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"VersionIdentityVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"}],\"verificationProfiles\":[{\"id\":\"VERIFY-AuthorityBindings\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"AUTH-Actions\",\"AUTH-ClassifiedExternal\",\"AUTH-GitLedger\",\"AUTH-NativeGitHub\",\"AUTH-PackageFeed\",\"AUTH-ProtocolStream\",\"AUTH-RepositoryRegistry\"],\"boundIds\":[\"BOUND-AuthorityCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-DurablePlans\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"MUT-Compensate\",\"PAYLOAD-OperationReceipt\",\"PDISP-Advance\",\"PDISP-Compensate\",\"PDISP-ReceiptReread\",\"PDISP-Replan\"],\"boundIds\":[\"BOUND-DurablePlanDispositionCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-LifecycleIntent\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"INTENT-Backlog\",\"INTENT-Cancelled\",\"INTENT-Paused\",\"INTENT-Ready\"],\"boundIds\":[\"BOUND-LifecycleIntentCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-MutationAlgebra\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"MOUT-Applied\",\"MOUT-Idempotent\",\"MOUT-Incomplete\",\"MOUT-RateLimited\",\"MOUT-Rejected\",\"MOUT-RevisionConflict\",\"MOUT-TimedOut\",\"MOUT-Unavailable\",\"MUT-AddEdge\",\"MUT-Append\",\"MUT-Clear\",\"MUT-Compensate\",\"MUT-Create\",\"MUT-RemoveEdge\",\"MUT-Set\",\"MUT-Transition\"],\"boundIds\":[\"BOUND-MutationKindCardinality\",\"BOUND-MutationOutcomeCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-NativeRelations\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"REL-Blocks\",\"REL-ParentChild\"],\"boundIds\":[\"BOUND-NativeRelationKindCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-ObservationOutcomes\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"OBS-Contradictory\",\"OBS-Incomplete\",\"OBS-Observed\",\"OBS-ProvenAbsent\",\"OBS-RateLimited\",\"OBS-Stale\",\"OBS-Unauthorized\",\"OBS-Unreadable\",\"OBS-Unsupported\"],\"boundIds\":[\"BOUND-ObservationOutcomeCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-ProtocolStreams\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"PAYLOAD-Claim\",\"PAYLOAD-Delivery\",\"PAYLOAD-Election\",\"PAYLOAD-Lease\",\"PAYLOAD-OperationLock\",\"PAYLOAD-OperationReceipt\",\"PAYLOAD-Review\",\"PAYLOAD-TouchSet\",\"STREAM-Claim\",\"STREAM-Delivery\",\"STREAM-OperationLock\",\"STREAM-OperationReceipt\",\"STREAM-Review\"],\"boundIds\":[\"BOUND-ProtocolPayloadKindCardinality\",\"BOUND-ProtocolStreamKindCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-VocabularyBaseline\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"AuthorityVocabulary\",\"CodecVocabulary\",\"CommandVocabulary\",\"EventVocabulary\",\"EvidenceObligationVocabulary\",\"MutationVocabulary\",\"ObservationPlanVocabulary\",\"ProjectionVocabulary\",\"SettingsProfileVocabulary\",\"SubjectVocabulary\",\"VersionIdentityVocabulary\"],\"boundIds\":[\"BOUND-TraceSteps\",\"BOUND-VocabularyCardinality\"]}],\"bounds\":[{\"id\":\"BOUND-AuthorityCardinality\",\"minimum\":7,\"maximum\":7},{\"id\":\"BOUND-DurablePlanDispositionCardinality\",\"minimum\":4,\"maximum\":4},{\"id\":\"BOUND-LifecycleIntentCardinality\",\"minimum\":4,\"maximum\":4},{\"id\":\"BOUND-MutationKindCardinality\",\"minimum\":8,\"maximum\":8},{\"id\":\"BOUND-MutationOutcomeCardinality\",\"minimum\":8,\"maximum\":8},{\"id\":\"BOUND-NativeRelationKindCardinality\",\"minimum\":2,\"maximum\":2},{\"id\":\"BOUND-ObservationOutcomeCardinality\",\"minimum\":9,\"maximum\":9},{\"id\":\"BOUND-ProtocolPayloadKindCardinality\",\"minimum\":8,\"maximum\":8},{\"id\":\"BOUND-ProtocolStreamKindCardinality\",\"minimum\":5,\"maximum\":5},{\"id\":\"BOUND-TraceSteps\",\"minimum\":0,\"maximum\":4},{\"id\":\"BOUND-VocabularyCardinality\",\"minimum\":11,\"maximum\":11}],\"impacts\":[],\"compatibility\":[{\"surface\":\"fsgg-quint-profile/2\",\"requirement\":\"exact\",\"detail\":\"Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1\\u003EPreparing\\u003EFreezeRequested\\u003EFrozen\\u003ESwitchedV2\\u003EVerifiedV2\\u003EOpenV2\\u003EObservingV2\\u003EContractingV1\\u003EOperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen.\"}],\"digests\":[{\"name\":\"sandbox-contract\",\"sha256\":\"2bf8ff26ddb488444c59daa77515b183008c352213e48ac6e36e15e0bc08c122\"},{\"name\":\"typed-effect\",\"sha256\":\"0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715\"}]}\n"
+let CanonicalContractJson =
+    "{\"schema\":\"fsgg.quint.compiled-contract/v2\",\"profile\":\"fsgg-quint-profile/2\",\"specification\":\"CoordinationProtocolGenerated\",\"exports\":[{\"id\":\"EXPORT-Authorities\",\"module\":\"CoordinationProtocol\",\"declaration\":\"authorityCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-ancestry-snapshot-and-terminal-checkpoint\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ProtocolStream-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"protected-sharded-git-journal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"git-expected-parent-and-generation\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"journal-commit-and-fencing-generation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-Actions-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"actions\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-Actions\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"workflow-run-attempt\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"run-id-and-attempt\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ClassifiedExternal-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"classified-external\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"classified-external-revision\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"declared-source-revision\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-GitLedger-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"git-ledger\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"git-commit-sha\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"commit-object-id\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-NativeGitHub-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"native-github\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"github-object-version\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"node-id-and-updated-at\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-PackageFeed-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"package-feed\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"package-content-sha256\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"package-bytes-digest\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-RepositoryRegistry-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"repository-registry\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"registry-document-sha256\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"canonical-document-digest\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"EXPORT-Bounds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"boundCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-AuthorityCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":7}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":7}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-DurablePlanDispositionCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":4}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-LifecycleIntentCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":4}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-MutationKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-MutationOutcomeCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-NativeRelationKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":2}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":2}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ObservationOutcomeCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":9}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":9}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ProtocolPayloadKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ProtocolStreamKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":5}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":5}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":0}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-VocabularyCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":11}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":11}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"EXPORT-Compatibility\",\"module\":\"CoordinationProtocol\",\"declaration\":\"compatibilityCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"detail\",\"value\":{\"kind\":\"string\",\"value\":\"Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1\\u003EPreparing\\u003EFreezeRequested\\u003EFrozen\\u003ESwitchedV2\\u003EVerifiedV2\\u003EOpenV2\\u003EObservingV2\\u003EContractingV1\\u003EOperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen.\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"COMPAT-Profile2\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"compatibility\"}},{\"name\":\"requirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"surface\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg-quint-profile/2\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":332,\"startColumn\":1,\"endLine\":335,\"endColumn\":4}},{\"id\":\"EXPORT-CompiledOutputSpecification\",\"module\":\"CoordinationProtocol\",\"declaration\":\"compiledOutputSpecificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"familyContract\",\"value\":{\"kind\":\"string\",\"value\":\"1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"COUT-Specification\"}},{\"name\":\"identityContract\",\"value\":{\"kind\":\"string\",\"value\":\"family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"compiledOutputSpecification\"}},{\"name\":\"normalizationAuthority\",\"value\":{\"kind\":\"string\",\"value\":\"typed-effect-json\"}},{\"name\":\"projectionViewFormats\",\"value\":{\"kind\":\"string\",\"value\":\"markdown|json\"}},{\"name\":\"qualificationContract\",\"value\":{\"kind\":\"string\",\"value\":\"supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review\"}},{\"name\":\"refusalContract\",\"value\":{\"kind\":\"string\",\"value\":\"missing|duplicate|substituted|unsupported|incomplete|reordered|stale\"}},{\"name\":\"semanticDiffContract\",\"value\":{\"kind\":\"string\",\"value\":\"ordinal|json-pointer|value-sha256\"}},{\"name\":\"versionContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":253,\"startColumn\":1,\"endLine\":261,\"endColumn\":4}},{\"id\":\"EXPORT-DesiredStateSpecification\",\"module\":\"CoordinationProtocol\",\"declaration\":\"desiredStateSpecificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"authorityClass\",\"value\":{\"kind\":\"string\",\"value\":\"revision-bound\"}},{\"name\":\"executionClass\",\"value\":{\"kind\":\"string\",\"value\":\"pure-intent-no-writer\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DSTATE-Specification\"}},{\"name\":\"issueSchemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"issue-type|issue-field|field-type|allowed-value\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"desiredStateSpecification\"}},{\"name\":\"permissionsContract\",\"value\":{\"kind\":\"string\",\"value\":\"repository-visibility|team-access|workflow-permission|environment-protection\"}},{\"name\":\"phaseAuthorityContract\",\"value\":{\"kind\":\"string\",\"value\":\"subject|profile|family|content|authority-revision|plan-outcome|apply-receipt\"}},{\"name\":\"phaseContract\",\"value\":{\"kind\":\"string\",\"value\":\"DSPH-Inspect\\u003EDSPH-Plan\\u003E(DSPH-Apply|DSPH-Verify)\\u003EDSPH-Verify\"}},{\"name\":\"projectsContract\",\"value\":{\"kind\":\"string\",\"value\":\"project-field|project-view|project-workflow|project-visibility|project-membership-policy\"}},{\"name\":\"refusalContract\",\"value\":{\"kind\":\"string\",\"value\":\"unsupported|unauthorized|incomplete|stale|identity-mismatch\"}},{\"name\":\"releasesContract\",\"value\":{\"kind\":\"string\",\"value\":\"release-environment|immutable-release|tag-protection|trusted-publisher\"}},{\"name\":\"repositoryProfileContract\",\"value\":{\"kind\":\"string\",\"value\":\"ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy\"}},{\"name\":\"repositoryPropertiesContract\",\"value\":{\"kind\":\"string\",\"value\":\"property-schema|property-value\"}},{\"name\":\"securitySupplyChainContract\",\"value\":{\"kind\":\"string\",\"value\":\"vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy\"}},{\"name\":\"workflowPinsContract\",\"value\":{\"kind\":\"string\",\"value\":\"reusable-workflow-pin|action-pin\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":237,\"startColumn\":1,\"endLine\":252,\"endColumn\":4}},{\"id\":\"EXPORT-DurablePlanDispositions\",\"module\":\"CoordinationProtocol\",\"declaration\":\"durablePlanDispositionCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Advance\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"next-step\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-success\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"compensate-reverse\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-refusal-applied-boundary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"reread-receipt\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"compile-new-plan\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-refusal-no-applied-boundary\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"EXPORT-HostedWriterSpecification\",\"module\":\"CoordinationProtocol\",\"declaration\":\"hostedWriterSpecificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"activationContract\",\"value\":{\"kind\":\"string\",\"value\":\"accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit\"}},{\"name\":\"budgetContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-positive-no-renewal\"}},{\"name\":\"candidateContract\",\"value\":{\"kind\":\"string\",\"value\":\"owner-controlled-content-addressed-bytes-before-branch-publication\"}},{\"name\":\"capacityContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-ordinary-assignment\"}},{\"name\":\"completionContract\",\"value\":{\"kind\":\"string\",\"value\":\"native-provider-merged-pr-and-exact-head-readback\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"HOSTED-WriterV1\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"hostedWriterSpecification\"}},{\"name\":\"operationContract\",\"value\":{\"kind\":\"string\",\"value\":\"stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence\"}},{\"name\":\"runnerContract\",\"value\":{\"kind\":\"string\",\"value\":\"exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner\"}},{\"name\":\"schemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.coordination.hosted-writer/1\"}},{\"name\":\"scopeContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-immutable-work-item|routine-documentation-delivery\"}},{\"name\":\"startupContract\",\"value\":{\"kind\":\"string\",\"value\":\"manual-default-paused-no-automatic-resume\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":1148,\"startColumn\":1,\"endLine\":1161,\"endColumn\":4}},{\"id\":\"EXPORT-LifecycleIntents\",\"module\":\"CoordinationProtocol\",\"declaration\":\"lifecycleIntentCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"backlog\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"cancelled\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Paused\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"paused\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"ready\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"EXPORT-MutationKinds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"mutationKindCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-AddEdge\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"edge\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"relation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Append\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"append\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"stream\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Clear\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"scalar\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"field\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Compensate\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"compensation\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"mutation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Create\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"create\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"absent\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"subject\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-RemoveEdge\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"edge\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"relation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Set\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"scalar\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"field\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Transition\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"transition\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycle\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"EXPORT-MutationOutcomes\",\"module\":\"CoordinationProtocol\",\"declaration\":\"mutationOutcomeCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"applied\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Applied\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"conflict\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"refresh-and-new-intent\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"no-op\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"refused\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"new-authority-or-intent\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"complete-observation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"authority-window\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"observe-or-exact-replay\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"availability-window\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"EXPORT-NativeRelationKinds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"nativeRelationKindCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"direction\",\"value\":{\"kind\":\"string\",\"value\":\"blocker-to-blocked\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Blocks\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"nativeRelationKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"direction\",\"value\":{\"kind\":\"string\",\"value\":\"parent-to-child\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"nativeRelationKind\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":184,\"startColumn\":1,\"endLine\":188,\"endColumn\":4}},{\"id\":\"EXPORT-ObservationOutcomes\",\"module\":\"CoordinationProtocol\",\"declaration\":\"observationOutcomeCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"contradictory\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"resolve-contradiction\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"complete-evidence\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Observed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"positive\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"negative\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"authority-window\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Stale\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"refresh-revision\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"repair-authorization\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"repair-read\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"EXPORT-PilotPermitSpecification\",\"module\":\"CoordinationProtocol\",\"declaration\":\"pilotPermitSpecificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"activationContract\",\"value\":{\"kind\":\"string\",\"value\":\"inert-prospective-no-host-no-provider-writer\"}},{\"name\":\"budgetContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-positive-no-automatic-renewal\"}},{\"name\":\"capacityContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-with-reserved-recovery-capacity\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PILOT-PermitV1\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"pilotPermitSpecification\"}},{\"name\":\"lifecycleContract\",\"value\":{\"kind\":\"string\",\"value\":\"StableOwned\\u003ETransferIntended\\u003EPilotOwned\\u003E(OutcomeUnknown|Paused|Revoked|ReturnIntended)\\u003EStableOwned\"}},{\"name\":\"ownershipContract\",\"value\":{\"kind\":\"string\",\"value\":\"stable-until-durable-transfer-acknowledgement-and-readback\"}},{\"name\":\"recoveryContract\",\"value\":{\"kind\":\"string\",\"value\":\"generation-current|readback-current|unknown-outcome-blocks-dispatch\"}},{\"name\":\"schemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.coordination.pilot-permit/1\"}},{\"name\":\"scopeContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-canonical-work-item|routine-implementation\"}},{\"name\":\"trustContract\",\"value\":{\"kind\":\"string\",\"value\":\"trusted-cooperating-runner-supported-route-only\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":1133,\"startColumn\":1,\"endLine\":1147,\"endColumn\":4}},{\"id\":\"EXPORT-Properties\",\"module\":\"CoordinationProtocol\",\"declaration\":\"propertyCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedAuthoritiesAreQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"},{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedObservationKnowledgeIsQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedVocabularyIsQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CompensationRequiresAppliedPredecessor\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MUT-Compensate\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurablePlanCompensationIsBoundaryBound\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurablePlansAreOrderedAndResumable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PDISP-Advance\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"},{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurableProtocolCheckpointsArePreserved\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"FailureOutcomesDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"HumanIntentIsObservationIndependent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"LifecycleIntentCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"LifecycleStatusIsDerived\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"OBS-Observed\"},{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationCataloguesAreClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationResultsAreBound\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"},{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"},{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"},{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"NativeRelationEdgesAreValid\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"NativeRelationKindCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationOutcomeCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolEnvelopesAreValidAndOrdered\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamCataloguesAreClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"STREAM-Claim\"},{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"STREAM-Review\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamChangesPreservePriorSemantics\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"},{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamObservationFailuresDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"},{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProvenAbsenceCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationChangesPreserveLifecycleIntent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationChangesPreserveUnrelatedEdges\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationObservationFailuresDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"UncertainMutationOutcomesStayUnknown\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"},{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"},{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"},{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"UnknownLifecycleFactsFailClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VocabularyCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}]}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"EXPORT-ProtocolPayloadKinds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"protocolPayloadKindCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Review\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"EXPORT-ProtocolStreamKinds\",\"module\":\"CoordinationProtocol\",\"declaration\":\"protocolStreamKindCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"delivery\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-claim-lease-touch-set-fenced\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-full-snapshot-review-epoch\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Review\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-operation-election-fenced\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"operation-receipt\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"EXPORT-Relationships\",\"module\":\"CoordinationProtocol\",\"declaration\":\"relationshipCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-Actions\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-Actions-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ClassifiedExternal-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-GitLedger-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-NativeGitHub-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-PackageFeed-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ProtocolStream-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-RepositoryRegistry-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Authority-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"CodecVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Codec-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"CommandVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Command-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"EventVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Event-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Mutation-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-ObservationPlan-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Projection-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-SettingsProfile-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Subject-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-VersionIdentity-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"EXPORT-Verifications\",\"module\":\"CoordinationProtocol\",\"declaration\":\"verificationCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-AuthorityCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-AuthorityBindings\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-Actions\"},{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"},{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"},{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"},{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"},{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"},{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-DurablePlanDispositionCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-DurablePlans\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PDISP-Advance\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"},{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-LifecycleIntentCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-LifecycleIntent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-MutationKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-MutationOutcomeCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-MutationAlgebra\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"},{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"},{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"},{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"},{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"},{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"},{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"},{\"kind\":\"string\",\"value\":\"MUT-AddEdge\"},{\"kind\":\"string\",\"value\":\"MUT-Append\"},{\"kind\":\"string\",\"value\":\"MUT-Clear\"},{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"MUT-Create\"},{\"kind\":\"string\",\"value\":\"MUT-RemoveEdge\"},{\"kind\":\"string\",\"value\":\"MUT-Set\"},{\"kind\":\"string\",\"value\":\"MUT-Transition\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-NativeRelationKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-NativeRelations\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-ObservationOutcomeCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-ObservationOutcomes\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-Observed\"},{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-ProtocolPayloadKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-ProtocolStreamKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-ProtocolStreams\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"},{\"kind\":\"string\",\"value\":\"STREAM-Claim\"},{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"STREAM-Review\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"},{\"kind\":\"string\",\"value\":\"BOUND-VocabularyCardinality\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-VocabularyBaseline\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"},{\"kind\":\"string\",\"value\":\"CodecVocabulary\"},{\"kind\":\"string\",\"value\":\"CommandVocabulary\"},{\"kind\":\"string\",\"value\":\"EventVocabulary\"},{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"},{\"kind\":\"string\",\"value\":\"MutationVocabulary\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"},{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"},{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"},{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"},{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"EXPORT-Vocabulary\",\"module\":\"CoordinationProtocol\",\"declaration\":\"vocabularyCatalogue\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"authorities\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authority\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"codecs\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CodecVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"codec\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"commands\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CommandVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"command\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"events\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"EventVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"event\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"evidence-obligations\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"evidence\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"mutations\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutation\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"observation-plans\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationPlan\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"projections\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"projection\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"settings-profiles\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"settingsProfile\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"subjects\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"subject\"}}]},{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"version-identities\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"versionIdentity\"}}]}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}}],\"catalogue\":[{\"id\":\"AUTH-Actions\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-Actions-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"actions\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-Actions\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"workflow-run-attempt\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"run-id-and-attempt\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-ClassifiedExternal\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ClassifiedExternal-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"classified-external\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"classified-external-revision\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"declared-source-revision\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-GitLedger\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-GitLedger-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"git-ledger\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"git-commit-sha\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"commit-object-id\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-NativeGitHub\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-NativeGitHub-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"native-github\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"github-object-version\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"node-id-and-updated-at\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-PackageFeed\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-PackageFeed-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"package-feed\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"package-content-sha256\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"package-bytes-digest\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-ProtocolStream\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-ancestry-snapshot-and-terminal-checkpoint\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ProtocolStream-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"protected-sharded-git-journal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"git-expected-parent-and-generation\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"journal-commit-and-fencing-generation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AUTH-RepositoryRegistry\",\"kind\":\"authorityBinding\",\"exportId\":\"EXPORT-Authorities\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"completenessContract\",\"value\":{\"kind\":\"string\",\"value\":\"complete-required-fields\"}},{\"name\":\"evidenceRelationship\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-RepositoryRegistry-Evidence\"}},{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"repository-registry\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authorityBinding\"}},{\"name\":\"revisionKind\",\"value\":{\"kind\":\"string\",\"value\":\"registry-document-sha256\"}},{\"name\":\"revisionValue\",\"value\":{\"kind\":\"string\",\"value\":\"canonical-document-digest\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":155,\"startColumn\":1,\"endLine\":164,\"endColumn\":4}},{\"id\":\"AcceptedAuthoritiesAreQualified\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedAuthoritiesAreQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"},{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AcceptedObservationKnowledgeIsQualified\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedObservationKnowledgeIsQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AcceptedVocabularyIsQualified\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AcceptedVocabularyIsQualified\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AuthorityCanBeAccepted\",\"kind\":\"example\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AuthorityCatalogueIsClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"AuthorityVocabulary\",\"kind\":\"authority\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"authorities\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"authority\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"BOUND-AuthorityCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-AuthorityCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":7}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":7}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-DurablePlanDispositionCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-DurablePlanDispositionCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":4}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-LifecycleIntentCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-LifecycleIntentCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":4}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-MutationKindCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-MutationKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-MutationOutcomeCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-MutationOutcomeCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-NativeRelationKindCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-NativeRelationKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":2}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":2}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-ObservationOutcomeCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ObservationOutcomeCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":9}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":9}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-ProtocolPayloadKindCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ProtocolPayloadKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":8}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":8}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-ProtocolStreamKindCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-ProtocolStreamKindCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":5}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":5}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-TraceSteps\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":4}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":0}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"BOUND-VocabularyCardinality\",\"kind\":\"bound\",\"exportId\":\"EXPORT-Bounds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"BOUND-VocabularyCardinality\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"bound\"}},{\"name\":\"maximum\",\"value\":{\"kind\":\"int\",\"value\":11}},{\"name\":\"minimum\",\"value\":{\"kind\":\"int\",\"value\":11}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":282,\"startColumn\":1,\"endLine\":295,\"endColumn\":4}},{\"id\":\"COMPAT-Profile2\",\"kind\":\"compatibility\",\"exportId\":\"EXPORT-Compatibility\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"detail\",\"value\":{\"kind\":\"string\",\"value\":\"Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1\\u003EPreparing\\u003EFreezeRequested\\u003EFrozen\\u003ESwitchedV2\\u003EVerifiedV2\\u003EOpenV2\\u003EObservingV2\\u003EContractingV1\\u003EOperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen.\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"COMPAT-Profile2\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"compatibility\"}},{\"name\":\"requirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"surface\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg-quint-profile/2\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":332,\"startColumn\":1,\"endLine\":335,\"endColumn\":4}},{\"id\":\"COUT-Specification\",\"kind\":\"compiledOutputSpecification\",\"exportId\":\"EXPORT-CompiledOutputSpecification\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"familyContract\",\"value\":{\"kind\":\"string\",\"value\":\"1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"COUT-Specification\"}},{\"name\":\"identityContract\",\"value\":{\"kind\":\"string\",\"value\":\"family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"compiledOutputSpecification\"}},{\"name\":\"normalizationAuthority\",\"value\":{\"kind\":\"string\",\"value\":\"typed-effect-json\"}},{\"name\":\"projectionViewFormats\",\"value\":{\"kind\":\"string\",\"value\":\"markdown|json\"}},{\"name\":\"qualificationContract\",\"value\":{\"kind\":\"string\",\"value\":\"supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review\"}},{\"name\":\"refusalContract\",\"value\":{\"kind\":\"string\",\"value\":\"missing|duplicate|substituted|unsupported|incomplete|reordered|stale\"}},{\"name\":\"semanticDiffContract\",\"value\":{\"kind\":\"string\",\"value\":\"ordinal|json-pointer|value-sha256\"}},{\"name\":\"versionContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":253,\"startColumn\":1,\"endLine\":261,\"endColumn\":4}},{\"id\":\"CodecVocabulary\",\"kind\":\"codec\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"codecs\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CodecVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"codec\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"CommandVocabulary\",\"kind\":\"command\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"commands\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CommandVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"command\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"CompensationRequiresAppliedPredecessor\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"CompensationRequiresAppliedPredecessor\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MUT-Compensate\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"DSTATE-Specification\",\"kind\":\"desiredStateSpecification\",\"exportId\":\"EXPORT-DesiredStateSpecification\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"authorityClass\",\"value\":{\"kind\":\"string\",\"value\":\"revision-bound\"}},{\"name\":\"executionClass\",\"value\":{\"kind\":\"string\",\"value\":\"pure-intent-no-writer\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DSTATE-Specification\"}},{\"name\":\"issueSchemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"issue-type|issue-field|field-type|allowed-value\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"desiredStateSpecification\"}},{\"name\":\"permissionsContract\",\"value\":{\"kind\":\"string\",\"value\":\"repository-visibility|team-access|workflow-permission|environment-protection\"}},{\"name\":\"phaseAuthorityContract\",\"value\":{\"kind\":\"string\",\"value\":\"subject|profile|family|content|authority-revision|plan-outcome|apply-receipt\"}},{\"name\":\"phaseContract\",\"value\":{\"kind\":\"string\",\"value\":\"DSPH-Inspect\\u003EDSPH-Plan\\u003E(DSPH-Apply|DSPH-Verify)\\u003EDSPH-Verify\"}},{\"name\":\"projectsContract\",\"value\":{\"kind\":\"string\",\"value\":\"project-field|project-view|project-workflow|project-visibility|project-membership-policy\"}},{\"name\":\"refusalContract\",\"value\":{\"kind\":\"string\",\"value\":\"unsupported|unauthorized|incomplete|stale|identity-mismatch\"}},{\"name\":\"releasesContract\",\"value\":{\"kind\":\"string\",\"value\":\"release-environment|immutable-release|tag-protection|trusted-publisher\"}},{\"name\":\"repositoryProfileContract\",\"value\":{\"kind\":\"string\",\"value\":\"ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy\"}},{\"name\":\"repositoryPropertiesContract\",\"value\":{\"kind\":\"string\",\"value\":\"property-schema|property-value\"}},{\"name\":\"securitySupplyChainContract\",\"value\":{\"kind\":\"string\",\"value\":\"vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy\"}},{\"name\":\"workflowPinsContract\",\"value\":{\"kind\":\"string\",\"value\":\"reusable-workflow-pin|action-pin\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":237,\"startColumn\":1,\"endLine\":252,\"endColumn\":4}},{\"id\":\"DurablePlanCompensationIsBoundaryBound\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurablePlanCompensationIsBoundaryBound\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"DurablePlansAreOrderedAndResumable\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurablePlansAreOrderedAndResumable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PDISP-Advance\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"},{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"DurableProtocolCheckpointsArePreserved\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"DurableProtocolCheckpointsArePreserved\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"EventVocabulary\",\"kind\":\"event\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"events\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"EventVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"event\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"EvidenceObligationVocabulary\",\"kind\":\"evidence\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"evidence-obligations\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"evidence\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"FailureOutcomesDoNotBecomeAbsence\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"FailureOutcomesDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"HOSTED-WriterV1\",\"kind\":\"hostedWriterSpecification\",\"exportId\":\"EXPORT-HostedWriterSpecification\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"activationContract\",\"value\":{\"kind\":\"string\",\"value\":\"accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit\"}},{\"name\":\"budgetContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-positive-no-renewal\"}},{\"name\":\"candidateContract\",\"value\":{\"kind\":\"string\",\"value\":\"owner-controlled-content-addressed-bytes-before-branch-publication\"}},{\"name\":\"capacityContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-ordinary-assignment\"}},{\"name\":\"completionContract\",\"value\":{\"kind\":\"string\",\"value\":\"native-provider-merged-pr-and-exact-head-readback\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"HOSTED-WriterV1\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"hostedWriterSpecification\"}},{\"name\":\"operationContract\",\"value\":{\"kind\":\"string\",\"value\":\"stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence\"}},{\"name\":\"runnerContract\",\"value\":{\"kind\":\"string\",\"value\":\"exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner\"}},{\"name\":\"schemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.coordination.hosted-writer/1\"}},{\"name\":\"scopeContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-immutable-work-item|routine-documentation-delivery\"}},{\"name\":\"startupContract\",\"value\":{\"kind\":\"string\",\"value\":\"manual-default-paused-no-automatic-resume\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":1148,\"startColumn\":1,\"endLine\":1161,\"endColumn\":4}},{\"id\":\"HumanIntentIsObservationIndependent\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"HumanIntentIsObservationIndependent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"INTENT-Backlog\",\"kind\":\"lifecycleIntent\",\"exportId\":\"EXPORT-LifecycleIntents\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"backlog\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"INTENT-Cancelled\",\"kind\":\"lifecycleIntent\",\"exportId\":\"EXPORT-LifecycleIntents\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"cancelled\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"INTENT-Paused\",\"kind\":\"lifecycleIntent\",\"exportId\":\"EXPORT-LifecycleIntents\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Paused\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"paused\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"INTENT-Ready\",\"kind\":\"lifecycleIntent\",\"exportId\":\"EXPORT-LifecycleIntents\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycleIntent\"}},{\"name\":\"schedulingClass\",\"value\":{\"kind\":\"string\",\"value\":\"ready\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":177,\"startColumn\":1,\"endLine\":183,\"endColumn\":4}},{\"id\":\"LifecycleIntentCatalogueIsClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"LifecycleIntentCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"LifecycleStatusIsDerived\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"LifecycleStatusIsDerived\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"OBS-Observed\"},{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"MOUT-Applied\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"applied\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Applied\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-Idempotent\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"no-op\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-Incomplete\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"complete-observation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-RateLimited\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"authority-window\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-Rejected\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"refused\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"new-authority-or-intent\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-RevisionConflict\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"conflict\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"terminal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"refresh-and-new-intent\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-TimedOut\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"observe-or-exact-replay\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MOUT-Unavailable\",\"kind\":\"mutationOutcome\",\"exportId\":\"EXPORT-MutationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"effectClass\",\"value\":{\"kind\":\"string\",\"value\":\"unknown\"}},{\"name\":\"finality\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationOutcome\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"availability-window\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":219,\"startColumn\":1,\"endLine\":229,\"endColumn\":4}},{\"id\":\"MUT-AddEdge\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-AddEdge\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"edge\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"relation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Append\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Append\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"append\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"stream\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Clear\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Clear\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"scalar\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"field\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Compensate\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Compensate\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"compensation\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"mutation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Create\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Create\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"create\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"absent\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"subject\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-RemoveEdge\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-RemoveEdge\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"edge\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"relation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Set\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Set\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"scalar\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"field\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MUT-Transition\",\"kind\":\"mutationKind\",\"exportId\":\"EXPORT-MutationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MUT-Transition\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutationKind\"}},{\"name\":\"payloadKind\",\"value\":{\"kind\":\"string\",\"value\":\"transition\"}},{\"name\":\"revisionRequirement\",\"value\":{\"kind\":\"string\",\"value\":\"exact\"}},{\"name\":\"targetKind\",\"value\":{\"kind\":\"string\",\"value\":\"lifecycle\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":208,\"startColumn\":1,\"endLine\":218,\"endColumn\":4}},{\"id\":\"MutationCataloguesAreClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationCataloguesAreClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"MutationResultsAreBound\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationResultsAreBound\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"},{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"},{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"},{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"MutationVocabulary\",\"kind\":\"mutation\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"mutations\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"mutation\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"NativeRelationEdgesAreValid\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"NativeRelationEdgesAreValid\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"NativeRelationKindCatalogueIsClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"NativeRelationKindCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"OBS-Contradictory\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"contradictory\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"resolve-contradiction\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Incomplete\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"complete-evidence\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Observed\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Observed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"positive\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-ProvenAbsent\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"negative\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-RateLimited\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"authority-window\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Stale\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Stale\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"refresh-revision\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Unauthorized\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"repair-authorization\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Unreadable\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"repair-read\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":false}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"OBS-Unsupported\",\"kind\":\"observationOutcome\",\"exportId\":\"EXPORT-ObservationOutcomes\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationOutcome\"}},{\"name\":\"knowledgeClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"retryClass\",\"value\":{\"kind\":\"string\",\"value\":\"none\"}},{\"name\":\"terminal\",\"value\":{\"kind\":\"bool\",\"value\":true}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":165,\"startColumn\":1,\"endLine\":176,\"endColumn\":4}},{\"id\":\"ObservationOutcomeCatalogueIsClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationOutcomeCatalogueIsClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ObservationPlanVocabulary\",\"kind\":\"observationPlan\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"observation-plans\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"observationPlan\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"PAYLOAD-Claim\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-Delivery\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-Election\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-Lease\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-OperationLock\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-OperationReceipt\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-Review\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":true}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"durable\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Review\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PAYLOAD-TouchSet\",\"kind\":\"protocolPayloadKind\",\"exportId\":\"EXPORT-ProtocolPayloadKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"durableCheckpoint\",\"value\":{\"kind\":\"bool\",\"value\":false}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolPayloadKind\"}},{\"name\":\"retentionClass\",\"value\":{\"kind\":\"string\",\"value\":\"ephemeral\"}},{\"name\":\"streamKindId\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":197,\"startColumn\":1,\"endLine\":207,\"endColumn\":4}},{\"id\":\"PDISP-Advance\",\"kind\":\"durablePlanDisposition\",\"exportId\":\"EXPORT-DurablePlanDispositions\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Advance\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"next-step\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-success\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"PDISP-Compensate\",\"kind\":\"durablePlanDisposition\",\"exportId\":\"EXPORT-DurablePlanDispositions\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"compensate-reverse\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-refusal-applied-boundary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"PDISP-ReceiptReread\",\"kind\":\"durablePlanDisposition\",\"exportId\":\"EXPORT-DurablePlanDispositions\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"reread-receipt\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"uncertain\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"PDISP-Replan\",\"kind\":\"durablePlanDisposition\",\"exportId\":\"EXPORT-DurablePlanDispositions\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"durablePlanDisposition\"}},{\"name\":\"nextAction\",\"value\":{\"kind\":\"string\",\"value\":\"compile-new-plan\"}},{\"name\":\"receiptClass\",\"value\":{\"kind\":\"string\",\"value\":\"terminal-refusal-no-applied-boundary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":230,\"startColumn\":1,\"endLine\":236,\"endColumn\":4}},{\"id\":\"PILOT-PermitV1\",\"kind\":\"pilotPermitSpecification\",\"exportId\":\"EXPORT-PilotPermitSpecification\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"activationContract\",\"value\":{\"kind\":\"string\",\"value\":\"inert-prospective-no-host-no-provider-writer\"}},{\"name\":\"budgetContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-positive-no-automatic-renewal\"}},{\"name\":\"capacityContract\",\"value\":{\"kind\":\"string\",\"value\":\"finite-with-reserved-recovery-capacity\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"PILOT-PermitV1\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"pilotPermitSpecification\"}},{\"name\":\"lifecycleContract\",\"value\":{\"kind\":\"string\",\"value\":\"StableOwned\\u003ETransferIntended\\u003EPilotOwned\\u003E(OutcomeUnknown|Paused|Revoked|ReturnIntended)\\u003EStableOwned\"}},{\"name\":\"ownershipContract\",\"value\":{\"kind\":\"string\",\"value\":\"stable-until-durable-transfer-acknowledgement-and-readback\"}},{\"name\":\"recoveryContract\",\"value\":{\"kind\":\"string\",\"value\":\"generation-current|readback-current|unknown-outcome-blocks-dispatch\"}},{\"name\":\"schemaContract\",\"value\":{\"kind\":\"string\",\"value\":\"fsgg.coordination.pilot-permit/1\"}},{\"name\":\"scopeContract\",\"value\":{\"kind\":\"string\",\"value\":\"one-canonical-work-item|routine-implementation\"}},{\"name\":\"trustContract\",\"value\":{\"kind\":\"string\",\"value\":\"trusted-cooperating-runner-supported-route-only\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":1133,\"startColumn\":1,\"endLine\":1147,\"endColumn\":4}},{\"id\":\"ProjectionVocabulary\",\"kind\":\"projection\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"projections\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"projection\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"ProtocolEnvelopesAreValidAndOrdered\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolEnvelopesAreValidAndOrdered\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ProtocolStreamCataloguesAreClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamCataloguesAreClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"STREAM-Claim\"},{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"STREAM-Review\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ProtocolStreamChangesPreservePriorSemantics\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamChangesPreservePriorSemantics\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"},{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ProtocolStreamObservationFailuresDoNotBecomeAbsence\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProtocolStreamObservationFailuresDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"},{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"ProvenAbsenceCanBeAccepted\",\"kind\":\"example\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"ProvenAbsenceCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"REL-AUTH-Actions-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-Actions\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-Actions-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-ClassifiedExternal-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ClassifiedExternal-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-GitLedger-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-GitLedger-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-NativeGitHub-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-NativeGitHub-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-PackageFeed-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-PackageFeed-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-ProtocolStream-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-ProtocolStream-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-AUTH-RepositoryRegistry-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-AUTH-RepositoryRegistry-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Authority-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Authority-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Blocks\",\"kind\":\"nativeRelationKind\",\"exportId\":\"EXPORT-NativeRelationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"direction\",\"value\":{\"kind\":\"string\",\"value\":\"blocker-to-blocked\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Blocks\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"nativeRelationKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":184,\"startColumn\":1,\"endLine\":188,\"endColumn\":4}},{\"id\":\"REL-Codec-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"CodecVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Codec-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Command-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"CommandVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Command-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Event-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"EventVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Event-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Mutation-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"MutationVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Mutation-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-ObservationPlan-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-ObservationPlan-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-ParentChild\",\"kind\":\"nativeRelationKind\",\"exportId\":\"EXPORT-NativeRelationKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"direction\",\"value\":{\"kind\":\"string\",\"value\":\"parent-to-child\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"nativeRelationKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":184,\"startColumn\":1,\"endLine\":188,\"endColumn\":4}},{\"id\":\"REL-Projection-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Projection-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-SettingsProfile-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-SettingsProfile-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-Subject-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-Subject-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"REL-VersionIdentity-Evidence\",\"kind\":\"verifiedBy\",\"exportId\":\"EXPORT-Relationships\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"fromId\",\"value\":{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"REL-VersionIdentity-Evidence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verifiedBy\"}},{\"name\":\"toId\",\"value\":{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":262,\"startColumn\":1,\"endLine\":281,\"endColumn\":4}},{\"id\":\"RelationChangesPreserveLifecycleIntent\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationChangesPreserveLifecycleIntent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"RelationChangesPreserveUnrelatedEdges\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationChangesPreserveUnrelatedEdges\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"RelationObservationFailuresDoNotBecomeAbsence\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"RelationObservationFailuresDoNotBecomeAbsence\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"},{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"STREAM-Claim\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-claim-lease-touch-set-fenced\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Claim\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"STREAM-Delivery\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"delivery\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"STREAM-OperationLock\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-operation-election-fenced\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"STREAM-OperationReceipt\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"operation-receipt\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"STREAM-Review\",\"kind\":\"protocolStreamKind\",\"exportId\":\"EXPORT-ProtocolStreamKinds\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"journal-cas-full-snapshot-review-epoch\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"STREAM-Review\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"protocolStreamKind\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":189,\"startColumn\":1,\"endLine\":196,\"endColumn\":4}},{\"id\":\"SettingsProfileVocabulary\",\"kind\":\"settingsProfile\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"settings-profiles\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"settingsProfile\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"SubjectVocabulary\",\"kind\":\"subject\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"subjects\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"subject\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"UncertainMutationOutcomesStayUnknown\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"UncertainMutationOutcomesStayUnknown\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"},{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"},{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"},{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"UnknownLifecycleFactsFailClosed\",\"kind\":\"invariant\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"UnknownLifecycleFactsFailClosed\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"invariant\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}},{\"id\":\"VERIFY-AuthorityBindings\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-AuthorityCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-AuthorityBindings\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AUTH-Actions\"},{\"kind\":\"string\",\"value\":\"AUTH-ClassifiedExternal\"},{\"kind\":\"string\",\"value\":\"AUTH-GitLedger\"},{\"kind\":\"string\",\"value\":\"AUTH-NativeGitHub\"},{\"kind\":\"string\",\"value\":\"AUTH-PackageFeed\"},{\"kind\":\"string\",\"value\":\"AUTH-ProtocolStream\"},{\"kind\":\"string\",\"value\":\"AUTH-RepositoryRegistry\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-DurablePlans\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-DurablePlanDispositionCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-DurablePlans\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PDISP-Advance\"},{\"kind\":\"string\",\"value\":\"PDISP-Compensate\"},{\"kind\":\"string\",\"value\":\"PDISP-ReceiptReread\"},{\"kind\":\"string\",\"value\":\"PDISP-Replan\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-LifecycleIntent\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-LifecycleIntentCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-LifecycleIntent\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"INTENT-Backlog\"},{\"kind\":\"string\",\"value\":\"INTENT-Cancelled\"},{\"kind\":\"string\",\"value\":\"INTENT-Paused\"},{\"kind\":\"string\",\"value\":\"INTENT-Ready\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-MutationAlgebra\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-MutationKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-MutationOutcomeCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-MutationAlgebra\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"MOUT-Applied\"},{\"kind\":\"string\",\"value\":\"MOUT-Idempotent\"},{\"kind\":\"string\",\"value\":\"MOUT-Incomplete\"},{\"kind\":\"string\",\"value\":\"MOUT-RateLimited\"},{\"kind\":\"string\",\"value\":\"MOUT-Rejected\"},{\"kind\":\"string\",\"value\":\"MOUT-RevisionConflict\"},{\"kind\":\"string\",\"value\":\"MOUT-TimedOut\"},{\"kind\":\"string\",\"value\":\"MOUT-Unavailable\"},{\"kind\":\"string\",\"value\":\"MUT-AddEdge\"},{\"kind\":\"string\",\"value\":\"MUT-Append\"},{\"kind\":\"string\",\"value\":\"MUT-Clear\"},{\"kind\":\"string\",\"value\":\"MUT-Compensate\"},{\"kind\":\"string\",\"value\":\"MUT-Create\"},{\"kind\":\"string\",\"value\":\"MUT-RemoveEdge\"},{\"kind\":\"string\",\"value\":\"MUT-Set\"},{\"kind\":\"string\",\"value\":\"MUT-Transition\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-NativeRelations\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-NativeRelationKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-NativeRelations\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"REL-Blocks\"},{\"kind\":\"string\",\"value\":\"REL-ParentChild\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-ObservationOutcomes\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-ObservationOutcomeCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-ObservationOutcomes\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"OBS-Contradictory\"},{\"kind\":\"string\",\"value\":\"OBS-Incomplete\"},{\"kind\":\"string\",\"value\":\"OBS-Observed\"},{\"kind\":\"string\",\"value\":\"OBS-ProvenAbsent\"},{\"kind\":\"string\",\"value\":\"OBS-RateLimited\"},{\"kind\":\"string\",\"value\":\"OBS-Stale\"},{\"kind\":\"string\",\"value\":\"OBS-Unauthorized\"},{\"kind\":\"string\",\"value\":\"OBS-Unreadable\"},{\"kind\":\"string\",\"value\":\"OBS-Unsupported\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-ProtocolStreams\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-ProtocolPayloadKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-ProtocolStreamKindCardinality\"},{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-ProtocolStreams\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"PAYLOAD-Claim\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Delivery\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Election\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Lease\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationLock\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-Review\"},{\"kind\":\"string\",\"value\":\"PAYLOAD-TouchSet\"},{\"kind\":\"string\",\"value\":\"STREAM-Claim\"},{\"kind\":\"string\",\"value\":\"STREAM-Delivery\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationLock\"},{\"kind\":\"string\",\"value\":\"STREAM-OperationReceipt\"},{\"kind\":\"string\",\"value\":\"STREAM-Review\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VERIFY-VocabularyBaseline\",\"kind\":\"verification\",\"exportId\":\"EXPORT-Verifications\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"boundIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"BOUND-TraceSteps\"},{\"kind\":\"string\",\"value\":\"BOUND-VocabularyCardinality\"}]}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VERIFY-VocabularyBaseline\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"verification\"}},{\"name\":\"subjectIds\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"AuthorityVocabulary\"},{\"kind\":\"string\",\"value\":\"CodecVocabulary\"},{\"kind\":\"string\",\"value\":\"CommandVocabulary\"},{\"kind\":\"string\",\"value\":\"EventVocabulary\"},{\"kind\":\"string\",\"value\":\"EvidenceObligationVocabulary\"},{\"kind\":\"string\",\"value\":\"MutationVocabulary\"},{\"kind\":\"string\",\"value\":\"ObservationPlanVocabulary\"},{\"kind\":\"string\",\"value\":\"ProjectionVocabulary\"},{\"kind\":\"string\",\"value\":\"SettingsProfileVocabulary\"},{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"},{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}]}},{\"name\":\"verificationKind\",\"value\":{\"kind\":\"string\",\"value\":\"bounded-invariant-and-witness\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":296,\"startColumn\":1,\"endLine\":331,\"endColumn\":4}},{\"id\":\"VersionIdentityVocabulary\",\"kind\":\"versionIdentity\",\"exportId\":\"EXPORT-Vocabulary\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"family\",\"value\":{\"kind\":\"string\",\"value\":\"version-identities\"}},{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VersionIdentityVocabulary\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"versionIdentity\"}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":141,\"startColumn\":1,\"endLine\":154,\"endColumn\":4}},{\"id\":\"VocabularyCanBeAccepted\",\"kind\":\"example\",\"exportId\":\"EXPORT-Properties\",\"value\":{\"kind\":\"record\",\"fields\":[{\"name\":\"id\",\"value\":{\"kind\":\"string\",\"value\":\"VocabularyCanBeAccepted\"}},{\"name\":\"kind\",\"value\":{\"kind\":\"string\",\"value\":\"example\"}},{\"name\":\"subjects\",\"value\":{\"kind\":\"set\",\"items\":[{\"kind\":\"string\",\"value\":\"SubjectVocabulary\"}]}}]},\"source\":{\"path\":\"src/FS.GG.Coordination.Protocol/Protocol.md\",\"startLine\":336,\"startColumn\":1,\"endLine\":404,\"endColumn\":4}}],\"actionEffects\":[{\"actionId\":\"ACT-AcceptObservationKnowledge\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-AcceptObservedAuthority\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-AcceptVocabularyIdentity\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-AddNativeRelation\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-AppendProtocolEnvelope\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-CompactEphemeralProtocolEnvelope\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-Init\",\"reads\":[],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-ObserveAuthority\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-ObserveLifecycleFacts\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleStatus\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-ObserveProtocolEvidence\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-RefreshLifecycleStatus\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-RemoveNativeRelation\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-SetHumanIntent\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"lifecycleFacts\",\"lifecycleStatus\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]},{\"actionId\":\"ACT-Step\",\"reads\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"writes\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"],\"subjects\":[\"acceptedAuthorityObservations\",\"acceptedObservationKnowledge\",\"acceptedVocabulary\",\"authorityObservation\",\"authorityObservationAvailable\",\"authorizedDurableProtocolCheckpoints\",\"authorizedHumanIntentId\",\"authorizedNativeRelationEdges\",\"evidenceObserved\",\"humanIntentId\",\"lifecycleFacts\",\"lifecycleStatus\",\"lifecycleStatusCurrent\",\"nativeRelationEdges\",\"protocolStreamEvents\"]}],\"relationships\":[{\"from\":\"AUTH-Actions\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-ClassifiedExternal\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-GitLedger\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-NativeGitHub\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-PackageFeed\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-ProtocolStream\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AUTH-RepositoryRegistry\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"AuthorityVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"CodecVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"CommandVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"EventVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"MutationVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"ObservationPlanVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"ProjectionVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"SettingsProfileVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"SubjectVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"},{\"from\":\"VersionIdentityVocabulary\",\"kind\":\"verifiedBy\",\"to\":\"EvidenceObligationVocabulary\"}],\"verificationProfiles\":[{\"id\":\"VERIFY-AuthorityBindings\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"AUTH-Actions\",\"AUTH-ClassifiedExternal\",\"AUTH-GitLedger\",\"AUTH-NativeGitHub\",\"AUTH-PackageFeed\",\"AUTH-ProtocolStream\",\"AUTH-RepositoryRegistry\"],\"boundIds\":[\"BOUND-AuthorityCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-DurablePlans\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"MUT-Compensate\",\"PAYLOAD-OperationReceipt\",\"PDISP-Advance\",\"PDISP-Compensate\",\"PDISP-ReceiptReread\",\"PDISP-Replan\"],\"boundIds\":[\"BOUND-DurablePlanDispositionCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-LifecycleIntent\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"INTENT-Backlog\",\"INTENT-Cancelled\",\"INTENT-Paused\",\"INTENT-Ready\"],\"boundIds\":[\"BOUND-LifecycleIntentCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-MutationAlgebra\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"MOUT-Applied\",\"MOUT-Idempotent\",\"MOUT-Incomplete\",\"MOUT-RateLimited\",\"MOUT-Rejected\",\"MOUT-RevisionConflict\",\"MOUT-TimedOut\",\"MOUT-Unavailable\",\"MUT-AddEdge\",\"MUT-Append\",\"MUT-Clear\",\"MUT-Compensate\",\"MUT-Create\",\"MUT-RemoveEdge\",\"MUT-Set\",\"MUT-Transition\"],\"boundIds\":[\"BOUND-MutationKindCardinality\",\"BOUND-MutationOutcomeCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-NativeRelations\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"REL-Blocks\",\"REL-ParentChild\"],\"boundIds\":[\"BOUND-NativeRelationKindCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-ObservationOutcomes\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"OBS-Contradictory\",\"OBS-Incomplete\",\"OBS-Observed\",\"OBS-ProvenAbsent\",\"OBS-RateLimited\",\"OBS-Stale\",\"OBS-Unauthorized\",\"OBS-Unreadable\",\"OBS-Unsupported\"],\"boundIds\":[\"BOUND-ObservationOutcomeCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-ProtocolStreams\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"PAYLOAD-Claim\",\"PAYLOAD-Delivery\",\"PAYLOAD-Election\",\"PAYLOAD-Lease\",\"PAYLOAD-OperationLock\",\"PAYLOAD-OperationReceipt\",\"PAYLOAD-Review\",\"PAYLOAD-TouchSet\",\"STREAM-Claim\",\"STREAM-Delivery\",\"STREAM-OperationLock\",\"STREAM-OperationReceipt\",\"STREAM-Review\"],\"boundIds\":[\"BOUND-ProtocolPayloadKindCardinality\",\"BOUND-ProtocolStreamKindCardinality\",\"BOUND-TraceSteps\"]},{\"id\":\"VERIFY-VocabularyBaseline\",\"kind\":\"bounded-invariant-and-witness\",\"subjectIds\":[\"AuthorityVocabulary\",\"CodecVocabulary\",\"CommandVocabulary\",\"EventVocabulary\",\"EvidenceObligationVocabulary\",\"MutationVocabulary\",\"ObservationPlanVocabulary\",\"ProjectionVocabulary\",\"SettingsProfileVocabulary\",\"SubjectVocabulary\",\"VersionIdentityVocabulary\"],\"boundIds\":[\"BOUND-TraceSteps\",\"BOUND-VocabularyCardinality\"]}],\"bounds\":[{\"id\":\"BOUND-AuthorityCardinality\",\"minimum\":7,\"maximum\":7},{\"id\":\"BOUND-DurablePlanDispositionCardinality\",\"minimum\":4,\"maximum\":4},{\"id\":\"BOUND-LifecycleIntentCardinality\",\"minimum\":4,\"maximum\":4},{\"id\":\"BOUND-MutationKindCardinality\",\"minimum\":8,\"maximum\":8},{\"id\":\"BOUND-MutationOutcomeCardinality\",\"minimum\":8,\"maximum\":8},{\"id\":\"BOUND-NativeRelationKindCardinality\",\"minimum\":2,\"maximum\":2},{\"id\":\"BOUND-ObservationOutcomeCardinality\",\"minimum\":9,\"maximum\":9},{\"id\":\"BOUND-ProtocolPayloadKindCardinality\",\"minimum\":8,\"maximum\":8},{\"id\":\"BOUND-ProtocolStreamKindCardinality\",\"minimum\":5,\"maximum\":5},{\"id\":\"BOUND-TraceSteps\",\"minimum\":0,\"maximum\":4},{\"id\":\"BOUND-VocabularyCardinality\",\"minimum\":11,\"maximum\":11}],\"impacts\":[],\"compatibility\":[{\"surface\":\"fsgg-quint-profile/2\",\"requirement\":\"exact\",\"detail\":\"Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1\\u003EPreparing\\u003EFreezeRequested\\u003EFrozen\\u003ESwitchedV2\\u003EVerifiedV2\\u003EOpenV2\\u003EObservingV2\\u003EContractingV1\\u003EOperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen.\"}],\"digests\":[{\"name\":\"sandbox-contract\",\"sha256\":\"2bf8ff26ddb488444c59daa77515b183008c352213e48ac6e36e15e0bc08c122\"},{\"name\":\"typed-effect\",\"sha256\":\"0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715\"}]}\n"
 
 type QuintValue =
     | Bool of bool
@@ -24,484 +30,3987 @@ type QuintValue =
     | Map of (QuintValue * QuintValue) list
 
 type QuintExport =
-    { Id: string
-      ModuleName: string
-      DeclarationName: string
-      Value: QuintValue }
+    {
+        Id: string
+        ModuleName: string
+        DeclarationName: string
+        Value: QuintValue
+    }
 
 type CatalogueEntry =
-    { Id: string
-      Kind: string
-      ExportId: string
-      Value: QuintValue }
+    {
+        Id: string
+        Kind: string
+        ExportId: string
+        Value: QuintValue
+    }
 
 module Ids =
     [<Literal>]
     let AuthActions = "AUTH-Actions"
+
     [<Literal>]
     let AuthClassifiedExternal = "AUTH-ClassifiedExternal"
+
     [<Literal>]
     let AuthGitLedger = "AUTH-GitLedger"
+
     [<Literal>]
     let AuthNativeGitHub = "AUTH-NativeGitHub"
+
     [<Literal>]
     let AuthPackageFeed = "AUTH-PackageFeed"
+
     [<Literal>]
     let AuthProtocolStream = "AUTH-ProtocolStream"
+
     [<Literal>]
     let AuthRepositoryRegistry = "AUTH-RepositoryRegistry"
+
     [<Literal>]
     let AcceptedAuthoritiesAreQualified = "AcceptedAuthoritiesAreQualified"
+
     [<Literal>]
-    let AcceptedObservationKnowledgeIsQualified = "AcceptedObservationKnowledgeIsQualified"
+    let AcceptedObservationKnowledgeIsQualified =
+        "AcceptedObservationKnowledgeIsQualified"
+
     [<Literal>]
     let AcceptedVocabularyIsQualified = "AcceptedVocabularyIsQualified"
+
     [<Literal>]
     let AuthorityCanBeAccepted = "AuthorityCanBeAccepted"
+
     [<Literal>]
     let AuthorityCatalogueIsClosed = "AuthorityCatalogueIsClosed"
+
     [<Literal>]
     let AuthorityVocabulary = "AuthorityVocabulary"
+
     [<Literal>]
     let BoundAuthorityCardinality = "BOUND-AuthorityCardinality"
+
     [<Literal>]
-    let BoundDurablePlanDispositionCardinality = "BOUND-DurablePlanDispositionCardinality"
+    let BoundDurablePlanDispositionCardinality =
+        "BOUND-DurablePlanDispositionCardinality"
+
     [<Literal>]
     let BoundLifecycleIntentCardinality = "BOUND-LifecycleIntentCardinality"
+
     [<Literal>]
     let BoundMutationKindCardinality = "BOUND-MutationKindCardinality"
+
     [<Literal>]
     let BoundMutationOutcomeCardinality = "BOUND-MutationOutcomeCardinality"
+
     [<Literal>]
     let BoundNativeRelationKindCardinality = "BOUND-NativeRelationKindCardinality"
+
     [<Literal>]
     let BoundObservationOutcomeCardinality = "BOUND-ObservationOutcomeCardinality"
+
     [<Literal>]
     let BoundProtocolPayloadKindCardinality = "BOUND-ProtocolPayloadKindCardinality"
+
     [<Literal>]
     let BoundProtocolStreamKindCardinality = "BOUND-ProtocolStreamKindCardinality"
+
     [<Literal>]
     let BoundTraceSteps = "BOUND-TraceSteps"
+
     [<Literal>]
     let BoundVocabularyCardinality = "BOUND-VocabularyCardinality"
+
     [<Literal>]
     let CompatProfile2 = "COMPAT-Profile2"
+
     [<Literal>]
     let CoutSpecification = "COUT-Specification"
+
     [<Literal>]
     let CodecVocabulary = "CodecVocabulary"
+
     [<Literal>]
     let CommandVocabulary = "CommandVocabulary"
+
     [<Literal>]
-    let CompensationRequiresAppliedPredecessor = "CompensationRequiresAppliedPredecessor"
+    let CompensationRequiresAppliedPredecessor =
+        "CompensationRequiresAppliedPredecessor"
+
     [<Literal>]
     let DstateSpecification = "DSTATE-Specification"
+
     [<Literal>]
-    let DurablePlanCompensationIsBoundaryBound = "DurablePlanCompensationIsBoundaryBound"
+    let DurablePlanCompensationIsBoundaryBound =
+        "DurablePlanCompensationIsBoundaryBound"
+
     [<Literal>]
     let DurablePlansAreOrderedAndResumable = "DurablePlansAreOrderedAndResumable"
+
     [<Literal>]
-    let DurableProtocolCheckpointsArePreserved = "DurableProtocolCheckpointsArePreserved"
+    let DurableProtocolCheckpointsArePreserved =
+        "DurableProtocolCheckpointsArePreserved"
+
     [<Literal>]
     let ExportAuthorities = "EXPORT-Authorities"
+
     [<Literal>]
     let ExportBounds = "EXPORT-Bounds"
+
     [<Literal>]
     let ExportCompatibility = "EXPORT-Compatibility"
+
     [<Literal>]
     let ExportCompiledOutputSpecification = "EXPORT-CompiledOutputSpecification"
+
     [<Literal>]
     let ExportDesiredStateSpecification = "EXPORT-DesiredStateSpecification"
+
     [<Literal>]
     let ExportDurablePlanDispositions = "EXPORT-DurablePlanDispositions"
+
     [<Literal>]
     let ExportHostedWriterSpecification = "EXPORT-HostedWriterSpecification"
+
     [<Literal>]
     let ExportLifecycleIntents = "EXPORT-LifecycleIntents"
+
     [<Literal>]
     let ExportMutationKinds = "EXPORT-MutationKinds"
+
     [<Literal>]
     let ExportMutationOutcomes = "EXPORT-MutationOutcomes"
+
     [<Literal>]
     let ExportNativeRelationKinds = "EXPORT-NativeRelationKinds"
+
     [<Literal>]
     let ExportObservationOutcomes = "EXPORT-ObservationOutcomes"
+
     [<Literal>]
     let ExportPilotPermitSpecification = "EXPORT-PilotPermitSpecification"
+
     [<Literal>]
     let ExportProperties = "EXPORT-Properties"
+
     [<Literal>]
     let ExportProtocolPayloadKinds = "EXPORT-ProtocolPayloadKinds"
+
     [<Literal>]
     let ExportProtocolStreamKinds = "EXPORT-ProtocolStreamKinds"
+
     [<Literal>]
     let ExportRelationships = "EXPORT-Relationships"
+
     [<Literal>]
     let ExportVerifications = "EXPORT-Verifications"
+
     [<Literal>]
     let ExportVocabulary = "EXPORT-Vocabulary"
+
     [<Literal>]
     let EventVocabulary = "EventVocabulary"
+
     [<Literal>]
     let EvidenceObligationVocabulary = "EvidenceObligationVocabulary"
+
     [<Literal>]
     let FailureOutcomesDoNotBecomeAbsence = "FailureOutcomesDoNotBecomeAbsence"
+
     [<Literal>]
     let HostedWriterV1 = "HOSTED-WriterV1"
+
     [<Literal>]
     let HumanIntentIsObservationIndependent = "HumanIntentIsObservationIndependent"
+
     [<Literal>]
     let IntentBacklog = "INTENT-Backlog"
+
     [<Literal>]
     let IntentCancelled = "INTENT-Cancelled"
+
     [<Literal>]
     let IntentPaused = "INTENT-Paused"
+
     [<Literal>]
     let IntentReady = "INTENT-Ready"
+
     [<Literal>]
     let LifecycleIntentCatalogueIsClosed = "LifecycleIntentCatalogueIsClosed"
+
     [<Literal>]
     let LifecycleStatusIsDerived = "LifecycleStatusIsDerived"
+
     [<Literal>]
     let MoutApplied = "MOUT-Applied"
+
     [<Literal>]
     let MoutIdempotent = "MOUT-Idempotent"
+
     [<Literal>]
     let MoutIncomplete = "MOUT-Incomplete"
+
     [<Literal>]
     let MoutRateLimited = "MOUT-RateLimited"
+
     [<Literal>]
     let MoutRejected = "MOUT-Rejected"
+
     [<Literal>]
     let MoutRevisionConflict = "MOUT-RevisionConflict"
+
     [<Literal>]
     let MoutTimedOut = "MOUT-TimedOut"
+
     [<Literal>]
     let MoutUnavailable = "MOUT-Unavailable"
+
     [<Literal>]
     let MutAddEdge = "MUT-AddEdge"
+
     [<Literal>]
     let MutAppend = "MUT-Append"
+
     [<Literal>]
     let MutClear = "MUT-Clear"
+
     [<Literal>]
     let MutCompensate = "MUT-Compensate"
+
     [<Literal>]
     let MutCreate = "MUT-Create"
+
     [<Literal>]
     let MutRemoveEdge = "MUT-RemoveEdge"
+
     [<Literal>]
     let MutSet = "MUT-Set"
+
     [<Literal>]
     let MutTransition = "MUT-Transition"
+
     [<Literal>]
     let MutationCataloguesAreClosed = "MutationCataloguesAreClosed"
+
     [<Literal>]
     let MutationResultsAreBound = "MutationResultsAreBound"
+
     [<Literal>]
     let MutationVocabulary = "MutationVocabulary"
+
     [<Literal>]
     let NativeRelationEdgesAreValid = "NativeRelationEdgesAreValid"
+
     [<Literal>]
     let NativeRelationKindCatalogueIsClosed = "NativeRelationKindCatalogueIsClosed"
+
     [<Literal>]
     let ObsContradictory = "OBS-Contradictory"
+
     [<Literal>]
     let ObsIncomplete = "OBS-Incomplete"
+
     [<Literal>]
     let ObsObserved = "OBS-Observed"
+
     [<Literal>]
     let ObsProvenAbsent = "OBS-ProvenAbsent"
+
     [<Literal>]
     let ObsRateLimited = "OBS-RateLimited"
+
     [<Literal>]
     let ObsStale = "OBS-Stale"
+
     [<Literal>]
     let ObsUnauthorized = "OBS-Unauthorized"
+
     [<Literal>]
     let ObsUnreadable = "OBS-Unreadable"
+
     [<Literal>]
     let ObsUnsupported = "OBS-Unsupported"
+
     [<Literal>]
     let ObservationOutcomeCatalogueIsClosed = "ObservationOutcomeCatalogueIsClosed"
+
     [<Literal>]
     let ObservationPlanVocabulary = "ObservationPlanVocabulary"
+
     [<Literal>]
     let PayloadClaim = "PAYLOAD-Claim"
+
     [<Literal>]
     let PayloadDelivery = "PAYLOAD-Delivery"
+
     [<Literal>]
     let PayloadElection = "PAYLOAD-Election"
+
     [<Literal>]
     let PayloadLease = "PAYLOAD-Lease"
+
     [<Literal>]
     let PayloadOperationLock = "PAYLOAD-OperationLock"
+
     [<Literal>]
     let PayloadOperationReceipt = "PAYLOAD-OperationReceipt"
+
     [<Literal>]
     let PayloadReview = "PAYLOAD-Review"
+
     [<Literal>]
     let PayloadTouchSet = "PAYLOAD-TouchSet"
+
     [<Literal>]
     let PdispAdvance = "PDISP-Advance"
+
     [<Literal>]
     let PdispCompensate = "PDISP-Compensate"
+
     [<Literal>]
     let PdispReceiptReread = "PDISP-ReceiptReread"
+
     [<Literal>]
     let PdispReplan = "PDISP-Replan"
+
     [<Literal>]
     let PilotPermitV1 = "PILOT-PermitV1"
+
     [<Literal>]
     let ProjectionVocabulary = "ProjectionVocabulary"
+
     [<Literal>]
     let ProtocolEnvelopesAreValidAndOrdered = "ProtocolEnvelopesAreValidAndOrdered"
+
     [<Literal>]
     let ProtocolStreamCataloguesAreClosed = "ProtocolStreamCataloguesAreClosed"
+
     [<Literal>]
-    let ProtocolStreamChangesPreservePriorSemantics = "ProtocolStreamChangesPreservePriorSemantics"
+    let ProtocolStreamChangesPreservePriorSemantics =
+        "ProtocolStreamChangesPreservePriorSemantics"
+
     [<Literal>]
-    let ProtocolStreamObservationFailuresDoNotBecomeAbsence = "ProtocolStreamObservationFailuresDoNotBecomeAbsence"
+    let ProtocolStreamObservationFailuresDoNotBecomeAbsence =
+        "ProtocolStreamObservationFailuresDoNotBecomeAbsence"
+
     [<Literal>]
     let ProvenAbsenceCanBeAccepted = "ProvenAbsenceCanBeAccepted"
+
     [<Literal>]
     let RelAuthActionsEvidence = "REL-AUTH-Actions-Evidence"
+
     [<Literal>]
     let RelAuthClassifiedExternalEvidence = "REL-AUTH-ClassifiedExternal-Evidence"
+
     [<Literal>]
     let RelAuthGitLedgerEvidence = "REL-AUTH-GitLedger-Evidence"
+
     [<Literal>]
     let RelAuthNativeGitHubEvidence = "REL-AUTH-NativeGitHub-Evidence"
+
     [<Literal>]
     let RelAuthPackageFeedEvidence = "REL-AUTH-PackageFeed-Evidence"
+
     [<Literal>]
     let RelAuthProtocolStreamEvidence = "REL-AUTH-ProtocolStream-Evidence"
+
     [<Literal>]
     let RelAuthRepositoryRegistryEvidence = "REL-AUTH-RepositoryRegistry-Evidence"
+
     [<Literal>]
     let RelAuthorityEvidence = "REL-Authority-Evidence"
+
     [<Literal>]
     let RelBlocks = "REL-Blocks"
+
     [<Literal>]
     let RelCodecEvidence = "REL-Codec-Evidence"
+
     [<Literal>]
     let RelCommandEvidence = "REL-Command-Evidence"
+
     [<Literal>]
     let RelEventEvidence = "REL-Event-Evidence"
+
     [<Literal>]
     let RelMutationEvidence = "REL-Mutation-Evidence"
+
     [<Literal>]
     let RelObservationPlanEvidence = "REL-ObservationPlan-Evidence"
+
     [<Literal>]
     let RelParentChild = "REL-ParentChild"
+
     [<Literal>]
     let RelProjectionEvidence = "REL-Projection-Evidence"
+
     [<Literal>]
     let RelSettingsProfileEvidence = "REL-SettingsProfile-Evidence"
+
     [<Literal>]
     let RelSubjectEvidence = "REL-Subject-Evidence"
+
     [<Literal>]
     let RelVersionIdentityEvidence = "REL-VersionIdentity-Evidence"
+
     [<Literal>]
-    let RelationChangesPreserveLifecycleIntent = "RelationChangesPreserveLifecycleIntent"
+    let RelationChangesPreserveLifecycleIntent =
+        "RelationChangesPreserveLifecycleIntent"
+
     [<Literal>]
     let RelationChangesPreserveUnrelatedEdges = "RelationChangesPreserveUnrelatedEdges"
+
     [<Literal>]
-    let RelationObservationFailuresDoNotBecomeAbsence = "RelationObservationFailuresDoNotBecomeAbsence"
+    let RelationObservationFailuresDoNotBecomeAbsence =
+        "RelationObservationFailuresDoNotBecomeAbsence"
+
     [<Literal>]
     let StreamClaim = "STREAM-Claim"
+
     [<Literal>]
     let StreamDelivery = "STREAM-Delivery"
+
     [<Literal>]
     let StreamOperationLock = "STREAM-OperationLock"
+
     [<Literal>]
     let StreamOperationReceipt = "STREAM-OperationReceipt"
+
     [<Literal>]
     let StreamReview = "STREAM-Review"
+
     [<Literal>]
     let SettingsProfileVocabulary = "SettingsProfileVocabulary"
+
     [<Literal>]
     let SubjectVocabulary = "SubjectVocabulary"
+
     [<Literal>]
     let UncertainMutationOutcomesStayUnknown = "UncertainMutationOutcomesStayUnknown"
+
     [<Literal>]
     let UnknownLifecycleFactsFailClosed = "UnknownLifecycleFactsFailClosed"
+
     [<Literal>]
     let VerifyAuthorityBindings = "VERIFY-AuthorityBindings"
+
     [<Literal>]
     let VerifyDurablePlans = "VERIFY-DurablePlans"
+
     [<Literal>]
     let VerifyLifecycleIntent = "VERIFY-LifecycleIntent"
+
     [<Literal>]
     let VerifyMutationAlgebra = "VERIFY-MutationAlgebra"
+
     [<Literal>]
     let VerifyNativeRelations = "VERIFY-NativeRelations"
+
     [<Literal>]
     let VerifyObservationOutcomes = "VERIFY-ObservationOutcomes"
+
     [<Literal>]
     let VerifyProtocolStreams = "VERIFY-ProtocolStreams"
+
     [<Literal>]
     let VerifyVocabularyBaseline = "VERIFY-VocabularyBaseline"
+
     [<Literal>]
     let VersionIdentityVocabulary = "VersionIdentityVocabulary"
+
     [<Literal>]
     let VocabularyCanBeAccepted = "VocabularyCanBeAccepted"
 
-let Exports : QuintExport list =
-    [ { Id = "EXPORT-Authorities"; ModuleName = "CoordinationProtocol"; DeclarationName = "authorityCatalogue"; Value = Set [ Record [ ("completenessContract", String "complete-ancestry-snapshot-and-terminal-checkpoint"); ("evidenceRelationship", String "REL-AUTH-ProtocolStream-Evidence"); ("family", String "protected-sharded-git-journal"); ("id", String "AUTH-ProtocolStream"); ("kind", String "authorityBinding"); ("revisionKind", String "git-expected-parent-and-generation"); ("revisionValue", String "journal-commit-and-fencing-generation") ]; Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-Actions-Evidence"); ("family", String "actions"); ("id", String "AUTH-Actions"); ("kind", String "authorityBinding"); ("revisionKind", String "workflow-run-attempt"); ("revisionValue", String "run-id-and-attempt") ]; Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-ClassifiedExternal-Evidence"); ("family", String "classified-external"); ("id", String "AUTH-ClassifiedExternal"); ("kind", String "authorityBinding"); ("revisionKind", String "classified-external-revision"); ("revisionValue", String "declared-source-revision") ]; Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-GitLedger-Evidence"); ("family", String "git-ledger"); ("id", String "AUTH-GitLedger"); ("kind", String "authorityBinding"); ("revisionKind", String "git-commit-sha"); ("revisionValue", String "commit-object-id") ]; Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-NativeGitHub-Evidence"); ("family", String "native-github"); ("id", String "AUTH-NativeGitHub"); ("kind", String "authorityBinding"); ("revisionKind", String "github-object-version"); ("revisionValue", String "node-id-and-updated-at") ]; Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-PackageFeed-Evidence"); ("family", String "package-feed"); ("id", String "AUTH-PackageFeed"); ("kind", String "authorityBinding"); ("revisionKind", String "package-content-sha256"); ("revisionValue", String "package-bytes-digest") ]; Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-RepositoryRegistry-Evidence"); ("family", String "repository-registry"); ("id", String "AUTH-RepositoryRegistry"); ("kind", String "authorityBinding"); ("revisionKind", String "registry-document-sha256"); ("revisionValue", String "canonical-document-digest") ] ] }
-      { Id = "EXPORT-Bounds"; ModuleName = "CoordinationProtocol"; DeclarationName = "boundCatalogue"; Value = Set [ Record [ ("id", String "BOUND-AuthorityCardinality"); ("kind", String "bound"); ("maximum", Int 7L); ("minimum", Int 7L) ]; Record [ ("id", String "BOUND-DurablePlanDispositionCardinality"); ("kind", String "bound"); ("maximum", Int 4L); ("minimum", Int 4L) ]; Record [ ("id", String "BOUND-LifecycleIntentCardinality"); ("kind", String "bound"); ("maximum", Int 4L); ("minimum", Int 4L) ]; Record [ ("id", String "BOUND-MutationKindCardinality"); ("kind", String "bound"); ("maximum", Int 8L); ("minimum", Int 8L) ]; Record [ ("id", String "BOUND-MutationOutcomeCardinality"); ("kind", String "bound"); ("maximum", Int 8L); ("minimum", Int 8L) ]; Record [ ("id", String "BOUND-NativeRelationKindCardinality"); ("kind", String "bound"); ("maximum", Int 2L); ("minimum", Int 2L) ]; Record [ ("id", String "BOUND-ObservationOutcomeCardinality"); ("kind", String "bound"); ("maximum", Int 9L); ("minimum", Int 9L) ]; Record [ ("id", String "BOUND-ProtocolPayloadKindCardinality"); ("kind", String "bound"); ("maximum", Int 8L); ("minimum", Int 8L) ]; Record [ ("id", String "BOUND-ProtocolStreamKindCardinality"); ("kind", String "bound"); ("maximum", Int 5L); ("minimum", Int 5L) ]; Record [ ("id", String "BOUND-TraceSteps"); ("kind", String "bound"); ("maximum", Int 4L); ("minimum", Int 0L) ]; Record [ ("id", String "BOUND-VocabularyCardinality"); ("kind", String "bound"); ("maximum", Int 11L); ("minimum", Int 11L) ] ] }
-      { Id = "EXPORT-Compatibility"; ModuleName = "CoordinationProtocol"; DeclarationName = "compatibilityCatalogue"; Value = Set [ Record [ ("detail", String "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1>Preparing>FreezeRequested>Frozen>SwitchedV2>VerifiedV2>OpenV2>ObservingV2>ContractingV1>OperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen."); ("id", String "COMPAT-Profile2"); ("kind", String "compatibility"); ("requirement", String "exact"); ("surface", String "fsgg-quint-profile/2") ] ] }
-      { Id = "EXPORT-CompiledOutputSpecification"; ModuleName = "CoordinationProtocol"; DeclarationName = "compiledOutputSpecificationCatalogue"; Value = Set [ Record [ ("familyContract", String "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory"); ("id", String "COUT-Specification"); ("identityContract", String "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content"); ("kind", String "compiledOutputSpecification"); ("normalizationAuthority", String "typed-effect-json"); ("projectionViewFormats", String "markdown|json"); ("qualificationContract", String "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review"); ("refusalContract", String "missing|duplicate|substituted|unsupported|incomplete|reordered|stale"); ("semanticDiffContract", String "ordinal|json-pointer|value-sha256"); ("versionContract", String "fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2") ] ] }
-      { Id = "EXPORT-DesiredStateSpecification"; ModuleName = "CoordinationProtocol"; DeclarationName = "desiredStateSpecificationCatalogue"; Value = Set [ Record [ ("authorityClass", String "revision-bound"); ("executionClass", String "pure-intent-no-writer"); ("id", String "DSTATE-Specification"); ("issueSchemaContract", String "issue-type|issue-field|field-type|allowed-value"); ("kind", String "desiredStateSpecification"); ("permissionsContract", String "repository-visibility|team-access|workflow-permission|environment-protection"); ("phaseAuthorityContract", String "subject|profile|family|content|authority-revision|plan-outcome|apply-receipt"); ("phaseContract", String "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify"); ("projectsContract", String "project-field|project-view|project-workflow|project-visibility|project-membership-policy"); ("refusalContract", String "unsupported|unauthorized|incomplete|stale|identity-mismatch"); ("releasesContract", String "release-environment|immutable-release|tag-protection|trusted-publisher"); ("repositoryProfileContract", String "ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy"); ("repositoryPropertiesContract", String "property-schema|property-value"); ("securitySupplyChainContract", String "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy"); ("workflowPinsContract", String "reusable-workflow-pin|action-pin") ] ] }
-      { Id = "EXPORT-DurablePlanDispositions"; ModuleName = "CoordinationProtocol"; DeclarationName = "durablePlanDispositionCatalogue"; Value = Set [ Record [ ("id", String "PDISP-Advance"); ("kind", String "durablePlanDisposition"); ("nextAction", String "next-step"); ("receiptClass", String "terminal-success") ]; Record [ ("id", String "PDISP-Compensate"); ("kind", String "durablePlanDisposition"); ("nextAction", String "compensate-reverse"); ("receiptClass", String "terminal-refusal-applied-boundary") ]; Record [ ("id", String "PDISP-ReceiptReread"); ("kind", String "durablePlanDisposition"); ("nextAction", String "reread-receipt"); ("receiptClass", String "uncertain") ]; Record [ ("id", String "PDISP-Replan"); ("kind", String "durablePlanDisposition"); ("nextAction", String "compile-new-plan"); ("receiptClass", String "terminal-refusal-no-applied-boundary") ] ] }
-      { Id = "EXPORT-HostedWriterSpecification"; ModuleName = "CoordinationProtocol"; DeclarationName = "hostedWriterSpecificationCatalogue"; Value = Set [ Record [ ("activationContract", String "accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit"); ("budgetContract", String "finite-positive-no-renewal"); ("candidateContract", String "owner-controlled-content-addressed-bytes-before-branch-publication"); ("capacityContract", String "one-ordinary-assignment"); ("completionContract", String "native-provider-merged-pr-and-exact-head-readback"); ("id", String "HOSTED-WriterV1"); ("kind", String "hostedWriterSpecification"); ("operationContract", String "stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence"); ("runnerContract", String "exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner"); ("schemaContract", String "fsgg.coordination.hosted-writer/1"); ("scopeContract", String "one-immutable-work-item|routine-documentation-delivery"); ("startupContract", String "manual-default-paused-no-automatic-resume") ] ] }
-      { Id = "EXPORT-LifecycleIntents"; ModuleName = "CoordinationProtocol"; DeclarationName = "lifecycleIntentCatalogue"; Value = Set [ Record [ ("id", String "INTENT-Backlog"); ("kind", String "lifecycleIntent"); ("schedulingClass", String "backlog"); ("terminal", Bool false) ]; Record [ ("id", String "INTENT-Cancelled"); ("kind", String "lifecycleIntent"); ("schedulingClass", String "cancelled"); ("terminal", Bool true) ]; Record [ ("id", String "INTENT-Paused"); ("kind", String "lifecycleIntent"); ("schedulingClass", String "paused"); ("terminal", Bool false) ]; Record [ ("id", String "INTENT-Ready"); ("kind", String "lifecycleIntent"); ("schedulingClass", String "ready"); ("terminal", Bool false) ] ] }
-      { Id = "EXPORT-MutationKinds"; ModuleName = "CoordinationProtocol"; DeclarationName = "mutationKindCatalogue"; Value = Set [ Record [ ("id", String "MUT-AddEdge"); ("kind", String "mutationKind"); ("payloadKind", String "edge"); ("revisionRequirement", String "exact"); ("targetKind", String "relation") ]; Record [ ("id", String "MUT-Append"); ("kind", String "mutationKind"); ("payloadKind", String "append"); ("revisionRequirement", String "exact"); ("targetKind", String "stream") ]; Record [ ("id", String "MUT-Clear"); ("kind", String "mutationKind"); ("payloadKind", String "scalar"); ("revisionRequirement", String "exact"); ("targetKind", String "field") ]; Record [ ("id", String "MUT-Compensate"); ("kind", String "mutationKind"); ("payloadKind", String "compensation"); ("revisionRequirement", String "exact"); ("targetKind", String "mutation") ]; Record [ ("id", String "MUT-Create"); ("kind", String "mutationKind"); ("payloadKind", String "create"); ("revisionRequirement", String "absent"); ("targetKind", String "subject") ]; Record [ ("id", String "MUT-RemoveEdge"); ("kind", String "mutationKind"); ("payloadKind", String "edge"); ("revisionRequirement", String "exact"); ("targetKind", String "relation") ]; Record [ ("id", String "MUT-Set"); ("kind", String "mutationKind"); ("payloadKind", String "scalar"); ("revisionRequirement", String "exact"); ("targetKind", String "field") ]; Record [ ("id", String "MUT-Transition"); ("kind", String "mutationKind"); ("payloadKind", String "transition"); ("revisionRequirement", String "exact"); ("targetKind", String "lifecycle") ] ] }
-      { Id = "EXPORT-MutationOutcomes"; ModuleName = "CoordinationProtocol"; DeclarationName = "mutationOutcomeCatalogue"; Value = Set [ Record [ ("effectClass", String "applied"); ("finality", String "terminal"); ("id", String "MOUT-Applied"); ("kind", String "mutationOutcome"); ("retryClass", String "none") ]; Record [ ("effectClass", String "conflict"); ("finality", String "terminal"); ("id", String "MOUT-RevisionConflict"); ("kind", String "mutationOutcome"); ("retryClass", String "refresh-and-new-intent") ]; Record [ ("effectClass", String "no-op"); ("finality", String "terminal"); ("id", String "MOUT-Idempotent"); ("kind", String "mutationOutcome"); ("retryClass", String "none") ]; Record [ ("effectClass", String "refused"); ("finality", String "terminal"); ("id", String "MOUT-Rejected"); ("kind", String "mutationOutcome"); ("retryClass", String "new-authority-or-intent") ]; Record [ ("effectClass", String "unknown"); ("finality", String "uncertain"); ("id", String "MOUT-Incomplete"); ("kind", String "mutationOutcome"); ("retryClass", String "complete-observation") ]; Record [ ("effectClass", String "unknown"); ("finality", String "uncertain"); ("id", String "MOUT-RateLimited"); ("kind", String "mutationOutcome"); ("retryClass", String "authority-window") ]; Record [ ("effectClass", String "unknown"); ("finality", String "uncertain"); ("id", String "MOUT-TimedOut"); ("kind", String "mutationOutcome"); ("retryClass", String "observe-or-exact-replay") ]; Record [ ("effectClass", String "unknown"); ("finality", String "uncertain"); ("id", String "MOUT-Unavailable"); ("kind", String "mutationOutcome"); ("retryClass", String "availability-window") ] ] }
-      { Id = "EXPORT-NativeRelationKinds"; ModuleName = "CoordinationProtocol"; DeclarationName = "nativeRelationKindCatalogue"; Value = Set [ Record [ ("direction", String "blocker-to-blocked"); ("id", String "REL-Blocks"); ("kind", String "nativeRelationKind") ]; Record [ ("direction", String "parent-to-child"); ("id", String "REL-ParentChild"); ("kind", String "nativeRelationKind") ] ] }
-      { Id = "EXPORT-ObservationOutcomes"; ModuleName = "CoordinationProtocol"; DeclarationName = "observationOutcomeCatalogue"; Value = Set [ Record [ ("id", String "OBS-Contradictory"); ("kind", String "observationOutcome"); ("knowledgeClass", String "contradictory"); ("retryClass", String "resolve-contradiction"); ("terminal", Bool false) ]; Record [ ("id", String "OBS-Incomplete"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "complete-evidence"); ("terminal", Bool false) ]; Record [ ("id", String "OBS-Observed"); ("kind", String "observationOutcome"); ("knowledgeClass", String "positive"); ("retryClass", String "none"); ("terminal", Bool true) ]; Record [ ("id", String "OBS-ProvenAbsent"); ("kind", String "observationOutcome"); ("knowledgeClass", String "negative"); ("retryClass", String "none"); ("terminal", Bool true) ]; Record [ ("id", String "OBS-RateLimited"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "authority-window"); ("terminal", Bool false) ]; Record [ ("id", String "OBS-Stale"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "refresh-revision"); ("terminal", Bool false) ]; Record [ ("id", String "OBS-Unauthorized"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "repair-authorization"); ("terminal", Bool false) ]; Record [ ("id", String "OBS-Unreadable"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "repair-read"); ("terminal", Bool false) ]; Record [ ("id", String "OBS-Unsupported"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "none"); ("terminal", Bool true) ] ] }
-      { Id = "EXPORT-PilotPermitSpecification"; ModuleName = "CoordinationProtocol"; DeclarationName = "pilotPermitSpecificationCatalogue"; Value = Set [ Record [ ("activationContract", String "inert-prospective-no-host-no-provider-writer"); ("budgetContract", String "finite-positive-no-automatic-renewal"); ("capacityContract", String "finite-with-reserved-recovery-capacity"); ("id", String "PILOT-PermitV1"); ("kind", String "pilotPermitSpecification"); ("lifecycleContract", String "StableOwned>TransferIntended>PilotOwned>(OutcomeUnknown|Paused|Revoked|ReturnIntended)>StableOwned"); ("ownershipContract", String "stable-until-durable-transfer-acknowledgement-and-readback"); ("recoveryContract", String "generation-current|readback-current|unknown-outcome-blocks-dispatch"); ("schemaContract", String "fsgg.coordination.pilot-permit/1"); ("scopeContract", String "one-canonical-work-item|routine-implementation"); ("trustContract", String "trusted-cooperating-runner-supported-route-only") ] ] }
-      { Id = "EXPORT-Properties"; ModuleName = "CoordinationProtocol"; DeclarationName = "propertyCatalogue"; Value = Set [ Record [ ("id", String "AcceptedAuthoritiesAreQualified"); ("kind", String "invariant"); ("subjects", Set [ String "AuthorityVocabulary"; String "EvidenceObligationVocabulary" ]) ]; Record [ ("id", String "AcceptedObservationKnowledgeIsQualified"); ("kind", String "invariant"); ("subjects", Set [ String "EvidenceObligationVocabulary"; String "ObservationPlanVocabulary" ]) ]; Record [ ("id", String "AcceptedVocabularyIsQualified"); ("kind", String "invariant"); ("subjects", Set [ String "EvidenceObligationVocabulary" ]) ]; Record [ ("id", String "AuthorityCanBeAccepted"); ("kind", String "example"); ("subjects", Set [ String "AUTH-NativeGitHub" ]) ]; Record [ ("id", String "AuthorityCatalogueIsClosed"); ("kind", String "invariant"); ("subjects", Set [ String "AuthorityVocabulary" ]) ]; Record [ ("id", String "CompensationRequiresAppliedPredecessor"); ("kind", String "invariant"); ("subjects", Set [ String "MOUT-Applied"; String "MUT-Compensate" ]) ]; Record [ ("id", String "DurablePlanCompensationIsBoundaryBound"); ("kind", String "invariant"); ("subjects", Set [ String "MUT-Compensate"; String "PDISP-Compensate" ]) ]; Record [ ("id", String "DurablePlansAreOrderedAndResumable"); ("kind", String "invariant"); ("subjects", Set [ String "PAYLOAD-OperationReceipt"; String "PDISP-Advance"; String "PDISP-Compensate"; String "PDISP-ReceiptReread"; String "PDISP-Replan" ]) ]; Record [ ("id", String "DurableProtocolCheckpointsArePreserved"); ("kind", String "invariant"); ("subjects", Set [ String "PAYLOAD-Delivery"; String "PAYLOAD-Election"; String "PAYLOAD-OperationReceipt"; String "PAYLOAD-Review" ]) ]; Record [ ("id", String "FailureOutcomesDoNotBecomeAbsence"); ("kind", String "invariant"); ("subjects", Set [ String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported" ]) ]; Record [ ("id", String "HumanIntentIsObservationIndependent"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Backlog"; String "INTENT-Ready"; String "ObservationPlanVocabulary" ]) ]; Record [ ("id", String "LifecycleIntentCatalogueIsClosed"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Backlog"; String "INTENT-Cancelled"; String "INTENT-Paused"; String "INTENT-Ready" ]) ]; Record [ ("id", String "LifecycleStatusIsDerived"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Ready"; String "OBS-Observed"; String "OBS-ProvenAbsent" ]) ]; Record [ ("id", String "MutationCataloguesAreClosed"); ("kind", String "invariant"); ("subjects", Set [ String "MutationVocabulary" ]) ]; Record [ ("id", String "MutationResultsAreBound"); ("kind", String "invariant"); ("subjects", Set [ String "MOUT-Applied"; String "MOUT-Idempotent"; String "MOUT-Rejected"; String "MOUT-RevisionConflict"; String "MutationVocabulary" ]) ]; Record [ ("id", String "NativeRelationEdgesAreValid"); ("kind", String "invariant"); ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ]) ]; Record [ ("id", String "NativeRelationKindCatalogueIsClosed"); ("kind", String "invariant"); ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ]) ]; Record [ ("id", String "ObservationOutcomeCatalogueIsClosed"); ("kind", String "invariant"); ("subjects", Set [ String "ObservationPlanVocabulary" ]) ]; Record [ ("id", String "ProtocolEnvelopesAreValidAndOrdered"); ("kind", String "invariant"); ("subjects", Set [ String "PAYLOAD-Claim"; String "PAYLOAD-Delivery"; String "PAYLOAD-Election"; String "PAYLOAD-Lease"; String "PAYLOAD-OperationLock"; String "PAYLOAD-OperationReceipt"; String "PAYLOAD-Review"; String "PAYLOAD-TouchSet" ]) ]; Record [ ("id", String "ProtocolStreamCataloguesAreClosed"); ("kind", String "invariant"); ("subjects", Set [ String "STREAM-Claim"; String "STREAM-Delivery"; String "STREAM-OperationLock"; String "STREAM-OperationReceipt"; String "STREAM-Review" ]) ]; Record [ ("id", String "ProtocolStreamChangesPreservePriorSemantics"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Backlog"; String "REL-Blocks"; String "REL-ParentChild"; String "STREAM-Claim" ]) ]; Record [ ("id", String "ProtocolStreamObservationFailuresDoNotBecomeAbsence"); ("kind", String "invariant"); ("subjects", Set [ String "AUTH-ProtocolStream"; String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported" ]) ]; Record [ ("id", String "ProvenAbsenceCanBeAccepted"); ("kind", String "example"); ("subjects", Set [ String "OBS-ProvenAbsent" ]) ]; Record [ ("id", String "RelationChangesPreserveLifecycleIntent"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Backlog"; String "INTENT-Cancelled"; String "INTENT-Paused"; String "INTENT-Ready"; String "REL-Blocks"; String "REL-ParentChild" ]) ]; Record [ ("id", String "RelationChangesPreserveUnrelatedEdges"); ("kind", String "invariant"); ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ]) ]; Record [ ("id", String "RelationObservationFailuresDoNotBecomeAbsence"); ("kind", String "invariant"); ("subjects", Set [ String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported"; String "REL-Blocks"; String "REL-ParentChild" ]) ]; Record [ ("id", String "UncertainMutationOutcomesStayUnknown"); ("kind", String "invariant"); ("subjects", Set [ String "MOUT-Incomplete"; String "MOUT-RateLimited"; String "MOUT-TimedOut"; String "MOUT-Unavailable" ]) ]; Record [ ("id", String "UnknownLifecycleFactsFailClosed"); ("kind", String "invariant"); ("subjects", Set [ String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported" ]) ]; Record [ ("id", String "VocabularyCanBeAccepted"); ("kind", String "example"); ("subjects", Set [ String "SubjectVocabulary" ]) ] ] }
-      { Id = "EXPORT-ProtocolPayloadKinds"; ModuleName = "CoordinationProtocol"; DeclarationName = "protocolPayloadKindCatalogue"; Value = Set [ Record [ ("durableCheckpoint", Bool false); ("id", String "PAYLOAD-Claim"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "ephemeral"); ("streamKindId", String "STREAM-Claim") ]; Record [ ("durableCheckpoint", Bool false); ("id", String "PAYLOAD-Lease"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "ephemeral"); ("streamKindId", String "STREAM-Claim") ]; Record [ ("durableCheckpoint", Bool false); ("id", String "PAYLOAD-OperationLock"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "ephemeral"); ("streamKindId", String "STREAM-OperationLock") ]; Record [ ("durableCheckpoint", Bool false); ("id", String "PAYLOAD-TouchSet"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "ephemeral"); ("streamKindId", String "STREAM-Claim") ]; Record [ ("durableCheckpoint", Bool true); ("id", String "PAYLOAD-Delivery"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "durable"); ("streamKindId", String "STREAM-Delivery") ]; Record [ ("durableCheckpoint", Bool true); ("id", String "PAYLOAD-Election"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "durable"); ("streamKindId", String "STREAM-OperationLock") ]; Record [ ("durableCheckpoint", Bool true); ("id", String "PAYLOAD-OperationReceipt"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "durable"); ("streamKindId", String "STREAM-OperationReceipt") ]; Record [ ("durableCheckpoint", Bool true); ("id", String "PAYLOAD-Review"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "durable"); ("streamKindId", String "STREAM-Review") ] ] }
-      { Id = "EXPORT-ProtocolStreamKinds"; ModuleName = "CoordinationProtocol"; DeclarationName = "protocolStreamKindCatalogue"; Value = Set [ Record [ ("family", String "delivery"); ("id", String "STREAM-Delivery"); ("kind", String "protocolStreamKind") ]; Record [ ("family", String "journal-cas-claim-lease-touch-set-fenced"); ("id", String "STREAM-Claim"); ("kind", String "protocolStreamKind") ]; Record [ ("family", String "journal-cas-full-snapshot-review-epoch"); ("id", String "STREAM-Review"); ("kind", String "protocolStreamKind") ]; Record [ ("family", String "journal-cas-operation-election-fenced"); ("id", String "STREAM-OperationLock"); ("kind", String "protocolStreamKind") ]; Record [ ("family", String "operation-receipt"); ("id", String "STREAM-OperationReceipt"); ("kind", String "protocolStreamKind") ] ] }
-      { Id = "EXPORT-Relationships"; ModuleName = "CoordinationProtocol"; DeclarationName = "relationshipCatalogue"; Value = Set [ Record [ ("fromId", String "AUTH-Actions"); ("id", String "REL-AUTH-Actions-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "AUTH-ClassifiedExternal"); ("id", String "REL-AUTH-ClassifiedExternal-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "AUTH-GitLedger"); ("id", String "REL-AUTH-GitLedger-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "AUTH-NativeGitHub"); ("id", String "REL-AUTH-NativeGitHub-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "AUTH-PackageFeed"); ("id", String "REL-AUTH-PackageFeed-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "AUTH-ProtocolStream"); ("id", String "REL-AUTH-ProtocolStream-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "AUTH-RepositoryRegistry"); ("id", String "REL-AUTH-RepositoryRegistry-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "AuthorityVocabulary"); ("id", String "REL-Authority-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "CodecVocabulary"); ("id", String "REL-Codec-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "CommandVocabulary"); ("id", String "REL-Command-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "EventVocabulary"); ("id", String "REL-Event-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "MutationVocabulary"); ("id", String "REL-Mutation-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "ObservationPlanVocabulary"); ("id", String "REL-ObservationPlan-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "ProjectionVocabulary"); ("id", String "REL-Projection-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "SettingsProfileVocabulary"); ("id", String "REL-SettingsProfile-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "SubjectVocabulary"); ("id", String "REL-Subject-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ]; Record [ ("fromId", String "VersionIdentityVocabulary"); ("id", String "REL-VersionIdentity-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] ] }
-      { Id = "EXPORT-Verifications"; ModuleName = "CoordinationProtocol"; DeclarationName = "verificationCatalogue"; Value = Set [ Record [ ("boundIds", Set [ String "BOUND-AuthorityCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-AuthorityBindings"); ("kind", String "verification"); ("subjectIds", Set [ String "AUTH-Actions"; String "AUTH-ClassifiedExternal"; String "AUTH-GitLedger"; String "AUTH-NativeGitHub"; String "AUTH-PackageFeed"; String "AUTH-ProtocolStream"; String "AUTH-RepositoryRegistry" ]); ("verificationKind", String "bounded-invariant-and-witness") ]; Record [ ("boundIds", Set [ String "BOUND-DurablePlanDispositionCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-DurablePlans"); ("kind", String "verification"); ("subjectIds", Set [ String "MUT-Compensate"; String "PAYLOAD-OperationReceipt"; String "PDISP-Advance"; String "PDISP-Compensate"; String "PDISP-ReceiptReread"; String "PDISP-Replan" ]); ("verificationKind", String "bounded-invariant-and-witness") ]; Record [ ("boundIds", Set [ String "BOUND-LifecycleIntentCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-LifecycleIntent"); ("kind", String "verification"); ("subjectIds", Set [ String "INTENT-Backlog"; String "INTENT-Cancelled"; String "INTENT-Paused"; String "INTENT-Ready" ]); ("verificationKind", String "bounded-invariant-and-witness") ]; Record [ ("boundIds", Set [ String "BOUND-MutationKindCardinality"; String "BOUND-MutationOutcomeCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-MutationAlgebra"); ("kind", String "verification"); ("subjectIds", Set [ String "MOUT-Applied"; String "MOUT-Idempotent"; String "MOUT-Incomplete"; String "MOUT-RateLimited"; String "MOUT-Rejected"; String "MOUT-RevisionConflict"; String "MOUT-TimedOut"; String "MOUT-Unavailable"; String "MUT-AddEdge"; String "MUT-Append"; String "MUT-Clear"; String "MUT-Compensate"; String "MUT-Create"; String "MUT-RemoveEdge"; String "MUT-Set"; String "MUT-Transition" ]); ("verificationKind", String "bounded-invariant-and-witness") ]; Record [ ("boundIds", Set [ String "BOUND-NativeRelationKindCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-NativeRelations"); ("kind", String "verification"); ("subjectIds", Set [ String "REL-Blocks"; String "REL-ParentChild" ]); ("verificationKind", String "bounded-invariant-and-witness") ]; Record [ ("boundIds", Set [ String "BOUND-ObservationOutcomeCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-ObservationOutcomes"); ("kind", String "verification"); ("subjectIds", Set [ String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-Observed"; String "OBS-ProvenAbsent"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported" ]); ("verificationKind", String "bounded-invariant-and-witness") ]; Record [ ("boundIds", Set [ String "BOUND-ProtocolPayloadKindCardinality"; String "BOUND-ProtocolStreamKindCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-ProtocolStreams"); ("kind", String "verification"); ("subjectIds", Set [ String "PAYLOAD-Claim"; String "PAYLOAD-Delivery"; String "PAYLOAD-Election"; String "PAYLOAD-Lease"; String "PAYLOAD-OperationLock"; String "PAYLOAD-OperationReceipt"; String "PAYLOAD-Review"; String "PAYLOAD-TouchSet"; String "STREAM-Claim"; String "STREAM-Delivery"; String "STREAM-OperationLock"; String "STREAM-OperationReceipt"; String "STREAM-Review" ]); ("verificationKind", String "bounded-invariant-and-witness") ]; Record [ ("boundIds", Set [ String "BOUND-TraceSteps"; String "BOUND-VocabularyCardinality" ]); ("id", String "VERIFY-VocabularyBaseline"); ("kind", String "verification"); ("subjectIds", Set [ String "AuthorityVocabulary"; String "CodecVocabulary"; String "CommandVocabulary"; String "EventVocabulary"; String "EvidenceObligationVocabulary"; String "MutationVocabulary"; String "ObservationPlanVocabulary"; String "ProjectionVocabulary"; String "SettingsProfileVocabulary"; String "SubjectVocabulary"; String "VersionIdentityVocabulary" ]); ("verificationKind", String "bounded-invariant-and-witness") ] ] }
-      { Id = "EXPORT-Vocabulary"; ModuleName = "CoordinationProtocol"; DeclarationName = "vocabularyCatalogue"; Value = Set [ Record [ ("family", String "authorities"); ("id", String "AuthorityVocabulary"); ("kind", String "authority") ]; Record [ ("family", String "codecs"); ("id", String "CodecVocabulary"); ("kind", String "codec") ]; Record [ ("family", String "commands"); ("id", String "CommandVocabulary"); ("kind", String "command") ]; Record [ ("family", String "events"); ("id", String "EventVocabulary"); ("kind", String "event") ]; Record [ ("family", String "evidence-obligations"); ("id", String "EvidenceObligationVocabulary"); ("kind", String "evidence") ]; Record [ ("family", String "mutations"); ("id", String "MutationVocabulary"); ("kind", String "mutation") ]; Record [ ("family", String "observation-plans"); ("id", String "ObservationPlanVocabulary"); ("kind", String "observationPlan") ]; Record [ ("family", String "projections"); ("id", String "ProjectionVocabulary"); ("kind", String "projection") ]; Record [ ("family", String "settings-profiles"); ("id", String "SettingsProfileVocabulary"); ("kind", String "settingsProfile") ]; Record [ ("family", String "subjects"); ("id", String "SubjectVocabulary"); ("kind", String "subject") ]; Record [ ("family", String "version-identities"); ("id", String "VersionIdentityVocabulary"); ("kind", String "versionIdentity") ] ] } ]
+let Exports: QuintExport list =
+    [
+        {
+            Id = "EXPORT-Authorities"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "authorityCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("completenessContract", String "complete-ancestry-snapshot-and-terminal-checkpoint")
+                                ("evidenceRelationship", String "REL-AUTH-ProtocolStream-Evidence")
+                                ("family", String "protected-sharded-git-journal")
+                                ("id", String "AUTH-ProtocolStream")
+                                ("kind", String "authorityBinding")
+                                ("revisionKind", String "git-expected-parent-and-generation")
+                                ("revisionValue", String "journal-commit-and-fencing-generation")
+                            ]
+                        Record
+                            [
+                                ("completenessContract", String "complete-required-fields")
+                                ("evidenceRelationship", String "REL-AUTH-Actions-Evidence")
+                                ("family", String "actions")
+                                ("id", String "AUTH-Actions")
+                                ("kind", String "authorityBinding")
+                                ("revisionKind", String "workflow-run-attempt")
+                                ("revisionValue", String "run-id-and-attempt")
+                            ]
+                        Record
+                            [
+                                ("completenessContract", String "complete-required-fields")
+                                ("evidenceRelationship", String "REL-AUTH-ClassifiedExternal-Evidence")
+                                ("family", String "classified-external")
+                                ("id", String "AUTH-ClassifiedExternal")
+                                ("kind", String "authorityBinding")
+                                ("revisionKind", String "classified-external-revision")
+                                ("revisionValue", String "declared-source-revision")
+                            ]
+                        Record
+                            [
+                                ("completenessContract", String "complete-required-fields")
+                                ("evidenceRelationship", String "REL-AUTH-GitLedger-Evidence")
+                                ("family", String "git-ledger")
+                                ("id", String "AUTH-GitLedger")
+                                ("kind", String "authorityBinding")
+                                ("revisionKind", String "git-commit-sha")
+                                ("revisionValue", String "commit-object-id")
+                            ]
+                        Record
+                            [
+                                ("completenessContract", String "complete-required-fields")
+                                ("evidenceRelationship", String "REL-AUTH-NativeGitHub-Evidence")
+                                ("family", String "native-github")
+                                ("id", String "AUTH-NativeGitHub")
+                                ("kind", String "authorityBinding")
+                                ("revisionKind", String "github-object-version")
+                                ("revisionValue", String "node-id-and-updated-at")
+                            ]
+                        Record
+                            [
+                                ("completenessContract", String "complete-required-fields")
+                                ("evidenceRelationship", String "REL-AUTH-PackageFeed-Evidence")
+                                ("family", String "package-feed")
+                                ("id", String "AUTH-PackageFeed")
+                                ("kind", String "authorityBinding")
+                                ("revisionKind", String "package-content-sha256")
+                                ("revisionValue", String "package-bytes-digest")
+                            ]
+                        Record
+                            [
+                                ("completenessContract", String "complete-required-fields")
+                                ("evidenceRelationship", String "REL-AUTH-RepositoryRegistry-Evidence")
+                                ("family", String "repository-registry")
+                                ("id", String "AUTH-RepositoryRegistry")
+                                ("kind", String "authorityBinding")
+                                ("revisionKind", String "registry-document-sha256")
+                                ("revisionValue", String "canonical-document-digest")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-Bounds"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "boundCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("id", String "BOUND-AuthorityCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 7L)
+                                ("minimum", Int 7L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-DurablePlanDispositionCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 4L)
+                                ("minimum", Int 4L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-LifecycleIntentCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 4L)
+                                ("minimum", Int 4L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-MutationKindCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 8L)
+                                ("minimum", Int 8L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-MutationOutcomeCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 8L)
+                                ("minimum", Int 8L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-NativeRelationKindCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 2L)
+                                ("minimum", Int 2L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-ObservationOutcomeCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 9L)
+                                ("minimum", Int 9L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-ProtocolPayloadKindCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 8L)
+                                ("minimum", Int 8L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-ProtocolStreamKindCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 5L)
+                                ("minimum", Int 5L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-TraceSteps")
+                                ("kind", String "bound")
+                                ("maximum", Int 4L)
+                                ("minimum", Int 0L)
+                            ]
+                        Record
+                            [
+                                ("id", String "BOUND-VocabularyCardinality")
+                                ("kind", String "bound")
+                                ("maximum", Int 11L)
+                                ("minimum", Int 11L)
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-Compatibility"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "compatibilityCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("detail",
+                                 String
+                                     "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1>Preparing>FreezeRequested>Frozen>SwitchedV2>VerifiedV2>OpenV2>ObservingV2>ContractingV1>OperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen.")
+                                ("id", String "COMPAT-Profile2")
+                                ("kind", String "compatibility")
+                                ("requirement", String "exact")
+                                ("surface", String "fsgg-quint-profile/2")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-CompiledOutputSpecification"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "compiledOutputSpecificationCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("familyContract",
+                                 String
+                                     "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory")
+                                ("id", String "COUT-Specification")
+                                ("identityContract",
+                                 String
+                                     "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content")
+                                ("kind", String "compiledOutputSpecification")
+                                ("normalizationAuthority", String "typed-effect-json")
+                                ("projectionViewFormats", String "markdown|json")
+                                ("qualificationContract",
+                                 String
+                                     "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review")
+                                ("refusalContract",
+                                 String "missing|duplicate|substituted|unsupported|incomplete|reordered|stale")
+                                ("semanticDiffContract", String "ordinal|json-pointer|value-sha256")
+                                ("versionContract",
+                                 String
+                                     "fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-DesiredStateSpecification"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "desiredStateSpecificationCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("authorityClass", String "revision-bound")
+                                ("executionClass", String "pure-intent-no-writer")
+                                ("id", String "DSTATE-Specification")
+                                ("issueSchemaContract", String "issue-type|issue-field|field-type|allowed-value")
+                                ("kind", String "desiredStateSpecification")
+                                ("permissionsContract",
+                                 String "repository-visibility|team-access|workflow-permission|environment-protection")
+                                ("phaseAuthorityContract",
+                                 String "subject|profile|family|content|authority-revision|plan-outcome|apply-receipt")
+                                ("phaseContract", String "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify")
+                                ("projectsContract",
+                                 String
+                                     "project-field|project-view|project-workflow|project-visibility|project-membership-policy")
+                                ("refusalContract", String "unsupported|unauthorized|incomplete|stale|identity-mismatch")
+                                ("releasesContract",
+                                 String "release-environment|immutable-release|tag-protection|trusted-publisher")
+                                ("repositoryProfileContract",
+                                 String "ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy")
+                                ("repositoryPropertiesContract", String "property-schema|property-value")
+                                ("securitySupplyChainContract",
+                                 String
+                                     "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy")
+                                ("workflowPinsContract", String "reusable-workflow-pin|action-pin")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-DurablePlanDispositions"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "durablePlanDispositionCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("id", String "PDISP-Advance")
+                                ("kind", String "durablePlanDisposition")
+                                ("nextAction", String "next-step")
+                                ("receiptClass", String "terminal-success")
+                            ]
+                        Record
+                            [
+                                ("id", String "PDISP-Compensate")
+                                ("kind", String "durablePlanDisposition")
+                                ("nextAction", String "compensate-reverse")
+                                ("receiptClass", String "terminal-refusal-applied-boundary")
+                            ]
+                        Record
+                            [
+                                ("id", String "PDISP-ReceiptReread")
+                                ("kind", String "durablePlanDisposition")
+                                ("nextAction", String "reread-receipt")
+                                ("receiptClass", String "uncertain")
+                            ]
+                        Record
+                            [
+                                ("id", String "PDISP-Replan")
+                                ("kind", String "durablePlanDisposition")
+                                ("nextAction", String "compile-new-plan")
+                                ("receiptClass", String "terminal-refusal-no-applied-boundary")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-HostedWriterSpecification"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "hostedWriterSpecificationCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("activationContract",
+                                 String
+                                     "accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit")
+                                ("budgetContract", String "finite-positive-no-renewal")
+                                ("candidateContract",
+                                 String "owner-controlled-content-addressed-bytes-before-branch-publication")
+                                ("capacityContract", String "one-ordinary-assignment")
+                                ("completionContract", String "native-provider-merged-pr-and-exact-head-readback")
+                                ("id", String "HOSTED-WriterV1")
+                                ("kind", String "hostedWriterSpecification")
+                                ("operationContract",
+                                 String
+                                     "stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence")
+                                ("runnerContract",
+                                 String "exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner")
+                                ("schemaContract", String "fsgg.coordination.hosted-writer/1")
+                                ("scopeContract", String "one-immutable-work-item|routine-documentation-delivery")
+                                ("startupContract", String "manual-default-paused-no-automatic-resume")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-LifecycleIntents"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "lifecycleIntentCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("id", String "INTENT-Backlog")
+                                ("kind", String "lifecycleIntent")
+                                ("schedulingClass", String "backlog")
+                                ("terminal", Bool false)
+                            ]
+                        Record
+                            [
+                                ("id", String "INTENT-Cancelled")
+                                ("kind", String "lifecycleIntent")
+                                ("schedulingClass", String "cancelled")
+                                ("terminal", Bool true)
+                            ]
+                        Record
+                            [
+                                ("id", String "INTENT-Paused")
+                                ("kind", String "lifecycleIntent")
+                                ("schedulingClass", String "paused")
+                                ("terminal", Bool false)
+                            ]
+                        Record
+                            [
+                                ("id", String "INTENT-Ready")
+                                ("kind", String "lifecycleIntent")
+                                ("schedulingClass", String "ready")
+                                ("terminal", Bool false)
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-MutationKinds"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "mutationKindCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("id", String "MUT-AddEdge")
+                                ("kind", String "mutationKind")
+                                ("payloadKind", String "edge")
+                                ("revisionRequirement", String "exact")
+                                ("targetKind", String "relation")
+                            ]
+                        Record
+                            [
+                                ("id", String "MUT-Append")
+                                ("kind", String "mutationKind")
+                                ("payloadKind", String "append")
+                                ("revisionRequirement", String "exact")
+                                ("targetKind", String "stream")
+                            ]
+                        Record
+                            [
+                                ("id", String "MUT-Clear")
+                                ("kind", String "mutationKind")
+                                ("payloadKind", String "scalar")
+                                ("revisionRequirement", String "exact")
+                                ("targetKind", String "field")
+                            ]
+                        Record
+                            [
+                                ("id", String "MUT-Compensate")
+                                ("kind", String "mutationKind")
+                                ("payloadKind", String "compensation")
+                                ("revisionRequirement", String "exact")
+                                ("targetKind", String "mutation")
+                            ]
+                        Record
+                            [
+                                ("id", String "MUT-Create")
+                                ("kind", String "mutationKind")
+                                ("payloadKind", String "create")
+                                ("revisionRequirement", String "absent")
+                                ("targetKind", String "subject")
+                            ]
+                        Record
+                            [
+                                ("id", String "MUT-RemoveEdge")
+                                ("kind", String "mutationKind")
+                                ("payloadKind", String "edge")
+                                ("revisionRequirement", String "exact")
+                                ("targetKind", String "relation")
+                            ]
+                        Record
+                            [
+                                ("id", String "MUT-Set")
+                                ("kind", String "mutationKind")
+                                ("payloadKind", String "scalar")
+                                ("revisionRequirement", String "exact")
+                                ("targetKind", String "field")
+                            ]
+                        Record
+                            [
+                                ("id", String "MUT-Transition")
+                                ("kind", String "mutationKind")
+                                ("payloadKind", String "transition")
+                                ("revisionRequirement", String "exact")
+                                ("targetKind", String "lifecycle")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-MutationOutcomes"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "mutationOutcomeCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("effectClass", String "applied")
+                                ("finality", String "terminal")
+                                ("id", String "MOUT-Applied")
+                                ("kind", String "mutationOutcome")
+                                ("retryClass", String "none")
+                            ]
+                        Record
+                            [
+                                ("effectClass", String "conflict")
+                                ("finality", String "terminal")
+                                ("id", String "MOUT-RevisionConflict")
+                                ("kind", String "mutationOutcome")
+                                ("retryClass", String "refresh-and-new-intent")
+                            ]
+                        Record
+                            [
+                                ("effectClass", String "no-op")
+                                ("finality", String "terminal")
+                                ("id", String "MOUT-Idempotent")
+                                ("kind", String "mutationOutcome")
+                                ("retryClass", String "none")
+                            ]
+                        Record
+                            [
+                                ("effectClass", String "refused")
+                                ("finality", String "terminal")
+                                ("id", String "MOUT-Rejected")
+                                ("kind", String "mutationOutcome")
+                                ("retryClass", String "new-authority-or-intent")
+                            ]
+                        Record
+                            [
+                                ("effectClass", String "unknown")
+                                ("finality", String "uncertain")
+                                ("id", String "MOUT-Incomplete")
+                                ("kind", String "mutationOutcome")
+                                ("retryClass", String "complete-observation")
+                            ]
+                        Record
+                            [
+                                ("effectClass", String "unknown")
+                                ("finality", String "uncertain")
+                                ("id", String "MOUT-RateLimited")
+                                ("kind", String "mutationOutcome")
+                                ("retryClass", String "authority-window")
+                            ]
+                        Record
+                            [
+                                ("effectClass", String "unknown")
+                                ("finality", String "uncertain")
+                                ("id", String "MOUT-TimedOut")
+                                ("kind", String "mutationOutcome")
+                                ("retryClass", String "observe-or-exact-replay")
+                            ]
+                        Record
+                            [
+                                ("effectClass", String "unknown")
+                                ("finality", String "uncertain")
+                                ("id", String "MOUT-Unavailable")
+                                ("kind", String "mutationOutcome")
+                                ("retryClass", String "availability-window")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-NativeRelationKinds"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "nativeRelationKindCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("direction", String "blocker-to-blocked")
+                                ("id", String "REL-Blocks")
+                                ("kind", String "nativeRelationKind")
+                            ]
+                        Record
+                            [
+                                ("direction", String "parent-to-child")
+                                ("id", String "REL-ParentChild")
+                                ("kind", String "nativeRelationKind")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-ObservationOutcomes"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "observationOutcomeCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("id", String "OBS-Contradictory")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "contradictory")
+                                ("retryClass", String "resolve-contradiction")
+                                ("terminal", Bool false)
+                            ]
+                        Record
+                            [
+                                ("id", String "OBS-Incomplete")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "none")
+                                ("retryClass", String "complete-evidence")
+                                ("terminal", Bool false)
+                            ]
+                        Record
+                            [
+                                ("id", String "OBS-Observed")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "positive")
+                                ("retryClass", String "none")
+                                ("terminal", Bool true)
+                            ]
+                        Record
+                            [
+                                ("id", String "OBS-ProvenAbsent")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "negative")
+                                ("retryClass", String "none")
+                                ("terminal", Bool true)
+                            ]
+                        Record
+                            [
+                                ("id", String "OBS-RateLimited")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "none")
+                                ("retryClass", String "authority-window")
+                                ("terminal", Bool false)
+                            ]
+                        Record
+                            [
+                                ("id", String "OBS-Stale")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "none")
+                                ("retryClass", String "refresh-revision")
+                                ("terminal", Bool false)
+                            ]
+                        Record
+                            [
+                                ("id", String "OBS-Unauthorized")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "none")
+                                ("retryClass", String "repair-authorization")
+                                ("terminal", Bool false)
+                            ]
+                        Record
+                            [
+                                ("id", String "OBS-Unreadable")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "none")
+                                ("retryClass", String "repair-read")
+                                ("terminal", Bool false)
+                            ]
+                        Record
+                            [
+                                ("id", String "OBS-Unsupported")
+                                ("kind", String "observationOutcome")
+                                ("knowledgeClass", String "none")
+                                ("retryClass", String "none")
+                                ("terminal", Bool true)
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-PilotPermitSpecification"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "pilotPermitSpecificationCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("activationContract", String "inert-prospective-no-host-no-provider-writer")
+                                ("budgetContract", String "finite-positive-no-automatic-renewal")
+                                ("capacityContract", String "finite-with-reserved-recovery-capacity")
+                                ("id", String "PILOT-PermitV1")
+                                ("kind", String "pilotPermitSpecification")
+                                ("lifecycleContract",
+                                 String
+                                     "StableOwned>TransferIntended>PilotOwned>(OutcomeUnknown|Paused|Revoked|ReturnIntended)>StableOwned")
+                                ("ownershipContract",
+                                 String "stable-until-durable-transfer-acknowledgement-and-readback")
+                                ("recoveryContract",
+                                 String "generation-current|readback-current|unknown-outcome-blocks-dispatch")
+                                ("schemaContract", String "fsgg.coordination.pilot-permit/1")
+                                ("scopeContract", String "one-canonical-work-item|routine-implementation")
+                                ("trustContract", String "trusted-cooperating-runner-supported-route-only")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-Properties"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "propertyCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("id", String "AcceptedAuthoritiesAreQualified")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "AuthorityVocabulary"; String "EvidenceObligationVocabulary" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "AcceptedObservationKnowledgeIsQualified")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set [ String "EvidenceObligationVocabulary"; String "ObservationPlanVocabulary" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "AcceptedVocabularyIsQualified")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "EvidenceObligationVocabulary" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "AuthorityCanBeAccepted")
+                                ("kind", String "example")
+                                ("subjects", Set [ String "AUTH-NativeGitHub" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "AuthorityCatalogueIsClosed")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "AuthorityVocabulary" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "CompensationRequiresAppliedPredecessor")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "MOUT-Applied"; String "MUT-Compensate" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "DurablePlanCompensationIsBoundaryBound")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "MUT-Compensate"; String "PDISP-Compensate" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "DurablePlansAreOrderedAndResumable")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "PAYLOAD-OperationReceipt"
+                                         String "PDISP-Advance"
+                                         String "PDISP-Compensate"
+                                         String "PDISP-ReceiptReread"
+                                         String "PDISP-Replan"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "DurableProtocolCheckpointsArePreserved")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "PAYLOAD-Delivery"
+                                         String "PAYLOAD-Election"
+                                         String "PAYLOAD-OperationReceipt"
+                                         String "PAYLOAD-Review"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "FailureOutcomesDoNotBecomeAbsence")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "OBS-Contradictory"
+                                         String "OBS-Incomplete"
+                                         String "OBS-RateLimited"
+                                         String "OBS-Stale"
+                                         String "OBS-Unauthorized"
+                                         String "OBS-Unreadable"
+                                         String "OBS-Unsupported"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "HumanIntentIsObservationIndependent")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "INTENT-Backlog"
+                                         String "INTENT-Ready"
+                                         String "ObservationPlanVocabulary"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "LifecycleIntentCatalogueIsClosed")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "INTENT-Backlog"
+                                         String "INTENT-Cancelled"
+                                         String "INTENT-Paused"
+                                         String "INTENT-Ready"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "LifecycleStatusIsDerived")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set [ String "INTENT-Ready"; String "OBS-Observed"; String "OBS-ProvenAbsent" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "MutationCataloguesAreClosed")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "MutationVocabulary" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "MutationResultsAreBound")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "MOUT-Applied"
+                                         String "MOUT-Idempotent"
+                                         String "MOUT-Rejected"
+                                         String "MOUT-RevisionConflict"
+                                         String "MutationVocabulary"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "NativeRelationEdgesAreValid")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "NativeRelationKindCatalogueIsClosed")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "ObservationOutcomeCatalogueIsClosed")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "ObservationPlanVocabulary" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "ProtocolEnvelopesAreValidAndOrdered")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "PAYLOAD-Claim"
+                                         String "PAYLOAD-Delivery"
+                                         String "PAYLOAD-Election"
+                                         String "PAYLOAD-Lease"
+                                         String "PAYLOAD-OperationLock"
+                                         String "PAYLOAD-OperationReceipt"
+                                         String "PAYLOAD-Review"
+                                         String "PAYLOAD-TouchSet"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "ProtocolStreamCataloguesAreClosed")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "STREAM-Claim"
+                                         String "STREAM-Delivery"
+                                         String "STREAM-OperationLock"
+                                         String "STREAM-OperationReceipt"
+                                         String "STREAM-Review"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "ProtocolStreamChangesPreservePriorSemantics")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "INTENT-Backlog"
+                                         String "REL-Blocks"
+                                         String "REL-ParentChild"
+                                         String "STREAM-Claim"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "ProtocolStreamObservationFailuresDoNotBecomeAbsence")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "AUTH-ProtocolStream"
+                                         String "OBS-Contradictory"
+                                         String "OBS-Incomplete"
+                                         String "OBS-RateLimited"
+                                         String "OBS-Stale"
+                                         String "OBS-Unauthorized"
+                                         String "OBS-Unreadable"
+                                         String "OBS-Unsupported"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "ProvenAbsenceCanBeAccepted")
+                                ("kind", String "example")
+                                ("subjects", Set [ String "OBS-ProvenAbsent" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "RelationChangesPreserveLifecycleIntent")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "INTENT-Backlog"
+                                         String "INTENT-Cancelled"
+                                         String "INTENT-Paused"
+                                         String "INTENT-Ready"
+                                         String "REL-Blocks"
+                                         String "REL-ParentChild"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "RelationChangesPreserveUnrelatedEdges")
+                                ("kind", String "invariant")
+                                ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ])
+                            ]
+                        Record
+                            [
+                                ("id", String "RelationObservationFailuresDoNotBecomeAbsence")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "OBS-Contradictory"
+                                         String "OBS-Incomplete"
+                                         String "OBS-RateLimited"
+                                         String "OBS-Stale"
+                                         String "OBS-Unauthorized"
+                                         String "OBS-Unreadable"
+                                         String "OBS-Unsupported"
+                                         String "REL-Blocks"
+                                         String "REL-ParentChild"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "UncertainMutationOutcomesStayUnknown")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "MOUT-Incomplete"
+                                         String "MOUT-RateLimited"
+                                         String "MOUT-TimedOut"
+                                         String "MOUT-Unavailable"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "UnknownLifecycleFactsFailClosed")
+                                ("kind", String "invariant")
+                                ("subjects",
+                                 Set
+                                     [
+                                         String "OBS-Contradictory"
+                                         String "OBS-Incomplete"
+                                         String "OBS-RateLimited"
+                                         String "OBS-Stale"
+                                         String "OBS-Unauthorized"
+                                         String "OBS-Unreadable"
+                                         String "OBS-Unsupported"
+                                     ])
+                            ]
+                        Record
+                            [
+                                ("id", String "VocabularyCanBeAccepted")
+                                ("kind", String "example")
+                                ("subjects", Set [ String "SubjectVocabulary" ])
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-ProtocolPayloadKinds"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "protocolPayloadKindCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("durableCheckpoint", Bool false)
+                                ("id", String "PAYLOAD-Claim")
+                                ("kind", String "protocolPayloadKind")
+                                ("retentionClass", String "ephemeral")
+                                ("streamKindId", String "STREAM-Claim")
+                            ]
+                        Record
+                            [
+                                ("durableCheckpoint", Bool false)
+                                ("id", String "PAYLOAD-Lease")
+                                ("kind", String "protocolPayloadKind")
+                                ("retentionClass", String "ephemeral")
+                                ("streamKindId", String "STREAM-Claim")
+                            ]
+                        Record
+                            [
+                                ("durableCheckpoint", Bool false)
+                                ("id", String "PAYLOAD-OperationLock")
+                                ("kind", String "protocolPayloadKind")
+                                ("retentionClass", String "ephemeral")
+                                ("streamKindId", String "STREAM-OperationLock")
+                            ]
+                        Record
+                            [
+                                ("durableCheckpoint", Bool false)
+                                ("id", String "PAYLOAD-TouchSet")
+                                ("kind", String "protocolPayloadKind")
+                                ("retentionClass", String "ephemeral")
+                                ("streamKindId", String "STREAM-Claim")
+                            ]
+                        Record
+                            [
+                                ("durableCheckpoint", Bool true)
+                                ("id", String "PAYLOAD-Delivery")
+                                ("kind", String "protocolPayloadKind")
+                                ("retentionClass", String "durable")
+                                ("streamKindId", String "STREAM-Delivery")
+                            ]
+                        Record
+                            [
+                                ("durableCheckpoint", Bool true)
+                                ("id", String "PAYLOAD-Election")
+                                ("kind", String "protocolPayloadKind")
+                                ("retentionClass", String "durable")
+                                ("streamKindId", String "STREAM-OperationLock")
+                            ]
+                        Record
+                            [
+                                ("durableCheckpoint", Bool true)
+                                ("id", String "PAYLOAD-OperationReceipt")
+                                ("kind", String "protocolPayloadKind")
+                                ("retentionClass", String "durable")
+                                ("streamKindId", String "STREAM-OperationReceipt")
+                            ]
+                        Record
+                            [
+                                ("durableCheckpoint", Bool true)
+                                ("id", String "PAYLOAD-Review")
+                                ("kind", String "protocolPayloadKind")
+                                ("retentionClass", String "durable")
+                                ("streamKindId", String "STREAM-Review")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-ProtocolStreamKinds"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "protocolStreamKindCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("family", String "delivery")
+                                ("id", String "STREAM-Delivery")
+                                ("kind", String "protocolStreamKind")
+                            ]
+                        Record
+                            [
+                                ("family", String "journal-cas-claim-lease-touch-set-fenced")
+                                ("id", String "STREAM-Claim")
+                                ("kind", String "protocolStreamKind")
+                            ]
+                        Record
+                            [
+                                ("family", String "journal-cas-full-snapshot-review-epoch")
+                                ("id", String "STREAM-Review")
+                                ("kind", String "protocolStreamKind")
+                            ]
+                        Record
+                            [
+                                ("family", String "journal-cas-operation-election-fenced")
+                                ("id", String "STREAM-OperationLock")
+                                ("kind", String "protocolStreamKind")
+                            ]
+                        Record
+                            [
+                                ("family", String "operation-receipt")
+                                ("id", String "STREAM-OperationReceipt")
+                                ("kind", String "protocolStreamKind")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-Relationships"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "relationshipCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("fromId", String "AUTH-Actions")
+                                ("id", String "REL-AUTH-Actions-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "AUTH-ClassifiedExternal")
+                                ("id", String "REL-AUTH-ClassifiedExternal-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "AUTH-GitLedger")
+                                ("id", String "REL-AUTH-GitLedger-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "AUTH-NativeGitHub")
+                                ("id", String "REL-AUTH-NativeGitHub-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "AUTH-PackageFeed")
+                                ("id", String "REL-AUTH-PackageFeed-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "AUTH-ProtocolStream")
+                                ("id", String "REL-AUTH-ProtocolStream-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "AUTH-RepositoryRegistry")
+                                ("id", String "REL-AUTH-RepositoryRegistry-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "AuthorityVocabulary")
+                                ("id", String "REL-Authority-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "CodecVocabulary")
+                                ("id", String "REL-Codec-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "CommandVocabulary")
+                                ("id", String "REL-Command-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "EventVocabulary")
+                                ("id", String "REL-Event-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "MutationVocabulary")
+                                ("id", String "REL-Mutation-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "ObservationPlanVocabulary")
+                                ("id", String "REL-ObservationPlan-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "ProjectionVocabulary")
+                                ("id", String "REL-Projection-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "SettingsProfileVocabulary")
+                                ("id", String "REL-SettingsProfile-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "SubjectVocabulary")
+                                ("id", String "REL-Subject-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                        Record
+                            [
+                                ("fromId", String "VersionIdentityVocabulary")
+                                ("id", String "REL-VersionIdentity-Evidence")
+                                ("kind", String "verifiedBy")
+                                ("toId", String "EvidenceObligationVocabulary")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-Verifications"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "verificationCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("boundIds", Set [ String "BOUND-AuthorityCardinality"; String "BOUND-TraceSteps" ])
+                                ("id", String "VERIFY-AuthorityBindings")
+                                ("kind", String "verification")
+                                ("subjectIds",
+                                 Set
+                                     [
+                                         String "AUTH-Actions"
+                                         String "AUTH-ClassifiedExternal"
+                                         String "AUTH-GitLedger"
+                                         String "AUTH-NativeGitHub"
+                                         String "AUTH-PackageFeed"
+                                         String "AUTH-ProtocolStream"
+                                         String "AUTH-RepositoryRegistry"
+                                     ])
+                                ("verificationKind", String "bounded-invariant-and-witness")
+                            ]
+                        Record
+                            [
+                                ("boundIds",
+                                 Set [ String "BOUND-DurablePlanDispositionCardinality"; String "BOUND-TraceSteps" ])
+                                ("id", String "VERIFY-DurablePlans")
+                                ("kind", String "verification")
+                                ("subjectIds",
+                                 Set
+                                     [
+                                         String "MUT-Compensate"
+                                         String "PAYLOAD-OperationReceipt"
+                                         String "PDISP-Advance"
+                                         String "PDISP-Compensate"
+                                         String "PDISP-ReceiptReread"
+                                         String "PDISP-Replan"
+                                     ])
+                                ("verificationKind", String "bounded-invariant-and-witness")
+                            ]
+                        Record
+                            [
+                                ("boundIds",
+                                 Set [ String "BOUND-LifecycleIntentCardinality"; String "BOUND-TraceSteps" ])
+                                ("id", String "VERIFY-LifecycleIntent")
+                                ("kind", String "verification")
+                                ("subjectIds",
+                                 Set
+                                     [
+                                         String "INTENT-Backlog"
+                                         String "INTENT-Cancelled"
+                                         String "INTENT-Paused"
+                                         String "INTENT-Ready"
+                                     ])
+                                ("verificationKind", String "bounded-invariant-and-witness")
+                            ]
+                        Record
+                            [
+                                ("boundIds",
+                                 Set
+                                     [
+                                         String "BOUND-MutationKindCardinality"
+                                         String "BOUND-MutationOutcomeCardinality"
+                                         String "BOUND-TraceSteps"
+                                     ])
+                                ("id", String "VERIFY-MutationAlgebra")
+                                ("kind", String "verification")
+                                ("subjectIds",
+                                 Set
+                                     [
+                                         String "MOUT-Applied"
+                                         String "MOUT-Idempotent"
+                                         String "MOUT-Incomplete"
+                                         String "MOUT-RateLimited"
+                                         String "MOUT-Rejected"
+                                         String "MOUT-RevisionConflict"
+                                         String "MOUT-TimedOut"
+                                         String "MOUT-Unavailable"
+                                         String "MUT-AddEdge"
+                                         String "MUT-Append"
+                                         String "MUT-Clear"
+                                         String "MUT-Compensate"
+                                         String "MUT-Create"
+                                         String "MUT-RemoveEdge"
+                                         String "MUT-Set"
+                                         String "MUT-Transition"
+                                     ])
+                                ("verificationKind", String "bounded-invariant-and-witness")
+                            ]
+                        Record
+                            [
+                                ("boundIds",
+                                 Set [ String "BOUND-NativeRelationKindCardinality"; String "BOUND-TraceSteps" ])
+                                ("id", String "VERIFY-NativeRelations")
+                                ("kind", String "verification")
+                                ("subjectIds", Set [ String "REL-Blocks"; String "REL-ParentChild" ])
+                                ("verificationKind", String "bounded-invariant-and-witness")
+                            ]
+                        Record
+                            [
+                                ("boundIds",
+                                 Set [ String "BOUND-ObservationOutcomeCardinality"; String "BOUND-TraceSteps" ])
+                                ("id", String "VERIFY-ObservationOutcomes")
+                                ("kind", String "verification")
+                                ("subjectIds",
+                                 Set
+                                     [
+                                         String "OBS-Contradictory"
+                                         String "OBS-Incomplete"
+                                         String "OBS-Observed"
+                                         String "OBS-ProvenAbsent"
+                                         String "OBS-RateLimited"
+                                         String "OBS-Stale"
+                                         String "OBS-Unauthorized"
+                                         String "OBS-Unreadable"
+                                         String "OBS-Unsupported"
+                                     ])
+                                ("verificationKind", String "bounded-invariant-and-witness")
+                            ]
+                        Record
+                            [
+                                ("boundIds",
+                                 Set
+                                     [
+                                         String "BOUND-ProtocolPayloadKindCardinality"
+                                         String "BOUND-ProtocolStreamKindCardinality"
+                                         String "BOUND-TraceSteps"
+                                     ])
+                                ("id", String "VERIFY-ProtocolStreams")
+                                ("kind", String "verification")
+                                ("subjectIds",
+                                 Set
+                                     [
+                                         String "PAYLOAD-Claim"
+                                         String "PAYLOAD-Delivery"
+                                         String "PAYLOAD-Election"
+                                         String "PAYLOAD-Lease"
+                                         String "PAYLOAD-OperationLock"
+                                         String "PAYLOAD-OperationReceipt"
+                                         String "PAYLOAD-Review"
+                                         String "PAYLOAD-TouchSet"
+                                         String "STREAM-Claim"
+                                         String "STREAM-Delivery"
+                                         String "STREAM-OperationLock"
+                                         String "STREAM-OperationReceipt"
+                                         String "STREAM-Review"
+                                     ])
+                                ("verificationKind", String "bounded-invariant-and-witness")
+                            ]
+                        Record
+                            [
+                                ("boundIds", Set [ String "BOUND-TraceSteps"; String "BOUND-VocabularyCardinality" ])
+                                ("id", String "VERIFY-VocabularyBaseline")
+                                ("kind", String "verification")
+                                ("subjectIds",
+                                 Set
+                                     [
+                                         String "AuthorityVocabulary"
+                                         String "CodecVocabulary"
+                                         String "CommandVocabulary"
+                                         String "EventVocabulary"
+                                         String "EvidenceObligationVocabulary"
+                                         String "MutationVocabulary"
+                                         String "ObservationPlanVocabulary"
+                                         String "ProjectionVocabulary"
+                                         String "SettingsProfileVocabulary"
+                                         String "SubjectVocabulary"
+                                         String "VersionIdentityVocabulary"
+                                     ])
+                                ("verificationKind", String "bounded-invariant-and-witness")
+                            ]
+                    ]
+        }
+        {
+            Id = "EXPORT-Vocabulary"
+            ModuleName = "CoordinationProtocol"
+            DeclarationName = "vocabularyCatalogue"
+            Value =
+                Set
+                    [
+                        Record
+                            [
+                                ("family", String "authorities")
+                                ("id", String "AuthorityVocabulary")
+                                ("kind", String "authority")
+                            ]
+                        Record
+                            [
+                                ("family", String "codecs")
+                                ("id", String "CodecVocabulary")
+                                ("kind", String "codec")
+                            ]
+                        Record
+                            [
+                                ("family", String "commands")
+                                ("id", String "CommandVocabulary")
+                                ("kind", String "command")
+                            ]
+                        Record
+                            [
+                                ("family", String "events")
+                                ("id", String "EventVocabulary")
+                                ("kind", String "event")
+                            ]
+                        Record
+                            [
+                                ("family", String "evidence-obligations")
+                                ("id", String "EvidenceObligationVocabulary")
+                                ("kind", String "evidence")
+                            ]
+                        Record
+                            [
+                                ("family", String "mutations")
+                                ("id", String "MutationVocabulary")
+                                ("kind", String "mutation")
+                            ]
+                        Record
+                            [
+                                ("family", String "observation-plans")
+                                ("id", String "ObservationPlanVocabulary")
+                                ("kind", String "observationPlan")
+                            ]
+                        Record
+                            [
+                                ("family", String "projections")
+                                ("id", String "ProjectionVocabulary")
+                                ("kind", String "projection")
+                            ]
+                        Record
+                            [
+                                ("family", String "settings-profiles")
+                                ("id", String "SettingsProfileVocabulary")
+                                ("kind", String "settingsProfile")
+                            ]
+                        Record
+                            [
+                                ("family", String "subjects")
+                                ("id", String "SubjectVocabulary")
+                                ("kind", String "subject")
+                            ]
+                        Record
+                            [
+                                ("family", String "version-identities")
+                                ("id", String "VersionIdentityVocabulary")
+                                ("kind", String "versionIdentity")
+                            ]
+                    ]
+        }
+    ]
 
-let Catalogue : CatalogueEntry list =
-    [ { Id = "AUTH-Actions"; Kind = "authorityBinding"; ExportId = "EXPORT-Authorities"; Value = Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-Actions-Evidence"); ("family", String "actions"); ("id", String "AUTH-Actions"); ("kind", String "authorityBinding"); ("revisionKind", String "workflow-run-attempt"); ("revisionValue", String "run-id-and-attempt") ] }
-      { Id = "AUTH-ClassifiedExternal"; Kind = "authorityBinding"; ExportId = "EXPORT-Authorities"; Value = Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-ClassifiedExternal-Evidence"); ("family", String "classified-external"); ("id", String "AUTH-ClassifiedExternal"); ("kind", String "authorityBinding"); ("revisionKind", String "classified-external-revision"); ("revisionValue", String "declared-source-revision") ] }
-      { Id = "AUTH-GitLedger"; Kind = "authorityBinding"; ExportId = "EXPORT-Authorities"; Value = Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-GitLedger-Evidence"); ("family", String "git-ledger"); ("id", String "AUTH-GitLedger"); ("kind", String "authorityBinding"); ("revisionKind", String "git-commit-sha"); ("revisionValue", String "commit-object-id") ] }
-      { Id = "AUTH-NativeGitHub"; Kind = "authorityBinding"; ExportId = "EXPORT-Authorities"; Value = Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-NativeGitHub-Evidence"); ("family", String "native-github"); ("id", String "AUTH-NativeGitHub"); ("kind", String "authorityBinding"); ("revisionKind", String "github-object-version"); ("revisionValue", String "node-id-and-updated-at") ] }
-      { Id = "AUTH-PackageFeed"; Kind = "authorityBinding"; ExportId = "EXPORT-Authorities"; Value = Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-PackageFeed-Evidence"); ("family", String "package-feed"); ("id", String "AUTH-PackageFeed"); ("kind", String "authorityBinding"); ("revisionKind", String "package-content-sha256"); ("revisionValue", String "package-bytes-digest") ] }
-      { Id = "AUTH-ProtocolStream"; Kind = "authorityBinding"; ExportId = "EXPORT-Authorities"; Value = Record [ ("completenessContract", String "complete-ancestry-snapshot-and-terminal-checkpoint"); ("evidenceRelationship", String "REL-AUTH-ProtocolStream-Evidence"); ("family", String "protected-sharded-git-journal"); ("id", String "AUTH-ProtocolStream"); ("kind", String "authorityBinding"); ("revisionKind", String "git-expected-parent-and-generation"); ("revisionValue", String "journal-commit-and-fencing-generation") ] }
-      { Id = "AUTH-RepositoryRegistry"; Kind = "authorityBinding"; ExportId = "EXPORT-Authorities"; Value = Record [ ("completenessContract", String "complete-required-fields"); ("evidenceRelationship", String "REL-AUTH-RepositoryRegistry-Evidence"); ("family", String "repository-registry"); ("id", String "AUTH-RepositoryRegistry"); ("kind", String "authorityBinding"); ("revisionKind", String "registry-document-sha256"); ("revisionValue", String "canonical-document-digest") ] }
-      { Id = "AcceptedAuthoritiesAreQualified"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "AcceptedAuthoritiesAreQualified"); ("kind", String "invariant"); ("subjects", Set [ String "AuthorityVocabulary"; String "EvidenceObligationVocabulary" ]) ] }
-      { Id = "AcceptedObservationKnowledgeIsQualified"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "AcceptedObservationKnowledgeIsQualified"); ("kind", String "invariant"); ("subjects", Set [ String "EvidenceObligationVocabulary"; String "ObservationPlanVocabulary" ]) ] }
-      { Id = "AcceptedVocabularyIsQualified"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "AcceptedVocabularyIsQualified"); ("kind", String "invariant"); ("subjects", Set [ String "EvidenceObligationVocabulary" ]) ] }
-      { Id = "AuthorityCanBeAccepted"; Kind = "example"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "AuthorityCanBeAccepted"); ("kind", String "example"); ("subjects", Set [ String "AUTH-NativeGitHub" ]) ] }
-      { Id = "AuthorityCatalogueIsClosed"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "AuthorityCatalogueIsClosed"); ("kind", String "invariant"); ("subjects", Set [ String "AuthorityVocabulary" ]) ] }
-      { Id = "AuthorityVocabulary"; Kind = "authority"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "authorities"); ("id", String "AuthorityVocabulary"); ("kind", String "authority") ] }
-      { Id = "BOUND-AuthorityCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-AuthorityCardinality"); ("kind", String "bound"); ("maximum", Int 7L); ("minimum", Int 7L) ] }
-      { Id = "BOUND-DurablePlanDispositionCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-DurablePlanDispositionCardinality"); ("kind", String "bound"); ("maximum", Int 4L); ("minimum", Int 4L) ] }
-      { Id = "BOUND-LifecycleIntentCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-LifecycleIntentCardinality"); ("kind", String "bound"); ("maximum", Int 4L); ("minimum", Int 4L) ] }
-      { Id = "BOUND-MutationKindCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-MutationKindCardinality"); ("kind", String "bound"); ("maximum", Int 8L); ("minimum", Int 8L) ] }
-      { Id = "BOUND-MutationOutcomeCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-MutationOutcomeCardinality"); ("kind", String "bound"); ("maximum", Int 8L); ("minimum", Int 8L) ] }
-      { Id = "BOUND-NativeRelationKindCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-NativeRelationKindCardinality"); ("kind", String "bound"); ("maximum", Int 2L); ("minimum", Int 2L) ] }
-      { Id = "BOUND-ObservationOutcomeCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-ObservationOutcomeCardinality"); ("kind", String "bound"); ("maximum", Int 9L); ("minimum", Int 9L) ] }
-      { Id = "BOUND-ProtocolPayloadKindCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-ProtocolPayloadKindCardinality"); ("kind", String "bound"); ("maximum", Int 8L); ("minimum", Int 8L) ] }
-      { Id = "BOUND-ProtocolStreamKindCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-ProtocolStreamKindCardinality"); ("kind", String "bound"); ("maximum", Int 5L); ("minimum", Int 5L) ] }
-      { Id = "BOUND-TraceSteps"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-TraceSteps"); ("kind", String "bound"); ("maximum", Int 4L); ("minimum", Int 0L) ] }
-      { Id = "BOUND-VocabularyCardinality"; Kind = "bound"; ExportId = "EXPORT-Bounds"; Value = Record [ ("id", String "BOUND-VocabularyCardinality"); ("kind", String "bound"); ("maximum", Int 11L); ("minimum", Int 11L) ] }
-      { Id = "COMPAT-Profile2"; Kind = "compatibility"; ExportId = "EXPORT-Compatibility"; Value = Record [ ("detail", String "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1>Preparing>FreezeRequested>Frozen>SwitchedV2>VerifiedV2>OpenV2>ObservingV2>ContractingV1>OperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen."); ("id", String "COMPAT-Profile2"); ("kind", String "compatibility"); ("requirement", String "exact"); ("surface", String "fsgg-quint-profile/2") ] }
-      { Id = "COUT-Specification"; Kind = "compiledOutputSpecification"; ExportId = "EXPORT-CompiledOutputSpecification"; Value = Record [ ("familyContract", String "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory"); ("id", String "COUT-Specification"); ("identityContract", String "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content"); ("kind", String "compiledOutputSpecification"); ("normalizationAuthority", String "typed-effect-json"); ("projectionViewFormats", String "markdown|json"); ("qualificationContract", String "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review"); ("refusalContract", String "missing|duplicate|substituted|unsupported|incomplete|reordered|stale"); ("semanticDiffContract", String "ordinal|json-pointer|value-sha256"); ("versionContract", String "fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2") ] }
-      { Id = "CodecVocabulary"; Kind = "codec"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "codecs"); ("id", String "CodecVocabulary"); ("kind", String "codec") ] }
-      { Id = "CommandVocabulary"; Kind = "command"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "commands"); ("id", String "CommandVocabulary"); ("kind", String "command") ] }
-      { Id = "CompensationRequiresAppliedPredecessor"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "CompensationRequiresAppliedPredecessor"); ("kind", String "invariant"); ("subjects", Set [ String "MOUT-Applied"; String "MUT-Compensate" ]) ] }
-      { Id = "DSTATE-Specification"; Kind = "desiredStateSpecification"; ExportId = "EXPORT-DesiredStateSpecification"; Value = Record [ ("authorityClass", String "revision-bound"); ("executionClass", String "pure-intent-no-writer"); ("id", String "DSTATE-Specification"); ("issueSchemaContract", String "issue-type|issue-field|field-type|allowed-value"); ("kind", String "desiredStateSpecification"); ("permissionsContract", String "repository-visibility|team-access|workflow-permission|environment-protection"); ("phaseAuthorityContract", String "subject|profile|family|content|authority-revision|plan-outcome|apply-receipt"); ("phaseContract", String "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify"); ("projectsContract", String "project-field|project-view|project-workflow|project-visibility|project-membership-policy"); ("refusalContract", String "unsupported|unauthorized|incomplete|stale|identity-mismatch"); ("releasesContract", String "release-environment|immutable-release|tag-protection|trusted-publisher"); ("repositoryProfileContract", String "ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy"); ("repositoryPropertiesContract", String "property-schema|property-value"); ("securitySupplyChainContract", String "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy"); ("workflowPinsContract", String "reusable-workflow-pin|action-pin") ] }
-      { Id = "DurablePlanCompensationIsBoundaryBound"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "DurablePlanCompensationIsBoundaryBound"); ("kind", String "invariant"); ("subjects", Set [ String "MUT-Compensate"; String "PDISP-Compensate" ]) ] }
-      { Id = "DurablePlansAreOrderedAndResumable"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "DurablePlansAreOrderedAndResumable"); ("kind", String "invariant"); ("subjects", Set [ String "PAYLOAD-OperationReceipt"; String "PDISP-Advance"; String "PDISP-Compensate"; String "PDISP-ReceiptReread"; String "PDISP-Replan" ]) ] }
-      { Id = "DurableProtocolCheckpointsArePreserved"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "DurableProtocolCheckpointsArePreserved"); ("kind", String "invariant"); ("subjects", Set [ String "PAYLOAD-Delivery"; String "PAYLOAD-Election"; String "PAYLOAD-OperationReceipt"; String "PAYLOAD-Review" ]) ] }
-      { Id = "EventVocabulary"; Kind = "event"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "events"); ("id", String "EventVocabulary"); ("kind", String "event") ] }
-      { Id = "EvidenceObligationVocabulary"; Kind = "evidence"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "evidence-obligations"); ("id", String "EvidenceObligationVocabulary"); ("kind", String "evidence") ] }
-      { Id = "FailureOutcomesDoNotBecomeAbsence"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "FailureOutcomesDoNotBecomeAbsence"); ("kind", String "invariant"); ("subjects", Set [ String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported" ]) ] }
-      { Id = "HOSTED-WriterV1"; Kind = "hostedWriterSpecification"; ExportId = "EXPORT-HostedWriterSpecification"; Value = Record [ ("activationContract", String "accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit"); ("budgetContract", String "finite-positive-no-renewal"); ("candidateContract", String "owner-controlled-content-addressed-bytes-before-branch-publication"); ("capacityContract", String "one-ordinary-assignment"); ("completionContract", String "native-provider-merged-pr-and-exact-head-readback"); ("id", String "HOSTED-WriterV1"); ("kind", String "hostedWriterSpecification"); ("operationContract", String "stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence"); ("runnerContract", String "exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner"); ("schemaContract", String "fsgg.coordination.hosted-writer/1"); ("scopeContract", String "one-immutable-work-item|routine-documentation-delivery"); ("startupContract", String "manual-default-paused-no-automatic-resume") ] }
-      { Id = "HumanIntentIsObservationIndependent"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "HumanIntentIsObservationIndependent"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Backlog"; String "INTENT-Ready"; String "ObservationPlanVocabulary" ]) ] }
-      { Id = "INTENT-Backlog"; Kind = "lifecycleIntent"; ExportId = "EXPORT-LifecycleIntents"; Value = Record [ ("id", String "INTENT-Backlog"); ("kind", String "lifecycleIntent"); ("schedulingClass", String "backlog"); ("terminal", Bool false) ] }
-      { Id = "INTENT-Cancelled"; Kind = "lifecycleIntent"; ExportId = "EXPORT-LifecycleIntents"; Value = Record [ ("id", String "INTENT-Cancelled"); ("kind", String "lifecycleIntent"); ("schedulingClass", String "cancelled"); ("terminal", Bool true) ] }
-      { Id = "INTENT-Paused"; Kind = "lifecycleIntent"; ExportId = "EXPORT-LifecycleIntents"; Value = Record [ ("id", String "INTENT-Paused"); ("kind", String "lifecycleIntent"); ("schedulingClass", String "paused"); ("terminal", Bool false) ] }
-      { Id = "INTENT-Ready"; Kind = "lifecycleIntent"; ExportId = "EXPORT-LifecycleIntents"; Value = Record [ ("id", String "INTENT-Ready"); ("kind", String "lifecycleIntent"); ("schedulingClass", String "ready"); ("terminal", Bool false) ] }
-      { Id = "LifecycleIntentCatalogueIsClosed"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "LifecycleIntentCatalogueIsClosed"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Backlog"; String "INTENT-Cancelled"; String "INTENT-Paused"; String "INTENT-Ready" ]) ] }
-      { Id = "LifecycleStatusIsDerived"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "LifecycleStatusIsDerived"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Ready"; String "OBS-Observed"; String "OBS-ProvenAbsent" ]) ] }
-      { Id = "MOUT-Applied"; Kind = "mutationOutcome"; ExportId = "EXPORT-MutationOutcomes"; Value = Record [ ("effectClass", String "applied"); ("finality", String "terminal"); ("id", String "MOUT-Applied"); ("kind", String "mutationOutcome"); ("retryClass", String "none") ] }
-      { Id = "MOUT-Idempotent"; Kind = "mutationOutcome"; ExportId = "EXPORT-MutationOutcomes"; Value = Record [ ("effectClass", String "no-op"); ("finality", String "terminal"); ("id", String "MOUT-Idempotent"); ("kind", String "mutationOutcome"); ("retryClass", String "none") ] }
-      { Id = "MOUT-Incomplete"; Kind = "mutationOutcome"; ExportId = "EXPORT-MutationOutcomes"; Value = Record [ ("effectClass", String "unknown"); ("finality", String "uncertain"); ("id", String "MOUT-Incomplete"); ("kind", String "mutationOutcome"); ("retryClass", String "complete-observation") ] }
-      { Id = "MOUT-RateLimited"; Kind = "mutationOutcome"; ExportId = "EXPORT-MutationOutcomes"; Value = Record [ ("effectClass", String "unknown"); ("finality", String "uncertain"); ("id", String "MOUT-RateLimited"); ("kind", String "mutationOutcome"); ("retryClass", String "authority-window") ] }
-      { Id = "MOUT-Rejected"; Kind = "mutationOutcome"; ExportId = "EXPORT-MutationOutcomes"; Value = Record [ ("effectClass", String "refused"); ("finality", String "terminal"); ("id", String "MOUT-Rejected"); ("kind", String "mutationOutcome"); ("retryClass", String "new-authority-or-intent") ] }
-      { Id = "MOUT-RevisionConflict"; Kind = "mutationOutcome"; ExportId = "EXPORT-MutationOutcomes"; Value = Record [ ("effectClass", String "conflict"); ("finality", String "terminal"); ("id", String "MOUT-RevisionConflict"); ("kind", String "mutationOutcome"); ("retryClass", String "refresh-and-new-intent") ] }
-      { Id = "MOUT-TimedOut"; Kind = "mutationOutcome"; ExportId = "EXPORT-MutationOutcomes"; Value = Record [ ("effectClass", String "unknown"); ("finality", String "uncertain"); ("id", String "MOUT-TimedOut"); ("kind", String "mutationOutcome"); ("retryClass", String "observe-or-exact-replay") ] }
-      { Id = "MOUT-Unavailable"; Kind = "mutationOutcome"; ExportId = "EXPORT-MutationOutcomes"; Value = Record [ ("effectClass", String "unknown"); ("finality", String "uncertain"); ("id", String "MOUT-Unavailable"); ("kind", String "mutationOutcome"); ("retryClass", String "availability-window") ] }
-      { Id = "MUT-AddEdge"; Kind = "mutationKind"; ExportId = "EXPORT-MutationKinds"; Value = Record [ ("id", String "MUT-AddEdge"); ("kind", String "mutationKind"); ("payloadKind", String "edge"); ("revisionRequirement", String "exact"); ("targetKind", String "relation") ] }
-      { Id = "MUT-Append"; Kind = "mutationKind"; ExportId = "EXPORT-MutationKinds"; Value = Record [ ("id", String "MUT-Append"); ("kind", String "mutationKind"); ("payloadKind", String "append"); ("revisionRequirement", String "exact"); ("targetKind", String "stream") ] }
-      { Id = "MUT-Clear"; Kind = "mutationKind"; ExportId = "EXPORT-MutationKinds"; Value = Record [ ("id", String "MUT-Clear"); ("kind", String "mutationKind"); ("payloadKind", String "scalar"); ("revisionRequirement", String "exact"); ("targetKind", String "field") ] }
-      { Id = "MUT-Compensate"; Kind = "mutationKind"; ExportId = "EXPORT-MutationKinds"; Value = Record [ ("id", String "MUT-Compensate"); ("kind", String "mutationKind"); ("payloadKind", String "compensation"); ("revisionRequirement", String "exact"); ("targetKind", String "mutation") ] }
-      { Id = "MUT-Create"; Kind = "mutationKind"; ExportId = "EXPORT-MutationKinds"; Value = Record [ ("id", String "MUT-Create"); ("kind", String "mutationKind"); ("payloadKind", String "create"); ("revisionRequirement", String "absent"); ("targetKind", String "subject") ] }
-      { Id = "MUT-RemoveEdge"; Kind = "mutationKind"; ExportId = "EXPORT-MutationKinds"; Value = Record [ ("id", String "MUT-RemoveEdge"); ("kind", String "mutationKind"); ("payloadKind", String "edge"); ("revisionRequirement", String "exact"); ("targetKind", String "relation") ] }
-      { Id = "MUT-Set"; Kind = "mutationKind"; ExportId = "EXPORT-MutationKinds"; Value = Record [ ("id", String "MUT-Set"); ("kind", String "mutationKind"); ("payloadKind", String "scalar"); ("revisionRequirement", String "exact"); ("targetKind", String "field") ] }
-      { Id = "MUT-Transition"; Kind = "mutationKind"; ExportId = "EXPORT-MutationKinds"; Value = Record [ ("id", String "MUT-Transition"); ("kind", String "mutationKind"); ("payloadKind", String "transition"); ("revisionRequirement", String "exact"); ("targetKind", String "lifecycle") ] }
-      { Id = "MutationCataloguesAreClosed"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "MutationCataloguesAreClosed"); ("kind", String "invariant"); ("subjects", Set [ String "MutationVocabulary" ]) ] }
-      { Id = "MutationResultsAreBound"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "MutationResultsAreBound"); ("kind", String "invariant"); ("subjects", Set [ String "MOUT-Applied"; String "MOUT-Idempotent"; String "MOUT-Rejected"; String "MOUT-RevisionConflict"; String "MutationVocabulary" ]) ] }
-      { Id = "MutationVocabulary"; Kind = "mutation"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "mutations"); ("id", String "MutationVocabulary"); ("kind", String "mutation") ] }
-      { Id = "NativeRelationEdgesAreValid"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "NativeRelationEdgesAreValid"); ("kind", String "invariant"); ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ]) ] }
-      { Id = "NativeRelationKindCatalogueIsClosed"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "NativeRelationKindCatalogueIsClosed"); ("kind", String "invariant"); ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ]) ] }
-      { Id = "OBS-Contradictory"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-Contradictory"); ("kind", String "observationOutcome"); ("knowledgeClass", String "contradictory"); ("retryClass", String "resolve-contradiction"); ("terminal", Bool false) ] }
-      { Id = "OBS-Incomplete"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-Incomplete"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "complete-evidence"); ("terminal", Bool false) ] }
-      { Id = "OBS-Observed"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-Observed"); ("kind", String "observationOutcome"); ("knowledgeClass", String "positive"); ("retryClass", String "none"); ("terminal", Bool true) ] }
-      { Id = "OBS-ProvenAbsent"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-ProvenAbsent"); ("kind", String "observationOutcome"); ("knowledgeClass", String "negative"); ("retryClass", String "none"); ("terminal", Bool true) ] }
-      { Id = "OBS-RateLimited"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-RateLimited"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "authority-window"); ("terminal", Bool false) ] }
-      { Id = "OBS-Stale"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-Stale"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "refresh-revision"); ("terminal", Bool false) ] }
-      { Id = "OBS-Unauthorized"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-Unauthorized"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "repair-authorization"); ("terminal", Bool false) ] }
-      { Id = "OBS-Unreadable"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-Unreadable"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "repair-read"); ("terminal", Bool false) ] }
-      { Id = "OBS-Unsupported"; Kind = "observationOutcome"; ExportId = "EXPORT-ObservationOutcomes"; Value = Record [ ("id", String "OBS-Unsupported"); ("kind", String "observationOutcome"); ("knowledgeClass", String "none"); ("retryClass", String "none"); ("terminal", Bool true) ] }
-      { Id = "ObservationOutcomeCatalogueIsClosed"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "ObservationOutcomeCatalogueIsClosed"); ("kind", String "invariant"); ("subjects", Set [ String "ObservationPlanVocabulary" ]) ] }
-      { Id = "ObservationPlanVocabulary"; Kind = "observationPlan"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "observation-plans"); ("id", String "ObservationPlanVocabulary"); ("kind", String "observationPlan") ] }
-      { Id = "PAYLOAD-Claim"; Kind = "protocolPayloadKind"; ExportId = "EXPORT-ProtocolPayloadKinds"; Value = Record [ ("durableCheckpoint", Bool false); ("id", String "PAYLOAD-Claim"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "ephemeral"); ("streamKindId", String "STREAM-Claim") ] }
-      { Id = "PAYLOAD-Delivery"; Kind = "protocolPayloadKind"; ExportId = "EXPORT-ProtocolPayloadKinds"; Value = Record [ ("durableCheckpoint", Bool true); ("id", String "PAYLOAD-Delivery"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "durable"); ("streamKindId", String "STREAM-Delivery") ] }
-      { Id = "PAYLOAD-Election"; Kind = "protocolPayloadKind"; ExportId = "EXPORT-ProtocolPayloadKinds"; Value = Record [ ("durableCheckpoint", Bool true); ("id", String "PAYLOAD-Election"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "durable"); ("streamKindId", String "STREAM-OperationLock") ] }
-      { Id = "PAYLOAD-Lease"; Kind = "protocolPayloadKind"; ExportId = "EXPORT-ProtocolPayloadKinds"; Value = Record [ ("durableCheckpoint", Bool false); ("id", String "PAYLOAD-Lease"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "ephemeral"); ("streamKindId", String "STREAM-Claim") ] }
-      { Id = "PAYLOAD-OperationLock"; Kind = "protocolPayloadKind"; ExportId = "EXPORT-ProtocolPayloadKinds"; Value = Record [ ("durableCheckpoint", Bool false); ("id", String "PAYLOAD-OperationLock"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "ephemeral"); ("streamKindId", String "STREAM-OperationLock") ] }
-      { Id = "PAYLOAD-OperationReceipt"; Kind = "protocolPayloadKind"; ExportId = "EXPORT-ProtocolPayloadKinds"; Value = Record [ ("durableCheckpoint", Bool true); ("id", String "PAYLOAD-OperationReceipt"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "durable"); ("streamKindId", String "STREAM-OperationReceipt") ] }
-      { Id = "PAYLOAD-Review"; Kind = "protocolPayloadKind"; ExportId = "EXPORT-ProtocolPayloadKinds"; Value = Record [ ("durableCheckpoint", Bool true); ("id", String "PAYLOAD-Review"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "durable"); ("streamKindId", String "STREAM-Review") ] }
-      { Id = "PAYLOAD-TouchSet"; Kind = "protocolPayloadKind"; ExportId = "EXPORT-ProtocolPayloadKinds"; Value = Record [ ("durableCheckpoint", Bool false); ("id", String "PAYLOAD-TouchSet"); ("kind", String "protocolPayloadKind"); ("retentionClass", String "ephemeral"); ("streamKindId", String "STREAM-Claim") ] }
-      { Id = "PDISP-Advance"; Kind = "durablePlanDisposition"; ExportId = "EXPORT-DurablePlanDispositions"; Value = Record [ ("id", String "PDISP-Advance"); ("kind", String "durablePlanDisposition"); ("nextAction", String "next-step"); ("receiptClass", String "terminal-success") ] }
-      { Id = "PDISP-Compensate"; Kind = "durablePlanDisposition"; ExportId = "EXPORT-DurablePlanDispositions"; Value = Record [ ("id", String "PDISP-Compensate"); ("kind", String "durablePlanDisposition"); ("nextAction", String "compensate-reverse"); ("receiptClass", String "terminal-refusal-applied-boundary") ] }
-      { Id = "PDISP-ReceiptReread"; Kind = "durablePlanDisposition"; ExportId = "EXPORT-DurablePlanDispositions"; Value = Record [ ("id", String "PDISP-ReceiptReread"); ("kind", String "durablePlanDisposition"); ("nextAction", String "reread-receipt"); ("receiptClass", String "uncertain") ] }
-      { Id = "PDISP-Replan"; Kind = "durablePlanDisposition"; ExportId = "EXPORT-DurablePlanDispositions"; Value = Record [ ("id", String "PDISP-Replan"); ("kind", String "durablePlanDisposition"); ("nextAction", String "compile-new-plan"); ("receiptClass", String "terminal-refusal-no-applied-boundary") ] }
-      { Id = "PILOT-PermitV1"; Kind = "pilotPermitSpecification"; ExportId = "EXPORT-PilotPermitSpecification"; Value = Record [ ("activationContract", String "inert-prospective-no-host-no-provider-writer"); ("budgetContract", String "finite-positive-no-automatic-renewal"); ("capacityContract", String "finite-with-reserved-recovery-capacity"); ("id", String "PILOT-PermitV1"); ("kind", String "pilotPermitSpecification"); ("lifecycleContract", String "StableOwned>TransferIntended>PilotOwned>(OutcomeUnknown|Paused|Revoked|ReturnIntended)>StableOwned"); ("ownershipContract", String "stable-until-durable-transfer-acknowledgement-and-readback"); ("recoveryContract", String "generation-current|readback-current|unknown-outcome-blocks-dispatch"); ("schemaContract", String "fsgg.coordination.pilot-permit/1"); ("scopeContract", String "one-canonical-work-item|routine-implementation"); ("trustContract", String "trusted-cooperating-runner-supported-route-only") ] }
-      { Id = "ProjectionVocabulary"; Kind = "projection"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "projections"); ("id", String "ProjectionVocabulary"); ("kind", String "projection") ] }
-      { Id = "ProtocolEnvelopesAreValidAndOrdered"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "ProtocolEnvelopesAreValidAndOrdered"); ("kind", String "invariant"); ("subjects", Set [ String "PAYLOAD-Claim"; String "PAYLOAD-Delivery"; String "PAYLOAD-Election"; String "PAYLOAD-Lease"; String "PAYLOAD-OperationLock"; String "PAYLOAD-OperationReceipt"; String "PAYLOAD-Review"; String "PAYLOAD-TouchSet" ]) ] }
-      { Id = "ProtocolStreamCataloguesAreClosed"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "ProtocolStreamCataloguesAreClosed"); ("kind", String "invariant"); ("subjects", Set [ String "STREAM-Claim"; String "STREAM-Delivery"; String "STREAM-OperationLock"; String "STREAM-OperationReceipt"; String "STREAM-Review" ]) ] }
-      { Id = "ProtocolStreamChangesPreservePriorSemantics"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "ProtocolStreamChangesPreservePriorSemantics"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Backlog"; String "REL-Blocks"; String "REL-ParentChild"; String "STREAM-Claim" ]) ] }
-      { Id = "ProtocolStreamObservationFailuresDoNotBecomeAbsence"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "ProtocolStreamObservationFailuresDoNotBecomeAbsence"); ("kind", String "invariant"); ("subjects", Set [ String "AUTH-ProtocolStream"; String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported" ]) ] }
-      { Id = "ProvenAbsenceCanBeAccepted"; Kind = "example"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "ProvenAbsenceCanBeAccepted"); ("kind", String "example"); ("subjects", Set [ String "OBS-ProvenAbsent" ]) ] }
-      { Id = "REL-AUTH-Actions-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "AUTH-Actions"); ("id", String "REL-AUTH-Actions-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-AUTH-ClassifiedExternal-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "AUTH-ClassifiedExternal"); ("id", String "REL-AUTH-ClassifiedExternal-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-AUTH-GitLedger-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "AUTH-GitLedger"); ("id", String "REL-AUTH-GitLedger-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-AUTH-NativeGitHub-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "AUTH-NativeGitHub"); ("id", String "REL-AUTH-NativeGitHub-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-AUTH-PackageFeed-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "AUTH-PackageFeed"); ("id", String "REL-AUTH-PackageFeed-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-AUTH-ProtocolStream-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "AUTH-ProtocolStream"); ("id", String "REL-AUTH-ProtocolStream-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-AUTH-RepositoryRegistry-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "AUTH-RepositoryRegistry"); ("id", String "REL-AUTH-RepositoryRegistry-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-Authority-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "AuthorityVocabulary"); ("id", String "REL-Authority-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-Blocks"; Kind = "nativeRelationKind"; ExportId = "EXPORT-NativeRelationKinds"; Value = Record [ ("direction", String "blocker-to-blocked"); ("id", String "REL-Blocks"); ("kind", String "nativeRelationKind") ] }
-      { Id = "REL-Codec-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "CodecVocabulary"); ("id", String "REL-Codec-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-Command-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "CommandVocabulary"); ("id", String "REL-Command-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-Event-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "EventVocabulary"); ("id", String "REL-Event-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-Mutation-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "MutationVocabulary"); ("id", String "REL-Mutation-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-ObservationPlan-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "ObservationPlanVocabulary"); ("id", String "REL-ObservationPlan-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-ParentChild"; Kind = "nativeRelationKind"; ExportId = "EXPORT-NativeRelationKinds"; Value = Record [ ("direction", String "parent-to-child"); ("id", String "REL-ParentChild"); ("kind", String "nativeRelationKind") ] }
-      { Id = "REL-Projection-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "ProjectionVocabulary"); ("id", String "REL-Projection-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-SettingsProfile-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "SettingsProfileVocabulary"); ("id", String "REL-SettingsProfile-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-Subject-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "SubjectVocabulary"); ("id", String "REL-Subject-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "REL-VersionIdentity-Evidence"; Kind = "verifiedBy"; ExportId = "EXPORT-Relationships"; Value = Record [ ("fromId", String "VersionIdentityVocabulary"); ("id", String "REL-VersionIdentity-Evidence"); ("kind", String "verifiedBy"); ("toId", String "EvidenceObligationVocabulary") ] }
-      { Id = "RelationChangesPreserveLifecycleIntent"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "RelationChangesPreserveLifecycleIntent"); ("kind", String "invariant"); ("subjects", Set [ String "INTENT-Backlog"; String "INTENT-Cancelled"; String "INTENT-Paused"; String "INTENT-Ready"; String "REL-Blocks"; String "REL-ParentChild" ]) ] }
-      { Id = "RelationChangesPreserveUnrelatedEdges"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "RelationChangesPreserveUnrelatedEdges"); ("kind", String "invariant"); ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ]) ] }
-      { Id = "RelationObservationFailuresDoNotBecomeAbsence"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "RelationObservationFailuresDoNotBecomeAbsence"); ("kind", String "invariant"); ("subjects", Set [ String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported"; String "REL-Blocks"; String "REL-ParentChild" ]) ] }
-      { Id = "STREAM-Claim"; Kind = "protocolStreamKind"; ExportId = "EXPORT-ProtocolStreamKinds"; Value = Record [ ("family", String "journal-cas-claim-lease-touch-set-fenced"); ("id", String "STREAM-Claim"); ("kind", String "protocolStreamKind") ] }
-      { Id = "STREAM-Delivery"; Kind = "protocolStreamKind"; ExportId = "EXPORT-ProtocolStreamKinds"; Value = Record [ ("family", String "delivery"); ("id", String "STREAM-Delivery"); ("kind", String "protocolStreamKind") ] }
-      { Id = "STREAM-OperationLock"; Kind = "protocolStreamKind"; ExportId = "EXPORT-ProtocolStreamKinds"; Value = Record [ ("family", String "journal-cas-operation-election-fenced"); ("id", String "STREAM-OperationLock"); ("kind", String "protocolStreamKind") ] }
-      { Id = "STREAM-OperationReceipt"; Kind = "protocolStreamKind"; ExportId = "EXPORT-ProtocolStreamKinds"; Value = Record [ ("family", String "operation-receipt"); ("id", String "STREAM-OperationReceipt"); ("kind", String "protocolStreamKind") ] }
-      { Id = "STREAM-Review"; Kind = "protocolStreamKind"; ExportId = "EXPORT-ProtocolStreamKinds"; Value = Record [ ("family", String "journal-cas-full-snapshot-review-epoch"); ("id", String "STREAM-Review"); ("kind", String "protocolStreamKind") ] }
-      { Id = "SettingsProfileVocabulary"; Kind = "settingsProfile"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "settings-profiles"); ("id", String "SettingsProfileVocabulary"); ("kind", String "settingsProfile") ] }
-      { Id = "SubjectVocabulary"; Kind = "subject"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "subjects"); ("id", String "SubjectVocabulary"); ("kind", String "subject") ] }
-      { Id = "UncertainMutationOutcomesStayUnknown"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "UncertainMutationOutcomesStayUnknown"); ("kind", String "invariant"); ("subjects", Set [ String "MOUT-Incomplete"; String "MOUT-RateLimited"; String "MOUT-TimedOut"; String "MOUT-Unavailable" ]) ] }
-      { Id = "UnknownLifecycleFactsFailClosed"; Kind = "invariant"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "UnknownLifecycleFactsFailClosed"); ("kind", String "invariant"); ("subjects", Set [ String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported" ]) ] }
-      { Id = "VERIFY-AuthorityBindings"; Kind = "verification"; ExportId = "EXPORT-Verifications"; Value = Record [ ("boundIds", Set [ String "BOUND-AuthorityCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-AuthorityBindings"); ("kind", String "verification"); ("subjectIds", Set [ String "AUTH-Actions"; String "AUTH-ClassifiedExternal"; String "AUTH-GitLedger"; String "AUTH-NativeGitHub"; String "AUTH-PackageFeed"; String "AUTH-ProtocolStream"; String "AUTH-RepositoryRegistry" ]); ("verificationKind", String "bounded-invariant-and-witness") ] }
-      { Id = "VERIFY-DurablePlans"; Kind = "verification"; ExportId = "EXPORT-Verifications"; Value = Record [ ("boundIds", Set [ String "BOUND-DurablePlanDispositionCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-DurablePlans"); ("kind", String "verification"); ("subjectIds", Set [ String "MUT-Compensate"; String "PAYLOAD-OperationReceipt"; String "PDISP-Advance"; String "PDISP-Compensate"; String "PDISP-ReceiptReread"; String "PDISP-Replan" ]); ("verificationKind", String "bounded-invariant-and-witness") ] }
-      { Id = "VERIFY-LifecycleIntent"; Kind = "verification"; ExportId = "EXPORT-Verifications"; Value = Record [ ("boundIds", Set [ String "BOUND-LifecycleIntentCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-LifecycleIntent"); ("kind", String "verification"); ("subjectIds", Set [ String "INTENT-Backlog"; String "INTENT-Cancelled"; String "INTENT-Paused"; String "INTENT-Ready" ]); ("verificationKind", String "bounded-invariant-and-witness") ] }
-      { Id = "VERIFY-MutationAlgebra"; Kind = "verification"; ExportId = "EXPORT-Verifications"; Value = Record [ ("boundIds", Set [ String "BOUND-MutationKindCardinality"; String "BOUND-MutationOutcomeCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-MutationAlgebra"); ("kind", String "verification"); ("subjectIds", Set [ String "MOUT-Applied"; String "MOUT-Idempotent"; String "MOUT-Incomplete"; String "MOUT-RateLimited"; String "MOUT-Rejected"; String "MOUT-RevisionConflict"; String "MOUT-TimedOut"; String "MOUT-Unavailable"; String "MUT-AddEdge"; String "MUT-Append"; String "MUT-Clear"; String "MUT-Compensate"; String "MUT-Create"; String "MUT-RemoveEdge"; String "MUT-Set"; String "MUT-Transition" ]); ("verificationKind", String "bounded-invariant-and-witness") ] }
-      { Id = "VERIFY-NativeRelations"; Kind = "verification"; ExportId = "EXPORT-Verifications"; Value = Record [ ("boundIds", Set [ String "BOUND-NativeRelationKindCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-NativeRelations"); ("kind", String "verification"); ("subjectIds", Set [ String "REL-Blocks"; String "REL-ParentChild" ]); ("verificationKind", String "bounded-invariant-and-witness") ] }
-      { Id = "VERIFY-ObservationOutcomes"; Kind = "verification"; ExportId = "EXPORT-Verifications"; Value = Record [ ("boundIds", Set [ String "BOUND-ObservationOutcomeCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-ObservationOutcomes"); ("kind", String "verification"); ("subjectIds", Set [ String "OBS-Contradictory"; String "OBS-Incomplete"; String "OBS-Observed"; String "OBS-ProvenAbsent"; String "OBS-RateLimited"; String "OBS-Stale"; String "OBS-Unauthorized"; String "OBS-Unreadable"; String "OBS-Unsupported" ]); ("verificationKind", String "bounded-invariant-and-witness") ] }
-      { Id = "VERIFY-ProtocolStreams"; Kind = "verification"; ExportId = "EXPORT-Verifications"; Value = Record [ ("boundIds", Set [ String "BOUND-ProtocolPayloadKindCardinality"; String "BOUND-ProtocolStreamKindCardinality"; String "BOUND-TraceSteps" ]); ("id", String "VERIFY-ProtocolStreams"); ("kind", String "verification"); ("subjectIds", Set [ String "PAYLOAD-Claim"; String "PAYLOAD-Delivery"; String "PAYLOAD-Election"; String "PAYLOAD-Lease"; String "PAYLOAD-OperationLock"; String "PAYLOAD-OperationReceipt"; String "PAYLOAD-Review"; String "PAYLOAD-TouchSet"; String "STREAM-Claim"; String "STREAM-Delivery"; String "STREAM-OperationLock"; String "STREAM-OperationReceipt"; String "STREAM-Review" ]); ("verificationKind", String "bounded-invariant-and-witness") ] }
-      { Id = "VERIFY-VocabularyBaseline"; Kind = "verification"; ExportId = "EXPORT-Verifications"; Value = Record [ ("boundIds", Set [ String "BOUND-TraceSteps"; String "BOUND-VocabularyCardinality" ]); ("id", String "VERIFY-VocabularyBaseline"); ("kind", String "verification"); ("subjectIds", Set [ String "AuthorityVocabulary"; String "CodecVocabulary"; String "CommandVocabulary"; String "EventVocabulary"; String "EvidenceObligationVocabulary"; String "MutationVocabulary"; String "ObservationPlanVocabulary"; String "ProjectionVocabulary"; String "SettingsProfileVocabulary"; String "SubjectVocabulary"; String "VersionIdentityVocabulary" ]); ("verificationKind", String "bounded-invariant-and-witness") ] }
-      { Id = "VersionIdentityVocabulary"; Kind = "versionIdentity"; ExportId = "EXPORT-Vocabulary"; Value = Record [ ("family", String "version-identities"); ("id", String "VersionIdentityVocabulary"); ("kind", String "versionIdentity") ] }
-      { Id = "VocabularyCanBeAccepted"; Kind = "example"; ExportId = "EXPORT-Properties"; Value = Record [ ("id", String "VocabularyCanBeAccepted"); ("kind", String "example"); ("subjects", Set [ String "SubjectVocabulary" ]) ] } ]
+let Catalogue: CatalogueEntry list =
+    [
+        {
+            Id = "AUTH-Actions"
+            Kind = "authorityBinding"
+            ExportId = "EXPORT-Authorities"
+            Value =
+                Record
+                    [
+                        ("completenessContract", String "complete-required-fields")
+                        ("evidenceRelationship", String "REL-AUTH-Actions-Evidence")
+                        ("family", String "actions")
+                        ("id", String "AUTH-Actions")
+                        ("kind", String "authorityBinding")
+                        ("revisionKind", String "workflow-run-attempt")
+                        ("revisionValue", String "run-id-and-attempt")
+                    ]
+        }
+        {
+            Id = "AUTH-ClassifiedExternal"
+            Kind = "authorityBinding"
+            ExportId = "EXPORT-Authorities"
+            Value =
+                Record
+                    [
+                        ("completenessContract", String "complete-required-fields")
+                        ("evidenceRelationship", String "REL-AUTH-ClassifiedExternal-Evidence")
+                        ("family", String "classified-external")
+                        ("id", String "AUTH-ClassifiedExternal")
+                        ("kind", String "authorityBinding")
+                        ("revisionKind", String "classified-external-revision")
+                        ("revisionValue", String "declared-source-revision")
+                    ]
+        }
+        {
+            Id = "AUTH-GitLedger"
+            Kind = "authorityBinding"
+            ExportId = "EXPORT-Authorities"
+            Value =
+                Record
+                    [
+                        ("completenessContract", String "complete-required-fields")
+                        ("evidenceRelationship", String "REL-AUTH-GitLedger-Evidence")
+                        ("family", String "git-ledger")
+                        ("id", String "AUTH-GitLedger")
+                        ("kind", String "authorityBinding")
+                        ("revisionKind", String "git-commit-sha")
+                        ("revisionValue", String "commit-object-id")
+                    ]
+        }
+        {
+            Id = "AUTH-NativeGitHub"
+            Kind = "authorityBinding"
+            ExportId = "EXPORT-Authorities"
+            Value =
+                Record
+                    [
+                        ("completenessContract", String "complete-required-fields")
+                        ("evidenceRelationship", String "REL-AUTH-NativeGitHub-Evidence")
+                        ("family", String "native-github")
+                        ("id", String "AUTH-NativeGitHub")
+                        ("kind", String "authorityBinding")
+                        ("revisionKind", String "github-object-version")
+                        ("revisionValue", String "node-id-and-updated-at")
+                    ]
+        }
+        {
+            Id = "AUTH-PackageFeed"
+            Kind = "authorityBinding"
+            ExportId = "EXPORT-Authorities"
+            Value =
+                Record
+                    [
+                        ("completenessContract", String "complete-required-fields")
+                        ("evidenceRelationship", String "REL-AUTH-PackageFeed-Evidence")
+                        ("family", String "package-feed")
+                        ("id", String "AUTH-PackageFeed")
+                        ("kind", String "authorityBinding")
+                        ("revisionKind", String "package-content-sha256")
+                        ("revisionValue", String "package-bytes-digest")
+                    ]
+        }
+        {
+            Id = "AUTH-ProtocolStream"
+            Kind = "authorityBinding"
+            ExportId = "EXPORT-Authorities"
+            Value =
+                Record
+                    [
+                        ("completenessContract", String "complete-ancestry-snapshot-and-terminal-checkpoint")
+                        ("evidenceRelationship", String "REL-AUTH-ProtocolStream-Evidence")
+                        ("family", String "protected-sharded-git-journal")
+                        ("id", String "AUTH-ProtocolStream")
+                        ("kind", String "authorityBinding")
+                        ("revisionKind", String "git-expected-parent-and-generation")
+                        ("revisionValue", String "journal-commit-and-fencing-generation")
+                    ]
+        }
+        {
+            Id = "AUTH-RepositoryRegistry"
+            Kind = "authorityBinding"
+            ExportId = "EXPORT-Authorities"
+            Value =
+                Record
+                    [
+                        ("completenessContract", String "complete-required-fields")
+                        ("evidenceRelationship", String "REL-AUTH-RepositoryRegistry-Evidence")
+                        ("family", String "repository-registry")
+                        ("id", String "AUTH-RepositoryRegistry")
+                        ("kind", String "authorityBinding")
+                        ("revisionKind", String "registry-document-sha256")
+                        ("revisionValue", String "canonical-document-digest")
+                    ]
+        }
+        {
+            Id = "AcceptedAuthoritiesAreQualified"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "AcceptedAuthoritiesAreQualified")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "AuthorityVocabulary"; String "EvidenceObligationVocabulary" ])
+                    ]
+        }
+        {
+            Id = "AcceptedObservationKnowledgeIsQualified"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "AcceptedObservationKnowledgeIsQualified")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "EvidenceObligationVocabulary"; String "ObservationPlanVocabulary" ])
+                    ]
+        }
+        {
+            Id = "AcceptedVocabularyIsQualified"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "AcceptedVocabularyIsQualified")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "EvidenceObligationVocabulary" ])
+                    ]
+        }
+        {
+            Id = "AuthorityCanBeAccepted"
+            Kind = "example"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "AuthorityCanBeAccepted")
+                        ("kind", String "example")
+                        ("subjects", Set [ String "AUTH-NativeGitHub" ])
+                    ]
+        }
+        {
+            Id = "AuthorityCatalogueIsClosed"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "AuthorityCatalogueIsClosed")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "AuthorityVocabulary" ])
+                    ]
+        }
+        {
+            Id = "AuthorityVocabulary"
+            Kind = "authority"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "authorities")
+                        ("id", String "AuthorityVocabulary")
+                        ("kind", String "authority")
+                    ]
+        }
+        {
+            Id = "BOUND-AuthorityCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-AuthorityCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 7L)
+                        ("minimum", Int 7L)
+                    ]
+        }
+        {
+            Id = "BOUND-DurablePlanDispositionCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-DurablePlanDispositionCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 4L)
+                        ("minimum", Int 4L)
+                    ]
+        }
+        {
+            Id = "BOUND-LifecycleIntentCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-LifecycleIntentCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 4L)
+                        ("minimum", Int 4L)
+                    ]
+        }
+        {
+            Id = "BOUND-MutationKindCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-MutationKindCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 8L)
+                        ("minimum", Int 8L)
+                    ]
+        }
+        {
+            Id = "BOUND-MutationOutcomeCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-MutationOutcomeCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 8L)
+                        ("minimum", Int 8L)
+                    ]
+        }
+        {
+            Id = "BOUND-NativeRelationKindCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-NativeRelationKindCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 2L)
+                        ("minimum", Int 2L)
+                    ]
+        }
+        {
+            Id = "BOUND-ObservationOutcomeCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-ObservationOutcomeCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 9L)
+                        ("minimum", Int 9L)
+                    ]
+        }
+        {
+            Id = "BOUND-ProtocolPayloadKindCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-ProtocolPayloadKindCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 8L)
+                        ("minimum", Int 8L)
+                    ]
+        }
+        {
+            Id = "BOUND-ProtocolStreamKindCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-ProtocolStreamKindCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 5L)
+                        ("minimum", Int 5L)
+                    ]
+        }
+        {
+            Id = "BOUND-TraceSteps"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-TraceSteps")
+                        ("kind", String "bound")
+                        ("maximum", Int 4L)
+                        ("minimum", Int 0L)
+                    ]
+        }
+        {
+            Id = "BOUND-VocabularyCardinality"
+            Kind = "bound"
+            ExportId = "EXPORT-Bounds"
+            Value =
+                Record
+                    [
+                        ("id", String "BOUND-VocabularyCardinality")
+                        ("kind", String "bound")
+                        ("maximum", Int 11L)
+                        ("minimum", Int 11L)
+                    ]
+        }
+        {
+            Id = "COMPAT-Profile2"
+            Kind = "compatibility"
+            ExportId = "EXPORT-Compatibility"
+            Value =
+                Record
+                    [
+                        ("detail",
+                         String
+                             "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1>Preparing>FreezeRequested>Frozen>SwitchedV2>VerifiedV2>OpenV2>ObservingV2>ContractingV1>OperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen.")
+                        ("id", String "COMPAT-Profile2")
+                        ("kind", String "compatibility")
+                        ("requirement", String "exact")
+                        ("surface", String "fsgg-quint-profile/2")
+                    ]
+        }
+        {
+            Id = "COUT-Specification"
+            Kind = "compiledOutputSpecification"
+            ExportId = "EXPORT-CompiledOutputSpecification"
+            Value =
+                Record
+                    [
+                        ("familyContract",
+                         String
+                             "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory")
+                        ("id", String "COUT-Specification")
+                        ("identityContract",
+                         String
+                             "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content")
+                        ("kind", String "compiledOutputSpecification")
+                        ("normalizationAuthority", String "typed-effect-json")
+                        ("projectionViewFormats", String "markdown|json")
+                        ("qualificationContract",
+                         String
+                             "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review")
+                        ("refusalContract",
+                         String "missing|duplicate|substituted|unsupported|incomplete|reordered|stale")
+                        ("semanticDiffContract", String "ordinal|json-pointer|value-sha256")
+                        ("versionContract",
+                         String
+                             "fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2")
+                    ]
+        }
+        {
+            Id = "CodecVocabulary"
+            Kind = "codec"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "codecs")
+                        ("id", String "CodecVocabulary")
+                        ("kind", String "codec")
+                    ]
+        }
+        {
+            Id = "CommandVocabulary"
+            Kind = "command"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "commands")
+                        ("id", String "CommandVocabulary")
+                        ("kind", String "command")
+                    ]
+        }
+        {
+            Id = "CompensationRequiresAppliedPredecessor"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "CompensationRequiresAppliedPredecessor")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "MOUT-Applied"; String "MUT-Compensate" ])
+                    ]
+        }
+        {
+            Id = "DSTATE-Specification"
+            Kind = "desiredStateSpecification"
+            ExportId = "EXPORT-DesiredStateSpecification"
+            Value =
+                Record
+                    [
+                        ("authorityClass", String "revision-bound")
+                        ("executionClass", String "pure-intent-no-writer")
+                        ("id", String "DSTATE-Specification")
+                        ("issueSchemaContract", String "issue-type|issue-field|field-type|allowed-value")
+                        ("kind", String "desiredStateSpecification")
+                        ("permissionsContract",
+                         String "repository-visibility|team-access|workflow-permission|environment-protection")
+                        ("phaseAuthorityContract",
+                         String "subject|profile|family|content|authority-revision|plan-outcome|apply-receipt")
+                        ("phaseContract", String "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify")
+                        ("projectsContract",
+                         String
+                             "project-field|project-view|project-workflow|project-visibility|project-membership-policy")
+                        ("refusalContract", String "unsupported|unauthorized|incomplete|stale|identity-mismatch")
+                        ("releasesContract",
+                         String "release-environment|immutable-release|tag-protection|trusted-publisher")
+                        ("repositoryProfileContract",
+                         String "ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy")
+                        ("repositoryPropertiesContract", String "property-schema|property-value")
+                        ("securitySupplyChainContract",
+                         String "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy")
+                        ("workflowPinsContract", String "reusable-workflow-pin|action-pin")
+                    ]
+        }
+        {
+            Id = "DurablePlanCompensationIsBoundaryBound"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "DurablePlanCompensationIsBoundaryBound")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "MUT-Compensate"; String "PDISP-Compensate" ])
+                    ]
+        }
+        {
+            Id = "DurablePlansAreOrderedAndResumable"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "DurablePlansAreOrderedAndResumable")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "PAYLOAD-OperationReceipt"
+                                 String "PDISP-Advance"
+                                 String "PDISP-Compensate"
+                                 String "PDISP-ReceiptReread"
+                                 String "PDISP-Replan"
+                             ])
+                    ]
+        }
+        {
+            Id = "DurableProtocolCheckpointsArePreserved"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "DurableProtocolCheckpointsArePreserved")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "PAYLOAD-Delivery"
+                                 String "PAYLOAD-Election"
+                                 String "PAYLOAD-OperationReceipt"
+                                 String "PAYLOAD-Review"
+                             ])
+                    ]
+        }
+        {
+            Id = "EventVocabulary"
+            Kind = "event"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "events")
+                        ("id", String "EventVocabulary")
+                        ("kind", String "event")
+                    ]
+        }
+        {
+            Id = "EvidenceObligationVocabulary"
+            Kind = "evidence"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "evidence-obligations")
+                        ("id", String "EvidenceObligationVocabulary")
+                        ("kind", String "evidence")
+                    ]
+        }
+        {
+            Id = "FailureOutcomesDoNotBecomeAbsence"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "FailureOutcomesDoNotBecomeAbsence")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "OBS-Contradictory"
+                                 String "OBS-Incomplete"
+                                 String "OBS-RateLimited"
+                                 String "OBS-Stale"
+                                 String "OBS-Unauthorized"
+                                 String "OBS-Unreadable"
+                                 String "OBS-Unsupported"
+                             ])
+                    ]
+        }
+        {
+            Id = "HOSTED-WriterV1"
+            Kind = "hostedWriterSpecification"
+            ExportId = "EXPORT-HostedWriterSpecification"
+            Value =
+                Record
+                    [
+                        ("activationContract",
+                         String "accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit")
+                        ("budgetContract", String "finite-positive-no-renewal")
+                        ("candidateContract",
+                         String "owner-controlled-content-addressed-bytes-before-branch-publication")
+                        ("capacityContract", String "one-ordinary-assignment")
+                        ("completionContract", String "native-provider-merged-pr-and-exact-head-readback")
+                        ("id", String "HOSTED-WriterV1")
+                        ("kind", String "hostedWriterSpecification")
+                        ("operationContract",
+                         String
+                             "stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence")
+                        ("runnerContract", String "exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner")
+                        ("schemaContract", String "fsgg.coordination.hosted-writer/1")
+                        ("scopeContract", String "one-immutable-work-item|routine-documentation-delivery")
+                        ("startupContract", String "manual-default-paused-no-automatic-resume")
+                    ]
+        }
+        {
+            Id = "HumanIntentIsObservationIndependent"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "HumanIntentIsObservationIndependent")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "INTENT-Backlog"
+                                 String "INTENT-Ready"
+                                 String "ObservationPlanVocabulary"
+                             ])
+                    ]
+        }
+        {
+            Id = "INTENT-Backlog"
+            Kind = "lifecycleIntent"
+            ExportId = "EXPORT-LifecycleIntents"
+            Value =
+                Record
+                    [
+                        ("id", String "INTENT-Backlog")
+                        ("kind", String "lifecycleIntent")
+                        ("schedulingClass", String "backlog")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "INTENT-Cancelled"
+            Kind = "lifecycleIntent"
+            ExportId = "EXPORT-LifecycleIntents"
+            Value =
+                Record
+                    [
+                        ("id", String "INTENT-Cancelled")
+                        ("kind", String "lifecycleIntent")
+                        ("schedulingClass", String "cancelled")
+                        ("terminal", Bool true)
+                    ]
+        }
+        {
+            Id = "INTENT-Paused"
+            Kind = "lifecycleIntent"
+            ExportId = "EXPORT-LifecycleIntents"
+            Value =
+                Record
+                    [
+                        ("id", String "INTENT-Paused")
+                        ("kind", String "lifecycleIntent")
+                        ("schedulingClass", String "paused")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "INTENT-Ready"
+            Kind = "lifecycleIntent"
+            ExportId = "EXPORT-LifecycleIntents"
+            Value =
+                Record
+                    [
+                        ("id", String "INTENT-Ready")
+                        ("kind", String "lifecycleIntent")
+                        ("schedulingClass", String "ready")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "LifecycleIntentCatalogueIsClosed"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "LifecycleIntentCatalogueIsClosed")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "INTENT-Backlog"
+                                 String "INTENT-Cancelled"
+                                 String "INTENT-Paused"
+                                 String "INTENT-Ready"
+                             ])
+                    ]
+        }
+        {
+            Id = "LifecycleStatusIsDerived"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "LifecycleStatusIsDerived")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "INTENT-Ready"; String "OBS-Observed"; String "OBS-ProvenAbsent" ])
+                    ]
+        }
+        {
+            Id = "MOUT-Applied"
+            Kind = "mutationOutcome"
+            ExportId = "EXPORT-MutationOutcomes"
+            Value =
+                Record
+                    [
+                        ("effectClass", String "applied")
+                        ("finality", String "terminal")
+                        ("id", String "MOUT-Applied")
+                        ("kind", String "mutationOutcome")
+                        ("retryClass", String "none")
+                    ]
+        }
+        {
+            Id = "MOUT-Idempotent"
+            Kind = "mutationOutcome"
+            ExportId = "EXPORT-MutationOutcomes"
+            Value =
+                Record
+                    [
+                        ("effectClass", String "no-op")
+                        ("finality", String "terminal")
+                        ("id", String "MOUT-Idempotent")
+                        ("kind", String "mutationOutcome")
+                        ("retryClass", String "none")
+                    ]
+        }
+        {
+            Id = "MOUT-Incomplete"
+            Kind = "mutationOutcome"
+            ExportId = "EXPORT-MutationOutcomes"
+            Value =
+                Record
+                    [
+                        ("effectClass", String "unknown")
+                        ("finality", String "uncertain")
+                        ("id", String "MOUT-Incomplete")
+                        ("kind", String "mutationOutcome")
+                        ("retryClass", String "complete-observation")
+                    ]
+        }
+        {
+            Id = "MOUT-RateLimited"
+            Kind = "mutationOutcome"
+            ExportId = "EXPORT-MutationOutcomes"
+            Value =
+                Record
+                    [
+                        ("effectClass", String "unknown")
+                        ("finality", String "uncertain")
+                        ("id", String "MOUT-RateLimited")
+                        ("kind", String "mutationOutcome")
+                        ("retryClass", String "authority-window")
+                    ]
+        }
+        {
+            Id = "MOUT-Rejected"
+            Kind = "mutationOutcome"
+            ExportId = "EXPORT-MutationOutcomes"
+            Value =
+                Record
+                    [
+                        ("effectClass", String "refused")
+                        ("finality", String "terminal")
+                        ("id", String "MOUT-Rejected")
+                        ("kind", String "mutationOutcome")
+                        ("retryClass", String "new-authority-or-intent")
+                    ]
+        }
+        {
+            Id = "MOUT-RevisionConflict"
+            Kind = "mutationOutcome"
+            ExportId = "EXPORT-MutationOutcomes"
+            Value =
+                Record
+                    [
+                        ("effectClass", String "conflict")
+                        ("finality", String "terminal")
+                        ("id", String "MOUT-RevisionConflict")
+                        ("kind", String "mutationOutcome")
+                        ("retryClass", String "refresh-and-new-intent")
+                    ]
+        }
+        {
+            Id = "MOUT-TimedOut"
+            Kind = "mutationOutcome"
+            ExportId = "EXPORT-MutationOutcomes"
+            Value =
+                Record
+                    [
+                        ("effectClass", String "unknown")
+                        ("finality", String "uncertain")
+                        ("id", String "MOUT-TimedOut")
+                        ("kind", String "mutationOutcome")
+                        ("retryClass", String "observe-or-exact-replay")
+                    ]
+        }
+        {
+            Id = "MOUT-Unavailable"
+            Kind = "mutationOutcome"
+            ExportId = "EXPORT-MutationOutcomes"
+            Value =
+                Record
+                    [
+                        ("effectClass", String "unknown")
+                        ("finality", String "uncertain")
+                        ("id", String "MOUT-Unavailable")
+                        ("kind", String "mutationOutcome")
+                        ("retryClass", String "availability-window")
+                    ]
+        }
+        {
+            Id = "MUT-AddEdge"
+            Kind = "mutationKind"
+            ExportId = "EXPORT-MutationKinds"
+            Value =
+                Record
+                    [
+                        ("id", String "MUT-AddEdge")
+                        ("kind", String "mutationKind")
+                        ("payloadKind", String "edge")
+                        ("revisionRequirement", String "exact")
+                        ("targetKind", String "relation")
+                    ]
+        }
+        {
+            Id = "MUT-Append"
+            Kind = "mutationKind"
+            ExportId = "EXPORT-MutationKinds"
+            Value =
+                Record
+                    [
+                        ("id", String "MUT-Append")
+                        ("kind", String "mutationKind")
+                        ("payloadKind", String "append")
+                        ("revisionRequirement", String "exact")
+                        ("targetKind", String "stream")
+                    ]
+        }
+        {
+            Id = "MUT-Clear"
+            Kind = "mutationKind"
+            ExportId = "EXPORT-MutationKinds"
+            Value =
+                Record
+                    [
+                        ("id", String "MUT-Clear")
+                        ("kind", String "mutationKind")
+                        ("payloadKind", String "scalar")
+                        ("revisionRequirement", String "exact")
+                        ("targetKind", String "field")
+                    ]
+        }
+        {
+            Id = "MUT-Compensate"
+            Kind = "mutationKind"
+            ExportId = "EXPORT-MutationKinds"
+            Value =
+                Record
+                    [
+                        ("id", String "MUT-Compensate")
+                        ("kind", String "mutationKind")
+                        ("payloadKind", String "compensation")
+                        ("revisionRequirement", String "exact")
+                        ("targetKind", String "mutation")
+                    ]
+        }
+        {
+            Id = "MUT-Create"
+            Kind = "mutationKind"
+            ExportId = "EXPORT-MutationKinds"
+            Value =
+                Record
+                    [
+                        ("id", String "MUT-Create")
+                        ("kind", String "mutationKind")
+                        ("payloadKind", String "create")
+                        ("revisionRequirement", String "absent")
+                        ("targetKind", String "subject")
+                    ]
+        }
+        {
+            Id = "MUT-RemoveEdge"
+            Kind = "mutationKind"
+            ExportId = "EXPORT-MutationKinds"
+            Value =
+                Record
+                    [
+                        ("id", String "MUT-RemoveEdge")
+                        ("kind", String "mutationKind")
+                        ("payloadKind", String "edge")
+                        ("revisionRequirement", String "exact")
+                        ("targetKind", String "relation")
+                    ]
+        }
+        {
+            Id = "MUT-Set"
+            Kind = "mutationKind"
+            ExportId = "EXPORT-MutationKinds"
+            Value =
+                Record
+                    [
+                        ("id", String "MUT-Set")
+                        ("kind", String "mutationKind")
+                        ("payloadKind", String "scalar")
+                        ("revisionRequirement", String "exact")
+                        ("targetKind", String "field")
+                    ]
+        }
+        {
+            Id = "MUT-Transition"
+            Kind = "mutationKind"
+            ExportId = "EXPORT-MutationKinds"
+            Value =
+                Record
+                    [
+                        ("id", String "MUT-Transition")
+                        ("kind", String "mutationKind")
+                        ("payloadKind", String "transition")
+                        ("revisionRequirement", String "exact")
+                        ("targetKind", String "lifecycle")
+                    ]
+        }
+        {
+            Id = "MutationCataloguesAreClosed"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "MutationCataloguesAreClosed")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "MutationVocabulary" ])
+                    ]
+        }
+        {
+            Id = "MutationResultsAreBound"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "MutationResultsAreBound")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "MOUT-Applied"
+                                 String "MOUT-Idempotent"
+                                 String "MOUT-Rejected"
+                                 String "MOUT-RevisionConflict"
+                                 String "MutationVocabulary"
+                             ])
+                    ]
+        }
+        {
+            Id = "MutationVocabulary"
+            Kind = "mutation"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "mutations")
+                        ("id", String "MutationVocabulary")
+                        ("kind", String "mutation")
+                    ]
+        }
+        {
+            Id = "NativeRelationEdgesAreValid"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "NativeRelationEdgesAreValid")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ])
+                    ]
+        }
+        {
+            Id = "NativeRelationKindCatalogueIsClosed"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "NativeRelationKindCatalogueIsClosed")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ])
+                    ]
+        }
+        {
+            Id = "OBS-Contradictory"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-Contradictory")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "contradictory")
+                        ("retryClass", String "resolve-contradiction")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "OBS-Incomplete"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-Incomplete")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "none")
+                        ("retryClass", String "complete-evidence")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "OBS-Observed"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-Observed")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "positive")
+                        ("retryClass", String "none")
+                        ("terminal", Bool true)
+                    ]
+        }
+        {
+            Id = "OBS-ProvenAbsent"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-ProvenAbsent")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "negative")
+                        ("retryClass", String "none")
+                        ("terminal", Bool true)
+                    ]
+        }
+        {
+            Id = "OBS-RateLimited"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-RateLimited")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "none")
+                        ("retryClass", String "authority-window")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "OBS-Stale"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-Stale")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "none")
+                        ("retryClass", String "refresh-revision")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "OBS-Unauthorized"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-Unauthorized")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "none")
+                        ("retryClass", String "repair-authorization")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "OBS-Unreadable"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-Unreadable")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "none")
+                        ("retryClass", String "repair-read")
+                        ("terminal", Bool false)
+                    ]
+        }
+        {
+            Id = "OBS-Unsupported"
+            Kind = "observationOutcome"
+            ExportId = "EXPORT-ObservationOutcomes"
+            Value =
+                Record
+                    [
+                        ("id", String "OBS-Unsupported")
+                        ("kind", String "observationOutcome")
+                        ("knowledgeClass", String "none")
+                        ("retryClass", String "none")
+                        ("terminal", Bool true)
+                    ]
+        }
+        {
+            Id = "ObservationOutcomeCatalogueIsClosed"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "ObservationOutcomeCatalogueIsClosed")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "ObservationPlanVocabulary" ])
+                    ]
+        }
+        {
+            Id = "ObservationPlanVocabulary"
+            Kind = "observationPlan"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "observation-plans")
+                        ("id", String "ObservationPlanVocabulary")
+                        ("kind", String "observationPlan")
+                    ]
+        }
+        {
+            Id = "PAYLOAD-Claim"
+            Kind = "protocolPayloadKind"
+            ExportId = "EXPORT-ProtocolPayloadKinds"
+            Value =
+                Record
+                    [
+                        ("durableCheckpoint", Bool false)
+                        ("id", String "PAYLOAD-Claim")
+                        ("kind", String "protocolPayloadKind")
+                        ("retentionClass", String "ephemeral")
+                        ("streamKindId", String "STREAM-Claim")
+                    ]
+        }
+        {
+            Id = "PAYLOAD-Delivery"
+            Kind = "protocolPayloadKind"
+            ExportId = "EXPORT-ProtocolPayloadKinds"
+            Value =
+                Record
+                    [
+                        ("durableCheckpoint", Bool true)
+                        ("id", String "PAYLOAD-Delivery")
+                        ("kind", String "protocolPayloadKind")
+                        ("retentionClass", String "durable")
+                        ("streamKindId", String "STREAM-Delivery")
+                    ]
+        }
+        {
+            Id = "PAYLOAD-Election"
+            Kind = "protocolPayloadKind"
+            ExportId = "EXPORT-ProtocolPayloadKinds"
+            Value =
+                Record
+                    [
+                        ("durableCheckpoint", Bool true)
+                        ("id", String "PAYLOAD-Election")
+                        ("kind", String "protocolPayloadKind")
+                        ("retentionClass", String "durable")
+                        ("streamKindId", String "STREAM-OperationLock")
+                    ]
+        }
+        {
+            Id = "PAYLOAD-Lease"
+            Kind = "protocolPayloadKind"
+            ExportId = "EXPORT-ProtocolPayloadKinds"
+            Value =
+                Record
+                    [
+                        ("durableCheckpoint", Bool false)
+                        ("id", String "PAYLOAD-Lease")
+                        ("kind", String "protocolPayloadKind")
+                        ("retentionClass", String "ephemeral")
+                        ("streamKindId", String "STREAM-Claim")
+                    ]
+        }
+        {
+            Id = "PAYLOAD-OperationLock"
+            Kind = "protocolPayloadKind"
+            ExportId = "EXPORT-ProtocolPayloadKinds"
+            Value =
+                Record
+                    [
+                        ("durableCheckpoint", Bool false)
+                        ("id", String "PAYLOAD-OperationLock")
+                        ("kind", String "protocolPayloadKind")
+                        ("retentionClass", String "ephemeral")
+                        ("streamKindId", String "STREAM-OperationLock")
+                    ]
+        }
+        {
+            Id = "PAYLOAD-OperationReceipt"
+            Kind = "protocolPayloadKind"
+            ExportId = "EXPORT-ProtocolPayloadKinds"
+            Value =
+                Record
+                    [
+                        ("durableCheckpoint", Bool true)
+                        ("id", String "PAYLOAD-OperationReceipt")
+                        ("kind", String "protocolPayloadKind")
+                        ("retentionClass", String "durable")
+                        ("streamKindId", String "STREAM-OperationReceipt")
+                    ]
+        }
+        {
+            Id = "PAYLOAD-Review"
+            Kind = "protocolPayloadKind"
+            ExportId = "EXPORT-ProtocolPayloadKinds"
+            Value =
+                Record
+                    [
+                        ("durableCheckpoint", Bool true)
+                        ("id", String "PAYLOAD-Review")
+                        ("kind", String "protocolPayloadKind")
+                        ("retentionClass", String "durable")
+                        ("streamKindId", String "STREAM-Review")
+                    ]
+        }
+        {
+            Id = "PAYLOAD-TouchSet"
+            Kind = "protocolPayloadKind"
+            ExportId = "EXPORT-ProtocolPayloadKinds"
+            Value =
+                Record
+                    [
+                        ("durableCheckpoint", Bool false)
+                        ("id", String "PAYLOAD-TouchSet")
+                        ("kind", String "protocolPayloadKind")
+                        ("retentionClass", String "ephemeral")
+                        ("streamKindId", String "STREAM-Claim")
+                    ]
+        }
+        {
+            Id = "PDISP-Advance"
+            Kind = "durablePlanDisposition"
+            ExportId = "EXPORT-DurablePlanDispositions"
+            Value =
+                Record
+                    [
+                        ("id", String "PDISP-Advance")
+                        ("kind", String "durablePlanDisposition")
+                        ("nextAction", String "next-step")
+                        ("receiptClass", String "terminal-success")
+                    ]
+        }
+        {
+            Id = "PDISP-Compensate"
+            Kind = "durablePlanDisposition"
+            ExportId = "EXPORT-DurablePlanDispositions"
+            Value =
+                Record
+                    [
+                        ("id", String "PDISP-Compensate")
+                        ("kind", String "durablePlanDisposition")
+                        ("nextAction", String "compensate-reverse")
+                        ("receiptClass", String "terminal-refusal-applied-boundary")
+                    ]
+        }
+        {
+            Id = "PDISP-ReceiptReread"
+            Kind = "durablePlanDisposition"
+            ExportId = "EXPORT-DurablePlanDispositions"
+            Value =
+                Record
+                    [
+                        ("id", String "PDISP-ReceiptReread")
+                        ("kind", String "durablePlanDisposition")
+                        ("nextAction", String "reread-receipt")
+                        ("receiptClass", String "uncertain")
+                    ]
+        }
+        {
+            Id = "PDISP-Replan"
+            Kind = "durablePlanDisposition"
+            ExportId = "EXPORT-DurablePlanDispositions"
+            Value =
+                Record
+                    [
+                        ("id", String "PDISP-Replan")
+                        ("kind", String "durablePlanDisposition")
+                        ("nextAction", String "compile-new-plan")
+                        ("receiptClass", String "terminal-refusal-no-applied-boundary")
+                    ]
+        }
+        {
+            Id = "PILOT-PermitV1"
+            Kind = "pilotPermitSpecification"
+            ExportId = "EXPORT-PilotPermitSpecification"
+            Value =
+                Record
+                    [
+                        ("activationContract", String "inert-prospective-no-host-no-provider-writer")
+                        ("budgetContract", String "finite-positive-no-automatic-renewal")
+                        ("capacityContract", String "finite-with-reserved-recovery-capacity")
+                        ("id", String "PILOT-PermitV1")
+                        ("kind", String "pilotPermitSpecification")
+                        ("lifecycleContract",
+                         String
+                             "StableOwned>TransferIntended>PilotOwned>(OutcomeUnknown|Paused|Revoked|ReturnIntended)>StableOwned")
+                        ("ownershipContract", String "stable-until-durable-transfer-acknowledgement-and-readback")
+                        ("recoveryContract",
+                         String "generation-current|readback-current|unknown-outcome-blocks-dispatch")
+                        ("schemaContract", String "fsgg.coordination.pilot-permit/1")
+                        ("scopeContract", String "one-canonical-work-item|routine-implementation")
+                        ("trustContract", String "trusted-cooperating-runner-supported-route-only")
+                    ]
+        }
+        {
+            Id = "ProjectionVocabulary"
+            Kind = "projection"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "projections")
+                        ("id", String "ProjectionVocabulary")
+                        ("kind", String "projection")
+                    ]
+        }
+        {
+            Id = "ProtocolEnvelopesAreValidAndOrdered"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "ProtocolEnvelopesAreValidAndOrdered")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "PAYLOAD-Claim"
+                                 String "PAYLOAD-Delivery"
+                                 String "PAYLOAD-Election"
+                                 String "PAYLOAD-Lease"
+                                 String "PAYLOAD-OperationLock"
+                                 String "PAYLOAD-OperationReceipt"
+                                 String "PAYLOAD-Review"
+                                 String "PAYLOAD-TouchSet"
+                             ])
+                    ]
+        }
+        {
+            Id = "ProtocolStreamCataloguesAreClosed"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "ProtocolStreamCataloguesAreClosed")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "STREAM-Claim"
+                                 String "STREAM-Delivery"
+                                 String "STREAM-OperationLock"
+                                 String "STREAM-OperationReceipt"
+                                 String "STREAM-Review"
+                             ])
+                    ]
+        }
+        {
+            Id = "ProtocolStreamChangesPreservePriorSemantics"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "ProtocolStreamChangesPreservePriorSemantics")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "INTENT-Backlog"
+                                 String "REL-Blocks"
+                                 String "REL-ParentChild"
+                                 String "STREAM-Claim"
+                             ])
+                    ]
+        }
+        {
+            Id = "ProtocolStreamObservationFailuresDoNotBecomeAbsence"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "ProtocolStreamObservationFailuresDoNotBecomeAbsence")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "AUTH-ProtocolStream"
+                                 String "OBS-Contradictory"
+                                 String "OBS-Incomplete"
+                                 String "OBS-RateLimited"
+                                 String "OBS-Stale"
+                                 String "OBS-Unauthorized"
+                                 String "OBS-Unreadable"
+                                 String "OBS-Unsupported"
+                             ])
+                    ]
+        }
+        {
+            Id = "ProvenAbsenceCanBeAccepted"
+            Kind = "example"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "ProvenAbsenceCanBeAccepted")
+                        ("kind", String "example")
+                        ("subjects", Set [ String "OBS-ProvenAbsent" ])
+                    ]
+        }
+        {
+            Id = "REL-AUTH-Actions-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "AUTH-Actions")
+                        ("id", String "REL-AUTH-Actions-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-AUTH-ClassifiedExternal-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "AUTH-ClassifiedExternal")
+                        ("id", String "REL-AUTH-ClassifiedExternal-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-AUTH-GitLedger-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "AUTH-GitLedger")
+                        ("id", String "REL-AUTH-GitLedger-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-AUTH-NativeGitHub-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "AUTH-NativeGitHub")
+                        ("id", String "REL-AUTH-NativeGitHub-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-AUTH-PackageFeed-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "AUTH-PackageFeed")
+                        ("id", String "REL-AUTH-PackageFeed-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-AUTH-ProtocolStream-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "AUTH-ProtocolStream")
+                        ("id", String "REL-AUTH-ProtocolStream-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-AUTH-RepositoryRegistry-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "AUTH-RepositoryRegistry")
+                        ("id", String "REL-AUTH-RepositoryRegistry-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-Authority-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "AuthorityVocabulary")
+                        ("id", String "REL-Authority-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-Blocks"
+            Kind = "nativeRelationKind"
+            ExportId = "EXPORT-NativeRelationKinds"
+            Value =
+                Record
+                    [
+                        ("direction", String "blocker-to-blocked")
+                        ("id", String "REL-Blocks")
+                        ("kind", String "nativeRelationKind")
+                    ]
+        }
+        {
+            Id = "REL-Codec-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "CodecVocabulary")
+                        ("id", String "REL-Codec-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-Command-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "CommandVocabulary")
+                        ("id", String "REL-Command-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-Event-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "EventVocabulary")
+                        ("id", String "REL-Event-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-Mutation-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "MutationVocabulary")
+                        ("id", String "REL-Mutation-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-ObservationPlan-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "ObservationPlanVocabulary")
+                        ("id", String "REL-ObservationPlan-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-ParentChild"
+            Kind = "nativeRelationKind"
+            ExportId = "EXPORT-NativeRelationKinds"
+            Value =
+                Record
+                    [
+                        ("direction", String "parent-to-child")
+                        ("id", String "REL-ParentChild")
+                        ("kind", String "nativeRelationKind")
+                    ]
+        }
+        {
+            Id = "REL-Projection-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "ProjectionVocabulary")
+                        ("id", String "REL-Projection-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-SettingsProfile-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "SettingsProfileVocabulary")
+                        ("id", String "REL-SettingsProfile-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-Subject-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "SubjectVocabulary")
+                        ("id", String "REL-Subject-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "REL-VersionIdentity-Evidence"
+            Kind = "verifiedBy"
+            ExportId = "EXPORT-Relationships"
+            Value =
+                Record
+                    [
+                        ("fromId", String "VersionIdentityVocabulary")
+                        ("id", String "REL-VersionIdentity-Evidence")
+                        ("kind", String "verifiedBy")
+                        ("toId", String "EvidenceObligationVocabulary")
+                    ]
+        }
+        {
+            Id = "RelationChangesPreserveLifecycleIntent"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "RelationChangesPreserveLifecycleIntent")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "INTENT-Backlog"
+                                 String "INTENT-Cancelled"
+                                 String "INTENT-Paused"
+                                 String "INTENT-Ready"
+                                 String "REL-Blocks"
+                                 String "REL-ParentChild"
+                             ])
+                    ]
+        }
+        {
+            Id = "RelationChangesPreserveUnrelatedEdges"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "RelationChangesPreserveUnrelatedEdges")
+                        ("kind", String "invariant")
+                        ("subjects", Set [ String "REL-Blocks"; String "REL-ParentChild" ])
+                    ]
+        }
+        {
+            Id = "RelationObservationFailuresDoNotBecomeAbsence"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "RelationObservationFailuresDoNotBecomeAbsence")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "OBS-Contradictory"
+                                 String "OBS-Incomplete"
+                                 String "OBS-RateLimited"
+                                 String "OBS-Stale"
+                                 String "OBS-Unauthorized"
+                                 String "OBS-Unreadable"
+                                 String "OBS-Unsupported"
+                                 String "REL-Blocks"
+                                 String "REL-ParentChild"
+                             ])
+                    ]
+        }
+        {
+            Id = "STREAM-Claim"
+            Kind = "protocolStreamKind"
+            ExportId = "EXPORT-ProtocolStreamKinds"
+            Value =
+                Record
+                    [
+                        ("family", String "journal-cas-claim-lease-touch-set-fenced")
+                        ("id", String "STREAM-Claim")
+                        ("kind", String "protocolStreamKind")
+                    ]
+        }
+        {
+            Id = "STREAM-Delivery"
+            Kind = "protocolStreamKind"
+            ExportId = "EXPORT-ProtocolStreamKinds"
+            Value =
+                Record
+                    [
+                        ("family", String "delivery")
+                        ("id", String "STREAM-Delivery")
+                        ("kind", String "protocolStreamKind")
+                    ]
+        }
+        {
+            Id = "STREAM-OperationLock"
+            Kind = "protocolStreamKind"
+            ExportId = "EXPORT-ProtocolStreamKinds"
+            Value =
+                Record
+                    [
+                        ("family", String "journal-cas-operation-election-fenced")
+                        ("id", String "STREAM-OperationLock")
+                        ("kind", String "protocolStreamKind")
+                    ]
+        }
+        {
+            Id = "STREAM-OperationReceipt"
+            Kind = "protocolStreamKind"
+            ExportId = "EXPORT-ProtocolStreamKinds"
+            Value =
+                Record
+                    [
+                        ("family", String "operation-receipt")
+                        ("id", String "STREAM-OperationReceipt")
+                        ("kind", String "protocolStreamKind")
+                    ]
+        }
+        {
+            Id = "STREAM-Review"
+            Kind = "protocolStreamKind"
+            ExportId = "EXPORT-ProtocolStreamKinds"
+            Value =
+                Record
+                    [
+                        ("family", String "journal-cas-full-snapshot-review-epoch")
+                        ("id", String "STREAM-Review")
+                        ("kind", String "protocolStreamKind")
+                    ]
+        }
+        {
+            Id = "SettingsProfileVocabulary"
+            Kind = "settingsProfile"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "settings-profiles")
+                        ("id", String "SettingsProfileVocabulary")
+                        ("kind", String "settingsProfile")
+                    ]
+        }
+        {
+            Id = "SubjectVocabulary"
+            Kind = "subject"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "subjects")
+                        ("id", String "SubjectVocabulary")
+                        ("kind", String "subject")
+                    ]
+        }
+        {
+            Id = "UncertainMutationOutcomesStayUnknown"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "UncertainMutationOutcomesStayUnknown")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "MOUT-Incomplete"
+                                 String "MOUT-RateLimited"
+                                 String "MOUT-TimedOut"
+                                 String "MOUT-Unavailable"
+                             ])
+                    ]
+        }
+        {
+            Id = "UnknownLifecycleFactsFailClosed"
+            Kind = "invariant"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "UnknownLifecycleFactsFailClosed")
+                        ("kind", String "invariant")
+                        ("subjects",
+                         Set
+                             [
+                                 String "OBS-Contradictory"
+                                 String "OBS-Incomplete"
+                                 String "OBS-RateLimited"
+                                 String "OBS-Stale"
+                                 String "OBS-Unauthorized"
+                                 String "OBS-Unreadable"
+                                 String "OBS-Unsupported"
+                             ])
+                    ]
+        }
+        {
+            Id = "VERIFY-AuthorityBindings"
+            Kind = "verification"
+            ExportId = "EXPORT-Verifications"
+            Value =
+                Record
+                    [
+                        ("boundIds", Set [ String "BOUND-AuthorityCardinality"; String "BOUND-TraceSteps" ])
+                        ("id", String "VERIFY-AuthorityBindings")
+                        ("kind", String "verification")
+                        ("subjectIds",
+                         Set
+                             [
+                                 String "AUTH-Actions"
+                                 String "AUTH-ClassifiedExternal"
+                                 String "AUTH-GitLedger"
+                                 String "AUTH-NativeGitHub"
+                                 String "AUTH-PackageFeed"
+                                 String "AUTH-ProtocolStream"
+                                 String "AUTH-RepositoryRegistry"
+                             ])
+                        ("verificationKind", String "bounded-invariant-and-witness")
+                    ]
+        }
+        {
+            Id = "VERIFY-DurablePlans"
+            Kind = "verification"
+            ExportId = "EXPORT-Verifications"
+            Value =
+                Record
+                    [
+                        ("boundIds", Set [ String "BOUND-DurablePlanDispositionCardinality"; String "BOUND-TraceSteps" ])
+                        ("id", String "VERIFY-DurablePlans")
+                        ("kind", String "verification")
+                        ("subjectIds",
+                         Set
+                             [
+                                 String "MUT-Compensate"
+                                 String "PAYLOAD-OperationReceipt"
+                                 String "PDISP-Advance"
+                                 String "PDISP-Compensate"
+                                 String "PDISP-ReceiptReread"
+                                 String "PDISP-Replan"
+                             ])
+                        ("verificationKind", String "bounded-invariant-and-witness")
+                    ]
+        }
+        {
+            Id = "VERIFY-LifecycleIntent"
+            Kind = "verification"
+            ExportId = "EXPORT-Verifications"
+            Value =
+                Record
+                    [
+                        ("boundIds", Set [ String "BOUND-LifecycleIntentCardinality"; String "BOUND-TraceSteps" ])
+                        ("id", String "VERIFY-LifecycleIntent")
+                        ("kind", String "verification")
+                        ("subjectIds",
+                         Set
+                             [
+                                 String "INTENT-Backlog"
+                                 String "INTENT-Cancelled"
+                                 String "INTENT-Paused"
+                                 String "INTENT-Ready"
+                             ])
+                        ("verificationKind", String "bounded-invariant-and-witness")
+                    ]
+        }
+        {
+            Id = "VERIFY-MutationAlgebra"
+            Kind = "verification"
+            ExportId = "EXPORT-Verifications"
+            Value =
+                Record
+                    [
+                        ("boundIds",
+                         Set
+                             [
+                                 String "BOUND-MutationKindCardinality"
+                                 String "BOUND-MutationOutcomeCardinality"
+                                 String "BOUND-TraceSteps"
+                             ])
+                        ("id", String "VERIFY-MutationAlgebra")
+                        ("kind", String "verification")
+                        ("subjectIds",
+                         Set
+                             [
+                                 String "MOUT-Applied"
+                                 String "MOUT-Idempotent"
+                                 String "MOUT-Incomplete"
+                                 String "MOUT-RateLimited"
+                                 String "MOUT-Rejected"
+                                 String "MOUT-RevisionConflict"
+                                 String "MOUT-TimedOut"
+                                 String "MOUT-Unavailable"
+                                 String "MUT-AddEdge"
+                                 String "MUT-Append"
+                                 String "MUT-Clear"
+                                 String "MUT-Compensate"
+                                 String "MUT-Create"
+                                 String "MUT-RemoveEdge"
+                                 String "MUT-Set"
+                                 String "MUT-Transition"
+                             ])
+                        ("verificationKind", String "bounded-invariant-and-witness")
+                    ]
+        }
+        {
+            Id = "VERIFY-NativeRelations"
+            Kind = "verification"
+            ExportId = "EXPORT-Verifications"
+            Value =
+                Record
+                    [
+                        ("boundIds", Set [ String "BOUND-NativeRelationKindCardinality"; String "BOUND-TraceSteps" ])
+                        ("id", String "VERIFY-NativeRelations")
+                        ("kind", String "verification")
+                        ("subjectIds", Set [ String "REL-Blocks"; String "REL-ParentChild" ])
+                        ("verificationKind", String "bounded-invariant-and-witness")
+                    ]
+        }
+        {
+            Id = "VERIFY-ObservationOutcomes"
+            Kind = "verification"
+            ExportId = "EXPORT-Verifications"
+            Value =
+                Record
+                    [
+                        ("boundIds", Set [ String "BOUND-ObservationOutcomeCardinality"; String "BOUND-TraceSteps" ])
+                        ("id", String "VERIFY-ObservationOutcomes")
+                        ("kind", String "verification")
+                        ("subjectIds",
+                         Set
+                             [
+                                 String "OBS-Contradictory"
+                                 String "OBS-Incomplete"
+                                 String "OBS-Observed"
+                                 String "OBS-ProvenAbsent"
+                                 String "OBS-RateLimited"
+                                 String "OBS-Stale"
+                                 String "OBS-Unauthorized"
+                                 String "OBS-Unreadable"
+                                 String "OBS-Unsupported"
+                             ])
+                        ("verificationKind", String "bounded-invariant-and-witness")
+                    ]
+        }
+        {
+            Id = "VERIFY-ProtocolStreams"
+            Kind = "verification"
+            ExportId = "EXPORT-Verifications"
+            Value =
+                Record
+                    [
+                        ("boundIds",
+                         Set
+                             [
+                                 String "BOUND-ProtocolPayloadKindCardinality"
+                                 String "BOUND-ProtocolStreamKindCardinality"
+                                 String "BOUND-TraceSteps"
+                             ])
+                        ("id", String "VERIFY-ProtocolStreams")
+                        ("kind", String "verification")
+                        ("subjectIds",
+                         Set
+                             [
+                                 String "PAYLOAD-Claim"
+                                 String "PAYLOAD-Delivery"
+                                 String "PAYLOAD-Election"
+                                 String "PAYLOAD-Lease"
+                                 String "PAYLOAD-OperationLock"
+                                 String "PAYLOAD-OperationReceipt"
+                                 String "PAYLOAD-Review"
+                                 String "PAYLOAD-TouchSet"
+                                 String "STREAM-Claim"
+                                 String "STREAM-Delivery"
+                                 String "STREAM-OperationLock"
+                                 String "STREAM-OperationReceipt"
+                                 String "STREAM-Review"
+                             ])
+                        ("verificationKind", String "bounded-invariant-and-witness")
+                    ]
+        }
+        {
+            Id = "VERIFY-VocabularyBaseline"
+            Kind = "verification"
+            ExportId = "EXPORT-Verifications"
+            Value =
+                Record
+                    [
+                        ("boundIds", Set [ String "BOUND-TraceSteps"; String "BOUND-VocabularyCardinality" ])
+                        ("id", String "VERIFY-VocabularyBaseline")
+                        ("kind", String "verification")
+                        ("subjectIds",
+                         Set
+                             [
+                                 String "AuthorityVocabulary"
+                                 String "CodecVocabulary"
+                                 String "CommandVocabulary"
+                                 String "EventVocabulary"
+                                 String "EvidenceObligationVocabulary"
+                                 String "MutationVocabulary"
+                                 String "ObservationPlanVocabulary"
+                                 String "ProjectionVocabulary"
+                                 String "SettingsProfileVocabulary"
+                                 String "SubjectVocabulary"
+                                 String "VersionIdentityVocabulary"
+                             ])
+                        ("verificationKind", String "bounded-invariant-and-witness")
+                    ]
+        }
+        {
+            Id = "VersionIdentityVocabulary"
+            Kind = "versionIdentity"
+            ExportId = "EXPORT-Vocabulary"
+            Value =
+                Record
+                    [
+                        ("family", String "version-identities")
+                        ("id", String "VersionIdentityVocabulary")
+                        ("kind", String "versionIdentity")
+                    ]
+        }
+        {
+            Id = "VocabularyCanBeAccepted"
+            Kind = "example"
+            ExportId = "EXPORT-Properties"
+            Value =
+                Record
+                    [
+                        ("id", String "VocabularyCanBeAccepted")
+                        ("kind", String "example")
+                        ("subjects", Set [ String "SubjectVocabulary" ])
+                    ]
+        }
+    ]

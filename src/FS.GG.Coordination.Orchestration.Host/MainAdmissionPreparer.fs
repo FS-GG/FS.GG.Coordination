@@ -299,7 +299,13 @@ module MainAdmissionPreparer =
             let! admitted =
                 match beforeAdmission with
                 | Error failures -> Task.FromResult(Error(sprintf "%A" failures))
-                | Ok current when current.State.WorkItemId.IsNone || (match current.State.Control with ControlState.Revoked _|ControlState.Cancelled _->true|_->false) ->
+                | Ok current when
+                    current.State.WorkItemId.IsNone
+                    || (match current.State.Control with
+                        | ControlState.Revoked _
+                        | ControlState.Cancelled _ -> true
+                        | _ -> false)
+                    ->
                     append
                         clock
                         workItems
@@ -598,9 +604,13 @@ module MainAdmissionPreparer =
                                                                 ExecutionReservation = executionReservation
                                                             }
 
-                                                        let bytes=MainRouteAdmission.encode (MainRouteAdmission.commandId preparation) preparation
+                                                        let bytes =
+                                                            MainRouteAdmission.encode
+                                                                (MainRouteAdmission.commandId preparation)
+                                                                preparation
+
                                                         match MainRouteAdmission.decode workItemId principal bytes with
-                                                        | Ok decoded when decoded=preparation -> return Ok bytes
+                                                        | Ok decoded when decoded = preparation -> return Ok bytes
                                                         | _ -> return Error "main-admission-preparation-output-refused"
                                             | other ->
                                                 return
@@ -609,26 +619,67 @@ module MainAdmissionPreparer =
                                                     )
         }
 
-    let prepare clock workItems executions executionJournal workItemId principal request (inputBytes:byte array) token =
-        if isNull inputBytes || inputBytes.Length=0 || inputBytes.Length>1024*1024 then
+    let prepare
+        clock
+        workItems
+        executions
+        executionJournal
+        workItemId
+        principal
+        request
+        (inputBytes: byte array)
+        token
+        =
+        if isNull inputBytes || inputBytes.Length = 0 || inputBytes.Length > 1024 * 1024 then
             Task.FromResult(Error "main-admission-preparation-input-size-refused")
         else
-            let inputDigest=RunnerWire.sha256 inputBytes
-            let inputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=inputDigest;MediaType=request.InputMediaType;SizeBytes=inputBytes.LongLength;ChunkBytes=max 1 (min inputBytes.Length ExecutorWire.maximumContentBytes)}
-            let workspace={Schema=ExecutorWire.workspaceManifestSchema;Workspace=request.Workspace;RepositoryBinding=request.RepositoryBinding;BaselineObjectId=request.BaselineObjectId;AllowedPaths=request.AllowedPaths;Validations=request.Validations;InputDigest=inputDigest}
-            match ExecutorWire.encodeInputManifest inputManifest|>ExecutorWire.parseInputManifest,
-                  ExecutorWire.encodeWorkspaceManifest workspace|>ExecutorWire.parseWorkspaceManifest with
-            | Ok _,Ok _->prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes token
-            | Error reason,_|_,Error reason->Task.FromResult(Error reason)
+            let inputDigest = RunnerWire.sha256 inputBytes
+
+            let inputManifest =
+                {
+                    Schema = ExecutorWire.inputManifestSchema
+                    InputDigest = inputDigest
+                    MediaType = request.InputMediaType
+                    SizeBytes = inputBytes.LongLength
+                    ChunkBytes = max 1 (min inputBytes.Length ExecutorWire.maximumContentBytes)
+                }
+
+            let workspace =
+                {
+                    Schema = ExecutorWire.workspaceManifestSchema
+                    Workspace = request.Workspace
+                    RepositoryBinding = request.RepositoryBinding
+                    BaselineObjectId = request.BaselineObjectId
+                    AllowedPaths = request.AllowedPaths
+                    Validations = request.Validations
+                    InputDigest = inputDigest
+                }
+
+            match
+                ExecutorWire.encodeInputManifest inputManifest
+                |> ExecutorWire.parseInputManifest,
+                ExecutorWire.encodeWorkspaceManifest workspace
+                |> ExecutorWire.parseWorkspaceManifest
+            with
+            | Ok _, Ok _ ->
+                prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes token
+            | Error reason, _
+            | _, Error reason -> Task.FromResult(Error reason)
 
     let writeAtomicPrivate (path: string) (bytes: byte array) =
         let directory = Path.GetDirectoryName path
-        let privateMode=UnixFileMode.UserRead ||| UnixFileMode.UserWrite
-        let ensurePrivate (existingPath:string) =
+        let privateMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+
+        let ensurePrivate (existingPath: string) =
             if OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() then
-                File.SetUnixFileMode(existingPath,privateMode)
-                if File.GetUnixFileMode(existingPath)=privateMode then Ok() else Error "main-admission-output-permissions-refused"
-            else Ok()
+                File.SetUnixFileMode(existingPath, privateMode)
+
+                if File.GetUnixFileMode(existingPath) = privateMode then
+                    Ok()
+                else
+                    Error "main-admission-output-permissions-refused"
+            else
+                Ok()
 
         if String.IsNullOrWhiteSpace directory || not (Directory.Exists directory) then
             Error "main-admission-output-directory-refused"
@@ -646,9 +697,19 @@ module MainAdmissionPreparer =
                         Path.Combine(directory, $".{Path.GetFileName path}.{Guid.NewGuid():N}.tmp")
 
                     try
-                        let streamOptions=FileStreamOptions(Mode=FileMode.CreateNew,Access=FileAccess.Write,Share=FileShare.None,BufferSize=4096,Options=FileOptions.WriteThrough)
-                        if OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() then streamOptions.UnixCreateMode<-Nullable privateMode
-                        use stream = new FileStream(temporary,streamOptions)
+                        let streamOptions =
+                            FileStreamOptions(
+                                Mode = FileMode.CreateNew,
+                                Access = FileAccess.Write,
+                                Share = FileShare.None,
+                                BufferSize = 4096,
+                                Options = FileOptions.WriteThrough
+                            )
+
+                        if OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() then
+                            streamOptions.UnixCreateMode <- Nullable privateMode
+
+                        use stream = new FileStream(temporary, streamOptions)
 
                         stream.Write bytes
                         stream.Flush true

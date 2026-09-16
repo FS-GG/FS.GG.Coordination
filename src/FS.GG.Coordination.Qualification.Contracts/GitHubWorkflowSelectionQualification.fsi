@@ -1,121 +1,158 @@
 namespace FS.GG.Coordination.Qualification.Contracts
 
 type GitHubWorkflowObligation =
-    | Build | Test | Policy | Coordination | Packaging | Release
+    | Build
+    | Test
+    | Policy
+    | Coordination
+    | Packaging
+    | Release
 
 type GitHubWorkflowInventoryRow =
-    { Workflow: string
-      PolicyJobs: string list
-      CompositeSteps: string list
-      ReusableJobContracts: string list
-      AggregateOutputs: string list }
+    {
+        Workflow: string
+        PolicyJobs: string list
+        CompositeSteps: string list
+        ReusableJobContracts: string list
+        AggregateOutputs: string list
+    }
 
-type GitHubWorkflowDependencyEdge = { Source: GitHubWorkflowObligation; Target: GitHubWorkflowObligation }
+type GitHubWorkflowDependencyEdge =
+    {
+        Source: GitHubWorkflowObligation
+        Target: GitHubWorkflowObligation
+    }
 
 type GitHubMergeGroupImpact =
-    { QueuedHead: string
-      CurrentBase: string
-      CurrentSettings: string
-      ObservedBase: string
-      ObservedSettings: string
-      Recomputed: bool }
+    {
+        QueuedHead: string
+        CurrentBase: string
+        CurrentSettings: string
+        ObservedBase: string
+        ObservedSettings: string
+        Recomputed: bool
+    }
 
 type GitHubWorkflowImpactCase =
-    { Id: string
-      ChangedSubjects: string list
-      NonFileInputs: string list
-      Roots: GitHubWorkflowObligation list
-      ExpectedClosure: GitHubWorkflowObligation list
-      Unknown: bool
-      Ambiguous: bool
-      Fresh: bool
-      Complete: bool
-      MergeGroup: GitHubMergeGroupImpact option }
+    {
+        Id: string
+        ChangedSubjects: string list
+        NonFileInputs: string list
+        Roots: GitHubWorkflowObligation list
+        ExpectedClosure: GitHubWorkflowObligation list
+        Unknown: bool
+        Ambiguous: bool
+        Fresh: bool
+        Complete: bool
+        MergeGroup: GitHubMergeGroupImpact option
+    }
 
-type GitHubWorkflowChildDisposition = Selected | NotApplicable of reason: string
+type GitHubWorkflowChildDisposition =
+    | Selected
+    | NotApplicable of reason: string
+
 type GitHubWorkflowChildOutcome =
-    { Obligation: GitHubWorkflowObligation
-      Disposition: GitHubWorkflowChildDisposition
-      ExpensiveJobProvisioned: bool }
+    {
+        Obligation: GitHubWorkflowObligation
+        Disposition: GitHubWorkflowChildDisposition
+        ExpensiveJobProvisioned: bool
+    }
 
 type GitHubWorkflowMetrics =
-    { WorkflowFanOut: int
-      JobFanOut: int
-      BilledMinutes: int
-      QueueTimeSeconds: int
-      P50Seconds: int
-      P95Seconds: int }
+    {
+        WorkflowFanOut: int
+        JobFanOut: int
+        BilledMinutes: int
+        QueueTimeSeconds: int
+        P50Seconds: int
+        P95Seconds: int
+    }
 
 type GitHubWorkflowObservationProvenance =
-    { ObservationId: string
-      Query: string
-      RunIds: int64 list
-      Revisions: string list
-      ObservedAt: System.DateTimeOffset
-      WindowStart: System.DateTimeOffset
-      WindowEnd: System.DateTimeOffset
-      RunSampleCount: int
-      JobSampleCount: int
-      Aggregation: string
-      Complete: bool
-      IndependentRecomputed: bool
-      ReviewedBy: string
-      ReviewedAt: System.DateTimeOffset
-      TargetRationale: string }
+    {
+        ObservationId: string
+        Query: string
+        RunIds: int64 list
+        Revisions: string list
+        ObservedAt: System.DateTimeOffset
+        WindowStart: System.DateTimeOffset
+        WindowEnd: System.DateTimeOffset
+        RunSampleCount: int
+        JobSampleCount: int
+        Aggregation: string
+        Complete: bool
+        IndependentRecomputed: bool
+        ReviewedBy: string
+        ReviewedAt: System.DateTimeOffset
+        TargetRationale: string
+    }
 
 type GitHubWorkflowRepositoryPerformance =
-    { Repository: string
-      Baseline: GitHubWorkflowMetrics
-      Target: GitHubWorkflowMetrics
-      Selected: GitHubWorkflowMetrics
-      SelectedKind: string
-      Provenance: GitHubWorkflowObservationProvenance }
+    {
+        Repository: string
+        Baseline: GitHubWorkflowMetrics
+        Target: GitHubWorkflowMetrics
+        Selected: GitHubWorkflowMetrics
+        SelectedKind: string
+        Provenance: GitHubWorkflowObservationProvenance
+    }
 
 type GitHubWorkflowSentinel =
-    { Scheduled: bool
-      SelectedClosure: GitHubWorkflowObligation list
-      ActualFailures: GitHubWorkflowObligation list }
+    {
+        Scheduled: bool
+        SelectedClosure: GitHubWorkflowObligation list
+        ActualFailures: GitHubWorkflowObligation list
+    }
 
-type GitHubWorkflowRemoval = { Workflow: string; Obligation: string; Reason: string }
+type GitHubWorkflowRemoval =
+    {
+        Workflow: string
+        Obligation: string
+        Reason: string
+    }
 
 type GitHubWorkflowSelectionSnapshot =
-    { SchemaVersion: int
-      Repository: string
-      SourceRevision: string
-      RoadmapRevision: string
-      RoadmapSha256: string
-      PrerequisiteReceiptDigest: string
-      Complete: bool
-      InventoryComplete: bool
-      NonFileInputInventoryComplete: bool
-      GraphVersion: string
-      Workflows: GitHubWorkflowInventoryRow list
-      Obligations: GitHubWorkflowObligation list
-      DependencyEdges: GitHubWorkflowDependencyEdge list
-      UnconditionalObligations: GitHubWorkflowObligation list
-      ImpactCases: GitHubWorkflowImpactCase list
-      ChildOutcomes: GitHubWorkflowChildOutcome list
-      RequiredAggregates: string list
-      UnconditionalCore: GitHubWorkflowObligation list
-      ObservationSha256: string
-      Performance: GitHubWorkflowRepositoryPerformance list
-      Sentinel: GitHubWorkflowSentinel
-      FleetSelectionEnabled: bool
-      RemovalLedgerComplete: bool
-      RemovalLedgerSha256: string
-      Removals: GitHubWorkflowRemoval list }
+    {
+        SchemaVersion: int
+        Repository: string
+        SourceRevision: string
+        RoadmapRevision: string
+        RoadmapSha256: string
+        PrerequisiteReceiptDigest: string
+        Complete: bool
+        InventoryComplete: bool
+        NonFileInputInventoryComplete: bool
+        GraphVersion: string
+        Workflows: GitHubWorkflowInventoryRow list
+        Obligations: GitHubWorkflowObligation list
+        DependencyEdges: GitHubWorkflowDependencyEdge list
+        UnconditionalObligations: GitHubWorkflowObligation list
+        ImpactCases: GitHubWorkflowImpactCase list
+        ChildOutcomes: GitHubWorkflowChildOutcome list
+        RequiredAggregates: string list
+        UnconditionalCore: GitHubWorkflowObligation list
+        ObservationSha256: string
+        Performance: GitHubWorkflowRepositoryPerformance list
+        Sentinel: GitHubWorkflowSentinel
+        FleetSelectionEnabled: bool
+        RemovalLedgerComplete: bool
+        RemovalLedgerSha256: string
+        Removals: GitHubWorkflowRemoval list
+    }
 
 type GitHubWorkflowSelectionReport =
-    { Repository: string
-      SourceRevision: string
-      WorkflowCount: int
-      ObligationCount: int
-      ImpactCaseCount: int
-      RepositoryMetricCount: int
-      NotApplicableCount: int
-      FleetSelectionEnabled: bool
-      MissedObligations: GitHubWorkflowObligation list
-      Seal: string }
+    {
+        Repository: string
+        SourceRevision: string
+        WorkflowCount: int
+        ObligationCount: int
+        ImpactCaseCount: int
+        RepositoryMetricCount: int
+        NotApplicableCount: int
+        FleetSelectionEnabled: bool
+        MissedObligations: GitHubWorkflowObligation list
+        Seal: string
+    }
 
 type GitHubWorkflowSelectionFinding =
     | InvalidWorkflowSelectionField of string
@@ -132,24 +169,57 @@ type GitHubWorkflowSelectionFinding =
     | AlteredWorkflowSelectionSeal
 
 type GitHubWorkflowSelectionControl =
-    | WorkflowPrerequisite | WorkflowRoadmap | WorkflowCompleteness | TypedWorkflowInventory
-    | WorkflowGraphVersion | ChangedSubjectSelection | NonFileInputSelection | TransitiveClosure
-    | UnconditionalObligations | StableAggregates | TypedNotApplicable | NoExpensiveProvisioning
-    | AmbiguousImpactRefusal | StaleImpactRefusal | MergeGroupRecomputation
-    | RepresentativeChanges | MixedChanges | UnknownChanges | WorkflowOrdering | ExactWorkflowSeal
-    | ExactWorkflowReplay | QuintWorkflowUnchanged | NoWorkflowMutationSurface
+    | WorkflowPrerequisite
+    | WorkflowRoadmap
+    | WorkflowCompleteness
+    | TypedWorkflowInventory
+    | WorkflowGraphVersion
+    | ChangedSubjectSelection
+    | NonFileInputSelection
+    | TransitiveClosure
+    | UnconditionalObligations
+    | StableAggregates
+    | TypedNotApplicable
+    | NoExpensiveProvisioning
+    | AmbiguousImpactRefusal
+    | StaleImpactRefusal
+    | MergeGroupRecomputation
+    | RepresentativeChanges
+    | MixedChanges
+    | UnknownChanges
+    | WorkflowOrdering
+    | ExactWorkflowSeal
+    | ExactWorkflowReplay
+    | QuintWorkflowUnchanged
+    | NoWorkflowMutationSurface
 
 type GitHubWorkflowSupplyChainControl =
-    | FleetBaselines | AcceptedTargets | WorkflowFanOutTarget | JobFanOutTarget
-    | BilledMinuteTarget | QueueTimeTarget | P50Target | P95Target | ScheduledSentinel
-    | MissedObligationDetection | FleetDisable | RemovalLedger
+    | FleetBaselines
+    | AcceptedTargets
+    | WorkflowFanOutTarget
+    | JobFanOutTarget
+    | BilledMinuteTarget
+    | QueueTimeTarget
+    | P50Target
+    | P95Target
+    | ScheduledSentinel
+    | MissedObligationDetection
+    | FleetDisable
+    | RemovalLedger
 
 type GitHubWorkflowControlResult<'control> =
-    { Control: 'control
-      ControlPassed: bool
-      BaselineGreen: bool }
+    {
+        Control: 'control
+        ControlPassed: bool
+        BaselineGreen: bool
+    }
 
-type GitHubWorkflowQualificationFinding = { Code: string; ControlId: string; Message: string }
+type GitHubWorkflowQualificationFinding =
+    {
+        Code: string
+        ControlId: string
+        Message: string
+    }
 
 module GitHubWorkflowSelectionQualification =
     val requiredObligations: GitHubWorkflowObligation list
@@ -158,7 +228,21 @@ module GitHubWorkflowSelectionQualification =
     val obligationId: GitHubWorkflowObligation -> string
     val selectionControlId: GitHubWorkflowSelectionControl -> string
     val supplyChainControlId: GitHubWorkflowSupplyChainControl -> string
-    val compile: GitHubWorkflowSelectionSnapshot -> Result<GitHubWorkflowSelectionReport, GitHubWorkflowSelectionFinding list>
-    val verify: string -> GitHubWorkflowSelectionSnapshot -> Result<GitHubWorkflowSelectionReport, GitHubWorkflowSelectionFinding list>
-    val validateSelection: GitHubWorkflowControlResult<GitHubWorkflowSelectionControl> list -> GitHubWorkflowControlResult<GitHubWorkflowSelectionControl> list -> Result<unit, GitHubWorkflowQualificationFinding list>
-    val validateSupplyChain: GitHubWorkflowControlResult<GitHubWorkflowSupplyChainControl> list -> GitHubWorkflowControlResult<GitHubWorkflowSupplyChainControl> list -> Result<unit, GitHubWorkflowQualificationFinding list>
+
+    val compile:
+        GitHubWorkflowSelectionSnapshot -> Result<GitHubWorkflowSelectionReport, GitHubWorkflowSelectionFinding list>
+
+    val verify:
+        string ->
+        GitHubWorkflowSelectionSnapshot ->
+            Result<GitHubWorkflowSelectionReport, GitHubWorkflowSelectionFinding list>
+
+    val validateSelection:
+        GitHubWorkflowControlResult<GitHubWorkflowSelectionControl> list ->
+        GitHubWorkflowControlResult<GitHubWorkflowSelectionControl> list ->
+            Result<unit, GitHubWorkflowQualificationFinding list>
+
+    val validateSupplyChain:
+        GitHubWorkflowControlResult<GitHubWorkflowSupplyChainControl> list ->
+        GitHubWorkflowControlResult<GitHubWorkflowSupplyChainControl> list ->
+            Result<unit, GitHubWorkflowQualificationFinding list>

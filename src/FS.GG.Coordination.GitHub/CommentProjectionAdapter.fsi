@@ -5,17 +5,21 @@ open System
 type CommentIdentity = { DatabaseId: int64; NodeId: string }
 
 type CommentObservation =
-    { Identity: CommentIdentity
-      CreatedAt: DateTimeOffset
-      UpdatedAt: DateTimeOffset
-      AuthorLogin: string
-      Body: byte array }
+    {
+        Identity: CommentIdentity
+        CreatedAt: DateTimeOffset
+        UpdatedAt: DateTimeOffset
+        AuthorLogin: string
+        Body: byte array
+    }
 
 type CommentPage =
-    { Number: int
-      Comments: CommentObservation list
-      EndCursor: string option
-      TerminalPage: bool }
+    {
+        Number: int
+        Comments: CommentObservation list
+        EndCursor: string option
+        TerminalPage: bool
+    }
 
 type CommentReadObservation =
     | CommentsComplete of revision: string * pages: CommentPage list
@@ -26,11 +30,13 @@ type CommentReadObservation =
     | CommentsIndeterminate of reason: string
 
 type CommentSnapshot =
-    { Revision: string
-      PageCount: int
-      NodeCount: int
-      TerminalCursor: string option
-      Comments: CommentObservation list }
+    {
+        Revision: string
+        PageCount: int
+        NodeCount: int
+        TerminalCursor: string option
+        Comments: CommentObservation list
+    }
 
 type CommentReadFailure =
     | CommentObservationIncomplete of string * string option
@@ -46,27 +52,33 @@ type CommentReadFailure =
     | ReorderedCommentObservation
 
 type JournalAuthority =
-    { Subject: string
-      JournalKind: string
-      JournalShard: string
-      Generation: int64
-      JournalCommit: string
-      AuthorityDigest: string }
+    {
+        Subject: string
+        JournalKind: string
+        JournalShard: string
+        Generation: int64
+        JournalCommit: string
+        AuthorityDigest: string
+    }
 
 type ProjectionMarker =
-    { Schema: string
-      Subject: string
-      JournalKind: string
-      JournalShard: string
-      Generation: int64
-      JournalCommit: string
-      AuthorityDigest: string
-      ProjectionDigest: string }
+    {
+        Schema: string
+        Subject: string
+        JournalKind: string
+        JournalShard: string
+        Generation: int64
+        JournalCommit: string
+        AuthorityDigest: string
+        ProjectionDigest: string
+    }
 
 type ParsedProjection =
-    { Marker: ProjectionMarker
-      HumanBody: byte array
-      FullBodyDigest: string }
+    {
+        Marker: ProjectionMarker
+        HumanBody: byte array
+        FullBodyDigest: string
+    }
 
 type MarkerFailure =
     | MarkerMissing
@@ -75,14 +87,18 @@ type MarkerFailure =
     | ProjectionDigestMismatch of expected: string * observed: string
 
 type ExpectedProjection =
-    { Identity: CommentIdentity
-      UpdatedAt: DateTimeOffset
-      BodyDigest: string }
+    {
+        Identity: CommentIdentity
+        UpdatedAt: DateTimeOffset
+        BodyDigest: string
+    }
 
 type TrustedProjection =
-    { Comment: CommentObservation
-      Projection: ParsedProjection
-      Authority: JournalAuthority }
+    {
+        Comment: CommentObservation
+        Projection: ParsedProjection
+        Authority: JournalAuthority
+    }
 
 type ProjectionTrustFailure =
     | ProjectionMissing
@@ -96,31 +112,43 @@ type ProjectionTrustFailure =
 type RenderingPolicy = { Version: string }
 
 type ProjectionRequest =
-    { Authority: JournalAuthority
-      Policy: RenderingPolicy
-      HumanBody: string
-      CausationIdentity: string }
+    {
+        Authority: JournalAuthority
+        Policy: RenderingPolicy
+        HumanBody: string
+        CausationIdentity: string
+    }
 
 type ProjectionOperation =
     | CreateProjection of body: byte array
-    | ReplaceProjection of identity: CommentIdentity * expectedUpdatedAt: DateTimeOffset * expectedBodyDigest: string * body: byte array
+    | ReplaceProjection of
+        identity: CommentIdentity *
+        expectedUpdatedAt: DateTimeOffset *
+        expectedBodyDigest: string *
+        body: byte array
 
 type ProjectionPlan =
-    { Before: CommentSnapshot
-      Authority: JournalAuthority
-      Policy: RenderingPolicy
-      CausationIdentity: string
-      DesiredBody: byte array
-      DesiredBodyDigest: string
-      IdempotencyIdentity: string
-      Operation: ProjectionOperation }
+    {
+        Before: CommentSnapshot
+        Authority: JournalAuthority
+        Policy: RenderingPolicy
+        CausationIdentity: string
+        DesiredBody: byte array
+        DesiredBodyDigest: string
+        IdempotencyIdentity: string
+        Operation: ProjectionOperation
+    }
 
 type ProjectionNoOpReceipt =
-    { ObservedRevision: string
-      Identity: CommentIdentity
-      IdempotencyIdentity: string }
+    {
+        ObservedRevision: string
+        Identity: CommentIdentity
+        IdempotencyIdentity: string
+    }
 
-type ProjectionPlanDecision = ProjectionPlanned of ProjectionPlan | ProjectionNoOp of ProjectionNoOpReceipt
+type ProjectionPlanDecision =
+    | ProjectionPlanned of ProjectionPlan
+    | ProjectionNoOp of ProjectionNoOpReceipt
 
 type ProjectionPlanFailure =
     | InvalidProjectionRequest of string
@@ -143,13 +171,37 @@ type ProjectionPostStateFailure =
 module CommentProjectionAdapter =
     [<Literal>]
     val MarkerPrefix: string = "<!-- fsgg:projection/v1 -->"
+
     [<Literal>]
     val MarkerSchema: string = "fsgg.coordination.projection-marker/1"
+
     val sha256: byte array -> string
     val readComments: CommentReadObservation -> Result<CommentSnapshot, CommentReadFailure>
     val parseProjection: CommentObservation -> Result<ParsedProjection, MarkerFailure>
-    val evaluateTrust: expected: ExpectedProjection option -> authority: JournalAuthority -> CommentSnapshot -> Result<TrustedProjection, ProjectionTrustFailure>
+
+    val evaluateTrust:
+        expected: ExpectedProjection option ->
+        authority: JournalAuthority ->
+        CommentSnapshot ->
+            Result<TrustedProjection, ProjectionTrustFailure>
+
     val renderProjection: ProjectionRequest -> Result<byte array, ProjectionPlanFailure>
-    val planProjection: expected: ExpectedProjection option -> ProjectionRequest -> CommentSnapshot -> Result<ProjectionPlanDecision, ProjectionPlanFailure>
-    val checkPreState: currentAuthority: JournalAuthority -> ProjectionPlan -> CommentReadObservation -> Result<CommentSnapshot, ProjectionPreStateFailure>
-    val verifyPostState: expectedResultRevision: string -> resultingComment: CommentObservation -> ProjectionPlan -> CommentReadObservation -> Result<CommentSnapshot, ProjectionPostStateFailure>
+
+    val planProjection:
+        expected: ExpectedProjection option ->
+        ProjectionRequest ->
+        CommentSnapshot ->
+            Result<ProjectionPlanDecision, ProjectionPlanFailure>
+
+    val checkPreState:
+        currentAuthority: JournalAuthority ->
+        ProjectionPlan ->
+        CommentReadObservation ->
+            Result<CommentSnapshot, ProjectionPreStateFailure>
+
+    val verifyPostState:
+        expectedResultRevision: string ->
+        resultingComment: CommentObservation ->
+        ProjectionPlan ->
+        CommentReadObservation ->
+            Result<CommentSnapshot, ProjectionPostStateFailure>

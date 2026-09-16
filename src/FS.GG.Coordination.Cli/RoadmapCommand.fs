@@ -335,9 +335,11 @@ module RoadmapCommand =
                                 with
                                 | Ok(_, bytes), Ok _ ->
                                     Ok
-                                        { Name = name
-                                          Path = path
-                                          Bytes = ReadOnlyMemory<byte>(bytes) }
+                                        {
+                                            Name = name
+                                            Path = path
+                                            Bytes = ReadOnlyMemory<byte>(bytes)
+                                        }
                                 | Ok _, Error _ -> Error $"artifact {name}: file is not tracked by the candidate"
                                 | Error error, _
                                 | _, Error error -> Error $"artifact {name}: {error}"
@@ -443,10 +445,12 @@ module RoadmapCommand =
 
                                             results <-
                                                 results
-                                                @ [ command,
+                                                @ [
+                                                    command,
                                                     exitCode,
                                                     sha256 (Encoding.UTF8.GetBytes outputText),
-                                                    sha256 (Encoding.UTF8.GetBytes errorText) ]
+                                                    sha256 (Encoding.UTF8.GetBytes errorText)
+                                                ]
 
                                             if exitCode <> 0 then
                                                 failed <- true
