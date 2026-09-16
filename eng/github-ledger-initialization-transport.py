@@ -258,6 +258,14 @@ def verify_objects(objects, token=None):
                     observed[person] = dict(observed[person])
                     observed[person]["date"] = utc_iso(observed[person]["date"])
                 expected[person]["date"] = utc_iso(expected[person]["date"])
+            expected_message = expected["message"]
+            if (
+                isinstance(observed["message"], str)
+                and expected_message.endswith("\n")
+                and not expected_message.endswith("\n\n")
+                and observed["message"] == expected_message[:-1]
+            ):
+                observed["message"] = expected_message
             if observed != expected:
                 raise Refused("commit-readback:" + item["oid"])
 

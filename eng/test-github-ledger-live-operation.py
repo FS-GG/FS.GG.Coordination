@@ -252,7 +252,7 @@ class LiveOperationTests(unittest.TestCase):
                 if item["kind"] == "tree":
                     return 200, {"sha": item["oid"], "tree": transport.parse_tree(item["bytes"])}
                 parsed = transport.parse_commit(item["bytes"])
-                return 200, {"sha": item["oid"], "message": parsed["message"], "tree": {"sha": parsed["tree"]},
+                return 200, {"sha": item["oid"], "message": parsed["message"][:-1], "tree": {"sha": parsed["tree"]},
                              "parents": [], "author": parsed["author"], "committer": parsed["committer"]}
 
             original = transport.request
@@ -265,6 +265,49 @@ class LiveOperationTests(unittest.TestCase):
                     (200, {"sha": objects[2]["oid"], "tree": bad_tree}) if objects[2]["oid"] in path else response(path))
                 with self.assertRaisesRegex(transport.Refused, "tree-readback"):
                     transport.verify_objects(objects)
+            finally:
+                transport.request = original
+
+    def test_commit_readback_allows_only_one_terminal_lf_elision(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            path, _ = plan_fixture(pathlib.Path(scratch))
+            _, objects = transport.load_plan(path)
+            commit = objects[3]
+            parsed = transport.parse_commit(commit["bytes"])
+
+            def live_value(**changes):
+                value = {
+                    "sha": commit["oid"],
+                    "message": parsed["message"][:-1],
+                    "tree": {"sha": parsed["tree"]},
+                    "parents": [],
+                    "author": dict(parsed["author"]),
+                    "committer": dict(parsed["committer"]),
+                }
+                value.update(changes)
+                return value
+
+            original = transport.request
+            try:
+                transport.request = lambda *_args, **_kwargs: (200, live_value())
+                transport.verify_objects([commit])
+
+                mutations = [
+                    ("content", {"message": "Changed"}, "commit-readback"),
+                    ("internal-newline", {"message": "Init\nialize"}, "commit-readback"),
+                    ("extra-byte", {"message": parsed["message"] + "x"}, "commit-readback"),
+                    ("extra-lf", {"message": parsed["message"] + "\n"}, "commit-readback"),
+                    ("tree", {"tree": {"sha": "f" * 40}}, "commit-readback"),
+                    ("parents", {"parents": [{"sha": "f" * 40}]}, "commit-readback"),
+                    ("author", {"author": dict(parsed["author"], name="changed")}, "commit-readback"),
+                    ("committer", {"committer": dict(parsed["committer"], email="changed@example.com")}, "commit-readback"),
+                    ("sha", {"sha": "f" * 40}, "object-readback"),
+                ]
+                for name, changes, refusal in mutations:
+                    with self.subTest(name=name):
+                        transport.request = lambda *_args, changes=changes, **_kwargs: (200, live_value(**changes))
+                        with self.assertRaisesRegex(transport.Refused, refusal):
+                            transport.verify_objects([commit])
             finally:
                 transport.request = original
 
