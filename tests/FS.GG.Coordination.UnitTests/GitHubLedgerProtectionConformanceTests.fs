@@ -181,7 +181,7 @@ let private installed operational =
                     Repository = "FS-GG/.github"
                     Name = "fleet-cutover"
                     ReviewerIds = [ 1645484L; 4456104L ]
-                    PreventSelfReview = true
+                    PreventSelfReview = false
                     CanAdminsBypass = false
                     ProtectedBranches = false
                     CustomBranchPolicies = true
@@ -263,6 +263,21 @@ let ``reviewer or App permission drift is refused`` () =
             (TimeSpan.FromMinutes 5.0)
             { installedValue with
                 FleetEnvironment = wrongEnvironment
+            }
+    )
+
+    let selfReviewDrift =
+        match installedValue.FleetEnvironment with
+        | LedgerObservation.Observed value -> LedgerObservation.Observed { value with PreventSelfReview = true }
+        | state -> state
+
+    Assert.Equal(
+        DriftOrTamper,
+        LedgerProtectionConformance.classify
+            at
+            (TimeSpan.FromMinutes 5.0)
+            { installedValue with
+                FleetEnvironment = selfReviewDrift
             }
     )
 

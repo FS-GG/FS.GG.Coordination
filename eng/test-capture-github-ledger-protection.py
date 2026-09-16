@@ -66,11 +66,15 @@ class AppCaptureTests(unittest.TestCase):
         detail = {
             "name": "fleet-cutover", "can_admins_bypass": False,
             "deployment_branch_policy": {"protected_branches": False, "custom_branch_policies": True},
-            "protection_rules": [{"type": "wait_timer", "wait_timer": 0}, {"type": "required_reviewers", "prevent_self_review": True, "reviewers": [{"reviewer": {"id": 4456104}}, {"reviewer": {"id": 1645484}}]}]}
+            "protection_rules": [{"type": "wait_timer", "wait_timer": 0}, {"type": "required_reviewers", "prevent_self_review": False, "reviewers": [{"reviewer": {"id": 4456104}}, {"reviewer": {"id": 1645484}}]}]}
         normalized, gaps = CAPTURE.environment_detail(detail, [{"name": "main"}])
         self.assertEqual([], gaps)
-        self.assertTrue(normalized["preventSelfReview"])
+        self.assertFalse(normalized["preventSelfReview"])
         self.assertEqual([1645484, 4456104], normalized["reviewerIds"])
+        self.assertFalse(normalized["canAdminsBypass"])
+        self.assertFalse(normalized["protectedBranches"])
+        self.assertTrue(normalized["customBranchPolicies"])
+        self.assertEqual(["main"], normalized["deploymentBranchPatterns"])
 
     def test_missing_or_duplicate_required_reviewers_rule_refuses(self):
         baseline = {"name": "fleet-cutover", "protection_rules": []}

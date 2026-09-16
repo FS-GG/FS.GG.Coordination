@@ -22,6 +22,13 @@ AUTHORIZATION_WORKFLOW_REVISION = "c00b4636688f95024b80c588d2410ca40e11f6e6"
 AUTHORIZATION_WORKFLOW_SHA256 = "a778801d66751c3890826b0ca015a81758f7733ff09e5b9c5bde55e1f86c3b8f"
 REVIEWERS = {1645484, 4456104}
 DIMENSIONS = {"settings", "custody", "initialization", "monitoring"}
+INITIALIZER_FIELDS = {
+    "authorEmail", "authorName", "authorizationKeyId", "authorizationKeySpkiSha256",
+    "authorizationWorkflowRevision", "authorizationWorkflowSha256", "controlIssueNumber",
+    "createdAt", "cutoverAppId", "cutoverInstallationId", "desiredPolicySha256", "expectedRef",
+    "firstCaptureSha256", "fleetId", "manifestSha256", "ref", "repository", "repositoryId",
+    "secondCaptureSha256", "sourceSha256", "tag", "trustAnchorSha256",
+}
 
 
 class Refused(RuntimeError):
@@ -216,6 +223,8 @@ def initializer_payload(payload, public_spki):
     value = json.loads(payload)
     if canonical(value) != payload:
         raise Refused("initializer-payload-not-canonical")
+    if not isinstance(value, dict) or set(value) != INITIALIZER_FIELDS:
+        raise Refused("initializer-payload-shape")
     expected = {
         "repositoryId": 1351660651, "repository": AUTHORITY, "fleetId": "fs-gg-production", "ref": FLEET_REF,
         "expectedRef": "absent", "cutoverAppId": 4882399, "cutoverInstallationId": 160261436,

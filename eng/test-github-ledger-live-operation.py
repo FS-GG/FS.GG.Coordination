@@ -56,6 +56,110 @@ def plan_fixture(root):
 
 
 class LiveOperationTests(unittest.TestCase):
+    def test_compiled_initializer_payload_is_exactly_accepted_and_mutations_refuse(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            private = root / "private.pem"
+            public = root / "public.pem"
+            subprocess.run(
+                ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(private)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            subprocess.run(
+                ["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            private.chmod(0o600)
+            public.chmod(0o600)
+            public_spki = operation.spki_sha(public)
+            workflow_bytes = b"test-protected-authorization-workflow"
+            original_workflow_sha = operation.AUTHORIZATION_WORKFLOW_SHA256
+            operation.AUTHORIZATION_WORKFLOW_SHA256 = hashlib.sha256(workflow_bytes).hexdigest()
+
+            initializer = {
+                "repositoryId": 1351660651, "repository": operation.AUTHORITY, "fleetId": "fs-gg-production",
+                "ref": operation.FLEET_REF, "tag": "refs/tags/fsgg/v2/fleet-cutover/operating-v1/test",
+                "manifestSha256": "1" * 64, "trustAnchorSha256": "2" * 64, "sourceSha256": "3" * 64,
+                "desiredPolicySha256": "4" * 64, "firstCaptureSha256": "5" * 64,
+                "secondCaptureSha256": "6" * 64, "authorizationKeyId": "integration-test",
+                "authorizationKeySpkiSha256": public_spki, "cutoverAppId": 4882399,
+                "cutoverInstallationId": 160261436,
+                "authorizationWorkflowRevision": operation.AUTHORIZATION_WORKFLOW_REVISION,
+                "authorizationWorkflowSha256": operation.AUTHORIZATION_WORKFLOW_SHA256,
+                "controlIssueNumber": 2, "createdAt": "2026-09-09T12:00:00+00:00",
+                "authorName": "FS.GG cutover", "authorEmail": "cutover@fs.gg",
+            }
+            input_path = root / "initializer-input.json"
+            payload_path = root / "initializer-payload.json"
+            write(input_path, initializer)
+            compiled = subprocess.run(
+                ["dotnet", "run", "--project", "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj",
+                 "-c", "Release", "--", "ledger-protection", "initialize", "payload",
+                 "--input", str(input_path), "--output", str(payload_path)],
+                cwd=ROOT.parent, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertEqual(0, compiled.returncode, compiled.stderr.decode())
+            payload = payload_path.read_bytes()
+            self.assertEqual(operation.canonical(json.loads(payload)), payload)
+            self.assertFalse(payload.endswith(b"\n"))
+            self.assertNotIn(b"\\u002B", payload)
+
+            receipt_path = root / "protected-receipt.json"
+            receipt = {
+                "schema": "fsgg.github-ledger-protected-authorization/1", "repository": "FS-GG/.github",
+                "environment": "fleet-cutover", "inputSha256": operation.sha(payload),
+                "coordinationRevision": "a" * 40, "dotgithubRevision": "b" * 40,
+                "operationId": "gs2-08-2-byte-contract-test", "runId": 17, "conclusion": "success",
+                "approvedAt": "2026-09-09T12:00:00Z", "expiresAt": "2026-09-09T13:00:00Z",
+            }
+            write(receipt_path, receipt)
+            output = root / "authorization.json"
+            key_fd = os.open(private, os.O_RDONLY)
+            args = type("Args", (), {
+                "payload": payload_path, "protected_receipt": receipt_path, "public_key": public,
+                "public_key_spki_sha256": public_spki, "key_id": "integration-test",
+                "source_revision": "a" * 40, "operation_id": "gs2-08-2-byte-contract-test",
+                "now": "2026-09-09T12:01:00Z", "output": output, "private_key_fd": key_fd,
+            })()
+            original_gh = operation.gh_json
+
+            def provider(call):
+                joined = " ".join(call)
+                if joined.endswith("/17"):
+                    return {"conclusion": "success", "head_sha": "b" * 40}
+                if joined.endswith("/approvals"):
+                    return [{"state": "approved", "user": {"id": 1645484}}]
+                if "/compare/" in joined:
+                    return {"status": "ahead"}
+                return {"content": base64.b64encode(workflow_bytes).decode()}
+
+            operation.gh_json = provider
+            try:
+                operation.authorize(args)
+                authorization = json.loads(output.read_bytes())
+                self.assertEqual(payload, base64.b64decode(authorization["payloadBase64"]))
+
+                payload_path.write_bytes(payload + b"\n")
+                with self.assertRaisesRegex(operation.Refused, "initializer-payload-not-canonical"):
+                    operation.authorize(args)
+
+                payload_path.write_bytes(payload.replace(b"+", b"\\u002B", 1))
+                with self.assertRaisesRegex(operation.Refused, "initializer-payload-not-canonical"):
+                    operation.authorize(args)
+
+                changed = json.loads(payload)
+                changed["controlIssueNumber"] = 3
+                payload_path.write_bytes(operation.canonical(changed))
+                with self.assertRaisesRegex(operation.Refused, "initializer-payload-binding"):
+                    operation.authorize(args)
+
+                changed = json.loads(payload)
+                changed["extra"] = "refuse"
+                payload_path.write_bytes(operation.canonical(changed))
+                with self.assertRaisesRegex(operation.Refused, "initializer-payload-shape"):
+                    operation.authorize(args)
+            finally:
+                os.close(key_fd)
+                operation.gh_json = original_gh
+                operation.AUTHORIZATION_WORKFLOW_SHA256 = original_workflow_sha
+
     def test_transport_recomputes_every_git_oid_and_rejects_tamper(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = pathlib.Path(scratch)

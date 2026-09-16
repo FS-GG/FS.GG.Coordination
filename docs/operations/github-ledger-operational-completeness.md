@@ -29,6 +29,10 @@ dotnet run --project src/FS.GG.Coordination.Cli -c Release --no-build -- \
 sha256sum initializer-payload.json
 ```
 
+The payload command and Python authorizer share one byte contract: sorted compact UTF-8 JSON,
+unescaped JSON-safe characters, and no terminal newline. The authorizer requires that exact
+encoding and the exact initializer field set before it reads approval evidence or signs anything.
+
 `eng/github-ledger-operation.py derive` produces reviewable canonical `initial-manifest/v1`, `initial-trust/v1`,
 and initializer-input bytes. The manifest is derived from the accepted GS2-08.1 receipt and epoch-wire digest,
 exact source commit/tree, bound desired policy, fleet address, and the independent authorizer's canonical public-key

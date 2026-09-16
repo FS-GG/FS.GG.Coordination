@@ -89,6 +89,9 @@ let ``genesis uses real git objects and observation is not stored bytes`` () =
     Assert.Contains("authorizationKeySpkiSha256", canonical)
     Assert.Contains("authorizationWorkflowRevision", canonical)
     Assert.DoesNotContain("authorizationKeySha256", canonical)
+    Assert.Contains("\"createdAt\":\"2026-09-09T10:00:00.0000000+00:00\"", canonical)
+    Assert.DoesNotContain("\\u002B", canonical)
+    Assert.False(canonical.EndsWith("\n", StringComparison.Ordinal))
 
     for value in [ plan.Event; plan.Head; plan.Tree; plan.Commit ] do
         Assert.Equal(value.Oid, gitOid value)

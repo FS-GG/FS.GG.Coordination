@@ -4,6 +4,8 @@ open System
 open System.Globalization
 open System.Security.Cryptography
 open System.Text
+open System.Text.Encodings.Web
+open System.Text.Json
 open System.Text.Json.Nodes
 
 type ExpectedLedgerRef =
@@ -128,13 +130,25 @@ module LedgerInitializationAdapter =
         |> ShardedJournalAdapter.canonicalJson
         |> Result.defaultWith invalidOp
 
+    // The authorization boundary uses the same compact, sorted, UTF-8 JSON
+    // representation as eng/github-ledger-operation.py: no trailing newline
+    // and no escaping of JSON-safe characters such as '+'.
+    let private authorizationJson (pairs: (string * JsonNode) list) =
+        let root = JsonObject()
+        pairs |> List.sortBy fst |> List.iter (fun (k, v) -> root.Add(k, v))
+
+        root.ToJsonString(
+            JsonSerializerOptions(WriteIndented = false, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
+        )
+        |> utf8
+
     let private lease =
         function
         | ExpectedAbsent -> "absent"
         | ExpectedParent x -> "parent:" + x
 
     let canonicalInput input =
-        json
+        authorizationJson
             [
                 "authorEmail", JsonValue.Create input.AuthorEmail
                 "authorName", JsonValue.Create input.AuthorName
