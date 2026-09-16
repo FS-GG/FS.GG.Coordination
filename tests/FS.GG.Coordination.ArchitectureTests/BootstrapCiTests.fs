@@ -173,7 +173,7 @@ let private createArtifacts root =
             let preparationDigest = String.replicate 64 "c"
 
             let sourceDigest =
-                "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
+                "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90"
 
             let contractDigest =
                 "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
@@ -783,6 +783,7 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
         )
 
     Assert.DoesNotContain(", epoch,", semanticBlock)
+    Assert.Contains("timeout-minutes: 25", semanticBlock)
     Assert.Contains("FSGG_QUINT_SHARD: epoch", workflow)
     Assert.Contains("path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance", workflow)
     Assert.DoesNotContain("needs: [canonical-quint-semantic]", semanticBlock)

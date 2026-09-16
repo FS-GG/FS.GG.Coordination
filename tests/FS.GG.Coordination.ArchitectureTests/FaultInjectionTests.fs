@@ -42,7 +42,7 @@ let ``committed matrix is deterministic complete and source bound`` () =
     Assert.Equal(15, summary.ScenarioCount)
     Assert.Equal(11, summary.ConvergedCount)
     Assert.Equal(4, summary.RefusedCount)
-    Assert.Equal("14367ea444517c31d2af0a5ba244f91d6a9b73ed06f52b89c5efae0a0df68646", summary.SelfSha256)
+    Assert.Equal("cdfb080df81c20c78d18708b53bbd11f89a7643e406aa8930923e130e7b97666", summary.SelfSha256)
 
 [<Fact>]
 let ``every modeled external step has before and after convergence`` () =

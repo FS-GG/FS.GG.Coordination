@@ -1,0 +1,38 @@
+{
+  "schema": "fsgg.quint.choreo-source-pin/1",
+  "repository": "https://github.com/quint-co/choreo",
+  "commit": "000cf4eed315187dc6f216a148781cff7dde6521",
+  "observedAt": "2026-09-16",
+  "license": {
+    "spdx": "Apache-2.0",
+    "path": "eng/vendor/choreo/LICENSE",
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  },
+  "sources": [
+    {
+      "path": "spells/basicSpells.qnt",
+      "beginMarker": "// BEGIN PINNED quint-co/choreo spells/basicSpells.qnt",
+      "endMarker": "// END PINNED quint-co/choreo spells/basicSpells.qnt",
+      "upstreamSha256": "60e566ee21ed308c7f33069199b277fcbc9856bc16b0ac877cacc81d61926102",
+      "vendoredSha256": "60e566ee21ed308c7f33069199b277fcbc9856bc16b0ac877cacc81d61926102",
+      "transform": "none"
+    },
+    {
+      "path": "choreo.qnt",
+      "beginMarker": "// BEGIN PINNED quint-co/choreo choreo.qnt",
+      "endMarker": "// END PINNED quint-co/choreo choreo.qnt",
+      "upstreamSha256": "f733842c21513e42429567541b8a300545b0c27f2eec77e0a474fd45b1d2e407",
+      "vendoredSha256": "53c72b64d9dd14e7d5f0007f8e2a8dee61493646d3ffea944d6d033058c4bda3",
+      "transform": "replace exactly one filesystem import with import basicSpells.*"
+    }
+  ],
+  "integration": {
+    "mode": "embedded-offline-no-network-fetch",
+    "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
+    "fence": "quint-test",
+    "smokeModule": "ChoreoSourcePinSmoke",
+    "smokeRun": "choreoSourcePinSmoke",
+    "quintVersion": "0.32.0",
+    "quintBinarySha256": "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+  }
+}

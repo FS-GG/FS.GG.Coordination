@@ -818,7 +818,10 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "    needs: [reuse-decision, canonical-quint-prepare]"
     line "    if: ${{ needs.canonical-quint-prepare.result == 'success' }}"
     line $"    runs-on: %s{contract.Reuse.Runner}"
-    line "    timeout-minutes: 15"
+    // Every semantic shard independently compiles the canonical roots before its bounded
+    // checks. The pinned Choreo source increases that fixed preparation cost, and runners
+    // under full matrix contention need enough wall-clock headroom to emit their receipt.
+    line "    timeout-minutes: 25"
     line "    strategy:"
     line "      fail-fast: false"
     line "      matrix:"
@@ -1575,7 +1578,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
 
             let expectedInputs =
                 [
-                    "sourceSha256", "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
+                    "sourceSha256", "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90"
                     "contractSha256", "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
                 ]
 

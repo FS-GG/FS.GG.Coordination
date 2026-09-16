@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9",
-  "configurationSha256": "5581ffd8c441ff8604bd51afda7e9cb54bc23fbfba150a20480042ad9e1ee327",
-  "assembledQuintSha256": "162edfd5c25cf8f81aa1be17adfeb7bd30c81d504e95c4c47ad4f7f6229cd637",
+  "sourceSha256": "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90",
+  "configurationSha256": "d1df1057054c545dcabbf65a4c632d2701d223d8465c5f680bcad0dff83cf5b0",
+  "assembledQuintSha256": "052de27441d6ffd44f2dc5836e493365db7db6e79ca85cd6b3a9a6108d5eb55e",
   "runnerClass": "linux-x64-local-exact-sdk-10.0.400-refresh",
   "measuredAt": "2026-09-16T06:15:00Z",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v1",

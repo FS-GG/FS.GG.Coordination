@@ -1,6 +1,6 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; implementation not started
+Status: accepted design; C0 merged; C1 implementation in progress
 
 Decision date: 2026-09-16
 
@@ -27,10 +27,11 @@ remain atomic abstractions. The model keeps the seven hosted-writer effects para
 candidate, branch, pull request, merge, and native readback.
 
 Choreo is a source-time formal-model dependency only. It will not become a production, build-time F#, or runtime
-Akka dependency. Its required Quint modules will be committed as pinned `quint-library` regions in the canonical
-literate protocol source, with upstream commit, license, byte hashes, and architecture guards. This preserves the
-repository's single literate Quint source and does not add a local `.qnt`, a network fetch, a compiler fork, or a
-second qualification profile.
+Akka dependency. Its required Quint modules are committed as pinned regions inside the canonical source's existing
+`quint-test` fence, with upstream commit, license, byte hashes, and architecture guards. `basicSpells.qnt` is
+byte-exact; `choreo.qnt` has one guarded rewrite from its filesystem import to the equivalent same-file import
+required by the combined Q2 source. This preserves the repository's single literate Quint source and does not add
+a local `.qnt`, a network fetch, a compiler fork, or a second qualification profile.
 
 The current flat model remains authoritative during a dual-model parity window. The Choreo model becomes the
 formal workload only after projection parity, actual Quint-generated trace replay, negative controls, and the
@@ -139,14 +140,15 @@ committed bytes in the canonical pipeline.
    unreproducible.
 3. Fork the SDD extractor or qualification profile. This is rejected for the first adoption because it expands a
    local modeling improvement into a cross-repository toolchain contract change.
-4. Commit the required modules as license- and provenance-marked `quint-library` fences in `Protocol.md`. This is
-   selected. Existing extraction concatenates the canonical literate source, the bytes remain reviewable and
-   offline, and no second compiler/profile/source path is created.
+4. Commit the required modules as license- and provenance-marked regions inside the existing `quint-test` fence in
+   `Protocol.md`. This is selected. The canonical validator already concatenates that fence into its combined Q2
+   source, the bytes remain reviewable and offline, and no second compiler/profile/source path is created.
 
-The copied region must be mechanically exact apart from the literate fence and an adjacent provenance header.
-An architecture test will extract the region, hash it, and compare it with a small provenance manifest under
-`eng/`. Updating Choreo requires a dedicated PR that changes the commit, hashes, copied bytes, compatibility
-evidence, and this decision record together. No floating branch reference is accepted.
+The basic-spells region must be mechanically exact. The Choreo region permits only the manifest-declared single
+import rewrite; reversing that rewrite must reproduce the upstream hash. An architecture test extracts both
+regions and compares them with a small provenance manifest under `eng/`. Updating Choreo requires a dedicated PR
+that changes the commit, hashes, copied bytes, compatibility evidence, and this decision record together. No
+floating branch reference is accepted.
 
 ## Approved protocol design
 
@@ -295,22 +297,31 @@ points.
 - [x] Replace the obsolete Quint 0.22.4 fingerprint with the accepted 0.32.0 identity and binary hash.
 - [x] Prove the lost-response path calls observation/reconciliation only; remove any redispatch-shaped fallback.
 - [x] Mark hand-authored F# traces as transitional and keep their claims scoped to the flat model.
-- [ ] Merge the reusable harness, journal fence, and focused actor tests without claiming Choreo correspondence.
+- [x] Merge the reusable harness, journal fence, and focused actor tests without claiming Choreo correspondence.
 
 Exit evidence: protected-main PR checks, replay tests, journal tests, and a source note naming the temporary trace
 origin. No Choreo bytes are added in C0.
 
 ### C1 — pin Choreo and establish the source boundary
 
-- [ ] Add the exact Apache-2.0 Choreo/basic-spells modules as provenance-marked `quint-library` regions.
-- [ ] Add `eng/choreo-source-pin.json` with repository, commit, file hashes, license hash, and integration schema.
-- [ ] Add positive and mutation architecture tests for copied bytes, commit/hash changes, missing license, local
+- [x] Add the pinned Apache-2.0 Choreo/basic-spells modules as provenance-marked `quint-test` regions.
+- [x] Add `eng/choreo-source-pin.json` with repository, commit, file hashes, license hash, and integration schema.
+- [x] Add positive and mutation architecture tests for copied bytes, commit/hash changes, missing license, local
   `.qnt`, and forbidden network fetching.
-- [ ] Add a minimal imported smoke module and typecheck/run it with Quint 0.32.0 in the canonical preparation path.
+- [x] Add a minimal imported smoke module and typecheck/run it with Quint 0.32.0 in the canonical preparation path.
 - [ ] Confirm all existing nineteen formal workloads and published-kernel architecture tests remain unchanged.
 
 Exit evidence: deterministic offline extraction, exact hashes, smoke run, full architecture tests, and no formal
 catalog switch.
+
+Implementation note: embedding the pinned library increases each compiled root artifact from roughly 8.8 MiB to a
+measured maximum of 12,246,193 bytes. C1 therefore raises the common root-artifact ceiling from 10 MiB to 16 MiB;
+the existing per-root fail-closed check and all semantic workload budgets remain in force.
+The pinned regions are appended after the established formal test modules so their source locations, retained ITF
+states, and diagnostic trace bytes remain stable.
+Each semantic shard now has a 25-minute workflow envelope (formerly 15 minutes). The workload's own time, memory,
+state, transition, and sample limits are unchanged; this only accommodates the larger canonical compilation cost
+when all nineteen independent shards contend for hosted-runner capacity.
 
 ### C2 — implement and review the four-process model
 

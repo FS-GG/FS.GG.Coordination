@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9",
+  "sourceSha256": "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
@@ -224,7 +224,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 10485760
+        "artifactBytes": 16777216
       },
       "admission": {
         "owner": "authority",
@@ -280,7 +280,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 10485760
+        "artifactBytes": 16777216
       },
       "admission": {
         "owner": "lifecycle",
@@ -337,7 +337,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 10485760
+        "artifactBytes": 16777216
       },
       "admission": {
         "owner": "relations",
@@ -394,7 +394,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 10485760
+        "artifactBytes": 16777216
       },
       "admission": {
         "owner": "protocol-streams",
@@ -447,7 +447,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 10485760
+        "artifactBytes": 16777216
       },
       "admission": {
         "owner": "mutation-saga",
@@ -501,7 +501,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 10485760
+        "artifactBytes": 16777216
       },
       "admission": {
         "owner": "desired-state",
@@ -557,7 +557,7 @@
         "samples": 200,
         "elapsedMs": 60000,
         "peakMiB": 2048,
-        "artifactBytes": 10485760
+        "artifactBytes": 16777216
       },
       "admission": {
         "owner": "qualification",

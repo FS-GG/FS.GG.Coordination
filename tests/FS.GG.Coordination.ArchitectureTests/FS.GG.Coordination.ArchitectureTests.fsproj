@@ -72,6 +72,7 @@
     <Compile Include="GeneratedStructuralTests.fs" />
     <Compile Include="FaultInjectionTests.fs" />
     <Compile Include="SupplyChainTests.fs" />
+    <Compile Include="ChoreoSourcePinArchitectureTests.fs" />
     <Compile Include="QuintQualificationTests.fs" />
   </ItemGroup>
 
