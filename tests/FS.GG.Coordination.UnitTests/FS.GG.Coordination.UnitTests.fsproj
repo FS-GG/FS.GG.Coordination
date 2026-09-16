@@ -42,6 +42,8 @@
     <Compile Include="GitHubCommentProjectionTests.fs" />
     <Compile Include="GitHubTransportTests.fs" />
     <Compile Include="GitHubShardedJournalTests.fs" />
+    <Compile Include="..\FS.GG.Coordination.QuintReplay.Tests\ReplayHarness.fs" Link="QuintReplay\ReplayHarness.fs" />
+    <Compile Include="..\FS.GG.Coordination.QuintReplay.Tests\JournalFencingReplayTests.fs" Link="QuintReplay\JournalFencingReplayTests.fs" />
     <Compile Include="GitHubRepositorySettingsTests.fs" />
     <Compile Include="GitHubActionsReleaseFeedTests.fs" />
     <Compile Include="GitHubSandboxClosureTests.fs" />
@@ -64,6 +66,21 @@
     <ProjectReference Include="..\..\src\FS.GG.Coordination.App\FS.GG.Coordination.App.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Qualification.Contracts\FS.GG.Coordination.Qualification.Contracts.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.GitHub\FS.GG.Coordination.GitHub.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\work\96-gs2-03-5-native-quint-formal-tests\counterexamples\journal-fencing.itf.json"
+             Link="Fixtures\journal-fencing.itf.json"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\work\96-gs2-03-5-native-quint-formal-tests\counterexamples\journal-fencing.manifest.json"
+             Link="Fixtures\journal-fencing.manifest.json"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\src\FS.GG.Coordination.Protocol\Generated\contract.json"
+             Link="Fixtures\contract.json"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\src\FS.GG.Coordination.Protocol\Protocol.md"
+             Link="Fixtures\Protocol.md"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
