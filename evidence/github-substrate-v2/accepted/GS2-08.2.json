@@ -1,0 +1,20 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-08.2",
+  "state": "accepted",
+  "unitContractSha256": "a5eeca225c9fbc554913332c15f2182ba764d4994f6971d895a0403431452aad",
+  "sourceRevision": "3139078ae3db01928a731e343d4d2a18e00f5982",
+  "artifacts": [
+    { "name": "native-acceptance-candidate", "sha256": "0c9ab3211b80089255ae0e3f64a86767b14491dc1f384d17cab624b31fbf817d" },
+    { "name": "settings-operational-evidence", "sha256": "c11e818c110e84e555495e4064d35126981f09e5cd53fd98f557d2e2620f2f3c" },
+    { "name": "custody-operational-evidence", "sha256": "fdefb8890da79a44c10e53b04eee6e317ba119df271c6c46ba5f92fe992cd7bf" },
+    { "name": "initialization-operational-evidence", "sha256": "a3fc80eb1f8344b14b5338bc1f99efa1728919618d08df358960916a7948bb71" },
+    { "name": "monitoring-operational-evidence", "sha256": "4091136c7c7bb4e21207ca69d1eb9bf73488efeff1feeef5d6dd6cb7fb4ea442" },
+    { "name": "external-runner-receipt", "sha256": "d23da0e88db1a3c3bb2f49da3470d1ff5c9b6cf6361c248ba93db713669c46f7" },
+    { "name": "scheduled-monitor-receipt", "sha256": "4fd6e4197a8d04c84596533482e3216d2731cf3a2e277632424b41f5e8041693" },
+    { "name": "anonymous-transport-receipt", "sha256": "28b699502ddb6610b078c4aaae9716390742169f2775e0b3ee1e08540fd1a047" },
+    { "name": "authorizer-public-key", "sha256": "15b0f583fb4fa1687a05b3e604d82037ff2d6cbcb8867afec1a1fb089279ad9f" }
+  ],
+  "acceptedAt": "2026-09-16T22:31:00Z",
+  "digest": "e1622382d599f9dac58fffe0171b4c658c82e2bb48d71efbcd7db780eca81f59"
+}

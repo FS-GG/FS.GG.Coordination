@@ -1554,6 +1554,29 @@ let ``GS2-08-1 acceptance binds repaired correspondence and protected delivery``
     Assert.Equal<Map<string, string>>(expected, artifacts)
 
 [<Fact>]
+let ``GS2-08-2 acceptance binds exact live ledger and monitoring evidence`` () =
+    use receipt =
+        JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.2.json")))
+
+    let value = receipt.RootElement
+    Assert.Equal("accepted", value.GetProperty("state").GetString())
+    Assert.Equal("a5eeca225c9fbc554913332c15f2182ba764d4994f6971d895a0403431452aad", value.GetProperty("unitContractSha256").GetString())
+    Assert.Equal("3139078ae3db01928a731e343d4d2a18e00f5982", value.GetProperty("sourceRevision").GetString())
+    Assert.Equal("e1622382d599f9dac58fffe0171b4c658c82e2bb48d71efbcd7db780eca81f59", value.GetProperty("digest").GetString())
+
+    let artifacts =
+        value.GetProperty("artifacts").EnumerateArray()
+        |> Seq.map (fun artifact -> artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString())
+        |> Map.ofSeq
+
+    Assert.Equal(9, artifacts.Count)
+    Assert.Equal("0c9ab3211b80089255ae0e3f64a86767b14491dc1f384d17cab624b31fbf817d", artifacts["native-acceptance-candidate"])
+    Assert.Equal("c11e818c110e84e555495e4064d35126981f09e5cd53fd98f557d2e2620f2f3c", artifacts["settings-operational-evidence"])
+    Assert.Equal("fdefb8890da79a44c10e53b04eee6e317ba119df271c6c46ba5f92fe992cd7bf", artifacts["custody-operational-evidence"])
+    Assert.Equal("a3fc80eb1f8344b14b5338bc1f99efa1728919618d08df358960916a7948bb71", artifacts["initialization-operational-evidence"])
+    Assert.Equal("4091136c7c7bb4e21207ca69d1eb9bf73488efeff1feeef5d6dd6cb7fb4ea442", artifacts["monitoring-operational-evidence"])
+
+[<Fact>]
 let ``GS2-08-3 acceptance binds both exact census sources and native gates`` () =
     let receiptBytes =
         File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json"))
