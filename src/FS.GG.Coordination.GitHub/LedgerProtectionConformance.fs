@@ -203,7 +203,7 @@ module LedgerProtectionConformance =
             value.Repository = "FS-GG/.github"
             && value.Name = "fleet-cutover"
             && exact LedgerProtectionPlanAdapter.environmentReviewerIds value.ReviewerIds
-            && value.PreventSelfReview
+            && not value.PreventSelfReview
             && not value.CanAdminsBypass
             && not value.ProtectedBranches
             && value.CustomBranchPolicies

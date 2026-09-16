@@ -62,6 +62,10 @@ not from the environment root. A missing or duplicate rule, a non-Boolean
 `prevent_self_review`, or an unreadable reviewer id makes the environment
 resource unknown and the capture fail closed.
 
+The accepted `fleet-cutover` shape has reviewers EHotwagner (`1645484`) and
+nuklearwanze (`4456104`), `prevent_self_review=false`, no administrator bypass,
+and a custom deployment branch policy containing only `main`.
+
 ## Binding the control issue and sealing a dry plan
 
 After the ordinary, non-PR Authority control issue exists, supply its positive
