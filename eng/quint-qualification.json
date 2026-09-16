@@ -556,7 +556,7 @@
         "states": 100000,
         "samples": 200,
         "elapsedMs": 60000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 16777216
       },
       "admission": {
@@ -624,7 +624,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -650,7 +650,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -676,7 +676,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 135000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -702,7 +702,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 135000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -728,7 +728,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -754,7 +754,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -780,7 +780,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 135000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -806,7 +806,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -832,7 +832,7 @@
         "transitions": 10000,
         "samples": 1000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -858,7 +858,7 @@
         "transitions": 10000,
         "samples": 100,
         "elapsedMs": 135000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -884,7 +884,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -910,7 +910,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -936,7 +936,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -962,7 +962,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -988,7 +988,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -1014,7 +1014,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -1040,7 +1040,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -1066,7 +1066,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     },
@@ -1092,7 +1092,7 @@
         "transitions": 10000,
         "samples": 10000,
         "elapsedMs": 150000,
-        "peakMiB": 2560,
+        "peakMiB": 3072,
         "artifactBytes": 6291456
       }
     }

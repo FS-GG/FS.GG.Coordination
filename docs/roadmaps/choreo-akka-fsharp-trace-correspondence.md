@@ -351,12 +351,12 @@ witnesses and the smoke witness each passed 10,000 executions; and seed `0xC2F0`
 against `safety` without a violation. This is foundation evidence, not the C2 exit: fault listeners, projection,
 progress assumptions, negative witnesses, bounded checking, and the structural/runtime review remain unchecked.
 
-The first protected C2 run measured the cost of compiling the larger typed combined source in every independent
-TLC shard. State and transition counts were unchanged, but observed elapsed time reached 129,530 ms and one shard
-peaked at 2,317 MiB. C2 therefore adds fixed source-compilation headroom: the 90/105-second elapsed ceilings become
-135/150 seconds respectively, and the TLC peak-memory ceiling becomes 2,560 MiB. Depth, state, transition, sample,
-artifact, toolchain, and workflow-envelope limits are unchanged. These are operational compilation ceilings, not
-larger semantic exploration bounds.
+The protected C2 runs measured the cost of compiling the larger typed combined source in every independent TLC
+shard. State and transition counts were unchanged, but observed elapsed time reached 129,530 ms and peak process
+memory reached 2,592 MiB. C2 therefore adds fixed source-compilation headroom: the 90/105-second elapsed ceilings
+become 135/150 seconds respectively, and the TLC peak-memory ceiling becomes 3,072 MiB. Depth, state, transition,
+sample, artifact, toolchain, and workflow-envelope limits are unchanged. These are operational compilation
+ceilings, not larger semantic exploration bounds.
 
 ### C3 — make Quint traces the executable contract
 
