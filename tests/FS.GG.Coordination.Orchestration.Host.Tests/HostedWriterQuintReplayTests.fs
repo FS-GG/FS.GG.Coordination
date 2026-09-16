@@ -1,0 +1,939 @@
+module FS.GG.Coordination.Orchestration.Host.Tests.HostedWriterQuintReplayTests
+
+open System
+open System.Collections.Generic
+open System.IO
+open System.Security.Cryptography
+open System.Text
+open System.Text.Json.Nodes
+open System.Threading
+open System.Threading.Tasks
+open Akka.Actor
+open Akka.Pattern
+open FS.GG.Coordination.Core.Orchestration
+open FS.GG.Coordination.Core.OrchestrationPersistence
+open FS.GG.Coordination.Orchestration.Host
+open FS.GG.Coordination.Orchestration.PostgreSql
+open FS.GG.Coordination.Orchestration.Runner.Protocol
+open FS.GG.Coordination.QuintReplay.Tests
+open FS.GG.SDD.Artifacts.TypedSpecifications
+open Xunit
+
+type private WriterModel =
+    {
+        Stage: int
+        OperationId: string
+        OperationStatus: string
+        Paused: bool
+        ReadbackCurrent: bool
+        Restarted: bool
+        FreshReadback: bool
+        AdapterClaimedComplete: bool
+        UnknownObserved: bool
+    }
+
+module private Fixture =
+    let now = DateTimeOffset.Parse "2026-09-10T19:00:00Z"
+    let guid (value: string) = Guid.Parse value
+    let sha character = String.replicate 64 character
+    let oid character = String.replicate 40 character
+    let workItem = WorkItemIdentity.create "MDU6SXNzdWUx" 7L "I_writer_replay" 11L
+    let attempt = Id.attempt (guid "10000000-0000-0000-0000-000000000011")
+    let session = Id.session (guid "11000000-0000-0000-0000-000000000011")
+    let candidate = Id.candidate (guid "20000000-0000-0000-0000-000000000011")
+
+    let operations =
+        [ 1..7 ]
+        |> List.map (fun value -> Id.operation (guid $"30000000-0000-0000-0000-{value:D12}"))
+
+    let route =
+        {
+            RouteId = guid "40000000-0000-0000-0000-000000000011"
+            WorkItemId = workItem
+            JobClass = "routine-documentation-delivery"
+            AttemptId = attempt
+            CandidateId = candidate
+            RepositoryNodeId = "repository-1"
+            BranchRef = "refs/heads/fsgg/pilot/replay"
+            ClaimResourceId = "claim-1"
+            ClaimOperationId = operations[0]
+            ProcessOperationId = operations[1]
+            CandidateOperationId = operations[2]
+            BranchOperationId = operations[3]
+            PullRequestOperationId = operations[4]
+            MergeOperationId = operations[5]
+            ReadbackOperationId = operations[6]
+            Generation = Id.generation 1L
+            WorkflowRevision = Id.revision 8L
+            SelectedAt = now.AddMinutes(-1.)
+        }
+
+    let snapshot =
+        {
+            ProjectId = Id.project (guid "50000000-0000-0000-0000-000000000011")
+            WorkItemId = workItem
+            WorkflowRevision = route.WorkflowRevision
+            CanonicalSha256 = sha "b"
+            BoardMembershipIds = []
+            CapturedAt = now.AddMinutes(-2.)
+        }
+
+    let budget =
+        {
+            Schema = "fsgg.coordination.subscription-execution-budget/2"
+            AttemptLimit = 1
+            MaximumRuntime = TimeSpan.FromMinutes 30.
+            ExecutionDeadline = now.AddMinutes 25.
+            DeliveryDeadline = now.AddHours 2.
+            Usage = TokensUnknown "not-reported"
+            Cost =
+                {
+                    InvocationState = "not-applicable"
+                    InvocationProvenance = "subscription"
+                    BroaderAttributionState = "unknown"
+                    BroaderAttributionProvenance = "unattributed"
+                }
+        }
+
+    let reservation =
+        {
+            ReservationId = Id.reservation (guid "60000000-0000-0000-0000-000000000011")
+            Generation = route.Generation
+            ExpiresAt = now.AddMinutes 20.
+            RequiredClaimIds = Set.singleton route.ClaimResourceId
+        }
+
+    let runner =
+        {
+            RunnerId = Id.runner (guid "70000000-0000-0000-0000-000000000011")
+            PrincipalId = "pilot"
+            FingerprintSha256 = sha "c"
+            Generation = route.Generation
+            ExpiresAt = now.AddMinutes 20.
+        }
+
+    let initialEvents =
+        [
+            SubscriptionWorkAdmitted(snapshot, budget)
+            GenerationAdvanced route.Generation
+            ReservationCreated reservation
+            HostedRouteSelected route
+            PausedEvent "quint-initial"
+        ]
+
+    let kinds =
+        [
+            AcquireExternalClaim
+            DispatchRunner
+            StoreCandidate
+            PublishCandidateBranch
+            CreatePullRequest
+            MergePullRequest
+            ReadNativeDelivery
+        ]
+
+    let operation stage = operations[stage]
+
+    let operationName stage =
+        [|
+            "op-claim"
+            "op-process"
+            "op-candidate"
+            "op-branch"
+            "op-pr"
+            "op-merge"
+            "op-readback"
+        |][stage]
+
+    let resource stage =
+        match kinds[stage] with
+        | AcquireExternalClaim -> route.ClaimResourceId
+        | DispatchRunner -> string (Id.attemptValue route.AttemptId)
+        | StoreCandidate -> string (Id.candidateValue route.CandidateId)
+        | _ -> route.BranchRef
+
+    let intent stage =
+        {
+            OperationId = operation stage
+            Kind = kinds[stage]
+            Generation = route.Generation
+            WorkflowRevision = route.WorkflowRevision
+            ResourceId = resource stage
+            PayloadSha256 = sha "a"
+        }
+
+    let hosted stage =
+        let kind = kinds[stage]
+
+        {
+            OperationId = operation stage
+            RouteId = route.RouteId
+            AttemptId = route.AttemptId
+            CandidateId = route.CandidateId
+            RepositoryNodeId = route.RepositoryNodeId
+            ProviderResourceId =
+                (match kind with
+                 | CreatePullRequest
+                 | MergePullRequest -> "PR_node"
+                 | _ -> resource stage)
+            CandidateHeadSha =
+                (match kind with
+                 | StoreCandidate
+                 | PublishCandidateBranch
+                 | CreatePullRequest
+                 | MergePullRequest -> Some(oid "a")
+                 | _ -> None)
+            ResultSha =
+                (match kind with
+                 | StoreCandidate -> Some(sha "d")
+                 | PublishCandidateBranch -> Some(oid "a")
+                 | MergePullRequest -> Some(oid "b")
+                 | _ -> None)
+            ProviderRevision = $"provider-revision-{stage}"
+            Generation = route.Generation
+            WorkflowRevision = route.WorkflowRevision
+            ObservedAt = now
+            Exists = true
+        }
+
+    let native () =
+        {
+            OperationId = route.ReadbackOperationId
+            RouteId = route.RouteId
+            AttemptId = route.AttemptId
+            CandidateId = route.CandidateId
+            RepositoryNodeId = route.RepositoryNodeId
+            PullRequestNodeId = "PR_node"
+            CandidateHeadSha = oid "a"
+            ObservedPullRequestHeadSha = oid "a"
+            MergeCommitSha = oid "b"
+            ProviderRevision = "provider-revision-6"
+            Generation = route.Generation
+            WorkflowRevision = route.WorkflowRevision
+            ObservedAt = now
+            Merged = true
+        }
+
+    let routeReadback =
+        {
+            RouteId = route.RouteId
+            WorkItemId = workItem
+            RepositoryNodeId = route.RepositoryNodeId
+            ProviderRevision = "route-reconnected"
+            EvidenceSha256 = sha "e"
+            Generation = route.Generation
+            WorkflowRevision = route.WorkflowRevision
+            ObservedAt = now
+        }
+
+    let candidateArtifact =
+        let contentKey = sha "d"
+
+        {
+            CandidateId = candidate
+            BaselineSha = oid "0"
+            HeadSha = oid "a"
+            TreeSha = oid "c"
+            ManifestSha256 = sha "f"
+            ContentSha256 = sha "d"
+            MediaType = "application/vnd.fsgg.runner-candidate+zip"
+            SizeBytes = 32L
+            RetainUntil = now.AddDays 30.
+            Location = ContentAddressedObject($"sha256/{contentKey}")
+        }
+
+    let candidateReceipt =
+        {
+            CandidateId = candidate
+            ContentSha256 = sha "d"
+            ManifestSha256 = sha "f"
+            SizeBytes = 32L
+            Location = candidateArtifact.Location
+            StoreId = "replay-store"
+            StoreSchemaVersion = 2
+            StorageReceiptSha256 = sha "9"
+            VerifiedAt = now
+        }
+
+type private FixedClock() =
+    inherit TimeProvider()
+    override _.GetUtcNow() = Fixture.now
+
+type private MemoryStore(initialEvents: Event list) =
+    let persistenceId = WorkItemIdentity.persistenceId Fixture.workItem
+
+    let mutable events =
+        initialEvents
+        |> List.mapi (fun index eventValue ->
+            let payload = EventEnvelope.encode eventValue
+
+            {
+                PersistenceId = persistenceId
+                Sequence = int64 (index + 1)
+                EventId = Guid.NewGuid()
+                SchemaVersion = 1
+                SerializerVersion = EventEnvelope.serializerVersion
+                Payload = payload
+                PayloadSha256 = SHA256.HashData payload |> Convert.ToHexString |> _.ToLowerInvariant()
+                EffectChange =
+                    (match eventValue with
+                     | EffectIntentRecorded intent -> IntentAdded intent
+                     | EffectSettled(id, _) -> Settled id
+                     | _ -> NoEffect)
+                RecordedAt = Fixture.now
+            })
+
+    let commands = Dictionary<CommandId, string * int64>()
+
+    member _.DecodedEvents =
+        events
+        |> List.map (fun stored -> EventEnvelope.tryDecode stored.Payload |> Result.defaultWith failwith)
+
+    interface IJournalStore with
+        member _.CheckReadiness _ = Task.FromResult(Ok())
+
+        member _.Recover(_, _) =
+            let state =
+                events
+                |> List.map (fun stored -> EventEnvelope.tryDecode stored.Payload |> Result.defaultWith failwith)
+                |> replay
+
+            let unsettled =
+                state.Operations
+                |> Map.toList
+                |> List.choose (fun (_, value) ->
+                    match value with
+                    | IntentRecorded i
+                    | Dispatching i
+                    | NeedsObservation(i, _) -> Some i
+                    | _ -> None)
+
+            Task.FromResult(
+                Ok
+                    {
+                        Events = events
+                        Snapshot = None
+                        UnsettledEffects = unsettled
+                        RequiresExternalReconciliation = not unsettled.IsEmpty
+                    }
+            )
+
+        member _.Append(request, _) =
+            match commands.TryGetValue request.Inbox.CommandId with
+            | true, (digest, sequence) when digest = request.Inbox.BodySha256 -> Task.FromResult(Duplicate sequence)
+            | true, _ -> Task.FromResult Conflict
+            | _ when request.ExpectedSequence <> int64 events.Length ->
+                Task.FromResult(WrongExpectedSequence(int64 events.Length))
+            | _ ->
+                events <- events @ request.Events
+                let tail = int64 events.Length
+                commands[request.Inbox.CommandId] <- (request.Inbox.BodySha256, tail)
+                Task.FromResult(Appended tail)
+
+        member _.SaveSnapshot(_, _) = Task.FromResult(Ok())
+        member _.SaveProjectionCheckpoint(_, _) = Task.FromResult(Ok())
+
+type private ActorRuntime =
+    {
+        Actor: IActorRef
+        Projection: QuintReplayState
+    }
+
+type private ApplyReplay = ApplyReplay of QuintReplayStep
+
+let private integer value = QuintReplayValue.Integer(string value)
+let private boolean value = QuintReplayValue.Boolean value
+let private textValue value = QuintReplayValue.Text value
+
+let private fingerprint (value: string) =
+    let bytes: byte array = Encoding.UTF8.GetBytes value
+    SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+let private stateValue
+    stage
+    operationId
+    operationStatus
+    paused
+    readbackCurrent
+    restarted
+    freshReadback
+    adapterClaimedComplete
+    unknownObserved
+    =
+    let progressed threshold = stage >= threshold
+
+    let draft: QuintReplayState =
+        {
+            Identity = String.replicate 64 "0"
+            Bindings =
+                [
+                    "state",
+                    QuintReplayValue.Record
+                        [
+                            "activeAssignments",
+                            integer (
+                                if stage = 7 then
+                                    0
+                                else if paused && stage = 0 && operationStatus = "none" && not restarted then
+                                    0
+                                else
+                                    1
+                            )
+                            "adapterClaimedComplete", boolean adapterClaimedComplete
+                            "attemptId", textValue "attempt-1"
+                            "branchPublished", boolean (progressed 4)
+                            "budgetLimit", integer 1
+                            "budgetUsed",
+                            integer (
+                                if paused && stage = 0 && operationStatus = "none" && not restarted then
+                                    0
+                                else
+                                    1
+                            )
+                            "candidateDurable", boolean (progressed 3)
+                            "candidateId", textValue "candidate-1"
+                            "capacity", integer 1
+                            "claimCurrent", boolean (progressed 1)
+                            "currentGeneration", integer 1
+                            "deliveryOpen", boolean true
+                            "evidenceAttemptId", textValue (if stage > 0 then "attempt-1" else "")
+                            "evidenceCandidateId", textValue (if stage > 0 then "candidate-1" else "")
+                            "evidenceGeneration", integer (if stage > 0 then 1 else 0)
+                            "evidenceRepositoryId", textValue (if stage > 0 then "repository-1" else "")
+                            "evidenceRouteId", textValue (if stage > 0 then "route-1" else "")
+                            "executionOpen", boolean true
+                            "freshReadback", boolean freshReadback
+                            "jobClass", textValue "routine-documentation-delivery"
+                            "mergeObserved", boolean (progressed 6)
+                            "nativeReadbackObserved", boolean (progressed 7)
+                            "operationId", textValue operationId
+                            "operationStatus", textValue operationStatus
+                            "paused", boolean paused
+                            "permitGeneration", integer 1
+                            "pullRequestObserved", boolean (progressed 5)
+                            "readbackCurrent", boolean readbackCurrent
+                            "repositoryId", textValue "repository-1"
+                            "restarted", boolean restarted
+                            "routeId", textValue "route-1"
+                            "sameOperationRetried", boolean false
+                            "stage", integer stage
+                            "subjectId", textValue "MDU6SXNzdWUx"
+                            "unknownObserved", boolean unknownObserved
+                        ]
+                ]
+        }
+
+    { draft with
+        Identity =
+            QuintReplay.stateFingerprint draft
+            |> Result.defaultWith (fun error -> failwithf "%A" error)
+    }
+
+let private modelStep action (model: WriterModel) =
+    match action with
+    | "manualStart" -> { model with Paused = false }
+    | "recordIntent" ->
+        { model with
+            OperationId = Fixture.operationName model.Stage
+            OperationStatus = "intent"
+        }
+    | "dispatch" ->
+        { model with
+            OperationStatus = "dispatching"
+        }
+    | "loseResponse" ->
+        { model with
+            OperationStatus = "unknown"
+            UnknownObserved = true
+        }
+    | "reconcileApplied"
+    | "observeApplied" ->
+        { model with
+            Stage = model.Stage + 1
+            OperationId = ""
+            OperationStatus = "none"
+        }
+    | "restartPaused" ->
+        { model with
+            Paused = true
+            ReadbackCurrent = false
+            Restarted = true
+        }
+    | "reconnect" ->
+        { model with
+            ReadbackCurrent = true
+            FreshReadback = true
+        }
+    | "resume" -> { model with Paused = false }
+    | value -> failwith $"unsupported expected Quint action: {value}"
+
+let private source action =
+    let lines =
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md")
+        |> File.ReadAllLines
+
+    let marker = $"action {action} ="
+
+    let moduleStart =
+        lines
+        |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterModel {")
+
+    let moduleEnd =
+        lines
+        |> Array.findIndex (fun line -> line.Trim() = "module GS20310JournalModel {")
+
+    match
+        lines
+        |> Array.indexed
+        |> Array.filter (fun (index, line) ->
+            index > moduleStart
+            && index < moduleEnd
+            && line.TrimStart().StartsWith(marker, StringComparison.Ordinal))
+    with
+    | [| index, _ |] ->
+        {
+            Path = "src/FS.GG.Coordination.Protocol/Protocol.md"
+            Line = index + 1
+            Column = 3
+        }
+    | matches -> failwith $"expected one Quint action {action}, got {matches.Length}"
+
+let private trace actions =
+    let initialModel =
+        {
+            Stage = 0
+            OperationId = ""
+            OperationStatus = "none"
+            Paused = true
+            ReadbackCurrent = true
+            Restarted = false
+            FreshReadback = false
+            AdapterClaimedComplete = false
+            UnknownObserved = false
+        }
+
+    let states =
+        actions |> List.scan (fun model action -> modelStep action model) initialModel
+
+    let stateJson model =
+        let projection =
+            stateValue
+                model.Stage
+                model.OperationId
+                model.OperationStatus
+                model.Paused
+                model.ReadbackCurrent
+                model.Restarted
+                model.FreshReadback
+                model.AdapterClaimedComplete
+                model.UnknownObserved
+
+        let value projectionValue =
+            let rec node =
+                function
+                | QuintReplayValue.Boolean item -> JsonValue.Create item :> JsonNode
+                | QuintReplayValue.Text item -> JsonValue.Create item :> JsonNode
+                | QuintReplayValue.Integer item ->
+                    let result = JsonObject() in
+                    result["#bigint"] <- item
+                    result
+                | QuintReplayValue.Record fields ->
+                    let result = JsonObject() in
+                    fields |> List.iter (fun (key, item) -> result[key] <- node item)
+                    result
+                | other -> failwith $"unexpected replay value: {other}"
+
+            node projectionValue
+
+        let result = JsonObject()
+        result["state"] <- value (snd projection.Bindings.Head)
+        result
+
+    let root = JsonObject()
+    let metadata = JsonObject()
+    metadata["format"] <- "ITF"
+    metadata["format-description"] <- "https://apalache-mc.org/docs/adr/015adr-trace.html"
+    metadata["source"] <- "src/FS.GG.Coordination.Protocol/Protocol.md#O2HostedWriterModel"
+    metadata["status"] <- "ok"
+    root["#meta"] <- metadata
+    root["vars"] <- JsonArray(JsonValue.Create("state"))
+    let stateNodes = JsonArray()
+
+    states
+    |> List.iteri (fun index model ->
+        let item = stateJson model in
+        let meta = JsonObject() in
+        meta["index"] <- index
+        item["#meta"] <- meta
+        stateNodes.Add item)
+
+    root["states"] <- stateNodes
+
+    let context: QuintItfDecodeContext =
+        {
+            Environment =
+                {
+                    Seed = "deterministic-hosted-writer"
+                    Bounds = [ "maxSteps", int64 actions.Length ]
+                    ToolFingerprint = fingerprint "quint-0.22.4"
+                    ProfileFingerprint = fingerprint "fsgg-quint-profile/2"
+                    ContractFingerprint = fingerprint "O2HostedWriterModel"
+                    AdapterFingerprint = fingerprint "akka-hosted-writer/1"
+                    ImplementationFingerprint = fingerprint "FS.GG.Coordination.Orchestration.Host"
+                }
+            Steps =
+                actions
+                |> List.mapi (fun index action ->
+                    {
+                        Index = index + 1
+                        Action = action
+                        Source = source action
+                    })
+        }
+
+    QuintReplay.decodeItf context (root.ToJsonString())
+    |> Result.defaultWith (fun error -> failwithf "%A" error)
+
+let private appendCommand (store: IJournalStore) command =
+    task {
+        let! recovered =
+            HostedWriterJournal.recover store Fixture.workItem CancellationToken.None
+
+        let state =
+            (recovered |> Result.defaultWith (fun failures -> failwithf "%A" failures)).State
+
+        let envelope =
+            {
+                CommandId = Id.command (Guid.NewGuid())
+                ProtocolVersion = Id.protocolVersion 1 0
+                ExpectedRevision = state.Revision
+                ExpectedGeneration = state.Generation
+                PrincipalId = "quint-replay"
+                SessionId = None
+                IssuedAt = Fixture.now
+                ExpiresAt = Fixture.now.AddMinutes 1.
+                Command = command
+            }
+
+        let! appended =
+            HostedWriterJournal.decideAndAppend (FixedClock()) store Fixture.workItem envelope CancellationToken.None
+
+        match appended with
+        | Ok(decision, _) when
+            decision.Receipt.Disposition = ReceiptDisposition.Accepted
+            || decision.Receipt.Disposition = ReceiptDisposition.Duplicate
+            ->
+            return ()
+        | Ok(decision, _) -> return failwith $"{decision.Receipt.Disposition}: {decision.Receipt.Detail}"
+        | Error reason -> return failwith reason
+    }
+
+let private createAdapter () =
+    let hosted stage _ _ _ =
+        Task.FromResult(Ok(Fixture.hosted stage))
+
+    HostedWriterProviderAdapter.Create
+        {
+            AcquireExternalClaim = hosted 0
+            DispatchRunner = hosted 1
+            StoreCandidate = hosted 2
+            PublishCandidateBranch = hosted 3
+            CreatePullRequest = hosted 4
+            MergePullRequest = hosted 5
+            ReadNativeDelivery = fun _ _ _ -> Task.FromResult(Ok(Fixture.native ()))
+        }
+
+let private stageOf (state: State) =
+    Fixture.operations
+    |> List.takeWhile (fun operationId ->
+        state.Operations
+        |> Map.tryFind operationId
+        |> Option.exists (function
+            | OperationState.Settled(_, Applied _) -> true
+            | _ -> false))
+    |> List.length
+
+let private project (store: MemoryStore) faultyNative =
+    task {
+        let! recovered =
+            HostedWriterJournal.recover (store :> IJournalStore) Fixture.workItem CancellationToken.None
+
+        let state =
+            (recovered |> Result.defaultWith (fun failures -> failwithf "%A" failures)).State
+
+        let stage = stageOf state
+
+        let operationId, operationStatus =
+            if stage = 7 then
+                "", "none"
+            else
+                match Map.tryFind (Fixture.operation stage) state.Operations with
+                | None -> "", "none"
+                | Some(IntentRecorded _) -> Fixture.operationName stage, "intent"
+                | Some(Dispatching _) -> Fixture.operationName stage, "dispatching"
+                | Some(NeedsObservation _) -> Fixture.operationName stage, "unknown"
+                | Some(OperationState.Settled _) -> "", "none"
+
+        let events = store.DecodedEvents
+
+        let restarted =
+            events
+            |> List.exists (function
+                | StartupPausedEvent _ -> true
+                | _ -> false)
+
+        let fresh =
+            events
+            |> List.exists (function
+                | HostedRouteReadbackAccepted _ -> true
+                | _ -> false)
+
+        let unknown =
+            events
+            |> List.exists (function
+                | EffectObservationRequired _ -> true
+                | _ -> false)
+
+        let paused =
+            match state.Control with
+            | Paused _ -> true
+            | _ -> false
+
+        let projectedStage = if faultyNative && stage = 7 then 6 else stage
+
+        return
+            stateValue
+                projectedStage
+                operationId
+                operationStatus
+                paused
+                state.ReadbackCurrent
+                restarted
+                fresh
+                false
+                unknown
+    }
+
+type private HostedWriterReplayActor(faultyNative: bool) =
+    inherit UntypedActor()
+    let store = MemoryStore Fixture.initialEvents
+    let journal = store :> IJournalStore
+    let adapter = createAdapter ()
+    let mutable pending: HostedWriterProviderReadback option = None
+
+    override this.OnReceive message =
+        let replyTo = this.Sender
+        let self = this.Self
+
+        let work =
+            task {
+                match message with
+                | :? ApplyReplay as envelope ->
+                    let (ApplyReplay step) = envelope
+
+                    match step.Action with
+                    | "manualStart" -> do! appendCommand journal Resume
+                    | "recordIntent" ->
+                        let! current =
+                            HostedWriterJournal.recover journal Fixture.workItem CancellationToken.None
+
+                        let stage =
+                            current
+                            |> Result.defaultWith (fun failures -> failwithf "%A" failures)
+                            |> _.State
+                            |> stageOf
+
+                        do! appendCommand journal (RecordEffectIntent(Fixture.intent stage))
+                    | "dispatch" ->
+                        let! current =
+                            HostedWriterJournal.recover journal Fixture.workItem CancellationToken.None
+
+                        let stage =
+                            current
+                            |> Result.defaultWith (fun failures -> failwithf "%A" failures)
+                            |> _.State
+                            |> stageOf
+
+                        do! appendCommand journal (MarkEffectDispatching(Fixture.operation stage))
+
+                        let! result =
+                            adapter.Dispatch(Fixture.route, Fixture.intent stage, CancellationToken.None)
+
+                        pending <- Some(result |> Result.defaultWith failwith)
+                    | "loseResponse" ->
+                        let! current =
+                            HostedWriterJournal.recover journal Fixture.workItem CancellationToken.None
+
+                        let stage =
+                            current
+                            |> Result.defaultWith (fun failures -> failwithf "%A" failures)
+                            |> _.State
+                            |> stageOf
+
+                        do!
+                            appendCommand
+                                journal
+                                (ObserveEffect(Fixture.operation stage, Unknown "github-timeout-unknown"))
+
+                        pending <- None
+                    | "observeApplied"
+                    | "reconcileApplied" ->
+                        let! current =
+                            HostedWriterJournal.recover journal Fixture.workItem CancellationToken.None
+
+                        let stage =
+                            current
+                            |> Result.defaultWith (fun failures -> failwithf "%A" failures)
+                            |> _.State
+                            |> stageOf
+
+                        let! observed =
+                            match pending with
+                            | Some value -> Task.FromResult value
+                            | None ->
+                                task {
+                                    let! value =
+                                        adapter.Dispatch(Fixture.route, Fixture.intent stage, CancellationToken.None)
+
+                                    return value |> Result.defaultWith failwith
+                                }
+
+                        pending <- None
+
+                        match observed with
+                        | HostedEffect readback ->
+                            do! appendCommand journal (RecordHostedEffectReadback(Fixture.operation stage, readback))
+
+                            if stage = 0 then
+                                do!
+                                    appendCommand
+                                        journal
+                                        (ObserveClaim
+                                            {
+                                                ClaimId = Fixture.route.ClaimResourceId
+                                                Generation = Fixture.route.Generation
+                                                WorkflowRevision = Fixture.route.WorkflowRevision
+                                                ObservedAt = Fixture.now
+                                            })
+
+                                do!
+                                    appendCommand
+                                        journal
+                                        (StartAttempt(Fixture.attempt, Fixture.session, Fixture.runner))
+                            elif stage = 2 then
+                                do!
+                                    appendCommand
+                                        journal
+                                        (RecordCandidate(Fixture.candidateArtifact, Fixture.candidateReceipt))
+                        | NativeDelivery readback ->
+                            do! appendCommand journal (RecordNativeDeliveryReadback(Fixture.operation stage, readback))
+                            do! appendCommand journal (ObserveAttempt(Fixture.attempt, Completed))
+                    | "restartPaused" -> do! appendCommand journal (RecordStartupPause "quint-restart")
+                    | "reconnect" -> do! appendCommand journal (RecordHostedRouteReadback Fixture.routeReadback)
+                    | "resume" -> do! appendCommand journal Resume
+                    | action -> failwith $"unbound Quint action: {action}"
+
+                    let! projection = project store faultyNative
+                    return Ok projection
+                | _ -> return Error "replay-actor-message-refused"
+            }
+
+        work.ContinueWith(fun (completed: Task<Result<QuintReplayState, string>>) ->
+            if completed.IsCompletedSuccessfully then
+                replyTo.Tell(completed.Result, self)
+            else
+                replyTo.Tell(Error(completed.Exception.GetBaseException().Message), self))
+        |> ignore
+
+let private actorProps faultyNative =
+    Props.Create(typeof<HostedWriterReplayActor>, [| box faultyNative |])
+
+let private driver (system: ActorSystem) faultyNative initial : ReplayDriver<ActorRuntime> =
+    {
+        Initialize =
+            fun _ ->
+                Ok
+                    {
+                        Actor = system.ActorOf(actorProps faultyNative)
+                        Projection = initial
+                    }
+        Apply =
+            fun step runtime ->
+                task {
+                    let! result =
+                        runtime.Actor.Ask<Result<QuintReplayState, string>>(ApplyReplay step, TimeSpan.FromSeconds 10.)
+
+                    return
+                        result
+                        |> Result.map (fun projection -> { runtime with Projection = projection })
+                }
+        Observe = fun runtime -> Ok runtime.Projection
+    }
+
+let private normalActions =
+    [
+        yield "manualStart"
+        for _ in 0..6 do
+            yield "recordIntent"
+            yield "dispatch"
+            yield "observeApplied"
+    ]
+
+let private recoveryActions =
+    [
+        yield "manualStart"
+        yield "recordIntent"
+        yield "dispatch"
+        yield "observeApplied"
+        yield "recordIntent"
+        yield "dispatch"
+        yield "loseResponse"
+        yield "restartPaused"
+        yield "reconnect"
+        yield "resume"
+        yield "reconcileApplied"
+        for _ in 2..6 do
+            yield "recordIntent"
+            yield "dispatch"
+            yield "observeApplied"
+    ]
+
+let private runReplay faultyNative actions =
+    task {
+        use system = ActorSystem.Create($"hosted-writer-quint-{Guid.NewGuid():N}")
+        let replayTrace = trace actions
+
+        let! result =
+            ReplayHarness.run replayTrace (driver system faultyNative replayTrace.Initial)
+
+        do! system.Terminate()
+        return result
+    }
+
+[<Fact>]
+let ``Akka hosted writer exactly replays Quint happy path`` () =
+    task {
+        match! runReplay false normalActions with
+        | Ok QuintReplayResult.Equivalent -> ()
+        | result -> Assert.Fail($"expected equivalent replay, got %A{result}")
+    }
+
+[<Fact>]
+let ``Akka hosted writer exactly replays lost response restart and recovery`` () =
+    task {
+        match! runReplay false recoveryActions with
+        | Ok QuintReplayResult.Equivalent -> ()
+        | result -> Assert.Fail($"expected equivalent recovery replay, got %A{result}")
+    }
+
+[<Fact>]
+let ``missing native readback projection diverges at exact Quint action`` () =
+    task {
+        match! runReplay true normalActions with
+        | Ok(QuintReplayResult.Diverged divergence) ->
+            Assert.Equal(normalActions.Length, divergence.Step)
+            Assert.Equal("observeApplied", divergence.Action)
+            Assert.Equal(source "observeApplied", divergence.Source)
+            Assert.Equal("state", divergence.Reason)
+        | result -> Assert.Fail($"expected exact native-readback divergence, got %A{result}")
+    }
