@@ -12,7 +12,11 @@ let private valuesNamed (name: string) (document: XDocument) =
     document.Descendants(XName.Get name)
     |> Seq.choose (fun element ->
         let includeAttribute = element.Attribute(XName.Get "Include")
-        if isNull includeAttribute then None else Some includeAttribute.Value)
+
+        if isNull includeAttribute then
+            None
+        else
+            Some includeAttribute.Value)
     |> Seq.toList
 
 let private elementValuesNamed (name: string) (document: XDocument) =
@@ -26,25 +30,32 @@ let private sdkValues (document: XDocument) =
         let attribute = element.Attribute(XName.Get attributeName)
         if isNull attribute then None else Some attribute.Value
 
-    [ if not (isNull document.Root) then
-          yield! attributeValue "Sdk" document.Root |> Option.toList
-      if not (isNull document.Root) then
-          for element in document.Root.Descendants() do
-              yield! attributeValue "Sdk" element |> Option.toList
-              if element.Name.LocalName = "Sdk" then
-                  yield! attributeValue "Name" element |> Option.toList ]
+    [
+        if not (isNull document.Root) then
+            yield! attributeValue "Sdk" document.Root |> Option.toList
+        if not (isNull document.Root) then
+            for element in document.Root.Descendants() do
+                yield! attributeValue "Sdk" element |> Option.toList
+
+                if element.Name.LocalName = "Sdk" then
+                    yield! attributeValue "Name" element |> Option.toList
+    ]
 
 type private EvaluatedPackageReference =
-    { Identity: string
-      Version: string
-      VersionOverride: string
-      GeneratePathProperty: string }
+    {
+        Identity: string
+        Version: string
+        VersionOverride: string
+        GeneratePathProperty: string
+    }
 
 type private EvaluatedProject =
-    { OutputType: string
-      ProjectReferences: string list
-      PackageReferences: EvaluatedPackageReference list
-      RuntimeReferences: string list }
+    {
+        OutputType: string
+        ProjectReferences: string list
+        PackageReferences: EvaluatedPackageReference list
+        RuntimeReferences: string list
+    }
 
 let private evaluateProject (path: string) =
     let startInfo = ProcessStartInfo("dotnet")
@@ -66,7 +77,12 @@ let private evaluateProject (path: string) =
     let error = errorTask.Result.Trim()
 
     if childProcess.ExitCode <> 0 then
-        Error(if String.IsNullOrWhiteSpace error then "dotnet-msbuild-evaluation-failed" else error)
+        Error(
+            if String.IsNullOrWhiteSpace error then
+                "dotnet-msbuild-evaluation-failed"
+            else
+                error
+        )
     else
         try
             use result = JsonDocument.Parse output
@@ -95,70 +111,89 @@ let private evaluateProject (path: string) =
             let packageReferences =
                 items.GetProperty("PackageReference").EnumerateArray()
                 |> Seq.map (fun item ->
-                    { Identity = itemValue "Identity" item
-                      Version = itemValue "Version" item
-                      VersionOverride = itemValue "VersionOverride" item
-                      GeneratePathProperty = itemValue "GeneratePathProperty" item })
+                    {
+                        Identity = itemValue "Identity" item
+                        Version = itemValue "Version" item
+                        VersionOverride = itemValue "VersionOverride" item
+                        GeneratePathProperty = itemValue "GeneratePathProperty" item
+                    })
                 |> Seq.filter (fun reference -> not (String.IsNullOrWhiteSpace reference.Identity))
                 |> Seq.toList
 
             Ok
-                { OutputType = properties.GetProperty("OutputType").GetString() |> Option.ofObj |> Option.defaultValue ""
-                  ProjectReferences = itemValues "ProjectReference" "FullPath"
-                  PackageReferences = packageReferences
-                  RuntimeReferences =
-                    [ yield! packageReferences |> List.map _.Identity
-                      yield! itemValues "Reference" "Identity"
-                      yield! itemValues "FrameworkReference" "Identity" ] }
+                {
+                    OutputType =
+                        properties.GetProperty("OutputType").GetString()
+                        |> Option.ofObj
+                        |> Option.defaultValue ""
+                    ProjectReferences = itemValues "ProjectReference" "FullPath"
+                    PackageReferences = packageReferences
+                    RuntimeReferences =
+                        [
+                            yield! packageReferences |> List.map _.Identity
+                            yield! itemValues "Reference" "Identity"
+                            yield! itemValues "FrameworkReference" "Identity"
+                        ]
+                }
         with exceptionValue ->
             Error $"invalid-msbuild-evaluation-json:{exceptionValue.Message}"
 
 let private allowedDependencies =
     Map.ofList
-        [ "FS.GG.Coordination.Protocol", Set.empty
-          "FS.GG.Coordination.Core", Set.singleton "FS.GG.Coordination.Protocol"
-          "FS.GG.Coordination.Orchestration.Observer",
-          Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.GitHub" ]
-          "FS.GG.Coordination.Orchestration.Pilot",
-          Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.Protocol" ]
-          "FS.GG.Coordination.Orchestration.Runner.Protocol", Set.empty
-          "FS.GG.Coordination.Orchestration.Execution", Set.empty
-          "FS.GG.Coordination.Orchestration.Execution.Codex",
-          Set.singleton "FS.GG.Coordination.Orchestration.Execution"
-          "FS.GG.Coordination.Orchestration.Runner.Client",
-          Set.ofList
-              [ "FS.GG.Coordination.Orchestration.Runner.Protocol"
-                "FS.GG.Coordination.Orchestration.Execution"
-                "FS.GG.Coordination.Orchestration.Execution.Codex" ]
-          "FS.GG.Coordination.Orchestration.Host",
-          Set.ofList
-              [ "FS.GG.Coordination.Core"
-                "FS.GG.Coordination.Orchestration.Pilot"
-                "FS.GG.Coordination.Orchestration.PostgreSql"
-                "FS.GG.Coordination.Orchestration.Runner.Protocol" ]
-          "FS.GG.Coordination.Orchestration.PostgreSql",
-          Set.ofList
-              [ "FS.GG.Coordination.Core"
-                "FS.GG.Coordination.Orchestration.Execution"
-                "FS.GG.Coordination.Orchestration.Observer"
-                "FS.GG.Coordination.Orchestration.Pilot"
-                "FS.GG.Coordination.Orchestration.Runner.Protocol" ]
-          "FS.GG.Coordination.GitHub",
-          Set.ofList [ "FS.GG.Coordination.Protocol"; "FS.GG.Coordination.Core" ]
-          "FS.GG.Coordination.Cli",
-          Set.ofList
-              [ "FS.GG.Coordination.Protocol"
-                "FS.GG.Coordination.Core"
-                "FS.GG.Coordination.GitHub"
-                "FS.GG.Coordination.Orchestration.Observer"
-                "FS.GG.Coordination.Qualification.Contracts" ]
-          "FS.GG.Coordination.App",
-          Set.ofList
-              [ "FS.GG.Coordination.Protocol"
-                "FS.GG.Coordination.Core"
-                "FS.GG.Coordination.GitHub" ]
-          "FS.GG.Coordination.Qualification.Contracts",
-          Set.singleton "FS.GG.Coordination.Protocol" ]
+        [
+            "FS.GG.Coordination.Protocol", Set.empty
+            "FS.GG.Coordination.Core", Set.singleton "FS.GG.Coordination.Protocol"
+            "FS.GG.Coordination.Orchestration.Observer",
+            Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.GitHub" ]
+            "FS.GG.Coordination.Orchestration.Pilot",
+            Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.Protocol" ]
+            "FS.GG.Coordination.Orchestration.Runner.Protocol", Set.empty
+            "FS.GG.Coordination.Orchestration.Execution", Set.empty
+            "FS.GG.Coordination.Orchestration.Execution.Codex",
+            Set.singleton "FS.GG.Coordination.Orchestration.Execution"
+            "FS.GG.Coordination.Orchestration.Runner.Client",
+            Set.ofList
+                [
+                    "FS.GG.Coordination.Orchestration.Runner.Protocol"
+                    "FS.GG.Coordination.Orchestration.Execution"
+                    "FS.GG.Coordination.Orchestration.Execution.Codex"
+                ]
+            "FS.GG.Coordination.Orchestration.Host",
+            Set.ofList
+                [
+                    "FS.GG.Coordination.Core"
+                    "FS.GG.Coordination.Orchestration.Pilot"
+                    "FS.GG.Coordination.Orchestration.PostgreSql"
+                    "FS.GG.Coordination.Orchestration.Runner.Protocol"
+                ]
+            "FS.GG.Coordination.Orchestration.PostgreSql",
+            Set.ofList
+                [
+                    "FS.GG.Coordination.Core"
+                    "FS.GG.Coordination.Orchestration.Execution"
+                    "FS.GG.Coordination.Orchestration.Observer"
+                    "FS.GG.Coordination.Orchestration.Pilot"
+                    "FS.GG.Coordination.Orchestration.Runner.Protocol"
+                ]
+            "FS.GG.Coordination.GitHub", Set.ofList [ "FS.GG.Coordination.Protocol"; "FS.GG.Coordination.Core" ]
+            "FS.GG.Coordination.Cli",
+            Set.ofList
+                [
+                    "FS.GG.Coordination.Protocol"
+                    "FS.GG.Coordination.Core"
+                    "FS.GG.Coordination.GitHub"
+                    "FS.GG.Coordination.Orchestration.Observer"
+                    "FS.GG.Coordination.Qualification.Contracts"
+                ]
+            "FS.GG.Coordination.App",
+            Set.ofList
+                [
+                    "FS.GG.Coordination.Protocol"
+                    "FS.GG.Coordination.Core"
+                    "FS.GG.Coordination.GitHub"
+                ]
+            "FS.GG.Coordination.Qualification.Contracts", Set.singleton "FS.GG.Coordination.Protocol"
+        ]
 
 let private allowedPureLayerRuntimeReferences =
     Set.ofList [ "FSharp.Core"; "Microsoft.NETCore.App" ]
@@ -176,19 +211,20 @@ let private inspectProject (path: string) =
     let evaluated = evaluateProject path
 
     let packageReferences =
-        document.Descendants(XName.Get "PackageReference")
-        |> Seq.toList
+        document.Descendants(XName.Get "PackageReference") |> Seq.toList
 
     let edgeViolations =
-        [ yield!
-              valuesNamed "ProjectReference" document
-              |> List.map (fun reference ->
-                  reference.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar)
-                  |> fun relativePath -> Path.Combine(Path.GetDirectoryName path, relativePath)
-                  |> normalizePath)
-          match evaluated with
-          | Ok project -> yield! project.ProjectReferences |> List.map normalizePath
-          | Error _ -> () ]
+        [
+            yield!
+                valuesNamed "ProjectReference" document
+                |> List.map (fun reference ->
+                    reference.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar)
+                    |> fun relativePath -> Path.Combine(Path.GetDirectoryName path, relativePath)
+                    |> normalizePath)
+            match evaluated with
+            | Ok project -> yield! project.ProjectReferences |> List.map normalizePath
+            | Error _ -> ()
+        ]
         |> List.distinct
         |> List.choose (fun reference ->
             let dependency = projectName reference
@@ -207,6 +243,7 @@ let private inspectProject (path: string) =
             packageReferences
             |> List.filter (fun element ->
                 let includeAttribute = element.Attribute(XName.Get "Include")
+
                 not (isNull includeAttribute)
                 && includeAttribute.Value.Equals("FS.GG.SDD.Artifacts", StringComparison.OrdinalIgnoreCase))
 
@@ -218,33 +255,43 @@ let private inspectProject (path: string) =
                     reference.Identity.Equals("FS.GG.SDD.Artifacts", StringComparison.OrdinalIgnoreCase))
             | Error _ -> []
 
-        let hasReference = not (List.isEmpty references) || not (List.isEmpty evaluatedReferences)
+        let hasReference =
+            not (List.isEmpty references) || not (List.isEmpty evaluatedReferences)
 
-        [ if name = "FS.GG.Coordination.Qualification.Contracts" && not hasReference then
-              yield violation name "FS.GG.SDD.Artifacts" "published-kernel-package-reference-required"
+        [
+            if name = "FS.GG.Coordination.Qualification.Contracts" && not hasReference then
+                yield violation name "FS.GG.SDD.Artifacts" "published-kernel-package-reference-required"
 
-          if name <> "FS.GG.Coordination.Qualification.Contracts" && hasReference then
-              yield violation name "FS.GG.SDD.Artifacts" "published-kernel-consumer-not-allowed"
+            if name <> "FS.GG.Coordination.Qualification.Contracts" && hasReference then
+                yield violation name "FS.GG.SDD.Artifacts" "published-kernel-consumer-not-allowed"
 
-          for reference in references do
-              for attributeName in [ "Version"; "VersionOverride" ] do
-                  let attribute = reference.Attribute(XName.Get attributeName)
-                  if not (isNull attribute) then
-                      yield violation name attribute.Value "published-kernel-version-must-be-central"
+            for reference in references do
+                for attributeName in [ "Version"; "VersionOverride" ] do
+                    let attribute = reference.Attribute(XName.Get attributeName)
 
-              if name = "FS.GG.Coordination.Qualification.Contracts" then
-                  let generatePath = reference.Attribute(XName.Get "GeneratePathProperty")
-                  if isNull generatePath || not (generatePath.Value.Equals("true", StringComparison.OrdinalIgnoreCase)) then
-                      yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required"
+                    if not (isNull attribute) then
+                        yield violation name attribute.Value "published-kernel-version-must-be-central"
 
-          for reference in evaluatedReferences do
-              for value in [ reference.Version; reference.VersionOverride ] do
-                  if not (String.IsNullOrWhiteSpace value) then
-                      yield violation name value "published-kernel-version-must-be-central"
+                if name = "FS.GG.Coordination.Qualification.Contracts" then
+                    let generatePath = reference.Attribute(XName.Get "GeneratePathProperty")
 
-              if name = "FS.GG.Coordination.Qualification.Contracts"
-                 && not (reference.GeneratePathProperty.Equals("true", StringComparison.OrdinalIgnoreCase)) then
-                  yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required" ]
+                    if
+                        isNull generatePath
+                        || not (generatePath.Value.Equals("true", StringComparison.OrdinalIgnoreCase))
+                    then
+                        yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required"
+
+            for reference in evaluatedReferences do
+                for value in [ reference.Version; reference.VersionOverride ] do
+                    if not (String.IsNullOrWhiteSpace value) then
+                        yield violation name value "published-kernel-version-must-be-central"
+
+                if
+                    name = "FS.GG.Coordination.Qualification.Contracts"
+                    && not (reference.GeneratePathProperty.Equals("true", StringComparison.OrdinalIgnoreCase))
+                then
+                    yield violation name "FS.GG.SDD.Artifacts" "published-kernel-path-property-required"
+        ]
 
     let packageSourceViolations =
         [ "RestoreSources"; "RestoreAdditionalProjectSources" ]
@@ -259,12 +306,14 @@ let private inspectProject (path: string) =
     let transportViolations =
         if name = "FS.GG.Coordination.Protocol" || name = "FS.GG.Coordination.Core" then
             let referenceViolations =
-                [ yield! valuesNamed "PackageReference" document
-                  yield! valuesNamed "Reference" document
-                  yield! valuesNamed "FrameworkReference" document
-                  match evaluated with
-                  | Ok project -> yield! project.RuntimeReferences
-                  | Error _ -> () ]
+                [
+                    yield! valuesNamed "PackageReference" document
+                    yield! valuesNamed "Reference" document
+                    yield! valuesNamed "FrameworkReference" document
+                    match evaluated with
+                    | Ok project -> yield! project.RuntimeReferences
+                    | Error _ -> ()
+                ]
                 |> List.distinct
                 |> List.filter (fun dependency -> not (Set.contains dependency allowedPureLayerRuntimeReferences))
                 |> List.map (fun dependency -> violation name dependency "runtime-reference-not-allowed-in-pure-layer")
@@ -281,31 +330,47 @@ let private inspectProject (path: string) =
     let hostViolations =
         if name = "FS.GG.Coordination.App" then
             let outputTypes =
-                [ yield! document.Descendants(XName.Get "OutputType") |> Seq.map _.Value
-                  match evaluated with
-                  | Ok project -> yield project.OutputType
-                  | Error _ -> () ]
+                [
+                    yield! document.Descendants(XName.Get "OutputType") |> Seq.map _.Value
+                    match evaluated with
+                    | Ok project -> yield project.OutputType
+                    | Error _ -> ()
+                ]
                 |> List.distinct
 
             let runtimeReferences =
-                [ yield! valuesNamed "PackageReference" document
-                  yield! valuesNamed "Reference" document
-                  yield! valuesNamed "FrameworkReference" document
-                  match evaluated with
-                  | Ok project -> yield! project.RuntimeReferences
-                  | Error _ -> () ]
+                [
+                    yield! valuesNamed "PackageReference" document
+                    yield! valuesNamed "Reference" document
+                    yield! valuesNamed "FrameworkReference" document
+                    match evaluated with
+                    | Ok project -> yield! project.RuntimeReferences
+                    | Error _ -> ()
+                ]
                 |> List.distinct
 
-            [ for sdk in sdkValues document do
-                  if containsAny [ "Microsoft.NET.Sdk.Web"; "Microsoft.NET.Sdk.Razor"; "Microsoft.NET.Sdk.Worker" ] sdk then
-                      violation name sdk "app-host-runtime-sdk-forbidden"
-              for outputType in outputTypes do
-                  if outputType.Equals("Exe", StringComparison.OrdinalIgnoreCase)
-                     || outputType.Equals("WinExe", StringComparison.OrdinalIgnoreCase) then
-                      violation name $"OutputType={outputType}" "app-host-must-not-be-executable"
-              for runtimeReference in runtimeReferences do
-                  if containsAny [ "AspNetCore"; "Kestrel"; "Webhook"; "Extensions.Hosting" ] runtimeReference then
-                      violation name runtimeReference "app-host-runtime-binding-forbidden" ]
+            [
+                for sdk in sdkValues document do
+                    if
+                        containsAny
+                            [
+                                "Microsoft.NET.Sdk.Web"
+                                "Microsoft.NET.Sdk.Razor"
+                                "Microsoft.NET.Sdk.Worker"
+                            ]
+                            sdk
+                    then
+                        violation name sdk "app-host-runtime-sdk-forbidden"
+                for outputType in outputTypes do
+                    if
+                        outputType.Equals("Exe", StringComparison.OrdinalIgnoreCase)
+                        || outputType.Equals("WinExe", StringComparison.OrdinalIgnoreCase)
+                    then
+                        violation name $"OutputType={outputType}" "app-host-must-not-be-executable"
+                for runtimeReference in runtimeReferences do
+                    if containsAny [ "AspNetCore"; "Kestrel"; "Webhook"; "Extensions.Hosting" ] runtimeReference then
+                        violation name runtimeReference "app-host-runtime-binding-forbidden"
+            ]
         else
             []
 
@@ -314,7 +379,12 @@ let private inspectProject (path: string) =
         | Ok _ -> []
         | Error detail -> [ violation name detail "project-evaluation-failed" ]
 
-    evaluationViolations @ edgeViolations @ publishedKernelViolations @ packageSourceViolations @ transportViolations @ hostViolations
+    evaluationViolations
+    @ edgeViolations
+    @ publishedKernelViolations
+    @ packageSourceViolations
+    @ transportViolations
+    @ hostViolations
 
 let private parseRoot (arguments: string array) =
     let args = arguments |> Array.filter ((<>) "--")
@@ -345,38 +415,53 @@ let required = allowedDependencies |> Map.keys |> Set.ofSeq
 
 let centralPinViolations =
     let path = Path.Combine(root, "Directory.Packages.local.props")
+
     if not (File.Exists path) then
-        [ violation "repository" "FS.GG.SDD.Artifacts" "published-kernel-central-pin-missing" ]
+        [
+            violation "repository" "FS.GG.SDD.Artifacts" "published-kernel-central-pin-missing"
+        ]
     else
         let document = XDocument.Load path
+
         let pins =
             document.Descendants(XName.Get "PackageVersion")
             |> Seq.choose (fun element ->
                 let includeAttribute = element.Attribute(XName.Get "Include")
                 let versionAttribute = element.Attribute(XName.Get "Version")
-                if isNull includeAttribute || isNull versionAttribute then None
+
+                if isNull includeAttribute || isNull versionAttribute then
+                    None
                 elif includeAttribute.Value.Equals("FS.GG.SDD.Artifacts", StringComparison.OrdinalIgnoreCase) then
                     Some versionAttribute.Value
-                else None)
+                else
+                    None)
             |> Seq.toList
 
         match pins with
         | [ "[1.5.0]" ] -> []
-        | [] -> [ violation "repository" "FS.GG.SDD.Artifacts" "published-kernel-central-pin-missing" ]
-        | values -> [ violation "repository" (String.concat "," values) "published-kernel-central-pin-must-equal-1.5.0" ]
+        | [] ->
+            [
+                violation "repository" "FS.GG.SDD.Artifacts" "published-kernel-central-pin-missing"
+            ]
+        | values ->
+            [
+                violation "repository" (String.concat "," values) "published-kernel-central-pin-must-equal-1.5.0"
+            ]
 
 let producerCopyViolations =
     let forbiddenNames =
         Set.ofList
-            [ "q1-identity-manifest.json"
-              "QuintCompiler.fs"
-              "QuintCompiler.fsi"
-              "QuintProfile.fs"
-              "QuintProfile.fsi"
-              "QuintSource.fs"
-              "QuintSource.fsi"
-              "QuintReplay.fs"
-              "QuintReplay.fsi" ]
+            [
+                "q1-identity-manifest.json"
+                "QuintCompiler.fs"
+                "QuintCompiler.fsi"
+                "QuintProfile.fs"
+                "QuintProfile.fsi"
+                "QuintSource.fs"
+                "QuintSource.fsi"
+                "QuintReplay.fs"
+                "QuintReplay.fsi"
+            ]
 
     Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
     |> Seq.filter (fun path ->
@@ -390,11 +475,19 @@ let producerCopyViolations =
         && not (path.Contains($"{Path.DirectorySeparatorChar}tests{Path.DirectorySeparatorChar}")))
     |> Seq.choose (fun path ->
         let fileName = Path.GetFileName path
-        if Path.GetExtension(path).Equals(".qnt", StringComparison.OrdinalIgnoreCase)
-           || Set.contains fileName forbiddenNames
-           || (fileName = "main.go" && path.Contains($"{Path.DirectorySeparatorChar}quint{Path.DirectorySeparatorChar}lmt{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)) then
+
+        if
+            Path.GetExtension(path).Equals(".qnt", StringComparison.OrdinalIgnoreCase)
+            || Set.contains fileName forbiddenNames
+            || (fileName = "main.go"
+                && path.Contains(
+                    $"{Path.DirectorySeparatorChar}quint{Path.DirectorySeparatorChar}lmt{Path.DirectorySeparatorChar}",
+                    StringComparison.OrdinalIgnoreCase
+                ))
+        then
             Some(violation "repository" (Path.GetRelativePath(root, path)) "published-kernel-producer-copy-forbidden")
-        else None)
+        else
+            None)
     |> Seq.toList
 
 let repositoryPackageSourceViolations =
@@ -405,6 +498,7 @@ let repositoryPackageSourceViolations =
         && Set.contains (Path.GetExtension(path).ToLowerInvariant()) (Set.ofList [ ".props"; ".targets"; ".fsproj" ]))
     |> Seq.collect (fun path ->
         let document = XDocument.Load path
+
         [ "RestoreSources"; "RestoreAdditionalProjectSources" ]
         |> Seq.collect (fun property -> elementValuesNamed property document)
         |> Seq.collect (fun value -> value.Split(';', StringSplitOptions.RemoveEmptyEntries)))
@@ -425,13 +519,16 @@ let nugetConfigPackageSourceViolations =
         && not (path.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}")))
     |> Seq.collect (fun path ->
         let document = XDocument.Load path
+
         document.Descendants()
-        |> Seq.filter (fun element -> element.Name.LocalName.Equals("packageSources", StringComparison.OrdinalIgnoreCase))
+        |> Seq.filter (fun element ->
+            element.Name.LocalName.Equals("packageSources", StringComparison.OrdinalIgnoreCase))
         |> Seq.collect _.Elements()
         |> Seq.filter (fun element -> element.Name.LocalName.Equals("add", StringComparison.OrdinalIgnoreCase))
         |> Seq.choose (fun element ->
             element.Attributes()
-            |> Seq.tryFind (fun attribute -> attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase))
+            |> Seq.tryFind (fun attribute ->
+                attribute.Name.LocalName.Equals("value", StringComparison.OrdinalIgnoreCase))
             |> Option.map _.Value))
     |> Seq.map _.Trim()
     |> Seq.filter (String.IsNullOrWhiteSpace >> not)
@@ -453,14 +550,16 @@ let unknownViolations =
     |> Seq.toList
 
 let violations =
-    [ yield! centralPinViolations
-      yield! producerCopyViolations
-      yield! repositoryPackageSourceViolations
-      yield! nugetConfigPackageSourceViolations
-      yield! missingViolations
-      yield! unknownViolations
-      for project in projects do
-          yield! inspectProject project ]
+    [
+        yield! centralPinViolations
+        yield! producerCopyViolations
+        yield! repositoryPackageSourceViolations
+        yield! nugetConfigPackageSourceViolations
+        yield! missingViolations
+        yield! unknownViolations
+        for project in projects do
+            yield! inspectProject project
+    ]
 
 if List.isEmpty violations then
     printfn "DEPENDENCY_POLICY_OK projects=%d" projects.Length

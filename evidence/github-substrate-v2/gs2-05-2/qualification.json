@@ -5,11 +5,11 @@
   "artifacts": [
     {
       "path": "src/FS.GG.Coordination.Core/OrganizationIssueFields.fsi",
-      "sha256": "c3efe770bb285bd7ccd1f60b610328e7dbcee828f382b078a6495428581a1992"
+      "sha256": "eb80f93b37bc55486768b9468fc95cb7d106086089c9753097ed52e6f5d5ad9b"
     },
     {
       "path": "src/FS.GG.Coordination.Core/OrganizationIssueFields.fs",
-      "sha256": "6b6a4e2cfd831ee92876207ca09dbdd78622c8c32be85ed243e830831b80df73"
+      "sha256": "f4f5137edd73317ebaefed0cedddc112df25ba50c8a4d873fab975a12b1afea9"
     },
     {
       "path": "evidence/github-substrate-v2/gs2-05-2/corpus.json",
@@ -29,7 +29,7 @@
     },
     {
       "path": "eng/validate-github-organization-issue-fields.fsx",
-      "sha256": "b27b1152148b04ed50f94e2b0127a72fa66191ee38682b86f119c3b841925aa9"
+      "sha256": "cfc9e52e5b90b24c531142ba26401fec6c6f5c7e77965801a9c1444c3526a6a1"
     }
   ]
 }

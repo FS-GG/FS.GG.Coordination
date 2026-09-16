@@ -10,39 +10,45 @@ type LedgerProviderPayload =
     | ControlIssuesPage of LedgerProviderIssue list
 
 and LedgerProviderInstallation =
-    { InstallationId: int64
-      AppId: int64
-      Slug: string
-      RepositorySelection: string
-      Permissions: (string * string) list
-      SelectedRepositoriesEndpoint: string option
-      SelectedRepositoriesPagesComplete: bool
-      SelectedRepositories: LedgerObservation<string list> }
+    {
+        InstallationId: int64
+        AppId: int64
+        Slug: string
+        RepositorySelection: string
+        Permissions: (string * string) list
+        SelectedRepositoriesEndpoint: string option
+        SelectedRepositoriesPagesComplete: bool
+        SelectedRepositories: LedgerObservation<string list>
+    }
 
 and LedgerProviderIssue = { Number: int64; IsPullRequest: bool }
 
 type LedgerProviderPage =
-    { Endpoint: string
-      Page: int
-      LastPage: int
-      IsTerminal: bool
-      HttpStatus: int
-      ObservedAt: DateTimeOffset
-      PayloadSha256: string
-      Payload: LedgerProviderPayload }
+    {
+        Endpoint: string
+        Page: int
+        LastPage: int
+        IsTerminal: bool
+        HttpStatus: int
+        ObservedAt: DateTimeOffset
+        PayloadSha256: string
+        Payload: LedgerProviderPayload
+    }
 
 type LedgerProviderObservation =
-    { SchemaVersion: int
-      Repository: string
-      RepositoryId: int64
-      Revision: string
-      PreviousObservationSha256: string option
-      PreviousObservationEvidenceSha256: string option
-      RawSetSha256: string option
-      NormalizedSetSha256: string option
-      DedicatedWriterAppId: int64 option
-      ControlIssueNumber: int64 option
-      Pages: LedgerProviderPage list }
+    {
+        SchemaVersion: int
+        Repository: string
+        RepositoryId: int64
+        Revision: string
+        PreviousObservationSha256: string option
+        PreviousObservationEvidenceSha256: string option
+        RawSetSha256: string option
+        NormalizedSetSha256: string option
+        DedicatedWriterAppId: int64 option
+        ControlIssueNumber: int64 option
+        Pages: LedgerProviderPage list
+    }
 
 type LedgerProviderFinding =
     | UnsupportedLedgerProviderSchema of int
@@ -63,5 +69,15 @@ module LedgerProtectionProviderAdapter =
     val selectedRepositoriesEndpoint: installationId: int64 -> string
     val appSelectedRepositoriesEndpoint: string
     val payloadSha256: LedgerProviderPayload -> string
-    val normalize: asOf: DateTimeOffset -> maxAge: TimeSpan -> LedgerProviderObservation -> Result<LedgerProtectionObservation, LedgerProviderFinding list>
-    val compile: asOf: DateTimeOffset -> maxAge: TimeSpan -> LedgerProviderObservation -> Result<LedgerProtectionPlan, LedgerProviderFinding list>
+
+    val normalize:
+        asOf: DateTimeOffset ->
+        maxAge: TimeSpan ->
+        LedgerProviderObservation ->
+            Result<LedgerProtectionObservation, LedgerProviderFinding list>
+
+    val compile:
+        asOf: DateTimeOffset ->
+        maxAge: TimeSpan ->
+        LedgerProviderObservation ->
+            Result<LedgerProtectionPlan, LedgerProviderFinding list>

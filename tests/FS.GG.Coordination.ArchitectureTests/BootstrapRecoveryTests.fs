@@ -7,7 +7,8 @@ open System.Text
 open System.Text.Json
 open Xunit
 
-let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+let private root =
+    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
 let private sha256Text (value: string) =
     let bytes: byte array = Encoding.UTF8.GetBytes value
@@ -29,11 +30,20 @@ let ``recovery runner closes clone cache feed and command overrides`` () =
 
 [<Fact>]
 let ``recovery receipt contract is compact exact and hosted read only`` () =
-    let workflow = File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
-    let contract = File.ReadAllText(Path.Combine(root, "eng/bootstrap-qualification-plan.json"))
+    let workflow =
+        File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
+
+    let contract =
+        File.ReadAllText(Path.Combine(root, "eng/bootstrap-qualification-plan.json"))
+
     Assert.Contains("bootstrap-recovery:", workflow)
     Assert.Contains("run: bash eng/bootstrap-gates/bootstrap-recovery.sh", workflow)
-    Assert.Contains("dotnet fsi eng/bootstrap-recovery.fsx -- .", File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/bootstrap-recovery.sh")))
+
+    Assert.Contains(
+        "dotnet fsi eng/bootstrap-recovery.fsx -- .",
+        File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/bootstrap-recovery.sh"))
+    )
+
     Assert.Contains("bootstrap-recovery/result.json", contract)
     Assert.Contains("permissions:\n  actions: read\n  contents: read", workflow.Replace("\r\n", "\n"))
     Assert.DoesNotContain("contents: write", workflow)
@@ -41,17 +51,30 @@ let ``recovery receipt contract is compact exact and hosted read only`` () =
 
 [<Fact>]
 let ``recovery roadmap gate command is independently pinned`` () =
-    use catalog = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json")))
-    use index = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json")))
-    let gate = catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.find (fun item -> item.GetProperty("id").GetString() = "bootstrap-recovery")
+    use catalog =
+        JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-gates.json")))
+
+    use index =
+        JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "eng/github-substrate-v2-units.json")))
+
+    let gate =
+        catalog.RootElement.GetProperty("commands").EnumerateArray()
+        |> Seq.find (fun item -> item.GetProperty("id").GetString() = "bootstrap-recovery")
+
     let command =
         seq {
             yield gate.GetProperty("executable").GetString()
             yield! gate.GetProperty("args").EnumerateArray() |> Seq.map _.GetString()
         }
         |> String.concat "\u0000"
-    let unit = index.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun item -> item.GetProperty("id").GetString() = "GS2-01.8")
-    let gateContract = unit.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
+
+    let unit =
+        index.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun item -> item.GetProperty("id").GetString() = "GS2-01.8")
+
+    let gateContract =
+        unit.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
+
     Assert.Equal("Q7", gate.GetProperty("qGate").GetString())
     Assert.Equal("bootstrap-recovery", gateContract.GetProperty("id").GetString())
     Assert.Equal("Q7", gateContract.GetProperty("qGate").GetString())
@@ -60,7 +83,19 @@ let ``recovery roadmap gate command is independently pinned`` () =
 [<Fact>]
 let ``recovery evidence shape names every ordered stage`` () =
     let script = File.ReadAllText(Path.Combine(root, "eng/bootstrap-recovery.fsx"))
+
     for value in
-        [ "fsgg.coordination.bootstrap-recovery/1"; "packageSha256"; "publishedSources"
-          "clone"; "restore"; "build"; "unit-tests"; "architecture-tests"; "pack"; "install"; "execute" ] do
+        [
+            "fsgg.coordination.bootstrap-recovery/1"
+            "packageSha256"
+            "publishedSources"
+            "clone"
+            "restore"
+            "build"
+            "unit-tests"
+            "architecture-tests"
+            "pack"
+            "install"
+            "execute"
+        ] do
         Assert.Contains(value, script)

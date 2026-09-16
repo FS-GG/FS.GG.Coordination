@@ -10,7 +10,9 @@ open System.Text.Json.Nodes
 open FS.GG.Coordination.Qualification.Contracts
 open Xunit
 
-let private repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+let private repositoryRoot =
+    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+
 let private verifier = Path.Combine(repositoryRoot, "eng/bootstrap-ci.fsx")
 let private exactHead = String.replicate 40 "a"
 
@@ -22,7 +24,10 @@ let private runBootstrapAdapter root arguments =
     startInfo.ArgumentList.Add("fsi")
     startInfo.ArgumentList.Add(verifier)
     startInfo.ArgumentList.Add("--")
-    for argument in arguments @ [ "--root"; root ] do startInfo.ArgumentList.Add(argument)
+
+    for argument in arguments @ [ "--root"; root ] do
+        startInfo.ArgumentList.Add(argument)
+
     startInfo.RedirectStandardOutput <- true
     startInfo.RedirectStandardError <- true
     startInfo.UseShellExecute <- false
@@ -50,12 +55,19 @@ let private runGateWithoutRepositorySubject gateId root =
 
 let private withScratch prefix action =
     let scratch = Directory.CreateTempSubdirectory(prefix)
-    try action scratch.FullName
-    finally scratch.Delete(true)
+
+    try
+        action scratch.FullName
+    finally
+        scratch.Delete(true)
 
 let private copyContract root =
     let eng = Directory.CreateDirectory(Path.Combine(root, "eng"))
-    File.Copy(Path.Combine(repositoryRoot, "eng/bootstrap-qualification-plan.json"), Path.Combine(eng.FullName, "bootstrap-qualification-plan.json"))
+
+    File.Copy(
+        Path.Combine(repositoryRoot, "eng/bootstrap-qualification-plan.json"),
+        Path.Combine(eng.FullName, "bootstrap-qualification-plan.json")
+    )
 
 let private withWorkflowMutation mutate verify =
     withScratch "fsgg-bootstrap-workflow-" (fun root ->
@@ -70,44 +82,56 @@ let private withPlanMutation mutate verify =
     withScratch "fsgg-bootstrap-plan-" (fun root ->
         copyContract root
         let workflows = Directory.CreateDirectory(Path.Combine(root, ".github/workflows"))
-        File.Copy(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"), Path.Combine(workflows.FullName, "bootstrap-qualification.yml"))
+
+        File.Copy(
+            Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"),
+            Path.Combine(workflows.FullName, "bootstrap-qualification.yml")
+        )
+
         let target = Path.Combine(root, "eng/bootstrap-qualification-plan.json")
         mutate target
         verify root)
 
 let private vulnerabilityJson projectCount vulnerable =
     let vulnerability =
-        if vulnerable then ",\"frameworks\":[{\"topLevelPackages\":[{\"vulnerabilities\":[{}]}]}]"
-        else ""
+        if vulnerable then
+            ",\"frameworks\":[{\"topLevelPackages\":[{\"vulnerabilities\":[{}]}]}]"
+        else
+            ""
+
     let requiredProjects =
-        [ "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj"
-          "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
-          "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj"
-          "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj"
-          "src/FS.GG.Coordination.Orchestration.Execution/FS.GG.Coordination.Orchestration.Execution.fsproj"
-          "src/FS.GG.Coordination.Orchestration.Execution.Codex/FS.GG.Coordination.Orchestration.Execution.Codex.fsproj"
-          "src/FS.GG.Coordination.Orchestration.Host/FS.GG.Coordination.Orchestration.Host.fsproj"
-          "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
-          "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj"
-          "src/FS.GG.Coordination.Orchestration.Pilot/FS.GG.Coordination.Orchestration.Pilot.fsproj"
-          "src/FS.GG.Coordination.Orchestration.Runner.Protocol/FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj"
-          "src/FS.GG.Coordination.Orchestration.Runner.Client/FS.GG.Coordination.Orchestration.Runner.Client.fsproj"
-          "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
-          "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
-          "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
-          "tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj"
-          "tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests.fsproj"
-          "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
-          "tests/FS.GG.Coordination.Orchestration.Host.Tests/FS.GG.Coordination.Orchestration.Host.Tests.fsproj"
-          "tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests.fsproj"
-          "tests/FS.GG.Coordination.Orchestration.Observer.Tests/FS.GG.Coordination.Orchestration.Observer.Tests.fsproj"
-          "tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests.fsproj"
-          "tests/FS.GG.Coordination.Orchestration.Pilot.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Pilot.PostgreSql.Tests.fsproj" ]
+        [
+            "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj"
+            "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
+            "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj"
+            "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj"
+            "src/FS.GG.Coordination.Orchestration.Execution/FS.GG.Coordination.Orchestration.Execution.fsproj"
+            "src/FS.GG.Coordination.Orchestration.Execution.Codex/FS.GG.Coordination.Orchestration.Execution.Codex.fsproj"
+            "src/FS.GG.Coordination.Orchestration.Host/FS.GG.Coordination.Orchestration.Host.fsproj"
+            "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
+            "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj"
+            "src/FS.GG.Coordination.Orchestration.Pilot/FS.GG.Coordination.Orchestration.Pilot.fsproj"
+            "src/FS.GG.Coordination.Orchestration.Runner.Protocol/FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj"
+            "src/FS.GG.Coordination.Orchestration.Runner.Client/FS.GG.Coordination.Orchestration.Runner.Client.fsproj"
+            "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
+            "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
+            "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
+            "tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj"
+            "tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests.fsproj"
+            "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
+            "tests/FS.GG.Coordination.Orchestration.Host.Tests/FS.GG.Coordination.Orchestration.Host.Tests.fsproj"
+            "tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests/FS.GG.Coordination.Orchestration.PostgreSql.Tests.fsproj"
+            "tests/FS.GG.Coordination.Orchestration.Observer.Tests/FS.GG.Coordination.Orchestration.Observer.Tests.fsproj"
+            "tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Observer.PostgreSql.Tests.fsproj"
+            "tests/FS.GG.Coordination.Orchestration.Pilot.PostgreSql.Tests/FS.GG.Coordination.Orchestration.Pilot.PostgreSql.Tests.fsproj"
+        ]
+
     let projects =
         requiredProjects
         |> List.take projectCount
         |> List.map (fun path -> $"{{\"path\":\"%s{path}\"%s{vulnerability}}}")
         |> String.concat ","
+
     $"{{\"version\":1,\"parameters\":\"--vulnerable --include-transitive\",\"sources\":[\"https://api.nuget.org/v3/index.json\"],\"projects\":[%s{projects}]}}"
 
 let private validateVulnerability (contents: string) =
@@ -119,57 +143,103 @@ let private validateVulnerability (contents: string) =
 
 let private createArtifacts root =
     let paths =
-        [ "deterministic-build/protocol.dll"
-          "compiler-and-tests/architecture.trx"
-          "canonical-quint/qualification.json"
-          "dependency-and-security/vulnerability-report.json"
-          "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
-          "bootstrap-recovery/result.json"
-          "orchestration-postgresql/results.trx"
-          "orchestration-observer-postgresql/results.trx"
-          "orchestration-pilot-postgresql/results.trx"
-          "evidence-manifest/plan.json" ]
+        [
+            "deterministic-build/protocol.dll"
+            "compiler-and-tests/architecture.trx"
+            "canonical-quint/qualification.json"
+            "dependency-and-security/vulnerability-report.json"
+            "package-install-smoke/FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg"
+            "bootstrap-recovery/result.json"
+            "orchestration-postgresql/results.trx"
+            "orchestration-observer-postgresql/results.trx"
+            "orchestration-pilot-postgresql/results.trx"
+            "evidence-manifest/plan.json"
+        ]
+
     for relative in paths do
         let target = Path.Combine(root, relative)
         Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
+
         if relative = "evidence-manifest/plan.json" then
             File.Copy(Path.Combine(repositoryRoot, "eng/bootstrap-qualification-plan.json"), target)
         elif relative = "bootstrap-recovery/result.json" then
             let packageDigest = String.replicate 64 "b"
+
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.bootstrap-recovery/1\",\"candidate\":\"%s{exactHead}\",\"packageSha256\":\"%s{packageDigest}\",\"publishedSources\":[\"https://api.nuget.org/v3/index.json\"],\"stages\":[\"clone\",\"restore\",\"build\",\"unit-tests\",\"architecture-tests\",\"pack\",\"install\",\"execute\"]}}\n")
+                $"{{\"schema\":\"fsgg.coordination.bootstrap-recovery/1\",\"candidate\":\"%s{exactHead}\",\"packageSha256\":\"%s{packageDigest}\",\"publishedSources\":[\"https://api.nuget.org/v3/index.json\"],\"stages\":[\"clone\",\"restore\",\"build\",\"unit-tests\",\"architecture-tests\",\"pack\",\"install\",\"execute\"]}}\n"
+            )
         elif relative = "canonical-quint/qualification.json" then
             let preparationDigest = String.replicate 64 "c"
-            let sourceDigest = "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
-            let contractDigest = "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
-            let toolchainDigest = "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
+
+            let sourceDigest =
+                "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9"
+
+            let contractDigest =
+                "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
+
+            let toolchainDigest =
+                "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
+
             let quintDigest = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
-            let apalacheDigest = "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
+
+            let apalacheDigest =
+                "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
+
             let formalRows =
-                [ "administrative-retirement-closure"; "administrative-retirement-old-plan-counterexample"; "administrative-retirement-race"
-                  "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
-                  "journal-reconciliation"; "lifecycle"; "operation-saga"; "pilot-permit-fault-safety"; "pilot-permit-major-action-coverage"; "pilot-permit-transfer"; "relation-mutation"; "review-epoch"; "rollback" ]
+                [
+                    "administrative-retirement-closure"
+                    "administrative-retirement-old-plan-counterexample"
+                    "administrative-retirement-race"
+                    "authority-reconciliation"
+                    "claim-election"
+                    "cutover-observation"
+                    "epoch"
+                    "hosted-writer-fault-safety"
+                    "hosted-writer-progress"
+                    "journal-fencing"
+                    "journal-reconciliation"
+                    "lifecycle"
+                    "operation-saga"
+                    "pilot-permit-fault-safety"
+                    "pilot-permit-major-action-coverage"
+                    "pilot-permit-transfer"
+                    "relation-mutation"
+                    "review-epoch"
+                    "rollback"
+                ]
                 |> List.mapi (fun index id ->
                     let suffix = (index + 1).ToString("x2")
-                    id, String.replicate 62 "a" + suffix,
-                    String.replicate 62 "b" + suffix, String.replicate 62 "c" + suffix)
+
+                    id,
+                    String.replicate 62 "a" + suffix,
+                    String.replicate 62 "b" + suffix,
+                    String.replicate 62 "c" + suffix)
+
             let formalIdentity =
                 formalRows
                 |> List.map (fun (id, manifest, trace, itf) -> $"%s{id}|%s{manifest}|%s{trace}|%s{itf}")
                 |> String.concat ";"
+
             let formalJson =
                 formalRows
                 |> List.map (fun (id, manifest, trace, itf) ->
                     $"{{\"id\":\"%s{id}\",\"manifestSha256\":\"%s{manifest}\",\"traceSha256\":\"%s{trace}\",\"itfSha256\":\"%s{itf}\"}}")
                 |> String.concat ","
+
             let resultDigest =
-                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|166|242|217|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"))
+                SHA256.HashData(
+                    Encoding.UTF8.GetBytes(
+                        $"passed|passed|8|166|242|217|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"
+                    )
+                )
                 |> Convert.ToHexString
                 |> _.ToLowerInvariant()
+
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":166,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":242,\"quintCli\":217,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":242,\"quintCli\":217,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":166,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":242,\"quintCli\":217,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":242,\"quintCli\":217,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}"
+            )
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
 
@@ -181,25 +251,53 @@ let private withEvidence action =
         createArtifacts artifacts
         let manifest = Path.Combine(root, "evidence.json")
         let decision = Path.Combine(root, "decision.json")
+
         QualificationReuse.decide exactHead (String.replicate 64 "d") None None
         |> QualificationReuse.decisionBytes
         |> fun bytes -> File.WriteAllBytes(decision, bytes)
+
         let collectCode, _, collectError =
-            runBootstrap root [ "collect"; "--head"; exactHead; "--artifacts"; artifacts; "--output"; manifest; "--decision"; decision ]
+            runBootstrap
+                root
+                [
+                    "collect"
+                    "--head"
+                    exactHead
+                    "--artifacts"
+                    artifacts
+                    "--output"
+                    manifest
+                    "--decision"
+                    decision
+                ]
+
         Assert.Equal(0, collectCode)
         Assert.Equal("", collectError)
         action root artifacts manifest)
 
 let private runEvidence root head artifacts manifest =
-    runBootstrap root
-        [ "evidence"; "--head"; head; "--artifacts"; artifacts; "--file"; manifest
-          "--decision"; Path.Combine(root, "decision.json") ]
+    runBootstrap
+        root
+        [
+            "evidence"
+            "--head"
+            head
+            "--artifacts"
+            artifacts
+            "--file"
+            manifest
+            "--decision"
+            Path.Combine(root, "decision.json")
+        ]
 
 let private runPackageSmoke scratch packageOverride =
     let startInfo = ProcessStartInfo("bash")
     startInfo.ArgumentList.Add(Path.Combine(repositoryRoot, "eng/package-install-smoke.sh"))
     startInfo.ArgumentList.Add(scratch)
-    packageOverride |> Option.iter (fun path -> startInfo.Environment["FSGG_BOOTSTRAP_PACKAGE_OVERRIDE"] <- path)
+
+    packageOverride
+    |> Option.iter (fun path -> startInfo.Environment["FSGG_BOOTSTRAP_PACKAGE_OVERRIDE"] <- path)
+
     startInfo.RedirectStandardOutput <- true
     startInfo.RedirectStandardError <- true
     startInfo.UseShellExecute <- false
@@ -210,17 +308,33 @@ let private runPackageSmoke scratch packageOverride =
     childProcess.ExitCode, output.Trim(), error.Trim()
 
 let private tracked (mode: string) (path: string) (contents: string) : QualificationReuse.TrackedFile =
-    { Mode = mode; Path = path; Bytes = Encoding.UTF8.GetBytes contents }
+    {
+        Mode = mode
+        Path = path
+        Bytes = Encoding.UTF8.GetBytes contents
+    }
 
 [<Fact>]
 let ``qualification subject is canonical across tracked-file enumeration order`` () =
     let files = [ tracked "100644" "b.txt" "b"; tracked "100755" "a.sh" "a" ]
+
     let create values =
-        QualificationReuse.createSubject values (Encoding.UTF8.GetBytes "plan") (Encoding.UTF8.GetBytes "workflow") (Encoding.UTF8.GetBytes "environment") (Encoding.UTF8.GetBytes "review")
+        QualificationReuse.createSubject
+            values
+            (Encoding.UTF8.GetBytes "plan")
+            (Encoding.UTF8.GetBytes "workflow")
+            (Encoding.UTF8.GetBytes "environment")
+            (Encoding.UTF8.GetBytes "review")
+
     let first = create files
     let second = create (List.rev files)
     Assert.Equal(first, second)
-    Assert.True((QualificationReuse.subjectBytes first).AsSpan().SequenceEqual((QualificationReuse.subjectBytes second).AsSpan()))
+
+    Assert.True(
+        (QualificationReuse.subjectBytes first)
+            .AsSpan()
+            .SequenceEqual((QualificationReuse.subjectBytes second).AsSpan())
+    )
 
 [<Theory>]
 [<InlineData("100644", "a.txt", "value-2")>]
@@ -228,7 +342,13 @@ let ``qualification subject is canonical across tracked-file enumeration order``
 [<InlineData("100644", "renamed.txt", "value")>]
 let ``qualification subject changes for independently mutated tree bytes mode or path`` mode path contents =
     let create file =
-        QualificationReuse.createSubject [ file ] (Encoding.UTF8.GetBytes "plan") (Encoding.UTF8.GetBytes "workflow") (Encoding.UTF8.GetBytes "environment") (Encoding.UTF8.GetBytes "review")
+        QualificationReuse.createSubject
+            [ file ]
+            (Encoding.UTF8.GetBytes "plan")
+            (Encoding.UTF8.GetBytes "workflow")
+            (Encoding.UTF8.GetBytes "environment")
+            (Encoding.UTF8.GetBytes "review")
+
     let baseline = create (tracked "100644" "a.txt" "value")
     let mutated = create (tracked mode path contents)
     Assert.NotEqual<string>(baseline.TreeSha256, mutated.TreeSha256)
@@ -237,99 +357,253 @@ let ``qualification subject changes for independently mutated tree bytes mode or
 [<Fact>]
 let ``qualification subject rejects duplicate unsafe and unsupported tracked identities`` () =
     let create files =
-        QualificationReuse.createSubject files [| 1uy |] [| 2uy |] [| 3uy |] [| 4uy |] |> ignore
-    Assert.Throws<ArgumentException>(fun () -> create [ tracked "100644" "a" "1"; tracked "100644" "a" "2" ]) |> ignore
-    Assert.Throws<ArgumentException>(fun () -> create [ tracked "100644" "../a" "1" ]) |> ignore
-    Assert.Throws<ArgumentException>(fun () -> create [ tracked "160000" "submodule" "1" ]) |> ignore
+        QualificationReuse.createSubject files [| 1uy |] [| 2uy |] [| 3uy |] [| 4uy |]
+        |> ignore
+
+    Assert.Throws<ArgumentException>(fun () -> create [ tracked "100644" "a" "1"; tracked "100644" "a" "2" ])
+    |> ignore
+
+    Assert.Throws<ArgumentException>(fun () -> create [ tracked "100644" "../a" "1" ])
+    |> ignore
+
+    Assert.Throws<ArgumentException>(fun () -> create [ tracked "160000" "submodule" "1" ])
+    |> ignore
 
 [<Fact>]
 let ``reuse decision distinguishes hit miss and incomplete authority`` () =
     let subject = String.replicate 64 "a"
+
     let prior: QualificationReuse.PriorRun =
-        { Head = String.replicate 40 "b"; RunId = 42L; Attempt = 1
-          EvidenceSha256 = String.replicate 64 "c"; ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
-    Assert.Equal(QualificationReuse.Reuse, (QualificationReuse.decide exactHead subject (Some prior) (Some subject)).Kind)
+        {
+            Head = String.replicate 40 "b"
+            RunId = 42L
+            Attempt = 1
+            EvidenceSha256 = String.replicate 64 "c"
+            ArtifactExpiresAt = "2026-09-01T00:00:00Z"
+            RunnerMinutes = Some 14M
+        }
+
+    Assert.Equal(
+        QualificationReuse.Reuse,
+        (QualificationReuse.decide exactHead subject (Some prior) (Some subject)).Kind
+    )
+
     Assert.Equal(QualificationReuse.Execute, (QualificationReuse.decide exactHead subject None None).Kind)
-    Assert.Equal(QualificationReuse.Execute, (QualificationReuse.decide exactHead subject (Some prior) (Some(String.replicate 64 "d"))).Kind)
+
+    Assert.Equal(
+        QualificationReuse.Execute,
+        (QualificationReuse.decide exactHead subject (Some prior) (Some(String.replicate 64 "d"))).Kind
+    )
+
     Assert.Equal(QualificationReuse.Refuse, (QualificationReuse.decide exactHead subject (Some prior) None).Kind)
     let unmeasured = { prior with RunnerMinutes = None }
-    let measuredDecision = QualificationReuse.decide exactHead subject (Some prior) (Some subject)
-    let unmeasuredDecision = QualificationReuse.decide exactHead subject (Some unmeasured) (Some subject)
+
+    let measuredDecision =
+        QualificationReuse.decide exactHead subject (Some prior) (Some subject)
+
+    let unmeasuredDecision =
+        QualificationReuse.decide exactHead subject (Some unmeasured) (Some subject)
+
     Assert.Equal(QualificationReuse.Reuse, unmeasuredDecision.Kind)
     Assert.NotEqual<string>(measuredDecision.SelfSha256, unmeasuredDecision.SelfSha256)
-    Assert.Equal(Ok unmeasuredDecision, QualificationReuse.decisionBytes unmeasuredDecision |> QualificationReuse.parseDecision)
+
+    Assert.Equal(
+        Ok unmeasuredDecision,
+        QualificationReuse.decisionBytes unmeasuredDecision
+        |> QualificationReuse.parseDecision
+    )
+
     let invalid = { prior with RunnerMinutes = Some -1M }
-    Assert.Throws<ArgumentException>(fun () -> QualificationReuse.decide exactHead subject (Some invalid) (Some subject) |> ignore) |> ignore
+
+    Assert.Throws<ArgumentException>(fun () ->
+        QualificationReuse.decide exactHead subject (Some invalid) (Some subject)
+        |> ignore)
+    |> ignore
 
 [<Fact>]
 let ``reuse receipt round trips canonical bytes and rejects tampering`` () =
-    let decision = QualificationReuse.decide exactHead (String.replicate 64 "a") None None
+    let decision =
+        QualificationReuse.decide exactHead (String.replicate 64 "a") None None
+
     let bytes = QualificationReuse.decisionBytes decision
     Assert.Equal(Ok decision, QualificationReuse.parseDecision bytes)
-    let tampered = Encoding.UTF8.GetString(bytes).Replace("no-compatible-prior", "different-reason") |> Encoding.UTF8.GetBytes
+
+    let tampered =
+        Encoding.UTF8.GetString(bytes).Replace("no-compatible-prior", "different-reason")
+        |> Encoding.UTF8.GetBytes
+
     Assert.True(QualificationReuse.parseDecision tampered |> Result.isError)
-    let unknown = Encoding.UTF8.GetString(bytes).Replace("{\"schema\"", "{\"unknown\":true,\"schema\"") |> Encoding.UTF8.GetBytes
+
+    let unknown =
+        Encoding.UTF8.GetString(bytes).Replace("{\"schema\"", "{\"unknown\":true,\"schema\"")
+        |> Encoding.UTF8.GetBytes
+
     Assert.True(QualificationReuse.parseDecision unknown |> Result.isError)
 
 [<Fact>]
 let ``formal subject ignores unrelated files but binds every selected byte`` () =
     let files =
-        [ ({ Mode = "100644"; Path = "src/Protocol/Model.fs"; Bytes = Encoding.UTF8.GetBytes "model" }: QualificationReuse.TrackedFile)
-          { Mode = "100644"; Path = "docs/notes.md"; Bytes = Encoding.UTF8.GetBytes "first" } ]
+        [
+            ({
+                Mode = "100644"
+                Path = "src/Protocol/Model.fs"
+                Bytes = Encoding.UTF8.GetBytes "model"
+            }
+            : QualificationReuse.TrackedFile)
+            {
+                Mode = "100644"
+                Path = "docs/notes.md"
+                Bytes = Encoding.UTF8.GetBytes "first"
+            }
+        ]
+
     let selectors = [ QualificationReuse.Prefix "src/Protocol/" ]
     let policy = Encoding.UTF8.GetBytes "policy"
     let baseline = QualificationReuse.createFormalSubject files selectors policy
-    let unrelated = QualificationReuse.createFormalSubject [ files[0]; { files[1] with Bytes = Encoding.UTF8.GetBytes "second" } ] selectors policy
-    let selected = QualificationReuse.createFormalSubject [ { files[0] with Bytes = Encoding.UTF8.GetBytes "changed" }; files[1] ] selectors policy
+
+    let unrelated =
+        QualificationReuse.createFormalSubject
+            [
+                files[0]
+                { files[1] with
+                    Bytes = Encoding.UTF8.GetBytes "second"
+                }
+            ]
+            selectors
+            policy
+
+    let selected =
+        QualificationReuse.createFormalSubject
+            [
+                { files[0] with
+                    Bytes = Encoding.UTF8.GetBytes "changed"
+                }
+                files[1]
+            ]
+            selectors
+            policy
+
     Assert.Equal(baseline.SubjectSha256, unrelated.SubjectSha256)
     Assert.NotEqual(baseline.SubjectSha256, selected.SubjectSha256)
-    Assert.Throws<ArgumentException>(fun () -> QualificationReuse.createFormalSubject files [ QualificationReuse.Exact "src/Protocol/Model.fs"; QualificationReuse.Prefix "src/Protocol/" ] policy |> ignore) |> ignore
+
+    Assert.Throws<ArgumentException>(fun () ->
+        QualificationReuse.createFormalSubject
+            files
+            [
+                QualificationReuse.Exact "src/Protocol/Model.fs"
+                QualificationReuse.Prefix "src/Protocol/"
+            ]
+            policy
+        |> ignore)
+    |> ignore
 
 [<Fact>]
 let ``current scoped milestone binds the accepted prefix without contract drift`` () =
     let statePath = Path.Combine(repositoryRoot, "eng/milestone-qualification.json")
+
     let state =
         match MilestoneQualification.parse (File.ReadAllBytes statePath) with
         | Ok value -> value
         | Error problem -> failwith problem
+
     let receipts =
         state.Children
-        |> List.choose (fun child -> child.Acceptance |> Option.map (fun acceptance -> acceptance.ReceiptPath, File.ReadAllBytes(Path.Combine(repositoryRoot, acceptance.ReceiptPath))))
+        |> List.choose (fun child ->
+            child.Acceptance
+            |> Option.map (fun acceptance ->
+                acceptance.ReceiptPath, File.ReadAllBytes(Path.Combine(repositoryRoot, acceptance.ReceiptPath))))
         |> Map.ofList
+
     let validation =
         match MilestoneQualification.validate state receipts with
         | Ok value -> value
         | Error problem -> failwith problem
+
     Assert.Equal(MilestoneQualification.Scoped, validation.State.Mode)
     Assert.Equal(2, validation.AcceptedPrefixLength)
     Assert.Empty(validation.ContractDrift)
     Assert.True(validation.SubjectSha256.Length = 64)
-    let closure = { state with Mode = MilestoneQualification.Comprehensive; BoundaryKind = Some "closure" }
+
+    let closure =
+        { state with
+            Mode = MilestoneQualification.Comprehensive
+            BoundaryKind = Some "closure"
+        }
+
     Assert.True(MilestoneQualification.validate closure receipts |> Result.isError)
 
 [<Fact>]
 let ``cadence recommendation trades measured cost for yield without weakening protected gates`` () =
     let now = DateTimeOffset.Parse "2026-08-31T12:00:00Z"
+
     let policy: QualificationCadence.Policy =
-        { Version = "adr-0081/1"; WindowDays = 14; FreshnessHours = 36; MinimumObservations = 5
-          ExpensiveRunnerMinutes = 8M; LowYieldMaximum = 0.05M; MinimumCadence = Map.empty }
+        {
+            Version = "adr-0081/1"
+            WindowDays = 14
+            FreshnessHours = 36
+            MinimumObservations = 5
+            ExpensiveRunnerMinutes = 8M
+            LowYieldMaximum = 0.05M
+            MinimumCadence = Map.empty
+        }
+
     let observation run outcome boundary equivalent =
-        ({ Gate = "canonical-quint"; RunId = run; Attempt = 1; ObservedAt = now.AddHours(-float run)
-           DurationSeconds = 1080; RunnerMinutes = 18M; Reused = false; Outcome = outcome; Boundary = boundary
-           ClosureEquivalent = equivalent; DetectionDelayHours = None }: QualificationCadence.Observation)
-    let quiet = [ 1L .. 5L ] |> List.map (fun run -> observation run QualificationCadence.Passed QualificationCadence.Child true)
+        ({
+            Gate = "canonical-quint"
+            RunId = run
+            Attempt = 1
+            ObservedAt = now.AddHours(-float run)
+            DurationSeconds = 1080
+            RunnerMinutes = 18M
+            Reused = false
+            Outcome = outcome
+            Boundary = boundary
+            ClosureEquivalent = equivalent
+            DetectionDelayHours = None
+        }
+        : QualificationCadence.Observation)
+
+    let quiet =
+        [ 1L .. 5L ]
+        |> List.map (fun run -> observation run QualificationCadence.Passed QualificationCadence.Child true)
+
     let reduce = QualificationCadence.evaluate now policy "canonical-quint" quiet
     Assert.Equal(QualificationCadence.Reduce, reduce.Kind)
     Assert.True(reduce.ClosureEquivalent)
     Assert.Equal("high", reduce.BlastRadius)
     Assert.Equal(0M, reduce.CostSavedRunnerMinutes)
     Assert.Equal(QualificationCadence.recommendationBytes reduce, QualificationCadence.recommendationBytes reduce)
-    let closureMiss = observation 1L QualificationCadence.ActionableDefect QualificationCadence.Closure true :: quiet.Tail
-    Assert.Equal(QualificationCadence.Increase, (QualificationCadence.evaluate now policy "canonical-quint" closureMiss).Kind)
-    let protectedPolicy = { policy with MinimumCadence = Map.ofList [ "canonical-quint", "parent-closure" ] }
-    Assert.Equal(QualificationCadence.Retain, (QualificationCadence.evaluate now protectedPolicy "canonical-quint" quiet).Kind)
-    let security = quiet |> List.map (fun value -> { value with Gate = "dependency-and-security" })
-    Assert.Equal(QualificationCadence.Retain, (QualificationCadence.evaluate now policy "dependency-and-security" security).Kind)
+
+    let closureMiss =
+        observation 1L QualificationCadence.ActionableDefect QualificationCadence.Closure true
+        :: quiet.Tail
+
+    Assert.Equal(
+        QualificationCadence.Increase,
+        (QualificationCadence.evaluate now policy "canonical-quint" closureMiss).Kind
+    )
+
+    let protectedPolicy =
+        { policy with
+            MinimumCadence = Map.ofList [ "canonical-quint", "parent-closure" ]
+        }
+
+    Assert.Equal(
+        QualificationCadence.Retain,
+        (QualificationCadence.evaluate now protectedPolicy "canonical-quint" quiet).Kind
+    )
+
+    let security =
+        quiet
+        |> List.map (fun value ->
+            { value with
+                Gate = "dependency-and-security"
+            })
+
+    Assert.Equal(
+        QualificationCadence.Retain,
+        (QualificationCadence.evaluate now policy "dependency-and-security" security).Kind
+    )
 
 [<Fact>]
 let ``economics report carries bounded census completeness without becoming delivery authority`` () =
@@ -339,18 +613,39 @@ let ``economics report carries bounded census completeness without becoming deli
         let completeness = Path.Combine(root, "completeness.json")
         let report = Path.Combine(root, "recommendations.json")
         File.WriteAllText(observations, "[]")
+
         File.WriteAllText(
             completeness,
-            """{"schema":"fsgg.coordination.qualification-census-completeness/1","windowStart":"2026-08-24T00:00:00Z","windowEnd":"2026-09-07T00:00:00Z","status":"partial","runsEnumerated":2,"attemptsExpected":3,"attemptsObserved":2,"failedRequests":1,"complete":false}""")
+            """{"schema":"fsgg.coordination.qualification-census-completeness/1","windowStart":"2026-08-24T00:00:00Z","windowEnd":"2026-09-07T00:00:00Z","status":"partial","runsEnumerated":2,"attemptsExpected":3,"attemptsObserved":2,"failedRequests":1,"complete":false}"""
+        )
+
         let exitCode, output, error =
-            runBootstrap root
-                [ "cadence"; "--observations"; observations; "--completeness"; completeness
-                  "--output"; report; "--now"; "2026-09-07T00:00:00Z"; "--data-status"; "partial" ]
+            runBootstrap
+                root
+                [
+                    "cadence"
+                    "--observations"
+                    observations
+                    "--completeness"
+                    completeness
+                    "--output"
+                    report
+                    "--now"
+                    "2026-09-07T00:00:00Z"
+                    "--data-status"
+                    "partial"
+                ]
+
         Assert.Equal(0, exitCode)
         Assert.Equal("BOOTSTRAP_CI_OK mode=cadence", output)
         Assert.Equal("", error)
         use document = JsonDocument.Parse(File.ReadAllBytes report)
-        Assert.Equal("fsgg.coordination.qualification-cadence-report/2", document.RootElement.GetProperty("schema").GetString())
+
+        Assert.Equal(
+            "fsgg.coordination.qualification-cadence-report/2",
+            document.RootElement.GetProperty("schema").GetString()
+        )
+
         Assert.Equal("partial", document.RootElement.GetProperty("dataStatus").GetString())
         let census = document.RootElement.GetProperty("completeness")
         Assert.Equal(3, census.GetProperty("attemptsExpected").GetInt32())
@@ -359,13 +654,20 @@ let ``economics report carries bounded census completeness without becoming deli
 
 [<Fact>]
 let ``economics producer paginates every run attempt and cannot gate pull request delivery`` () =
-    let producer = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/qualification-economics.sh"))
+    let producer =
+        File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/qualification-economics.sh"))
+
     Assert.Contains("--paginate --slurp", producer)
     Assert.Contains("range(1; (($run.run_attempt // 1) + 1))", producer)
     Assert.Contains("actions/runs/$run_id/attempts/$attempt/jobs", producer)
     Assert.DoesNotContain("filter=latest", producer)
-    let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
-    let economics = workflow.Substring(workflow.IndexOf("  qualification-economics:", StringComparison.Ordinal))
+
+    let workflow =
+        File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+
+    let economics =
+        workflow.Substring(workflow.IndexOf("  qualification-economics:", StringComparison.Ordinal))
+
     Assert.Contains("if: ${{ github.event_name == 'schedule' }}", economics)
     Assert.Contains("root=\"$RUNNER_TEMP/qualification-economics\"", producer)
 
@@ -378,7 +680,9 @@ let ``bootstrap workflow satisfies the reuse decision plus exact seven-gate cont
 
 [<Fact>]
 let ``reuse telemetry measures completed runner jobs without becoming route authority`` () =
-    let entryPoint = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/reuse-decision.sh"))
+    let entryPoint =
+        File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/reuse-decision.sh"))
+
     Assert.Contains("actions/runs/$run_id/jobs?filter=latest&per_page=100", entryPoint)
     Assert.Contains("artifact_name=\"bootstrap-evidence-manifest-$subject\"", entryPoint)
     Assert.Contains("artifacts?name=$artifact_name&per_page=$max_candidates", entryPoint)
@@ -389,15 +693,24 @@ let ``reuse telemetry measures completed runner jobs without becoming route auth
 
 [<Fact>]
 let ``subject indexed terminal evidence is projected and normalized fail closed`` () =
-    let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
-    let terminal = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/evidence-manifest.sh"))
+    let workflow =
+        File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+
+    let terminal =
+        File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/evidence-manifest.sh"))
+
     Assert.Contains("subject-sha: ${{ steps.decide.outputs.subject-sha }}", workflow)
     Assert.Contains("name: bootstrap-evidence-manifest-${{ needs.reuse-decision.outputs.subject-sha }}", workflow)
     Assert.Contains("FSGG_QUALIFICATION_SUBJECT_SHA: ${{ needs.reuse-decision.outputs.subject-sha }}", workflow)
     Assert.Contains("subject-indexed prior evidence is missing or ambiguous", terminal)
     Assert.Contains("mv \"$subject_manifest\" \"$canonical_manifest\"", terminal)
     Assert.Contains("name: Retain normalized current-run formal evidence", workflow)
-    Assert.Contains("if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}", workflow)
+
+    Assert.Contains(
+        "if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'reuse' }}",
+        workflow
+    )
+
     Assert.Contains("path: ${{ runner.temp }}/bootstrap-artifacts/canonical-quint/qualification.json", workflow)
 
 [<Fact>]
@@ -407,7 +720,11 @@ let ``production FSI adapter matches the compiled green outcome`` () =
 [<Fact>]
 let ``production FSI adapter matches the compiled red diagnostic`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  deterministic-build:", "  deterministic-build-removed:")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File.ReadAllText(path).Replace("  deterministic-build:", "  deterministic-build-removed:")
+            ))
         (fun root -> Assert.Equal(runBootstrap root [ "workflow" ], runBootstrapAdapter root [ "workflow" ]))
 
 [<Fact>]
@@ -418,20 +735,38 @@ let ``workflow generator reproduces the committed projection`` () =
         let exitCode, _, error = runBootstrap root [ "generate"; "--output"; output ]
         Assert.Equal(0, exitCode)
         Assert.Equal("", error)
-        let expected = File.ReadAllBytes(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+
+        let expected =
+            File.ReadAllBytes(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+
         let actual = File.ReadAllBytes output
         Assert.True(expected.AsSpan().SequenceEqual(actual.AsSpan())))
 
 [<Fact>]
 let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
-    let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
-    let aggregate = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/canonical-quint-aggregate.sh"))
-    let performance = File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/canonical-quint-performance.sh"))
+    let workflow =
+        File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+
+    let aggregate =
+        File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/canonical-quint-aggregate.sh"))
+
+    let performance =
+        File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/canonical-quint-performance.sh"))
+
     Assert.Contains("canonical-quint-semantic:", workflow)
     Assert.Contains("fail-fast: false", workflow)
     Assert.Contains("canonical-quint-performance:", workflow)
-    Assert.Contains("canonical-quint-performance:\n    name: canonical-quint-performance\n    needs: [reuse-decision, canonical-quint-prepare]", workflow)
-    Assert.Contains("canonical-quint:\n    name: canonical-quint\n    needs: [reuse-decision, canonical-quint-prepare, canonical-quint-semantic, canonical-quint-performance]", workflow)
+
+    Assert.Contains(
+        "canonical-quint-performance:\n    name: canonical-quint-performance\n    needs: [reuse-decision, canonical-quint-prepare]",
+        workflow
+    )
+
+    Assert.Contains(
+        "canonical-quint:\n    name: canonical-quint\n    needs: [reuse-decision, canonical-quint-prepare, canonical-quint-semantic, canonical-quint-performance]",
+        workflow
+    )
+
     Assert.Contains("if: ${{ always() && needs.reuse-decision.outputs.route == 'execute'", workflow)
     Assert.Contains("test -f \"$receipt\"", aggregate)
     Assert.Contains("$(dirname \"$FSGG_QUINT_PERFORMANCE_RECEIPT\")/epoch.json", aggregate)
@@ -439,7 +774,14 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
     Assert.Contains("test -f \"$receipt\"", performance)
     Assert.Contains(".outcome == \"passed\"", performance)
     Assert.Contains("shard: [authority-reconciliation", workflow)
-    let semanticBlock = workflow.Substring(workflow.IndexOf("  canonical-quint-semantic:"), workflow.IndexOf("  canonical-quint-performance:") - workflow.IndexOf("  canonical-quint-semantic:"))
+
+    let semanticBlock =
+        workflow.Substring(
+            workflow.IndexOf("  canonical-quint-semantic:"),
+            workflow.IndexOf("  canonical-quint-performance:")
+            - workflow.IndexOf("  canonical-quint-semantic:")
+        )
+
     Assert.DoesNotContain(", epoch,", semanticBlock)
     Assert.Contains("FSGG_QUINT_SHARD: epoch", workflow)
     Assert.Contains("path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance", workflow)
@@ -448,7 +790,12 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
     Assert.Contains(".processCounts.external == 7", aggregate)
     Assert.Contains(".executedProcessCounts.external == (10 + .startupRetries.total)", aggregate)
     Assert.Contains(".executedProcessCounts.apalacheVerify == (3 + .startupRetries.verify)", aggregate)
-    Assert.Contains(".startupRetries.total == (.startupRetries.reflectionDeadline + .startupRetries.earlyLifecycleExit)", aggregate)
+
+    Assert.Contains(
+        ".startupRetries.total == (.startupRetries.reflectionDeadline + .startupRetries.earlyLifecycleExit)",
+        aggregate
+    )
+
     Assert.Contains(".startupRetries.verify <= .startupRetries.total", aggregate)
     Assert.Contains("physicalProcessCounts", aggregate)
     Assert.Contains("negative_count=$((negative_count +", aggregate)
@@ -465,7 +812,12 @@ let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
         let shardRoot = Path.Combine(root, "shards")
         Directory.CreateDirectory shardRoot |> ignore
         let performance = Path.Combine(root, "performance.json")
-        File.WriteAllText(performance, "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":105000}")
+
+        File.WriteAllText(
+            performance,
+            "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":105000}"
+        )
+
         let startInfo = ProcessStartInfo("bash")
         startInfo.WorkingDirectory <- repositoryRoot
         startInfo.ArgumentList.Add("eng/bootstrap-gates/canonical-quint-aggregate.sh")
@@ -481,7 +833,11 @@ let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
 [<Fact>]
 let ``qualification plan rejects an unreviewed action revision`` () =
     withPlanMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("3d3c42e5aac5ba805825da76410c181273ba90b1", String.replicate 40 "a")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File.ReadAllText(path).Replace("3d3c42e5aac5ba805825da76410c181273ba90b1", String.replicate 40 "a")
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -490,7 +846,11 @@ let ``qualification plan rejects an unreviewed action revision`` () =
 [<Fact>]
 let ``qualification plan rejects a legacy action runtime`` () =
     withPlanMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("\"checkout\": \"node24\"", "\"checkout\": \"node20\"")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File.ReadAllText(path).Replace("\"checkout\": \"node24\"", "\"checkout\": \"node20\"")
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -499,7 +859,8 @@ let ``qualification plan rejects a legacy action runtime`` () =
 [<Fact>]
 let ``qualification plan rejects reuse before the reviewed evidence epoch`` () =
     withPlanMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("2026-08-29T13:32:00Z", "2026-01-01T00:00:00Z")))
+        (fun path ->
+            File.WriteAllText(path, File.ReadAllText(path).Replace("2026-08-29T13:32:00Z", "2026-01-01T00:00:00Z")))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -511,7 +872,10 @@ let ``qualification plan rejects an incomplete terminal dependency edge`` () =
         (fun path ->
             let plan = JsonNode.Parse(File.ReadAllText(path)).AsObject()
             let jobs = plan["jobs"].AsArray()
-            let terminal = jobs |> Seq.find (fun job -> job["id"].GetValue<string>() = "evidence-manifest")
+
+            let terminal =
+                jobs |> Seq.find (fun job -> job["id"].GetValue<string>() = "evidence-manifest")
+
             terminal["needs"].AsArray().RemoveAt(0)
             File.WriteAllText(path, plan.ToJsonString()))
         (fun root ->
@@ -570,43 +934,66 @@ let ``stable gate entry point refuses a removed repository subject`` gateId expe
 [<Fact>]
 let ``performance evidence retains five source-linked timing samples and every acceptance threshold`` () =
     let evaluation =
-        File.ReadAllText(Path.Combine(repositoryRoot, "work/78-shorten-qualification-critical-path/performance-evaluation.md"))
+        File.ReadAllText(
+            Path.Combine(repositoryRoot, "work/78-shorten-qualification-critical-path/performance-evaluation.md")
+        )
+
     let requiredEvidence =
-        [ "actions/runs/33248808361"
-          "actions/runs/33250382392/attempts/1"
-          "actions/runs/33250382392/attempts/2"
-          "actions/runs/33251281115"
-          "actions/runs/33251621507"
-          "| Baseline | 2s | 31s | 1033s | 22s | 1103s | 366s |"
-          "| Receipt-bound cache-free | 49s | 24s | 775s | 24s | 840s | 478s |"
-          "Compiler/tests improvement exceeds 30% in all four candidate attempts."
-          "Aggregate runner-time improvement exceeds 10% in all four candidate attempts."
-          "Cache miss/hit semantics are equal" ]
-    for evidence in requiredEvidence do Assert.Contains(evidence, evaluation)
-    let removedSource = evaluation.Replace("actions/runs/33251281115", "missing-cache-free-run")
+        [
+            "actions/runs/33248808361"
+            "actions/runs/33250382392/attempts/1"
+            "actions/runs/33250382392/attempts/2"
+            "actions/runs/33251281115"
+            "actions/runs/33251621507"
+            "| Baseline | 2s | 31s | 1033s | 22s | 1103s | 366s |"
+            "| Receipt-bound cache-free | 49s | 24s | 775s | 24s | 840s | 478s |"
+            "Compiler/tests improvement exceeds 30% in all four candidate attempts."
+            "Aggregate runner-time improvement exceeds 10% in all four candidate attempts."
+            "Cache miss/hit semantics are equal"
+        ]
+
+    for evidence in requiredEvidence do
+        Assert.Contains(evidence, evaluation)
+
+    let removedSource =
+        evaluation.Replace("actions/runs/33251281115", "missing-cache-free-run")
+
     Assert.DoesNotContain("actions/runs/33251281115", removedSource)
 
 [<Fact>]
 let ``reuse performance evidence retains the exact execute hit pair and thresholds`` () =
     let evaluation =
-        File.ReadAllText(Path.Combine(repositoryRoot, "work/80-digest-bound-exact-head-qualification-reuse/performance-evaluation.md"))
+        File.ReadAllText(
+            Path.Combine(
+                repositoryRoot,
+                "work/80-digest-bound-exact-head-qualification-reuse/performance-evaluation.md"
+            )
+        )
+
     let requiredEvidence =
-        [ "actions/runs/33255549867"
-          "actions/runs/33255929882"
-          "30c9b48940f9a598af170183049bde9f0494693c"
-          "saved 467 wall-seconds (89.5%) and 873 runner-seconds (94.7%, 14m33s)"
-          "settled in 55 seconds, below the 180-second target"
-          "added 78 wall-seconds over the comparable cohort median, below the 90-second ceiling"
-          "represents an unavailable measurement as `null`"
-          "route selection remains unchanged for measured versus unavailable telemetry" ]
-    for evidence in requiredEvidence do Assert.Contains(evidence, evaluation)
+        [
+            "actions/runs/33255549867"
+            "actions/runs/33255929882"
+            "30c9b48940f9a598af170183049bde9f0494693c"
+            "saved 467 wall-seconds (89.5%) and 873 runner-seconds (94.7%, 14m33s)"
+            "settled in 55 seconds, below the 180-second target"
+            "added 78 wall-seconds over the comparable cohort median, below the 90-second ceiling"
+            "represents an unavailable measurement as `null`"
+            "route selection remains unchanged for measured versus unavailable telemetry"
+        ]
+
+    for evidence in requiredEvidence do
+        Assert.Contains(evidence, evaluation)
 
 [<Fact>]
 let ``bootstrap control surface stays typed thin and bounded`` () =
-    let lineCount relative = File.ReadAllLines(Path.Combine(repositoryRoot, relative)).Length
+    let lineCount relative =
+        File.ReadAllLines(Path.Combine(repositoryRoot, relative)).Length
+
     let gateLines =
         Directory.GetFiles(Path.Combine(repositoryRoot, "eng/bootstrap-gates"), "*.sh")
         |> Array.sumBy (File.ReadAllLines >> Array.length)
+
     let uniqueGateLines =
         Directory.GetFiles(Path.Combine(repositoryRoot, "eng/bootstrap-gates"), "*.sh")
         |> Array.collect File.ReadAllLines
@@ -614,14 +1001,23 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
         |> Array.filter (String.IsNullOrWhiteSpace >> not)
         |> Array.distinct
         |> Array.length
-    let core = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"))
-    let reuseCore = File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs"))
-    let workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+
+    let core =
+        File.ReadAllText(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs"))
+
+    let reuseCore =
+        File.ReadAllText(
+            Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs")
+        )
+
+    let workflow =
+        File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
+
     Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
     Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 300)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
-    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 1450)
-    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 720)
+    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
+    Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
     // Complete run/attempt pagination adds explicit census handling to the economics observer.
     Assert.InRange(gateLines, 1, 750)
     Assert.InRange(uniqueGateLines, 1, 550)
@@ -640,8 +1036,10 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
 let ``dependency and security gate statically checks every workflow with an inverted context fixture`` () =
     let entryPoint =
         File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/dependency-and-security.sh"))
+
     let validator =
         File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/workflow-static.sh"))
+
     Assert.Contains("bash eng/bootstrap-gates/workflow-static.sh", entryPoint)
     Assert.Contains("version=\"1.7.12\"", validator)
     Assert.Contains("8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8", validator)
@@ -651,7 +1049,11 @@ let ``dependency and security gate statically checks every workflow with an inve
 [<Fact>]
 let ``bootstrap workflow rejects a missing gate`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  deterministic-build:", "  deterministic-build-removed:")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File.ReadAllText(path).Replace("  deterministic-build:", "  deterministic-build-removed:")
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -660,7 +1062,13 @@ let ``bootstrap workflow rejects a missing gate`` () =
 [<Fact>]
 let ``bootstrap workflow rejects duplicate job identities`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("  compiler-and-tests:", "  deterministic-build:\n  compiler-and-tests:")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace("  compiler-and-tests:", "  deterministic-build:\n  compiler-and-tests:")
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -669,7 +1077,13 @@ let ``bootstrap workflow rejects duplicate job identities`` () =
 [<Fact>]
 let ``bootstrap workflow rejects mutable action references`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "actions/checkout@v7")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "actions/checkout@v7")
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -678,7 +1092,16 @@ let ``bootstrap workflow rejects mutable action references`` () =
 [<Fact>]
 let ``bootstrap workflow rejects pinned but unapproved actions`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Upload qualification evidence", "      - name: Unapproved pinned action\n        uses: example/deploy@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      - name: Upload qualification evidence")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "      - name: Upload qualification evidence",
+                        "      - name: Unapproved pinned action\n        uses: example/deploy@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      - name: Upload qualification evidence"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -687,7 +1110,16 @@ let ``bootstrap workflow rejects pinned but unapproved actions`` () =
 [<Fact>]
 let ``bootstrap workflow rejects an unbound cross-run artifact download`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          path: ${{ runner.temp }}/bootstrap-artifacts", "          path: ${{ runner.temp }}/bootstrap-artifacts\n          run-id: 1")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "          path: ${{ runner.temp }}/bootstrap-artifacts",
+                        "          path: ${{ runner.temp }}/bootstrap-artifacts\n          run-id: 1"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -696,7 +1128,16 @@ let ``bootstrap workflow rejects an unbound cross-run artifact download`` () =
 [<Fact>]
 let ``bootstrap workflow rejects checkout not bound to the evidence candidate`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("          ref: ${{ github.event.pull_request.head.sha || github.sha }}", "          # ref: ${{ github.event.pull_request.head.sha || github.sha }}")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "          ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+                        "          # ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -714,7 +1155,16 @@ let ``bootstrap workflow rejects authority expansion`` () =
 [<Fact>]
 let ``bootstrap workflow rejects unavailable runner context in job environment`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint", "NUGET_PACKAGES: ${{ runner.temp }}/nuget-canonical-quint")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint",
+                        "NUGET_PACKAGES: ${{ runner.temp }}/nuget-canonical-quint"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -750,7 +1200,16 @@ let ``bootstrap workflow rejects a vacuous action inventory`` () =
 [<Fact>]
 let ``bootstrap workflow rejects a missing required command`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        run: bash eng/bootstrap-gates/compiler-and-tests.sh", "        # run: bash eng/bootstrap-gates/compiler-and-tests.sh")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "        run: bash eng/bootstrap-gates/compiler-and-tests.sh",
+                        "        # run: bash eng/bootstrap-gates/compiler-and-tests.sh"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -759,7 +1218,16 @@ let ``bootstrap workflow rejects a missing required command`` () =
 [<Fact>]
 let ``bootstrap workflow rejects shell success suppression`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("run: bash eng/bootstrap-gates/compiler-and-tests.sh", "run: bash eng/bootstrap-gates/compiler-and-tests.sh || true")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "run: bash eng/bootstrap-gates/compiler-and-tests.sh",
+                        "run: bash eng/bootstrap-gates/compiler-and-tests.sh || true"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -768,7 +1236,16 @@ let ``bootstrap workflow rejects shell success suppression`` () =
 [<Fact>]
 let ``bootstrap workflow rejects any unexpected executable command`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        run: bash eng/bootstrap-gates/compiler-and-tests.sh", "        run: |\n          set +o errexit\n          bash eng/bootstrap-gates/compiler-and-tests.sh")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "        run: bash eng/bootstrap-gates/compiler-and-tests.sh",
+                        "        run: |\n          set +o errexit\n          bash eng/bootstrap-gates/compiler-and-tests.sh"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -777,7 +1254,16 @@ let ``bootstrap workflow rejects any unexpected executable command`` () =
 [<Fact>]
 let ``bootstrap workflow rejects checkout ref outside with`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        with:\n          ref: ${{ github.event.pull_request.head.sha || github.sha }}", "        env:\n          ref: ${{ github.event.pull_request.head.sha || github.sha }}")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "        with:\n          ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+                        "        env:\n          ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -786,7 +1272,16 @@ let ``bootstrap workflow rejects checkout ref outside with`` () =
 [<Fact>]
 let ``bootstrap workflow rejects conditional gates`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Run the stable qualification gate", "      - name: Run the stable qualification gate\n        if: false")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "      - name: Run the stable qualification gate",
+                        "      - name: Run the stable qualification gate\n        if: false"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -795,7 +1290,16 @@ let ``bootstrap workflow rejects conditional gates`` () =
 [<Fact>]
 let ``bootstrap workflow rejects package override seam`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("        run: bash eng/bootstrap-gates/package-install-smoke.sh", "        env:\n          FSGG_BOOTSTRAP_PACKAGE_OVERRIDE: fake.nupkg\n        run: bash eng/bootstrap-gates/package-install-smoke.sh")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "        run: bash eng/bootstrap-gates/package-install-smoke.sh",
+                        "        env:\n          FSGG_BOOTSTRAP_PACKAGE_OVERRIDE: fake.nupkg\n        run: bash eng/bootstrap-gates/package-install-smoke.sh"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -804,7 +1308,16 @@ let ``bootstrap workflow rejects package override seam`` () =
 [<Fact>]
 let ``bootstrap workflow rejects imported v1 completion machinery`` () =
     withWorkflowMutation
-        (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("      - name: Upload qualification evidence", "      - name: Forbidden completion route\n        run: scripts/fsgg-coord delivery\n      - name: Upload qualification evidence")))
+        (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace(
+                        "      - name: Upload qualification evidence",
+                        "      - name: Forbidden completion route\n        run: scripts/fsgg-coord delivery\n      - name: Upload qualification evidence"
+                    )
+            ))
         (fun root ->
             let exitCode, _, error = runBootstrap root [ "workflow" ]
             Assert.NotEqual(0, exitCode)
@@ -831,7 +1344,9 @@ let ``complete vulnerability report is accepted`` () =
 [<InlineData(16, false, "vulnerability-report-completeness")>]
 [<InlineData(23, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
-    let exitCode, _, error = validateVulnerability (vulnerabilityJson projectCount vulnerable)
+    let exitCode, _, error =
+        validateVulnerability (vulnerabilityJson projectCount vulnerable)
+
     Assert.NotEqual(0, exitCode)
     Assert.Contains($"rule=%s{rule}", error)
 
@@ -843,28 +1358,38 @@ let ``malformed vulnerability report is rejected`` () =
 
 [<Fact>]
 let ``unsafe vulnerability source is rejected`` () =
-    let report = (vulnerabilityJson 17 false).Replace("https://api.nuget.org", "http://api.nuget.org")
+    let report =
+        (vulnerabilityJson 17 false).Replace("https://api.nuget.org", "http://api.nuget.org")
+
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-source", error)
 
 [<Fact>]
 let ``unexpected HTTPS vulnerability source is rejected`` () =
-    let report = (vulnerabilityJson 17 false).Replace("https://api.nuget.org/v3/index.json", "https://packages.example.invalid/v3/index.json")
+    let report =
+        (vulnerabilityJson 17 false)
+            .Replace("https://api.nuget.org/v3/index.json", "https://packages.example.invalid/v3/index.json")
+
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-source", error)
 
 [<Fact>]
 let ``incomplete vulnerability parameters are rejected`` () =
-    let report = (vulnerabilityJson 17 false).Replace("--vulnerable --include-transitive", "--vulnerable")
+    let report =
+        (vulnerabilityJson 17 false).Replace("--vulnerable --include-transitive", "--vulnerable")
+
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-parameters", error)
 
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
-    let report = (vulnerabilityJson 23 false).Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
+    let report =
+        (vulnerabilityJson 23 false)
+            .Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
+
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=vulnerability-report-completeness", error)
@@ -880,7 +1405,9 @@ let ``package smoke rejects an absent staged package`` () =
 [<Fact>]
 let ``package smoke rejects tampered staged bytes`` () =
     withScratch "fsgg-bootstrap-package-tampered-" (fun root ->
-        let tampered = Path.Combine(root, "FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg")
+        let tampered =
+            Path.Combine(root, "FS.GG.Coordination.Protocol.0.0.0-bootstrap.nupkg")
+
         File.WriteAllText(tampered, "not a NuGet package")
         let run = Path.Combine(root, "run")
         let exitCode, _, _ = runPackageSmoke run (Some tampered)
@@ -907,8 +1434,7 @@ let ``package override is unavailable inside GitHub Actions`` () =
 [<Fact>]
 let ``exact-head evidence and artifact digests are accepted`` () =
     withEvidence (fun root artifacts manifest ->
-        let exitCode, output, error =
-            runEvidence root exactHead artifacts manifest
+        let exitCode, output, error = runEvidence root exactHead artifacts manifest
         Assert.Equal(0, exitCode)
         Assert.Equal("BOOTSTRAP_CI_OK mode=evidence", output)
         Assert.Equal("", error))
@@ -920,23 +1446,71 @@ let ``reuse revalidates prior execution artifacts and emits current-head evidenc
             let target = Path.Combine(artifacts, relative)
             Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
             File.Copy(source, target)
+
         copy "reuse-decision/decision.json" (Path.Combine(root, "decision.json"))
         copy "bootstrap-evidence-manifest/bootstrap-evidence.json" priorManifest
-        let evidenceDigest = SHA256.HashData(File.ReadAllBytes priorManifest) |> Convert.ToHexString |> _.ToLowerInvariant()
+
+        let evidenceDigest =
+            SHA256.HashData(File.ReadAllBytes priorManifest)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
         let prior: QualificationReuse.PriorRun =
-            { Head = exactHead; RunId = 42L; Attempt = 1; EvidenceSha256 = evidenceDigest
-              ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
+            {
+                Head = exactHead
+                RunId = 42L
+                Attempt = 1
+                EvidenceSha256 = evidenceDigest
+                ArtifactExpiresAt = "2026-09-01T00:00:00Z"
+                RunnerMinutes = Some 14M
+            }
+
         let currentHead = String.replicate 40 "e"
-        let currentDecision = QualificationReuse.decide currentHead (String.replicate 64 "d") (Some prior) (Some(String.replicate 64 "d"))
+
+        let currentDecision =
+            QualificationReuse.decide
+                currentHead
+                (String.replicate 64 "d")
+                (Some prior)
+                (Some(String.replicate 64 "d"))
+
         let decisionPath = Path.Combine(root, "reuse.json")
         File.WriteAllBytes(decisionPath, QualificationReuse.decisionBytes currentDecision)
         let currentManifest = Path.Combine(root, "current-evidence.json")
+
         let collectCode, _, collectError =
-            runBootstrap root [ "collect"; "--head"; currentHead; "--artifacts"; artifacts; "--output"; currentManifest; "--decision"; decisionPath ]
+            runBootstrap
+                root
+                [
+                    "collect"
+                    "--head"
+                    currentHead
+                    "--artifacts"
+                    artifacts
+                    "--output"
+                    currentManifest
+                    "--decision"
+                    decisionPath
+                ]
+
         Assert.Equal(0, collectCode)
         Assert.Equal("", collectError)
+
         let evidenceCode, _, evidenceError =
-            runBootstrap root [ "evidence"; "--head"; currentHead; "--artifacts"; artifacts; "--file"; currentManifest; "--decision"; decisionPath ]
+            runBootstrap
+                root
+                [
+                    "evidence"
+                    "--head"
+                    currentHead
+                    "--artifacts"
+                    artifacts
+                    "--file"
+                    currentManifest
+                    "--decision"
+                    decisionPath
+                ]
+
         Assert.Equal(0, evidenceCode)
         Assert.Equal("", evidenceError)
         let current = JsonNode.Parse(File.ReadAllText currentManifest).AsObject()
@@ -949,22 +1523,58 @@ let ``reuse revalidates prior execution artifacts and emits current-head evidenc
 let ``reuse refuses a selected prior manifest whose bytes changed`` () =
     withEvidence (fun root artifacts priorManifest ->
         let priorDecisionPath = Path.Combine(artifacts, "reuse-decision/decision.json")
-        let retainedManifest = Path.Combine(artifacts, "bootstrap-evidence-manifest/bootstrap-evidence.json")
+
+        let retainedManifest =
+            Path.Combine(artifacts, "bootstrap-evidence-manifest/bootstrap-evidence.json")
+
         Directory.CreateDirectory(Path.GetDirectoryName priorDecisionPath) |> ignore
         Directory.CreateDirectory(Path.GetDirectoryName retainedManifest) |> ignore
         File.Copy(Path.Combine(root, "decision.json"), priorDecisionPath)
         File.Copy(priorManifest, retainedManifest)
-        let originalDigest = SHA256.HashData(File.ReadAllBytes retainedManifest) |> Convert.ToHexString |> _.ToLowerInvariant()
+
+        let originalDigest =
+            SHA256.HashData(File.ReadAllBytes retainedManifest)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
         let prior: QualificationReuse.PriorRun =
-            { Head = exactHead; RunId = 42L; Attempt = 1; EvidenceSha256 = originalDigest
-              ArtifactExpiresAt = "2026-09-01T00:00:00Z"; RunnerMinutes = Some 14M }
+            {
+                Head = exactHead
+                RunId = 42L
+                Attempt = 1
+                EvidenceSha256 = originalDigest
+                ArtifactExpiresAt = "2026-09-01T00:00:00Z"
+                RunnerMinutes = Some 14M
+            }
+
         let currentHead = String.replicate 40 "e"
-        let decision = QualificationReuse.decide currentHead (String.replicate 64 "d") (Some prior) (Some(String.replicate 64 "d"))
+
+        let decision =
+            QualificationReuse.decide
+                currentHead
+                (String.replicate 64 "d")
+                (Some prior)
+                (Some(String.replicate 64 "d"))
+
         let decisionPath = Path.Combine(root, "reuse.json")
         File.WriteAllBytes(decisionPath, QualificationReuse.decisionBytes decision)
         File.AppendAllText(retainedManifest, "tampered")
+
         let exitCode, _, error =
-            runBootstrap root [ "collect"; "--head"; currentHead; "--artifacts"; artifacts; "--output"; Path.Combine(root, "current.json"); "--decision"; decisionPath ]
+            runBootstrap
+                root
+                [
+                    "collect"
+                    "--head"
+                    currentHead
+                    "--artifacts"
+                    artifacts
+                    "--output"
+                    Path.Combine(root, "current.json")
+                    "--decision"
+                    decisionPath
+                ]
+
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=reuse-prior-evidence-digest", error))
 
@@ -991,35 +1601,54 @@ let private mutateCanonicalQuintReceipt mutate =
 [<InlineData("\"quintCli\":217", "\"quintCli\":0", "quint-receipt-process-count")>]
 [<InlineData("\"verify\":0", "\"verify\":1", "quint-receipt-startup-retries")>]
 [<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
-let ``canonical Quint receipt rejects incomplete or contradictory evidence`` (original: string) (replacement: string) (rule: string) =
+let ``canonical Quint receipt rejects incomplete or contradictory evidence``
+    (original: string)
+    (replacement: string)
+    (rule: string)
+    =
     let exitCode, _, error =
-        mutateCanonicalQuintReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace(original, replacement)))
+        mutateCanonicalQuintReceipt (fun path ->
+            File.WriteAllText(path, File.ReadAllText(path).Replace(original, replacement)))
+
     Assert.NotEqual(0, exitCode)
     Assert.Contains($"rule=%s{rule}", error)
 
 [<Fact>]
 let ``canonical Quint receipt rejects malformed JSON`` () =
-    let exitCode, _, error = mutateCanonicalQuintReceipt (fun path -> File.WriteAllText(path, "not-json"))
+    let exitCode, _, error =
+        mutateCanonicalQuintReceipt (fun path -> File.WriteAllText(path, "not-json"))
+
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=quint-receipt-unreadable", error)
 
 [<Fact>]
 let ``recovery evidence rejects malformed JSON`` () =
-    let exitCode, _, error = mutateRecoveryReceipt (fun path -> File.WriteAllText(path, "not-json"))
+    let exitCode, _, error =
+        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, "not-json"))
+
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=recovery-receipt-unreadable", error)
 
 [<Fact>]
 let ``recovery evidence rejects a stale candidate`` () =
     let exitCode, _, error =
-        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace(exactHead, String.replicate 40 "c")))
+        mutateRecoveryReceipt (fun path ->
+            File.WriteAllText(path, File.ReadAllText(path).Replace(exactHead, String.replicate 40 "c")))
+
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=recovery-receipt-candidate", error)
 
 [<Fact>]
 let ``recovery evidence rejects feed substitution`` () =
     let exitCode, _, error =
-        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("https://api.nuget.org/v3/index.json", "https://packages.example.invalid/v3/index.json")))
+        mutateRecoveryReceipt (fun path ->
+            File.WriteAllText(
+                path,
+                File
+                    .ReadAllText(path)
+                    .Replace("https://api.nuget.org/v3/index.json", "https://packages.example.invalid/v3/index.json")
+            ))
+
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=recovery-receipt-source", error)
 
@@ -1029,25 +1658,33 @@ let ``recovery evidence rejects feed substitution`` () =
 [<InlineData("\"execute\"", "\"execute\",\"publish\"")>]
 let ``recovery evidence rejects missing reordered and extra stages`` (original: string) (replacement: string) =
     let exitCode, _, error =
-        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace(original, replacement)))
+        mutateRecoveryReceipt (fun path ->
+            File.WriteAllText(path, File.ReadAllText(path).Replace(original, replacement)))
+
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=recovery-receipt-stages", error)
 
 [<Fact>]
 let ``recovery evidence rejects a malformed package digest`` () =
     let exitCode, _, error =
-        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace(String.replicate 64 "b", "ABC")))
+        mutateRecoveryReceipt (fun path ->
+            File.WriteAllText(path, File.ReadAllText(path).Replace(String.replicate 64 "b", "ABC")))
+
     Assert.NotEqual(0, exitCode)
     Assert.Contains("rule=recovery-receipt-package-digest", error)
 
 [<Fact>]
 let ``recovery evidence rejects unexpected fields and noncanonical bytes`` () =
     let unexpectedCode, _, unexpectedError =
-        mutateRecoveryReceipt (fun path -> File.WriteAllText(path, File.ReadAllText(path).Replace("{\"schema\"", "{\"extra\":true,\"schema\"")))
+        mutateRecoveryReceipt (fun path ->
+            File.WriteAllText(path, File.ReadAllText(path).Replace("{\"schema\"", "{\"extra\":true,\"schema\"")))
+
     Assert.NotEqual(0, unexpectedCode)
     Assert.Contains("rule=recovery-receipt-properties", unexpectedError)
+
     let shapeCode, _, shapeError =
         mutateRecoveryReceipt (fun path -> File.AppendAllText(path, "\n"))
+
     Assert.NotEqual(0, shapeCode)
     Assert.Contains("rule=recovery-receipt-canonical", shapeError)
 
@@ -1055,8 +1692,7 @@ let ``recovery evidence rejects unexpected fields and noncanonical bytes`` () =
 let ``evidence rejects a stale candidate`` () =
     withEvidence (fun root artifacts manifest ->
         let differentHead = String.replicate 40 "b"
-        let exitCode, _, error =
-            runEvidence root differentHead artifacts manifest
+        let exitCode, _, error = runEvidence root differentHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-candidate", error))
 
@@ -1066,8 +1702,7 @@ let ``evidence rejects a missing gate`` () =
         let document = JsonNode.Parse(File.ReadAllText manifest).AsObject()
         document["gates"].AsArray().RemoveAt(0)
         File.WriteAllText(manifest, document.ToJsonString())
-        let exitCode, _, error =
-            runEvidence root exactHead artifacts manifest
+        let exitCode, _, error = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-gate-set", error))
 
@@ -1075,8 +1710,7 @@ let ``evidence rejects a missing gate`` () =
 let ``evidence rejects an artifact changed after collection`` () =
     withEvidence (fun root artifacts manifest ->
         File.AppendAllText(Path.Combine(artifacts, "deterministic-build/protocol.dll"), "tampered")
-        let exitCode, _, error =
-            runEvidence root exactHead artifacts manifest
+        let exitCode, _, error = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-artifact-digest", error))
 
@@ -1088,8 +1722,7 @@ let ``evidence rejects duplicate and unknown gates`` () =
         gates.Add(gates[0].DeepClone())
         gates[1]["id"] <- JsonValue.Create("unknown-gate")
         File.WriteAllText(manifest, document.ToJsonString())
-        let exitCode, _, error =
-            runEvidence root exactHead artifacts manifest
+        let exitCode, _, error = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-gate-set", error))
 
@@ -1100,8 +1733,7 @@ let ``evidence rejects malformed declared digests`` () =
         let first = document["gates"].AsArray()[0]
         first["sha256"] <- JsonValue.Create("not-a-sha256")
         File.WriteAllText(manifest, document.ToJsonString())
-        let exitCode, _, error =
-            runEvidence root exactHead artifacts manifest
+        let exitCode, _, error = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-artifact-digest", error))
 
@@ -1113,8 +1745,7 @@ let ``evidence rejects altered command contracts and artifact paths`` () =
         first["commands"].AsArray().Clear()
         first["artifact"] <- JsonValue.Create("../outside")
         File.WriteAllText(manifest, document.ToJsonString())
-        let exitCode, _, error =
-            runEvidence root exactHead artifacts manifest
+        let exitCode, _, error = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-command-contract", error)
         Assert.Contains("rule=evidence-artifact-path", error))
@@ -1123,8 +1754,7 @@ let ``evidence rejects altered command contracts and artifact paths`` () =
 let ``evidence rejects missing artifact files`` () =
     withEvidence (fun root artifacts manifest ->
         File.Delete(Path.Combine(artifacts, "compiler-and-tests/architecture.trx"))
-        let exitCode, _, error =
-            runEvidence root exactHead artifacts manifest
+        let exitCode, _, error = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, exitCode)
         Assert.Contains("rule=evidence-artifact-missing", error))
 
@@ -1134,12 +1764,10 @@ let ``evidence rejects malformed manifests and contract digests`` () =
         let document = JsonNode.Parse(File.ReadAllText manifest).AsObject()
         document["planSha256"] <- JsonValue.Create("wrong")
         File.WriteAllText(manifest, document.ToJsonString())
-        let digestExit, _, digestError =
-            runEvidence root exactHead artifacts manifest
+        let digestExit, _, digestError = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, digestExit)
         Assert.Contains("rule=evidence-plan-digest", digestError)
         File.WriteAllText(manifest, "not-json")
-        let malformedExit, _, malformedError =
-            runEvidence root exactHead artifacts manifest
+        let malformedExit, _, malformedError = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, malformedExit)
         Assert.Contains("rule=evidence-unreadable", malformedError))

@@ -12,285 +12,627 @@ open FS.GG.Coordination.Orchestration.Execution
 open FS.GG.Coordination.Orchestration.PostgreSql
 
 type MainHostComposition =
-    { ExecutionProvider:IExecutionProvider
-      ExecutionActor:Props
-      HostedProvider:HostedWriterProviderAdapter
-      EffectDriver:MainEffectDriver }
+    {
+        ExecutionProvider: IExecutionProvider
+        ExecutionActor: Props
+        HostedProvider: HostedWriterProviderAdapter
+        EffectDriver: MainEffectDriver
+    }
 
-type RunningMainHost = { ExecutionActor:IActorRef; EffectLoop:Task }
+type RunningMainHost =
+    {
+        ExecutionActor: IActorRef
+        EffectLoop: Task
+    }
+
 type RunningProductionMainHost =
-    { ExecutionActor:IActorRef; EffectLoop:Task; Workflow:MainRouteWorkflow
-      Callbacks:MainProductionCallbacks; Transport:IAuthenticatedExecutorTransport }
+    {
+        ExecutionActor: IActorRef
+        EffectLoop: Task
+        Workflow: MainRouteWorkflow
+        Callbacks: MainProductionCallbacks
+        Transport: IAuthenticatedExecutorTransport
+    }
 
 [<RequireQualifiedAccess>]
 module MainHostComposition =
-    let private normalInterval=TimeSpan.FromMilliseconds 250.
-    let private externalObservationBackoff=TimeSpan.FromSeconds 15.
+    let private normalInterval = TimeSpan.FromMilliseconds 250.
+    let private externalObservationBackoff = TimeSpan.FromSeconds 15.
 
     let private pacing results =
-        if results|>Seq.exists(function
-            | EffectNeedsExternalReconciliation _ -> true
-            | EffectDriveRefused reason when reason.StartsWith("github-",StringComparison.Ordinal) -> true
-            | _ -> false)
-        then externalObservationBackoff
-        else normalInterval
+        if
+            results
+            |> Seq.exists (function
+                | EffectNeedsExternalReconciliation _ -> true
+                | EffectDriveRefused reason when reason.StartsWith("github-", StringComparison.Ordinal) -> true
+                | _ -> false)
+        then
+            externalObservationBackoff
+        else
+            normalInterval
 
-    let private pump (workItems:IJournalStore) (workItemId:WorkItemId) (driver:MainEffectDriver) (cancellationToken:CancellationToken) = task {
-        while not cancellationToken.IsCancellationRequested do
-            let! recovered=HostedWriterJournal.recover workItems workItemId cancellationToken
-            match recovered with
-            | Error _ -> do! Task.Delay(TimeSpan.FromSeconds 1.,cancellationToken)
-            | Ok current ->
-                let results=ResizeArray<MainEffectDriveResult>()
-                for intent in current.UnsettledEffects do
-                    let! result=driver.Drive(intent.OperationId,cancellationToken)
-                    results.Add result
-                do! Task.Delay(pacing results,cancellationToken) }
+    let private pump
+        (workItems: IJournalStore)
+        (workItemId: WorkItemId)
+        (driver: MainEffectDriver)
+        (cancellationToken: CancellationToken)
+        =
+        task {
+            while not cancellationToken.IsCancellationRequested do
+                let! recovered = HostedWriterJournal.recover workItems workItemId cancellationToken
+
+                match recovered with
+                | Error _ -> do! Task.Delay(TimeSpan.FromSeconds 1., cancellationToken)
+                | Ok current ->
+                    let results = ResizeArray<MainEffectDriveResult>()
+
+                    for intent in current.UnsettledEffects do
+                        let! result = driver.Drive(intent.OperationId, cancellationToken)
+                        results.Add result
+
+                    do! Task.Delay(pacing results, cancellationToken)
+        }
+
     /// Wires the production authority graph. Main owns both journals and the actor;
     /// the authenticated transport owns only framed executor I/O. GitHub callbacks
     /// remain a separately supplied delivery identity.
-    let create clock workItems (executions:PostgreSqlExecutionStore) workItemId principal resolver transport calls reconcile =
-        let provider=RemoteExecutorProvider(executions :> IExecutorCommandStore,resolver,transport) :> IExecutionProvider
-        let coordinator=ExecutionSessionCoordinator(provider,executions :> IExecutionSessionJournal,clock)
-        let hosted=HostedWriterProviderAdapter.Create calls
-        { ExecutionProvider=provider
-          ExecutionActor=ExecutionSessionActor.Props coordinator
-          HostedProvider=hosted
-          EffectDriver=MainEffectDriver(clock,workItems,workItemId,principal,hosted,reconcile) }
+    let create
+        clock
+        workItems
+        (executions: PostgreSqlExecutionStore)
+        workItemId
+        principal
+        resolver
+        transport
+        calls
+        reconcile
+        =
+        let provider =
+            RemoteExecutorProvider(executions :> IExecutorCommandStore, resolver, transport) :> IExecutionProvider
+
+        let coordinator =
+            ExecutionSessionCoordinator(provider, executions :> IExecutionSessionJournal, clock)
+
+        let hosted = HostedWriterProviderAdapter.Create calls
+
+        {
+            ExecutionProvider = provider
+            ExecutionActor = ExecutionSessionActor.Props coordinator
+            HostedProvider = hosted
+            EffectDriver = MainEffectDriver(clock, workItems, workItemId, principal, hosted, reconcile)
+        }
 
     /// Starts the actual supervised execution actor and bounded effect pump. Startup
     /// remains paused by Core state; the pump can only reconcile already-exposed
     /// effects until a separately authorized Resume command is durable.
-    let start (system:ActorSystem) (workItems:IJournalStore) (workItemId:WorkItemId) (composition:MainHostComposition) (cancellationToken:CancellationToken) =
-        let actor=system.ActorOf(composition.ExecutionActor,"main-execution-session")
-        let loop=pump workItems workItemId composition.EffectDriver cancellationToken
-        {ExecutionActor=actor;EffectLoop=loop}
+    let start
+        (system: ActorSystem)
+        (workItems: IJournalStore)
+        (workItemId: WorkItemId)
+        (composition: MainHostComposition)
+        (cancellationToken: CancellationToken)
+        =
+        let actor = system.ActorOf(composition.ExecutionActor, "main-execution-session")
+        let loop = pump workItems workItemId composition.EffectDriver cancellationToken
+
+        {
+            ExecutionActor = actor
+            EffectLoop = loop
+        }
 
     /// Actual production graph used by Program after startup pause. Construction
     /// never calls Prepare: only the authenticated admission route may introduce
     /// a fresh route readback and resume the selected attempt.
-    let startProduction (system:ActorSystem) (clock:TimeProvider) (workItems:IJournalStore) (candidates:ICandidateStore) (executions:PostgreSqlExecutionStore)
-                        workItemId principal (resolver:IExecutorBindingResolver) (github:GitHubRouteClient)
-                        (transport:IAuthenticatedExecutorTransport) (preparation:MainRoutePreparation) (cancellationToken:CancellationToken) =
-        let remote=RemoteExecutorProvider(executions :> IExecutorCommandStore,resolver,transport)
-        let coordinator=ExecutionSessionCoordinator(remote :> IExecutionProvider,executions :> IExecutionSessionJournal,clock)
-        let actor=system.ActorOf(ExecutionSessionActor.Props coordinator,"main-execution-session")
-        let callbacks=MainProductionCallbacks(clock,actor,remote,candidates,github,preparation)
-        let workflow=MainRouteWorkflow(clock,workItems,candidates,executions :> IExecutorCommandStore,executions :> IExecutionSessionJournal,workItemId,principal)
-        let advance (route:HostedRoutePlan) intent _ token=workflow.Advance(preparation,intent,callbacks.TryCandidateReceipt route.CandidateId,token)
-        let reconcile route intent token=callbacks.Reconcile(route,intent,token)
-        let preflight (route:HostedRoutePlan) (intent:EffectIntent) token=task {
-            let! ownership =
-                if intent.Kind=AcquireExternalClaim then Task.FromResult(Ok())
-                else task {
-                    let! claim=github.ReadClaim(route.ClaimResourceId,Id.operationValue route.ClaimOperationId,token)
-                    return claim|>Result.map ignore }
-            match ownership with
-            | Error reason->return Error reason
-            | Ok() when intent.Kind<>MergePullRequest->return Ok()
-            | Ok()->
-                let! candidate=candidates.Read(route.CandidateId,token)
-                match candidate with
-                | Error reason->return Error reason
-                | Ok value->
-                    let! qualification=github.CheckProtectedHead(route.BranchRef,value.Candidate.HeadSha,token)
-                    return qualification|>Result.map ignore }
-        let hosted=HostedWriterProviderAdapter.Create callbacks.Calls
-        let driver=MainEffectDriver(clock,workItems,workItemId,principal,hosted,reconcile,advance,preflight)
-        let loop=task {
-            while not cancellationToken.IsCancellationRequested do
-                let! recovered=HostedWriterJournal.recover workItems workItemId cancellationToken
-                match recovered with
-                | Error _->do! Task.Delay(TimeSpan.FromSeconds 1.,cancellationToken)
-                | Ok current->
-                    let results=ResizeArray<MainEffectDriveResult>()
-                    for intent in current.UnsettledEffects do
-                        let! result=driver.Drive(intent.OperationId,cancellationToken)
-                        results.Add result
-                    let! _=workflow.RecoverContinuation(preparation,cancellationToken)
-                    do! Task.Delay(pacing results,cancellationToken) }
-        {ExecutionActor=actor;EffectLoop=loop;Workflow=workflow;Callbacks=callbacks;Transport=transport}
+    let startProduction
+        (system: ActorSystem)
+        (clock: TimeProvider)
+        (workItems: IJournalStore)
+        (candidates: ICandidateStore)
+        (executions: PostgreSqlExecutionStore)
+        workItemId
+        principal
+        (resolver: IExecutorBindingResolver)
+        (github: GitHubRouteClient)
+        (transport: IAuthenticatedExecutorTransport)
+        (preparation: MainRoutePreparation)
+        (cancellationToken: CancellationToken)
+        =
+        let remote =
+            RemoteExecutorProvider(executions :> IExecutorCommandStore, resolver, transport)
+
+        let coordinator =
+            ExecutionSessionCoordinator(remote :> IExecutionProvider, executions :> IExecutionSessionJournal, clock)
+
+        let actor =
+            system.ActorOf(ExecutionSessionActor.Props coordinator, "main-execution-session")
+
+        let callbacks =
+            MainProductionCallbacks(clock, actor, remote, candidates, github, preparation)
+
+        let workflow =
+            MainRouteWorkflow(
+                clock,
+                workItems,
+                candidates,
+                executions :> IExecutorCommandStore,
+                executions :> IExecutionSessionJournal,
+                workItemId,
+                principal
+            )
+
+        let advance (route: HostedRoutePlan) intent _ token =
+            workflow.Advance(preparation, intent, callbacks.TryCandidateReceipt route.CandidateId, token)
+
+        let reconcile route intent token =
+            callbacks.Reconcile(route, intent, token)
+
+        let preflight (route: HostedRoutePlan) (intent: EffectIntent) token =
+            task {
+                let! ownership =
+                    if intent.Kind = AcquireExternalClaim then
+                        Task.FromResult(Ok())
+                    else
+                        task {
+                            let! claim =
+                                github.ReadClaim(route.ClaimResourceId, Id.operationValue route.ClaimOperationId, token)
+
+                            return claim |> Result.map ignore
+                        }
+
+                match ownership with
+                | Error reason -> return Error reason
+                | Ok() when intent.Kind <> MergePullRequest -> return Ok()
+                | Ok() ->
+                    let! candidate = candidates.Read(route.CandidateId, token)
+
+                    match candidate with
+                    | Error reason -> return Error reason
+                    | Ok value ->
+                        let! qualification =
+                            github.CheckProtectedHead(route.BranchRef, value.Candidate.HeadSha, token)
+
+                        return qualification |> Result.map ignore
+            }
+
+        let hosted = HostedWriterProviderAdapter.Create callbacks.Calls
+
+        let driver =
+            MainEffectDriver(clock, workItems, workItemId, principal, hosted, reconcile, advance, preflight)
+
+        let loop =
+            task {
+                while not cancellationToken.IsCancellationRequested do
+                    let! recovered = HostedWriterJournal.recover workItems workItemId cancellationToken
+
+                    match recovered with
+                    | Error _ -> do! Task.Delay(TimeSpan.FromSeconds 1., cancellationToken)
+                    | Ok current ->
+                        let results = ResizeArray<MainEffectDriveResult>()
+
+                        for intent in current.UnsettledEffects do
+                            let! result = driver.Drive(intent.OperationId, cancellationToken)
+                            results.Add result
+
+                        let! _ = workflow.RecoverContinuation(preparation, cancellationToken)
+                        do! Task.Delay(pacing results, cancellationToken)
+            }
+
+        {
+            ExecutionActor = actor
+            EffectLoop = loop
+            Workflow = workflow
+            Callbacks = callbacks
+            Transport = transport
+        }
 
 /// The production admission boundary shared by Program and executable tests.
 /// It binds one immutable preparation to one running actor graph. Exact retries
 /// recover the original workflow; conflicting bytes cannot replace authority.
 [<Sealed>]
 type MainProductionAdmission
-    (system:ActorSystem,clock:TimeProvider,workItems:IJournalStore,candidates:ICandidateStore,
-     executions:PostgreSqlExecutionStore,workItemId:WorkItemId,principal:string,
-     github:GitHubRouteClient,transport:IAuthenticatedExecutorTransport,cancellationToken:CancellationToken) =
-    let gate=obj()
-    let mutable running:RunningProductionMainHost option=None
-    let mutable boundDigest:string option=None
-    let mutable boundPreparation:MainRoutePreparation option=None
+    (
+        system: ActorSystem,
+        clock: TimeProvider,
+        workItems: IJournalStore,
+        candidates: ICandidateStore,
+        executions: PostgreSqlExecutionStore,
+        workItemId: WorkItemId,
+        principal: string,
+        github: GitHubRouteClient,
+        transport: IAuthenticatedExecutorTransport,
+        cancellationToken: CancellationToken
+    ) =
+    let gate = obj ()
+    let mutable running: RunningProductionMainHost option = None
+    let mutable boundDigest: string option = None
+    let mutable boundPreparation: MainRoutePreparation option = None
+
     let decode bytes =
         match MainRouteAdmission.decode workItemId principal bytes with
-        | Error reason->Error reason
-        | Ok preparation->
-            let admissionDigest=SHA256.HashData bytes|>Convert.ToHexString|>fun value->value.ToLowerInvariant()
-            Ok(preparation,admissionDigest)
+        | Error reason -> Error reason
+        | Ok preparation ->
+            let admissionDigest =
+                SHA256.HashData bytes
+                |> Convert.ToHexString
+                |> fun value -> value.ToLowerInvariant()
+
+            Ok(preparation, admissionDigest)
+
     let bind preparation admissionDigest =
-            lock gate (fun ()->
-                match running,boundDigest with
-                | Some value,Some existing when existing=admissionDigest->Ok(value,preparation)
-                | Some _,_->Error "main-route-admission-binding-conflict"
-                | None,_->
-                    let resolver=
-                        PostgreSqlExecutorBindingResolver(
+        lock gate (fun () ->
+            match running, boundDigest with
+            | Some value, Some existing when existing = admissionDigest -> Ok(value, preparation)
+            | Some _, _ -> Error "main-route-admission-binding-conflict"
+            | None, _ ->
+                let resolver =
+                    PostgreSqlExecutorBindingResolver(
+                        executions :> IExecutorCommandStore,
+                        executions :> IExecutionSessionJournal,
+                        preparation.LaunchIntent.Key.AssignmentId,
+                        preparation.LaunchIntent.Key.AttemptId
+                    )
+                    :> IExecutorBindingResolver
+
+                let value =
+                    MainHostComposition.startProduction
+                        system
+                        clock
+                        workItems
+                        candidates
+                        executions
+                        workItemId
+                        principal
+                        resolver
+                        github
+                        transport
+                        preparation
+                        cancellationToken
+
+                running <- Some value
+                boundDigest <- Some admissionDigest
+                boundPreparation <- Some preparation
+                Ok(value, preparation))
+
+    member _.Running = lock gate (fun () -> running)
+
+    interface IMainRouteAdmissionHandler with
+        member _.Admit(bytes, token) =
+            task {
+                match decode bytes with
+                | Error reason -> return Error reason
+                | Ok(preparation, digest) ->
+                    match bind preparation digest with
+                    | Error reason -> return Error reason
+                    | Ok(value, _) -> return! value.Workflow.Prepare(preparation, token)
+            }
+
+        member _.RecoverPaused(bytes, token) =
+            task {
+                match decode bytes with
+                | Error reason -> return Error reason
+                | Ok(preparation, digest) ->
+                    // Validate every immutable preparation field against the durable
+                    // Core and execution journals before starting or caching a graph.
+                    // A canonical but altered recovery document therefore cannot
+                    // poison a later retry of the exact original bytes.
+                    let validator =
+                        MainRouteWorkflow(
+                            clock,
+                            workItems,
+                            candidates,
                             executions :> IExecutorCommandStore,
                             executions :> IExecutionSessionJournal,
-                            preparation.LaunchIntent.Key.AssignmentId,
-                            preparation.LaunchIntent.Key.AttemptId) :> IExecutorBindingResolver
-                    let value=
-                        MainHostComposition.startProduction system clock workItems candidates executions
-                            workItemId principal resolver github transport preparation cancellationToken
-                    running<-Some value
-                    boundDigest<-Some admissionDigest
-                    boundPreparation<-Some preparation
-                    Ok(value,preparation))
-    member _.Running = lock gate (fun ()->running)
-    interface IMainRouteAdmissionHandler with
-        member _.Admit(bytes,token)=task {
-            match decode bytes with
-            | Error reason->return Error reason
-            | Ok(preparation,digest)->
-                match bind preparation digest with
-                | Error reason->return Error reason
-                | Ok(value,_)->return! value.Workflow.Prepare(preparation,token) }
-        member _.RecoverPaused(bytes,token)=task {
-            match decode bytes with
-            | Error reason->return Error reason
-            | Ok(preparation,digest)->
-                // Validate every immutable preparation field against the durable
-                // Core and execution journals before starting or caching a graph.
-                // A canonical but altered recovery document therefore cannot
-                // poison a later retry of the exact original bytes.
-                let validator=MainRouteWorkflow(clock,workItems,candidates,executions :> IExecutorCommandStore,executions :> IExecutionSessionJournal,workItemId,principal)
-                let! validated=validator.ValidatePausedBinding(preparation,token)
-                match validated with
-                | Error reason->return Error reason
-                | Ok()->
-                    let! readback=github.ReadHostedRoute(preparation.Route,token)
-                    let! claim=github.ReadClaim(preparation.Route.ClaimResourceId,Id.operationValue preparation.Route.ClaimOperationId,token)
-                    match readback,claim with
-                    | Error reason,_->return Error reason
-                    | Ok fresh,claimReadback->
-                        match bind preparation digest with
-                        | Error reason->return Error reason
-                        | Ok(value,_)->
-                            // A lost claim or expired delivery clock leaves the
-                            // exact graph paused and observation-only. Its pump may
-                            // reconcile an already exposed PR, but status cannot
-                            // become dispatch-enabled and Resume remains refused.
-                            match claimReadback with
-                            | Error _->return Ok()
-                            | Ok _ when clock.GetUtcNow()>=preparation.Budget.DeliveryDeadline->return Ok()
-                            | Ok _->return! value.Workflow.ReconnectPaused(preparation,fresh,token) }
-        member _.Status(token)=task {
-            let! recovered=HostedWriterJournal.recover workItems workItemId token
-            match recovered with
-            | Error failures->return Error(sprintf "%A" failures)
-            | Ok value->
-                let admitted,preparation=lock gate (fun()->boundDigest.IsSome,boundPreparation)
-                let now=clock.GetUtcNow()
-                let mode=
-                    match value.State.Control with
-                    | ControlState.Running->"running"|ControlState.Paused _->"paused"|ControlState.CancelPending _->"cancel-pending"
-                    | ControlState.Cancelled _->"cancelled"|ControlState.Revoked _->"revoked"
-                let unknown=value.State.Operations|>Map.values|>Seq.filter(function NeedsObservation _->true|_->false)|>Seq.length
-                let executionRequired =
-                    value.State.HostedRoute
-                    |> Option.forall(fun route->
-                        value.State.HostedEffectReadbacks
-                        |> Map.tryFind route.ProcessOperationId
-                        |> Option.exists _.Exists
-                        |> not)
-                let findings=ResizeArray<string>()
-                if not admitted then findings.Add "main-route-admission-required"
-                if value.State.Control<>ControlState.Running then findings.Add "main-route-control-not-running"
-                if not value.State.ReadbackCurrent then findings.Add "main-route-readback-not-current"
-                match value.State.HostedRoute with
-                | None->findings.Add "main-route-not-selected"
-                | Some route when route.Generation<>value.State.Generation->findings.Add "main-route-generation-stale"
-                | Some route->
-                    match Map.tryFind route.AttemptId value.State.Attempts with
-                    | Some {Status=AttemptStatus.Completed|AttemptStatus.CancelledByRunner|AttemptStatus.ReconciledAbsent _}->findings.Add "main-route-attempt-terminal"
-                    | Some {Status=AttemptStatus.OutcomeUnknown _}->findings.Add "main-route-attempt-observation-required"
-                    | _->()
-                match value.State.SubscriptionBudget with
-                | Some budget when budget.Schema=FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.budgetSchema && budget.AttemptLimit=1 && budget.MaximumRuntime>TimeSpan.Zero && budget.MaximumRuntime<=TimeSpan.FromMinutes 30. && budget.DeliveryDeadline>now->()
-                | _->findings.Add "main-route-budget-not-current"
-                match value.State.SubscriptionBudget with
-                | Some budget when not executionRequired || budget.ExecutionDeadline>now->()
-                | _->findings.Add "main-route-execution-budget-not-current"
-                match value.State.Reservation with
-                | Some reservation when reservation.Generation=value.State.Generation && (not executionRequired || reservation.ExpiresAt>now)->()
-                | _->findings.Add "main-route-reservation-not-current"
-                match preparation with
-                | Some prep when prep.Runner.Generation=value.State.Generation && prep.ExecutionReservation.Generation=Id.generationValue value.State.Generation
-                                 && (not executionRequired || (prep.Runner.ExpiresAt>now && prep.ExecutionReservation.Deadline>now))->()
-                | _->findings.Add "main-route-executor-authority-not-current"
-                if unknown>0 then findings.Add "main-route-observation-required"
-                let dispatch=findings.Count=0
-                return Ok{Admitted=admitted;Ready=dispatch;DispatchEnabled=dispatch;Mode=mode
-                          Sequence=Id.revisionValue value.State.Revision;Generation=Id.generationValue value.State.Generation
-                          UnknownOperations=unknown;Findings=List.ofSeq findings} }
-        member _.Control(control,token)=task {
-            if control.CommandId=Guid.Empty||control.ExpectedSequence<0L||control.ExpectedGeneration<0L
-               ||control.PrincipalId<>principal||String.IsNullOrWhiteSpace control.Reason||control.Reason<>control.Reason.Trim()
-               ||control.IssuedAt=DateTimeOffset.MinValue||control.ExpiresAt<=control.IssuedAt then
-                return Error "invalid-main-control-request"
-            else
-                let command=
-                    match control.Action with
-                    | "pause"->Some(Pause control.Reason)
-                    | "resume"->Some Resume
-                    | "revoke"->Some(Revoke control.Reason)
-                    | "cancel"->Some(RequestCancel control.Reason)
-                    | _->None
-                match command with
-                | None->return Error "invalid-main-control-action"
-                | Some command->
-                    let envelope=
-                        {CommandId=Id.command control.CommandId;ProtocolVersion=Id.protocolVersion 1 0
-                         ExpectedRevision=Id.revision control.ExpectedSequence;ExpectedGeneration=Id.generation control.ExpectedGeneration
-                         PrincipalId=control.PrincipalId;SessionId=None;IssuedAt=control.IssuedAt;ExpiresAt=control.ExpiresAt;Command=command}
-                    let! appended=HostedWriterJournal.decideAndAppend clock workItems workItemId envelope token
-                    match appended with
-                    | Error reason->return Error reason
-                    | Ok(decision,sequence)->
-                        match decision.Receipt.Disposition with
-                        | ReceiptDisposition.Accepted|ReceiptDisposition.Duplicate when control.Action="cancel"->
-                            let selected=lock gate (fun()->running,boundPreparation)
-                            match selected with
-                            | Some host,Some preparation->
-                                try
-                                    let! result=host.ExecutionActor.Ask<CoordinationResult>(box(Cancel preparation.LaunchIntent.Key),TimeSpan.FromSeconds 30.,token)
-                                    let detail=
-                                        match result with
-                                        | SessionAdvanced _|SessionDuplicate _->"execution-cancel-reconciled"
-                                        | SessionNeedsReconciliation reason|SessionRefused reason->reason
-                                    let! durable=(executions :> IExecutionSessionJournal).ReadAttempt(preparation.LaunchIntent.Key.AssignmentId,preparation.LaunchIntent.Key.AttemptId,token)
-                                    let observed=
-                                        durable
-                                        |>Option.bind(fun stored->SessionState.replay stored.Events)
-                                        |>Option.bind _.Observation
-                                        |>Option.map(fun value->match value.Lifecycle with Cancelled|Succeeded|Failed|DeadlineExceeded->true|_->false)
-                                        |>Option.defaultValue false
-                                    return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=Some observed;Detail=detail}
-                                with :? OperationCanceledException->
-                                    return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=Some false;Detail="execution-cancel-observation-timeout"}
-                            | _->return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=Some false;Detail="execution-cancel-binding-unavailable"}
-                        | ReceiptDisposition.Accepted|ReceiptDisposition.Duplicate when control.Action="revoke"->
-                            match lock gate (fun()->boundPreparation) with
-                            | None->return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=None;Detail=decision.Receipt.Detail}
-                            | Some preparation->
-                                let reservation=preparation.ExecutionReservation
-                                let! released=(executions :> IExecutorCommandStore).ReleaseSubscription(reservation.ReservationId,reservation.AttemptId,reservation.Generation,token)
-                                match released with
-                                | SubscriptionReleased|SubscriptionReleaseDuplicate->
-                                    return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=None;Detail=decision.Receipt.Detail}
-                                | SubscriptionReleaseConflict->return Error "subscription-release-conflict"
-                        | ReceiptDisposition.Accepted|ReceiptDisposition.Duplicate->
-                            return Ok{Sequence=sequence;Action=control.Action;RequestPersisted=true;ProcessTerminationObserved=None;Detail=decision.Receipt.Detail}
-                        | _->return Error decision.Receipt.Detail }
+                            workItemId,
+                            principal
+                        )
+
+                    let! validated = validator.ValidatePausedBinding(preparation, token)
+
+                    match validated with
+                    | Error reason -> return Error reason
+                    | Ok() ->
+                        let! readback = github.ReadHostedRoute(preparation.Route, token)
+
+                        let! claim =
+                            github.ReadClaim(
+                                preparation.Route.ClaimResourceId,
+                                Id.operationValue preparation.Route.ClaimOperationId,
+                                token
+                            )
+
+                        match readback, claim with
+                        | Error reason, _ -> return Error reason
+                        | Ok fresh, claimReadback ->
+                            match bind preparation digest with
+                            | Error reason -> return Error reason
+                            | Ok(value, _) ->
+                                // A lost claim or expired delivery clock leaves the
+                                // exact graph paused and observation-only. Its pump may
+                                // reconcile an already exposed PR, but status cannot
+                                // become dispatch-enabled and Resume remains refused.
+                                match claimReadback with
+                                | Error _ -> return Ok()
+                                | Ok _ when clock.GetUtcNow() >= preparation.Budget.DeliveryDeadline -> return Ok()
+                                | Ok _ -> return! value.Workflow.ReconnectPaused(preparation, fresh, token)
+            }
+
+        member _.Status(token) =
+            task {
+                let! recovered = HostedWriterJournal.recover workItems workItemId token
+
+                match recovered with
+                | Error failures -> return Error(sprintf "%A" failures)
+                | Ok value ->
+                    let admitted, preparation =
+                        lock gate (fun () -> boundDigest.IsSome, boundPreparation)
+
+                    let now = clock.GetUtcNow()
+
+                    let mode =
+                        match value.State.Control with
+                        | ControlState.Running -> "running"
+                        | ControlState.Paused _ -> "paused"
+                        | ControlState.CancelPending _ -> "cancel-pending"
+                        | ControlState.Cancelled _ -> "cancelled"
+                        | ControlState.Revoked _ -> "revoked"
+
+                    let unknown =
+                        value.State.Operations
+                        |> Map.values
+                        |> Seq.filter (function
+                            | NeedsObservation _ -> true
+                            | _ -> false)
+                        |> Seq.length
+
+                    let executionRequired =
+                        value.State.HostedRoute
+                        |> Option.forall (fun route ->
+                            value.State.HostedEffectReadbacks
+                            |> Map.tryFind route.ProcessOperationId
+                            |> Option.exists _.Exists
+                            |> not)
+
+                    let findings = ResizeArray<string>()
+
+                    if not admitted then
+                        findings.Add "main-route-admission-required"
+
+                    if value.State.Control <> ControlState.Running then
+                        findings.Add "main-route-control-not-running"
+
+                    if not value.State.ReadbackCurrent then
+                        findings.Add "main-route-readback-not-current"
+
+                    match value.State.HostedRoute with
+                    | None -> findings.Add "main-route-not-selected"
+                    | Some route when route.Generation <> value.State.Generation ->
+                        findings.Add "main-route-generation-stale"
+                    | Some route ->
+                        match Map.tryFind route.AttemptId value.State.Attempts with
+                        | Some {
+                                   Status = AttemptStatus.Completed | AttemptStatus.CancelledByRunner | AttemptStatus.ReconciledAbsent _
+                               } -> findings.Add "main-route-attempt-terminal"
+                        | Some {
+                                   Status = AttemptStatus.OutcomeUnknown _
+                               } -> findings.Add "main-route-attempt-observation-required"
+                        | _ -> ()
+
+                    match value.State.SubscriptionBudget with
+                    | Some budget when
+                        budget.Schema = FS.GG.Coordination.Orchestration.Pilot.SubscriptionPilot.budgetSchema
+                        && budget.AttemptLimit = 1
+                        && budget.MaximumRuntime > TimeSpan.Zero
+                        && budget.MaximumRuntime <= TimeSpan.FromMinutes 30.
+                        && budget.DeliveryDeadline > now
+                        ->
+                        ()
+                    | _ -> findings.Add "main-route-budget-not-current"
+
+                    match value.State.SubscriptionBudget with
+                    | Some budget when not executionRequired || budget.ExecutionDeadline > now -> ()
+                    | _ -> findings.Add "main-route-execution-budget-not-current"
+
+                    match value.State.Reservation with
+                    | Some reservation when
+                        reservation.Generation = value.State.Generation
+                        && (not executionRequired || reservation.ExpiresAt > now)
+                        ->
+                        ()
+                    | _ -> findings.Add "main-route-reservation-not-current"
+
+                    match preparation with
+                    | Some prep when
+                        prep.Runner.Generation = value.State.Generation
+                        && prep.ExecutionReservation.Generation = Id.generationValue value.State.Generation
+                        && (not executionRequired
+                            || (prep.Runner.ExpiresAt > now && prep.ExecutionReservation.Deadline > now))
+                        ->
+                        ()
+                    | _ -> findings.Add "main-route-executor-authority-not-current"
+
+                    if unknown > 0 then
+                        findings.Add "main-route-observation-required"
+
+                    let dispatch = findings.Count = 0
+
+                    return
+                        Ok
+                            {
+                                Admitted = admitted
+                                Ready = dispatch
+                                DispatchEnabled = dispatch
+                                Mode = mode
+                                Sequence = Id.revisionValue value.State.Revision
+                                Generation = Id.generationValue value.State.Generation
+                                UnknownOperations = unknown
+                                Findings = List.ofSeq findings
+                            }
+            }
+
+        member _.Control(control, token) =
+            task {
+                if
+                    control.CommandId = Guid.Empty
+                    || control.ExpectedSequence < 0L
+                    || control.ExpectedGeneration < 0L
+                    || control.PrincipalId <> principal
+                    || String.IsNullOrWhiteSpace control.Reason
+                    || control.Reason <> control.Reason.Trim()
+                    || control.IssuedAt = DateTimeOffset.MinValue
+                    || control.ExpiresAt <= control.IssuedAt
+                then
+                    return Error "invalid-main-control-request"
+                else
+                    let command =
+                        match control.Action with
+                        | "pause" -> Some(Pause control.Reason)
+                        | "resume" -> Some Resume
+                        | "revoke" -> Some(Revoke control.Reason)
+                        | "cancel" -> Some(RequestCancel control.Reason)
+                        | _ -> None
+
+                    match command with
+                    | None -> return Error "invalid-main-control-action"
+                    | Some command ->
+                        let envelope =
+                            {
+                                CommandId = Id.command control.CommandId
+                                ProtocolVersion = Id.protocolVersion 1 0
+                                ExpectedRevision = Id.revision control.ExpectedSequence
+                                ExpectedGeneration = Id.generation control.ExpectedGeneration
+                                PrincipalId = control.PrincipalId
+                                SessionId = None
+                                IssuedAt = control.IssuedAt
+                                ExpiresAt = control.ExpiresAt
+                                Command = command
+                            }
+
+                        let! appended =
+                            HostedWriterJournal.decideAndAppend clock workItems workItemId envelope token
+
+                        match appended with
+                        | Error reason -> return Error reason
+                        | Ok(decision, sequence) ->
+                            match decision.Receipt.Disposition with
+                            | ReceiptDisposition.Accepted
+                            | ReceiptDisposition.Duplicate when control.Action = "cancel" ->
+                                let selected = lock gate (fun () -> running, boundPreparation)
+
+                                match selected with
+                                | Some host, Some preparation ->
+                                    try
+                                        let! result =
+                                            host.ExecutionActor.Ask<CoordinationResult>(
+                                                box (Cancel preparation.LaunchIntent.Key),
+                                                TimeSpan.FromSeconds 30.,
+                                                token
+                                            )
+
+                                        let detail =
+                                            match result with
+                                            | SessionAdvanced _
+                                            | SessionDuplicate _ -> "execution-cancel-reconciled"
+                                            | SessionNeedsReconciliation reason
+                                            | SessionRefused reason -> reason
+
+                                        let! durable =
+                                            (executions :> IExecutionSessionJournal)
+                                                .ReadAttempt(
+                                                    preparation.LaunchIntent.Key.AssignmentId,
+                                                    preparation.LaunchIntent.Key.AttemptId,
+                                                    token
+                                                )
+
+                                        let observed =
+                                            durable
+                                            |> Option.bind (fun stored -> SessionState.replay stored.Events)
+                                            |> Option.bind _.Observation
+                                            |> Option.map (fun value ->
+                                                match value.Lifecycle with
+                                                | Cancelled
+                                                | Succeeded
+                                                | Failed
+                                                | DeadlineExceeded -> true
+                                                | _ -> false)
+                                            |> Option.defaultValue false
+
+                                        return
+                                            Ok
+                                                {
+                                                    Sequence = sequence
+                                                    Action = control.Action
+                                                    RequestPersisted = true
+                                                    ProcessTerminationObserved = Some observed
+                                                    Detail = detail
+                                                }
+                                    with :? OperationCanceledException ->
+                                        return
+                                            Ok
+                                                {
+                                                    Sequence = sequence
+                                                    Action = control.Action
+                                                    RequestPersisted = true
+                                                    ProcessTerminationObserved = Some false
+                                                    Detail = "execution-cancel-observation-timeout"
+                                                }
+                                | _ ->
+                                    return
+                                        Ok
+                                            {
+                                                Sequence = sequence
+                                                Action = control.Action
+                                                RequestPersisted = true
+                                                ProcessTerminationObserved = Some false
+                                                Detail = "execution-cancel-binding-unavailable"
+                                            }
+                            | ReceiptDisposition.Accepted
+                            | ReceiptDisposition.Duplicate when control.Action = "revoke" ->
+                                match lock gate (fun () -> boundPreparation) with
+                                | None ->
+                                    return
+                                        Ok
+                                            {
+                                                Sequence = sequence
+                                                Action = control.Action
+                                                RequestPersisted = true
+                                                ProcessTerminationObserved = None
+                                                Detail = decision.Receipt.Detail
+                                            }
+                                | Some preparation ->
+                                    let reservation = preparation.ExecutionReservation
+
+                                    let! released =
+                                        (executions :> IExecutorCommandStore)
+                                            .ReleaseSubscription(
+                                                reservation.ReservationId,
+                                                reservation.AttemptId,
+                                                reservation.Generation,
+                                                token
+                                            )
+
+                                    match released with
+                                    | SubscriptionReleased
+                                    | SubscriptionReleaseDuplicate ->
+                                        return
+                                            Ok
+                                                {
+                                                    Sequence = sequence
+                                                    Action = control.Action
+                                                    RequestPersisted = true
+                                                    ProcessTerminationObserved = None
+                                                    Detail = decision.Receipt.Detail
+                                                }
+                                    | SubscriptionReleaseConflict -> return Error "subscription-release-conflict"
+                            | ReceiptDisposition.Accepted
+                            | ReceiptDisposition.Duplicate ->
+                                return
+                                    Ok
+                                        {
+                                            Sequence = sequence
+                                            Action = control.Action
+                                            RequestPersisted = true
+                                            ProcessTerminationObserved = None
+                                            Detail = decision.Receipt.Detail
+                                        }
+                            | _ -> return Error decision.Receipt.Detail
+            }

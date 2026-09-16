@@ -7,31 +7,31 @@
   "artifacts": [
     {
       "name": "mutation-proof",
-      "sha256": "4585fb2f68700dd8d8f0a470a55591fc0d5b6e8a31d2936ff2388fe655204060"
+      "sha256": "b4f6187b606e99e5bf787cf0dd94aa66c650c25c5f86a074c842ebbfd4cc995b"
     },
     {
       "name": "validator-boundary",
-      "sha256": "22afe424bd4578e987d6c39b6beb52d58b933e491798508cefb4648e96ff3894"
+      "sha256": "64e7fd87f4cb8e911c0c44384cb4277d9ce0b3a6ad3a2765cb4caf08d7a548c2"
     },
     {
       "name": "critique-bundle",
-      "sha256": "ae4268a7eb9eebd4ecc3a050a59acf9b3829d6c809689e5fc5a8eed47b129f74"
+      "sha256": "f8c895e887008544168095e43a6033d4c9b00b4e998650bfb8d61daeaa9a4ca1"
     },
     {
       "name": "critique-root-digest",
-      "sha256": "e1b7b0fdf7b741821b1e9ee42bbbf90b2c38b793b715552e295190fbce64e498"
+      "sha256": "1b7c8ce8a9930d419d6429685753ba5156c105193e0a2c4b7fef970f369032d5"
     },
     {
       "name": "critique-evidence-set",
-      "sha256": "f5b67a9866630ff6a8f24599e3e9057e87c8a8249a6c183b1a37dd62483b843b"
+      "sha256": "5c11d62d70d608608a00bc73451144d2cc57ca26d3cb39daaef62132c3461b85"
     },
     {
       "name": "critique-finding-set",
-      "sha256": "a9d3f9aebddf62cee1d151e51096377eee70a9b018d7a2948fa9eb63b7ec5705"
+      "sha256": "96cc7ddf9e92dfb9057b883c1e3017b52dc9f4f2c0f8349c29c2d38a808a4398"
     },
     {
       "name": "acceptance-harness",
-      "sha256": "1920251c5bb405421107fdf617ae9043a51ed981c3ce18be3952eac82bf9ee43"
+      "sha256": "a3bdb8a81d184e9d1db8fb0664f369b400b98908da123b2590023582ede0589a"
     },
     {
       "name": "q7-candidate-manifest",
@@ -63,5 +63,5 @@
     }
   ],
   "acceptedAt": "2026-08-31T02:05:00Z",
-  "digest": "c5b0bf313583e26dc6a2f471b58e22d6315f4ff425d05cf6f74070c45c5ecde2"
+  "digest": "5ec683e279e2ada83e7fe02b0093e7413f33a720dd7e778dba1b615c0f660922"
 }

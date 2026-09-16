@@ -8,19 +8,31 @@ open System.Text.Json.Nodes
 open Xunit
 open FS.GG.Coordination.Qualification.Contracts
 
-let private time minute = DateTimeOffset(2026, 8, 29, 0, minute, 0, TimeSpan.Zero)
+let private time minute =
+    DateTimeOffset(2026, 8, 29, 0, minute, 0, TimeSpan.Zero)
+
 let private digest character = String(character, 64)
 
 let private content id producer minute =
-    { Id = id
-      Sha256 = SHA256.HashData(Encoding.UTF8.GetBytes id) |> Convert.ToHexString |> _.ToLowerInvariant()
-      Bytes = 100L
-      MediaType = "application/json"
-      Producer = producer
-      ObservedAt = time minute }
+    {
+        Id = id
+        Sha256 =
+            SHA256.HashData(Encoding.UTF8.GetBytes id)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+        Bytes = 100L
+        MediaType = "application/json"
+        Producer = producer
+        ObservedAt = time minute
+    }
 
 let private validInput () =
-    let sources = [ content "source-a" "candidate-builder" 1; content "source-b" "candidate-builder" 1 ]
+    let sources =
+        [
+            content "source-a" "candidate-builder" 1
+            content "source-b" "candidate-builder" 1
+        ]
+
     let model = [ content "model-a" "model-compiler" 1 ]
     let compiler = [ content "compiler-a" "model-compiler" 1 ]
     let dependencies = [ content "dependencies-a" "dependency-reader" 1 ]
@@ -28,36 +40,87 @@ let private validInput () =
     let independentCases = [ content "independent-a" "oracle-author" 2 ]
     let externalFixtures = [ content "fixture-a" "fixture-curator" 2 ]
     let packages = [ content "package-a" "package-builder" 3 ]
+
     let results =
-        [ { Id = "result-q1"; QGate = "Q1"; Sha256 = digest 'd'; Producer = "gate-runner"; CompletedAt = time 5 }
-          { Id = "result-q2"; QGate = "Q2"; Sha256 = digest 'e'; Producer = "gate-runner"; CompletedAt = time 6 }
-          { Id = "result-q7"; QGate = "Q7"; Sha256 = digest 'f'; Producer = "gate-runner"; CompletedAt = time 7 } ]
+        [
+            {
+                Id = "result-q1"
+                QGate = "Q1"
+                Sha256 = digest 'd'
+                Producer = "gate-runner"
+                CompletedAt = time 5
+            }
+            {
+                Id = "result-q2"
+                QGate = "Q2"
+                Sha256 = digest 'e'
+                Producer = "gate-runner"
+                CompletedAt = time 6
+            }
+            {
+                Id = "result-q7"
+                QGate = "Q7"
+                Sha256 = digest 'f'
+                Producer = "gate-runner"
+                CompletedAt = time 7
+            }
+        ]
+
     let reviewers =
-        [ { Id = "review-architecture"; Role = "architecture"; Sha256 = digest '1'; Principal = "independent-critic"; CompletedAt = time 8 } ]
-    { Candidate =
-        { CommitSha = String('a', 40)
-          TreeSha256 = digest 'b'
-          ContractSha256 = digest 'c'
-          Producer = "candidate-builder" }
-      Expected =
-        { Sources = sources |> List.map _.Id; Model = model |> List.map _.Id; Compiler = compiler |> List.map _.Id
-          Dependencies = dependencies |> List.map _.Id; GeneratedCases = generatedCases |> List.map _.Id
-          IndependentCases = independentCases |> List.map _.Id; ExternalFixtures = externalFixtures |> List.map _.Id
-          Packages = packages |> List.map _.Id; Results = results |> List.map _.Id; Reviewers = reviewers |> List.map _.Id }
-      CreatedAt = time 10
-      Sources = sources; Model = model; Compiler = compiler; Dependencies = dependencies
-      GeneratedCases = generatedCases; IndependentCases = independentCases
-      ExternalFixtures = externalFixtures; Packages = packages
-      Environment =
-        { Os = "linux"
-          Architecture = "x64"
-          Runtime = ".NET 10.0.11"
-          Locale = "C.UTF-8"
-          Timezone = "UTC"
-          NetworkMode = "isolated"
-          Producer = "environment-observer"
-          ObservedAt = time 3 }
-      Results = results; Reviewers = reviewers }
+        [
+            {
+                Id = "review-architecture"
+                Role = "architecture"
+                Sha256 = digest '1'
+                Principal = "independent-critic"
+                CompletedAt = time 8
+            }
+        ]
+
+    {
+        Candidate =
+            {
+                CommitSha = String('a', 40)
+                TreeSha256 = digest 'b'
+                ContractSha256 = digest 'c'
+                Producer = "candidate-builder"
+            }
+        Expected =
+            {
+                Sources = sources |> List.map _.Id
+                Model = model |> List.map _.Id
+                Compiler = compiler |> List.map _.Id
+                Dependencies = dependencies |> List.map _.Id
+                GeneratedCases = generatedCases |> List.map _.Id
+                IndependentCases = independentCases |> List.map _.Id
+                ExternalFixtures = externalFixtures |> List.map _.Id
+                Packages = packages |> List.map _.Id
+                Results = results |> List.map _.Id
+                Reviewers = reviewers |> List.map _.Id
+            }
+        CreatedAt = time 10
+        Sources = sources
+        Model = model
+        Compiler = compiler
+        Dependencies = dependencies
+        GeneratedCases = generatedCases
+        IndependentCases = independentCases
+        ExternalFixtures = externalFixtures
+        Packages = packages
+        Environment =
+            {
+                Os = "linux"
+                Architecture = "x64"
+                Runtime = ".NET 10.0.11"
+                Locale = "C.UTF-8"
+                Timezone = "UTC"
+                NetworkMode = "isolated"
+                Producer = "environment-observer"
+                ObservedAt = time 3
+            }
+        Results = results
+        Reviewers = reviewers
+    }
 
 let private generated input =
     match QualificationManifest.generate input with
@@ -69,6 +132,7 @@ let private codes bytes =
         match QualificationManifest.generateInventory (validInput ()).Expected with
         | Ok value -> value
         | Error findings -> failwithf "%A" findings
+
     match QualificationManifest.validate (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(bytes)) with
     | Ok _ -> Set.empty
     | Error findings -> findings |> List.map _.Code |> Set.ofList
@@ -77,7 +141,14 @@ let private codes bytes =
 let ``complete qualification manifest is canonical deterministic and self bound`` () =
     let input = validInput ()
     let first = generated input
-    let reordered = generated { input with Sources = List.rev input.Sources; Results = List.rev input.Results }
+
+    let reordered =
+        generated
+            { input with
+                Sources = List.rev input.Sources
+                Results = List.rev input.Results
+            }
+
     Assert.Equal<byte>(first, reordered)
     Assert.True(Set.isEmpty (codes first))
     use document = JsonDocument.Parse first
@@ -88,12 +159,24 @@ let ``complete qualification manifest is canonical deterministic and self bound`
 [<Fact>]
 let ``semantic input changes manifest identity`` () =
     let input = validInput ()
-    let changedSource = { input.Sources.Head with Sha256 = digest '9' }
+
+    let changedSource =
+        { input.Sources.Head with
+            Sha256 = digest '9'
+        }
+
     let before = generated input
-    let after = generated { input with Sources = changedSource :: input.Sources.Tail }
+
+    let after =
+        generated
+            { input with
+                Sources = changedSource :: input.Sources.Tail
+            }
+
     Assert.NotEqual<byte array>(before, after)
     use beforeDocument = JsonDocument.Parse before
     use afterDocument = JsonDocument.Parse after
+
     Assert.NotEqual<string>(
         beforeDocument.RootElement.GetProperty("digest").GetString(),
         afterDocument.RootElement.GetProperty("digest").GetString()
@@ -109,12 +192,28 @@ let private sha256 (bytes: byte array) =
 
 let private reseal (root: JsonObject) =
     let inputs = JsonObject()
-    for name in [ "compiler"; "dependencies"; "environment"; "externalFixtures"; "generatedCases"; "independentCases"; "model"; "packages"; "sources" ] do
+
+    for name in
+        [
+            "compiler"
+            "dependencies"
+            "environment"
+            "externalFixtures"
+            "generatedCases"
+            "independentCases"
+            "model"
+            "packages"
+            "sources"
+        ] do
         inputs.Add(name, root[name].DeepClone())
+
     let inputDigest = inputs.ToJsonString() |> Encoding.UTF8.GetBytes |> sha256
     root["candidate"].AsObject()["inputSetSha256"] <- inputDigest
+
     for name in [ "results"; "reviewers" ] do
-        for item in root[name].AsArray() do item.AsObject()["inputSetSha256"] <- inputDigest
+        for item in root[name].AsArray() do
+            item.AsObject()["inputSetSha256"] <- inputDigest
+
     let unsigned = root.DeepClone().AsObject()
     unsigned.Remove("digest") |> ignore
     root["digest"] <- (unsigned.ToJsonString() |> Encoding.UTF8.GetBytes |> sha256)
@@ -123,20 +222,28 @@ let private reseal (root: JsonObject) =
 [<Fact>]
 let ``qualification manifest omissions substitutions and independence failures are red`` () =
     let baseline = generated (validInput ())
+
     let cases: (string * (JsonObject -> unit)) list =
-        [ "QM-CATEGORY", fun root -> root.Remove("model") |> ignore
-          "QM-CATEGORY-EMPTY", fun root -> root["sources"] <- JsonArray()
-          "QM-ENTRY-DUPLICATE", fun root ->
-              let entries = root["sources"].AsArray()
-              entries.Add(JsonNode.Parse(entries[0].ToJsonString()))
-          "QM-CANDIDATE-BINDING", fun root -> root["sources"].AsArray().[0].AsObject()["candidateSha"] <- String('9', 40)
-          "QM-INPUT-SET", fun root -> root["candidate"].AsObject()["inputSetSha256"] <- digest '9'
-          "QM-INDEPENDENCE", fun root -> root["independentCases"].AsArray().[0].AsObject()["producer"] <- "candidate-builder"
-          "QM-SELF-REVIEW", fun root -> root["reviewers"].AsArray().[0].AsObject()["principal"] <- "gate-runner"
-          "QM-TIME-ORDER", fun root -> root["reviewers"].AsArray().[0].AsObject()["completedAt"] <- "2026-08-29T00:04:00Z"
-          "QM-SCHEMA", fun root -> root["schema"] <- "fsgg.coordination.qualification-manifest/2"
-          "QM-SELF-DIGEST", fun root -> root["digest"] <- digest '0'
-          "QM-ROOT-SHAPE", fun root -> root["unexpected"] <- true ]
+        [
+            "QM-CATEGORY", fun root -> root.Remove("model") |> ignore
+            "QM-CATEGORY-EMPTY", fun root -> root["sources"] <- JsonArray()
+            "QM-ENTRY-DUPLICATE",
+            fun root ->
+                let entries = root["sources"].AsArray()
+                entries.Add(JsonNode.Parse(entries[0].ToJsonString()))
+            "QM-CANDIDATE-BINDING",
+            fun root -> root["sources"].AsArray().[0].AsObject()["candidateSha"] <- String('9', 40)
+            "QM-INPUT-SET", fun root -> root["candidate"].AsObject()["inputSetSha256"] <- digest '9'
+            "QM-INDEPENDENCE",
+            fun root -> root["independentCases"].AsArray().[0].AsObject()["producer"] <- "candidate-builder"
+            "QM-SELF-REVIEW", fun root -> root["reviewers"].AsArray().[0].AsObject()["principal"] <- "gate-runner"
+            "QM-TIME-ORDER",
+            fun root -> root["reviewers"].AsArray().[0].AsObject()["completedAt"] <- "2026-08-29T00:04:00Z"
+            "QM-SCHEMA", fun root -> root["schema"] <- "fsgg.coordination.qualification-manifest/2"
+            "QM-SELF-DIGEST", fun root -> root["digest"] <- digest '0'
+            "QM-ROOT-SHAPE", fun root -> root["unexpected"] <- true
+        ]
+
     for expected, mutation in cases do
         let observed = mutate baseline mutation |> codes
         Assert.Contains(expected, observed)
@@ -144,7 +251,18 @@ let ``qualification manifest omissions substitutions and independence failures a
 [<Fact>]
 let ``resealed truncation of every closed inventory remains red`` () =
     let baseline = generated (validInput ())
-    for category in [ "compiler"; "dependencies"; "externalFixtures"; "generatedCases"; "independentCases"; "model"; "packages"; "sources" ] do
+
+    for category in
+        [
+            "compiler"
+            "dependencies"
+            "externalFixtures"
+            "generatedCases"
+            "independentCases"
+            "model"
+            "packages"
+            "sources"
+        ] do
         let root = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
         let entries = root[category].AsArray()
         let removedId = (entries[entries.Count - 1].AsObject()["id"]).GetValue<string>()
@@ -152,11 +270,15 @@ let ``resealed truncation of every closed inventory remains red`` () =
         let candidate = root["candidate"].AsObject()
         let expectedIds = candidate["expectedIds"].AsObject()
         let declared = expectedIds[category].AsArray()
-        declared.Remove(declared |> Seq.find (fun value -> value.GetValue<string>() = removedId)) |> ignore
+
+        declared.Remove(declared |> Seq.find (fun value -> value.GetValue<string>() = removedId))
+        |> ignore
+
         let observed = reseal root |> codes
         Assert.Contains("QM-INVENTORY-BINDING", observed)
         Assert.DoesNotContain("QM-INPUT-SET", observed)
         Assert.DoesNotContain("QM-SELF-DIGEST", observed)
+
     for category in [ "results"; "reviewers" ] do
         let root = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
         let entries = root[category].AsArray()
@@ -165,7 +287,10 @@ let ``resealed truncation of every closed inventory remains red`` () =
         let candidate = root["candidate"].AsObject()
         let expectedIds = candidate["expectedIds"].AsObject()
         let declared = expectedIds[category].AsArray()
-        declared.Remove(declared |> Seq.find (fun value -> value.GetValue<string>() = removedId)) |> ignore
+
+        declared.Remove(declared |> Seq.find (fun value -> value.GetValue<string>() = removedId))
+        |> ignore
+
         let observed = reseal root |> codes
         Assert.Contains("QM-INVENTORY-BINDING", observed)
         Assert.DoesNotContain("QM-SELF-DIGEST", observed)
@@ -173,46 +298,98 @@ let ``resealed truncation of every closed inventory remains red`` () =
 [<Fact>]
 let ``generated producers cannot be the sole evidence for another gate class`` () =
     let baseline = generated (validInput ())
-    for category in [ "compiler"; "dependencies"; "externalFixtures"; "independentCases"; "model"; "packages"; "sources" ] do
+
+    for category in
+        [
+            "compiler"
+            "dependencies"
+            "externalFixtures"
+            "independentCases"
+            "model"
+            "packages"
+            "sources"
+        ] do
         let root = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
-        for entry in root[category].AsArray() do entry.AsObject()["producer"] <- "case-generator"
+
+        for entry in root[category].AsArray() do
+            entry.AsObject()["producer"] <- "case-generator"
+
         let observed = reseal root |> codes
         Assert.Contains("QM-GENERATED-ONLY", observed)
+
     let resultRoot = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
-    for entry in resultRoot["results"].AsArray() do entry.AsObject()["producer"] <- "case-generator"
+
+    for entry in resultRoot["results"].AsArray() do
+        entry.AsObject()["producer"] <- "case-generator"
+
     Assert.Contains("QM-GENERATED-ONLY", reseal resultRoot |> codes)
     let reviewRoot = JsonNode.Parse(ReadOnlySpan<byte>(baseline)).AsObject()
-    for entry in reviewRoot["reviewers"].AsArray() do entry.AsObject()["principal"] <- "case-generator"
+
+    for entry in reviewRoot["reviewers"].AsArray() do
+        entry.AsObject()["principal"] <- "case-generator"
+
     Assert.Contains("QM-GENERATED-ONLY", reseal reviewRoot |> codes)
 
 [<Fact>]
 let ``harness mutation proof derives all controls and negative observations`` () =
     let input = validInput ()
-    let inventory = QualificationManifest.generateInventory input.Expected |> Result.defaultWith (failwithf "%A")
+
+    let inventory =
+        QualificationManifest.generateInventory input.Expected
+        |> Result.defaultWith (failwithf "%A")
+
     let baseline = generated input
+
     let context =
-        { CandidateCommit = String('1', 40)
-          CandidateTreeSha256 = digest '2'
-          UnitContractSha256 = digest '3'
-          ValidatorSha256 = digest '4' }
+        {
+            CandidateCommit = String('1', 40)
+            CandidateTreeSha256 = digest '2'
+            UnitContractSha256 = digest '3'
+            ValidatorSha256 = digest '4'
+        }
+
     let proof =
         HarnessMutationProof.generate context (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(baseline))
         |> Result.defaultWith (failwithf "%A")
+
     Assert.True(
-        HarnessMutationProof.validate context (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(baseline)) (ReadOnlyMemory<byte>(proof))
-        |> Result.isOk)
+        HarnessMutationProof.validate
+            context
+            (ReadOnlyMemory<byte>(inventory))
+            (ReadOnlyMemory<byte>(baseline))
+            (ReadOnlyMemory<byte>(proof))
+        |> Result.isOk
+    )
+
     use document = JsonDocument.Parse proof
     Assert.Equal(10, document.RootElement.GetProperty("controls").GetArrayLength())
     Assert.Equal(60, document.RootElement.GetProperty("observations").GetArrayLength())
-    Assert.All(document.RootElement.GetProperty("controls").EnumerateArray(), fun item -> Assert.Equal("passed", item.GetProperty("outcome").GetString()))
-    Assert.All(document.RootElement.GetProperty("observations").EnumerateArray(), fun item ->
-        Assert.Equal("rejected", item.GetProperty("outcome").GetString())
-        Assert.True(item.GetProperty("diagnostics").GetArrayLength() > 0))
+
+    Assert.All(
+        document.RootElement.GetProperty("controls").EnumerateArray(),
+        fun item -> Assert.Equal("passed", item.GetProperty("outcome").GetString())
+    )
+
+    Assert.All(
+        document.RootElement.GetProperty("observations").EnumerateArray(),
+        fun item ->
+            Assert.Equal("rejected", item.GetProperty("outcome").GetString())
+            Assert.True(item.GetProperty("diagnostics").GetArrayLength() > 0)
+    )
+
     let mutated = JsonNode.Parse(proof).AsObject()
     mutated["observations"].AsArray().RemoveAt(0)
     let invalid = Encoding.UTF8.GetBytes(mutated.ToJsonString() + "\n")
+
     let findings =
-        match HarnessMutationProof.validate context (ReadOnlyMemory<byte>(inventory)) (ReadOnlyMemory<byte>(baseline)) (ReadOnlyMemory<byte>(invalid)) with
+        match
+            HarnessMutationProof.validate
+                context
+                (ReadOnlyMemory<byte>(inventory))
+                (ReadOnlyMemory<byte>(baseline))
+                (ReadOnlyMemory<byte>(invalid))
+        with
         | Ok _ -> failwith "mutated proof unexpectedly validated"
         | Error values -> values
+
     Assert.Contains(findings, fun item -> item.Code = "HMP-PROOF-MISMATCH")

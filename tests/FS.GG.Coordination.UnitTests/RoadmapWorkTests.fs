@@ -111,18 +111,27 @@ let ``missing duplicate rejected stale and tampered receipts fail closed`` () =
     assertCode "RW-RECEIPT-DUPLICATE" [ validReceipt; validReceipt ]
     assertCode "RW-RECEIPT-STATE" [ receiptWith "rejected" unit5Contract None |> bytes ]
     assertCode "RW-RECEIPT-STALE" [ receiptWith "accepted" (String.replicate 64 "d") None |> bytes ]
-    assertCode "RW-RECEIPT-TAMPERED" [ receiptWith "accepted" unit5Contract (Some(String.replicate 64 "e")) |> bytes ]
+
+    assertCode
+        "RW-RECEIPT-TAMPERED"
+        [
+            receiptWith "accepted" unit5Contract (Some(String.replicate 64 "e")) |> bytes
+        ]
 
 [<Fact>]
 let ``candidate manifest is deterministic and never claims acceptance`` () =
     let candidate =
-        { Commit = String.replicate 40 "1"
-          Tree = String.replicate 40 "2" }
+        {
+            Commit = String.replicate 40 "1"
+            Tree = String.replicate 40 "2"
+        }
 
     let artifact =
-        { Name = "skill"
-          Path = ".agents/skills/github-substrate-v2-work/SKILL.md"
-          Bytes = bytes "skill" }
+        {
+            Name = "skill"
+            Path = ".agents/skills/github-substrate-v2-work/SKILL.md"
+            Bytes = bytes "skill"
+        }
 
     let create () =
         RoadmapWork.createManifest
@@ -147,13 +156,17 @@ let ``candidate manifest is deterministic and never claims acceptance`` () =
 [<Fact>]
 let ``manifest refuses traversal and validation refuses changed candidate`` () =
     let candidate =
-        { Commit = String.replicate 40 "1"
-          Tree = String.replicate 40 "2" }
+        {
+            Commit = String.replicate 40 "1"
+            Tree = String.replicate 40 "2"
+        }
 
     let escaped =
-        { Name = "escape"
-          Path = "../secret"
-          Bytes = bytes "secret" }
+        {
+            Name = "escape"
+            Path = "../secret"
+            Bytes = bytes "secret"
+        }
 
     match
         RoadmapWork.createManifest
@@ -169,9 +182,11 @@ let ``manifest refuses traversal and validation refuses changed candidate`` () =
     | Error findings -> Assert.Contains("RW-PATH", codes findings)
 
     let artifact =
-        { Name = "skill"
-          Path = "skill.md"
-          Bytes = bytes "skill" }
+        {
+            Name = "skill"
+            Path = "skill.md"
+            Bytes = bytes "skill"
+        }
 
     let manifest =
         RoadmapWork.createManifest
@@ -186,7 +201,8 @@ let ``manifest refuses traversal and validation refuses changed candidate`` () =
 
     let changed =
         { candidate with
-            Tree = String.replicate 40 "3" }
+            Tree = String.replicate 40 "3"
+        }
 
     match
         RoadmapWork.validateManifest
@@ -203,13 +219,17 @@ let ``manifest refuses traversal and validation refuses changed candidate`` () =
 [<Fact>]
 let ``manifest creation requires one canonical UTC instant form`` () =
     let candidate =
-        { Commit = String.replicate 40 "1"
-          Tree = String.replicate 40 "2" }
+        {
+            Commit = String.replicate 40 "1"
+            Tree = String.replicate 40 "2"
+        }
 
     let artifact =
-        { Name = "skill"
-          Path = "skill.md"
-          Bytes = bytes "skill" }
+        {
+            Name = "skill"
+            Path = "skill.md"
+            Bytes = bytes "skill"
+        }
 
     for createdAt in [ "2026-08-27"; "2026-08-27T01:00:00+01:00"; "2026-08-27T01:00:00.000Z" ] do
         match
@@ -243,9 +263,13 @@ let ``unknown qualification gate and JSON members are refused`` () =
 [<Fact>]
 let ``gate catalog arguments are pinned independently and list-only mutation is refused`` () =
     let expected =
-        [ { Id = "unit-tests"
-            QGate = "Q7"
-            CommandSha256 = gateDigest } ]
+        [
+            {
+                Id = "unit-tests"
+                QGate = "Q7"
+                CommandSha256 = gateDigest
+            }
+        ]
 
     let catalog arguments =
         sprintf

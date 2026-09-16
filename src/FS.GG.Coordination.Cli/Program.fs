@@ -12,5 +12,7 @@ let main arguments =
         printfn "FS.GG.Coordination CLI boundary is installed; no production commands are enabled."
         0
     | _ ->
-        eprintfn "unknown command; available commands: workflow-select, roadmap-work, qualification-manifest, ledger-protection, observer-view"
+        eprintfn
+            "unknown command; available commands: workflow-select, roadmap-work, qualification-manifest, ledger-protection, observer-view"
+
         2

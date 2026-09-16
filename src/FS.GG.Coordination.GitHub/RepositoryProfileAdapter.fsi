@@ -2,45 +2,61 @@ namespace FS.GG.Coordination.GitHub
 
 open System
 
-type RepositoryRole = Authority | Framework | NonParticipant
-type AdministrationBoundary = OrganizationAdministered | ExternalObserveOnly
+type RepositoryRole =
+    | Authority
+    | Framework
+    | NonParticipant
+
+type AdministrationBoundary =
+    | OrganizationAdministered
+    | ExternalObserveOnly
+
 type RepositoryRosterRow =
-    { Id: string
-      FullName: string
-      Role: RepositoryRole
-      Capabilities: string list
-      KitDelivery: string option
-      AbsenceCover: string option
-      Reason: string option }
+    {
+        Id: string
+        FullName: string
+        Role: RepositoryRole
+        Capabilities: string list
+        KitDelivery: string option
+        AbsenceCover: string option
+        Reason: string option
+    }
 
 type RepositoryRosterSnapshot =
-    { SchemaVersion: int
-      SourceRevision: string
-      SourceArtifactSha256: string
-      CanonicalRosterSha256: string
-      ReviewedAt: DateTimeOffset
-      Complete: bool
-      Rows: RepositoryRosterRow list }
+    {
+        SchemaVersion: int
+        SourceRevision: string
+        SourceArtifactSha256: string
+        CanonicalRosterSha256: string
+        ReviewedAt: DateTimeOffset
+        Complete: bool
+        Rows: RepositoryRosterRow list
+    }
 
 type NativeCustomProperty = { Name: string; Value: string }
+
 type RepositoryProfile =
-    { Id: string
-      FullName: string
-      Role: RepositoryRole
-      Administration: AdministrationBoundary
-      Capabilities: string list
-      KitDelivery: string option
-      AbsenceCover: string option
-      Reason: string option
-      NativeProperties: NativeCustomProperty list
-      PropertyMutationPermitted: bool }
+    {
+        Id: string
+        FullName: string
+        Role: RepositoryRole
+        Administration: AdministrationBoundary
+        Capabilities: string list
+        KitDelivery: string option
+        AbsenceCover: string option
+        Reason: string option
+        NativeProperties: NativeCustomProperty list
+        PropertyMutationPermitted: bool
+    }
 
 type RepositoryProfileReport =
-    { SourceRevision: string
-      SourceArtifactSha256: string
-      CanonicalRosterSha256: string
-      Profiles: RepositoryProfile list
-      Seal: string }
+    {
+        SourceRevision: string
+        SourceArtifactSha256: string
+        CanonicalRosterSha256: string
+        Profiles: RepositoryProfile list
+        Seal: string
+    }
 
 type RepositoryProfileFinding =
     | UnsupportedRosterSchema of int
@@ -62,5 +78,16 @@ type RepositoryProfileFinding =
 module RepositoryProfileAdapter =
     val allowedCapabilities: string list
     val canonicalRosterDigest: RepositoryRosterRow list -> string
-    val compile: asOf: DateTimeOffset -> maxAge: TimeSpan -> RepositoryRosterSnapshot -> Result<RepositoryProfileReport, RepositoryProfileFinding list>
-    val verify: expectedSeal: string -> asOf: DateTimeOffset -> maxAge: TimeSpan -> RepositoryRosterSnapshot -> Result<RepositoryProfileReport, RepositoryProfileFinding list>
+
+    val compile:
+        asOf: DateTimeOffset ->
+        maxAge: TimeSpan ->
+        RepositoryRosterSnapshot ->
+            Result<RepositoryProfileReport, RepositoryProfileFinding list>
+
+    val verify:
+        expectedSeal: string ->
+        asOf: DateTimeOffset ->
+        maxAge: TimeSpan ->
+        RepositoryRosterSnapshot ->
+            Result<RepositoryProfileReport, RepositoryProfileFinding list>

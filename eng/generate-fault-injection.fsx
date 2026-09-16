@@ -8,7 +8,8 @@ let fail detail =
     eprintfn "FAULT_INJECTION_RED %s" detail
     exit 1
 
-let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--") |> Array.toList
+let arguments =
+    fsi.CommandLineArgs |> Array.skip 1 |> Array.filter ((<>) "--") |> Array.toList
 
 let rec parse root output checkOnly remaining =
     match remaining with
@@ -22,8 +23,10 @@ let root, output, checkOnly =
     parse "." "src/FS.GG.Coordination.Qualification.Contracts/Generated/fault-injection.json" false arguments
 
 let result =
-    if checkOnly then FaultInjection.check root output
-    else FaultInjection.write root output
+    if checkOnly then
+        FaultInjection.check root output
+    else
+        FaultInjection.write root output
 
 match result with
 | Error error -> fail error

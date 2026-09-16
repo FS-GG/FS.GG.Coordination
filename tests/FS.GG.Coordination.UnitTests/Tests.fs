@@ -132,34 +132,74 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Contains("ACT-CompactEphemeralProtocolEnvelope", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("VERIFY-DurablePlans", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("DSTATE-Specification", CoordinationProtocolGenerated.CanonicalContractJson)
-    Assert.Contains("project-workflow|project-visibility|project-membership-policy", CoordinationProtocolGenerated.CanonicalContractJson)
-    Assert.Contains("ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy", CoordinationProtocolGenerated.CanonicalContractJson)
-    Assert.Contains("vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy", CoordinationProtocolGenerated.CanonicalContractJson)
-    Assert.Contains("1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory", CoordinationProtocolGenerated.CanonicalContractJson)
-    Assert.Contains("family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content", CoordinationProtocolGenerated.CanonicalContractJson)
+
+    Assert.Contains(
+        "project-workflow|project-visibility|project-membership-policy",
+        CoordinationProtocolGenerated.CanonicalContractJson
+    )
+
+    Assert.Contains(
+        "ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy",
+        CoordinationProtocolGenerated.CanonicalContractJson
+    )
+
+    Assert.Contains(
+        "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy",
+        CoordinationProtocolGenerated.CanonicalContractJson
+    )
+
+    Assert.Contains(
+        "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory",
+        CoordinationProtocolGenerated.CanonicalContractJson
+    )
+
+    Assert.Contains(
+        "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content",
+        CoordinationProtocolGenerated.CanonicalContractJson
+    )
+
     Assert.Contains("typed-effect-json", CoordinationProtocolGenerated.CanonicalContractJson)
-    Assert.Contains("quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0", CoordinationProtocolGenerated.CanonicalContractJson)
+
+    Assert.Contains(
+        "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0",
+        CoordinationProtocolGenerated.CanonicalContractJson
+    )
+
     Assert.Contains("ordinal|json-pointer|value-sha256", CoordinationProtocolGenerated.CanonicalContractJson)
     Assert.Contains("markdown|json", CoordinationProtocolGenerated.CanonicalContractJson)
-    Assert.Contains("missing|duplicate|substituted|unsupported|incomplete|reordered|stale", CoordinationProtocolGenerated.CanonicalContractJson)
 
-    let repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+    Assert.Contains(
+        "missing|duplicate|substituted|unsupported|incomplete|reordered|stale",
+        CoordinationProtocolGenerated.CanonicalContractJson
+    )
+
+    let repositoryRoot =
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
     use outputManifest =
         JsonDocument.Parse(
             File.ReadAllBytes(
-                Path.Combine(
-                    repositoryRoot,
-                    "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/manifest.json"
-                )
+                Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/manifest.json")
             )
         )
 
     let outputRoot = outputManifest.RootElement
     Assert.Equal("fsgg.quint.compiled-output-manifest/1", outputRoot.GetProperty("schema").GetString())
-    Assert.Equal("735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9", outputRoot.GetProperty("sourceSha256").GetString())
-    Assert.Equal("0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715", outputRoot.GetProperty("behavioralSha256").GetString())
-    Assert.Equal(CoordinationProtocolGenerated.ContractFingerprint, outputRoot.GetProperty("contractSha256").GetString())
+
+    Assert.Equal(
+        "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9",
+        outputRoot.GetProperty("sourceSha256").GetString()
+    )
+
+    Assert.Equal(
+        "0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715",
+        outputRoot.GetProperty("behavioralSha256").GetString()
+    )
+
+    Assert.Equal(
+        CoordinationProtocolGenerated.ContractFingerprint,
+        outputRoot.GetProperty("contractSha256").GetString()
+    )
 
     let identity = outputRoot.GetProperty("identity")
     Assert.Equal("fsgg.quint.deterministic-identity/1", identity.GetProperty("schema").GetString())
@@ -167,21 +207,37 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     let versions = identity.GetProperty("versions")
     Assert.Equal("fsgg.quint.literate-source/1", versions.GetProperty("source").GetString())
     Assert.Equal("quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0", versions.GetProperty("extractor").GetString())
-    Assert.Equal("sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f", versions.GetProperty("quint").GetString())
+
+    Assert.Equal(
+        "sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
+        versions.GetProperty("quint").GetString()
+    )
+
     Assert.Equal("fsgg-quint-profile/2", versions.GetProperty("profile").GetString())
     Assert.Equal("fsgg.quint.compiled-contract/v2", versions.GetProperty("schema").GetString())
 
     let outputs = outputRoot.GetProperty("outputs").EnumerateArray() |> Seq.toList
     Assert.Equal(9, outputs.Length)
     Assert.Equal<int list>([ 1..9 ], outputs |> List.map (fun output -> output.GetProperty("ordinal").GetInt32()))
-    Assert.All(outputs, fun output ->
-        Assert.Equal(outputRoot.GetProperty("behavioralSha256").GetString(), output.GetProperty("behavioralSha256").GetString())
-        Assert.Equal(identity.GetRawText(), output.GetProperty("identity").GetRawText())
-        Assert.True(output.GetProperty("supported").GetBoolean())
-        Assert.True(output.GetProperty("complete").GetBoolean())
-        Assert.True(output.GetProperty("fresh").GetBoolean()))
 
-    let projection = outputs |> List.find (fun output -> output.GetProperty("family").GetString() = "COUT-ProjectionViews")
+    Assert.All(
+        outputs,
+        fun output ->
+            Assert.Equal(
+                outputRoot.GetProperty("behavioralSha256").GetString(),
+                output.GetProperty("behavioralSha256").GetString()
+            )
+
+            Assert.Equal(identity.GetRawText(), output.GetProperty("identity").GetRawText())
+            Assert.True(output.GetProperty("supported").GetBoolean())
+            Assert.True(output.GetProperty("complete").GetBoolean())
+            Assert.True(output.GetProperty("fresh").GetBoolean())
+    )
+
+    let projection =
+        outputs
+        |> List.find (fun output -> output.GetProperty("family").GetString() = "COUT-ProjectionViews")
+
     Assert.Equal<string list>(
         [ "projection-view.json"; "projection-view.md" ],
         projection.GetProperty("files").EnumerateArray()
@@ -192,22 +248,32 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     use semanticDiff =
         JsonDocument.Parse(
             File.ReadAllBytes(
-                Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/semantic-diff.json")
+                Path.Combine(
+                    repositoryRoot,
+                    "src/FS.GG.Coordination.Protocol/Generated/compiled-outputs/semantic-diff.json"
+                )
             )
         )
 
-    let rows = semanticDiff.RootElement.GetProperty("content").GetProperty("rows").EnumerateArray() |> Seq.toList
+    let rows =
+        semanticDiff.RootElement.GetProperty("content").GetProperty("rows").EnumerateArray()
+        |> Seq.toList
+
     Assert.DoesNotContain(
         outputRoot.GetProperty("sourceSha256").GetString(),
         semanticDiff.RootElement.GetProperty("content").GetRawText()
     )
+
     Assert.NotEmpty(rows)
-    Assert.Equal<int list>([ 1..rows.Length ], rows |> List.map (fun row -> row.GetProperty("ordinal").GetInt32()))
+    Assert.Equal<int list>([ 1 .. rows.Length ], rows |> List.map (fun row -> row.GetProperty("ordinal").GetInt32()))
+
     Assert.Equal<string list>(
         rows |> List.map (fun row -> row.GetProperty("path").GetString()) |> List.sort,
         rows |> List.map (fun row -> row.GetProperty("path").GetString())
     )
+
     Assert.Contains(rows, fun row -> row.GetProperty("path").GetString() = "/behavioralSha256")
+
     Assert.False(
         File.Exists(Path.Combine(repositoryRoot, "src/FS.GG.Coordination.Protocol/Generated/typed-effect.json")),
         "raw typed IR must remain private and must not be retained"
@@ -232,8 +298,10 @@ let ``app boundary is inert`` () =
 [<Fact>]
 let ``qualification contracts carry a typed result`` () =
     let receipt =
-        { Rule = "dependency-policy"
-          Result = QualificationResult.Passed }
+        {
+            Rule = "dependency-policy"
+            Result = QualificationResult.Passed
+        }
 
     Assert.Equal("dependency-policy", receipt.Rule)
 
