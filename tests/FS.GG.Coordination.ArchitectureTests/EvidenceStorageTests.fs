@@ -46,7 +46,7 @@ let ``evidence storage contract and all independent negative cases pass`` () =
     )
 
     Assert.Contains(
-        "EVIDENCE_STORAGE_SELF_TEST_OK negativeCases=56 positiveArtifactManifests=1 positiveCritiqueBundles=1 positiveMutationProofs=1",
+        "EVIDENCE_STORAGE_SELF_TEST_OK negativeCases=57 positiveArtifactManifests=1 positiveCritiqueBundles=1 positiveMutationProofs=1 positiveReceiptDigestMigrations=1",
         output
     )
 
