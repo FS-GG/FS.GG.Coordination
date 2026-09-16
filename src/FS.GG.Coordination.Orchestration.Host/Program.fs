@@ -18,6 +18,9 @@ let private usage () =
         "   or: fsgg-coord-orchestration-host prepare-main-admission --connection-file <path> --store-id <id> --backup-identity <guid> --minimum-generation-fence <n> --pilot-principal <id> --repository-node-id <id> --repository-database-id <n> --issue-node-id <id> --issue-database-id <n> --request-file <path> --input-file <path> --output-file <path>"
 
     eprintfn
+        "   or: fsgg-coord-orchestration-host verify-installed-adoption --connection-file <absolute-private-path> --request-file <absolute-private-path>"
+
+    eprintfn
         "   or: fsgg-coord-orchestration-host serve ... [--github-token-file <path> --github-repository <owner/repo> --github-issue-number <n> --github-base-ref <ref> --runner-executable <absolute-path> --runner-repository-root <absolute-path> --runner-workspace-root <absolute-path> --runner-input-root <absolute-path> --runner-state-root <absolute-path> --runner-artifact-root <absolute-path> --codex-executable <absolute-path> --executor-binding <identity>]"
 
     2
@@ -115,6 +118,31 @@ let main arguments =
             with error ->
                 eprintfn "main-admission-preparation-refused:%s" error.Message
                 3
+    | Some "verify-installed-adoption" ->
+        let executablePath =
+            Environment.ProcessPath |> Option.ofObj |> Option.defaultValue ""
+
+        let runtime =
+            {
+                SourceRevision = InstalledAdoptionVerification.embeddedSourceRevision ()
+                ExecutablePath = executablePath
+                Clock = TimeProvider.System
+                AfterAReserved = None
+            }
+
+        let result =
+            match HostConfiguration.parseInstalledAdoptionVerification arguments[1..] with
+            | Error reason -> InstalledAdoptionVerification.configurationFailure runtime reason
+            | Ok configuration ->
+                InstalledAdoptionVerification.run
+                    configuration.ConnectionString
+                    configuration.RequestBytes
+                    runtime
+                    CancellationToken.None
+                |> _.GetAwaiter().GetResult()
+
+        printfn "%s" (InstalledAdoptionVerification.serializeResult result)
+        if result.Passed then 0 else 3
     | Some "serve" ->
         match HostConfiguration.parseServe arguments[1..] with
         | Error reason ->

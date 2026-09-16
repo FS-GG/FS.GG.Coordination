@@ -40,6 +40,16 @@ effects through merged native readback. They do not publish or install artifacts
 configure the launcher, copy a subscription session, activate a Host, or invoke a
 live model. Those remain separate deployment and observed-pilot operations.
 
+`verify-installed-adoption` is a separate offline command for a dedicated,
+initialized, empty schema-2 qualification store. It consumes owner-private
+connection and request files, verifies the embedded source revision and running
+executable digest, and exercises two deterministic project/subject fixtures against
+the production execution journal and subscription store at ordinary capacity 1.
+It never starts `serve`, a provider, runner, model, HTTP listener, GitHub client, or
+child process, and never migrates or resets the store. Its single result document is
+defined by `fsgg.orchestration.installed-adoption-result/1`; a failed run retains
+its durable fixture history and requires operator adjudication.
+
 The current GitHub qualification implementation is deliberately bounded to the
 selected `.github` `internal-docs` pilot route. It reads the exact base-owned
 routine policy and native pull-request/check state, selects the latest check run
