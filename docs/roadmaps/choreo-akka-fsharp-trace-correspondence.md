@@ -314,6 +314,10 @@ origin. No Choreo bytes are added in C0.
 Exit evidence: deterministic offline extraction, exact hashes, smoke run, full architecture tests, and no formal
 catalog switch.
 
+Implementation note: embedding the pinned library increases each compiled root artifact from roughly 8.8 MiB to a
+measured maximum of 12,246,193 bytes. C1 therefore raises the common root-artifact ceiling from 10 MiB to 16 MiB;
+the existing per-root fail-closed check and all semantic workload budgets remain in force.
+
 ### C2 — implement and review the four-process model
 
 - [ ] Add typed identities, local process states, message payloads, and the unordered message soup.
