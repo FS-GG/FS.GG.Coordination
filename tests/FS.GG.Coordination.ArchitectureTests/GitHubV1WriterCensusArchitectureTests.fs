@@ -155,4 +155,4 @@ let ``GS2-08-3 registration preserves accepted epoch prerequisite and writer Q3 
         |> Seq.toList
     )
 
-    Assert.False(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json")))
+    Assert.True(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json")))

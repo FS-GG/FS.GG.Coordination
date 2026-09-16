@@ -138,4 +138,4 @@ let ``GS2-08-3 registration adds receiver census Q3 without changing prerequisit
         |> Seq.toList
     )
 
-    Assert.False(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json")))
+    Assert.True(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json")))
