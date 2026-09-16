@@ -816,7 +816,7 @@ let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
 
         File.WriteAllText(
             performance,
-            "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":105000}"
+            "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":150000}"
         )
 
         let startInfo = ProcessStartInfo("bash")

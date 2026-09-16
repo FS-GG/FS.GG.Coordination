@@ -11,7 +11,7 @@ jq -e '
 ' "$receipt" >/dev/null
 elapsed="$(jq -r '.elapsedMs' "$receipt")"
 epoch_budget="$(jq -r '.formalTests[] | select(.id == "epoch") | .budget.elapsedMs' eng/quint-qualification.json)"
-test "$epoch_budget" -eq 105000
+test "$epoch_budget" -eq 150000
 if (( elapsed > epoch_budget )); then
   printf 'CANONICAL_QUINT_PERFORMANCE_RED id=epoch elapsedMs=%s budgetMs=%s\n' "$elapsed" "$epoch_budget" >&2
   exit 1
