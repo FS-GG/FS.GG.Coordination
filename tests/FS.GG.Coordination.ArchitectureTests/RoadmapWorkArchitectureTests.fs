@@ -1636,6 +1636,62 @@ let ``GS2-08-3 acceptance binds both exact census sources and native gates`` () 
         Assert.Equal(digest, artifacts[name])
 
 [<Fact>]
+let ``GS2-08-4 acceptance binds the common fence source and native gates`` () =
+    use receipt =
+        JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.4.json")))
+
+    let value = receipt.RootElement
+    Assert.Equal("accepted", value.GetProperty("state").GetString())
+
+    Assert.Equal(
+        "ceb6164cd8dfd21a2cb0efe6010dcfc843b382b894de337d63d0d4ef155e50a0",
+        value.GetProperty("unitContractSha256").GetString()
+    )
+
+    Assert.Equal("b53c3fe1a76f481c07c20f4d8675a68ab9216177", value.GetProperty("sourceRevision").GetString())
+
+    Assert.Equal(
+        "2be4326532da38276de1c46fd84387bad309d6b9c51bf589a01549171931aafc",
+        value.GetProperty("digest").GetString()
+    )
+
+    let artifacts =
+        value.GetProperty("artifacts").EnumerateArray()
+        |> Seq.map (fun artifact ->
+            artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString())
+        |> Map.ofSeq
+
+    Assert.Equal(15, artifacts.Count)
+    Assert.False(artifacts.ContainsKey("accepted-GS2-08.3-receipt"))
+
+    let expected =
+        [
+            "accepted-GS2-08.1-receipt", "49c70359ebfbc00331ba90c7c5b100a292efa4cc95a5dfa8007867ceceec5c31"
+            "github-v1-effect-fence-contract", "357f7d81987885ebdb198fa18f8590862591f2ae6b1a484db469fce25bf53a98"
+            "v1-effect-fence-interface", "281c87ec29e69268ce8bacefe7167e814114c9b2a36f0f21564cbaf8df3d158a"
+            "v1-effect-fence-implementation", "1e0bb9ae31dfe2a72ee34abdb25b3b7c79401197766486fc00dff60501bc9dfd"
+            "v1-effect-fence-qualification-interface",
+            "0ba118e7b381edce6398dac4969a75bd37041670c329d76ab66c784419480833"
+            "v1-effect-fence-qualification-implementation",
+            "fe2b490c7f17d6c51dfa0d93bf32ac91fb7b63487c787cd58ca3c1eb400d7b71"
+            "independent-cases", "0d440ca93befce795e12b21433ee5092a20e99caaef28af4bdebd386e9d718cf"
+            "source-binding", "1f5f7c71389bc7d6d827b725b3b2998df5fe49cf2eddf698bfd35b9c8e649505"
+            "effect-fence-validator", "64dce8a86ca42a2ec78aee701688ad91776caada16b417ebb35a69dd2437b371"
+            "source-head-5b2e2b758aa872096a23877f769d6794a66c5484",
+            "66c9bf4806876e43b228761c6ee6b110439b0e974e24a76d9ece34f0519958a0"
+            "source-merge-b53c3fe1a76f481c07c20f4d8675a68ab9216177",
+            "7f7aa3129eaee23d4aa68605f4c279744804b9c962a0e1647b0f83352eb1971b"
+            "source-bootstrap-run-34320097332", "c3db56e94e6c53658aee21d2645181b2ecc981601a172d7f574fad6cde8d5359"
+            "source-codeql-run-34320094556", "00f7acd29de432bce54d04d45b5d01cfa0ae7da6336c5779e094914833c88ec7"
+            "protected-bootstrap-run-34322023243",
+            "39628c888d5034390918d234e060a5f0c73506c1457a60eb794d191410b08148"
+            "protected-codeql-run-34322023304", "0942f730755375b26a93b7a9b7299c66ddd581c06b629160044bec1de709481b"
+        ]
+        |> Map.ofList
+
+    Assert.Equal<Map<string, string>>(expected, artifacts)
+
+[<Fact>]
 let ``roadmap unit index advances through GS2-08-4 common effect fence`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
