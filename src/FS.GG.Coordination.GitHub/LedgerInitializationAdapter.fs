@@ -143,7 +143,13 @@ module LedgerInitializationAdapter =
                 "authorizationWorkflowRevision", JsonValue.Create input.AuthorizationWorkflowRevision
                 "authorizationWorkflowSha256", JsonValue.Create input.AuthorizationWorkflowSha256
                 "controlIssueNumber", JsonValue.Create input.ControlIssueNumber
-                "createdAt", JsonValue.Create(input.CreatedAt.ToUniversalTime().ToString("O"))
+                "createdAt",
+                JsonValue.Create(
+                    input.CreatedAt.UtcDateTime.ToString(
+                        "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",
+                        CultureInfo.InvariantCulture
+                    )
+                )
                 "cutoverAppId", JsonValue.Create input.CutoverAppId
                 "cutoverInstallationId", JsonValue.Create input.CutoverInstallationId
                 "desiredPolicySha256", JsonValue.Create input.DesiredPolicySha256
@@ -159,6 +165,11 @@ module LedgerInitializationAdapter =
                 "tag", JsonValue.Create input.Tag
                 "trustAnchorSha256", JsonValue.Create input.TrustAnchorSha256
             ]
+        |> fun bytes ->
+            if bytes.Length = 0 || bytes[bytes.Length - 1] <> byte '\n' then
+                invalidOp "canonical initializer payload terminator"
+
+            bytes |> Array.take (bytes.Length - 1)
 
     let private authorityValid asOf (authority: LedgerInitializationAuthority) expected =
         try

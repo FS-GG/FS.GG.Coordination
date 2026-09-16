@@ -127,6 +127,7 @@ let ``App identities are distinct and capture tests prove the private transport 
     Assert.Equal(160261608L, desiredRoot.GetProperty("ordinaryWriter").GetProperty("installationId").GetInt64())
     Assert.Equal(4882399L, desiredRoot.GetProperty("cutoverWriter").GetProperty("appId").GetInt64())
     Assert.Equal(160261436L, desiredRoot.GetProperty("cutoverWriter").GetProperty("installationId").GetInt64())
+    Assert.False(desiredRoot.GetProperty("environment").GetProperty("preventSelfReview").GetBoolean())
 
     let info =
         ProcessStartInfo("python3", "eng/test-capture-github-ledger-protection.py")
