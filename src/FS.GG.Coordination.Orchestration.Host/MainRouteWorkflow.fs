@@ -134,8 +134,37 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
         let bindingFailureDetail=String.concat "," bindingFailures
         if not bindingFailures.IsEmpty then return Error($"main-route-preparation-binding-refused:{bindingFailureDetail}")
         else
-            let! input=executions.StageInput(ExecutorWire.encodeInputManifest value.InputManifest,value.InputBytes,token)
-            let! workspace=executions.StageWorkspaceManifest(ExecutorWire.encodeWorkspaceManifest value.WorkspaceManifest,token)
+            // A caller must first establish the admission boundary. The only
+            // exception is the narrowly recoverable pre-PR389 branch spelling.
+            let! beforePreparation=state token
+            let rejectedCommandId=legacyCommandId "select-route"
+            let recoverable=
+                beforePreparation|>Result.exists(fun current->
+                    current.HostedRoute.IsNone && current.Snapshot=Some value.Snapshot && current.SubscriptionBudget=Some value.Budget
+                    && current.Generation=value.Route.Generation && (match current.Control with ControlState.Paused _->true|_->false)
+                    && (current.CommandReceipts|>Map.tryFind rejectedCommandId|>Option.exists(fun receipt->receipt.Disposition=Rejected&&receipt.Detail="invalid-hosted-route")))
+            let mutable preflightFailure=match beforePreparation with Ok _->None|Error reason->Some reason
+            if recoverable then
+                let priorRoute={value.Route with BranchRef=value.Route.BranchRef.Replace("refs/heads/fsgg/pilot/","refs/heads/fsgg/")}
+                let! recoveredRoute=append value "recover-select-route" (RecoverHostedRoute(rejectedCommandId,priorRoute,value.Route)) token
+                match recoveredRoute with Error reason->preflightFailure<-Some reason|Ok()->()
+            let! prepared=state token
+            let preAdmitted=
+                preflightFailure.IsNone
+                && (prepared |> Result.exists(fun (current:State) ->
+                    current.Snapshot = Some value.Snapshot
+                    && current.SubscriptionBudget = Some value.Budget
+                    && current.Generation = value.Route.Generation
+                    && current.HostedRoute = Some value.Route
+                    && (match current.Control with ControlState.Paused _->true|_->false)
+                    && not current.ReadbackCurrent))
+            let refused=preflightFailure|>Option.defaultValue "main-route-pre-admission-required"
+            let! input,workspace=
+                if preAdmitted then task {
+                    let! input=executions.StageInput(ExecutorWire.encodeInputManifest value.InputManifest,value.InputBytes,token)
+                    let! workspace=executions.StageWorkspaceManifest(ExecutorWire.encodeWorkspaceManifest value.WorkspaceManifest,token)
+                    return input,workspace }
+                else Task.FromResult((Error refused,Error refused))
             match input,workspace with
             | Error reason,_|_,Error reason -> return Error reason
             | Ok(),Ok workspaceDigest when workspaceDigest<>value.Binding.WorkspaceManifestSha256 -> return Error "main-route-workspace-digest-refused"
@@ -152,14 +181,6 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
                     | SubscriptionReserved->subscriptionReservationAcquired<-true
                     | SubscriptionDuplicate->()
                     | other->failure<-Some($"main-route-subscription-reservation-refused:{other}")
-                if failure.IsNone then
-                    let! before=state token
-                    match before with
-                    | Error reason -> failure<-Some reason
-                    | Ok current ->
-                        let needsAdmission=MainRouteWorkflowPolicy.needsSubscriptionAdmission current
-                        let! result=runIf value needsAdmission "admit-subscription" (AdmitSubscription(value.Snapshot,value.Budget)) token
-                        match result with Error reason->failure<-Some reason|_->()
                 if failure.IsSome && subscriptionReservationAcquired then
                     let originalFailure=failure.Value
                     try
@@ -172,36 +193,15 @@ type MainRouteWorkflow(clock:TimeProvider,workItems:IJournalStore,candidates:ICa
                         failure<-Some($"%s{originalFailure};main-route-subscription-release-failed:%s{error.GetType().Name}")
                 if failure.IsNone then
                     let! current=state token
-                    let! result=runIf value (current|>Result.exists _.Reservation.IsNone) "reserve" (Reserve(value.Reservation.ReservationId,value.Reservation.ExpiresAt,value.Reservation.RequiredClaimIds)) token
-                    match result with Error reason->failure<-Some reason|_->()
-                if failure.IsNone then
-                    let! current=state token
-                    let rejectedCommandId=legacyCommandId "select-route"
-                    let routeSelectedNow=current|>Result.exists _.HostedRoute.IsNone
-                    let recoverable=
-                        current|>Result.exists(fun state->
-                            state.HostedRoute.IsNone && (match state.Control with ControlState.Paused _->true|_->false)
-                            && (state.CommandReceipts|>Map.tryFind rejectedCommandId|>Option.exists(fun receipt->receipt.Disposition=Rejected&&receipt.Detail="invalid-hosted-route")))
-                    let priorRoute={value.Route with BranchRef=value.Route.BranchRef.Replace("refs/heads/fsgg/pilot/","refs/heads/fsgg/")}
-                    let! result=
-                        if recoverable then append value "recover-select-route" (RecoverHostedRoute(rejectedCommandId,priorRoute,value.Route)) token
-                        else runIf value routeSelectedNow "select-route" (SelectHostedRoute value.Route) token
-                    match result with Error reason->failure<-Some reason|_->()
-                    if failure.IsNone && routeSelectedNow then
-                        let! selected=state token
-                        let! invalidated=runIf value (selected|>Result.exists _.ReadbackCurrent) "prepare-pause" (RecordStartupPause "route-selection") token
-                        match invalidated with Error reason->failure<-Some reason|_->()
-                if failure.IsNone then
-                    let! current=state token
-                    let! result=runIf value (current|>Result.exists(fun value->value.Control=ControlState.Running && not value.ReadbackCurrent)) "pause-for-route-readback" (Command.Pause "route-readback") token
-                    match result with Error reason->failure<-Some reason|_->()
-                if failure.IsNone then
-                    let! current=state token
                     let! result=runIf value (current|>Result.exists(fun state->not state.ReadbackCurrent)) "route-readback" (RecordHostedRouteReadback value.Readback) token
                     match result with Error reason->failure<-Some reason|_->()
                 if failure.IsNone then
                     let! current=state token
                     let! result=runIf value (current|>Result.exists(fun state->state.Control<>ControlState.Running)) "resume" Command.Resume token
+                    match result with Error reason->failure<-Some reason|_->()
+                if failure.IsNone then
+                    let! current=state token
+                    let! result=runIf value (current|>Result.exists _.Reservation.IsNone) "reserve" (Reserve(value.Reservation.ReservationId,value.Reservation.ExpiresAt,value.Reservation.RequiredClaimIds)) token
                     match result with Error reason->failure<-Some reason|_->()
                 if failure.IsNone then
                     let claim=effect value.Route value.Binding.BindingSha256 AcquireExternalClaim value.Route.ClaimOperationId value.Route.ClaimResourceId

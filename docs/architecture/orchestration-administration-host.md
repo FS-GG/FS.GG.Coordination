@@ -61,6 +61,32 @@ fsgg-coord-orchestration-host serve --connection-file /absolute/private/postgres
   --permit-id <uuid> --pilot-principal <configured-pilot-principal>
 ```
 
+Main admission is prepared before `serve` with the same fenced PostgreSQL authority. The command admits
+the subscription, recovers its actual generation, selects the exact route, records the startup pause,
+stages the executor input, workspace, binding, launch intent and subscription reservation, and atomically
+writes an owner-only canonical `fsgg.orchestration.main-route-admission/1` document. It does not resume the
+WorkItem, create the Core reservation, start an attempt, or record an effect intent.
+
+```text
+fsgg-coord-orchestration-host prepare-main-admission \
+  --connection-file /absolute/private/postgresql-connection \
+  --store-id main-pilot --backup-identity <uuid-from-init> --minimum-generation-fence <n> \
+  --pilot-principal <configured-pilot-principal> \
+  --repository-node-id <node-id> --repository-database-id <id> \
+  --issue-node-id <node-id> --issue-database-id <number> \
+  --request-file /absolute/request.json --input-file /absolute/prompt.md \
+  --output-file /absolute/private/admission.json
+```
+
+The request is the closed schema `fsgg.orchestration.main-route-preparation-request/1`. Its fields are
+`schema`, `preparationId`, `projectId`, `workflowRevision`, `canonicalSha256`, `selectedAt`, `routeId`,
+`attemptId`, `candidateId`, `branchRef`, `claimResourceId`, the seven explicit `claimOperationId` through
+`readbackOperationId` values, `runnerId`, `runnerFingerprintSha256`, `sessionId`, `reservationId`,
+`executionReservationId`, `routeProviderRevision`, `routeEvidenceSha256`, `repositoryBinding`,
+`baselineObjectId`, `workspace`, `allowedPaths`, `validations`, `executorBinding`, `requestedModel`,
+`requestedEffort`, and `inputMediaType`. JSON `null` means no requested model or effort. `preparationId`
+is stable across a lost-output retry; replay with different route or executor values is refused.
+
 An authenticated pause or revoke uses `POST /v1/pause` or `POST /v1/revoke` with
 `fsgg.orchestration.host-control/1` JSON. The closed object includes `permitId`, `commandId`,
 `expectedSequence`, `expectedGeneration`, `principalId`, `issuedAt`, `expiresAt`, and `reason`.

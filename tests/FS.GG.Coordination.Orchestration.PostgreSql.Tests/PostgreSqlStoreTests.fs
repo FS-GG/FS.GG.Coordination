@@ -898,6 +898,46 @@ type PostgreSqlStoreTests() =
         Assert.True(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.decode(Array.zeroCreate(FS.GG.Coordination.Orchestration.Execution.SessionEventCodec.maximumBytes+1)) |> Result.isError)
 
     [<Fact>]
+    member _.``main admission preparer retries lost output against one durable PostgreSQL binding``() = task {
+        let! dataSource,identity=Fixture.reset()
+        use dataSource=dataSource
+        let options={Fixture.options dataSource identity 0L with RuntimeSchemaVersion=2}
+        do! PostgreSqlExecutionSchema.migrate dataSource CancellationToken.None
+        let journal=PostgreSqlStore(options) :> IJournalStore
+        let executions=PostgreSqlExecutionStore(options)
+        let workItem=WorkItemIdentity.create "R_prepare" 5001L "I_prepare" 5002L
+        let selectedAt=DateTimeOffset.UtcNow
+        let ids=[|for _ in 1..16->Guid.NewGuid()|]
+        let request : MainAdmissionPreparationRequest =
+            { Schema=MainAdmissionPreparer.schema;PreparationId=ids[0];ProjectId=ids[1];WorkflowRevision=9L;CanonicalSha256=String.replicate 64 "a";SelectedAt=selectedAt
+              RouteId=ids[2];AttemptId=ids[3];CandidateId=ids[4];BranchRef="refs/heads/fsgg/pilot/o2-i4c-pg";ClaimResourceId="claim-o2-i4c-pg"
+              ClaimOperationId=ids[5];ProcessOperationId=ids[6];CandidateOperationId=ids[7];BranchOperationId=ids[8];PullRequestOperationId=ids[9];MergeOperationId=ids[10];ReadbackOperationId=ids[11]
+              RunnerId=ids[12];RunnerFingerprintSha256=String.replicate 64 "b";SessionId=ids[13];ReservationId=ids[14];ExecutionReservationId=ids[15]
+              RouteProviderRevision="postgres-selected-route";RouteEvidenceSha256=String.replicate 64 "c";RepositoryBinding="selected-repository";BaselineObjectId=String.replicate 40 "d"
+              Workspace="pilot";AllowedPaths=[|"docs/**"|];Validations=[|"git-diff-check"|];ExecutorBinding="codex-main";RequestedModel=null;RequestedEffort=null;InputMediaType="text/markdown; charset=utf-8" }
+        let input=Encoding.UTF8.GetBytes "Prepare the bounded PostgreSQL admission."
+        let! first=MainAdmissionPreparer.prepare TimeProvider.System journal executions executions workItem "pilot" request input CancellationToken.None
+        let firstBytes=first|>Result.defaultWith failwith
+        let! retry=MainAdmissionPreparer.prepare TimeProvider.System journal executions executions workItem "pilot" request input CancellationToken.None
+        let retryBytes=retry|>Result.defaultWith failwith
+        Assert.True(ReadOnlySpan<byte>(firstBytes).SequenceEqual(ReadOnlySpan<byte>(retryBytes)))
+        let preparation=MainRouteAdmission.decode workItem "pilot" firstBytes|>Result.defaultWith failwith
+        let! recovered=HostedWriterJournal.recover journal workItem CancellationToken.None
+        let state=(recovered|>Result.defaultWith(sprintf "%A">>failwith)).State
+        Assert.Equal(1L,Id.generationValue state.Generation)
+        Assert.Equal(Some preparation.Route,state.HostedRoute)
+        Assert.True(state.Control|>function Paused _->true|_->false)
+        Assert.False(state.ReadbackCurrent);Assert.True(state.Reservation.IsNone);Assert.Empty(state.Attempts);Assert.Empty(state.Operations)
+        let! route=(executions :> IExecutorCommandStore).ReadRoute(request.ProcessOperationId,request.AttemptId,CancellationToken.None)
+        Assert.Equal(preparation.Binding,route|>Result.bind ExecutorWire.parseRouteBinding|>Result.defaultWith failwith)
+        let! launch=(executions :> IExecutionSessionJournal).ReadAttempt(request.ProcessOperationId,request.AttemptId,CancellationToken.None)
+        Assert.Equal(Some preparation.LaunchIntent,launch|>Option.bind(fun stored->SessionState.replay stored.Events)|>Option.map _.Intent)
+        let! reservation=(executions :> IExecutorCommandStore).ReadSubscription(request.ExecutionReservationId,CancellationToken.None)
+        Assert.Equal(preparation.ExecutionReservation,reservation|>Result.bind(fun(bytes,_)->SubscriptionAccountingCodec.decodeReservation bytes)|>Result.defaultWith failwith)
+        let! changed=MainAdmissionPreparer.prepare TimeProvider.System journal executions executions workItem "pilot" {request with ExecutorBinding="changed-executor"} input CancellationToken.None
+        Assert.True(Result.isError changed) }
+
+    [<Fact>]
     member _.``production Main composes PostgreSQL packaged executor and seven native effects``() = task {
         let! dataSource,identity=Fixture.reset()
         use dataSource=dataSource
@@ -974,83 +1014,9 @@ type PostgreSqlStoreTests() =
             let nextExecutionReservation=SubscriptionPilot.reserve now (Guid.NewGuid()) nextAssignment nextAttempt generation 1L budget|>Result.defaultWith failwith
             {preparation with Reservation={preparation.Reservation with ReservationId=Id.reservation(Guid.NewGuid())};Route=nextRoute;SessionId=Id.session(Guid.NewGuid());LaunchIntent=nextLaunch;Binding=nextBinding;ExecutionReservation=nextExecutionReservation}
         let commandStore=executions :> IExecutorCommandStore
-        let withRelease release =
-            { new IExecutorCommandStore with
-                member _.BindRoute(a,b)=commandStore.BindRoute(a,b)
-                member _.ReadRoute(a,b,c)=commandStore.ReadRoute(a,b,c)
-                member _.FindAttemptBySession(a,b)=commandStore.FindAttemptBySession(a,b)
-                member _.StageInput(a,b,c)=commandStore.StageInput(a,b,c)
-                member _.ReadInput(a,b)=commandStore.ReadInput(a,b)
-                member _.StageWorkspaceManifest(a,b)=commandStore.StageWorkspaceManifest(a,b)
-                member _.ReadWorkspaceManifest(a,b)=commandStore.ReadWorkspaceManifest(a,b)
-                member _.PersistCommand(a,b)=commandStore.PersistCommand(a,b)
-                member _.ReadPending(a,b)=commandStore.ReadPending(a,b)
-                member _.SettleCommand(a,b,c)=commandStore.SettleCommand(a,b,c)
-                member _.ReserveSubscription(a,b,c,d)=commandStore.ReserveSubscription(a,b,c,d)
-                member _.SettleSubscription(a,b,c)=commandStore.SettleSubscription(a,b,c)
-                member _.ReleaseSubscription(a,b,c,d)=release(a,b,c,d)
-                member _.ReadSubscription(a,b)=commandStore.ReadSubscription(a,b) }
-        let reservationActive reservationId = task {
-            use! connection=dataSource.OpenConnectionAsync(CancellationToken.None)
-            use command=new NpgsqlCommand("SELECT active FROM fsgg_orchestration.subscription_reservation WHERE reservation_id=$1",connection)
-            command.Parameters.AddWithValue(reservationId)|>ignore
-            let! value=command.ExecuteScalarAsync(CancellationToken.None)
-            return unbox<bool> value }
-        let refusingWorkItems=
-            { new IJournalStore with
-                member _.CheckReadiness token=workItems.CheckReadiness token
-                member _.Recover(id,token)=workItems.Recover(id,token)
-                member _.SaveSnapshot(value,token)=workItems.SaveSnapshot(value,token)
-                member _.SaveProjectionCheckpoint(value,token)=workItems.SaveProjectionCheckpoint(value,token)
-                member _.Append(_,_) = Task.FromResult(InvalidAppend "fixture-core-admission-refused") }
-        let refusedPreparation=alternatePreparation()
-        let refusedWorkflow=MainRouteWorkflow(TimeProvider.System,refusingWorkItems,candidates,executions,executions,workItem,"pilot")
-        use refusedRequest=new CancellationTokenSource()
-        let cancellingWorkItems=
-            { new IJournalStore with
-                member _.CheckReadiness token=refusingWorkItems.CheckReadiness token
-                member _.Recover(id,token)=refusingWorkItems.Recover(id,token)
-                member _.SaveSnapshot(value,token)=refusingWorkItems.SaveSnapshot(value,token)
-                member _.SaveProjectionCheckpoint(value,token)=refusingWorkItems.SaveProjectionCheckpoint(value,token)
-                member _.Append(request,token) = refusedRequest.Cancel();refusingWorkItems.Append(request,token) }
-        let cancelledRequestWorkflow=MainRouteWorkflow(TimeProvider.System,cancellingWorkItems,candidates,executions,executions,workItem,"pilot")
-        let! refusedPreparationResult=cancelledRequestWorkflow.Prepare(refusedPreparation,refusedRequest.Token)
-        Assert.Equal(Error "fixture-core-admission-refused",refusedPreparationResult)
-        let! refusedStillActive=reservationActive refusedPreparation.ExecutionReservation.ReservationId
-        Assert.False(refusedStillActive)
-
-        let duplicatePreparation=alternatePreparation()
-        let! duplicateIntent=(executions :> IExecutionSessionJournal).AppendAttempt(duplicatePreparation.LaunchIntent.Key.AssignmentId,duplicatePreparation.LaunchIntent.Key.AttemptId,0L,LaunchIntentRecorded duplicatePreparation.LaunchIntent,CancellationToken.None)
-        Assert.Equal(Appended,duplicateIntent)
-        let! duplicateReserved=commandStore.ReserveSubscription(SubscriptionAccountingCodec.encodeReservation duplicatePreparation.ExecutionReservation,1,1,CancellationToken.None)
-        Assert.Equal(SubscriptionReserved,duplicateReserved)
-        let! duplicateRefusal=refusedWorkflow.Prepare(duplicatePreparation,CancellationToken.None)
-        Assert.Equal(Error "fixture-core-admission-refused",duplicateRefusal)
-        let! duplicateStillActive=reservationActive duplicatePreparation.ExecutionReservation.ReservationId
-        Assert.True(duplicateStillActive)
-        let! duplicateCleanup=commandStore.ReleaseSubscription(duplicatePreparation.ExecutionReservation.ReservationId,duplicatePreparation.ExecutionReservation.AttemptId,duplicatePreparation.ExecutionReservation.Generation,CancellationToken.None)
-        Assert.Equal(SubscriptionReleased,duplicateCleanup)
-
-        let conflictPreparation=alternatePreparation()
-        let conflictStore=withRelease(fun _->Task.FromResult SubscriptionReleaseConflict)
-        let conflictWorkflow=MainRouteWorkflow(TimeProvider.System,refusingWorkItems,candidates,conflictStore,executions,workItem,"pilot")
-        let! conflictResult=conflictWorkflow.Prepare(conflictPreparation,CancellationToken.None)
-        Assert.Equal(Error "fixture-core-admission-refused;main-route-subscription-release-conflict",conflictResult)
-        let! conflictStillActive=reservationActive conflictPreparation.ExecutionReservation.ReservationId
-        Assert.True(conflictStillActive)
-        let! conflictCleanup=commandStore.ReleaseSubscription(conflictPreparation.ExecutionReservation.ReservationId,conflictPreparation.ExecutionReservation.AttemptId,conflictPreparation.ExecutionReservation.Generation,CancellationToken.None)
-        Assert.Equal(SubscriptionReleased,conflictCleanup)
-
-        let exceptionPreparation=alternatePreparation()
-        let exceptionStore=withRelease(fun _->Task.FromException<SubscriptionRelease>(InvalidOperationException "fixture-release-failed"))
-        let exceptionWorkflow=MainRouteWorkflow(TimeProvider.System,refusingWorkItems,candidates,exceptionStore,executions,workItem,"pilot")
-        let! exceptionResult=exceptionWorkflow.Prepare(exceptionPreparation,CancellationToken.None)
-        Assert.Equal(Error "fixture-core-admission-refused;main-route-subscription-release-failed:InvalidOperationException",exceptionResult)
-        let! exceptionStillActive=reservationActive exceptionPreparation.ExecutionReservation.ReservationId
-        Assert.True(exceptionStillActive)
-        let! exceptionCleanup=commandStore.ReleaseSubscription(exceptionPreparation.ExecutionReservation.ReservationId,exceptionPreparation.ExecutionReservation.AttemptId,exceptionPreparation.ExecutionReservation.Generation,CancellationToken.None)
-        Assert.Equal(SubscriptionReleased,exceptionCleanup)
-
+        do! appendCore (Id.protocolVersion 2 0) (AdmitSubscription(preparation.Snapshot,preparation.Budget))
+        do! appendCore (Id.protocolVersion 1 0) (SelectHostedRoute preparation.Route)
+        do! appendCore (Id.protocolVersion 1 0) (RecordStartupPause "main-admission-preparation")
         let! stagedIntent=(executions :> IExecutionSessionJournal).AppendAttempt(assignment,attempt,0L,LaunchIntentRecorded launch,CancellationToken.None)
         Assert.Equal(Appended,stagedIntent)
         let! stagedReservation=(executions :> IExecutorCommandStore).ReserveSubscription(SubscriptionAccountingCodec.encodeReservation executionReservation,1,1,CancellationToken.None)
@@ -1227,9 +1193,9 @@ finally:
         let! afterInvalid=HostedWriterJournal.recover workItems workItem CancellationToken.None
         let afterInvalidState=match afterInvalid with Ok value->value.State|Error failures->failwithf "unexpected recovery failure: %A" failures
         Assert.Equal(Some workItem,afterInvalidState.WorkItemId)
-        Assert.Equal(ControlState.Cancelled "prior-attempt-ended",afterInvalidState.Control)
+        Assert.Equal(ControlState.Paused "main-admission-preparation",afterInvalidState.Control)
         Assert.True(afterInvalidState.Reservation.IsNone)
-        Assert.True(afterInvalidState.HostedRoute.IsNone)
+        Assert.Equal(Some preparation.Route,afterInvalidState.HostedRoute)
         let firstServer=HostRuntime.serveMain TimeProvider.System hostConfiguration (hostStore workItems) relay (firstAdmission :> IMainRouteAdmissionHandler) firstShutdown.Token
         do! Task.Delay 50
         use client=new HttpClient()
