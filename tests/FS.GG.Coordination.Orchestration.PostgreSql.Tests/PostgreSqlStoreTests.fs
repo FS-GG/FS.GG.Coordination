@@ -2948,7 +2948,7 @@ type PostgreSqlStoreTests() =
                             | _ -> RestMethod.Post, "", None
 
                         let outcome =
-                            if path = "/repos/FS-GG/.github/" && methodValue = RestMethod.Get then
+                            if path = "/repos/FS-GG/.github" && methodValue = RestMethod.Get then
                                 jsonResponse 200 "{\"id\":4242,\"node_id\":\"R_main\"}"
                             elif path.EndsWith("issues/3421") && methodValue = RestMethod.Get then
                                 jsonResponse 200 "{\"number\":3421,\"node_id\":\"I_main\"}"
