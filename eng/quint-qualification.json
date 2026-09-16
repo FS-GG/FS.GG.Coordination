@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "3387a7d61d51ed35495e041bd26679af3d9cad63f2389443dc97368e14ac8118",
+  "sourceSha256": "735d7a6a259facf8b12c38a82e621f321b191ee8a0cf5138f2a1434384c4c2d9",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
@@ -1010,6 +1010,84 @@
       "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-fault-safety.manifest.json",
       "budget": {
         "depth": 20,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 10000,
+        "elapsedMs": 105000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "administrative-retirement-closure",
+      "main": "O2AdministrativeRetirementModel",
+      "init": "init",
+      "step": "closureStep",
+      "invariant": "safety",
+      "witness": "closureEvidenceReached",
+      "temporal": "closureProgress",
+      "invalid": "unsafeTerminalWithoutFence",
+      "removedStep": "withoutPermanentFence",
+      "violatedTemporal": "closureEventuallyReached",
+      "blockedInvariant": "blockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-closure.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-closure.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-closure.manifest.json",
+      "budget": {
+        "depth": 18,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 10000,
+        "elapsedMs": 105000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "administrative-retirement-race",
+      "main": "O2AdministrativeRetirementModel",
+      "init": "init",
+      "step": "raceStep",
+      "invariant": "safety",
+      "witness": "raceEvidenceReached",
+      "temporal": "raceProgress",
+      "invalid": "unsafeTerminalWithoutFence",
+      "removedStep": "withoutPermanentFence",
+      "violatedTemporal": "raceEventuallyReached",
+      "blockedInvariant": "blockedInvariant",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-race.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-race.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-race.manifest.json",
+      "budget": {
+        "depth": 18,
+        "states": 10000,
+        "transitions": 10000,
+        "samples": 10000,
+        "elapsedMs": 105000,
+        "peakMiB": 2048,
+        "artifactBytes": 6291456
+      }
+    },
+    {
+      "id": "administrative-retirement-old-plan-counterexample",
+      "main": "O2AdministrativeRetirementOldPlanModel",
+      "init": "init",
+      "step": "oldPlanStep",
+      "invariant": "oldPlanTraceConsistent",
+      "witness": "oldPlanLateMergeReached",
+      "temporal": "oldPlanTraceProgress",
+      "invalid": "invalidOldPlanTrace",
+      "removedStep": "oldPlanWithoutRelease",
+      "violatedTemporal": "oldPlanLateMergeEventually",
+      "blockedInvariant": "oldPlanNotRetired",
+      "backend": "tlc",
+      "counterexample": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-old-plan-counterexample.itf.json",
+      "counterexampleTrace": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-old-plan-counterexample.quint-trace.json",
+      "counterexampleManifest": "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/administrative-retirement-old-plan-counterexample.manifest.json",
+      "budget": {
+        "depth": 18,
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,

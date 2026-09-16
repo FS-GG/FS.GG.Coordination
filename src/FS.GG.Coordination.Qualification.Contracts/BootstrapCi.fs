@@ -289,9 +289,9 @@ let private loadContract root =
         elif not (List.isEmpty job.Needs) then
             failwith $"prerequisite gate must remain independently scheduled: %s{job.Id}"
         if job.ReceiptKind = Some "formal" then
-            if job.Shards.Length <> 16 || job.Shards.Length <> (job.Shards |> List.distinct |> List.length)
+            if job.Shards.Length <> 19 || job.Shards.Length <> (job.Shards |> List.distinct |> List.length)
                || job.Shards |> List.exists (fun shard -> String.IsNullOrWhiteSpace shard || shard |> Seq.exists (fun character -> not (Char.IsLower character || Char.IsDigit character || character = '-'))) then
-                failwith "formal gate must bind sixteen distinct canonical shard identities"
+                failwith "formal gate must bind nineteen distinct canonical shard identities"
         elif not job.Shards.IsEmpty then
             failwith $"non-formal gate cannot declare shards: %s{job.Id}"
     let receiptKinds = jobs |> List.choose _.ReceiptKind
@@ -343,7 +343,7 @@ let private inspectOptimisticProjection root =
               if formalFanout.GetProperty("logicalPartition").GetInt32() <> 1 || formalFanout.GetProperty("maxConcurrentExecutions").GetInt32() <> 6
                  || semanticShards.Head <> "base" || Set.ofList semanticShards <> Set.ofList expectedSemanticShards
                  || semanticShards.Length <> (semanticShards |> List.distinct |> List.length) || performanceShard <> "epoch" then
-                  yield violation "optimistic-formal-fanout" "must preserve partition one, sixteen semantic shards, epoch, and the six-execution bound"
+                  yield violation "optimistic-formal-fanout" "must preserve partition one, nineteen semantic shards, epoch, and the six-execution bound"
               if boolProperty "failFast" coherent <> Some false || boolProperty "cancelInProgress" coherent <> Some false then
                   yield violation "optimistic-continuation" "coherent validation must continue completely"
               for token in [ "cancel-in-progress: false"; "fail-fast: false"; "max-parallel: 6"; "cron: '17 3 * * *'"; "  prepare:"; "  run-partition:"; "  formal-aggregate:"; "  aggregate:"; "shard: base"; "shard: epoch" ] do
@@ -923,7 +923,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
         let expectedResult =
             sha256Bytes
                 (Encoding.UTF8.GetBytes(
-                    $"passed|passed|8|151|221|196|62|%d{startupRetryCount}|%d{verifyRetryCount}|%d{reflectionRetryCount}|%d{earlyLifecycleRetryCount}|%s{preparationDigest}|%s{formalIdentity}|none|none"))
+                    $"passed|passed|8|166|242|217|71|%d{startupRetryCount}|%d{verifyRetryCount}|%d{reflectionRetryCount}|%d{earlyLifecycleRetryCount}|%s{preparationDigest}|%s{formalIdentity}|none|none"))
         let preparationMs = int64Property "preparationDurationMs" root |> Option.defaultValue -1L
         let q2Ms = int64Property "q2DurationMs" root |> Option.defaultValue -1L
         let totalMs = int64Property "totalDurationMs" root |> Option.defaultValue -1L
@@ -933,14 +933,14 @@ let private inspectCanonicalQuintReceipt (path: string) =
               yield violation "quint-receipt-schema" "unsupported or absent schema"
           if stringProperty "q1Outcome" root <> Some "passed" || stringProperty "q2Outcome" root <> Some "passed" then
               yield violation "quint-receipt-outcome" "Q1 and Q2 must both pass"
-          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 151L then
-              yield violation "quint-receipt-inventory" "expected eight positive invariants and 151 observed negative-control rejections"
+          if int64Property "positiveInvariantCount" root <> Some 8L || int64Property "negativeControlCount" root <> Some 166L then
+              yield violation "quint-receipt-inventory" "expected eight positive invariants and 166 observed negative-control rejections"
           if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
               yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
-          if int64Property "external" processCounts <> Some 221L
-             || int64Property "quintCli" processCounts <> Some 196L
-             || int64Property "apalacheVerify" processCounts <> Some 62L then
-            yield violation "quint-receipt-process-count" "expected labeled retained process inventory 221/196/62"
+          if int64Property "external" processCounts <> Some 242L
+             || int64Property "quintCli" processCounts <> Some 217L
+             || int64Property "apalacheVerify" processCounts <> Some 71L then
+            yield violation "quint-receipt-process-count" "expected labeled retained process inventory 242/217/71"
           if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
               yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
           if stringProperty "processAccounting" root <> Some "logical-invocations-plus-explicit-startup-retries/v1" then
@@ -951,9 +951,9 @@ let private inspectCanonicalQuintReceipt (path: string) =
              || startupRetryCount < 0L || verifyRetryCount < 0L || verifyRetryCount > startupRetryCount
              || startupRetryCount <> reflectionRetryCount + earlyLifecycleRetryCount then
               yield violation "quint-receipt-startup-retries" "retry command/class counts are inconsistent"
-          if int64Property "external" physicalProcessCounts <> Some(221L + startupRetryCount)
-             || int64Property "quintCli" physicalProcessCounts <> Some(196L + startupRetryCount)
-             || int64Property "apalacheVerify" physicalProcessCounts <> Some(62L + verifyRetryCount) then
+          if int64Property "external" physicalProcessCounts <> Some(242L + startupRetryCount)
+             || int64Property "quintCli" physicalProcessCounts <> Some(217L + startupRetryCount)
+             || int64Property "apalacheVerify" physicalProcessCounts <> Some(71L + verifyRetryCount) then
               yield violation "quint-receipt-physical-process-count" "physical process inventory does not match logical invocations and retry commands"
           let expectedFormalIds =
               [ "authority-reconciliation"; "claim-election"; "cutover-observation"; "epoch"; "hosted-writer-fault-safety"; "hosted-writer-progress"; "journal-fencing"
@@ -961,7 +961,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
           if formalRows |> List.map (fun (id, _, _, _) -> id) <> expectedFormalIds
              || formalRows |> List.exists (fun (_, manifest, trace, itf) ->
                  not (isLowerSha256 manifest && isLowerSha256 trace && isLowerSha256 itf)) then
-              yield violation "quint-receipt-formal-counterexamples" "expected sixteen digest-bound formal counterexamples"
+              yield violation "quint-receipt-formal-counterexamples" "expected nineteen digest-bound formal counterexamples"
           if toolProperties <> [ "toolchainSha256"; "quintSha256"; "apalacheJarSha256" ] then
               yield violation "quint-receipt-tool-properties" (String.concat "," toolProperties)
           if inputProperties <> [ "sourceSha256"; "contractSha256" ] then

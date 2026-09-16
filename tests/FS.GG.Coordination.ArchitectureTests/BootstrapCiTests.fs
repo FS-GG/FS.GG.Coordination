@@ -163,12 +163,12 @@ let private createArtifacts root =
                     $"{{\"id\":\"%s{id}\",\"manifestSha256\":\"%s{manifest}\",\"traceSha256\":\"%s{trace}\",\"itfSha256\":\"%s{itf}\"}}")
                 |> String.concat ","
             let resultDigest =
-                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|151|221|196|62|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"))
+                SHA256.HashData(Encoding.UTF8.GetBytes($"passed|passed|8|166|242|217|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"))
                 |> Convert.ToHexString
                 |> _.ToLowerInvariant()
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":151,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":221,\"quintCli\":196,\"apalacheVerify\":62}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":221,\"quintCli\":196,\"apalacheVerify\":62}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":166,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":242,\"quintCli\":217,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":242,\"quintCli\":217,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}")
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
 
@@ -456,7 +456,7 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
     Assert.Contains("logical-formal-contribution-and-observed-execution/v1", aggregate)
     Assert.Contains("parallel-composed-upper-bound-not-workflow-wall-time", aggregate)
     Assert.Contains("name: canonical-quint-parallel-accounting", workflow)
-    Assert.DoesNotContain("processCounts:{external:221", aggregate)
+    Assert.DoesNotContain("processCounts:{external:242", aggregate)
 
 [<Fact>]
 let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
@@ -464,7 +464,7 @@ let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
         let shardRoot = Path.Combine(root, "shards")
         Directory.CreateDirectory shardRoot |> ignore
         let performance = Path.Combine(root, "performance.json")
-        File.WriteAllText(performance, "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":16,\"epochBudgetMs\":105000}")
+        File.WriteAllText(performance, "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":105000}")
         let startInfo = ProcessStartInfo("bash")
         startInfo.WorkingDirectory <- repositoryRoot
         startInfo.ArgumentList.Add("eng/bootstrap-gates/canonical-quint-aggregate.sh")
@@ -982,12 +982,12 @@ let private mutateCanonicalQuintReceipt mutate =
 [<Theory>]
 [<InlineData("\"q1Outcome\":\"passed\"", "\"q1Outcome\":\"failed\"", "quint-receipt-outcome")>]
 [<InlineData("\"positiveInvariantCount\":8", "\"positiveInvariantCount\":7", "quint-receipt-inventory")>]
-[<InlineData("\"negativeControlCount\":151", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
+[<InlineData("\"negativeControlCount\":166", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
 [<InlineData("\"totalDurationMs\":300", "\"totalDurationMs\":301", "quint-receipt-timing")>]
-[<InlineData("\"external\":221", "\"external\":185", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":196", "\"quintCli\":160", "quint-receipt-process-count")>]
-[<InlineData("\"apalacheVerify\":62", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":196", "\"quintCli\":0", "quint-receipt-process-count")>]
+[<InlineData("\"external\":242", "\"external\":185", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":217", "\"quintCli\":160", "quint-receipt-process-count")>]
+[<InlineData("\"apalacheVerify\":71", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":217", "\"quintCli\":0", "quint-receipt-process-count")>]
 [<InlineData("\"verify\":0", "\"verify\":1", "quint-receipt-startup-retries")>]
 [<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
 let ``canonical Quint receipt rejects incomplete or contradictory evidence`` (original: string) (replacement: string) (rule: string) =

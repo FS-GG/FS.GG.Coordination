@@ -3844,6 +3844,286 @@ module GS20310CutoverModel {
     v1Fenced: true, contracted: true }
 }
 
+// O2-I4c administrative retirement: a lost private journal is never treated as a completed
+// execution. Native GitHub state can retire the abandoned subject only after independent
+// preservation, a complete native census, an exact permanent fence, an unambiguous PR outcome,
+// subject exclusion, issue settlement, and removal of the helper-owned temporary main hold.
+module O2AdministrativeRetirementModel {
+  type RetirementState = {
+    phase: int, nativeRevision: int, observedRevision: int,
+    archivePreserved: bool, initialCensusComplete: bool,
+    temporaryMainHold: bool, permanentBranchFence: bool, branchFenceHasBypass: bool,
+    retirementHeadInstalled: bool, pullRequestHead: int, // 0=H, 1=T
+    mergeAcceptedBeforeHold: bool, pullRequestDisposition: int, // 0=open, 1=closed-unmerged, 2=merged-exact, 3=merged-other
+    cachedMergeRequest: bool, cachedExpectedHead: int, mergeRequestReleased: bool,
+    nativeShaCompared: bool, mergeRequestRefused: bool, oldHostMutationApplied: bool,
+    responseLost: bool, helperRestarted: bool, settlementReconciled: bool,
+    subjectExcluded: bool, issueSettled: bool, oldHostReturned: bool,
+    originalCompletionFabricated: bool, retired: bool,
+  }
+  var state: RetirementState
+  action init = state' = {
+    phase: 0, nativeRevision: 0, observedRevision: 0,
+    archivePreserved: false, initialCensusComplete: false,
+    temporaryMainHold: false, permanentBranchFence: false, branchFenceHasBypass: false,
+    retirementHeadInstalled: false, pullRequestHead: 0,
+    mergeAcceptedBeforeHold: false, pullRequestDisposition: 0,
+    cachedMergeRequest: false, cachedExpectedHead: 0, mergeRequestReleased: false,
+    nativeShaCompared: false, mergeRequestRefused: false, oldHostMutationApplied: false,
+    responseLost: false, helperRestarted: false, settlementReconciled: false,
+    subjectExcluded: false, issueSettled: false, oldHostReturned: false,
+    originalCompletionFabricated: false, retired: false,
+  }
+  action preserveEvidence = all {
+    state.phase == 0,
+    state' = { ...state, phase: 1, archivePreserved: true,
+      initialCensusComplete: true, observedRevision: state.nativeRevision },
+  }
+  action preserveRaceEvidence = all {
+    state.phase == 0,
+    state' = { ...state, phase: 1, archivePreserved: true,
+      initialCensusComplete: true, observedRevision: state.nativeRevision,
+      cachedMergeRequest: true, cachedExpectedHead: 0, mergeAcceptedBeforeHold: true },
+  }
+  action cacheOldMergeRequest = all {
+    state.phase == 1, not(state.cachedMergeRequest), state.pullRequestHead == 0,
+    state' = { ...state, cachedMergeRequest: true, cachedExpectedHead: 0 },
+  }
+  action releaseCachedMergeRequest = all {
+    state.cachedMergeRequest, not(state.mergeRequestReleased),
+    (state.phase == 1 and state.mergeAcceptedBeforeHold) or state.phase == 9,
+    state' = { ...state, mergeRequestReleased: true },
+  }
+  action nativeCompareReleasedMerge = all {
+    state.mergeRequestReleased, not(state.nativeShaCompared),
+    (state.phase == 1 and state.mergeAcceptedBeforeHold) or state.phase == 9,
+    state' = { ...state, nativeShaCompared: true,
+      mergeRequestRefused: state.cachedExpectedHead != state.pullRequestHead,
+      oldHostReturned: true,
+      oldHostMutationApplied: state.cachedExpectedHead == state.pullRequestHead,
+      pullRequestDisposition: if (state.cachedExpectedHead == state.pullRequestHead) 2 else state.pullRequestDisposition,
+      nativeRevision: if (state.cachedExpectedHead == state.pullRequestHead) state.nativeRevision + 1 else state.nativeRevision,
+      responseLost: state.cachedExpectedHead == state.pullRequestHead },
+  }
+  action installTemporaryMainHold = all {
+    state.phase == 1, state.archivePreserved, state.initialCensusComplete,
+    state.cachedMergeRequest, not(state.temporaryMainHold),
+    not(state.mergeAcceptedBeforeHold) or and {
+      state.mergeRequestReleased, state.nativeShaCompared,
+      state.oldHostMutationApplied, state.pullRequestDisposition == 2,
+    },
+    state' = { ...state, phase: 2, temporaryMainHold: true,
+      nativeRevision: state.nativeRevision + 1,
+      observedRevision: if (state.responseLost) state.observedRevision else state.nativeRevision + 1 },
+  }
+  action advanceRetirementHead = all {
+    state.phase == 2, state.temporaryMainHold, not(state.mergeAcceptedBeforeHold),
+    state.pullRequestDisposition == 0, state.pullRequestHead == 0,
+    state' = { ...state, phase: 3, retirementHeadInstalled: true, pullRequestHead: 1,
+      nativeRevision: state.nativeRevision + 1, observedRevision: state.nativeRevision + 1 },
+  }
+  action installPermanentFence = all {
+    state.temporaryMainHold, not(state.permanentBranchFence),
+    (state.phase == 3 and state.retirementHeadInstalled) or
+      (state.phase == 2 and state.mergeAcceptedBeforeHold),
+    state' = { ...state, phase: 4, permanentBranchFence: true,
+      branchFenceHasBypass: false, nativeRevision: state.nativeRevision + 1,
+      observedRevision: if (state.responseLost) state.observedRevision else state.nativeRevision + 1 },
+  }
+  action loseCloseResponse = all {
+    state.phase == 4, state.permanentBranchFence, state.retirementHeadInstalled,
+    state.pullRequestHead == 1, state.pullRequestDisposition == 0,
+    state' = { ...state, phase: 5, pullRequestDisposition: 1,
+      nativeRevision: state.nativeRevision + 1, responseLost: true,
+      settlementReconciled: false },
+  }
+  action mergeWinsRaceWithLostResponse = all {
+    state.phase == 4, state.temporaryMainHold, state.permanentBranchFence,
+    state.pullRequestHead == 0, state.pullRequestDisposition == 2,
+    state.mergeAcceptedBeforeHold, state.cachedMergeRequest,
+    state.mergeRequestReleased, state.nativeShaCompared,
+    state.oldHostMutationApplied, state.responseLost,
+    state' = { ...state, phase: 5, settlementReconciled: false },
+  }
+  action restartHelper = all {
+    state.phase == 5, state.responseLost, not(state.helperRestarted),
+    state' = { ...state, helperRestarted: true },
+  }
+  action reconcileSettlement = all {
+    state.phase == 5, state.responseLost, state.helperRestarted,
+    state.observedRevision != state.nativeRevision,
+    state.pullRequestDisposition == 1 or state.pullRequestDisposition == 2,
+    state' = { ...state, responseLost: false, settlementReconciled: true,
+      observedRevision: state.nativeRevision },
+  }
+  action excludeSubject = all {
+    state.phase == 5, state.settlementReconciled,
+    state.observedRevision == state.nativeRevision, not(state.subjectExcluded),
+    state' = { ...state, phase: 6, subjectExcluded: true,
+      nativeRevision: state.nativeRevision + 1, observedRevision: state.nativeRevision + 1 },
+  }
+  action settleIssue = all {
+    state.phase == 6, state.subjectExcluded, not(state.issueSettled),
+    state' = { ...state, phase: 7, issueSettled: true,
+      nativeRevision: state.nativeRevision + 1, observedRevision: state.nativeRevision + 1 },
+  }
+  action removeTemporaryMainHold = all {
+    state.phase == 7, state.permanentBranchFence, state.issueSettled,
+    state.temporaryMainHold,
+    state' = { ...state, phase: 8, temporaryMainHold: false,
+      nativeRevision: state.nativeRevision + 1, observedRevision: state.nativeRevision + 1 },
+  }
+  action retire = all {
+    state.phase == 8, state.archivePreserved, state.initialCensusComplete,
+    state.observedRevision == state.nativeRevision, state.settlementReconciled,
+    state.permanentBranchFence, not(state.branchFenceHasBypass),
+    state.subjectExcluded, state.issueSettled, not(state.temporaryMainHold),
+    (state.pullRequestDisposition == 1 and state.retirementHeadInstalled and
+      state.pullRequestHead == 1 and not(state.oldHostMutationApplied)) or
+      (state.pullRequestDisposition == 2 and state.mergeAcceptedBeforeHold and
+        state.pullRequestHead == 0 and state.oldHostMutationApplied),
+    state' = { ...state, phase: 9, retired: true },
+  }
+  action hold = state' = state
+  action step = any {
+    preserveEvidence, preserveRaceEvidence, cacheOldMergeRequest,
+    installTemporaryMainHold, advanceRetirementHead, installPermanentFence,
+    loseCloseResponse, mergeWinsRaceWithLostResponse, restartHelper,
+    reconcileSettlement, excludeSubject, settleIssue, removeTemporaryMainHold,
+    releaseCachedMergeRequest, nativeCompareReleasedMerge, retire, hold,
+  }
+  action closureStep = any {
+    preserveEvidence, cacheOldMergeRequest, installTemporaryMainHold,
+    advanceRetirementHead, installPermanentFence, loseCloseResponse,
+    restartHelper, reconcileSettlement, excludeSubject, settleIssue,
+    removeTemporaryMainHold, releaseCachedMergeRequest,
+    nativeCompareReleasedMerge, retire, hold,
+  }
+  action raceStep = any {
+    preserveRaceEvidence, releaseCachedMergeRequest, nativeCompareReleasedMerge,
+    installTemporaryMainHold, installPermanentFence,
+    mergeWinsRaceWithLostResponse, restartHelper, reconcileSettlement,
+    excludeSubject, settleIssue, removeTemporaryMainHold, retire, hold,
+  }
+  val safety = and {
+    not(state.originalCompletionFabricated), state.observedRevision <= state.nativeRevision,
+    not(state.mergeAcceptedBeforeHold) or state.phase < 2 or state.nativeShaCompared,
+    not(state.oldHostMutationApplied) or state.pullRequestDisposition == 2,
+    not(state.retired) or and {
+      state.phase == 9, state.archivePreserved, state.initialCensusComplete,
+      state.observedRevision == state.nativeRevision, state.settlementReconciled,
+      state.permanentBranchFence, not(state.branchFenceHasBypass),
+      state.subjectExcluded, state.issueSettled, not(state.temporaryMainHold),
+      (state.pullRequestDisposition == 1 and state.retirementHeadInstalled and
+        state.pullRequestHead == 1 and not(state.oldHostMutationApplied)) or
+        (state.pullRequestDisposition == 2 and state.pullRequestHead == 0 and
+          state.mergeAcceptedBeforeHold and state.oldHostMutationApplied),
+    },
+  }
+  val closureReached = and { state.retired, state.pullRequestDisposition == 1 }
+  val mergeRaceReached = and {
+    state.retired, state.pullRequestDisposition == 2,
+    state.mergeAcceptedBeforeHold, state.helperRestarted,
+  }
+  val restartReached = and { state.helperRestarted, state.settlementReconciled }
+  val oldHostRefusalReached = and {
+    state.oldHostReturned, state.mergeRequestReleased, state.nativeShaCompared,
+    state.mergeRequestRefused, not(state.oldHostMutationApplied),
+    state.retirementHeadInstalled, state.pullRequestHead == 1,
+  }
+  val cleanupReached = and { state.retired, not(state.temporaryMainHold) }
+  val closureEvidenceReached = and {
+    closureReached, restartReached, oldHostRefusalReached, cleanupReached,
+  }
+  val raceEvidenceReached = and {
+    mergeRaceReached, restartReached, state.oldHostMutationApplied, cleanupReached,
+  }
+  temporal closureProgress: bool = and {
+    preserveEvidence.weakFair(Set(state)), cacheOldMergeRequest.weakFair(Set(state)),
+    installTemporaryMainHold.weakFair(Set(state)), advanceRetirementHead.weakFair(Set(state)),
+    installPermanentFence.weakFair(Set(state)), loseCloseResponse.weakFair(Set(state)),
+    restartHelper.weakFair(Set(state)), reconcileSettlement.weakFair(Set(state)),
+    excludeSubject.weakFair(Set(state)), settleIssue.weakFair(Set(state)),
+    removeTemporaryMainHold.weakFair(Set(state)), releaseCachedMergeRequest.weakFair(Set(state)),
+    nativeCompareReleasedMerge.weakFair(Set(state)),
+    retire.weakFair(Set(state)),
+  }.implies(eventually(closureReached))
+  temporal raceProgress: bool = and {
+    preserveRaceEvidence.weakFair(Set(state)), releaseCachedMergeRequest.weakFair(Set(state)),
+    nativeCompareReleasedMerge.weakFair(Set(state)), installTemporaryMainHold.weakFair(Set(state)),
+    installPermanentFence.weakFair(Set(state)), mergeWinsRaceWithLostResponse.weakFair(Set(state)),
+    restartHelper.weakFair(Set(state)), reconcileSettlement.weakFair(Set(state)),
+    excludeSubject.weakFair(Set(state)), settleIssue.weakFair(Set(state)),
+    removeTemporaryMainHold.weakFair(Set(state)), retire.weakFair(Set(state)),
+  }.implies(eventually(mergeRaceReached))
+  temporal closureEventuallyReached: bool = eventually(closureEvidenceReached)
+  temporal raceEventuallyReached: bool = eventually(mergeRaceReached)
+  val blockedInvariant = not(state.retired)
+  action withoutPermanentFence = any {
+    preserveEvidence, cacheOldMergeRequest, installTemporaryMainHold,
+    unsafeTerminalWithoutFence, hold,
+  }
+  action unsafeTerminalWithoutFence = state' = {
+    ...state, phase: 9, archivePreserved: true, initialCensusComplete: true,
+    nativeRevision: 5, observedRevision: 5, temporaryMainHold: false,
+    permanentBranchFence: false, retirementHeadInstalled: false,
+    pullRequestHead: 0, pullRequestDisposition: 1,
+    cachedMergeRequest: true, cachedExpectedHead: 0,
+    mergeRequestReleased: true, nativeShaCompared: false,
+    mergeRequestRefused: false, oldHostMutationApplied: true,
+    responseLost: false, settlementReconciled: true,
+    subjectExcluded: true, issueSettled: true, oldHostReturned: true,
+    originalCompletionFabricated: true, retired: true,
+  }
+}
+
+// The superseded close-only plan is retained as an executable counterexample model.
+// It shows the supported old client caching H while OPEN, then releasing the same
+// SHA-bound request after closure and hold removal, where H still matches and merges.
+module O2AdministrativeRetirementOldPlanModel {
+  type OldPlanState = {
+    phase: int, cachedH: bool, hold: bool, permanentRefRule: bool,
+    closedAtH: bool, retired: bool, requestReleased: bool,
+    nativeShaCompared: bool, lateMergeApplied: bool,
+  }
+  var old: OldPlanState
+  action init = old' = { phase: 0, cachedH: false, hold: false,
+    permanentRefRule: false, closedAtH: false, retired: false,
+    requestReleased: false, nativeShaCompared: false, lateMergeApplied: false }
+  action preserveAndCacheH = all { old.phase == 0,
+    old' = { ...old, phase: 1, cachedH: true } }
+  action installHold = all { old.phase == 1, old.cachedH,
+    old' = { ...old, phase: 2, hold: true } }
+  action freezeH = all { old.phase == 2, old.hold,
+    old' = { ...old, phase: 3, permanentRefRule: true } }
+  action closeAtH = all { old.phase == 3, old.permanentRefRule,
+    old' = { ...old, phase: 4, closedAtH: true } }
+  action removeHoldAndRetire = all { old.phase == 4, old.closedAtH,
+    old' = { ...old, phase: 5, hold: false, retired: true } }
+  action releaseLateHMerge = all { old.phase == 5, old.retired, old.cachedH,
+    not(old.requestReleased),
+    old' = { ...old, phase: 6, requestReleased: true,
+      nativeShaCompared: true, lateMergeApplied: true } }
+  action holdState = old' = old
+  action oldPlanStep = any { preserveAndCacheH, installHold, freezeH,
+    closeAtH, removeHoldAndRetire, releaseLateHMerge, holdState }
+  val oldPlanTraceConsistent = not(old.lateMergeApplied) or and {
+    old.retired, old.closedAtH, old.cachedH, old.requestReleased,
+    old.nativeShaCompared, not(old.hold),
+  }
+  val oldPlanLateMergeReached = and { old.phase == 6, old.lateMergeApplied }
+  temporal oldPlanTraceProgress: bool = and {
+    preserveAndCacheH.weakFair(Set(old)), installHold.weakFair(Set(old)),
+    freezeH.weakFair(Set(old)), closeAtH.weakFair(Set(old)),
+    removeHoldAndRetire.weakFair(Set(old)), releaseLateHMerge.weakFair(Set(old)),
+  }.implies(eventually(oldPlanLateMergeReached))
+  temporal oldPlanLateMergeEventually: bool = eventually(oldPlanLateMergeReached)
+  action invalidOldPlanTrace = old' = { ...old, lateMergeApplied: true }
+  action oldPlanWithoutRelease = any { preserveAndCacheH, installHold,
+    freezeH, closeAtH, removeHoldAndRetire, holdState }
+  val oldPlanNotRetired = not(old.retired)
+}
+
 // GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only
 // the actions and properties needed for one independently qualified closure. Quint flattening
 // therefore retains the used transitive closure instead of the all-actions integration root.

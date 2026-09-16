@@ -14,7 +14,7 @@ jq -e --slurpfile obligation "$plan_root/candidate-obligation.json" '
 ' "$plan_root/partition-plan.json" >/dev/null
 mapfile -t semantic < <(jq -er '.formalFanout.semanticShards[]' eng/optimistic-qualification-plan.json)
 performance="$(jq -er '.formalFanout.performanceShard' eng/optimistic-qualification-plan.json)"
-test "${#semantic[@]}" -eq 16
+test "${#semantic[@]}" -eq 19
 
 expected_dirs=()
 for id in "${semantic[@]}" "$performance"; do expected_dirs+=("coherent-formal-fragment-$candidate-$id"); done
@@ -44,7 +44,7 @@ for id in "${semantic[@]}" "$performance"; do
     jq -e --arg id "$id" '.schema == "fsgg.coordination.canonical-quint-formal-shard/1" and .id == $id and .outcome == "passed"' "$dir/receipt.json" >/dev/null
   fi
   if [[ "$id" == "$performance" ]]; then
-    jq -e '.schema == "fsgg.coordination.canonical-quint-performance/1" and .outcome == "passed" and .shardCount == 16 and .epochBudgetMs == 105000' "$dir/performance.json" >/dev/null
+    jq -e '.schema == "fsgg.coordination.canonical-quint-performance/1" and .outcome == "passed" and .shardCount == 19 and .epochBudgetMs == 105000' "$dir/performance.json" >/dev/null
   fi
 done
 
