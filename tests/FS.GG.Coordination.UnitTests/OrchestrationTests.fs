@@ -2142,6 +2142,35 @@ module Cases =
         )
 
     [<Fact>]
+    let ``project recovery allocation is local and leaves another project unchanged`` () =
+        let projectA = Id.project (guid "50000000-0000-0000-0000-000000000001")
+        let projectB = Id.project (guid "50000000-0000-0000-0000-000000000002")
+        let subjectA = WorkItemIdentity.create "R_a" 71L "I_a" 81L
+        let subjectB = WorkItemIdentity.create "R_b" 72L "I_b" 82L
+        let ordinaryA = Id.reservation (guid "60000000-0000-0000-0000-000000000001")
+        let recoveryA = Id.reservation (guid "60000000-0000-0000-0000-000000000002")
+        let ordinaryB = Id.reservation (guid "60000000-0000-0000-0000-000000000003")
+
+        let running projectId =
+            ProjectOrchestrator.initial projectId 2 1
+            |> fun state -> ProjectOrchestrator.evolve state ProjectResumed
+
+        let allocate state reservation subject recovery =
+            ProjectOrchestrator.decide state (Allocate(reservation, subject, recovery))
+            |> Result.defaultWith failwith
+            |> List.fold ProjectOrchestrator.evolve state
+
+        let stateA = allocate (running projectA) ordinaryA subjectA false
+        let stateB = allocate (running projectB) ordinaryB subjectB false
+        let beforeB = stateB
+        let recoveredA = allocate stateA recoveryA subjectA true
+
+        Assert.Equal(2, recoveredA.Reservations.Count)
+        Assert.Equal(beforeB, stateB)
+        Assert.Equal(Id.generation 0L, stateB.Generation)
+        Assert.Equal(Some subjectB, Map.tryFind ordinaryB stateB.Reservations)
+
+    [<Fact>]
     let ``session rejects duplicates and gaps without advancing cursor`` () =
         let session =
             {

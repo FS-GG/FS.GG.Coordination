@@ -526,19 +526,31 @@ let ``event codec roundtrip replays private identities and durable budget`` () =
     Assert.Equal(Observer.replay events, state)
 
 [<Fact>]
-let ``incomplete project observation cannot erase or invent stable identity`` () =
-    let refusal =
-        ProjectObservationBridge.observe
-            projectId
-            (Id.revision 1L)
-            (Id.generation 1L)
-            provenance
-            []
-            (ProjectIncomplete("page lost", Some "cursor"))
+let ``transient project failures cannot erase known membership or create an observation`` () =
+    let known = observed ()
+    let knownObservation = known.Observation
+    let knownSequence = known.Sequence
 
-    match refusal with
-    | Error(ProjectReadRefused(ProjectObservationRefused(ObservationIncomplete("page lost", Some "cursor")))) -> ()
-    | other -> failwithf "unexpected %A" other
+    let failures =
+        [
+            ProjectIncomplete("page lost", Some "cursor"), "incomplete"
+            ProjectUnreadable "timeout", "timeout"
+            ProjectUnreadable "rate-limited", "rate-limited"
+        ]
+
+    for failure, expected in failures do
+        let refusal =
+            ProjectObservationBridge.observe projectId (Id.revision 8L) (Id.generation 3L) provenance [] failure
+
+        match refusal, expected with
+        | Error(ProjectReadRefused(ProjectObservationRefused(ObservationIncomplete("page lost", Some "cursor")))),
+          "incomplete" -> ()
+        | Error(ProjectReadRefused(ProjectObservationUnreadable reason)), expectedReason ->
+            Assert.Equal(expectedReason, reason)
+        | other -> failwithf "unexpected project failure projection: %A" other
+
+        Assert.Equal(knownObservation, known.Observation)
+        Assert.Equal(knownSequence, known.Sequence)
 
 [<Fact>]
 let ``complete bridge requires immutable repository database and issue readback`` () =
@@ -596,6 +608,43 @@ let ``complete bridge requires immutable repository database and issue readback`
         WorkItemIdentity.persistenceId workItem,
         WorkItemIdentity.persistenceId accepted.WorkItems.Head.Identity
     )
+
+    let movedMembership =
+        ProjectComplete(
+            "revision-2",
+            [
+                {
+                    Number = 1
+                    Items =
+                        [
+                            { item with
+                                ItemId = live "PVTI_other_board_projection"
+                            }
+                        ]
+                    TerminalPage = true
+                }
+            ]
+        )
+
+    let reconciled =
+        ProjectObservationBridge.observe
+            projectId
+            (Id.revision 2L)
+            (Id.generation 1L)
+            { provenance with
+                EvidenceSha256 = sha "c"
+            }
+            [ fact ]
+            movedMembership
+        |> Result.defaultWith (sprintf "%A" >> failwith)
+
+    let owners =
+        [ accepted; reconciled ]
+        |> List.collect _.WorkItems
+        |> List.map (fun value -> WorkItemIdentity.persistenceId value.Identity)
+        |> Set.ofList
+
+    Assert.Equal(1, owners.Count)
 
 type private ReadCapability() =
     interface IProjectReadCapability with
