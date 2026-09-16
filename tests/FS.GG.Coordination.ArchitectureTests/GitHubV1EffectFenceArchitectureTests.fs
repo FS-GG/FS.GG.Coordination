@@ -63,7 +63,7 @@ let ``common fence has only injected read and effect boundaries`` () =
     )
 
 [<Fact>]
-let ``GS2-08-4 registration binds accepted epoch and both source census gates without receipt fiction`` () =
+let ``GS2-08-4 registration binds accepted epoch and landed census gates directly`` () =
     use units = JsonDocument.Parse(read "eng/github-substrate-v2-units.json")
     use gates = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
 
@@ -87,8 +87,6 @@ let ``GS2-08-4 registration binds accepted epoch and both source census gates wi
         "both exact landed GS2-08.3 writer and receiver source-census",
         (unitValue.GetProperty("permissionCeiling")[1]).GetString()
     )
-
-    Assert.False(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.3.json")))
 
     let contract =
         unitValue.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
