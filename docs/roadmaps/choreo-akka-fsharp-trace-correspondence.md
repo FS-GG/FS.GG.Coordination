@@ -358,6 +358,12 @@ become 135/150 seconds respectively, and the TLC peak-memory ceiling becomes 3,0
 sample, artifact, toolchain, and workflow-envelope limits are unchanged. These are operational compilation
 ceilings, not larger semantic exploration bounds.
 
+The enlarged assembled source also exposed an outer CI constraint after those inner budgets passed: three canonical
+semantic shards completed compilation and simulation but were canceled at the workflow's 25-minute job boundary.
+The semantic job timeout is therefore 40 minutes (60% scheduling/execution headroom over the observed boundary).
+This changes only the outer runner allowance; it does not relax any Quint/TLC elapsed, memory, depth, state,
+transition, sample, or artifact limit.
+
 ### C3 — make Quint traces the executable contract
 
 - [ ] Define and version the stable observable trace schema and trace manifest.
