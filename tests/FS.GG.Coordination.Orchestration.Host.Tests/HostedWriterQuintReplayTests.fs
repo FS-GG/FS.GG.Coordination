@@ -349,6 +349,8 @@ let private fingerprint (value: string) =
     let bytes: byte array = Encoding.UTF8.GetBytes value
     SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
 
+let private quint032BinarySha256 = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+
 let private stateValue
     stage
     operationId
@@ -499,6 +501,9 @@ let private source action =
     | matches -> failwith $"expected one Quint action {action}, got {matches.Length}"
 
 let private trace actions =
+    // Transitional C0 fixture for the existing flat O2 model. The reusable replay
+    // harness and production projections are retained, but this state sequence is
+    // still assembled in F#. C3 replaces it with Quint-emitted Choreo ITF.
     let initialModel =
         {
             Stage = 0
@@ -575,7 +580,7 @@ let private trace actions =
                 {
                     Seed = "deterministic-hosted-writer"
                     Bounds = [ "maxSteps", int64 actions.Length ]
-                    ToolFingerprint = fingerprint "quint-0.22.4"
+                    ToolFingerprint = quint032BinarySha256
                     ProfileFingerprint = fingerprint "fsgg-quint-profile/2"
                     ContractFingerprint = fingerprint "O2HostedWriterModel"
                     AdapterFingerprint = fingerprint "akka-hosted-writer/1"
@@ -628,8 +633,9 @@ let private appendCommand (store: IJournalStore) command =
         | Error reason -> return failwith reason
     }
 
-let private createAdapter () =
+let private createAdapter onDispatch =
     let hosted stage _ _ _ =
+        onDispatch stage
         Task.FromResult(Ok(Fixture.hosted stage))
 
     HostedWriterProviderAdapter.Create
@@ -640,8 +646,16 @@ let private createAdapter () =
             PublishCandidateBranch = hosted 3
             CreatePullRequest = hosted 4
             MergePullRequest = hosted 5
-            ReadNativeDelivery = fun _ _ _ -> Task.FromResult(Ok(Fixture.native ()))
+            ReadNativeDelivery =
+                fun _ _ _ ->
+                    onDispatch 6
+                    Task.FromResult(Ok(Fixture.native ()))
         }
+
+let private reconcileReadback stage =
+    match Fixture.kinds[stage] with
+    | ReadNativeDelivery -> NativeDelivery(Fixture.native ())
+    | _ -> HostedEffect(Fixture.hosted stage)
 
 let private stageOf (state: State) =
     Fixture.operations
@@ -718,7 +732,11 @@ type private HostedWriterReplayActor(faultyNative: bool) =
     inherit UntypedActor()
     let store = MemoryStore Fixture.initialEvents
     let journal = store :> IJournalStore
-    let adapter = createAdapter ()
+    let dispatchCounts = Array.zeroCreate Fixture.kinds.Length
+
+    let adapter =
+        createAdapter (fun stage -> dispatchCounts[stage] <- dispatchCounts[stage] + 1)
+
     let mutable pending: HostedWriterProviderReadback option = None
 
     override this.OnReceive message =
@@ -787,16 +805,19 @@ type private HostedWriterReplayActor(faultyNative: bool) =
                             |> _.State
                             |> stageOf
 
-                        let! observed =
-                            match pending with
-                            | Some value -> Task.FromResult value
-                            | None ->
-                                task {
-                                    let! value =
-                                        adapter.Dispatch(Fixture.route, Fixture.intent stage, CancellationToken.None)
+                        let observed =
+                            match step.Action, pending with
+                            | "observeApplied", Some value -> value
+                            | "observeApplied", None -> failwith "provider-response-is-not-pending"
+                            | "reconcileApplied", None ->
+                                if dispatchCounts[stage] <> 1 then
+                                    failwith $"expected exactly one provider dispatch before reconciliation, got {dispatchCounts[stage]}"
 
-                                    return value |> Result.defaultWith failwith
-                                }
+                                // The provider already applied the effect before its response was lost.
+                                // Reconciliation observes that fact and must not dispatch the effect again.
+                                reconcileReadback stage
+                            | "reconcileApplied", Some _ -> failwith "reconciliation-cannot-consume-a-pending-dispatch-response"
+                            | action, _ -> failwith $"unsupported observation action: {action}"
 
                         pending <- None
 
@@ -911,7 +932,7 @@ let private runReplay faultyNative actions =
     }
 
 [<Fact>]
-let ``Akka hosted writer exactly replays Quint happy path`` () =
+let ``Akka hosted writer replays transitional flat-model happy path`` () =
     task {
         match! runReplay false normalActions with
         | Ok QuintReplayResult.Equivalent -> ()
@@ -919,7 +940,7 @@ let ``Akka hosted writer exactly replays Quint happy path`` () =
     }
 
 [<Fact>]
-let ``Akka hosted writer exactly replays lost response restart and recovery`` () =
+let ``Akka hosted writer reconciliation does not redispatch after a lost response`` () =
     task {
         match! runReplay false recoveryActions with
         | Ok QuintReplayResult.Equivalent -> ()

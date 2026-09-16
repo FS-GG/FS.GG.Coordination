@@ -291,10 +291,10 @@ points.
 
 ### C0 — stabilize the replay baseline
 
-- [ ] Rebase/update PR 395 on the roadmap merge and repair all exact-head checks.
-- [ ] Replace the obsolete Quint 0.22.4 fingerprint with the accepted 0.32.0 identity and binary hash.
-- [ ] Prove the lost-response path calls observation/reconciliation only; remove any redispatch-shaped fallback.
-- [ ] Mark hand-authored F# traces as transitional and keep their claims scoped to the flat model.
+- [x] Rebase/update PR 395 on the roadmap merge and repair all exact-head checks.
+- [x] Replace the obsolete Quint 0.22.4 fingerprint with the accepted 0.32.0 identity and binary hash.
+- [x] Prove the lost-response path calls observation/reconciliation only; remove any redispatch-shaped fallback.
+- [x] Mark hand-authored F# traces as transitional and keep their claims scoped to the flat model.
 - [ ] Merge the reusable harness, journal fence, and focused actor tests without claiming Choreo correspondence.
 
 Exit evidence: protected-main PR checks, replay tests, journal tests, and a source note naming the temporary trace
