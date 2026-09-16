@@ -556,7 +556,7 @@
         "states": 100000,
         "samples": 200,
         "elapsedMs": 60000,
-        "peakMiB": 2048,
+        "peakMiB": 2560,
         "artifactBytes": 16777216
       },
       "admission": {
@@ -623,8 +623,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -649,8 +649,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -675,8 +675,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 90000,
-        "peakMiB": 2048,
+        "elapsedMs": 135000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -701,8 +701,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 90000,
-        "peakMiB": 2048,
+        "elapsedMs": 135000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -727,8 +727,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -753,8 +753,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -779,8 +779,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 90000,
-        "peakMiB": 2048,
+        "elapsedMs": 135000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -805,8 +805,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -831,8 +831,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 1000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -857,8 +857,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 100,
-        "elapsedMs": 90000,
-        "peakMiB": 2048,
+        "elapsedMs": 135000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -883,8 +883,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -909,8 +909,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -935,8 +935,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -961,8 +961,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -987,8 +987,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -1013,8 +1013,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -1039,8 +1039,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -1065,8 +1065,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     },
@@ -1091,8 +1091,8 @@
         "states": 10000,
         "transitions": 10000,
         "samples": 10000,
-        "elapsedMs": 105000,
-        "peakMiB": 2048,
+        "elapsedMs": 150000,
+        "peakMiB": 2560,
         "artifactBytes": 6291456
       }
     }
