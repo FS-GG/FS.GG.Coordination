@@ -50,7 +50,7 @@ let ``review delivery adapter composes journals and exposes no production transp
 [<Fact>]
 let ``review delivery preserves canonical Quint source`` () =
     Assert.Equal(
-        "be430a56332a9f5067e717ef58eaa86c800f143a9a81b999ee6dcbb0f8b80f0d",
+        "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90",
         sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md")
     )
 

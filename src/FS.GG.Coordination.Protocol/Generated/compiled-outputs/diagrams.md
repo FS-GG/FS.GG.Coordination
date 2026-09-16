@@ -1,6 +1,6 @@
 # Compiled contract diagrams
 
-Source: `be430a56332a9f5067e717ef58eaa86c800f143a9a81b999ee6dcbb0f8b80f0d`
+Source: `f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90`
 
 Behavior: `0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715`
 

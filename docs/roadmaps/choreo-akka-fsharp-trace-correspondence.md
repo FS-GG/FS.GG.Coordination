@@ -317,6 +317,8 @@ catalog switch.
 Implementation note: embedding the pinned library increases each compiled root artifact from roughly 8.8 MiB to a
 measured maximum of 12,246,193 bytes. C1 therefore raises the common root-artifact ceiling from 10 MiB to 16 MiB;
 the existing per-root fail-closed check and all semantic workload budgets remain in force.
+The pinned regions are appended after the established formal test modules so their source locations, retained ITF
+states, and diagnostic trace bytes remain stable.
 
 ### C2 — implement and review the four-process model
 
