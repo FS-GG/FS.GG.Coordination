@@ -403,7 +403,8 @@ type GitHubRouteClient
     let owner, repo = if parts.Length = 2 then parts[0], parts[1] else "", ""
 
     let uri (path: string) =
-        Uri(target.ApiRoot, $"repos/{owner}/{repo}/{path}")
+        let suffix = if String.IsNullOrEmpty path then "" else $"/{path}"
+        Uri(target.ApiRoot, $"repos/{owner}/{repo}{suffix}")
 
     let request (methodValue: RestMethod) (path: string) (body: string option) (key: string option) =
         Rest

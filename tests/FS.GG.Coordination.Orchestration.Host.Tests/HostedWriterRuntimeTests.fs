@@ -1553,6 +1553,18 @@ let ``GitHub route recovery reads fresh immutable repository and issue identity`
         Assert.Equal(64, readback.EvidenceSha256.Length)
         Assert.Equal(2, executor.Requests.Length)
 
+        let requestedUris =
+            executor.Requests
+            |> List.map (function
+                | Rest value -> value.Uri.AbsoluteUri
+                | GraphQL _ -> failwith "expected REST recovery reads")
+
+        Assert.Equal<string list>(
+            [ "https://api.github.test/repos/FS-GG/.github"
+              "https://api.github.test/repos/FS-GG/.github/issues/11" ],
+            requestedUris
+        )
+
         let mismatch =
             QueuedGitHub[response "{\"id\":8,\"node_id\":\"R_other\"}"
                          response "{\"number\":11,\"node_id\":\"I_writer\"}"]
