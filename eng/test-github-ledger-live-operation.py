@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import base64
 import contextlib
+import datetime as dt
 import gzip
 import hashlib
 import importlib.util
@@ -191,7 +192,52 @@ class LiveOperationTests(unittest.TestCase):
             self.assertEqual(["event.json", "head.json"], [x["path"] for x in transport.parse_tree(objects[2]["bytes"])])
             parsed = transport.parse_commit(objects[3]["bytes"])
             self.assertEqual([], parsed["parents"])
-            self.assertEqual("Initialize", parsed["message"])
+            self.assertEqual("Initialize\n", parsed["message"])
+
+    def test_commit_post_preserves_terminal_lf_and_exact_git_oid(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            path, _ = plan_fixture(pathlib.Path(scratch))
+            _, objects = transport.load_plan(path)
+            commit = objects[3]
+            posted = []
+            message_mutation = [None]
+
+            def raw_commit(value):
+                def person(name):
+                    item = value[name]
+                    stamp = dt.datetime.fromisoformat(item["date"])
+                    seconds = int(stamp.timestamp())
+                    offset = stamp.strftime("%z")
+                    return f'{item["name"]} <{item["email"]}> {seconds} {offset}'
+
+                return (
+                    f'tree {value["tree"]}\n'
+                    f'author {person("author")}\n'
+                    f'committer {person("committer")}\n\n'
+                    f'{value["message"]}'
+                ).encode()
+
+            def response(_path, _token, _method, value):
+                posted.append(value)
+                received = dict(value)
+                if message_mutation[0] is not None:
+                    received["message"] = message_mutation[0]
+                return 201, {"sha": transport.oid("commit", raw_commit(received))}
+
+            original = transport.request
+            transport.request = response
+            try:
+                transport.put_commit(commit, "synthetic")
+                self.assertEqual("Initialize\n", posted[0]["message"])
+                self.assertEqual(commit["bytes"], raw_commit(posted[0]))
+
+                for changed in ("Initialize", "Initialize\n\n"):
+                    with self.subTest(message=repr(changed)):
+                        message_mutation[0] = changed
+                        with self.assertRaisesRegex(transport.Refused, "commit-object-mismatch"):
+                            transport.put_commit(commit, "synthetic")
+            finally:
+                transport.request = original
 
     def test_transport_round_trip_validates_structured_tree_and_parentless_commit(self):
         with tempfile.TemporaryDirectory() as scratch:

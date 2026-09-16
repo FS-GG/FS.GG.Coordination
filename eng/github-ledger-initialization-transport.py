@@ -213,7 +213,7 @@ def parse_commit(payload):
     if set(fields) != {"tree", "author", "committer"}:
         raise Refused("commit-object-header")
     return {
-        "message": message.decode("utf-8").removesuffix("\n"),
+        "message": message.decode("utf-8"),
         "tree": fields["tree"],
         "parents": [],
         "author": parse_person(fields["author"]),
