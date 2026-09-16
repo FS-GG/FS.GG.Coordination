@@ -349,7 +349,8 @@ let private fingerprint (value: string) =
     let bytes: byte array = Encoding.UTF8.GetBytes value
     SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
 
-let private quint032BinarySha256 = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+let private quint032BinarySha256 =
+    "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
 
 let private stateValue
     stage
@@ -811,12 +812,14 @@ type private HostedWriterReplayActor(faultyNative: bool) =
                             | "observeApplied", None -> failwith "provider-response-is-not-pending"
                             | "reconcileApplied", None ->
                                 if dispatchCounts[stage] <> 1 then
-                                    failwith $"expected exactly one provider dispatch before reconciliation, got {dispatchCounts[stage]}"
+                                    failwith
+                                        $"expected exactly one provider dispatch before reconciliation, got {dispatchCounts[stage]}"
 
                                 // The provider already applied the effect before its response was lost.
                                 // Reconciliation observes that fact and must not dispatch the effect again.
                                 reconcileReadback stage
-                            | "reconcileApplied", Some _ -> failwith "reconciliation-cannot-consume-a-pending-dispatch-response"
+                            | "reconcileApplied", Some _ ->
+                                failwith "reconciliation-cannot-consume-a-pending-dispatch-response"
                             | action, _ -> failwith $"unsupported observation action: {action}"
 
                         pending <- None
