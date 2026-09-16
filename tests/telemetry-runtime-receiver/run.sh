@@ -24,7 +24,12 @@ assert manifest == {
             "version": "0.87.0",
             "commands": ["fsgg-coord-engine"],
             "rollForward": False,
-        }
+        },
+        "fantomas": {
+            "version": "8.0.0",
+            "commands": ["fantomas"],
+            "rollForward": False,
+        },
     },
 }
 
