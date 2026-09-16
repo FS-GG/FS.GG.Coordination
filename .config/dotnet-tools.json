@@ -8,6 +8,13 @@
         "fsgg-coord-engine"
       ],
       "rollForward": false
+    },
+    "fantomas": {
+      "version": "8.0.0",
+      "commands": [
+        "fantomas"
+      ],
+      "rollForward": false
     }
   }
 }
