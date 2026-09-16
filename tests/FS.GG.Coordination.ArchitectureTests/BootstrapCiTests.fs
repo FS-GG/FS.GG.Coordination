@@ -784,6 +784,14 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
 
     Assert.DoesNotContain(", epoch,", semanticBlock)
     Assert.Contains("timeout-minutes: 40", semanticBlock)
+
+    let performanceBlock =
+        workflow.Substring(
+            workflow.IndexOf("  canonical-quint-performance:"),
+            workflow.IndexOf("  canonical-quint:") - workflow.IndexOf("  canonical-quint-performance:")
+        )
+
+    Assert.Contains("timeout-minutes: 30", performanceBlock)
     Assert.Contains("FSGG_QUINT_SHARD: epoch", workflow)
     Assert.Contains("path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance", workflow)
     Assert.DoesNotContain("needs: [canonical-quint-semantic]", semanticBlock)

@@ -134,7 +134,7 @@ jobs:
     needs: [reuse-decision, canonical-quint-prepare]
     if: ${{ needs.canonical-quint-prepare.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint-performance
       FSGG_QUINT_SHARD: epoch

@@ -861,7 +861,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "    needs: [reuse-decision, canonical-quint-prepare]"
     line "    if: ${{ needs.canonical-quint-prepare.result == 'success' }}"
     line $"    runs-on: %s{contract.Reuse.Runner}"
-    line "    timeout-minutes: 15"
+    line "    timeout-minutes: 30"
     line "    env:"
     line "      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint-performance"
     line "      FSGG_QUINT_SHARD: epoch"

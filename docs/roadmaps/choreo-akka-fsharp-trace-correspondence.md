@@ -364,6 +364,11 @@ The semantic job timeout is therefore 40 minutes (60% scheduling/execution headr
 This changes only the outer runner allowance; it does not relax any Quint/TLC elapsed, memory, depth, state,
 transition, sample, or artifact limit.
 
+The independent epoch/performance shard subsequently completed compilation and simulation but reached its separate
+15-minute job boundary while the bounded performance check was still running. Its outer job allowance is therefore
+30 minutes. As with the semantic-shard allowance, this is runner headroom only: the epoch's 150-second formal
+measurement ceiling and every semantic/resource bound remain unchanged.
+
 ### C3 — make Quint traces the executable contract
 
 - [ ] Define and version the stable observable trace schema and trace manifest.

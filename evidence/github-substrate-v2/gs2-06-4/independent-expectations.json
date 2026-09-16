@@ -38,7 +38,7 @@
   "managers": [
     "github-actions"
   ],
-  "expectedSeal": "d8c5c7e171d88bbaf4cb26ed2c64e2afdefc22a3f965598665eb6e3960738079",
+  "expectedSeal": "b5ac779ddfeac41841802583a443808699a64fabf678b1441eaf15cddc807e31",
   "controls": [
     "prerequisite-receipt",
     "corpus-completeness",
