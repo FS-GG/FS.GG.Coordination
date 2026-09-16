@@ -1,9 +1,11 @@
 module FS.GG.Coordination.RoadmapWorkTests
 
 open System
+open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open Xunit
 open FS.GG.Coordination.Qualification.Contracts
 
@@ -73,6 +75,9 @@ let private validReceipt = receiptWith "accepted" unit5Contract None |> bytes
 let private codes (findings: RoadmapWorkFinding list) =
     findings |> List.map _.Code |> Set.ofList
 
+let private repositoryRoot =
+    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+
 [<Fact>]
 let ``known unit inspection is bound to exact roadmap bytes`` () =
     match RoadmapWork.inspect (bytes indexText) (bytes roadmap) "GS2-01.6" with
@@ -117,6 +122,97 @@ let ``missing duplicate rejected stale and tampered receipts fail closed`` () =
         [
             receiptWith "accepted" unit5Contract (Some(String.replicate 64 "e")) |> bytes
         ]
+
+[<Fact>]
+let ``GS2-08-3 receipt digest compatibility is bound to all four immutable identities`` () =
+    let receiptBytes =
+        File.ReadAllBytes(
+            Path.Combine(repositoryRoot, "evidence/github-substrate-v2/accepted/GS2-08.3.json")
+        )
+
+    use receipt = JsonDocument.Parse receiptBytes
+    let root = receipt.RootElement
+
+    let verify bytes unitId storedDigest element =
+        AcceptanceReceiptDigest.verify (ReadOnlyMemory<byte>(bytes)) unitId storedDigest element
+
+    match
+        verify
+            receiptBytes
+            AcceptanceReceiptDigest.Gs2083UnitId
+            AcceptanceReceiptDigest.Gs2083LegacyDigest
+            root
+    with
+    | Ok result ->
+        Assert.True(result.CompatibilityApplied)
+        Assert.Equal(AcceptanceReceiptDigest.Gs2083LegacyDigest, result.StoredDigest)
+        Assert.Equal(AcceptanceReceiptDigest.Gs2083CanonicalDigest, result.CanonicalDigest)
+    | Error error -> Assert.Fail(error)
+
+    let changedRawBytes = Array.append receiptBytes [| byte ' ' |]
+
+    Assert.True(
+        verify
+            changedRawBytes
+            AcceptanceReceiptDigest.Gs2083UnitId
+            AcceptanceReceiptDigest.Gs2083LegacyDigest
+            root
+        |> Result.isError
+    )
+
+    Assert.True(
+        verify
+            receiptBytes
+            AcceptanceReceiptDigest.Gs2083UnitId
+            (String.replicate 64 "0")
+            root
+        |> Result.isError
+    )
+
+    let changedCanonicalNode = JsonNode.Parse(receiptBytes).AsObject()
+    changedCanonicalNode["acceptedAt"] <- "2026-09-16T00:00:00Z"
+    use changedCanonical = JsonDocument.Parse(changedCanonicalNode.ToJsonString())
+
+    Assert.True(
+        verify
+            receiptBytes
+            AcceptanceReceiptDigest.Gs2083UnitId
+            AcceptanceReceiptDigest.Gs2083LegacyDigest
+            changedCanonical.RootElement
+        |> Result.isError
+    )
+
+    Assert.True(
+        verify
+            receiptBytes
+            "GS2-08.4"
+            AcceptanceReceiptDigest.Gs2083LegacyDigest
+            root
+        |> Result.isError
+    )
+
+[<Fact>]
+let ``unrelated insertion-order receipt cannot use legacy self-digest behavior`` () =
+    let legacyBody =
+        sprintf
+            """{"schema":"fsgg.coordination.unit-acceptance/1","unitId":"GS2-09.9","state":"accepted","unitContractSha256":"%s","sourceRevision":"%s","artifacts":[{"sha256":"%s","name":"merge"}],"acceptedAt":"2026-08-27T00:00:00Z"}"""
+            (String.replicate 64 "a")
+            (String.replicate 40 "b")
+            (String.replicate 64 "c")
+
+    let storedDigest = sha legacyBody
+    let receiptText = legacyBody.Substring(0, legacyBody.Length - 1) + $",\"digest\":\"{storedDigest}\"}}"
+    let receiptBytes = Encoding.UTF8.GetBytes receiptText
+    use receipt = JsonDocument.Parse receiptBytes
+
+    Assert.True(
+        AcceptanceReceiptDigest.verify
+            (ReadOnlyMemory<byte>(receiptBytes))
+            "GS2-09.9"
+            storedDigest
+            receipt.RootElement
+        |> Result.isError
+    )
 
 [<Fact>]
 let ``candidate manifest is deterministic and never claims acceptance`` () =

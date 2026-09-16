@@ -1,3 +1,5 @@
+#load "../src/FS.GG.Coordination.Qualification.Contracts/AcceptanceReceiptDigest.fsi" "../src/FS.GG.Coordination.Qualification.Contracts/AcceptanceReceiptDigest.fs"
+
 open System
 open System.Collections.Generic
 open System.IO
@@ -5,6 +7,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
+open FS.GG.Coordination.Qualification.Contracts
 
 let policySchema = "fsgg.coordination.evidence-storage-policy/1"
 let indexSchema = "fsgg.coordination.evidence-index/1"
@@ -1242,7 +1245,18 @@ let validate evidenceRoot =
                 validateSha relative (stringProperty "sha256" artifact)
 
             validateTime relative (stringProperty "acceptedAt" receipt.RootElement)
-            validateSha relative (stringProperty "digest" receipt.RootElement)
+            let storedDigest = stringProperty "digest" receipt.RootElement
+            validateSha relative storedDigest
+
+            match
+                AcceptanceReceiptDigest.verify
+                    (ReadOnlyMemory<byte>(bytes))
+                    unitId
+                    storedDigest
+                    receipt.RootElement
+            with
+            | Ok _ -> ()
+            | Error detail -> fail "ES-RECEIPT-TAMPERED" $"{relative} unit={unitId}: {detail}"
 
         if categoryName = "artifact-manifests" then
             use manifestDocument = readJson path
@@ -1734,6 +1748,26 @@ let selfTest evidenceRoot =
 
                 addTrackedJson root "accepted-invalid" "accepted-receipts" "accepted/invalid.json" content),
             "ES-RECEIPT-UNIT"
+            "receipt-unrecognized-bad-self-digest",
+            (fun root ->
+                let content =
+                    "{\"schema\":\"fsgg.coordination.unit-acceptance/1\",\"unitId\":\"GS2-09.9\",\"state\":\"accepted\",\"unitContractSha256\":\""
+                    + String('a', 64)
+                    + "\",\"sourceRevision\":\""
+                    + String('b', 40)
+                    + "\",\"artifacts\":[{\"name\":\"merge\",\"sha256\":\""
+                    + String('c', 64)
+                    + "\"}],\"acceptedAt\":\"2026-08-27T00:00:00Z\",\"digest\":\""
+                    + String('d', 64)
+                    + "\"}"
+
+                addTrackedJson
+                    root
+                    "accepted-unrecognized-bad-self-digest"
+                    "accepted-receipts"
+                    "accepted/GS2-09.9.json"
+                    content),
+            "ES-RECEIPT-TAMPERED"
             "frozen-payload-byte",
             (fun root ->
                 let path = Path.Combine(root, "corpus/originals/C-claim.source")
@@ -1924,7 +1958,7 @@ let selfTest evidenceRoot =
             if Directory.Exists temp then
                 Directory.Delete(temp, true)
 
-    $"EVIDENCE_STORAGE_SELF_TEST_OK negativeCases={cases.Length} positiveArtifactManifests=1 positiveCritiqueBundles=1 positiveMutationProofs=1"
+    $"EVIDENCE_STORAGE_SELF_TEST_OK negativeCases={cases.Length} positiveArtifactManifests=1 positiveCritiqueBundles=1 positiveMutationProofs=1 positiveReceiptDigestMigrations=1"
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 
