@@ -1,0 +1,9 @@
+{
+  "schema": "fsgg.github-substrate.v1-historical-client-blockers/1",
+  "unit": "GS2-08.6",
+  "clients": [
+    { "version": "0.58.0", "proof": "cannot-prove-fence-refusal", "disposition": "GS2-08.9-retain-or-retire" },
+    { "version": "0.75.4", "proof": "cannot-prove-fence-refusal", "disposition": "GS2-08.9-retain-or-retire" }
+  ],
+  "claim": "historical clients are blockers and are not passing fence results"
+}

@@ -994,6 +994,21 @@
         { "id": "github-v1-admission-contract", "qGate": "Q3", "commandSha256": "6396cce692cd8991470ed6a5a799d55876dadac28882b1d2a3cb2469e06e49e0" }
       ],
       "contractSha256": "0ff1ee7944b734937938b9cb24c2cea6f26e1c617f5313f9be5eda67176153e3"
+    },
+    {
+      "id": "GS2-08.6",
+      "title": "Independently attack the fence",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-08.3", "GS2-08.5"],
+      "permissionCeiling": ["repository-local GS2-08.6 registration, exact source and protected-merge binding, closed writer-census coverage contract, independent producer-attack interface, explicit historical-client blockers, offline validator and architecture tests", "read-only consumption of exact accepted GS2-08.3 census and GS2-08.5 receipt is mandatory; no claim that the producer attacks, Q3, Q6 or unit acceptance passed; no provider call or evidence, credential access, live authority or journal mutation, delayed-response exclusion claim, fence activation, package publication, receiver adoption, cutover transition, accepted GS2-08.6 receipt, completion claim or GS2-08.7 authority"],
+      "exitGate": "the Q3 and Q6 registration contracts freeze the accepted GS2-08.3 closed population and exact GS2-08.5 producer integration at source head eed927d9ca544369e2dfdbb347ba9fb6ad1a9768, protected merge cc70abbacf31a7f7ff45aadb2aedbf37e8a8999c and tree 5db84daefc48341f8be86efa5268c16ecb9a80ac, with imported Coordination merge 48fa43e67de52d4e728a9abff30686fc029d1d8d and tree 484e6c53f9f474bfedfd10f22ac301e3227478cd; acceptance remains blocked until a content-addressed executable result from outside the producer generator runs the real merged FencedTransport and DurableMutationFence boundaries for all 20 always-writing and 6 conditionally-writing commands plus direct workflow, script, protected-administration, publication and non-CLI routes; that result must cover canonical effect IDs, legacy Send refusal and read allowlisting across OperatingV1, Preparing, FreezeRequested, Frozen, SwitchedV2, VerifiedV2, OpenV2, ObservingV2, ContractingV1, OperatingV2 and RollingBack, plus stale cache, lost response, ledger rewind, missing tag, wrong manifest, permission loss and old clients; Q6 must independently execute crash/restart, lost-response reconciliation and settlement, delayed-original exclusion and retry only after proven absence; no Q4 claim exists without isolated provider evidence, and historical 0.58.0 and 0.75.4 clients that cannot prove refusal are explicit GS2-08.9 retain-or-retire blockers; registration is pending the exact producer result and claims no GS2-08.6 execution or acceptance, provider behavior, delayed-response exclusion, live activation, publication, adoption or successor authority",
+      "qGates": ["Q3", "Q6"],
+      "gateCommands": ["github-v1-independent-fence-registration-contract", "github-v1-independent-fence-recovery-registration-contract"],
+      "gateContracts": [
+        { "id": "github-v1-independent-fence-registration-contract", "qGate": "Q3", "commandSha256": "277fdd1a73eeb4cb3e2b1b5c20349b5762dd763f879ee17aefce8b6d7c85e7c5" },
+        { "id": "github-v1-independent-fence-recovery-registration-contract", "qGate": "Q6", "commandSha256": "277fdd1a73eeb4cb3e2b1b5c20349b5762dd763f879ee17aefce8b6d7c85e7c5" }
+      ],
+      "contractSha256": "6ab63e1d28261fb33de5c96d2ae48cd42f05febcfcdc3c04923a67758ab44041"
     }
   ]
 }

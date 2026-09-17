@@ -1,0 +1,28 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-08.5",
+  "state": "accepted",
+  "unitContractSha256": "0ff1ee7944b734937938b9cb24c2cea6f26e1c617f5313f9be5eda67176153e3",
+  "sourceRevision": "cc70abbacf31a7f7ff45aadb2aedbf37e8a8999c",
+  "artifacts": [
+    { "name": "accepted-GS2-08.2-receipt", "sha256": "9e92bbb5c16c952560f52e5e859a554fd938ed64870106fad138459e3f1d27fd" },
+    { "name": "accepted-GS2-08.4-receipt", "sha256": "9b7f7784fc63bf128b559857fa2651431592ad44dbecce5d4376a5f24f8dc3bd" },
+    { "name": "github-v1-admission-contract", "sha256": "6396cce692cd8991470ed6a5a799d55876dadac28882b1d2a3cb2469e06e49e0" },
+    { "name": "admission-source-subset", "sha256": "e9adf1beb1b5b99c273c9928f3e7e8978d7ec3c32cd37815858d5cf254e006f3" },
+    { "name": "v1-admission-interface", "sha256": "7e4736da1efb91cd5ffcd176d1e72ddd561048f8b4b8d8c034a4071531ccafb2" },
+    { "name": "v1-admission-implementation", "sha256": "5da24c4ea07f8a9d8934bdb6f716662c4c412f641369dc9ef6250f21cecaa081" },
+    { "name": "v1-admission-qualification-interface", "sha256": "ade3816bbf81bf78c98757a3eb8765ab6b41475018a4e17d2b28450f5951b234" },
+    { "name": "v1-admission-qualification-implementation", "sha256": "fdb5480015757a77d0462d6d1ea65f5ffe8bd59cca0a3a1235d1867fdc429156" },
+    { "name": "independent-cases", "sha256": "6b7737fa9c366efd3d55525d401d205a443e5930e1df60acbdd7236d9d689e88" },
+    { "name": "coordination-source-merge-48fa43e67de52d4e728a9abff30686fc029d1d8d", "sha256": "a3a9469fb45f433c0e611f18d60449438945abe7643e3cb96cafffb576420d85" },
+    { "name": "coordination-source-tree-484e6c53f9f474bfedfd10f22ac301e3227478cd", "sha256": "2366baa45bd0cbdabfe4237e705856525ffc53bfbfa87f46472cb2b6c30abf95" },
+    { "name": "producer-source-head-eed927d9ca544369e2dfdbb347ba9fb6ad1a9768", "sha256": "f3f64b2d57ba56838acb750971c85bcac0ff72fd4bd605792665db90bd1ddcf2" },
+    { "name": "producer-protected-merge-cc70abbacf31a7f7ff45aadb2aedbf37e8a8999c", "sha256": "ba16414b256115cb3f79aa1248f7cf8a9d94e79a5d7784815f6f0a88591a24d5" },
+    { "name": "producer-protected-tree-5db84daefc48341f8be86efa5268c16ecb9a80ac", "sha256": "11432110c6382d0c3a674b77c8c44819a0fbee091c02b0beea27ec58a73f3db0" },
+    { "name": "producer-pr-3518", "sha256": "cb00b9afb86333c9aad30e3b37543fb0fa8a5255162f189cdc1cc7de98cb9aee" },
+    { "name": "independent-review-head-6b48448cf580fc848178e370f1f1c2c4003c2c4d", "sha256": "4b2d45a7cd16e62e0cbba71dde5879c111a8e8be38a084b253afafce8391e9fc" },
+    { "name": "producer-and-parity-test-summary", "sha256": "b2e7b2129f9f0db4358d8e3d9b855772aecc10804242b98a2a6fe269127706b8" }
+  ],
+  "acceptedAt": "2026-09-17T04:13:08Z",
+  "digest": "5189e9336df0c049410bb78d027e4c08759ee2da53f1eb692c8b019740e8756b"
+}
