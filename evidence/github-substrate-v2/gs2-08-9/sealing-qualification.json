@@ -1,0 +1,164 @@
+{
+  "schema": "fsgg.github-substrate.v1-residual-writer-sealing/1",
+  "unit": "GS2-08.9",
+  "state": "pending-external-evidence",
+  "sourceRepository": "FS-GG/.github",
+  "sourceHead": "81276fbd8572dd5a8b6f9ce1408694cc2b96b303",
+  "sourceTree": "13e4f1d5a0160f697fa5e880e662199f43dbfb9b",
+  "acceptedPredecessors": [
+    {
+      "unit": "GS2-08.6",
+      "receiptSha256": "4b19806d1c4f9d147368e29e04ab7a480dcb6b798aed32e37159e8ac92a1e0cf"
+    },
+    {
+      "unit": "GS2-08.7",
+      "receiptSha256": "0cac376a7f981f56143f14ebbbc6a465529251420fce93b5d115d44282e08e55"
+    }
+  ],
+  "receiverAdoption": {
+    "unit": "GS2-08.8",
+    "state": "pending-native-receipt",
+    "candidateHead": "059d891af79b1a62914798a7d2de1ec601af220e",
+    "acceptedReceiptPresent": false
+  },
+  "sourceSeals": [
+    {
+      "partition": "telemetry",
+      "commit": "b2b9bc5c8b07d8fcaf4ee171e1cfc07639aa87b5",
+      "tree": "33d992b85c4b8309c0d6350ac1d3db42983ed562",
+      "state": "merged-protected",
+      "evidencePath": "tests/FS.GG.Telemetry.Tests/RemoteTelemetryTests.fs",
+      "evidenceSha256": "be74aacdbbc79b2a71508385acdaae36df102f33bf11268ee4ff0ec2bb4c17bd"
+    },
+    {
+      "partition": "dispatch-repair",
+      "commit": "659d405d87f0b551419528bc0a3e3d2fe1f874a9",
+      "tree": "30d41314b425b0dd198a6b33f83e60ae2aa2be8a",
+      "state": "merged-protected",
+      "evidencePath": "tests/gs2-08-9-dispatch-repair/disposition.json",
+      "evidenceSha256": "0cf7e999204184681682d694fd1eb298914d3d29c887fcb21d732d12f34ea337"
+    },
+    {
+      "partition": "release-publication",
+      "commit": "81276fbd8572dd5a8b6f9ce1408694cc2b96b303",
+      "tree": "13e4f1d5a0160f697fa5e880e662199f43dbfb9b",
+      "state": "merged-protected",
+      "evidencePath": "docs/reports/gs2-08-9-release-route-dispositions.json",
+      "evidenceSha256": "4ca6c682f120117ba68907369d52584c5058cf84ad95b0f1abb47b2dcfd0f5f0"
+    }
+  ],
+  "baseline": {
+    "path": "tests/producer-fence-attacks/external-route-evidence.json",
+    "sha256": "3f6874a392fc698cbbede5f90fbc53136e60b62af4c3bfd6a0e4bcdd9a45a6b3",
+    "routeCount": 22
+  },
+  "routes": [
+    { "path": ".github/workflows/dispatch-sender.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": ".github/workflows/feed-autofix.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": ".github/workflows/fsgg-dispatch-broker.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": ".github/workflows/github-substrate-v2-authority-qualification.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": ".github/workflows/kit-auto-publish.yml", "partition": "release-publication", "state": "current-source-sealed" },
+    { "path": ".github/workflows/kit-materialize.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": ".github/workflows/lockfile-sync.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": ".github/workflows/release-coord-engine.yml", "partition": "release-administration", "state": "admin-disabled" },
+    { "path": ".github/workflows/release-drivers.yml", "partition": "release-administration", "state": "admin-disabled" },
+    { "path": ".github/workflows/release-kit.yml", "partition": "release-administration", "state": "admin-disabled" },
+    { "path": ".github/workflows/release-new-sdd-workspace.yml", "partition": "release-publication", "state": "current-source-sealed" },
+    { "path": ".github/workflows/release-telemetry-host.yml", "partition": "release-publication", "state": "current-source-sealed" },
+    { "path": ".github/workflows/release-saga-prepare.yml", "partition": "release-administration", "state": "admin-disabled" },
+    { "path": ".github/workflows/release-saga-start.yml", "partition": "release-administration", "state": "admin-disabled" },
+    { "path": ".github/workflows/skill-registry-autofix.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": ".github/workflows/skillmirror-redrive.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": ".github/workflows/touch-set-drift.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
+    { "path": "scripts/NewSddWorkspace/Program.fs", "partition": "helper", "state": "pending-merge-and-copy-retirement" },
+    { "path": "scripts/release-saga-ci.sh", "partition": "release-publication", "state": "current-source-sealed" },
+    { "path": "scripts/release-saga-promote-release.sh", "partition": "release-publication", "state": "current-source-sealed" },
+    { "path": "src/FS.GG.Telemetry.Client/RemoteClient.fs", "partition": "telemetry", "state": "submission-only" },
+    { "path": "tools/routine-delivery.py", "partition": "helper", "state": "pending-merge-and-copy-retirement" }
+  ],
+  "historicalClients": [
+    {
+      "version": "0.58.0",
+      "artifact": "unavailable",
+      "refusalAttempted": false,
+      "accounting": "receiver-adoption-retirement"
+    },
+    {
+      "version": "0.75.4",
+      "artifact": "available-bypass-observed",
+      "refusalAttempted": true,
+      "historicalShaCredentialed": true,
+      "accounting": "rendering-selected-repository-revocation-pending"
+    }
+  ],
+  "workflowAdministration": {
+    "repository": "FS-GG/.github",
+    "observedAt": "2026-09-17T12:46:26Z",
+    "workflows": [
+      { "id": 311748898, "path": ".github/workflows/release-coord-engine.yml", "sourceSealed": true, "state": "disabled_manually" },
+      { "id": 317170238, "path": ".github/workflows/release-drivers.yml", "sourceSealed": true, "state": "disabled_manually" },
+      { "id": 316772183, "path": ".github/workflows/release-kit.yml", "sourceSealed": true, "state": "disabled_manually" },
+      { "id": 334278878, "path": ".github/workflows/release-saga-prepare.yml", "sourceSealed": true, "state": "disabled_manually" },
+      { "id": 346289776, "path": ".github/workflows/release-saga-start.yml", "sourceSealed": true, "state": "disabled_manually" }
+    ]
+  },
+  "telemetryBoundary": {
+    "scope": "telemetry-submission-only",
+    "authorityEscalation": "unauthorized-scope",
+    "redirect": "refused",
+    "providerMutationCount": 0
+  },
+  "helperBoundary": {
+    "candidateCommit": "c3e8cc1124584de27537496454d3772c2f62743f",
+    "mergedToMain": false,
+    "newSddWorkspaceSha256": "b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f",
+    "routineDeliverySha256": "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429",
+    "mutationAttempts": 0,
+    "admissionRefusalReadbackAttributedAsDelivery": false,
+    "publishedCopiesRetired": false,
+    "callersRetired": false,
+    "requiredEvidenceTemplate": {
+      "immutablePublicPackages": "retained-history-allowed",
+      "sufficientWhen": "Every installed or materialized historical helper copy is removed or replaced, every current caller selects sealed bytes, and no trusted runner, container or workflow can pair retained historical bytes with mutation credentials.",
+      "inventories": [
+        "global-and-local-dotnet-tool-manifests",
+        "active-container-images-and-build-recipes",
+        "materialized-fs-gg-drivers-routine-delivery-copies",
+        "workflow-skill-script-and-generated-workspace-callers",
+        "caller-specific-gh-token-github-token-and-app-secret-bindings",
+        "retained-package-and-cache-copies-classified-as-noncurrent-history"
+      ],
+      "readOnlyCommands": [
+        "dotnet tool list --global",
+        "find /home/developer/projects -type f -path '*/tools/routine-delivery.py' -print",
+        "rg -n 'FS.GG.NewSddWorkspace|routine-delivery.py' /home/developer/projects /home/developer/.config",
+        "find /home/developer/.nuget/packages -maxdepth 3 -type d -iname 'fs.gg.new*' -o -iname 'fs.gg.drivers'",
+        "gh api repos/OWNER/REPO/actions/secrets",
+        "gh api orgs/FS-GG/actions/secrets/SECRET/repositories"
+      ],
+      "knownCaller": "SystemAdmin/Containers/Containerfile.fsharp installs FS.GG.NewSddWorkspace and requires replacement or an explicit non-active image disposition."
+    }
+  },
+  "pendingBlockers": [
+    {
+      "id": "rendering-dispatch-app-scope",
+      "state": "pending-main-admin-mailbox",
+      "requiredEvidence": "Remove FS-GG.Rendering from FSGG_DISPATCH_APP_ID and FSGG_DISPATCH_APP_PRIVATE_KEY selected-repository scopes, or rotate/revoke that App key, and bind administrative readback."
+    },
+    {
+      "id": "helper-merge-and-retirement",
+      "state": "pending-source-and-callers",
+      "requiredEvidence": "Merge c3e8cc1124584de27537496454d3772c2f62743f and retire every published historical helper copy and caller before treating helper refusal as universal."
+    },
+    {
+      "id": "gs2-08.8-native-receipt",
+      "state": "pending-pr-merge",
+      "requiredEvidence": "Merge the GS2-08.8 native qualification PR and consume its accepted receipt."
+    }
+  ],
+  "q4": {
+    "state": "unclaimed",
+    "providerMutationClaimed": false
+  },
+  "acceptanceReceiptCreated": false
+}
