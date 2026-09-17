@@ -129,25 +129,25 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
     let expectedElapsedBudgets =
         Map
             [
-                "claim-election", 150000
-                "relation-mutation", 150000
-                "lifecycle", 135000
-                "operation-saga", 135000
-                "epoch", 150000
-                "rollback", 150000
-                "journal-reconciliation", 135000
-                "journal-fencing", 150000
-                "authority-reconciliation", 150000
-                "review-epoch", 135000
-                "cutover-observation", 150000
-                "pilot-permit-transfer", 150000
-                "pilot-permit-fault-safety", 150000
-                "pilot-permit-major-action-coverage", 150000
-                "hosted-writer-progress", 150000
-                "hosted-writer-fault-safety", 150000
-                "administrative-retirement-closure", 150000
-                "administrative-retirement-race", 150000
-                "administrative-retirement-old-plan-counterexample", 150000
+                "claim-election", 300000
+                "relation-mutation", 300000
+                "lifecycle", 300000
+                "operation-saga", 300000
+                "epoch", 300000
+                "rollback", 300000
+                "journal-reconciliation", 300000
+                "journal-fencing", 300000
+                "authority-reconciliation", 300000
+                "review-epoch", 300000
+                "cutover-observation", 300000
+                "pilot-permit-transfer", 300000
+                "pilot-permit-fault-safety", 300000
+                "pilot-permit-major-action-coverage", 300000
+                "hosted-writer-progress", 300000
+                "hosted-writer-fault-safety", 300000
+                "administrative-retirement-closure", 300000
+                "administrative-retirement-race", 300000
+                "administrative-retirement-old-plan-counterexample", 300000
             ]
 
     let actualElapsedBudgets =
@@ -158,11 +158,11 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
         sprintf "unexpected formal elapsed budgets: %A" actualElapsedBudgets
     )
 
-    Assert.Equal(135000, elapsedBudget "operation-saga")
+    Assert.Equal(300000, elapsedBudget "operation-saga")
 
     for item in tests do
         Assert.Equal("tlc", item["backend"].GetValue<string>())
-        Assert.Equal(3072, (item["budget"].AsObject()["peakMiB"]).GetValue<int>())
+        Assert.Equal(5120, (item["budget"].AsObject()["peakMiB"]).GetValue<int>())
 
         for field in
             [
