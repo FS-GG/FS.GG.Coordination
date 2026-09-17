@@ -1,0 +1,33 @@
+{
+  "schema": "fsgg.coordination.ordinary-delivery-model-correspondence/1",
+  "profile": "ordinary-source-delivery",
+  "canonicalAuthorities": [
+    {
+      "unit": "GS2-07.2",
+      "receiptDigest": "6ae56a7c9dce52f3ac25e39145b275ed5e8127a1020ee8c65a392b976661c298",
+      "reusedProperty": "missing or incomplete observation is not absence"
+    },
+    {
+      "unit": "GS2-07.3",
+      "receiptDigest": "4c6a18a3c8cca8ebd59ce040f63f0192c07f9468ad155e7941f676b0b611719c",
+      "reusedProperty": "unknown effect requires authoritative reconciliation before retry"
+    },
+    {
+      "unit": "GS2-04.9",
+      "receiptDigest": "11defafd12353bbcb9b96cc06d3d9e29553ddca4ba912bacd7476c067f9802ed",
+      "reusedProperty": "journal generation CAS admits one competing successor"
+    }
+  ],
+  "correspondence": [
+    {"runtime":"no journal entry","model":"observed decision only","enabled":["persist-intent"]},
+    {"runtime":"OrdinaryIntentPersisted","model":"durable intent before effect","enabled":["reobserve","mark-pending"]},
+    {"runtime":"OrdinaryEffectPending","model":"effect exposed or outcome unknown","enabled":["reobserve-effect","settle"]},
+    {"runtime":"OrdinarySettled","model":"terminal exact-operation receipt","enabled":[]}
+  ],
+  "nonClaims": [
+    "no new canonical Quint behavior",
+    "no production composition proof inherited from GS2-07",
+    "no legacy review or Done authority",
+    "no Q4 provider evidence"
+  ]
+}

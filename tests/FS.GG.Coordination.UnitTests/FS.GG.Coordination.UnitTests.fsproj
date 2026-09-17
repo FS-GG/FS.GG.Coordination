@@ -12,6 +12,7 @@
     <Compile Include="GitHubRoadmapIntakeTests.fs" />
     <Compile Include="GitHubClaimTouchSetTests.fs" />
     <Compile Include="GitHubReviewDeliveryTests.fs" />
+    <Compile Include="GitHubOrdinaryDeliveryTests.fs" />
     <Compile Include="GitHubLifecycleProjectionTests.fs" />
     <Compile Include="GitHubFleetShadowTests.fs" />
     <Compile Include="GitHubRepositoryProfileTests.fs" />
