@@ -330,7 +330,7 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
     )
 
     Assert.Contains(
-        "GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=c504738aaebf8280bb3042a60c804216138644cae9ceb3f3a8d947e26e3c605e",
+        "GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=3dd55761c53751ac2ecc3f3d15b99325e41346bfa9aff14497b355bfc05742ae",
         output
     )
 

@@ -821,7 +821,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     // Every semantic shard independently compiles the canonical roots before its bounded
     // checks. The pinned Choreo source increases that fixed preparation cost, and runners
     // under full matrix contention need enough wall-clock headroom to emit their receipt.
-    line "    timeout-minutes: 60"
+    line "    timeout-minutes: 90"
     line "    strategy:"
     line "      fail-fast: false"
     line "      matrix:"

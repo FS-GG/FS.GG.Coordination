@@ -783,7 +783,7 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
         )
 
     Assert.DoesNotContain(", epoch,", semanticBlock)
-    Assert.Contains("timeout-minutes: 60", semanticBlock)
+    Assert.Contains("timeout-minutes: 90", semanticBlock)
 
     let performanceBlock =
         workflow.Substring(
