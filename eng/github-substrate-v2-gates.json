@@ -342,6 +342,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-v1-bridge-publication.fsx", "--", "."]
+    },
+    {
+      "id": "github-v1-bridge-receivers-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-v1-bridge-receivers.fsx", "--", "."]
     }
   ]
 }

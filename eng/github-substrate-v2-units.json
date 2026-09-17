@@ -1056,6 +1056,33 @@
         }
       ],
       "contractSha256": "61892a9127879827d431980d76bf143c5e6a637ea5dd59799964f2969068d698"
+    },
+    {
+      "id": "GS2-08.8",
+      "title": "Adopt the immutable bridge across every receiver",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": [
+        "GS2-08.7"
+      ],
+      "permissionCeiling": [
+        "repository-local native GS2-08.8 qualification from one offline aggregate evidence file plus the accepted GS2-08.7 receipt; no provider call, production mutation, receiver write, package publication, scaffold publication or acceptance receipt creation is authorized",
+        "read-only verification may bind protected receiver heads and trees, immutable workflow references, exact public 0.90.0 source/content/manifest/package payload identities, receiver reports, route dispositions, installed old-client refusal and dependent public scaffold outcomes"
+      ],
+      "exitGate": "the Q3 github-v1-bridge-receivers contract consumes the accepted GS2-08.7 receipt and one final offline aggregate; it binds all eight receivers (.github plus seven), exact public 0.90.0 source/content/manifest and package payloads, protected head/tree and report digest for each receiver, anonymous public resolution and installed old-client refusal, immutable workflow identities, route dispositions bridge-adopted/read-only-local-only/gs2-08.9-sealing, the preserved 615-route baseline plus explicit successor accounting, and passed SDD and Templates public clean-creation, upgrade and refusal outcomes; it refuses missing receivers, old or substituted packages, stale head/tree/report, missing routes, mutable workflows described as immutable, any false successful production mutation and dashboard notification presented as adoption; qualification remains offline and creates no GS2-08.8 acceptance receipt",
+      "qGates": [
+        "Q3"
+      ],
+      "gateCommands": [
+        "github-v1-bridge-receivers-contract"
+      ],
+      "gateContracts": [
+        {
+          "id": "github-v1-bridge-receivers-contract",
+          "qGate": "Q3",
+          "commandSha256": "dde9f9545d35bc95d3141f5bcefd3b0fe42d00f7a605dedb839aa3ae0e08b8f3"
+        }
+      ],
+      "contractSha256": "be2689c238d3592cf3b93b26bc1f37dc2d353ad926ffafbb845814cd97c3b6bb"
     }
   ]
 }

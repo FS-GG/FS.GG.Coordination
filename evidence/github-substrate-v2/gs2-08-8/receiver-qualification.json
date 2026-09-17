@@ -1,0 +1,1148 @@
+{
+  "schema": "fsgg.gs2-08.8-bridge-receiver-qualification/1",
+  "unit": "GS2-08.8",
+  "state": "qualified",
+  "qualified": true,
+  "network": "offline",
+  "replaceBeforeQualification": false,
+  "prerequisite": {
+    "unit": "GS2-08.7",
+    "receiptSha256": "00e8f2b49f62ccef6b2ca1ba45c0097bfbc13c36ee47769240719f1ebbb8ce0d",
+    "receiptDigest": "0cac376a7f981f56143f14ebbbc6a465529251420fce93b5d115d44282e08e55"
+  },
+  "bridge": {
+    "version": "0.90.0",
+    "sourceMerge": "3adada5a9738464291088830c47a30a3a8fc9561",
+    "sourceTree": "0f075e251d90a2d33efe556df1dac38394b0a388",
+    "releaseContentId": "sha256:52b2774de277855c16a3c0852bc5113deea13d9076b866e6a7de0acc84f4b9c4",
+    "manifestSha256": "1bbb77f3de10ba3116f9de2ea1df3f5edee38be0de07fa0eaf7c173da3a8456a",
+    "packages": [
+      {
+        "id": "FS.GG.Coord.Cli",
+        "version": "0.90.0",
+        "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+        "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+      },
+      {
+        "id": "FS.GG.Drivers",
+        "version": "0.90.0",
+        "publicArchiveSha256": "103292c164806bb0fb887edf268a60053e706545d0fdd9e1a9c5707e9f3873d5",
+        "payloadSha256": "sha256:76c7c7ac186431bc8e55e13e7175897cace654cf9f9ba49cb5b081e830f890f3"
+      },
+      {
+        "id": "FS.GG.Kit",
+        "version": "0.90.0",
+        "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+        "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+      }
+    ]
+  },
+  "receivers": [
+    {
+      "repository": "FS-GG/.github",
+      "protected": {
+        "expectedHead": "85a70e9a30e5e6a471d61afddb06f7f597d020ce",
+        "observedHead": "85a70e9a30e5e6a471d61afddb06f7f597d020ce",
+        "expectedTree": "23ba8852d93d09713271c516aa85a09173fdd8a2",
+        "observedTree": "23ba8852d93d09713271c516aa85a09173fdd8a2"
+      },
+      "report": {
+        "path": "docs/reports/gs2-08-8-bridge-adoption.json",
+        "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+        "receiver": "FS-GG/.github",
+        "expectedSha256": "8e69b2863c549beffe26ebca9c7bd50498133f7b05922fce1c127bb107756383",
+        "observedSha256": "8e69b2863c549beffe26ebca9c7bd50498133f7b05922fce1c127bb107756383"
+      },
+      "packages": [
+        {
+          "id": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+          "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+        },
+        {
+          "id": "FS.GG.Kit",
+          "version": "0.90.0",
+          "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+          "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        }
+      ],
+      "pins": [
+        {
+          "package": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "path": "dist/dotnet/.config/dotnet-tools.json"
+        },
+        {
+          "package": "FS.GG.Kit",
+          "version": "0.90.0",
+          "path": "Directory.Build.props"
+        }
+      ],
+      "routes": [
+        {
+          "id": "dist/dotnet/.config/dotnet-tools.json",
+          "sha256": "31bcff6fe195cb13c6ade2389cbdc8a5f5ebdde590f99b6923399ce445189f5e",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": "tests/bridge-receivers/run.sh",
+          "sha256": "864dbc6a85042b8d0dad62fad9b93dfee75e8f8b8d2ebf9e8613e1e6bc45531d",
+          "disposition": "read-only-local-only"
+        },
+        {
+          "id": ".github/workflows/release-saga-tooling.yml",
+          "sha256": "4a9d96d5647ab067ae70c5ff22fa159f7235f4e356e8c1dab02802b0e1049463",
+          "disposition": "read-only-local-only"
+        },
+        {
+          "id": "docs/coordination/v1-writer-receiver-census.json",
+          "sha256": "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "callableRoutes": [
+        {
+          "caller": ".github/workflows/release-saga-tooling.yml",
+          "callerSha256": "4a9d96d5647ab067ae70c5ff22fa159f7235f4e356e8c1dab02802b0e1049463",
+          "target": "FS-GG/.github/tests/bridge-receivers/run.sh",
+          "ref": "receiver-revision",
+          "immutable": false,
+          "observedRevision": "qualification-input",
+          "workflowSha256": "864dbc6a85042b8d0dad62fad9b93dfee75e8f8b8d2ebf9e8613e1e6bc45531d",
+          "disposition": "read-only-local-only"
+        }
+      ],
+      "qualification": {
+        "publicRestore": true,
+        "installedCommand": true,
+        "productionMutation": "refused-unavailable-fence",
+        "providerRequests": 0,
+        "dashboardNotificationPresentedAsAdoption": false
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.SDD",
+      "protected": {
+        "expectedHead": "f48204831a2e90db9bfbbbdd59d49d0139c2bf19",
+        "observedHead": "f48204831a2e90db9bfbbbdd59d49d0139c2bf19",
+        "expectedTree": "6de1bef60009435abc6a0c907e916de6956185db",
+        "observedTree": "6de1bef60009435abc6a0c907e916de6956185db"
+      },
+      "report": {
+        "path": "docs/reports/gs2-08-8-bridge-adoption.json",
+        "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+        "receiver": "FS-GG/FS.GG.SDD",
+        "expectedSha256": "d6c8f7a9d7aa2d2d8cb8d120ccf05bfc03cda6812f67763bdce73cbed9038bed",
+        "observedSha256": "d6c8f7a9d7aa2d2d8cb8d120ccf05bfc03cda6812f67763bdce73cbed9038bed"
+      },
+      "packages": [
+        {
+          "id": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+          "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+        },
+        {
+          "id": "FS.GG.Drivers",
+          "version": "0.90.0",
+          "publicArchiveSha256": "103292c164806bb0fb887edf268a60053e706545d0fdd9e1a9c5707e9f3873d5",
+          "payloadSha256": "sha256:76c7c7ac186431bc8e55e13e7175897cace654cf9f9ba49cb5b081e830f890f3"
+        },
+        {
+          "id": "FS.GG.Kit",
+          "version": "0.90.0",
+          "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+          "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        }
+      ],
+      "pins": [
+        {
+          "package": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "path": ".config/dotnet-tools.json"
+        },
+        {
+          "package": "FS.GG.Drivers",
+          "version": "0.90.0",
+          "path": "Directory.Packages.local.props"
+        },
+        {
+          "package": "FS.GG.Kit",
+          "version": "0.90.0",
+          "path": "Directory.Packages.local.props"
+        }
+      ],
+      "routes": [
+        {
+          "id": "scripts/fsgg-coord",
+          "sha256": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": "fsgg-sdd scaffold",
+          "sha256": "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": ".github/workflows/release.yml",
+          "sha256": "a530cc3adb53efb4c79e061c1e8045b8d8f03f61f6030aab742e8b25b075f80d",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "callableRoutes": [
+        {
+          "caller": ".github/workflows/coordination-coherence.yml",
+          "callerSha256": "2121b1902e2ebdded3468771bec2bfa17c219c7599bc18408f1d9dd5ef4235c0",
+          "target": "FS-GG/.github/.github/workflows/coordination-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "400e2d5ef2406d872a0fd45f79fa0a01d1b09f12d30eca66310324e9d795e4c2",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/gate.yml",
+          "callerSha256": "8d284a599298ce4bdc12164f967ff16ce1f0e6f17add3db4a09fe97bdab95080",
+          "target": "FS-GG/.github/.github/workflows/contract-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "7ff5e7599bddf8a7e21c70a635b3edba8e73583edc54c74c3bc3fa6d736377a7",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/kit-materialize.yml",
+          "callerSha256": "aafc8fe723351d2e424fb75d8fb9337e65c90b0677d678a187f09e881d0daeee",
+          "target": "FS-GG/.github/.github/workflows/kit-materialize.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/lockfile-sync.yml",
+          "callerSha256": "71c9d982470350f6b0e853e0149aaa9b109ea6c39ea934f9b8b17c298a0059f7",
+          "target": "FS-GG/.github/.github/workflows/lockfile-sync.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "qualification": {
+        "publicRestore": true,
+        "installedCommand": true,
+        "productionMutation": "refused-unavailable-fence",
+        "providerRequests": 0,
+        "dashboardNotificationPresentedAsAdoption": false
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Rendering",
+      "protected": {
+        "expectedHead": "66836abdaef87d601fc084d90658fdb605fbe023",
+        "observedHead": "66836abdaef87d601fc084d90658fdb605fbe023",
+        "expectedTree": "57c4d8a8775997f1db3d89c524fc2a7bfb09237d",
+        "observedTree": "57c4d8a8775997f1db3d89c524fc2a7bfb09237d"
+      },
+      "report": {
+        "path": "docs/reports/gs2-08-8-bridge-adoption.json",
+        "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+        "receiver": "FS-GG/FS.GG.Rendering",
+        "expectedSha256": "542b758b478f1ab4f212cc21dfe455103866367e4f3b7f1f51bdcc3a743a5617",
+        "observedSha256": "542b758b478f1ab4f212cc21dfe455103866367e4f3b7f1f51bdcc3a743a5617"
+      },
+      "packages": [
+        {
+          "id": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+          "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+        },
+        {
+          "id": "FS.GG.Kit",
+          "version": "0.90.0",
+          "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+          "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        }
+      ],
+      "pins": [
+        {
+          "package": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "path": ".config/dotnet-tools.json"
+        },
+        {
+          "package": "FS.GG.Kit",
+          "version": "0.90.0",
+          "path": "Directory.Packages.local.props"
+        }
+      ],
+      "routes": [
+        {
+          "id": "scripts/fsgg-coord",
+          "sha256": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": ".config/kit/FS.GG.Kit.receiver.proj",
+          "sha256": "3a2732d0d6c02cdcaf5409eb53d5ede7ae3caa1039441ea466415fcf846d1ef9",
+          "disposition": "read-only-local-only"
+        },
+        {
+          "id": ".github/workflows/release.yml",
+          "sha256": "fa4caa73b2e456bb13efcd1dee307275ad9150dc5326c5b480f3d39b1e577158",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "callableRoutes": [
+        {
+          "caller": ".github/workflows/coordination-coherence.yml",
+          "callerSha256": "b8da02a01f4e533a94ec9e0eafbd94b5043b47319d8d115dfda55dabb35a4855",
+          "target": "FS-GG/.github/.github/workflows/coordination-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "400e2d5ef2406d872a0fd45f79fa0a01d1b09f12d30eca66310324e9d795e4c2",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/gate.yml",
+          "callerSha256": "81ce8e7da8bdc26c1a356ecbf4688e926b3d40b0ad2708333e6dabde01e15c9b",
+          "target": "FS-GG/.github/.github/workflows/lock-range-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "dda924b849ab5e2369378088bb1081acad5e9439c0cc13fde9b3d504beadd386",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/gate.yml",
+          "callerSha256": "81ce8e7da8bdc26c1a356ecbf4688e926b3d40b0ad2708333e6dabde01e15c9b",
+          "target": "FS-GG/.github/.github/workflows/contract-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "7ff5e7599bddf8a7e21c70a635b3edba8e73583edc54c74c3bc3fa6d736377a7",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/kit-materialize.yml",
+          "callerSha256": "73b978d869131f0fab312c1abbde44a30b6a33336ec021a37116ab0926c2ca8f",
+          "target": "FS-GG/.github/.github/workflows/kit-materialize.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/lockfile-sync.yml",
+          "callerSha256": "9a6a854ce84e70c0e210c6853346fe065c33befe56afb652da088297d6b7a9eb",
+          "target": "FS-GG/.github/.github/workflows/lockfile-sync.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/template-base-skill-union.yml",
+          "callerSha256": "852e005e89f112bb506dbe1e65c2d5cfdd1fe27cbffeb14ccc12dbbc631fd899",
+          "target": "FS-GG/.github/.github/workflows/skill-union-assert.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "8dc74c25090b8db5a65a6e51ab3e4ba2bc8fe0396831d81ac1f6de527ea72238",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/template-dispatch.yml",
+          "callerSha256": "e386f0fcb8dace82fb775dec9dafb13d80a2afe3a5f19f3c962eff6fd3b85534",
+          "target": "FS-GG/.github/.github/workflows/dispatch-sender.yml",
+          "ref": "5fed2838f9ed085ffca09f4cc18b4f7bc59c1294",
+          "immutable": true,
+          "observedRevision": "5fed2838f9ed085ffca09f4cc18b4f7bc59c1294",
+          "workflowSha256": "4774a3cc0fa4a749c35eca7378935abcc4c17ce344a79910b5967a3cc203115e",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/template-dispatch.yml",
+          "callerSha256": "e386f0fcb8dace82fb775dec9dafb13d80a2afe3a5f19f3c962eff6fd3b85534",
+          "target": "FS-GG/.github/.github/workflows/dispatch-sender.yml",
+          "ref": "5fed2838f9ed085ffca09f4cc18b4f7bc59c1294",
+          "immutable": true,
+          "observedRevision": "5fed2838f9ed085ffca09f4cc18b4f7bc59c1294",
+          "workflowSha256": "4774a3cc0fa4a749c35eca7378935abcc4c17ce344a79910b5967a3cc203115e",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "qualification": {
+        "publicRestore": true,
+        "installedCommand": true,
+        "productionMutation": "refused-unavailable-fence",
+        "providerRequests": 0,
+        "dashboardNotificationPresentedAsAdoption": false
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Governance",
+      "protected": {
+        "expectedHead": "df47d597fbddbbf41b8facc034185fc9755ef6f6",
+        "observedHead": "df47d597fbddbbf41b8facc034185fc9755ef6f6",
+        "expectedTree": "5b8af68aa9f3285fa22abbf6b56364b81098d2e3",
+        "observedTree": "5b8af68aa9f3285fa22abbf6b56364b81098d2e3"
+      },
+      "report": {
+        "path": "docs/reports/gs2-08-8-bridge-adoption.json",
+        "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+        "receiver": "FS-GG/FS.GG.Governance",
+        "expectedSha256": "528c76e86d228b583115e02156a8310761f0880e9935a93832132240d575ea6b",
+        "observedSha256": "528c76e86d228b583115e02156a8310761f0880e9935a93832132240d575ea6b"
+      },
+      "packages": [
+        {
+          "id": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+          "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+        },
+        {
+          "id": "FS.GG.Kit",
+          "version": "0.90.0",
+          "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+          "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        }
+      ],
+      "pins": [
+        {
+          "package": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "path": ".config/dotnet-tools.json"
+        },
+        {
+          "package": "FS.GG.Kit",
+          "version": "0.90.0",
+          "path": "Directory.Packages.local.props"
+        }
+      ],
+      "routes": [
+        {
+          "id": "scripts/fsgg-coord",
+          "sha256": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": "scripts/materialize-skill-roots.sh",
+          "sha256": "2eb2821d6529f788d809c506ebdd7ed01393ad4cf4e725e65541411c71b4e866",
+          "disposition": "read-only-local-only"
+        },
+        {
+          "id": ".github/workflows/publish.yml",
+          "sha256": "bf9de19f5e39f4c41a1bda488a63a1dff6f4c197246a79c5d94e4b0267a6380c",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "callableRoutes": [
+        {
+          "caller": ".github/workflows/coordination-coherence.yml",
+          "callerSha256": "a2b6e153db9ec97f0a40b9f1ba3a3a1ece1af1beb855cfcd55e7280bd6c3f32b",
+          "target": "FS-GG/.github/.github/workflows/coordination-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "400e2d5ef2406d872a0fd45f79fa0a01d1b09f12d30eca66310324e9d795e4c2",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/gate.yml",
+          "callerSha256": "2a6ee1e9544ba1a8a7dd2fa5766735a585767ed25486cea145b3b62d6a9a70cc",
+          "target": "FS-GG/.github/.github/workflows/contract-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "7ff5e7599bddf8a7e21c70a635b3edba8e73583edc54c74c3bc3fa6d736377a7",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/kit-materialize.yml",
+          "callerSha256": "2ef18effb373c13961dcc382748379b82bfd36a6b72f3f61a35197740f85a178",
+          "target": "FS-GG/.github/.github/workflows/kit-materialize.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/lockfile-sync.yml",
+          "callerSha256": "f3925299d39f171f4eb5dfcc9c6106c0d6dbea7affa8a7d52dc1ff6c4af3ce7b",
+          "target": "FS-GG/.github/.github/workflows/lockfile-sync.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "qualification": {
+        "publicRestore": true,
+        "installedCommand": true,
+        "productionMutation": "refused-unavailable-fence",
+        "providerRequests": 0,
+        "dashboardNotificationPresentedAsAdoption": false
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Templates",
+      "protected": {
+        "expectedHead": "d568f24ac44b3954d96898f95f72d969632807b1",
+        "observedHead": "d568f24ac44b3954d96898f95f72d969632807b1",
+        "expectedTree": "fcd1952270c6ee37a28210dd55bd788355a45792",
+        "observedTree": "fcd1952270c6ee37a28210dd55bd788355a45792"
+      },
+      "report": {
+        "path": "docs/reports/gs2-08-8-bridge-adoption.json",
+        "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+        "receiver": "FS-GG/FS.GG.Templates",
+        "expectedSha256": "0016148e26fdca2f0c4e51341f48a9dfd8d384596dcf7a1e4912390cd26285fc",
+        "observedSha256": "0016148e26fdca2f0c4e51341f48a9dfd8d384596dcf7a1e4912390cd26285fc"
+      },
+      "packages": [
+        {
+          "id": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+          "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+        },
+        {
+          "id": "FS.GG.Kit",
+          "version": "0.90.0",
+          "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+          "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        }
+      ],
+      "pins": [
+        {
+          "package": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "path": ".config/dotnet-tools.json"
+        },
+        {
+          "package": "FS.GG.Kit",
+          "version": "0.90.0",
+          "path": ".config/kit/FS.GG.Kit.receiver.proj"
+        }
+      ],
+      "routes": [
+        {
+          "id": "scripts/fsgg-coord",
+          "sha256": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": "scripts/fsgg-coord-report",
+          "sha256": "e1f63cda5b499f4fdd4396626c0bac013c49019daf182336df8c7513d24918ba",
+          "disposition": "read-only-local-only"
+        },
+        {
+          "id": ".github/workflows/release.yml",
+          "sha256": "2496178a962cfb812622a11d962c1b80afd71aa181b350809d3a7fb6369b914e",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "callableRoutes": [
+        {
+          "caller": ".github/workflows/coordination-coherence.yml",
+          "callerSha256": "3d0777540cee5ef007d171ab8d19208042264ff7a041d99ce5b652c92de8e6d1",
+          "target": "FS-GG/.github/.github/workflows/coordination-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "400e2d5ef2406d872a0fd45f79fa0a01d1b09f12d30eca66310324e9d795e4c2",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/kit-materialize.yml",
+          "callerSha256": "c921417d0651a11b973d5fa6fbe8595fd25187c27ced84148055923631657505",
+          "target": "FS-GG/.github/.github/workflows/kit-materialize.yml",
+          "ref": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "immutable": true,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/lockfile-sync.yml",
+          "callerSha256": "ff2e321c32a8280b135df9b60a011ef32c20099059d9db62b2cf12aa9abc7dd4",
+          "target": "FS-GG/.github/.github/workflows/lockfile-sync.yml",
+          "ref": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "immutable": true,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "qualification": {
+        "publicRestore": true,
+        "installedCommand": true,
+        "productionMutation": "refused-unavailable-fence",
+        "providerRequests": 0,
+        "dashboardNotificationPresentedAsAdoption": false
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Game",
+      "protected": {
+        "expectedHead": "d399c36f35a2f85a669a7bc7c37eed0b98896a03",
+        "observedHead": "d399c36f35a2f85a669a7bc7c37eed0b98896a03",
+        "expectedTree": "fcedf69488fc673fd4cd72112dd4c9d0fd81d83f",
+        "observedTree": "fcedf69488fc673fd4cd72112dd4c9d0fd81d83f"
+      },
+      "report": {
+        "path": "docs/reports/gs2-08-8-bridge-adoption.json",
+        "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+        "receiver": "FS-GG/FS.GG.Game",
+        "expectedSha256": "4ed892533b141e0535ab2090470594b5ef29d0fb85f8164e78936a2879848914",
+        "observedSha256": "4ed892533b141e0535ab2090470594b5ef29d0fb85f8164e78936a2879848914"
+      },
+      "packages": [
+        {
+          "id": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+          "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+        },
+        {
+          "id": "FS.GG.Kit",
+          "version": "0.90.0",
+          "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+          "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        }
+      ],
+      "pins": [
+        {
+          "package": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "path": ".config/dotnet-tools.json"
+        },
+        {
+          "package": "FS.GG.Kit",
+          "version": "0.90.0",
+          "path": "Directory.Packages.local.props"
+        }
+      ],
+      "routes": [
+        {
+          "id": "scripts/fsgg-coord",
+          "sha256": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": "scripts/fsgg-coord-report",
+          "sha256": "e1f63cda5b499f4fdd4396626c0bac013c49019daf182336df8c7513d24918ba",
+          "disposition": "read-only-local-only"
+        },
+        {
+          "id": ".github/workflows/release.yml",
+          "sha256": "1942809b5558786be6edb6551e88114bb1182d5f9fe38cd4acae1069f1efdd34",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "id": ".github/workflows/release-skills.yml",
+          "sha256": "0ae77282741f93390b24c80de847782bf21d034da949b4f89d45d5dd78ccd809",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "id": ".github/workflows/skills-package.yml",
+          "sha256": "4fdbaee168b20af4b58013c1fa20e2484d509214cbd723ecb23826cc9ff50475",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "callableRoutes": [
+        {
+          "caller": ".github/workflows/coordination-coherence.yml",
+          "callerSha256": "be835488763b0be0b75688417d7e03401d359f7c30630e432f8bf827887aa318",
+          "target": "FS-GG/.github/.github/workflows/coordination-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "400e2d5ef2406d872a0fd45f79fa0a01d1b09f12d30eca66310324e9d795e4c2",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/gate.yml",
+          "callerSha256": "863666cfa72e69d63eac084e9a6c9bac735f2a466478e6df125a6eb22d288f4b",
+          "target": "FS-GG/.github/.github/workflows/lock-range-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "dda924b849ab5e2369378088bb1081acad5e9439c0cc13fde9b3d504beadd386",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/gate.yml",
+          "callerSha256": "863666cfa72e69d63eac084e9a6c9bac735f2a466478e6df125a6eb22d288f4b",
+          "target": "FS-GG/.github/.github/workflows/contract-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "7ff5e7599bddf8a7e21c70a635b3edba8e73583edc54c74c3bc3fa6d736377a7",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/kit-materialize.yml",
+          "callerSha256": "51e196beb0992e281b90d7f6ada997ae3d1daae6843e7f64de8e21f6e0f79ef2",
+          "target": "FS-GG/.github/.github/workflows/kit-materialize.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/lockfile-sync.yml",
+          "callerSha256": "1c569ba4abae494aed20e9a6b21eb01e0f4ead5cdd0dedf5f0b1f84a708f60c9",
+          "target": "FS-GG/.github/.github/workflows/lockfile-sync.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "qualification": {
+        "publicRestore": true,
+        "installedCommand": true,
+        "productionMutation": "refused-unavailable-fence",
+        "providerRequests": 0,
+        "dashboardNotificationPresentedAsAdoption": false
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Audio",
+      "protected": {
+        "expectedHead": "d8ce8c057880c6c26547b813851510bf2f56bd3b",
+        "observedHead": "d8ce8c057880c6c26547b813851510bf2f56bd3b",
+        "expectedTree": "ca9d30fe360bf984121b1973bd7899707925eb12",
+        "observedTree": "ca9d30fe360bf984121b1973bd7899707925eb12"
+      },
+      "report": {
+        "path": "docs/reports/gs2-08-8-bridge-adoption.json",
+        "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+        "receiver": "FS-GG/FS.GG.Audio",
+        "expectedSha256": "ebad9695da77064ab882eb4ac063a26a37d87b9c2c9223b3b11b9d44c0389042",
+        "observedSha256": "ebad9695da77064ab882eb4ac063a26a37d87b9c2c9223b3b11b9d44c0389042"
+      },
+      "packages": [
+        {
+          "id": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+          "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+        },
+        {
+          "id": "FS.GG.Kit",
+          "version": "0.90.0",
+          "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+          "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        }
+      ],
+      "pins": [
+        {
+          "package": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "path": ".config/dotnet-tools.json"
+        },
+        {
+          "package": "FS.GG.Kit",
+          "version": "0.90.0",
+          "path": "Directory.Packages.props"
+        }
+      ],
+      "routes": [
+        {
+          "id": "scripts/fsgg-coord",
+          "sha256": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": "FS-GG/.github:tests/bridge-package/run.sh@3adada5a9738464291088830c47a30a3a8fc9561",
+          "sha256": "84e40c27d3f89a8c305eb5aebfe6de148411ca914e334d12c7419360860d8b41",
+          "disposition": "read-only-local-only"
+        },
+        {
+          "id": ".github/workflows/release.yml",
+          "sha256": "16bfa564c4f4f691e7d6515c9d4eabc2715541639e8774701e0fb96cb02b4084",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "callableRoutes": [
+        {
+          "caller": ".github/workflows/coordination-coherence.yml",
+          "callerSha256": "ec39d9c157bc09b7fe5d78851bfe0cd4613a8a67ef35e4dd7ce5eddfeb4a9b18",
+          "target": "FS-GG/.github/.github/workflows/coordination-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "400e2d5ef2406d872a0fd45f79fa0a01d1b09f12d30eca66310324e9d795e4c2",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/gate.yml",
+          "callerSha256": "77b63176ab337b703571edc8b20a70c82b91d1638f68baf2642b42d7d27acd6e",
+          "target": "FS-GG/.github/.github/workflows/contract-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "7ff5e7599bddf8a7e21c70a635b3edba8e73583edc54c74c3bc3fa6d736377a7",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/kit-materialize.yml",
+          "callerSha256": "51e196beb0992e281b90d7f6ada997ae3d1daae6843e7f64de8e21f6e0f79ef2",
+          "target": "FS-GG/.github/.github/workflows/kit-materialize.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/lockfile-sync.yml",
+          "callerSha256": "e75bc5a9b680e34e0697b6308f5467140b07743a6d35c8f2c4bee2b5d89cbfb3",
+          "target": "FS-GG/.github/.github/workflows/lockfile-sync.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "qualification": {
+        "publicRestore": true,
+        "installedCommand": true,
+        "productionMutation": "refused-unavailable-fence",
+        "providerRequests": 0,
+        "dashboardNotificationPresentedAsAdoption": false
+      }
+    },
+    {
+      "repository": "FS-GG/FS.GG.Net",
+      "protected": {
+        "expectedHead": "8c2855fba8fc2f03c2badb8f9c7695d91111dd58",
+        "observedHead": "8c2855fba8fc2f03c2badb8f9c7695d91111dd58",
+        "expectedTree": "55c16719da437262257d7fc42a608f38bce8edb2",
+        "observedTree": "55c16719da437262257d7fc42a608f38bce8edb2"
+      },
+      "report": {
+        "path": "docs/reports/gs2-08-8-bridge-adoption.json",
+        "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+        "receiver": "FS-GG/FS.GG.Net",
+        "expectedSha256": "7bfde3e20fb2c7719eb53a206a79bf59fd0d9e39b409468c277ef5533e95a072",
+        "observedSha256": "7bfde3e20fb2c7719eb53a206a79bf59fd0d9e39b409468c277ef5533e95a072"
+      },
+      "packages": [
+        {
+          "id": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+          "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+        },
+        {
+          "id": "FS.GG.Kit",
+          "version": "0.90.0",
+          "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+          "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        }
+      ],
+      "pins": [
+        {
+          "package": "FS.GG.Coord.Cli",
+          "version": "0.90.0",
+          "path": ".config/dotnet-tools.json"
+        },
+        {
+          "package": "FS.GG.Kit",
+          "version": "0.90.0",
+          "path": "Directory.Packages.props"
+        }
+      ],
+      "routes": [
+        {
+          "id": "scripts/fsgg-coord",
+          "sha256": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+          "disposition": "bridge-adopted"
+        },
+        {
+          "id": ".github/workflows/release.yml",
+          "sha256": "4a7ee3366f32f0191108ce623f3c2f5007972cc6102b60515f930ee4c43581ed",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "callableRoutes": [
+        {
+          "caller": ".github/workflows/coordination-coherence.yml",
+          "callerSha256": "ec39d9c157bc09b7fe5d78851bfe0cd4613a8a67ef35e4dd7ce5eddfeb4a9b18",
+          "target": "FS-GG/.github/.github/workflows/coordination-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "400e2d5ef2406d872a0fd45f79fa0a01d1b09f12d30eca66310324e9d795e4c2",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/gate.yml",
+          "callerSha256": "94f85edacae56dd400d340c3b7a67329fed092ae58c38830005faa129f7c3778",
+          "target": "FS-GG/.github/.github/workflows/contract-coherence.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "7ff5e7599bddf8a7e21c70a635b3edba8e73583edc54c74c3bc3fa6d736377a7",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/kit-materialize.yml",
+          "callerSha256": "51e196beb0992e281b90d7f6ada997ae3d1daae6843e7f64de8e21f6e0f79ef2",
+          "target": "FS-GG/.github/.github/workflows/kit-materialize.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+          "disposition": "gs2-08.9-sealing"
+        },
+        {
+          "caller": ".github/workflows/lockfile-sync.yml",
+          "callerSha256": "bc81bf8a04051b8d13645b179748fab6adaa6d6bd25a0dabfc054baa7e9f9418",
+          "target": "FS-GG/.github/.github/workflows/lockfile-sync.yml",
+          "ref": "main",
+          "immutable": false,
+          "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+          "workflowSha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+          "disposition": "gs2-08.9-sealing"
+        }
+      ],
+      "qualification": {
+        "publicRestore": true,
+        "installedCommand": true,
+        "productionMutation": "refused-unavailable-fence",
+        "providerRequests": 0,
+        "dashboardNotificationPresentedAsAdoption": false
+      }
+    }
+  ],
+  "routeAccounting": {
+    "baseline": 615,
+    "accounted": 615,
+    "missingRouteIds": [],
+    "reportedReceiverRoutes": 26,
+    "reportedCallableRoutes": 33,
+    "reportedDispositionCounts": {
+      "bridge-adopted": 9,
+      "read-only-local-only": 8,
+      "gs2-08.9-sealing": 42
+    },
+    "successorAddedRouteIds": [
+      "FS-GG/.github::route::dist/dotnet/.config/dotnet-tools.json",
+      "FS-GG/.github::route::tests/bridge-receivers/run.sh",
+      "FS-GG/.github::route::.github/workflows/release-saga-tooling.yml",
+      "FS-GG/.github::route::docs/coordination/v1-writer-receiver-census.json",
+      "FS-GG/.github::callable::.github/workflows/release-saga-tooling.yml->FS-GG/.github/tests/bridge-receivers/run.sh"
+    ],
+    "successorRetiredRouteIds": [],
+    "successorAdded": 5,
+    "successorRetired": 0,
+    "successorTotal": 620,
+    "baselineEffectCounts": {
+      "conditional": 197,
+      "inert": 353,
+      "protected-admin": 27,
+      "read-only": 38
+    },
+    "successorAddedDispositionCounts": {
+      "bridge-adopted": 1,
+      "read-only-local-only": 3,
+      "gs2-08.9-sealing": 1
+    },
+    "successorAccountingBasis": "GS2-08.3 covers seven product receivers; the five Hub report route and callable identities are additions, and no protected receiver report claims a retirement."
+  },
+  "dependentScaffolds": {
+    "sdd": {
+      "state": "passed",
+      "packageSource": "nuget-org",
+      "productVersion": "2.0.1",
+      "bridgeVersion": "0.90.0",
+      "cleanCreation": true,
+      "upgrade": true,
+      "oldClientRefused": true,
+      "reportSha256": "8783a1ce7f44052cdba04077040e4b9154c142d1bd9f98a4fac30d340b809eff",
+      "release": {
+        "tag": "v2.0.1",
+        "name": "FS.GG.SDD 2.0.1",
+        "sourceMerge": "7013aa1915a37c341107fcf9a66f87f3f73cc8c8",
+        "sourceTree": "7c1603942e83a492a66876325ce28d65a0368e6c",
+        "workflowSha256": "a530cc3adb53efb4c79e061c1e8045b8d8f03f61f6030aab742e8b25b075f80d",
+        "releaseReadbackSha256": "861368930c08375311c98bc8a87518e554d2f9e9b1fd0c2246a16ff49440d2ae",
+        "publishedAt": "2026-09-17T12:29:59Z",
+        "draft": false,
+        "prerelease": false
+      },
+      "run": {
+        "id": 35221457053,
+        "head": "7013aa1915a37c341107fcf9a66f87f3f73cc8c8",
+        "status": "completed",
+        "conclusion": "success",
+        "readbackSha256": "c1925a7a6d949d8079a47d4a3f5fcd0fe622cb5d6408e9c7fa64dc6ba6470bce",
+        "logSha256": "207ba7162b8fc531a524faf80f58cada8cb855d3b397ba0f6f144bca7bd20c2c",
+        "publishJobId": 105205252656,
+        "publishJobConclusion": "success"
+      },
+      "artifact": {
+        "id": 10497658518,
+        "name": "sdd-2.0.1-dual-feed-receipt-7013aa1915a37c341107fcf9a66f87f3f73cc8c8",
+        "size": 10718313,
+        "sha256": "8783a1ce7f44052cdba04077040e4b9154c142d1bd9f98a4fac30d340b809eff",
+        "expired": false
+      },
+      "packages": [
+        {
+          "id": "FS.GG.SDD.Artifacts",
+          "version": "2.0.1",
+          "nugetArchiveSha256": "50e771c8e036af72c784a49c6895e41788317fe22ed8771608684c048c0881ac",
+          "githubArchiveSha256": "230af8fe1cf08481c0284012e227868d7820a6908eca369c224429e0820b6bcc",
+          "entriesSha256": "ac2e6812e7720e1a8b53876a7a10fff05091716523b448fda794fe57f5cb7f9c",
+          "normalizedPayloadSha256": "87120ce72372cef2f6ae21ab8d36d5140093d4287d8a16c813cb076dffa555e0"
+        },
+        {
+          "id": "FS.GG.SDD.Cli",
+          "version": "2.0.1",
+          "nugetArchiveSha256": "4f5f20011932e4d8cc334b1ff1ce0b596ecb70cda5b35ff9ccf9f7a7371ab93c",
+          "githubArchiveSha256": "210cb2bc667efe1d9ebd0f8329e6c57f79a60fe8410c959350ead81d9d7853e9",
+          "entriesSha256": "ad14882a3eb475de5d21dd5046342b1499ccae2c564a2c7ee6ac8fac6ca9ec3f",
+          "normalizedPayloadSha256": "aedc307920d8dffe5ff9a6e64006d21a47c654f2c3c9ddff151f7ea8db7bf5c9"
+        }
+      ],
+      "publicReceipts": [
+        {
+          "path": "feed-readback/quint-q2-public.junit.xml",
+          "sha256": "9458b24dd7a9bccff4b989d40ddec99c5cab8622779ebbbfdbc15da69e4d4546",
+          "tests": 16,
+          "failures": 0
+        },
+        {
+          "path": "feed-readback/quint-q2-exact-ir-public.junit.xml",
+          "sha256": "abbb6b71fa0a9c056c16b5b211f4bfc044b455e68d2ac02e5cab0856e67cff67",
+          "tests": 20,
+          "failures": 0
+        },
+        {
+          "path": "feed-readback/quint-q3-public.junit.xml",
+          "sha256": "27567bf2188fe7f12c042f808428aaf54f98a359ee36ddd2896191f687e35ade",
+          "tests": 22,
+          "failures": 0
+        },
+        {
+          "path": "feed-readback/quint-q3-toolchain.json",
+          "sha256": "22f5bff23d8a0e6419f53275852936a021071123b908ec60bf2948b4dc848209",
+          "tests": 0,
+          "failures": 0
+        }
+      ],
+      "adoptionEvidence": {
+        "protectedMerge": "f48204831a2e90db9bfbbbdd59d49d0139c2bf19",
+        "protectedTree": "6de1bef60009435abc6a0c907e916de6956185db",
+        "reportSha256": "d6c8f7a9d7aa2d2d8cb8d120ccf05bfc03cda6812f67763bdce73cbed9038bed",
+        "route": {
+          "entrypoint": "fsgg-sdd scaffold",
+          "sourcePath": "src/FS.GG.SDD.Commands/CommandWorkflow/ScaffoldMutation.fs",
+          "sha256": "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7",
+          "disposition": "bridge-adopted",
+          "behavior": "fresh-emits-exact-existing-preserves-unrelated-conflict-refuses"
+        },
+        "qualification": {
+          "publicRestore": true,
+          "installedCommand": true,
+          "productionMutation": "refused-unavailable-fence",
+          "providerRequests": 0,
+          "materializerFiles": 37,
+          "materializerWritten": 0,
+          "materializerSource": "FS.GG.Kit 0.90.0",
+          "scaffoldAndDriverPassed": 140,
+          "materializerContract": "passed",
+          "failed": 0
+        },
+        "gate": {
+          "runId": 35215576977,
+          "head": "58521f34d1b89c6d04df16255f51ea73ba3cc018",
+          "tree": "6de1bef60009435abc6a0c907e916de6956185db",
+          "workflowSha256": "8d284a599298ce4bdc12164f967ff16ce1f0e6f17add3db4a09fe97bdab95080",
+          "readbackSha256": "9b98e84e1740ebd4777285a49780a5ece64473c4abfafd7e670dd4472ba2ba20",
+          "logSha256": "625eeb5300e7ab2155bc5ac9e09c191c2c5767f800eb338d02f450ab632ce021",
+          "jobId": 105183136033,
+          "conclusion": "success",
+          "commandsPassed": 1355,
+          "acceptancePassed": 46,
+          "acceptanceSkipped": 5,
+          "failed": 0
+        }
+      },
+      "releaseSourcePreservation": {
+        "adoptionMerge": "f48204831a2e90db9bfbbbdd59d49d0139c2bf19",
+        "adoptionTree": "6de1bef60009435abc6a0c907e916de6956185db",
+        "releaseMerge": "7013aa1915a37c341107fcf9a66f87f3f73cc8c8",
+        "releaseTree": "7c1603942e83a492a66876325ce28d65a0368e6c",
+        "adoptionIsAncestor": true,
+        "scaffoldSourcePath": "src/FS.GG.SDD.Commands/CommandWorkflow/ScaffoldMutation.fs",
+        "adoptionScaffoldSha256": "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7",
+        "releaseScaffoldSha256": "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7"
+      },
+      "outcomeEvidence": {
+        "cleanCreation": "protected-report:fresh-emits-exact",
+        "upgrade": "protected-report:existing-preserves-unrelated-conflict-refuses",
+        "oldClientRefused": "protected-report:installed-cli-refused-unavailable-fence-zero-provider-requests",
+        "publicInstall": "release-run:clean-public-install-2.0.1",
+        "composition": "protected-adoption-tree-gate+unchanged-release-source+public-release-readback"
+      },
+      "publicReceiptsScope": "typed-sdd-quint-only-not-scaffold-bridge-proof"
+    },
+    "templates": {
+      "state": "passed",
+      "packageSource": "nuget-org",
+      "bridgeVersion": "0.90.0",
+      "cleanCreation": true,
+      "upgrade": true,
+      "freshCreation": true,
+      "retrofit": true,
+      "oldClientRefused": true,
+      "reportSha256": "c1375c9965f879053d62adb3757254a40e7e230e0b2802f3504bb205ea910e83",
+      "workflow": {
+        "repository": "FS-GG/FS.GG.Templates",
+        "path": ".github/workflows/gs2-08-8-bridge-adoption.yml",
+        "sha256": "2c65fda0208d271fba144a50b16c15f009520b442bb033bb6326ddd55e980857",
+        "runId": 35217614942,
+        "head": "d568f24ac44b3954d96898f95f72d969632807b1",
+        "tree": "fcd1952270c6ee37a28210dd55bd788355a45792",
+        "hubAdoptionRef": "85a70e9a30e5e6a471d61afddb06f7f597d020ce",
+        "status": "completed",
+        "conclusion": "success",
+        "readbackSha256": "4bd560fe606922acb95ea9e40ed9d052b4e64c68788ece19cb7f53f9ba15a06c",
+        "logSha256": "c1375c9965f879053d62adb3757254a40e7e230e0b2802f3504bb205ea910e83",
+        "jobs": [
+          {
+            "id": 105189727497,
+            "name": "Explicit hub fresh and retrofit",
+            "conclusion": "success"
+          },
+          {
+            "id": 105189727768,
+            "name": "Public bridge receiver",
+            "conclusion": "success"
+          }
+        ]
+      }
+    }
+  }
+}
