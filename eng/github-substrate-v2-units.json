@@ -1083,6 +1083,33 @@
         }
       ],
       "contractSha256": "be2689c238d3592cf3b93b26bc1f37dc2d353ad926ffafbb845814cd97c3b6bb"
+    },
+    {
+      "id": "GS2-08.9",
+      "title": "Seal every residual github-v1 writer route",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": [
+        "GS2-08.8"
+      ],
+      "permissionCeiling": [
+        "repository-local native GS2-08.9 acceptance from the committed offline qualification aggregate, exact accepted predecessor receipts, protected source seals, workflow administration readback, dispatch secret-scope retirement and helper container/runtime retirement evidence",
+        "read-only verification may bind protected source and external administrative evidence; the gate performs no provider call, credential discovery, workflow enablement, secret mutation, helper execution, publication or Q4 claim"
+      ],
+      "exitGate": "the Q3 github-v1-residual-writer-sealing contract consumes exact accepted GS2-08.6, GS2-08.7 and GS2-08.8 receipts and one committed offline aggregate; it accounts for all 22 residual writer routes, binds protected telemetry, dispatch, release and helper source seals, verifies five workflows disabled_manually, removes Rendering from both selected dispatch-secret scopes, preserves the unavailable 0.58.0 and observed 0.75.4 histories without false refusal, proves telemetry submission-only redirect refusal and zero effect, and binds the accepted SystemAdmin helper container/runtime retirement including both failed uninstall attempts followed by exact manual remediation and readback; retained immutable history is non-selected, every current caller selects sealed bytes, Q4 remains unclaimed, and the offline validator and bounded negative controls pass without a provider mutation",
+      "qGates": [
+        "Q3"
+      ],
+      "gateCommands": [
+        "github-v1-residual-writer-sealing-contract"
+      ],
+      "gateContracts": [
+        {
+          "id": "github-v1-residual-writer-sealing-contract",
+          "qGate": "Q3",
+          "commandSha256": "8b2614848b93b53d64d35433c57e1ea63aa93f793ca073706702c2aa349a5001"
+        }
+      ],
+      "contractSha256": "c6ca8e280ab1cac9fe19355073b5ab3e92a4d6ff78a83cf63c0689a0d7a52c8f"
     }
   ]
 }
