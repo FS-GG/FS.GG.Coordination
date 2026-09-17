@@ -1,10 +1,10 @@
 {
   "schema": "fsgg.gs2-08.8-bridge-receiver-qualification/1",
   "unit": "GS2-08.8",
-  "state": "pending-dependent-scaffolds",
-  "qualified": false,
+  "state": "qualified",
+  "qualified": true,
   "network": "offline",
-  "replaceBeforeQualification": true,
+  "replaceBeforeQualification": false,
   "prerequisite": {
     "unit": "GS2-08.7",
     "receiptSha256": "00e8f2b49f62ccef6b2ca1ba45c0097bfbc13c36ee47769240719f1ebbb8ce0d",
@@ -971,14 +971,92 @@
   },
   "dependentScaffolds": {
     "sdd": {
-      "state": "pending-public-sdd-2.0.1",
+      "state": "passed",
       "packageSource": "nuget-org",
       "productVersion": "2.0.1",
       "bridgeVersion": "0.90.0",
-      "cleanCreation": false,
-      "upgrade": false,
-      "oldClientRefused": false,
-      "reportSha256": "REPLACE_WITH_FINAL_64_HEX"
+      "cleanCreation": true,
+      "upgrade": true,
+      "oldClientRefused": true,
+      "reportSha256": "8783a1ce7f44052cdba04077040e4b9154c142d1bd9f98a4fac30d340b809eff",
+      "release": {
+        "tag": "v2.0.1",
+        "name": "FS.GG.SDD 2.0.1",
+        "sourceMerge": "7013aa1915a37c341107fcf9a66f87f3f73cc8c8",
+        "sourceTree": "7c1603942e83a492a66876325ce28d65a0368e6c",
+        "workflowSha256": "a530cc3adb53efb4c79e061c1e8045b8d8f03f61f6030aab742e8b25b075f80d",
+        "releaseReadbackSha256": "861368930c08375311c98bc8a87518e554d2f9e9b1fd0c2246a16ff49440d2ae",
+        "publishedAt": "2026-09-17T12:29:59Z",
+        "draft": false,
+        "prerelease": false
+      },
+      "run": {
+        "id": 35221457053,
+        "head": "7013aa1915a37c341107fcf9a66f87f3f73cc8c8",
+        "status": "completed",
+        "conclusion": "success",
+        "readbackSha256": "c1925a7a6d949d8079a47d4a3f5fcd0fe622cb5d6408e9c7fa64dc6ba6470bce",
+        "logSha256": "207ba7162b8fc531a524faf80f58cada8cb855d3b397ba0f6f144bca7bd20c2c",
+        "publishJobId": 105205252656,
+        "publishJobConclusion": "success"
+      },
+      "artifact": {
+        "id": 10497658518,
+        "name": "sdd-2.0.1-dual-feed-receipt-7013aa1915a37c341107fcf9a66f87f3f73cc8c8",
+        "size": 10718313,
+        "sha256": "8783a1ce7f44052cdba04077040e4b9154c142d1bd9f98a4fac30d340b809eff",
+        "expired": false
+      },
+      "packages": [
+        {
+          "id": "FS.GG.SDD.Artifacts",
+          "version": "2.0.1",
+          "nugetArchiveSha256": "50e771c8e036af72c784a49c6895e41788317fe22ed8771608684c048c0881ac",
+          "githubArchiveSha256": "230af8fe1cf08481c0284012e227868d7820a6908eca369c224429e0820b6bcc",
+          "entriesSha256": "ac2e6812e7720e1a8b53876a7a10fff05091716523b448fda794fe57f5cb7f9c",
+          "normalizedPayloadSha256": "87120ce72372cef2f6ae21ab8d36d5140093d4287d8a16c813cb076dffa555e0"
+        },
+        {
+          "id": "FS.GG.SDD.Cli",
+          "version": "2.0.1",
+          "nugetArchiveSha256": "4f5f20011932e4d8cc334b1ff1ce0b596ecb70cda5b35ff9ccf9f7a7371ab93c",
+          "githubArchiveSha256": "210cb2bc667efe1d9ebd0f8329e6c57f79a60fe8410c959350ead81d9d7853e9",
+          "entriesSha256": "ad14882a3eb475de5d21dd5046342b1499ccae2c564a2c7ee6ac8fac6ca9ec3f",
+          "normalizedPayloadSha256": "aedc307920d8dffe5ff9a6e64006d21a47c654f2c3c9ddff151f7ea8db7bf5c9"
+        }
+      ],
+      "publicReceipts": [
+        {
+          "path": "feed-readback/quint-q2-public.junit.xml",
+          "sha256": "9458b24dd7a9bccff4b989d40ddec99c5cab8622779ebbbfdbc15da69e4d4546",
+          "tests": 16,
+          "failures": 0
+        },
+        {
+          "path": "feed-readback/quint-q2-exact-ir-public.junit.xml",
+          "sha256": "abbb6b71fa0a9c056c16b5b211f4bfc044b455e68d2ac02e5cab0856e67cff67",
+          "tests": 20,
+          "failures": 0
+        },
+        {
+          "path": "feed-readback/quint-q3-public.junit.xml",
+          "sha256": "27567bf2188fe7f12c042f808428aaf54f98a359ee36ddd2896191f687e35ade",
+          "tests": 22,
+          "failures": 0
+        },
+        {
+          "path": "feed-readback/quint-q3-toolchain.json",
+          "sha256": "22f5bff23d8a0e6419f53275852936a021071123b908ec60bf2948b4dc848209",
+          "tests": 0,
+          "failures": 0
+        }
+      ],
+      "outcomeBindings": {
+        "cleanCreation": "q3:fresh-cache-install-before-isolation",
+        "upgrade": "q3:profile1-retention+accepted-bounded-migration",
+        "oldClientRefused": "q3:wrong-tool-refusal+wrong-profile-refusal+freshness-refusal",
+        "publicInstall": "release-log:clean-public-install+FS.GG.SDD.Cli-2.0.1+FS.GG.SDD.Artifacts-2.0.1"
+      }
     },
     "templates": {
       "state": "passed",

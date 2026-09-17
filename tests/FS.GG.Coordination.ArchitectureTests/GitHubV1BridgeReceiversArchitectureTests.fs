@@ -22,13 +22,6 @@ let private validEvidence () =
     value["qualified"] <- true
     value["replaceBeforeQualification"] <- false
 
-    value["dependentScaffolds"].AsObject()
-    |> fun dependents ->
-        dependents["sdd"] <-
-            JsonNode.Parse(
-                """{"state":"passed","packageSource":"nuget-org","productVersion":"2.0.1","bridgeVersion":"0.90.0","cleanCreation":true,"upgrade":true,"oldClientRefused":true,"reportSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"""
-            )
-
     value
 
 let private runValidator (evidence: JsonObject option) =
@@ -67,10 +60,10 @@ let private arrayObject (index: int) (value: JsonArray) = value[index].AsObject(
 let private receiverAt (index: int) (value: JsonObject) = arrayProperty "receivers" value |> arrayObject index
 
 [<Fact>]
-let ``checked-in aggregate binds receivers and Templates but awaits public SDD 2-0-1`` () =
-    let exitCode, _, error = runValidator None
-    Assert.NotEqual(0, exitCode)
-    Assert.Contains("GVBR-SCAFFOLD", error)
+let ``checked-in aggregate qualifies receivers Templates and public SDD 2-0-1`` () =
+    let exitCode, output, error = runValidator None
+    Assert.True((exitCode = 0), error)
+    Assert.Contains("receivers=8 baseline=615 successor=620", output)
 
 [<Fact>]
 let ``complete offline aggregate closes all eight receiver and route bindings`` () =

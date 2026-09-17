@@ -348,6 +348,95 @@ require
     "GVBR-SCAFFOLD"
     "dependent SDD public scaffold must use 2.0.1"
 
+let sdd = dependents.GetProperty("sdd")
+let sddRelease = sdd.GetProperty("release")
+let sddRun = sdd.GetProperty("run")
+let sddArtifact = sdd.GetProperty("artifact")
+let sddPackages = array sdd "packages"
+let sddReceipts = array sdd "publicReceipts"
+let sddOutcomes = sdd.GetProperty("outcomeBindings")
+
+require
+    (text sddRelease "tag" = "v2.0.1"
+     && text sddRelease "name" = "FS.GG.SDD 2.0.1"
+     && text sddRelease "sourceMerge" = "7013aa1915a37c341107fcf9a66f87f3f73cc8c8"
+     && text sddRelease "sourceTree" = "7c1603942e83a492a66876325ce28d65a0368e6c"
+     && text sddRelease "workflowSha256" = "a530cc3adb53efb4c79e061c1e8045b8d8f03f61f6030aab742e8b25b075f80d"
+     && text sddRelease "releaseReadbackSha256" = "861368930c08375311c98bc8a87518e554d2f9e9b1fd0c2246a16ff49440d2ae"
+     && text sddRelease "publishedAt" = "2026-09-17T12:29:59Z"
+     && not (boolean sddRelease "draft")
+     && not (boolean sddRelease "prerelease"))
+    "GVBR-SCAFFOLD"
+    "SDD public release identity differs"
+
+require
+    (integer64 sddRun "id" = 35221457053L
+     && text sddRun "head" = "7013aa1915a37c341107fcf9a66f87f3f73cc8c8"
+     && text sddRun "status" = "completed"
+     && text sddRun "conclusion" = "success"
+     && text sddRun "readbackSha256" = "c1925a7a6d949d8079a47d4a3f5fcd0fe622cb5d6408e9c7fa64dc6ba6470bce"
+     && text sddRun "logSha256" = "207ba7162b8fc531a524faf80f58cada8cb855d3b397ba0f6f144bca7bd20c2c"
+     && integer64 sddRun "publishJobId" = 105205252656L
+     && text sddRun "publishJobConclusion" = "success")
+    "GVBR-SCAFFOLD"
+    "SDD public release run readback differs"
+
+require
+    (integer64 sddArtifact "id" = 10497658518L
+     && text sddArtifact "name" = "sdd-2.0.1-dual-feed-receipt-7013aa1915a37c341107fcf9a66f87f3f73cc8c8"
+     && integer sddArtifact "size" = 10718313
+     && text sddArtifact "sha256" = "8783a1ce7f44052cdba04077040e4b9154c142d1bd9f98a4fac30d340b809eff"
+     && text sdd "reportSha256" = text sddArtifact "sha256"
+     && not (boolean sddArtifact "expired"))
+    "GVBR-SCAFFOLD"
+    "SDD dual-feed receipt artifact identity differs"
+
+let expectedSddPackages =
+    [
+        "FS.GG.SDD.Artifacts", "50e771c8e036af72c784a49c6895e41788317fe22ed8771608684c048c0881ac", "230af8fe1cf08481c0284012e227868d7820a6908eca369c224429e0820b6bcc", "ac2e6812e7720e1a8b53876a7a10fff05091716523b448fda794fe57f5cb7f9c", "87120ce72372cef2f6ae21ab8d36d5140093d4287d8a16c813cb076dffa555e0"
+        "FS.GG.SDD.Cli", "4f5f20011932e4d8cc334b1ff1ce0b596ecb70cda5b35ff9ccf9f7a7371ab93c", "210cb2bc667efe1d9ebd0f8329e6c57f79a60fe8410c959350ead81d9d7853e9", "ad14882a3eb475de5d21dd5046342b1499ccae2c564a2c7ee6ac8fac6ca9ec3f", "aedc307920d8dffe5ff9a6e64006d21a47c654f2c3c9ddff151f7ea8db7bf5c9"
+    ]
+
+require (sddPackages.Length = expectedSddPackages.Length) "GVBR-SCAFFOLD" "SDD public package closure differs"
+
+for package, (id, nugetArchive, githubArchive, entries, payload) in List.zip sddPackages expectedSddPackages do
+    require
+        (text package "id" = id
+         && text package "version" = "2.0.1"
+         && text package "nugetArchiveSha256" = nugetArchive
+         && text package "githubArchiveSha256" = githubArchive
+         && text package "entriesSha256" = entries
+         && text package "normalizedPayloadSha256" = payload)
+        "GVBR-SCAFFOLD"
+        $"SDD public package identity differs for {id}"
+
+let expectedSddReceipts =
+    [
+        "feed-readback/quint-q2-public.junit.xml", "9458b24dd7a9bccff4b989d40ddec99c5cab8622779ebbbfdbc15da69e4d4546", 16
+        "feed-readback/quint-q2-exact-ir-public.junit.xml", "abbb6b71fa0a9c056c16b5b211f4bfc044b455e68d2ac02e5cab0856e67cff67", 20
+        "feed-readback/quint-q3-public.junit.xml", "27567bf2188fe7f12c042f808428aaf54f98a359ee36ddd2896191f687e35ade", 22
+        "feed-readback/quint-q3-toolchain.json", "22f5bff23d8a0e6419f53275852936a021071123b908ec60bf2948b4dc848209", 0
+    ]
+
+require (sddReceipts.Length = expectedSddReceipts.Length) "GVBR-SCAFFOLD" "SDD public receipt closure differs"
+
+for receipt, (path, receiptSha, tests) in List.zip sddReceipts expectedSddReceipts do
+    require
+        (text receipt "path" = path
+         && text receipt "sha256" = receiptSha
+         && integer receipt "tests" = tests
+         && integer receipt "failures" = 0)
+        "GVBR-SCAFFOLD"
+        $"SDD public receipt differs for {path}"
+
+require
+    (text sddOutcomes "cleanCreation" = "q3:fresh-cache-install-before-isolation"
+     && text sddOutcomes "upgrade" = "q3:profile1-retention+accepted-bounded-migration"
+     && text sddOutcomes "oldClientRefused" = "q3:wrong-tool-refusal+wrong-profile-refusal+freshness-refusal"
+     && text sddOutcomes "publicInstall" = "release-log:clean-public-install+FS.GG.SDD.Cli-2.0.1+FS.GG.SDD.Artifacts-2.0.1")
+    "GVBR-SCAFFOLD"
+    "SDD public install, creation, upgrade or refusal outcome binding differs"
+
 require
     (text evidence "state" = "qualified"
      && boolean evidence "qualified"
