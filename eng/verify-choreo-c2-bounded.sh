@@ -16,6 +16,7 @@ if [[ -n "${FSGG_QUINT_TOOLCHAIN_ARCHIVE:-}" ]]; then
   tar -xzf "$FSGG_QUINT_TOOLCHAIN_ARCHIVE" -C "$toolchain_root"
   quint_bin="$toolchain_root/cache/objects/$quint_sha"
   export FSGG_QUINT_HOME="$toolchain_root/home/.quint"
+  export QUINT_HOME="$toolchain_root/home/.quint"
   export JAVA_HOME="$toolchain_root/runtime/jdk-21.0.9+10-jre"
   export PATH="$JAVA_HOME/bin:$PATH"
 fi
