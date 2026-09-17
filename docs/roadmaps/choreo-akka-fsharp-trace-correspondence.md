@@ -373,6 +373,12 @@ The independent epoch/performance shard subsequently completed compilation and s
 30 minutes. As with the semantic-shard allowance, this is runner headroom only: the epoch's 150-second formal
 measurement ceiling and every semantic/resource bound remain unchanged.
 
+Protected runs also exposed an Apalache startup lifecycle in which `verify` exited zero immediately after
+`SanyParser`, with the server launch/shutdown markers but without either TLC state measurements or an invariant
+result. The existing bounded startup retry now classifies that exact signature as `early-lifecycle-exit`, alongside
+the already recognized nonzero early-exit signature. It retries once on a fresh isolated endpoint and remains
+fail-closed if the retry does not produce a real result; retry counts remain explicit in qualification receipts.
+
 ### C3 — make Quint traces the executable contract
 
 - [ ] Define and version the stable observable trace schema and trace manifest.

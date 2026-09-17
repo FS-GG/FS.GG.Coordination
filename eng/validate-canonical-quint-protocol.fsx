@@ -225,14 +225,23 @@ let classifyTransientApalacheStartupFailure exitCode (output: string) (error: st
         diagnostic.Contains("Error querying reflection endpoint", StringComparison.Ordinal)
         && diagnostic.Contains("DEADLINE_EXCEEDED", StringComparison.Ordinal)
 
-    let earlyLifecycleExit =
+    let launchedAndStopped =
         diagnostic.Contains("No running Apalache server found, launching", StringComparison.Ordinal)
         && diagnostic.Contains("Started Apalache server on pid=", StringComparison.Ordinal)
         && diagnostic.Contains("Shutting down Apalache server", StringComparison.Ordinal)
-        && Regex.IsMatch(diagnostic, "(?m)^error: error\\s*$")
 
-    if exitCode = 0 then None
-    elif reflectionDeadline then Some "reflection-deadline"
+    let successfulExitAfterParserWithoutResult =
+        exitCode = 0
+        && launchedAndStopped
+        && diagnostic.Contains("PASS #0: SanyParser", StringComparison.Ordinal)
+        && not (diagnostic.Contains("states generated", StringComparison.Ordinal))
+        && not (diagnostic.Contains("Invariant violated", StringComparison.Ordinal))
+
+    let earlyLifecycleExit =
+        launchedAndStopped
+        && (Regex.IsMatch(diagnostic, "(?m)^error: error\\s*$") || successfulExitAfterParserWithoutResult)
+
+    if reflectionDeadline then Some "reflection-deadline"
     elif earlyLifecycleExit then Some "early-lifecycle-exit"
     else None
 
