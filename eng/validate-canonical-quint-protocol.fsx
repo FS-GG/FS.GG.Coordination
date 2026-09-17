@@ -31,7 +31,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "a79054ddb24eb7636a797badf654753ad8d83aa4467cf2e6024b80df8c6ffc72"
+    "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05"
 
 let expectedContract =
     "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
@@ -225,14 +225,29 @@ let classifyTransientApalacheStartupFailure exitCode (output: string) (error: st
         diagnostic.Contains("Error querying reflection endpoint", StringComparison.Ordinal)
         && diagnostic.Contains("DEADLINE_EXCEEDED", StringComparison.Ordinal)
 
-    let earlyLifecycleExit =
+    let launchedAndStopped =
         diagnostic.Contains("No running Apalache server found, launching", StringComparison.Ordinal)
         && diagnostic.Contains("Started Apalache server on pid=", StringComparison.Ordinal)
         && diagnostic.Contains("Shutting down Apalache server", StringComparison.Ordinal)
-        && Regex.IsMatch(diagnostic, "(?m)^error: error\\s*$")
 
-    if exitCode = 0 then None
-    elif reflectionDeadline then Some "reflection-deadline"
+    let successfulExitAfterParserWithoutResult =
+        exitCode = 0
+        && launchedAndStopped
+        && diagnostic.Contains("PASS #0: SanyParser", StringComparison.Ordinal)
+        && not (diagnostic.Contains("states generated", StringComparison.Ordinal))
+        && not (diagnostic.Contains("Invariant violated", StringComparison.Ordinal))
+
+    let executionTimeout =
+        exitCode = 124
+        && diagnostic.Contains("APALACHE_EXECUTION_TIMEOUT", StringComparison.Ordinal)
+
+    let earlyLifecycleExit =
+        executionTimeout
+        || (launchedAndStopped
+            && (Regex.IsMatch(diagnostic, "(?m)^error: error\\s*$")
+                || successfulExitAfterParserWithoutResult))
+
+    if reflectionDeadline then Some "reflection-deadline"
     elif earlyLifecycleExit then Some "early-lifecycle-exit"
     else None
 
@@ -281,8 +296,32 @@ let run workingDirectory (executable: string) arguments environment =
         use child = Process.Start info
         let output = child.StandardOutput.ReadToEndAsync()
         let error = child.StandardError.ReadToEndAsync()
+        let clock = Stopwatch.StartNew()
+        let boundedVerify = isQuint && List.tryHead arguments = Some "verify"
+        let mutable timedOut = false
+
+        while not child.HasExited && not timedOut do
+            if boundedVerify && clock.ElapsedMilliseconds > 150000L then
+                timedOut <- true
+
+                try
+                    child.Kill(true)
+                with _ ->
+                    ()
+            else
+                Thread.Sleep 10
+
         child.WaitForExit()
-        child.ExitCode, output.Result.Trim(), error.Result.Trim()
+
+        let timeoutDiagnostic =
+            if timedOut then
+                $"APALACHE_EXECUTION_TIMEOUT elapsedMs=%d{clock.ElapsedMilliseconds} budgetMs=150000"
+            else
+                ""
+
+        (if timedOut then 124 else child.ExitCode),
+        output.Result.Trim(),
+        (String.concat "\n" [ error.Result.Trim(); timeoutDiagnostic ]).Trim()
 
     let firstExit, firstOutput, firstError = invoke ()
 
@@ -341,7 +380,7 @@ let private processTreeRssBytes rootPid =
 
     collect Set.empty rootPid |> fst
 
-let runMeasured workingDirectory (executable: string) arguments environment =
+let runMeasured timeoutMs workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
     incrementInvocation (classifyInvocation isQuint arguments)
@@ -372,17 +411,33 @@ let runMeasured workingDirectory (executable: string) arguments environment =
         let error = child.StandardError.ReadToEndAsync()
         let clock = Stopwatch.StartNew()
         let mutable peakBytes = 0L
+        let mutable timedOut = false
 
-        while not child.HasExited do
+        while not child.HasExited && not timedOut do
             peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
-            Thread.Sleep 10
+
+            if clock.ElapsedMilliseconds > int64 timeoutMs then
+                timedOut <- true
+
+                try
+                    child.Kill(true)
+                with _ ->
+                    ()
+            else
+                Thread.Sleep 10
 
         child.WaitForExit()
         peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
 
-        child.ExitCode,
+        let timeoutDiagnostic =
+            if timedOut then
+                $"APALACHE_EXECUTION_TIMEOUT elapsedMs=%d{clock.ElapsedMilliseconds} budgetMs=%d{timeoutMs}"
+            else
+                ""
+
+        (if timedOut then 124 else child.ExitCode),
         output.Result.Trim(),
-        error.Result.Trim(),
+        (String.concat "\n" [ error.Result.Trim(); timeoutDiagnostic ]).Trim(),
         clock.ElapsedMilliseconds,
         int (Math.Ceiling(float peakBytes / 1048576.0))
 
@@ -398,7 +453,7 @@ let runMeasured workingDirectory (executable: string) arguments environment =
         | Some failureClass ->
             recordApalacheStartupRetry (List.head arguments) failureClass
             let retryExit, retryOutput, retryError, retryElapsed, retryPeak = invoke ()
-            retryExit, retryOutput, retryError, firstElapsed + retryElapsed, Math.Max(firstPeak, retryPeak)
+            retryExit, retryOutput, retryError, retryElapsed, retryPeak
         | None -> firstExit, firstOutput, firstError, firstElapsed, firstPeak
 
     if isQuint && exitCode <> 0 then
@@ -1962,6 +2017,7 @@ try
 
         let exitCode, output, error, elapsedMs, peakMiB =
             runMeasured
+                elapsedBudget
                 scratch
                 quint
                 [
@@ -2148,12 +2204,13 @@ try
     // one deterministic Rust projection for every declared removed-step model before entering
     // the TLC loop.  The result is retained as the first of the two reproducibility samples,
     // so this changes failure order without adding process work.
-    let runProjection formalId main init removedStep blockedInvariant depth ordinal =
+    let runProjection formalId main init removedStep blockedInvariant depth elapsedBudget ordinal =
         let pattern =
             Path.Combine(formalArtifactDirectory, $"%s{formalId}-counterexample-%d{ordinal}-{{seq}}.itf.json")
 
         let exitCode, output, error, elapsedMs, peakMiB =
             runMeasured
+                elapsedBudget
                 scratch
                 quint
                 [
@@ -2194,8 +2251,27 @@ try
         formalTests
         |> List.map
             (fun
-                (formalId, main, init, _, _, _, _, _, removedStep, _, blockedInvariant, _, _, _, depth, _, _, _, _, _, _) ->
-                formalId, runProjection formalId main init removedStep blockedInvariant depth 1)
+                (formalId,
+                 main,
+                 init,
+                 _,
+                 _,
+                 _,
+                 _,
+                 _,
+                 removedStep,
+                 _,
+                 blockedInvariant,
+                 _,
+                 _,
+                 _,
+                 depth,
+                 _,
+                 _,
+                 _,
+                 elapsedBudget,
+                 _,
+                 _) -> formalId, runProjection formalId main init removedStep blockedInvariant depth elapsedBudget 1)
         |> Map.ofList
 
     for formalId,
@@ -2221,6 +2297,7 @@ try
         artifactBudget in formalTests do
         let temporalExit, temporalOutput, temporalError, temporalElapsed, temporalPeak =
             runMeasured
+                elapsedBudget
                 scratch
                 quint
                 [
@@ -2270,6 +2347,7 @@ try
 
         let safetyExit, safetyOutput, safetyError, safetyElapsed, safetyPeak =
             runMeasured
+                elapsedBudget
                 scratch
                 quint
                 [
@@ -2308,6 +2386,7 @@ try
         let runCounterexample ordinal =
             let temporalExitCode, temporalOutput, temporalError, temporalElapsedMs, temporalPeakMiB =
                 runMeasured
+                    elapsedBudget
                     scratch
                     quint
                     [
@@ -2370,7 +2449,7 @@ try
                 if ordinal = 1 then
                     projectionPreflights[formalId]
                 else
-                    runProjection formalId main init removedStep blockedInvariant depth ordinal
+                    runProjection formalId main init removedStep blockedInvariant depth elapsedBudget ordinal
 
             path,
             projection,

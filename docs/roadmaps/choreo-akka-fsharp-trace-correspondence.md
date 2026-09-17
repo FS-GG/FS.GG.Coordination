@@ -1,6 +1,6 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; C0 merged; C1 implementation in progress
+Status: accepted design; C0 and C1 merged; C2 foundation implemented
 
 Decision date: 2026-09-16
 
@@ -309,7 +309,7 @@ origin. No Choreo bytes are added in C0.
 - [x] Add positive and mutation architecture tests for copied bytes, commit/hash changes, missing license, local
   `.qnt`, and forbidden network fetching.
 - [x] Add a minimal imported smoke module and typecheck/run it with Quint 0.32.0 in the canonical preparation path.
-- [ ] Confirm all existing nineteen formal workloads and published-kernel architecture tests remain unchanged.
+- [x] Confirm all existing nineteen formal workloads and published-kernel architecture tests remain unchanged.
 
 Exit evidence: deterministic offline extraction, exact hashes, smoke run, full architecture tests, and no formal
 catalog switch.
@@ -325,9 +325,9 @@ when all nineteen independent shards contend for hosted-runner capacity.
 
 ### C2 — implement and review the four-process model
 
-- [ ] Add typed identities, local process states, message payloads, and the unordered message soup.
-- [ ] Implement Host, Journal, Runner, and GitHubProvider listeners incrementally, typechecking each slice.
-- [ ] Add the seven effect kinds through one parameteric protocol rather than copied transition families.
+- [x] Add typed identities, local process states, message payloads, and the unordered message soup.
+- [x] Implement the non-faulting Host, Journal, Runner, and GitHubProvider listener slice and typecheck it.
+- [x] Add the seven effect kinds through one parameteric protocol rather than copied transition families.
 - [ ] Add `legacyProjection`, retained safety invariants, explicit progress assumptions, and per-listener witnesses.
 - [ ] Run small randomized exploration after every participant, then bounded invariants and all named scenarios.
 - [ ] Conduct a structural/runtime model review: dead actions, vacuous invariants, unconstrained messages, accidental
@@ -335,6 +335,63 @@ when all nineteen independent shards contend for hosted-runner capacity.
 
 Exit evidence: model-review checklist, typecheck, randomized runs, bounded checks within an initial measured budget,
 and traceable coverage for every message/listener.
+
+C2 foundation evidence (2026-09-16): `O2HostedWriterChoreoModel` closes Choreo's string process carrier to four
+constants, then gives each process a tagged local-state variant. This carrier choice is required because the pinned
+Choreo module has global state and can be instantiated only once in the canonical combined source; it does not
+weaken the closed four-process set. Nine typed message variants traverse an unordered per-process set and are
+removed only by an explicit `Consume` custom effect. The happy-path listener chain has separate request/reply
+steps for durable intent, dispatch, external application, durable observation, and Host settlement. `ProcessWork`
+routes to `Runner`; the other six effect kinds route to `GitHubProvider` through the same parameteric transition.
+The stable C1 smoke entry point now executes this complete chain.
+
+Exact Quint 0.32.0 evidence used the accepted binary SHA-256
+`939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f`: typecheck passed; all seven named effect
+witnesses and the smoke witness each passed 10,000 executions; and seed `0xC2F0` completed 200 samples of 30 steps
+against `safety` without a violation. This is foundation evidence, not the C2 exit: fault listeners, projection,
+progress assumptions, negative witnesses, bounded checking, and the structural/runtime review remain unchecked.
+
+The protected C2 runs measured the cost of compiling the larger typed combined source in every independent TLC
+shard. State and transition counts were unchanged, but observed elapsed time reached 129,530 ms and peak process
+memory reached 2,592 MiB. C2 therefore adds fixed source-compilation headroom: the 90/105-second elapsed ceilings
+become 135/150 seconds respectively, and the TLC peak-memory ceiling becomes 3,072 MiB. Depth, state, transition,
+sample, artifact, toolchain, and workflow-envelope limits are unchanged. These are operational compilation
+ceilings, not larger semantic exploration bounds.
+
+The enlarged assembled source also exposed an outer CI constraint after those inner budgets passed: three canonical
+semantic shards completed compilation and simulation but were canceled at the workflow's 25-minute job boundary.
+The semantic job timeout was initially raised to 40 minutes, but the 10,000-sample administrative-retirement
+negative-control shard subsequently completed compilation and simulation and then reached that outer boundary while
+its bounded check was still active. A later protected run still had a canonical semantic shard active after 56
+minutes, leaving less than 7% slack under a provisional 60-minute ceiling. The semantic job allowance is therefore
+90 minutes (about 60% headroom over that observed active duration).
+This changes only the outer runner allowance; it does not relax any Quint/TLC elapsed, memory, depth, state,
+transition, sample, or artifact limit.
+
+The independent epoch/performance shard subsequently completed compilation and simulation but reached its separate
+15-minute job boundary while the bounded performance check was still running. Its outer job allowance is therefore
+30 minutes. As with the semantic-shard allowance, this is runner headroom only: the epoch's 150-second formal
+measurement ceiling and every semantic/resource bound remain unchanged.
+
+Protected runs also exposed an Apalache startup lifecycle in which `verify` exited zero immediately after
+`SanyParser`, with the server launch/shutdown markers but without either TLC state measurements or an invariant
+result. The existing bounded startup retry now classifies that exact signature as `early-lifecycle-exit`, alongside
+the already recognized nonzero early-exit signature. It retries once on a fresh isolated endpoint and remains
+fail-closed if the retry does not produce a real result; retry counts remain explicit in qualification receipts.
+
+The combined C2 plus GS2-08.5 source then exposed a second lifecycle defect: an Apalache child could remain alive
+after simulation until GitHub canceled the entire semantic job at 90 minutes. The retained elapsed ceilings had
+previously been checked only after child exit, so they measured completed work but could not enforce a bound on a
+hung process. `runMeasured` now treats each formal test's declared 135/150-second elapsed ceiling as a wall-clock
+process deadline, kills the complete child tree when it expires, emits `APALACHE_EXECUTION_TIMEOUT`, and routes a
+timed-out `verify` through the same single bounded fresh-endpoint retry. A second timeout fails closed. This makes
+the existing inner ceiling enforceable; it does not increase any semantic or resource bound. The killed
+infrastructure attempt is represented by the receipt's explicit physical-process/startup-retry counters, while
+elapsed and peak measurements use the one successful logical attempt. Otherwise a retry triggered exactly at the
+ceiling could never pass the unchanged semantic budget, even when the fresh attempt completed immediately.
+The same 150-second maximum ceiling also guards unmeasured Apalache `verify` calls used by the base invariant and
+negative-control suite; those calls use the same one-retry lifecycle classification, and negative controls must
+still emit their expected invariant/ITF evidence, so a timeout cannot be mistaken for a successful red control.
 
 ### C3 — make Quint traces the executable contract
 

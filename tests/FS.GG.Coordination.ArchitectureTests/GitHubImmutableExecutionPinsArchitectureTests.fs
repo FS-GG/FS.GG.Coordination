@@ -330,7 +330,7 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
     )
 
     Assert.Contains(
-        "GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=ade287e296edad1aae5469cca1273cb48dfacc82c17a7fe05376efcdebe409f7",
+        "GITHUB_IMMUTABLE_EXECUTION_PINS_OK workflows=2 references=7 publications=0 updaterConfigurations=0 updater=renovate controls=20 seal=3dd55761c53751ac2ecc3f3d15b99325e41346bfa9aff14497b355bfc05742ae",
         output
     )
 
@@ -339,6 +339,6 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
 [<Fact>]
 let ``immutable execution pins preserve canonical Quint source`` () =
     Assert.Equal(
-        "a79054ddb24eb7636a797badf654753ad8d83aa4467cf2e6024b80df8c6ffc72",
+        "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05",
         sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md")
     )

@@ -821,7 +821,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     // Every semantic shard independently compiles the canonical roots before its bounded
     // checks. The pinned Choreo source increases that fixed preparation cost, and runners
     // under full matrix contention need enough wall-clock headroom to emit their receipt.
-    line "    timeout-minutes: 25"
+    line "    timeout-minutes: 90"
     line "    strategy:"
     line "      fail-fast: false"
     line "      matrix:"
@@ -861,7 +861,7 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "    needs: [reuse-decision, canonical-quint-prepare]"
     line "    if: ${{ needs.canonical-quint-prepare.result == 'success' }}"
     line $"    runs-on: %s{contract.Reuse.Runner}"
-    line "    timeout-minutes: 15"
+    line "    timeout-minutes: 30"
     line "    env:"
     line "      NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint-performance"
     line "      FSGG_QUINT_SHARD: epoch"
@@ -1578,7 +1578,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
 
             let expectedInputs =
                 [
-                    "sourceSha256", "a79054ddb24eb7636a797badf654753ad8d83aa4467cf2e6024b80df8c6ffc72"
+                    "sourceSha256", "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05"
                     "contractSha256", "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
                 ]
 

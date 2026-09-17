@@ -173,7 +173,7 @@ let private createArtifacts root =
             let preparationDigest = String.replicate 64 "c"
 
             let sourceDigest =
-                "a79054ddb24eb7636a797badf654753ad8d83aa4467cf2e6024b80df8c6ffc72"
+                "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05"
 
             let contractDigest =
                 "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
@@ -783,7 +783,15 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
         )
 
     Assert.DoesNotContain(", epoch,", semanticBlock)
-    Assert.Contains("timeout-minutes: 25", semanticBlock)
+    Assert.Contains("timeout-minutes: 90", semanticBlock)
+
+    let performanceBlock =
+        workflow.Substring(
+            workflow.IndexOf("  canonical-quint-performance:"),
+            workflow.IndexOf("  canonical-quint:") - workflow.IndexOf("  canonical-quint-performance:")
+        )
+
+    Assert.Contains("timeout-minutes: 30", performanceBlock)
     Assert.Contains("FSGG_QUINT_SHARD: epoch", workflow)
     Assert.Contains("path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-performance", workflow)
     Assert.DoesNotContain("needs: [canonical-quint-semantic]", semanticBlock)
@@ -816,7 +824,7 @@ let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
 
         File.WriteAllText(
             performance,
-            "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":105000}"
+            "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":150000}"
         )
 
         let startInfo = ProcessStartInfo("bash")
