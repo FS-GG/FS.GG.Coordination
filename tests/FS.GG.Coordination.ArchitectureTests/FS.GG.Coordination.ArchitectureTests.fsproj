@@ -22,6 +22,7 @@
     <Compile Include="GitHubClaimTouchSetArchitectureTests.fs" />
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubReviewDeliveryTests.fs" Link="GitHubReviewDeliveryUnitTests.fs" />
     <Compile Include="GitHubReviewDeliveryArchitectureTests.fs" />
+    <Compile Include="GitHubOrdinaryDeliveryArchitectureTests.fs" />
     <Compile Include="GitHubLifecycleProjectionArchitectureTests.fs" />
     <Compile Include="GitHubFleetShadowArchitectureTests.fs" />
     <Compile Include="GitHubRepositoryProfileArchitectureTests.fs" />

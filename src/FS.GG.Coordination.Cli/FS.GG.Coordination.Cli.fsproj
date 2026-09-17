@@ -10,6 +10,7 @@
     <Compile Include="WorkflowSelectionCommand.fs" />
     <Compile Include="LedgerProtectionCommand.fs" />
     <Compile Include="ObserverViewCommand.fs" />
+    <Compile Include="DeliveryCommand.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

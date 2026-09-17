@@ -394,6 +394,19 @@ command digests, missing metric provenance, and added write permission. The
 feature subroadmap is an execution outline; the pinned roadmap, this unit index,
 and accepted receipt remain the sole completion authority.
 
+GS2-09.9 is a collision-free additive Coordination-owner amendment against the
+byte-identical `.github` roadmap at reviewed commit
+`7d2db1c32c47b6f9c445a77f9a91510c61a17281` and SHA-256
+`9c49a0efd1440d8a71130758be39394ae4cdd67f3d10b9cb6cb71998154c1a17`.
+It is the callable prerequisite to GS2-09.7 representative rehearsal. Its Q3/Q6
+commands qualify ordinary source-delivery planning and interruption recovery
+under controlled provider responses. The ceiling excludes publication, receiver
+adoption, production writing, release, administration, credentials, migration
+cutover, external acceptance, and Q4. Selected native checks never manufacture a
+legacy review pass, protected-main verification, or Done receipt. The amendment
+is owner registration evidence rather than an acceptance receipt; `.github`
+projection remains asynchronous.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

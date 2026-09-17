@@ -354,6 +354,18 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-v1-residual-writer-sealing.fsx", "--", "."]
+    },
+    {
+      "id": "github-callable-ordinary-delivery-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-callable-ordinary-delivery.fsx", "--", "--root", ".", "--phase", "contract"]
+    },
+    {
+      "id": "github-callable-ordinary-delivery-recovery-contract",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-callable-ordinary-delivery.fsx", "--", "--root", ".", "--phase", "recovery"]
     }
   ]
 }

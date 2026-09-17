@@ -37,6 +37,7 @@
     <Compile Include="ClaimTouchSetAdapter.fs" />
     <Compile Include="ReviewDeliveryAdapter.fsi" />
     <Compile Include="ReviewDeliveryAdapter.fs" />
+    <Compile Include="OrdinaryDelivery.fs" />
     <Compile Include="LifecycleProjectionAdapter.fsi" />
     <Compile Include="LifecycleProjectionAdapter.fs" />
     <Compile Include="FleetShadowAdapter.fsi" />
