@@ -1,0 +1,60 @@
+{
+  "schema": "fsgg.github-substrate.v1-producer-attack-result/1",
+  "unit": "GS2-08.6",
+  "producerAttackSourceHead": "50a89965b09595244f7def7757d7aef91f0ce0e2",
+  "producerAttackProtectedMerge": "068d5dc3fa24d7e1fca99401c755e2f1f5fafe1d",
+  "producerAttackProtectedTree": "a3302c16a0ed5f44e6490a87d3a28e5563ea25b9",
+  "producerPullRequest": "https://github.com/FS-GG/.github/pull/3519",
+  "executionEvidenceSha256": "9007aa34a34d4d957f0948cf3b3059d5c5bf189c4b2ec7645f35548884c60b15",
+  "executionEvidence": {
+    "canonicalOracleSha256": "c980932a66ec2b3e762498cfd61f53396ce03457daad76e81af79cc8fcf64023",
+    "compiledAttackHarnessSha256": "8da3b3dbe0ea19edc5d4363b93d4ec861895916150908effd7af072114998dfe",
+    "compiledFailures": 0,
+    "compiledTests": 21,
+    "epochs": 11,
+    "externalWriterBlockers": 22,
+    "legacyReceiverBlockers": 6,
+    "liveCompositionSha256": "55888b87dcdf7d0d7adf538355f9904d9c6bf63ac6bb6465792cdbff2fcbd6c9",
+    "loopbackWriteFixtureSha256": "f679f9f3c9be295ff578f1e71cf91c5cd975b45d74452d93c860cf848b01d7c8",
+    "oracleSha256": "89d0137434ff3590c4b9def719134d76ac777628cbd39b8ea88234fed47257bd",
+    "q4": "unclaimed",
+    "receiverCensusSha256": "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db",
+    "schema": "fsgg.gs2-08.6-offline-execution-evidence/1",
+    "status": "pass",
+    "typedWriteCommands": 26,
+    "writerCensusSha256": "d48dc72ba259cecb193bd5cb3bbb1ae3e1ed3520988d6fd502eac33da136937c"
+  },
+  "reproducibleInputs": [
+    {
+      "path": "tests/producer-fence-attacks/oracle.json",
+      "sha256": "89d0137434ff3590c4b9def719134d76ac777628cbd39b8ea88234fed47257bd"
+    },
+    {
+      "path": "tests/producer-fence-attacks/run.py",
+      "sha256": "8bbf71e4a51300a591509b07cfd3694b1c949122168eab0d290f5af1f102c127"
+    },
+    {
+      "path": "tests/FS.GG.Coord.GitHub.Tests/ProducerFenceAttackTests.fs",
+      "sha256": "8da3b3dbe0ea19edc5d4363b93d4ec861895916150908effd7af072114998dfe"
+    },
+    {
+      "path": ".github/workflows/coord-github.yml",
+      "sha256": "ef52d1d9f1135cdd8feac8be45d44952883018b87497ca037e181b6f603d0152"
+    },
+    {
+      "path": "scripts/change-completeness",
+      "sha256": "8d22a51c5edee2164caea23395af0011d8c56004599e2b21aead8089fdf8b441"
+    },
+    {
+      "path": "tests/coord-engine-e2e/writes.sh",
+      "sha256": "f679f9f3c9be295ff578f1e71cf91c5cd975b45d74452d93c860cf848b01d7c8"
+    }
+  ],
+  "boundedClaims": {
+    "q3": "real compiled producer adapter attacks passed; consumer-owned ITF replay correspondence remains unclaimed",
+    "q6": "crash, lost-response, ownership, retry and reconciliation rules passed; full multi-step recovery, rollback and fleet adoption remain unclaimed",
+    "q4": "unclaimed without isolated provider evidence"
+  },
+  "disposition": "bounded-result-attached-unit-not-accepted",
+  "producerAttackSourceTree": "a3302c16a0ed5f44e6490a87d3a28e5563ea25b9"
+}
