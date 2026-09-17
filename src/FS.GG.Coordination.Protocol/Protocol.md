@@ -5122,6 +5122,7 @@ module O2HostedWriterChoreoModel {
     staleRejected: bool,
     identityRejected: bool,
     sequenceRejected: bool,
+    restartObserved: bool,
     recoveredStatus: JournalStatus,
   }
 
@@ -5261,6 +5262,7 @@ module O2HostedWriterChoreoModel {
     staleRejected: false,
     identityRejected: false,
     sequenceRejected: false,
+    restartObserved: false,
     recoveredStatus: JournalEmpty,
   }
   pure val emptyJournal: JournalState = {
@@ -5319,6 +5321,41 @@ module O2HostedWriterChoreoModel {
 
   action init = choreo::init({
     system: PROCESSES.mapBy(process => initialState(process)),
+    messages: PROCESSES.mapBy(_ => Set()),
+    events: PROCESSES.mapBy(_ => Set()),
+    extensions: (),
+  })
+
+  // The runner proof starts from the exact state produced by a settled Claim. Keeping
+  // this as a second initializer avoids replaying a deterministic nine-step prefix in
+  // every TLC state while preserving the real journal/provider facts at that boundary.
+  action initAfterClaim = choreo::init({
+    system: PROCESSES.mapBy(process => {
+      val state = initialState(process)
+      if (process == HOST) {
+        ...state,
+        local: HostLocal({ ...emptyHost, completed: Set(Claim) }),
+      }
+      else if (process == JOURNAL) {
+        ...state,
+        local: JournalLocal({
+          ...emptyJournal,
+          status: Applied,
+          current: Some(operationFor(Claim)),
+          appendCount: 3,
+        }),
+      }
+      else if (process == GITHUB_PROVIDER) {
+        ...state,
+        local: ProviderLocal({
+          ...emptyProvider,
+          applied: Set(Claim),
+          lastResponse: Some(operationFor(Claim)),
+          applyCount: 1,
+        }),
+      }
+      else state
+    }),
     messages: PROCESSES.mapBy(_ => Set()),
     events: PROCESSES.mapBy(_ => Set()),
     extensions: (),
@@ -5880,6 +5917,7 @@ module O2HostedWriterChoreoModel {
                 completed: nextCompleted,
                 paused: false,
                 resumeAuthenticated: true,
+                restartObserved: true,
               }) },
               effects: nextEffects,
             })
@@ -6116,6 +6154,57 @@ module O2HostedWriterChoreoModel {
     stepWith(GITHUB_PROVIDER, providerPerforms),
   }
 
+  // C2 bounded verification explores one ambiguity retry and one crash/recovery
+  // cycle per operation. The production step above remains unrestricted; these
+  // listeners only bound the proof root so repeated equivalent cycles do not
+  // dominate the state space.
+  pure def firstProvenAbsentRetry(ctx: LocalContext): Set[Transition] = {
+    val host = hostState(ctx.state.local)
+    match host.current {
+      | Some(operation) =>
+          if (operation.revision == 1) hostRetriesProvenAbsent(ctx) else noTransitions
+      | None => noTransitions
+    }
+  }
+
+  pure def firstCrash(ctx: LocalContext): Set[Transition] = {
+    val host = hostState(ctx.state.local)
+    if (host.restartObserved) noTransitions else crashHost(ctx)
+  }
+
+  action boundedFaultStep(effect: EffectKind): bool = any {
+    start(effect),
+    stepWith(JOURNAL, journalRecordsIntent),
+    stepWith(HOST, hostAcceptsIntent),
+    stepWith(JOURNAL, journalRecordsDispatch),
+    stepWith(HOST, hostDispatches),
+    stepWith(RUNNER, runnerPerforms),
+    stepWith(GITHUB_PROVIDER, providerPerforms),
+    stepWith(RUNNER, externalOutcomeUnknown),
+    stepWith(GITHUB_PROVIDER, externalOutcomeUnknown),
+    stepWith(HOST, hostRecordsUnknown),
+    stepWith(JOURNAL, journalRecordsUnknown),
+    stepWith(HOST, hostBeginsReconciliation),
+    stepWith(RUNNER, externalReconciles),
+    stepWith(GITHUB_PROVIDER, externalReconciles),
+    stepWith(HOST, hostAcceptsReconciliation),
+    stepWith(JOURNAL, journalRecordsAbsent),
+    stepWith(HOST, firstProvenAbsentRetry),
+    stepWith(HOST, hostObservesApplied),
+    stepWith(JOURNAL, journalRecordsApplied),
+    stepWith(HOST, hostSettles),
+    stepWith(HOST, firstCrash),
+    stepWith(JOURNAL, journalRecovers),
+    stepWith(HOST, hostAcceptsRecovery),
+    stepWith(RUNNER, externalReadsAuthority),
+    stepWith(GITHUB_PROVIDER, externalReadsAuthority),
+    stepWith(HOST, hostAcceptsAuthority),
+    stepWith(HOST, hostAuthenticatesResume),
+    stepWith(HOST, hostRejectsInvalidResponse),
+    stepWith(JOURNAL, journalRejectsInvalidAppend),
+    stepWith(HOST, hostAcceptsAppendRejection),
+  }
+
   action completeEffect(effect: EffectKind): bool = start(effect)
     .then(stepWith(JOURNAL, journalRecordsIntent))
     .then(stepWith(HOST, hostAcceptsIntent))
@@ -6214,6 +6303,7 @@ module O2HostedWriterChoreoModel {
           journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
           unknownObserved: false, retryObserved: false, duplicateRejected: false,
           staleRejected: false, identityRejected: false, sequenceRejected: false,
+          restartObserved: false,
           recoveredStatus: JournalEmpty,
         }
     }
@@ -6311,6 +6401,7 @@ module O2HostedWriterChoreoModel {
             journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
             unknownObserved: false, retryObserved: false, duplicateRejected: false,
             staleRejected: false, identityRejected: false, sequenceRejected: false,
+            restartObserved: false,
             recoveredStatus: JournalEmpty,
           }
       }
@@ -6335,6 +6426,7 @@ module O2HostedWriterChoreoModel {
             journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
             unknownObserved: false, retryObserved: false, duplicateRejected: false,
             staleRejected: false, identityRejected: false, sequenceRejected: false,
+            restartObserved: false,
             recoveredStatus: JournalEmpty,
           }
       }
@@ -6388,6 +6480,24 @@ module O2HostedWriterChoreoModel {
   temporal progress: bool =
     normalProgressStep.weakFair(Set(choreo::s)).implies(eventually(workflowCompleted))
   temporal faultSafety: bool = always(safety)
+}
+
+// Separate modules keep Quint's init/step classification unambiguous while
+// checking both external authority implementations under the same fault schedule.
+module O2HostedWriterChoreoProviderBounded {
+  import O2HostedWriterChoreoModel as model
+
+  action init = model::init
+  action step = model::boundedFaultStep(model::Claim)
+  val safety = model::safety
+}
+
+module O2HostedWriterChoreoRunnerBounded {
+  import O2HostedWriterChoreoModel as model
+
+  action init = model::initAfterClaim
+  action step = model::boundedFaultStep(model::ProcessWork)
+  val safety = model::safety
 }
 
 module O2HostedWriterChoreoTests {

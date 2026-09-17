@@ -575,9 +575,9 @@ else
             let bytes =
                 File.ReadAllBytes(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
 
-            sha256Bytes bytes = "66212339baaac357712c19ec1607e944cd39f9dd6dbcffc88f2086f93cbce154"
+            sha256Bytes bytes = "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9"
             && sha256Bytes (Array.append bytes [| 0uy |])
-               <> "66212339baaac357712c19ec1607e944cd39f9dd6dbcffc88f2086f93cbce154"
+               <> "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9"
         | NoApplySurface ->
             let surface =
                 File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/RulesetPlanAdapter.fsi"))

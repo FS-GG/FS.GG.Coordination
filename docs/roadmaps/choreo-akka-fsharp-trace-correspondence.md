@@ -1,6 +1,6 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; C0 and C1 merged; C2 fault/recovery checkpoint implemented; bounded exit pending
+Status: accepted design; C0 and C1 merged; C2 bounded exit implemented in its protected-main PR; C3 next
 
 Decision date: 2026-09-16
 
@@ -328,9 +328,9 @@ when all nineteen independent shards contend for hosted-runner capacity.
 - [x] Add typed identities, local process states, message payloads, and the unordered message soup.
 - [x] Implement the non-faulting Host, Journal, Runner, and GitHubProvider listener slice and typecheck it.
 - [x] Add the seven effect kinds through one parameteric protocol rather than copied transition families.
-- [ ] Add `legacyProjection`, retained safety invariants, explicit progress assumptions, and per-listener witnesses.
-- [ ] Run small randomized exploration after every participant, then bounded invariants and all named scenarios.
-- [ ] Conduct a structural/runtime model review: dead actions, vacuous invariants, unconstrained messages, accidental
+- [x] Add `legacyProjection`, retained safety invariants, explicit progress assumptions, and per-listener witnesses.
+- [x] Run small randomized exploration after every participant, then bounded invariants and all named scenarios.
+- [x] Conduct a structural/runtime model review: dead actions, vacuous invariants, unconstrained messages, accidental
   atomicity, symmetry, state-space growth, and counterexample readability.
 
 Exit evidence: model-review checklist, typecheck, randomized runs, bounded checks within an initial measured budget,
@@ -417,6 +417,42 @@ budget was raised and no bounded-success claim is made. The next C2 continuation
 encoding cost or partition an equivalent bounded verification root, then rerun bounded safety, listener coverage,
 and the structural/runtime review before checking the remaining C2 boxes. C3 trace export remains blocked on that
 exit rather than synthesizing fault behavior in F#.
+
+C2 bounded-exit evidence (2026-09-17): `eng/verify-choreo-c2-bounded.sh` mechanically extracts the pinned Choreo,
+basic-spells, and hosted-writer modules from the canonical `quint-test` fence and refuses any Quint binary except
+the accepted 0.32.0 SHA-256. It typechecks the selected source, runs all fifteen deterministic scenarios with
+10,000 samples, repeats the 200-sample/30-step randomized safety exploration at seed `0xC2F0`, and runs two TLC
+roots at 20 configured steps under independent 150-second process ceilings. The provider root generated 715
+states / 593 distinct states with maximum outdegree 4; the Runner root generated 673 / 569 with maximum outdegree
+4. Both completed with an empty queue and no safety violation.
+
+The bounded roots partition by external authority rather than weakening the protocol. `Claim` represents the six
+provider-routed effect kinds, whose common listener is also exercised individually by the deterministic effect
+witnesses; `ProcessWork` covers the distinct Runner listener. Both roots retain normal application, ambiguous
+outcomes, applied/absent reconciliation, durable retry, crash at any enabled point, the three recovery gates,
+delayed-message rejection, and journal rejection. Exploration is bounded to one proven-absence retry and one
+completed crash/recovery cycle per operation. The unrestricted production `step` remains unchanged. The Runner
+root begins at a second initializer that is the exact reachable state after settled `Claim`, including the
+journal's `Applied` operation, append count, and provider response facts; it does not invent an abstract state.
+
+Structural/runtime review:
+
+- Dead actions and receiver coverage: the architecture test inventories the bounded root; the two roots plus the
+  named duplicate, stale-generation, wrong-identity, and out-of-sequence scenarios cover every listener and all
+  four processes. Seven effect witnesses cover every effect constructor.
+- Vacuity: randomized exploration previously produced two genuine `safety` counterexamples, including the
+  delayed-absence revision crossing. Their repaired paths remain in the bounded roots and deterministic suite.
+- Message constraints and atomicity: the closed `Message` union, `typedMessageSoup`, exact `Consume` key, and one
+  `stepWith` receiver per transition prevent unconstrained delivery and preserve each request/reply boundary.
+- Symmetry and state growth: only the six genuinely identical provider-routed effect labels are represented by
+  `Claim`; the structurally different Runner has its own root. Removing unbounded equivalent retry/restart cycles
+  reduces the failed multi-million-state search to 1,162 distinct states across the two complete partitions.
+- Counterexample readability: each root retains typed process/message/operation state and named listener actions;
+  no opaque symmetry quotient or message identity erasure is introduced.
+
+The base canonical semantic shard reruns this script in protected CI before its receipt can be accepted. C2 is
+therefore complete when this PR merges, and C3 may replace the remaining F#-assembled hosted-writer traces with
+genuine Quint ITF artifacts.
 
 ### C3 — make Quint traces the executable contract
 
