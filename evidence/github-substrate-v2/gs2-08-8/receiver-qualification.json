@@ -1,0 +1,39 @@
+{
+  "schema": "fsgg.gs2-08.8-bridge-receiver-qualification/1",
+  "unit": "GS2-08.8",
+  "state": "pending-final-evidence",
+  "qualified": false,
+  "network": "offline",
+  "replaceBeforeQualification": true,
+  "prerequisite": {
+    "unit": "GS2-08.7",
+    "receiptSha256": "00e8f2b49f62ccef6b2ca1ba45c0097bfbc13c36ee47769240719f1ebbb8ce0d",
+    "receiptDigest": "0cac376a7f981f56143f14ebbbc6a465529251420fce93b5d115d44282e08e55"
+  },
+  "bridge": {
+    "version": "0.90.0",
+    "sourceMerge": "3adada5a9738464291088830c47a30a3a8fc9561",
+    "sourceTree": "0f075e251d90a2d33efe556df1dac38394b0a388",
+    "releaseContentId": "sha256:52b2774de277855c16a3c0852bc5113deea13d9076b866e6a7de0acc84f4b9c4",
+    "manifestSha256": "1bbb77f3de10ba3116f9de2ea1df3f5edee38be0de07fa0eaf7c173da3a8456a",
+    "packages": [
+      { "id": "FS.GG.Coord.Cli", "version": "0.90.0", "payloadSha256": "725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481" },
+      { "id": "FS.GG.Drivers", "version": "0.90.0", "payloadSha256": "76c7c7ac186431bc8e55e13e7175897cace654cf9f9ba49cb5b081e830f890f3" },
+      { "id": "FS.GG.Kit", "version": "0.90.0", "payloadSha256": "f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4" }
+    ]
+  },
+  "receivers": [],
+  "routeAccounting": {
+    "baseline": 615,
+    "accounted": 0,
+    "dispositionCounts": { "bridge-adopted": 0, "read-only-local-only": 0, "gs2-08.9-sealing": 0 },
+    "missingRouteIds": ["REPLACE_WITH_FINAL_ROUTE_ACCOUNTING"],
+    "successorAdded": 0,
+    "successorRetired": 0,
+    "successorTotal": 615
+  },
+  "dependentScaffolds": {
+    "sdd": { "state": "pending", "packageSource": "nuget-org", "bridgeVersion": "0.90.0", "cleanCreation": false, "upgrade": false, "oldClientRefused": false, "reportSha256": "REPLACE_WITH_FINAL_64_HEX" },
+    "templates": { "state": "pending", "packageSource": "nuget-org", "bridgeVersion": "0.90.0", "cleanCreation": false, "upgrade": false, "oldClientRefused": false, "reportSha256": "REPLACE_WITH_FINAL_64_HEX" }
+  }
+}
