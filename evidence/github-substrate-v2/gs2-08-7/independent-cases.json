@@ -1,0 +1,38 @@
+{
+  "schema": "fsgg.gs2-08.7-publication-independent-cases/1",
+  "synthetic": true,
+  "credentials": "fake",
+  "network": "offline",
+  "cases": [
+    {
+      "id": "substituted-same-version-package",
+      "mutation": "substitute-package",
+      "expectedFailure": "substituted-package"
+    },
+    {
+      "id": "stale-mixed-source",
+      "mutation": "mix-source",
+      "expectedFailure": "stale-or-mixed-source"
+    },
+    {
+      "id": "incomplete-coherent-set",
+      "mutation": "remove-package",
+      "expectedFailure": "incomplete-coherent-set"
+    },
+    {
+      "id": "wrong-attestation-subject",
+      "mutation": "replace-attestation-subject",
+      "expectedFailure": "wrong-attestation-subject"
+    },
+    {
+      "id": "partial-required-feeds",
+      "mutation": "remove-feed-copy",
+      "expectedFailure": "partial-feeds"
+    },
+    {
+      "id": "dashboard-notification-is-not-adoption",
+      "mutation": "present-dashboard-receipt-as-adoption",
+      "expectedFailure": "dashboard-receipt-is-not-adoption"
+    }
+  ]
+}

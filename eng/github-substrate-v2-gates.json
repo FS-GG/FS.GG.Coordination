@@ -336,6 +336,12 @@
       "qGate": "Q6",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-v1-independent-fence-attacks.fsx", "--", "."]
+    },
+    {
+      "id": "github-v1-bridge-publication-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-v1-bridge-publication.fsx", "--", "."]
     }
   ]
 }

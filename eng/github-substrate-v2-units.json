@@ -1029,6 +1029,33 @@
         }
       ],
       "contractSha256": "34c122472fc35ffa141d20d7115ecdb1d4d793d2a49ef04e277053761bf15d88"
+    },
+    {
+      "id": "GS2-08.7",
+      "title": "Publish one immutable bridge",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": [
+        "GS2-08.6"
+      ],
+      "permissionCeiling": [
+        "repository-local independent GS2-08.7 publication qualification registration, exact landed P1 producer merge/tree and release-workflow binding, coherent artifact closure, required-feed, producer-signature, provenance-attestation, public-install and failure-state contracts, offline synthetic controls, validation and tests",
+        "read-only consumption of the accepted GS2-08.6 receipt and landed P1 producer evidence is allowed; no version selection, package publication, publication authorization, credential use, live provider mutation, receiver adoption, native GS2-08.7 acceptance or P3-P5 operation is performed"
+      ],
+      "exitGate": "the Q3 github-v1-bridge-publication contract registers independent publication qualification from exact landed P1 producer merge 155f8897424b49906dfb0464ce684e75dd9bda3c and tree 52c9dd051467a7782c4e101dd35e0ca561470f81; 0.89.0 remains only the observed P1 baseline, offline controls use an explicit non-release sentinel, and P3 must select the immutable publication version from fresh required-feed state; the coherent FS.GG.Coord.Cli, FS.GG.Kit and FS.GG.Drivers set closes package id, selected version, producer archive, normalized payload, source, producer signature and provenance attestation identities; both GitHub Packages and nuget.org are mandatory, while repository signing may change served archive bytes and cross-feed equality therefore binds normalized payload identity rather than an impossible archive identity; producer signatures and in-toto/SLSA attestations bind each exact producer archive plus the exact source merge/tree, saga preparation identity and corresponding component publisher workflow; anonymous public installation clears ambient sources, uses private caches, restores the complete set, executes fsgg-coord-engine and verifies served archive, feed, normalized payload, source, receipt and installed assembly identities; exact release-kit, release-drivers, release-coord-engine and saga start/prepare/promote workflow digests establish correspondence; independently authored offline controls refuse a substituted same-version package, stale or mixed source, incomplete coherent set, wrong attestation subject, partial feeds and a dashboard notification receipt presented as adoption; failure states are explicit and the operation ceiling permits only repository-local registration and offline synthetic qualification; this registration remains unaccepted and non-authorizing, performs no publication or live GitHub mutation, and leaves P3 release-path/provenance binding and version preparation, P4 protected coherent publication, and P5 public-only readback/native GS2-08.7 acceptance pending, while receiver adoption belongs to GS2-08.8",
+      "qGates": [
+        "Q3"
+      ],
+      "gateCommands": [
+        "github-v1-bridge-publication-contract"
+      ],
+      "gateContracts": [
+        {
+          "id": "github-v1-bridge-publication-contract",
+          "qGate": "Q3",
+          "commandSha256": "e7ef1389d11f7f4fd685829230fde5ae9ea527f8ea891b3134ff507a599b6358"
+        }
+      ],
+      "contractSha256": "9eb3aaef61b45a367ec97284105349adc2169e26007daed8de8c59b0286947c6"
     }
   ]
 }
