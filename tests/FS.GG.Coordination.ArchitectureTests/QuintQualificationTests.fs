@@ -162,7 +162,7 @@ let ``native formal catalogue covers all domains and retains normalized ITF coun
 
     for item in tests do
         Assert.Equal("tlc", item["backend"].GetValue<string>())
-        Assert.Equal(5120, (item["budget"].AsObject()["peakMiB"]).GetValue<int>())
+        Assert.Equal(6144, (item["budget"].AsObject()["peakMiB"]).GetValue<int>())
 
         for field in
             [
