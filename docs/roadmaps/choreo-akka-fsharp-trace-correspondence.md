@@ -485,9 +485,10 @@ Host composition, and PostgreSQL correspondence remain deliberately assigned to 
 
 #### C3 continuation checkpoint — 2026-09-17
 
-Safe resume branch: `routine/choreo-c3-quint-itf`, based on merged C2 commit
-`a598f27fc8d2c23647f4dc45df7d5119f3461b74`. The branch is intentionally limited to C3; do not begin C4 in the
-same PR. Its draft PR is the durable review/CI handoff.
+Safe resume branch: `routine/choreo-c3-quint-itf`, rebased onto `origin/main` at
+`794458ec586660aa2603dcb74374a9356abd9d61` (which contains merged C2 commit
+`a598f27fc8d2c23647f4dc45df7d5119f3461b74`). The branch is intentionally limited to C3; do not begin C4 in the
+same PR. Draft [PR #420](https://github.com/FS-GG/FS.GG.Coordination/pull/420) is the durable review/CI handoff.
 
 Completed on the branch:
 
