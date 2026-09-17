@@ -339,6 +339,6 @@ let ``immutable execution pin Q3 validator rejects the closed mutation inventory
 [<Fact>]
 let ``immutable execution pins preserve canonical Quint source`` () =
     Assert.Equal(
-        "f551c5469a04245b42b7a22840bd68b4bfd4b425ce2531c8791f54e53256ff90",
+        "a79054ddb24eb7636a797badf654753ad8d83aa4467cf2e6024b80df8c6ffc72",
         sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md")
     )
