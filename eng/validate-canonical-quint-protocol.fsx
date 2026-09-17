@@ -1765,6 +1765,22 @@ try
     requireGreen "QUINT-Q2-TYPECHECK" scratch quint [ "typecheck"; q2Qnt ] []
     |> ignore
 
+    // The pinned Choreo modules are appended to the canonical Q2 source and are
+    // compiled above as part of that source identity. Quint 0.32's TLC flattener,
+    // however, resolves every later module while flattening an unrelated legacy
+    // root and loses names imported through Choreo's parameterized module alias.
+    // C2/C3 deliberately retain the legacy qualification roots unchanged, so run
+    // those roots against the exact pre-Choreo prefix and qualify Choreo through
+    // its dedicated pinned-source and bounded gates instead.
+    let choreoBoundary = "// BEGIN PINNED quint-co/choreo spells/basicSpells.qnt"
+    let choreoBoundaryIndex = q2Source.IndexOf(choreoBoundary, StringComparison.Ordinal)
+
+    if choreoBoundaryIndex < 0 then
+        fail "QUINT-CHOREO-BOUNDARY" "missing pinned basic-spells boundary"
+
+    let qualificationQnt = Path.Combine(scratch, "protocol-q2-legacy-qualification.qnt")
+    File.WriteAllText(qualificationQnt, q2Source.Substring(0, choreoBoundaryIndex), UTF8Encoding(false))
+
     use qualificationConfigurationDocument =
         JsonDocument.Parse(File.ReadAllBytes qualificationConfiguration)
 
@@ -1904,7 +1920,7 @@ try
             quint
             [
                 "run"
-                q2Qnt
+                qualificationQnt
                 "--main"
                 rootModule
                 "--init"
@@ -1950,7 +1966,7 @@ try
             quint
             [
                 "test"
-                q2Qnt
+                qualificationQnt
                 "--main"
                 "CoordinationProtocolTests"
                 "--backend"
@@ -2022,7 +2038,7 @@ try
                 quint
                 [
                     "run"
-                    q2Qnt
+                    qualificationQnt
                     "--main"
                     main
                     "--init"
@@ -2095,7 +2111,7 @@ try
         quint
         [
             "test"
-            q2Qnt
+            qualificationQnt
             "--main"
             "CoordinationProtocolTests"
             "--backend"
@@ -2141,7 +2157,7 @@ try
         quint
         [
             "test"
-            q2Qnt
+            qualificationQnt
             "--main"
             "CoordinationProtocolTests"
             "--backend"
@@ -2215,7 +2231,7 @@ try
                 quint
                 [
                     "run"
-                    q2Qnt
+                    qualificationQnt
                     "--main"
                     main
                     "--init"
@@ -2302,7 +2318,7 @@ try
                 quint
                 [
                     "verify"
-                    q2Qnt
+                    qualificationQnt
                     "--main"
                     main
                     "--init"
@@ -2352,7 +2368,7 @@ try
                 quint
                 [
                     "run"
-                    q2Qnt
+                    qualificationQnt
                     "--main"
                     main
                     "--init"
@@ -2391,7 +2407,7 @@ try
                     quint
                     [
                         "verify"
-                        q2Qnt
+                        qualificationQnt
                         "--main"
                         main
                         "--init"
@@ -2740,7 +2756,7 @@ try
     verifiedPositiveInvariantCount <- positiveInvariants.Length
 
     let mutatedQnt = Path.Combine(scratch, "protocol-missing-evidence-guard.qnt")
-    let originalQnt = File.ReadAllText q2Qnt
+    let originalQnt = File.ReadAllText qualificationQnt
     let rustMutationChecks = ResizeArray<unit -> unit>()
 
     let enqueueRustMutation code filePrefix testMatch (name: string) (fixture: string) (replacement: string) =
@@ -2874,7 +2890,7 @@ try
                     quint
                     [
                         "run"
-                        q2Qnt
+                        qualificationQnt
                         "--main"
                         rootModule
                         "--init"
