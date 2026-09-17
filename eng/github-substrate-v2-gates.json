@@ -318,6 +318,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-v1-effect-fence.fsx", "--", "."]
+    },
+    {
+      "id": "github-v1-admission-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-v1-admission.fsx", "--", "."]
     }
   ]
 }

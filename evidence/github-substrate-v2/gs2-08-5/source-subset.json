@@ -1,0 +1,59 @@
+{
+  "schema": "fsgg.github-substrate.v1-admission-source-subset/1",
+  "unit": "GS2-08.5",
+  "sourceOnly": true,
+  "importMode": "exact-byte-copy",
+  "compilationOrder": [
+    "ShardedJournalAdapter.fsi",
+    "ShardedJournalAdapter.fs",
+    "V1EffectFenceAdapter.fsi",
+    "V1EffectFenceAdapter.fs",
+    "V1AdmissionRegistry.fsi",
+    "V1AdmissionRegistry.fs"
+  ],
+  "files": [
+    {
+      "path": "src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fsi",
+      "sha256": "790f6b3d6d787a0e613f4eacd97dceee79cdca17518a365d5c2f981df8f1136b",
+      "role": "protected Operation journal address and head contract"
+    },
+    {
+      "path": "src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs",
+      "sha256": "f0b6a5854c208c4cc88cccf003516d80d781ae5c4140ae9c123dc82942a17e09",
+      "role": "protected Operation journal address and head implementation"
+    },
+    {
+      "path": "src/FS.GG.Coordination.GitHub/V1EffectFenceAdapter.fsi",
+      "sha256": "281c87ec29e69268ce8bacefe7167e814114c9b2a36f0f21564cbaf8df3d158a",
+      "role": "epoch phase type contract"
+    },
+    {
+      "path": "src/FS.GG.Coordination.GitHub/V1EffectFenceAdapter.fs",
+      "sha256": "1e0bb9ae31dfe2a72ee34abdb25b3b7c79401197766486fc00dff60501bc9dfd",
+      "role": "epoch phase type implementation"
+    },
+    {
+      "path": "src/FS.GG.Coordination.GitHub/V1AdmissionRegistry.fsi",
+      "sha256": "7e4736da1efb91cd5ffcd176d1e72ddd561048f8b4b8d8c034a4071531ccafb2",
+      "role": "typed admission, raw-Git restore, expected-parent append, provider reconciliation and outbound-request boundary"
+    },
+    {
+      "path": "src/FS.GG.Coordination.GitHub/V1AdmissionRegistry.fs",
+      "sha256": "5da24c4ea07f8a9d8934bdb6f716662c4c412f641369dc9ef6250f21cecaa081",
+      "role": "canonical command codec, verified replay, admission, closing, seal, single-use effect ownership and settlement implementation"
+    }
+  ],
+  "protocolSourceSha256": "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05",
+  "compiledContractSha256": "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b",
+  "preservation": "future producers must preserve the closed admission-event/1 codec, strict canonical JSON and raw Git-object verification, pinned repository/ref and equal-head reads, complete legal-transition replay, expected-parent Operation-journal CAS and exact-ancestor reconciliation, stable command idempotence, confirmed-only handles and seal references, immutable cohort tuple, exact request bytes, operation/effect/attempt ownership, single-use live dispatch authority, recovery-only restored InFlight state, provider-backed delayed-original exclusion before retry, unresolved effect retention, fresh epoch/claim/admission/registry fences, and distinct 40-character Git OIDs and 64-character SHA-256 digests",
+  "exclusions": [
+    "credentials",
+    "provider dispatch",
+    "live journal append",
+    "phase transition",
+    "package publication",
+    "adoption",
+    "acceptance receipt",
+    "unit completion"
+  ]
+}

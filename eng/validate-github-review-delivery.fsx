@@ -166,7 +166,7 @@ let generatedMutation =
             }
     | GitHubReviewDeliveryControl.QuintAndPrerequisite ->
         receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.5"
-        && sha256 quintPath = "cf464a5206981dbf99b5ece74e284046f19b7f0431087fc38d42963541d892bd"
+        && sha256 quintPath = "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05"
 
 let independentMutation control =
     match control with

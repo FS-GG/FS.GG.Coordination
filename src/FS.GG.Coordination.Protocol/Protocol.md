@@ -1316,8 +1316,31 @@ successor is verified `OperatingV1`. `RollingBack` itself admits no ordinary eff
 restore v1, and the obsolete `RetiringV1` name is not on the wire.
 
 `OperatingV1` admits eligible new and incumbent v1 work. `Preparing` refuses new ordinary admission but may
-complete an eligible incumbent effect already admitted under the same manifest when the freshly read epoch,
-claim, and operation generations all match at the external effect boundary. `FreezeRequested` and every later
+complete an eligible incumbent effect present in the immutable sealed cohort under the same manifest when the
+freshly read epoch, claim, and operation generations all match at the external effect boundary. One canonical
+protected `Operation` journal aggregate is the only v1 admission registry: `AdmitOperation`, `CloseAdmissions`, and
+`SealAdmissions` are expected-parent CAS appends on that aggregate. Closing is an explicit durable interval in
+which new admission refuses while cohort members drain. A crash cannot reopen it; only an explicit journaled
+new round after a seal may reopen admissions. The seal binds the exact round, manifest, cohort, journal commit,
+and generation, and the `Preparing` epoch-event/2 record references that immutable tuple. Legacy epoch-event/1
+genesis bytes remain readable as history and may admit a fresh operation only while a round is open; they are
+never sufficient proof for `Preparing`.
+
+An admission binds stable operation id and generation, actor and receiver, mutation kind and canonical target,
+typed claim generation or `NoClaimRequired`, intent and touch-set digests, and the originating epoch. Replacing
+an operation advances its generation and invalidates every prior handle. Before each provider mutation the same
+journal records a stable effect id, exact request digest and preconditions, and an `InFlight` dispatch owner.
+The owner refreshes epoch, admission, operation, claim, manifest, and seal authority immediately before send.
+Settlement is `Applied`, `ProvenAbsent`, `Partial`, or `Indeterminate`. A restored `InFlight` intent is recovery-only
+and grants no send transition, including to its recorded owner. `ProvenAbsent` authorizes a retry only when durable
+provider evidence binds the exact request and excludes a delayed original through provider idempotency, a conditional
+fence, or explicit retirement of the original request; an ordinary absent read is insufficient. That evidence plus a
+fresh epoch, claim, admission, operation, manifest, seal, and registry-head fence may create exactly one next attempt.
+Later effects refresh independently, and expanded scope requires a new admission.
+Read-only requests use a distinct outbound type and cannot carry a mutation. The authority reader validates
+the real Git commit, tree, `event.json`, `head.json`, ancestry, tag, trust, manifest, claim generations, and two
+identical ref reads. A 40-character Git object id and a 64-character SHA-256 digest are distinct wire types.
+The reader discovers no credential and performs no repair. `FreezeRequested` and every later
 phase refuse ordinary v1 effects. From `OpenV2`, ordinary v2 effects require the same fresh generation fence.
 A lost provider response never triggers blind replay: the client rereads the fleet aggregate and exact operation
 receipt, treats an exact matching known effect as applied, retries only proven absence, preserves partial as
@@ -1381,6 +1404,16 @@ module CoordinationProtocolTests {
     currentSnapshotSha256: str, observationSnapshotSha256: str, observationClockDay: int,
     v1WritersFenced: bool,
     destructiveDeletionStarted: bool,
+  }
+  type FleetAdmission = {
+    operationId: str, operationGeneration: int, round: int, manifest: str,
+    actor: str, receiver: str, mutationKind: str, canonicalTarget: str,
+    claimGeneration: int, intentDigest: str, touchSetDigest: str,
+    originatingEpochGeneration: int,
+  }
+  type AdmissionRound = {
+    journalHead: str, journalGeneration: int, round: int, manifest: str,
+    state: str, cohort: Set[str], unsettledEffects: Set[str], sealDigest: str,
   }
 
   pure def journalHeadShapeIsValid(journal: JournalHead): bool = and {
@@ -1464,6 +1497,55 @@ module CoordinationProtocolTests {
       and { phase == "Preparing", not(newAdmission), eligibleIncumbent },
     },
   }
+  pure def fleetAdmissionMayAppend(current: AdmissionRound, admission: FleetAdmission,
+      expectedParent: str, currentEpochGeneration: int): bool = and {
+    current.state == "open", current.journalHead == expectedParent,
+    admission.round == current.round, admission.manifest == current.manifest,
+    admission.operationId != "", admission.operationGeneration >= 1,
+    admission.actor != "", admission.receiver != "", admission.mutationKind != "",
+    admission.canonicalTarget != "", admission.intentDigest != "",
+    admission.touchSetDigest != "",
+    admission.originatingEpochGeneration == currentEpochGeneration,
+  }
+  pure def admissionRoundMayClose(current: AdmissionRound, proposed: AdmissionRound): bool = and {
+    current.state == "open", proposed.state == "closing",
+    proposed.round == current.round, proposed.manifest == current.manifest,
+    proposed.cohort == current.cohort,
+    proposed.journalHead != current.journalHead,
+    proposed.journalGeneration == current.journalGeneration + 1,
+  }
+  pure def admissionRoundMaySeal(current: AdmissionRound, proposed: AdmissionRound): bool = and {
+    current.state == "closing", proposed.state == "sealed",
+    current.unsettledEffects == Set(), proposed.unsettledEffects == Set(),
+    proposed.round == current.round, proposed.manifest == current.manifest,
+    proposed.cohort == current.cohort, proposed.sealDigest != "",
+    proposed.journalHead != current.journalHead,
+    proposed.journalGeneration == current.journalGeneration + 1,
+  }
+  pure def admittedEffectMayDispatch(round: AdmissionRound, operationId: str,
+      requestDigest: str, inFlightPersisted: bool, singleOwner: bool,
+      epochFresh: bool, generationsFresh: bool, restoredInFlight: bool,
+      initialPermitFresh: bool): bool = and {
+    Set("open", "closing", "sealed").contains(round.state),
+    round.cohort.contains(operationId), requestDigest != "", inFlightPersisted,
+    singleOwner, epochFresh, generationsFresh, not(restoredInFlight), initialPermitFresh,
+  }
+  pure def effectRetryMayAppend(status: str, providerEvidenceKind: str,
+      exactRequestBound: bool, delayedOriginalExcluded: bool,
+      freshFence: bool, nextAttempt: bool): bool = and {
+    status == "proven-absent",
+    Set("provider-idempotency", "conditional-fence", "request-retirement").contains(providerEvidenceKind),
+    exactRequestBound, delayedOriginalExcluded, freshFence, nextAttempt,
+  }
+  pure def clientReadExternalEffectRaceRefuses(observedEpochGeneration: int,
+      currentEpochGeneration: int, inFlightPersisted: bool): bool = or {
+    observedEpochGeneration != currentEpochGeneration,
+    not(inFlightPersisted),
+  }
+  pure def fleetMayFreeze(round: AdmissionRound): bool = and {
+    round.state == "sealed",
+    round.unsettledEffects == Set(),
+  }
 
   pure val claimJournalHead: JournalHead = {
     aggregateId: "claim:subject-work", journalKind: "claim", commitSha: "commit-claim-1",
@@ -1494,6 +1576,18 @@ module CoordinationProtocolTests {
     freshObservationDays: Set(0, 7, 14, 30), currentSnapshotSha256: "cutover-snapshot",
     observationSnapshotSha256: "cutover-snapshot", observationClockDay: 30, v1WritersFenced: true,
     destructiveDeletionStarted: false,
+  }
+  pure val openAdmissionRound: AdmissionRound = {
+    journalHead: "admission-head-1", journalGeneration: 1, round: 1,
+    manifest: "manifest-a", state: "open", cohort: Set("operation-a"),
+    unsettledEffects: Set(), sealDigest: "",
+  }
+  pure val incumbentAdmission: FleetAdmission = {
+    operationId: "operation-a", operationGeneration: 1, round: 1,
+    manifest: "manifest-a", actor: "worker-a", receiver: "coordination",
+    mutationKind: "issue-edit", canonicalTarget: "FS-GG/example#17",
+    claimGeneration: 0, intentDigest: "intent-a", touchSetDigest: "touch-a",
+    originatingEpochGeneration: 1,
   }
 
   // GS2-03.4 independent black-box oracles. These expectations are deliberately hand-authored
@@ -1634,6 +1728,46 @@ module CoordinationProtocolTests {
     not(v1EffectMayProceed("FreezeRequested", false, true, true, true, true, true, true)),
     not(v1EffectMayProceed("OperatingV1", true, true, false, true, true, true, true)),
     not(v1EffectMayProceed("OperatingV1", true, true, true, true, true, false, true)),
+  }
+
+  run testMutationAdmissionCloseSealAndEffectOwnership = and {
+    fleetAdmissionMayAppend(openAdmissionRound, incumbentAdmission,
+      openAdmissionRound.journalHead, 1),
+    not(fleetAdmissionMayAppend({ ...openAdmissionRound, state: "closing" },
+      incumbentAdmission, openAdmissionRound.journalHead, 1)),
+    admissionRoundMayClose(openAdmissionRound,
+      { ...openAdmissionRound, journalHead: "admission-head-2",
+        journalGeneration: 2, state: "closing" }),
+    admissionRoundMaySeal(
+      { ...openAdmissionRound, journalHead: "admission-head-2",
+        journalGeneration: 2, state: "closing" },
+      { ...openAdmissionRound, journalHead: "admission-head-3",
+        journalGeneration: 3, state: "sealed", sealDigest: "cohort-digest" }),
+    not(admissionRoundMaySeal(
+      { ...openAdmissionRound, journalHead: "admission-head-2",
+        journalGeneration: 2, state: "closing", unsettledEffects: Set("effect-a") },
+      { ...openAdmissionRound, journalHead: "admission-head-3",
+        journalGeneration: 3, state: "sealed", sealDigest: "cohort-digest" })),
+    admittedEffectMayDispatch(openAdmissionRound, "operation-a", "request-a",
+      true, true, true, true, false, true),
+    not(admittedEffectMayDispatch(openAdmissionRound, "operation-b", "request-a",
+      true, true, true, true, false, true)),
+    not(admittedEffectMayDispatch(openAdmissionRound, "operation-a", "request-a",
+      false, true, true, true, false, true)),
+    not(admittedEffectMayDispatch(openAdmissionRound, "operation-a", "request-a",
+      true, true, true, true, true, true)),
+    not(admittedEffectMayDispatch(openAdmissionRound, "operation-a", "request-a",
+      true, true, true, true, false, false)),
+    effectRetryMayAppend("proven-absent", "conditional-fence", true, true, true, true),
+    not(effectRetryMayAppend("proven-absent", "ordinary-read", true, false, true, true)),
+    not(effectRetryMayAppend("indeterminate", "conditional-fence", true, true, true, true)),
+    not(clientReadExternalEffectRaceRefuses(1, 1, true)),
+    clientReadExternalEffectRaceRefuses(1, 2, true),
+    clientReadExternalEffectRaceRefuses(1, 1, false),
+    fleetMayFreeze({ ...openAdmissionRound, state: "sealed",
+      sealDigest: "cohort-digest" }),
+    not(fleetMayFreeze({ ...openAdmissionRound, state: "sealed",
+      unsettledEffects: Set("effect-a"), sealDigest: "cohort-digest" })),
   }
 
   type DeterministicVersionTuple = {
