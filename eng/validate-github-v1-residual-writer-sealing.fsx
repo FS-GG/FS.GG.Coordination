@@ -243,10 +243,10 @@ for workflow in workflows do
     require
         (expectedWorkflows.ContainsKey id
          && text workflow "path" = expectedWorkflows[id]
-         && boolean workflow "sourceSealed"
+         && not (boolean workflow "sourceSealed")
          && text workflow "state" = "disabled_manually")
         "GS2089-ADMIN"
-        $"workflow {id} source seal is not paired with disabled_manually readback"
+        $"workflow {id} must remain explicitly unsealed and closed by disabled_manually readback"
 
 let telemetry = aggregate.GetProperty("telemetryBoundary")
 

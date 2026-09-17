@@ -135,11 +135,11 @@
     "repository": "FS-GG/.github",
     "observedAt": "2026-09-17T12:46:26Z",
     "workflows": [
-      { "id": 311748898, "path": ".github/workflows/release-coord-engine.yml", "sourceSealed": true, "state": "disabled_manually" },
-      { "id": 317170238, "path": ".github/workflows/release-drivers.yml", "sourceSealed": true, "state": "disabled_manually" },
-      { "id": 316772183, "path": ".github/workflows/release-kit.yml", "sourceSealed": true, "state": "disabled_manually" },
-      { "id": 334278878, "path": ".github/workflows/release-saga-prepare.yml", "sourceSealed": true, "state": "disabled_manually" },
-      { "id": 346289776, "path": ".github/workflows/release-saga-start.yml", "sourceSealed": true, "state": "disabled_manually" }
+      { "id": 311748898, "path": ".github/workflows/release-coord-engine.yml", "sourceSealed": false, "state": "disabled_manually" },
+      { "id": 317170238, "path": ".github/workflows/release-drivers.yml", "sourceSealed": false, "state": "disabled_manually" },
+      { "id": 316772183, "path": ".github/workflows/release-kit.yml", "sourceSealed": false, "state": "disabled_manually" },
+      { "id": 334278878, "path": ".github/workflows/release-saga-prepare.yml", "sourceSealed": false, "state": "disabled_manually" },
+      { "id": 346289776, "path": ".github/workflows/release-saga-start.yml", "sourceSealed": false, "state": "disabled_manually" }
     ]
   },
   "telemetryBoundary": {

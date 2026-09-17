@@ -73,7 +73,7 @@ let ``aggregate binds the protected seals disabled workflows and retained Q4 bou
     Assert.Equal(5, value.GetProperty("workflowAdministration").GetProperty("workflows").GetArrayLength())
 
     for workflow in value.GetProperty("workflowAdministration").GetProperty("workflows").EnumerateArray() do
-        Assert.True(workflow.GetProperty("sourceSealed").GetBoolean())
+        Assert.False(workflow.GetProperty("sourceSealed").GetBoolean())
         Assert.Equal("disabled_manually", workflow.GetProperty("state").GetString())
 
     Assert.Equal("unclaimed", value.GetProperty("q4").GetProperty("state").GetString())
@@ -195,12 +195,18 @@ let ``bounded controls reject route capability identity telemetry and helper mis
                 |> arrayProperty "secretScopes"
                 |> arrayObject 0
                 |> fun scope -> scope["renderingPresentAfter"] <- true
-            "workflow-source-sealed-but-admin-active",
+            "workflow-admin-active",
             fun value ->
                 objectProperty "workflowAdministration" value
                 |> arrayProperty "workflows"
                 |> arrayObject 0
                 |> fun workflow -> workflow["state"] <- "active"
+            "workflow-false-source-seal",
+            fun value ->
+                objectProperty "workflowAdministration" value
+                |> arrayProperty "workflows"
+                |> arrayObject 0
+                |> fun workflow -> workflow["sourceSealed"] <- true
             "stale-source-identity", fun value -> value["sourceHead"] <- String('f', 40)
             "missing-receiver-receipt",
             fun value -> objectProperty "receiverAdoption" value |> fun receiver -> receiver["acceptedReceiptPresent"] <- false
