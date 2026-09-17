@@ -53,8 +53,8 @@ let ``checked-in GS2-08-9 aggregate refuses closure with the exact pending code`
     Assert.Equal(78, exitCode)
     Assert.Empty(output)
     Assert.Contains("GS2089-PENDING", error)
-    Assert.Contains("rendering App scope revocation", error)
-    Assert.Contains("GS2-08.8 native receipt", error)
+    Assert.Contains("helper PR #3530 merge", error)
+    Assert.Contains("GS2-08.8 PR #417 merge/receipt", error)
     Assert.False(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.9.json")))
 
 [<Fact>]
@@ -74,6 +74,16 @@ let ``aggregate binds the protected seals disabled workflows and retained Q4 bou
     Assert.False(value.GetProperty("q4").GetProperty("providerMutationClaimed").GetBoolean())
     Assert.False(value.GetProperty("acceptanceReceiptCreated").GetBoolean())
 
+    let dispatch = value.GetProperty("dispatchAdministration")
+    Assert.Equal("8cea64e7dc551fbec46479331f71787384b4c7495f6b75b012d7a0d8d3295a1c", dispatch.GetProperty("evidenceSha256").GetString())
+    Assert.All(
+        dispatch.GetProperty("secretScopes").EnumerateArray(),
+        fun scope ->
+            Assert.Equal(204, scope.GetProperty("deleteStatus").GetInt32())
+            Assert.False(scope.GetProperty("renderingPresentAfter").GetBoolean())
+    )
+    Assert.False(dispatch.GetProperty("historicalCaller").GetProperty("executed").GetBoolean())
+
 [<Fact>]
 let ``bounded controls reject route capability identity telemetry and helper misstatements`` () =
     let controls: (string * (JsonObject -> unit)) list =
@@ -89,7 +99,16 @@ let ``bounded controls reject route capability identity telemetry and helper mis
                 |> arrayObject 0
                 |> fun client -> client["refusalAttempted"] <- true
             "historical-sha-still-credentialed-without-blocker",
-            fun value -> arrayProperty "pendingBlockers" value |> fun blockers -> blockers.RemoveAt(0)
+            fun value ->
+                arrayProperty "historicalClients" value
+                |> arrayObject 1
+                |> fun client -> client["historicalShaCredentialed"] <- true
+            "dispatch-admin-false-readback",
+            fun value ->
+                objectProperty "dispatchAdministration" value
+                |> arrayProperty "secretScopes"
+                |> arrayObject 0
+                |> fun scope -> scope["renderingPresentAfter"] <- true
             "workflow-source-sealed-but-admin-active",
             fun value ->
                 objectProperty "workflowAdministration" value

@@ -18,7 +18,8 @@
   "receiverAdoption": {
     "unit": "GS2-08.8",
     "state": "pending-native-receipt",
-    "candidateHead": "059d891af79b1a62914798a7d2de1ec601af220e",
+    "candidateHead": "643e76b48bfc317e8a06b38ddc5a0c0f22f93eb4",
+    "pullRequest": 417,
     "acceptedReceiptPresent": false
   },
   "sourceSeals": [
@@ -87,10 +88,44 @@
       "version": "0.75.4",
       "artifact": "available-bypass-observed",
       "refusalAttempted": true,
-      "historicalShaCredentialed": true,
-      "accounting": "rendering-selected-repository-revocation-pending"
+      "historicalShaCredentialed": false,
+      "accounting": "rendering-selected-repository-scope-retired"
     }
   ],
+  "dispatchAdministration": {
+    "schema": "fsgg.gs2-08.9.rendering-dispatch-secret-scope-retirement/1",
+    "mailboxCommit": "202bbb3e0799027cc448fecfef084f186eba4f08",
+    "evidenceSha256": "8cea64e7dc551fbec46479331f71787384b4c7495f6b75b012d7a0d8d3295a1c",
+    "observedAt": "2026-09-17T13:02:40.704923Z",
+    "repository": {
+      "id": 1269292235,
+      "name": "FS-GG/FS.GG.Rendering"
+    },
+    "secretScopes": [
+      {
+        "secretName": "FSGG_DISPATCH_APP_ID",
+        "visibilityBefore": "selected",
+        "visibilityAfter": "selected",
+        "deleteStatus": 204,
+        "renderingPresentBefore": true,
+        "renderingPresentAfter": false
+      },
+      {
+        "secretName": "FSGG_DISPATCH_APP_PRIVATE_KEY",
+        "visibilityBefore": "selected",
+        "visibilityAfter": "selected",
+        "deleteStatus": 204,
+        "renderingPresentBefore": true,
+        "renderingPresentAfter": false
+      }
+    ],
+    "historicalCaller": {
+      "renderingRevision": "66836abdaef87d601fc084d90658fdb605fbe023",
+      "dispatchSenderRevision": "5fed2838f9ed085ffca09f4cc18b4f7bc59c1294",
+      "canResolveBothCredentials": false,
+      "executed": false
+    }
+  },
   "workflowAdministration": {
     "repository": "FS-GG/.github",
     "observedAt": "2026-09-17T12:46:26Z",
@@ -109,7 +144,10 @@
     "providerMutationCount": 0
   },
   "helperBoundary": {
-    "candidateCommit": "c3e8cc1124584de27537496454d3772c2f62743f",
+    "candidateCommit": "adbb08e86c00bf2753e57381527ba271654aa9d0",
+    "candidateTree": "24c1d7d9037bc04f8d44e6c6fdd199f2ae852fc7",
+    "pullRequest": 3530,
+    "reviewerDisposition": "GO",
     "mergedToMain": false,
     "newSddWorkspaceSha256": "b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f",
     "routineDeliverySha256": "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429",
@@ -141,19 +179,19 @@
   },
   "pendingBlockers": [
     {
-      "id": "rendering-dispatch-app-scope",
-      "state": "pending-main-admin-mailbox",
-      "requiredEvidence": "Remove FS-GG.Rendering from FSGG_DISPATCH_APP_ID and FSGG_DISPATCH_APP_PRIVATE_KEY selected-repository scopes, or rotate/revoke that App key, and bind administrative readback."
-    },
-    {
-      "id": "helper-merge-and-retirement",
-      "state": "pending-source-and-callers",
-      "requiredEvidence": "Merge c3e8cc1124584de27537496454d3772c2f62743f and retire every published historical helper copy and caller before treating helper refusal as universal."
-    },
-    {
       "id": "gs2-08.8-native-receipt",
-      "state": "pending-pr-merge",
-      "requiredEvidence": "Merge the GS2-08.8 native qualification PR and consume its accepted receipt."
+      "state": "pending-pr-417-merge",
+      "requiredEvidence": "Merge GS2-08.8 PR #417 and consume its accepted native receipt."
+    },
+    {
+      "id": "helper-source-merge",
+      "state": "pending-pr-3530-merge",
+      "requiredEvidence": "Merge reviewed helper PR #3530 at head adbb08e86c00bf2753e57381527ba271654aa9d0."
+    },
+    {
+      "id": "helper-container-runtime-retirement",
+      "state": "pending-admin-readback",
+      "requiredEvidence": "Retire active NewSddWorkspace installations and historical routine-delivery copies/callers from containers and runtimes, then bind the non-secret inventory and credential-absence readback."
     }
   ],
   "q4": {

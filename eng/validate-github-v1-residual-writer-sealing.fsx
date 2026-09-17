@@ -73,7 +73,8 @@ let receiver = aggregate.GetProperty("receiverAdoption")
 require
     (text receiver "unit" = "GS2-08.8"
      && text receiver "state" = "pending-native-receipt"
-     && text receiver "candidateHead" = "059d891af79b1a62914798a7d2de1ec601af220e"
+     && text receiver "candidateHead" = "643e76b48bfc317e8a06b38ddc5a0c0f22f93eb4"
+     && integer receiver "pullRequest" = 417
      && not (boolean receiver "acceptedReceiptPresent"))
     "GS2089-RECEIVER"
     "GS2-08.8 must remain pending until its protected merge and native receipt"
@@ -166,10 +167,38 @@ require
 require
     (text bypass "artifact" = "available-bypass-observed"
      && boolean bypass "refusalAttempted"
-     && boolean bypass "historicalShaCredentialed"
-     && text bypass "accounting" = "rendering-selected-repository-revocation-pending")
+     && not (boolean bypass "historicalShaCredentialed")
+     && text bypass "accounting" = "rendering-selected-repository-scope-retired")
     "GS2089-HISTORICAL-CAPABILITY"
-    "historical 0.75.4 capability must remain explicit while Rendering retains the App scope"
+    "historical 0.75.4 capability must remain retired after Rendering lost both selected-repository secret scopes"
+
+let dispatchAdministration = aggregate.GetProperty("dispatchAdministration")
+let dispatchRepository = dispatchAdministration.GetProperty("repository")
+let dispatchScopes = dispatchAdministration.GetProperty("secretScopes").EnumerateArray() |> Seq.toList
+let historicalCaller = dispatchAdministration.GetProperty("historicalCaller")
+
+require
+    (text dispatchAdministration "schema" = "fsgg.gs2-08.9.rendering-dispatch-secret-scope-retirement/1"
+     && text dispatchAdministration "mailboxCommit" = "202bbb3e0799027cc448fecfef084f186eba4f08"
+     && text dispatchAdministration "evidenceSha256" = "8cea64e7dc551fbec46479331f71787384b4c7495f6b75b012d7a0d8d3295a1c"
+     && dispatchRepository.GetProperty("id").GetInt64() = 1269292235L
+     && text dispatchRepository "name" = "FS-GG/FS.GG.Rendering"
+     && dispatchScopes.Length = 2
+     && (dispatchScopes |> List.map (fun scope -> text scope "secretName") |> Set.ofList) =
+        Set.ofList [ "FSGG_DISPATCH_APP_ID"; "FSGG_DISPATCH_APP_PRIVATE_KEY" ]
+     && dispatchScopes
+        |> List.forall (fun scope ->
+            text scope "visibilityBefore" = "selected"
+            && text scope "visibilityAfter" = "selected"
+            && integer scope "deleteStatus" = 204
+            && boolean scope "renderingPresentBefore"
+            && not (boolean scope "renderingPresentAfter"))
+     && text historicalCaller "renderingRevision" = "66836abdaef87d601fc084d90658fdb605fbe023"
+     && text historicalCaller "dispatchSenderRevision" = "5fed2838f9ed085ffca09f4cc18b4f7bc59c1294"
+     && not (boolean historicalCaller "canResolveBothCredentials")
+     && not (boolean historicalCaller "executed"))
+    "GS2089-DISPATCH-ADMIN"
+    "Rendering dispatch secret-scope removal or non-execution readback differs"
 
 let expectedWorkflows =
     Map.ofList
@@ -215,7 +244,10 @@ let helper = aggregate.GetProperty("helperBoundary")
 let helperTemplate = helper.GetProperty("requiredEvidenceTemplate")
 
 require
-    (text helper "candidateCommit" = "c3e8cc1124584de27537496454d3772c2f62743f"
+    (text helper "candidateCommit" = "adbb08e86c00bf2753e57381527ba271654aa9d0"
+     && text helper "candidateTree" = "24c1d7d9037bc04f8d44e6c6fdd199f2ae852fc7"
+     && integer helper "pullRequest" = 3530
+     && text helper "reviewerDisposition" = "GO"
      && not (boolean helper "mergedToMain")
      && text helper "newSddWorkspaceSha256" = "b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f"
      && text helper "routineDeliverySha256" = "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429"
@@ -237,13 +269,13 @@ let pendingIds = pending |> List.map (fun item -> text item "id")
 require
     (pendingIds =
         [
-            "rendering-dispatch-app-scope"
-            "helper-merge-and-retirement"
             "gs2-08.8-native-receipt"
+            "helper-source-merge"
+            "helper-container-runtime-retirement"
         ]
-     && text pending[0] "state" = "pending-main-admin-mailbox"
-     && text pending[1] "state" = "pending-source-and-callers"
-     && text pending[2] "state" = "pending-pr-merge")
+     && text pending[0] "state" = "pending-pr-417-merge"
+     && text pending[1] "state" = "pending-pr-3530-merge"
+     && text pending[2] "state" = "pending-admin-readback")
     "GS2089-PENDING-SET"
     "the three explicit blocking evidence items must remain ordered and pending"
 
@@ -254,6 +286,6 @@ require
     "Q4 must remain unclaimed"
 
 eprintfn
-    "GS2089-PENDING: rendering App scope revocation, helper merge/copy retirement, and GS2-08.8 native receipt remain required; Q4 is unclaimed"
+    "GS2089-PENDING: GS2-08.8 PR #417 merge/receipt, helper PR #3530 merge, and container/runtime retirement remain required; Q4 is unclaimed"
 
 Environment.Exit 78
