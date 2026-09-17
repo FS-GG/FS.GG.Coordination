@@ -999,16 +999,36 @@
       "id": "GS2-08.6",
       "title": "Independently attack the fence",
       "owner": "FS.GG.Coordination",
-      "prerequisites": ["GS2-08.3", "GS2-08.5"],
-      "permissionCeiling": ["repository-local GS2-08.6 exact source and protected-merge binding, closed writer-census coverage contract, bounded producer attack result, explicit historical-client and external-route blockers, offline validator and architecture tests", "read-only consumption of exact accepted GS2-08.3 census, GS2-08.5 receipt and protected producer attack result is mandatory; the 21 compiled attacks do not establish full Q3 or Q6 exit, provider behavior, delayed-response exclusion, direct external writer fencing, live authority or journal installation, activation, publication, adoption, cutover, accepted GS2-08.6 receipt, completion or GS2-08.7 authority"],
-      "exitGate": "the protected producer attack result runs 21 independently authored compiled attacks against the real FencedTransport and DurableMutationFence boundaries for all 20 always-writing and 6 conditionally-writing commands across all 11 epochs, canonical effect identities, legacy Send refusal, read allowlisting, stale cache, lost response, ledger rewind, missing tag, wrong manifest, permission loss, crash, ownership, retry and reconciliation; this is bounded Q3/Q6 evidence, while full Q3 remains blocked on consumer-owned ITF replay correspondence and execution or retirement of 22 direct workflow, script, publication, protected-administration and non-CLI writer routes, full Q6 remains blocked on multi-step recovery, rollback and fleet adoption, Q4 remains unclaimed without isolated provider evidence, and 6 receivers on historical 0.58.0 and 0.75.4 clients remain explicit GS2-08.9 retain-or-retire blockers; GS2-08.6 acceptance remains pending and no live activation, publication, adoption or successor authority is claimed",
-      "qGates": ["Q3", "Q6"],
-      "gateCommands": ["github-v1-independent-fence-producer-evidence-contract", "github-v1-independent-fence-recovery-evidence-contract"],
-      "gateContracts": [
-        { "id": "github-v1-independent-fence-producer-evidence-contract", "qGate": "Q3", "commandSha256": "277fdd1a73eeb4cb3e2b1b5c20349b5762dd763f879ee17aefce8b6d7c85e7c5" },
-        { "id": "github-v1-independent-fence-recovery-evidence-contract", "qGate": "Q6", "commandSha256": "277fdd1a73eeb4cb3e2b1b5c20349b5762dd763f879ee17aefce8b6d7c85e7c5" }
+      "prerequisites": [
+        "GS2-08.3",
+        "GS2-08.5"
       ],
-      "contractSha256": "af85bd96ace4bb94ba963f5655125adeb703783507625840417d8d4d27043529"
+      "permissionCeiling": [
+        "repository-local GS2-08.6 exact protected source and execution binding, closed callsite and route-population validation, Q3/Q6 offline and isolated-loopback evidence, explicit GS2-08.9 residuals, native acceptance receipt, offline validator and architecture tests",
+        "no live GitHub provider evidence, credential, installed authority or journal mutation, provider-specific delayed-response exclusion, activation, publication, adoption, cutover or GS2-08.7 operation authority"
+      ],
+      "exitGate": "the Q3 evidence binds the protected producer completion at source head fa053da18cb59b4546ed6b04c4f0c804952abf37, merge bc881a6ed1b4ce32e99d4c30a664b1db686280d3 and tree 3e43e1e0126ebe923bae8ce4197f7310b486b7a3 and executes 66 exact independently authored tests over all 16 production mutation callsites through six real public-function, FencedTransport and DurableMutationFence boundaries, both REST and GraphQL across all 11 epochs, stale cache, rewind, missing tag, wrong manifest, permission loss, generations, phase changes, canonical identities, legacy Send and read allowlisting; every direct workflow, script, publication, protected-administration and non-CLI route receives exact source-bound availability evidence, and unavailable routes plus the unavailable 0.58.0 artifact and observed 0.75.4 bypass remain explicit GS2-08.9 inputs rather than false passes; Q6 executes persisted reopen at five crash cuts, admissions-closing restart, deterministic two-owner CAS, Applied, ProvenAbsent, Partial and Indeterminate settlement counts, lost-response reconciliation, replacement refusal, conditional old-SHA exclusion and retry only after proven absence with a fresh fence; Q4 and provider-specific delayed-response exclusion remain unclaimed because no live GitHub provider authority was used; acceptance qualifies the independent attack result only and performs no activation, publication, adoption or cutover",
+      "qGates": [
+        "Q3",
+        "Q6"
+      ],
+      "gateCommands": [
+        "github-v1-independent-fence-producer-evidence-contract",
+        "github-v1-independent-fence-recovery-evidence-contract"
+      ],
+      "gateContracts": [
+        {
+          "id": "github-v1-independent-fence-producer-evidence-contract",
+          "qGate": "Q3",
+          "commandSha256": "277fdd1a73eeb4cb3e2b1b5c20349b5762dd763f879ee17aefce8b6d7c85e7c5"
+        },
+        {
+          "id": "github-v1-independent-fence-recovery-evidence-contract",
+          "qGate": "Q6",
+          "commandSha256": "277fdd1a73eeb4cb3e2b1b5c20349b5762dd763f879ee17aefce8b6d7c85e7c5"
+        }
+      ],
+      "contractSha256": "34c122472fc35ffa141d20d7115ecdb1d4d793d2a49ef04e277053761bf15d88"
     }
   ]
 }

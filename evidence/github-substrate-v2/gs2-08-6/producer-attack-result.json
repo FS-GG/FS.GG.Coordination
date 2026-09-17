@@ -1,60 +1,85 @@
 {
-  "schema": "fsgg.github-substrate.v1-producer-attack-result/1",
+  "schema": "fsgg.github-substrate.v1-producer-attack-result/2",
   "unit": "GS2-08.6",
-  "producerAttackSourceHead": "50a89965b09595244f7def7757d7aef91f0ce0e2",
-  "producerAttackProtectedMerge": "068d5dc3fa24d7e1fca99401c755e2f1f5fafe1d",
-  "producerAttackProtectedTree": "a3302c16a0ed5f44e6490a87d3a28e5563ea25b9",
-  "producerPullRequest": "https://github.com/FS-GG/.github/pull/3519",
-  "executionEvidenceSha256": "9007aa34a34d4d957f0948cf3b3059d5c5bf189c4b2ec7645f35548884c60b15",
+  "producerAttackSourceHead": "fa053da18cb59b4546ed6b04c4f0c804952abf37",
+  "producerAttackSourceTree": "3e43e1e0126ebe923bae8ce4197f7310b486b7a3",
+  "producerAttackProtectedMerge": "bc881a6ed1b4ce32e99d4c30a664b1db686280d3",
+  "producerAttackProtectedTree": "3e43e1e0126ebe923bae8ce4197f7310b486b7a3",
+  "producerPullRequest": "https://github.com/FS-GG/.github/pull/3520",
+  "ciRun": "https://github.com/FS-GG/.github/actions/runs/35188451156",
+  "ciJob": "https://github.com/FS-GG/.github/actions/runs/35188451156/job/105095489134",
+  "executionEvidenceSha256": "6f119f2e8b8f00d19bdf17f1d45cb087f4a1bf6765d6b1a7d8089441993c2dd1",
   "executionEvidence": {
-    "canonicalOracleSha256": "c980932a66ec2b3e762498cfd61f53396ce03457daad76e81af79cc8fcf64023",
-    "compiledAttackHarnessSha256": "8da3b3dbe0ea19edc5d4363b93d4ec861895916150908effd7af072114998dfe",
+    "canonicalOracleSha256": "3aa5e8dfce0bf3b925b4f9be8a9d4c9b584ff1a673948f26dc81af8237c580f8",
+    "checkoutHead": "532a2c09b1799a86deda1d7feeb46a3e59fc64f6",
     "compiledFailures": 0,
-    "compiledTests": 21,
+    "compiledTests": 66,
+    "dotnetVersion": "10.0.401",
     "epochs": 11,
-    "externalWriterBlockers": 22,
-    "legacyReceiverBlockers": 6,
+    "executedBoundaries": 6,
+    "externalRouteEvidenceSha256": "1d33145d4ad1fd637b3ff1220d659d16d7187a8adb0aab5943a0ad480f1a591d",
+    "externalWriterResiduals": 22,
+    "globalJsonSha256": "abb754e4de3e434515ec3362db26346bb65de9d1eaf47850b75aceb298af6a8f",
+    "legacyBypasses": 1,
+    "legacyEvidenceSha256": "f6f12d1f1c8420fa0ba9e734c74dc4acd468fe00f815b0e94f03f0e37143d557",
+    "legacyUnavailable": 1,
     "liveCompositionSha256": "55888b87dcdf7d0d7adf538355f9904d9c6bf63ac6bb6465792cdbff2fcbd6c9",
     "loopbackWriteFixtureSha256": "f679f9f3c9be295ff578f1e71cf91c5cd975b45d74452d93c860cf848b01d7c8",
-    "oracleSha256": "89d0137434ff3590c4b9def719134d76ac777628cbd39b8ea88234fed47257bd",
+    "oracleSha256": "12977be9b3afeb3c21c18b2db142cf43d5c4260e17caf95be408b75221f4b536",
+    "productAssemblySha256": "4b3149352dfc4fc6a62c2eb67dbad1b8d025a36776bd94e52c15bfb78933cf3c",
     "q4": "unclaimed",
     "receiverCensusSha256": "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db",
-    "schema": "fsgg.gs2-08.6-offline-execution-evidence/1",
+    "schema": "fsgg.gs2-08.6-offline-execution-evidence/2",
+    "sourceHead": "fa053da18cb59b4546ed6b04c4f0c804952abf37",
     "status": "pass",
-    "typedWriteCommands": 26,
-    "writerCensusSha256": "d48dc72ba259cecb193bd5cb3bbb1ae3e1ed3520988d6fd502eac33da136937c"
+    "testAssemblySha256": "1f5492ababd1d94f819ed8de2dfb01a078d300e6b260381c4d6ab1f418ad011f",
+    "trxSha256": "825bf156ef882aa491ec5c0d507ebdb58be85169025656f49ed4beeee6d3530f",
+    "writerCallsites": 16,
+    "writerCensusSha256": "a0b381fa9c5c1d43c143b09a722a2bc394b75d3d46ebe1d899d9af58580357f7"
   },
   "reproducibleInputs": [
     {
       "path": "tests/producer-fence-attacks/oracle.json",
-      "sha256": "89d0137434ff3590c4b9def719134d76ac777628cbd39b8ea88234fed47257bd"
+      "sha256": "12977be9b3afeb3c21c18b2db142cf43d5c4260e17caf95be408b75221f4b536"
     },
     {
       "path": "tests/producer-fence-attacks/run.py",
-      "sha256": "8bbf71e4a51300a591509b07cfd3694b1c949122168eab0d290f5af1f102c127"
+      "sha256": "f20462490982fde6ff6e3c4a452e0084cf81bcb69eab7ec4c6a3cc9a9679b1de"
+    },
+    {
+      "path": "tests/producer-fence-attacks/selftest.py",
+      "sha256": "e432b92386bf9badc26ae946f206fd81b1ae4e09321de3fdf73d4bf1a24b796b"
+    },
+    {
+      "path": "tests/producer-fence-attacks/probe_legacy.py",
+      "sha256": "375af975c954c61550c58ac968f2986c454d774997702dd7398f751f25631229"
+    },
+    {
+      "path": "tests/producer-fence-attacks/external-route-evidence.json",
+      "sha256": "1d33145d4ad1fd637b3ff1220d659d16d7187a8adb0aab5943a0ad480f1a591d"
+    },
+    {
+      "path": "tests/producer-fence-attacks/legacy-probe-evidence.json",
+      "sha256": "f6f12d1f1c8420fa0ba9e734c74dc4acd468fe00f815b0e94f03f0e37143d557"
     },
     {
       "path": "tests/FS.GG.Coord.GitHub.Tests/ProducerFenceAttackTests.fs",
-      "sha256": "8da3b3dbe0ea19edc5d4363b93d4ec861895916150908effd7af072114998dfe"
+      "sha256": "74d71b29d61fb94343cd0f6d4475df452d523420003b4a7c342ba918c00aef33"
+    },
+    {
+      "path": "tests/FS.GG.Coord.GitHub.Tests/ProducerFenceCompletionTests.fs",
+      "sha256": "e586f951d2b09bc8914e0f2cf05b7931014cc0945c6a4cd808887075693ef584"
     },
     {
       "path": ".github/workflows/coord-github.yml",
-      "sha256": "ef52d1d9f1135cdd8feac8be45d44952883018b87497ca037e181b6f603d0152"
-    },
-    {
-      "path": "scripts/change-completeness",
-      "sha256": "8d22a51c5edee2164caea23395af0011d8c56004599e2b21aead8089fdf8b441"
-    },
-    {
-      "path": "tests/coord-engine-e2e/writes.sh",
-      "sha256": "f679f9f3c9be295ff578f1e71cf91c5cd975b45d74452d93c860cf848b01d7c8"
+      "sha256": "eced9c58e6dc0938d81a79095a11a03899611a13f414e933640dea190111d62c"
     }
   ],
-  "boundedClaims": {
-    "q3": "real compiled producer adapter attacks passed; consumer-owned ITF replay correspondence remains unclaimed",
-    "q6": "crash, lost-response, ownership, retry and reconciliation rules passed; full multi-step recovery, rollback and fleet adoption remain unclaimed",
-    "q4": "unclaimed without isolated provider evidence"
+  "qGates": {
+    "q3": "accepted for GS2-08.6: exact closed callsite population maps to six real compiled production boundaries and every external route received exact source-bound availability evidence",
+    "q6": "accepted for GS2-08.6: five persisted crash cuts, restart admission closure, two-owner CAS, exact settlements, lost response, reconciliation and fresh-fence retry executed",
+    "q4": "unclaimed; no live GitHub repository, token, ruleset or mutation authority was used"
   },
-  "disposition": "bounded-result-attached-unit-not-accepted",
-  "producerAttackSourceTree": "a3302c16a0ed5f44e6490a87d3a28e5563ea25b9"
+  "residualDisposition": "22 unavailable or non-redirectable external sources, the unavailable 0.58.0 artifact and the observed 0.75.4 bypass are explicit GS2-08.9 inputs; they do not become passing fence results",
+  "disposition": "unit-exit-evidence-complete"
 }
