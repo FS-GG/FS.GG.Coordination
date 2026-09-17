@@ -2,8 +2,138 @@
   "schema": "fsgg.github-substrate.v1-historical-client-blockers/1",
   "unit": "GS2-08.6",
   "clients": [
-    { "version": "0.58.0", "proof": "cannot-prove-fence-refusal", "disposition": "GS2-08.9-retain-or-retire" },
-    { "version": "0.75.4", "proof": "cannot-prove-fence-refusal", "disposition": "GS2-08.9-retain-or-retire" }
+    {
+      "version": "0.58.0",
+      "receivers": [
+        "governance"
+      ],
+      "proof": "cannot-prove-fence-refusal",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "version": "0.75.4",
+      "receivers": [
+        "audio",
+        "game",
+        "net",
+        "rendering",
+        "templates"
+      ],
+      "proof": "cannot-prove-fence-refusal",
+      "disposition": "GS2-08.9-retain-or-retire"
+    }
   ],
-  "claim": "historical clients are blockers and are not passing fence results"
+  "claim": "22 direct workflow, script, publication, protected-administration and non-CLI sources plus 6 legacy receivers remain blockers and are not passing fence results",
+  "externalWriterSources": [
+    {
+      "path": ".github/workflows/dispatch-sender.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/feed-autofix.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/fsgg-dispatch-broker.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/github-substrate-v2-authority-qualification.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/kit-auto-publish.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/kit-materialize.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/lockfile-sync.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/release-coord-engine.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/release-drivers.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/release-kit.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/release-new-sdd-workspace.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/release-telemetry-host.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/release-saga-prepare.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/release-saga-start.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/skill-registry-autofix.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/skillmirror-redrive.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": ".github/workflows/touch-set-drift.yml",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": "scripts/NewSddWorkspace/Program.fs",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": "scripts/release-saga-ci.sh",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": "scripts/release-saga-promote-release.sh",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/RemoteClient.fs",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    },
+    {
+      "path": "tools/routine-delivery.py",
+      "proof": "producer-harness-does-not-execute-route",
+      "disposition": "GS2-08.9-retain-or-retire"
+    }
+  ]
 }

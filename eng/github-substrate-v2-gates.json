@@ -326,13 +326,13 @@
       "args": ["fsi", "eng/validate-github-v1-admission.fsx", "--", "."]
     },
     {
-      "id": "github-v1-independent-fence-registration-contract",
+      "id": "github-v1-independent-fence-producer-evidence-contract",
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-v1-independent-fence-attacks.fsx", "--", "."]
     },
     {
-      "id": "github-v1-independent-fence-recovery-registration-contract",
+      "id": "github-v1-independent-fence-recovery-evidence-contract",
       "qGate": "Q6",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-v1-independent-fence-attacks.fsx", "--", "."]

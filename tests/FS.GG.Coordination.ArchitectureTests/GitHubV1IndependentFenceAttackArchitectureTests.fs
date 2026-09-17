@@ -25,15 +25,16 @@ let ``GS2-08-5 acceptance binds protected producer integration without live acti
     Assert.DoesNotContain(names, fun name -> name.Contains("activation", StringComparison.OrdinalIgnoreCase))
 
 [<Fact>]
-let ``GS2-08-6 registration binds pending Q3 and Q6 producer attack contracts`` () =
+let ``GS2-08-6 binds bounded Q3 and Q6 producer evidence without claiming exit`` () =
     use units = JsonDocument.Parse(read "eng/github-substrate-v2-units.json")
     use gates = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
     let unitValue = units.RootElement.GetProperty("units").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-08.6")
     Assert.Equal<string list>([ "GS2-08.3"; "GS2-08.5" ], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
     Assert.Equal<string list>([ "Q3"; "Q6" ], unitValue.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
     Assert.DoesNotContain("Q4", unitValue.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString())
-    Assert.Contains("acceptance remains blocked", unitValue.GetProperty("exitGate").GetString())
-    Assert.Contains("claims no GS2-08.6 execution or acceptance", unitValue.GetProperty("exitGate").GetString())
+    Assert.Contains("acceptance remains pending", unitValue.GetProperty("exitGate").GetString())
+    Assert.Contains("full Q3 remains blocked", unitValue.GetProperty("exitGate").GetString())
+    Assert.Contains("full Q6 remains blocked", unitValue.GetProperty("exitGate").GetString())
     let commands = gates.RootElement.GetProperty("commands").EnumerateArray() |> Seq.map (fun value -> value.GetProperty("id").GetString(), value) |> Map.ofSeq
     for contract in unitValue.GetProperty("gateContracts").EnumerateArray() do
         let id = contract.GetProperty("id").GetString()
@@ -55,9 +56,21 @@ let ``independent attack evidence binds closed and refreshed populations and blo
     Assert.All(clients, fun client -> Assert.Equal("GS2-08.9-retain-or-retire", client.GetProperty("disposition").GetString()))
 
 [<Fact>]
-let ``registration validator refuses to substitute generic adapter pass rows for producer evidence`` () =
+let ``validator binds real producer evidence and refuses generic adapter substitution`` () =
     let validator = read "eng/validate-github-v1-independent-fence-attacks.fsx"
-    Assert.Contains("awaiting-exact-producer-result", validator)
-    Assert.Contains("unvalidated producer result was attached", validator)
+    Assert.Contains("producer-attack-result.json", validator)
+    Assert.Contains("canonical producer execution digest differs", validator)
     Assert.DoesNotContain("V1EffectFenceAdapter.execute", validator)
-    Assert.DoesNotContain("passed", read "evidence/github-substrate-v2/gs2-08-6/attack-expectations.json", StringComparison.OrdinalIgnoreCase)
+    Assert.DoesNotContain("\"status\": \"pass\"", read "evidence/github-substrate-v2/gs2-08-6/attack-expectations.json", StringComparison.OrdinalIgnoreCase)
+
+[<Fact>]
+let ``producer result records bounded execution and unresolved direct routes`` () =
+    use result = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-08-6/producer-attack-result.json")
+    let value = result.RootElement
+    let execution = value.GetProperty("executionEvidence")
+    Assert.Equal(21, execution.GetProperty("compiledTests").GetInt32())
+    Assert.Equal(0, execution.GetProperty("compiledFailures").GetInt32())
+    Assert.Equal(22, execution.GetProperty("externalWriterBlockers").GetInt32())
+    Assert.Equal(6, execution.GetProperty("legacyReceiverBlockers").GetInt32())
+    Assert.Equal("unclaimed", execution.GetProperty("q4").GetString())
+    Assert.Equal("bounded-result-attached-unit-not-accepted", value.GetProperty("disposition").GetString())

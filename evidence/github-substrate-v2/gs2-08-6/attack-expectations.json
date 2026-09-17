@@ -2,11 +2,48 @@
   "schema": "fsgg.github-substrate.v1-independent-fence-expectations/1",
   "unit": "GS2-08.6",
   "population": "accepted-GS2-08.3-closed-census",
-  "writeClasses": { "always": 20, "conditional": 6 },
-  "epochs": ["OperatingV1", "Preparing", "FreezeRequested", "Frozen", "SwitchedV2", "VerifiedV2", "OpenV2", "ObservingV2", "ContractingV1", "OperatingV2", "RollingBack"],
-  "attacks": ["stale-cache", "lost-response", "ledger-rewind", "missing-tag", "wrong-manifest", "permission-loss", "old-client"],
-  "routeCoverage": ["typed-command", "workflow", "script", "publication", "protected-admin", "non-cli"],
-  "q3": "compiled-adapter-and-closed-population",
-  "q6": "existing-admission-registry-crash-restart-lost-response-settlement-suite",
-  "providerEvidence": null
+  "writeClasses": {
+    "always": 20,
+    "conditional": 6
+  },
+  "epochs": [
+    "OperatingV1",
+    "Preparing",
+    "FreezeRequested",
+    "Frozen",
+    "SwitchedV2",
+    "VerifiedV2",
+    "OpenV2",
+    "ObservingV2",
+    "ContractingV1",
+    "OperatingV2",
+    "RollingBack"
+  ],
+  "attacks": [
+    "stale-cache",
+    "lost-response",
+    "ledger-rewind",
+    "missing-tag",
+    "wrong-manifest",
+    "permission-loss",
+    "old-client"
+  ],
+  "routeCoverage": [
+    "typed-command",
+    "workflow",
+    "script",
+    "publication",
+    "protected-admin",
+    "non-cli"
+  ],
+  "q3": {
+    "passed": "bounded compiled producer adapter attacks",
+    "unclaimed": "consumer-owned ITF replay correspondence and direct external writer execution"
+  },
+  "q6": {
+    "passed": "bounded crash, lost-response, ownership, retry and reconciliation attacks",
+    "unclaimed": "full multi-step recovery, rollback and fleet adoption"
+  },
+  "providerEvidence": null,
+  "producerResult": "producer-attack-result.json"
 }

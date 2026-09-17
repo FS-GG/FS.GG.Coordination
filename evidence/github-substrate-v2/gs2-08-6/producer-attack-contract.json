@@ -1,15 +1,69 @@
 {
   "schema": "fsgg.github-substrate.v1-producer-attack-contract/1",
   "unit": "GS2-08.6",
-  "state": "awaiting-exact-producer-result",
+  "state": "bounded-producer-result-attached",
   "producerCommit": "cc70abbacf31a7f7ff45aadb2aedbf37e8a8999c",
   "producerTree": "5db84daefc48341f8be86efa5268c16ecb9a80ac",
-  "requiredSurfaces": ["FencedTransport", "DurableMutationFence", "canonical-effect-ids", "legacy-send-refusal", "read-allowlist", "retry-after-proven-absence", "provider-reconciliation"],
-  "requiredEpochs": ["OperatingV1", "Preparing", "FreezeRequested", "Frozen", "SwitchedV2", "VerifiedV2", "OpenV2", "ObservingV2", "ContractingV1", "OperatingV2", "RollingBack"],
-  "requiredFaults": ["stale-cache", "lost-response", "ledger-rewind", "missing-tag", "wrong-manifest", "permission-loss", "old-client"],
-  "requiredRoutes": ["typed-command", "workflow", "script", "publication", "protected-admin", "non-cli"],
-  "q3": "independent compiled producer adapter and closed-population attacks",
-  "q6": "crash restart lost-response reconciliation settlement and proven-absence retry",
+  "requiredSurfaces": [
+    "FencedTransport",
+    "DurableMutationFence",
+    "canonical-effect-ids",
+    "legacy-send-refusal",
+    "read-allowlist",
+    "retry-after-proven-absence",
+    "provider-reconciliation"
+  ],
+  "requiredEpochs": [
+    "OperatingV1",
+    "Preparing",
+    "FreezeRequested",
+    "Frozen",
+    "SwitchedV2",
+    "VerifiedV2",
+    "OpenV2",
+    "ObservingV2",
+    "ContractingV1",
+    "OperatingV2",
+    "RollingBack"
+  ],
+  "requiredFaults": [
+    "stale-cache",
+    "lost-response",
+    "ledger-rewind",
+    "missing-tag",
+    "wrong-manifest",
+    "permission-loss",
+    "old-client"
+  ],
+  "requiredRoutes": [
+    "typed-command",
+    "workflow",
+    "script",
+    "publication",
+    "protected-admin",
+    "non-cli"
+  ],
+  "q3": "bounded compiled producer adapter evidence passed; full Q3 exit remains blocked on consumer-owned ITF replay correspondence and direct external writer execution",
+  "q6": "bounded crash lost-response ownership retry and reconciliation evidence passed; full Q6 exit remains blocked on multi-step recovery rollback and fleet adoption",
   "q4": "unclaimed without isolated provider evidence",
-  "result": null
+  "result": {
+    "path": "evidence/github-substrate-v2/gs2-08-6/producer-attack-result.json",
+    "sha256": "43638214a47715921404cbd2995814e27a546e73762724200961f7fc0592d45d",
+    "executionEvidenceSha256": "9007aa34a34d4d957f0948cf3b3059d5c5bf189c4b2ec7645f35548884c60b15"
+  },
+  "producerAttackCommit": "50a89965b09595244f7def7757d7aef91f0ce0e2",
+  "producerAttackProtectedMerge": "068d5dc3fa24d7e1fca99401c755e2f1f5fafe1d",
+  "producerAttackProtectedTree": "a3302c16a0ed5f44e6490a87d3a28e5563ea25b9",
+  "executedRoutes": [
+    "typed-rest",
+    "typed-graphql"
+  ],
+  "blockedRoutes": [
+    "workflow",
+    "script",
+    "publication",
+    "protected-admin",
+    "non-cli"
+  ],
+  "producerAttackSourceTree": "a3302c16a0ed5f44e6490a87d3a28e5563ea25b9"
 }

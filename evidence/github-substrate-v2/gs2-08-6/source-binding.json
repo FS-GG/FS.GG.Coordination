@@ -11,5 +11,11 @@
   "coordinationSourceMerge": "48fa43e67de52d4e728a9abff30686fc029d1d8d",
   "coordinationSourceTree": "484e6c53f9f474bfedfd10f22ac301e3227478cd",
   "acceptedGS2085Digest": "5189e9336df0c049410bb78d027e4c08759ee2da53f1eb692c8b019740e8756b",
-  "scope": "independent offline compiled-boundary attacks; no provider evidence, credential, live authority, journal installation, activation, publication, adoption or cutover effect"
+  "scope": "independent offline compiled-boundary attacks; no provider evidence, credential, live authority, journal installation, activation, publication, adoption or cutover effect",
+  "producerAttackSourceHead": "50a89965b09595244f7def7757d7aef91f0ce0e2",
+  "producerAttackProtectedMerge": "068d5dc3fa24d7e1fca99401c755e2f1f5fafe1d",
+  "producerAttackProtectedTree": "a3302c16a0ed5f44e6490a87d3a28e5563ea25b9",
+  "producerAttackPullRequest": "https://github.com/FS-GG/.github/pull/3519",
+  "producerAttackEvidenceSha256": "9007aa34a34d4d957f0948cf3b3059d5c5bf189c4b2ec7645f35548884c60b15",
+  "producerAttackSourceTree": "a3302c16a0ed5f44e6490a87d3a28e5563ea25b9"
 }
