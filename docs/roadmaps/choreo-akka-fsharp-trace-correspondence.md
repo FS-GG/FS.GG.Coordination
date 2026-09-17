@@ -360,7 +360,10 @@ ceilings, not larger semantic exploration bounds.
 
 The enlarged assembled source also exposed an outer CI constraint after those inner budgets passed: three canonical
 semantic shards completed compilation and simulation but were canceled at the workflow's 25-minute job boundary.
-The semantic job timeout is therefore 40 minutes (60% scheduling/execution headroom over the observed boundary).
+The semantic job timeout was initially raised to 40 minutes, but the 10,000-sample administrative-retirement
+negative-control shard subsequently completed compilation and simulation and then reached that outer boundary while
+its bounded check was still active. The semantic job allowance is therefore 60 minutes (50% headroom over the
+latest observed boundary).
 This changes only the outer runner allowance; it does not relax any Quint/TLC elapsed, memory, depth, state,
 transition, sample, or artifact limit.
 
