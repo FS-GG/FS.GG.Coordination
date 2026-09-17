@@ -7,6 +7,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open Xunit
+open FS.GG.Coordination.Qualification.Contracts
 
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
@@ -21,7 +22,7 @@ let private sha256 (value: byte array) =
     SHA256.HashData value |> Convert.ToHexString |> _.ToLowerInvariant()
 
 [<Fact>]
-let ``GS2-08-7 registration binds P1 and remains non-authorizing`` () =
+let ``GS2-08-7 acceptance binds the promoted immutable bridge`` () =
     use units = JsonDocument.Parse(bytes "eng/github-substrate-v2-units.json")
 
     let unitValue =
@@ -45,11 +46,52 @@ let ``GS2-08-7 registration binds P1 and remains non-authorizing`` () =
     Assert.Matches("^[0-9a-f]{64}$", unitValue.GetProperty("contractSha256").GetString())
 
     let exitGate = unitValue.GetProperty("exitGate").GetString()
-    Assert.Contains("155f8897424b49906dfb0464ce684e75dd9bda3c", exitGate)
-    Assert.Contains("52c9dd051467a7782c4e101dd35e0ca561470f81", exitGate)
-    Assert.Contains("repository signing may change served archive bytes", exitGate)
-    Assert.Contains("receiver adoption belongs to GS2-08.8", exitGate)
-    Assert.False(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.7.json")))
+    Assert.Contains("3adada5a9738464291088830c47a30a3a8fc9561", exitGate)
+    Assert.Contains("0f075e251d90a2d33efe556df1dac38394b0a388", exitGate)
+    Assert.Contains("keyless in-toto/SLSA attestations", exitGate)
+    Assert.Contains("receiver adoption remains exclusively GS2-08.8", exitGate)
+    Assert.True(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.7.json")))
+
+    let receiptBytes = bytes "evidence/github-substrate-v2/accepted/GS2-08.7.json"
+    use receipt = JsonDocument.Parse receiptBytes
+    let receiptValue = receipt.RootElement
+    Assert.Equal("accepted", receiptValue.GetProperty("state").GetString())
+    Assert.Equal(unitValue.GetProperty("contractSha256").GetString(), receiptValue.GetProperty("unitContractSha256").GetString())
+
+    match
+        AcceptanceReceiptDigest.verify
+            (ReadOnlyMemory<byte>(receiptBytes))
+            "GS2-08.7"
+            (receiptValue.GetProperty("digest").GetString())
+            receiptValue
+    with
+    | Ok _ -> ()
+    | Error error -> Assert.Fail(error)
+
+[<Fact>]
+let ``public readback closes both feeds provenance and anonymous install`` () =
+    use readback =
+        JsonDocument.Parse(bytes "evidence/github-substrate-v2/gs2-08-7/public-readback.json")
+
+    let value = readback.RootElement
+    Assert.Equal("qualified", value.GetProperty("state").GetString())
+    Assert.Equal("0.90.0", value.GetProperty("version").GetString())
+    Assert.False(value.GetProperty("release").GetProperty("draft").GetBoolean())
+    Assert.Equal("verified", value.GetProperty("feeds").GetProperty("github-packages").GetString())
+    Assert.Equal("verified", value.GetProperty("feeds").GetProperty("nuget-org").GetString())
+    Assert.Equal(3, value.GetProperty("packages").GetArrayLength())
+    Assert.Equal("verified", value.GetProperty("attestations").GetProperty("state").GetString())
+
+    let install = value.GetProperty("publicInstall")
+    Assert.Equal("anonymous", install.GetProperty("authentication").GetString())
+    Assert.Equal("cleared", install.GetProperty("ambientSources").GetString())
+    Assert.True(install.GetProperty("cliExecuted").GetBoolean())
+    Assert.True(install.GetProperty("closureRestored").GetBoolean())
+
+    let operation = value.GetProperty("operation")
+    Assert.False(operation.GetProperty("providerMutation").GetBoolean())
+    Assert.False(operation.GetProperty("credentialRetained").GetBoolean())
+    Assert.False(operation.GetProperty("receiverAdoption").GetBoolean())
 
 [<Fact>]
 let ``publication qualification records accurate version and provenance boundaries`` () =
@@ -156,7 +198,7 @@ let ``independent controls reject all six publication substitutions offline`` ()
     Assert.Equal("", error.Trim())
 
     Assert.Contains(
-        "github-v1-bridge-publication-contract OK packages=3 feeds=2 controls=6 q=Q3 network=offline state=registered",
+        "github-v1-bridge-publication-contract OK packages=3 feeds=2 controls=6 q=Q3 network=offline state=accepted version=0.90.0",
         output,
         StringComparison.Ordinal
     )
