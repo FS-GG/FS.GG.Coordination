@@ -626,6 +626,7 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("APALACHE_EXECUTION_TIMEOUT", validator)
     Assert.Contains("let runMeasured timeoutMs", validator)
     Assert.Contains("child.Kill(true)", validator)
+    Assert.Contains("retryExit, retryOutput, retryError, retryElapsed, retryPeak", validator)
     Assert.Contains("PASS #0: SanyParser", validator)
     Assert.Contains("states generated", validator)
     Assert.Contains("Invariant violated", validator)

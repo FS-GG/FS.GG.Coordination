@@ -429,7 +429,7 @@ let runMeasured timeoutMs workingDirectory (executable: string) arguments enviro
         | Some failureClass ->
             recordApalacheStartupRetry (List.head arguments) failureClass
             let retryExit, retryOutput, retryError, retryElapsed, retryPeak = invoke ()
-            retryExit, retryOutput, retryError, firstElapsed + retryElapsed, Math.Max(firstPeak, retryPeak)
+            retryExit, retryOutput, retryError, retryElapsed, retryPeak
         | None -> firstExit, firstOutput, firstError, firstElapsed, firstPeak
 
     if isQuint && exitCode <> 0 then

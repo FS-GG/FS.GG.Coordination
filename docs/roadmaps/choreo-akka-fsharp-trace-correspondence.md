@@ -385,7 +385,10 @@ previously been checked only after child exit, so they measured completed work b
 hung process. `runMeasured` now treats each formal test's declared 135/150-second elapsed ceiling as a wall-clock
 process deadline, kills the complete child tree when it expires, emits `APALACHE_EXECUTION_TIMEOUT`, and routes a
 timed-out `verify` through the same single bounded fresh-endpoint retry. A second timeout fails closed. This makes
-the existing inner ceiling enforceable; it does not increase any semantic or resource bound.
+the existing inner ceiling enforceable; it does not increase any semantic or resource bound. The killed
+infrastructure attempt is represented by the receipt's explicit physical-process/startup-retry counters, while
+elapsed and peak measurements use the one successful logical attempt. Otherwise a retry triggered exactly at the
+ceiling could never pass the unchanged semantic budget, even when the fresh attempt completed immediately.
 
 ### C3 — make Quint traces the executable contract
 
