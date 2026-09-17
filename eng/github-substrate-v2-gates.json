@@ -348,6 +348,12 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-v1-bridge-receivers.fsx", "--", "."]
+    },
+    {
+      "id": "github-v1-residual-writer-sealing-contract",
+      "qGate": "Q3",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-v1-residual-writer-sealing.fsx", "--", "."]
     }
   ]
 }

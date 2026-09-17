@@ -1,0 +1,31 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-08.9",
+  "state": "accepted",
+  "unitContractSha256": "c6ca8e280ab1cac9fe19355073b5ab3e92a4d6ff78a83cf63c0689a0d7a52c8f",
+  "sourceRevision": "179a485e249d39794f5f1b02fe7ddbbfbf1e88a1",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-08.8-receipt",
+      "sha256": "25856b2453e93087c1ae1ff41fce5b8ce1ed5d81ff2a1434274cddddfa6a429e"
+    },
+    {
+      "name": "residual-writer-sealing-aggregate",
+      "sha256": "44abcf15afa2cdd14ffee9ee41c6e3820dcf4d8a7876015c5b15b05f19f08d71"
+    },
+    {
+      "name": "residual-writer-sealing-validator",
+      "sha256": "154394fb10cf1aa75ae37c818c8fa7b06d219304347f913e94370717ebd7057b"
+    },
+    {
+      "name": "residual-writer-sealing-architecture-tests",
+      "sha256": "96f18f2244220d771eb858c6ecfd4f948b1ca6fd2f02b2c6545f8cea080aa81b"
+    },
+    {
+      "name": "host-helper-retirement-mailbox-evidence",
+      "sha256": "fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549"
+    }
+  ],
+  "acceptedAt": "2026-09-17T14:12:04Z",
+  "digest": "dfee1381892be08a5a3ced90a596c4084fba81c4f702f930ccc6f0b784d4470c"
+}

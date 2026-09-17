@@ -3,12 +3,19 @@ module FS.GG.Coordination.GitHubV1ResidualWriterSealingArchitectureTests
 open System
 open System.Diagnostics
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
+open FS.GG.Coordination.Qualification.Contracts
 open Xunit
 
 let private root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 let private read path = File.ReadAllText(Path.Combine(root, path))
+let private bytes path = File.ReadAllBytes(Path.Combine(root, path))
+
+let private sha256 (value: byte array) =
+    value |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
 let private aggregate () =
     JsonNode.Parse(read "evidence/github-substrate-v2/gs2-08-9/sealing-qualification.json").AsObject()
@@ -54,7 +61,7 @@ let ``checked-in GS2-08-9 aggregate qualifies without minting a receipt`` () =
     Assert.Contains("GS2089-QUALIFIED", output)
     Assert.Contains("Q4 remains unclaimed", output)
     Assert.Empty(error)
-    Assert.False(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.9.json")))
+    Assert.True(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.9.json")))
 
 [<Fact>]
 let ``aggregate binds the protected seals disabled workflows and retained Q4 boundary`` () =
@@ -102,6 +109,66 @@ let ``aggregate binds the protected seals disabled workflows and retained Q4 bou
     Assert.All(runtime.GetProperty("uninstallAttempts").EnumerateArray(), fun attempt -> Assert.Equal(1, attempt.GetProperty("exitStatus").GetInt32()))
     Assert.Equal(0, runtime.GetProperty("manualRemediation").GetProperty("exitStatus").GetInt32())
     Assert.True(runtime.GetProperty("manualRemediation").GetProperty("manifestAndPathAbsenceVerified").GetBoolean())
+
+[<Fact>]
+let ``GS2-08-9 registration gate receipt and storage index bind the qualified source revision`` () =
+    use units = JsonDocument.Parse(bytes "eng/github-substrate-v2-units.json")
+    use gates = JsonDocument.Parse(bytes "eng/github-substrate-v2-gates.json")
+
+    let unitValue =
+        units.RootElement.GetProperty("units").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-08.9")
+
+    Assert.Equal<string list>([ "GS2-08.8" ], unitValue.GetProperty("prerequisites").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Equal<string list>([ "Q3" ], unitValue.GetProperty("qGates").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+    Assert.Contains("all 22 residual writer routes", unitValue.GetProperty("exitGate").GetString())
+    Assert.Contains("Q4 remains unclaimed", unitValue.GetProperty("exitGate").GetString())
+
+    let calculatedContract =
+        AcceptanceReceiptDigest.canonicalBytesOmitting "contractSha256" unitValue |> sha256
+
+    Assert.Equal(calculatedContract, unitValue.GetProperty("contractSha256").GetString())
+
+    let contract = unitValue.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
+    let command =
+        gates.RootElement.GetProperty("commands").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("id").GetString() = "github-v1-residual-writer-sealing-contract")
+
+    let commandBytes =
+        seq {
+            command.GetProperty("executable").GetString()
+            yield! command.GetProperty("args").EnumerateArray() |> Seq.map _.GetString()
+        }
+        |> String.concat "\u0000"
+        |> Encoding.UTF8.GetBytes
+
+    Assert.Equal("Q3", command.GetProperty("qGate").GetString())
+    Assert.Equal(sha256 commandBytes, contract.GetProperty("commandSha256").GetString())
+
+    let receiptBytes = bytes "evidence/github-substrate-v2/accepted/GS2-08.9.json"
+    use receipt = JsonDocument.Parse(receiptBytes)
+    let receiptValue = receipt.RootElement
+    Assert.Equal("accepted", receiptValue.GetProperty("state").GetString())
+    Assert.Equal("179a485e249d39794f5f1b02fe7ddbbfbf1e88a1", receiptValue.GetProperty("sourceRevision").GetString())
+    Assert.Equal(unitValue.GetProperty("contractSha256").GetString(), receiptValue.GetProperty("unitContractSha256").GetString())
+    Assert.Equal("dfee1381892be08a5a3ced90a596c4084fba81c4f702f930ccc6f0b784d4470c", receiptValue.GetProperty("digest").GetString())
+    Assert.True(AcceptanceReceiptDigest.verify (ReadOnlyMemory receiptBytes) "GS2-08.9" (receiptValue.GetProperty("digest").GetString()) receiptValue |> Result.isOk)
+
+    let artifacts =
+        receiptValue.GetProperty("artifacts").EnumerateArray()
+        |> Seq.map (fun artifact -> artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString())
+        |> Map.ofSeq
+
+    Assert.Equal("44abcf15afa2cdd14ffee9ee41c6e3820dcf4d8a7876015c5b15b05f19f08d71", artifacts["residual-writer-sealing-aggregate"])
+    Assert.Equal("fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549", artifacts["host-helper-retirement-mailbox-evidence"])
+
+    use index = JsonDocument.Parse(bytes "evidence/github-substrate-v2/index.json")
+    let entry =
+        index.RootElement.GetProperty("entries").EnumerateArray()
+        |> Seq.find (fun value -> value.GetProperty("id").GetString() = "accepted-GS2-08.9")
+
+    Assert.Equal(receiptBytes.Length, entry.GetProperty("bytes").GetInt32())
+    Assert.Equal(sha256 receiptBytes, entry.GetProperty("sha256").GetString())
 
 [<Fact>]
 let ``bounded controls reject route capability identity telemetry and helper misstatements`` () =
