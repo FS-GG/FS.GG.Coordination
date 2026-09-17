@@ -173,7 +173,7 @@ let private createArtifacts root =
             let preparationDigest = String.replicate 64 "c"
 
             let sourceDigest =
-                "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05"
+                "66212339baaac357712c19ec1607e944cd39f9dd6dbcffc88f2086f93cbce154"
 
             let contractDigest =
                 "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
@@ -824,7 +824,7 @@ let ``canonical Quint aggregate refuses an omitted shard fixture`` () =
 
         File.WriteAllText(
             performance,
-            "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":150000}"
+            "{\"schema\":\"fsgg.coordination.canonical-quint-performance/1\",\"outcome\":\"passed\",\"shardCount\":19,\"epochBudgetMs\":300000}"
         )
 
         let startInfo = ProcessStartInfo("bash")

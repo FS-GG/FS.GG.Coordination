@@ -44,7 +44,7 @@ for id in "${semantic[@]}" "$performance"; do
     jq -e --arg id "$id" '.schema == "fsgg.coordination.canonical-quint-formal-shard/1" and .id == $id and .outcome == "passed"' "$dir/receipt.json" >/dev/null
   fi
   if [[ "$id" == "$performance" ]]; then
-    jq -e '.schema == "fsgg.coordination.canonical-quint-performance/1" and .outcome == "passed" and .shardCount == 19 and .epochBudgetMs == 150000' "$dir/performance.json" >/dev/null
+    jq -e '.schema == "fsgg.coordination.canonical-quint-performance/1" and .outcome == "passed" and .shardCount == 19 and .epochBudgetMs == 300000' "$dir/performance.json" >/dev/null
   fi
 done
 

@@ -240,7 +240,7 @@ let generatedMutation (control: GitHubWorkflowSelectionControl) =
                     })
                 snapshot)
     | QuintWorkflowUnchanged ->
-        sha256File protocolPath = "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05"
+        sha256File protocolPath = "66212339baaac357712c19ec1607e944cd39f9dd6dbcffc88f2086f93cbce154"
         && SHA256.HashData(Array.append (File.ReadAllBytes protocolPath) [| 10uy |])
            <> SHA256.HashData(File.ReadAllBytes protocolPath)
     | NoWorkflowMutationSurface ->
@@ -429,7 +429,7 @@ let independentMutation (control: GitHubWorkflowSelectionControl) fixture =
     | QuintWorkflowUnchanged, "protocol-byte-append" ->
         let original = File.ReadAllBytes protocolPath
 
-        sha256File protocolPath = "79a4ff0188a2d817d2de10f2c28a0a3b60029938178b643ae73ee070c2ebfb05"
+        sha256File protocolPath = "66212339baaac357712c19ec1607e944cd39f9dd6dbcffc88f2086f93cbce154"
         && SHA256.HashData(Array.append original [| 0uy |]) <> SHA256.HashData original
     | NoWorkflowMutationSurface, "forbidden-http-client-surface" ->
         let source = File.ReadAllText sourcePath

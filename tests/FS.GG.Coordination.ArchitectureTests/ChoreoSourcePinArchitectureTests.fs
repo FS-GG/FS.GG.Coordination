@@ -167,8 +167,9 @@ let ``hosted writer Choreo foundation keeps four closed authorities and explicit
     Assert.Contains("Set(HOST, JOURNAL, RUNNER, GITHUB_PROVIDER)", model)
     Assert.Contains("type ProcessState =", model)
     Assert.Contains("type Message =", model)
-    Assert.Contains("type CustomEffect = Consume", model)
-    Assert.Contains("messages.setRemove(record.message)", model)
+    Assert.Contains("type CustomEffect = Consume({ at: Process, key: MessageKey })", model)
+    Assert.Contains("messages.filter(message => messageKey(message) != record.key)", model)
+    Assert.DoesNotContain("type CustomEffect = Consume({ at: Process, message: Message })", model)
     Assert.Contains("val typedMessageSoup", model)
     Assert.DoesNotContain("action hold", model)
 
@@ -190,3 +191,29 @@ let ``hosted writer Choreo routes all seven effects through one protocol`` () =
 
     Assert.Contains("operation.effectKind == ProcessWork", protocol)
     Assert.Contains("else GITHUB_PROVIDER", protocol)
+
+[<Fact>]
+let ``hosted writer Choreo faults remain durable identity fenced and project to the legacy model`` () =
+    let protocol, _, _ = fixture ()
+
+    for required in
+        [
+            "type JournalStatus = JournalEmpty | Intent | Dispatching | Unknown | ProvenAbsent | Applied"
+            "val legacyProjection: LegacyProjection"
+            "val retainedProjectionSafety"
+            "temporal progress: bool"
+            "temporal faultSafety: bool"
+            "run lostAppliedReconciles"
+            "run provenAbsentRetriesSameOperation"
+            "run restartRequiresThreeGates"
+            "run duplicateResponseRejected"
+            "run staleGenerationRejected"
+            "run wrongIdentityRejected"
+            "run journalSequenceRejected"
+            "run missingNativeReadbackCannotComplete"
+            "current.revision == previous.revision + 1"
+        ] do
+        Assert.Contains(required, protocol)
+
+    Assert.Contains("module O2HostedWriterChoreoTests {", protocol)
+    Assert.DoesNotContain("action hold", protocol.Substring(protocol.IndexOf("module O2HostedWriterChoreoModel {")))
