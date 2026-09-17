@@ -1,6 +1,6 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; C0 and C1 merged; C2 foundation implemented
+Status: accepted design; C0 and C1 merged; C2 fault/recovery checkpoint implemented; bounded exit pending
 
 Decision date: 2026-09-16
 
@@ -392,6 +392,31 @@ ceiling could never pass the unchanged semantic budget, even when the fresh atte
 The same 150-second maximum ceiling also guards unmeasured Apalache `verify` calls used by the base invariant and
 negative-control suite; those calls use the same one-retry lifecycle classification, and negative controls must
 still emit their expected invariant/ITF evidence, so a timeout cannot be mistaken for a successful red control.
+
+C2 fault/recovery checkpoint evidence (2026-09-17): the Choreo model now orders the seven effects, exposes a pure
+`legacyProjection`, separates normal progress from fault scheduling, and models ambiguous outcomes, applied/absent
+reconciliation, same-operation retry, crash recovery, fresh authority readback, authenticated resume, duplicate
+responses, stale generation, wrong identity, and journal rejection. Fifteen deterministic Quint scenarios pass
+against the pinned 0.32.0 binary, including every effect kind and all named fault/identity controls. The model and
+scenario helpers are separate modules so an executable test cannot make `init` part of the verification step.
+
+Random exploration found two real recovery defects and the checkpoint fixes both. First, recovery after durable
+`Applied` failed to reconstruct Host completion and could restart the same effect. Second, a delayed
+`ReconcileAbsent` result could cross a proven-absence retry, because the stable operation id alone did not identify
+the retry round. The retry now preserves `operation` while incrementing `revision`; the journal accepts only the
+next exact revision and the Runner binds its acknowledgement/reconciliation state to that revision. The journal
+also fences its recovery response until earlier append messages have drained. The explicit Choreo consume effect
+now carries a finite `{ process, message-key }` rather than recursively embedding the entire `Message` union; this
+preserves exact stale/wrong-identity removal and makes Quint's TLA+ conversion possible.
+
+This checkpoint does **not** complete C2. After conversion succeeded, TLC exposed the delayed-absence violation
+after 6,470 distinct states; the fixed model no longer reproduces that trace, but a subsequent full TLC run and
+both combined-source and 73,834-byte lean Apalache bounded runs reached the unchanged 150-second process ceiling.
+The lean Apalache run passed parsing and Snowcat typechecking before timing out in symbolic transformation. No
+budget was raised and no bounded-success claim is made. The next C2 continuation must reduce transition/state
+encoding cost or partition an equivalent bounded verification root, then rerun bounded safety, listener coverage,
+and the structural/runtime review before checking the remaining C2 boxes. C3 trace export remains blocked on that
+exit rather than synthesizing fault behavior in F#.
 
 ### C3 — make Quint traces the executable contract
 

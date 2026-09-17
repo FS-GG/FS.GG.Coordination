@@ -5071,10 +5071,9 @@ module choreo {
 }
 // END PINNED quint-co/choreo choreo.qnt
 
-// C2 foundation: the hosted-writer boundary as four independently scheduled authorities.
-// This first slice deliberately models only the non-faulting append/dispatch/apply/settle
-// path. Fault injection, restart gates, reconciliation, and legacy projection are added by
-// the remaining C2 checkpoints; the types and message boundaries below are their stable base.
+// C2 hosted-writer boundary as four independently scheduled authorities. The model keeps
+// durable journal status separate from Host volatility, admits ambiguity only around an
+// already-dispatched external operation, and makes recovery/readback/resume distinct gates.
 module O2HostedWriterChoreoModel {
   import basicSpells.*
   import choreo(processes = PROCESSES) as choreo
@@ -5084,8 +5083,18 @@ module O2HostedWriterChoreoModel {
   // closes it to these four typed constants.
   type Process = str
   type EffectKind = Claim | ProcessWork | Candidate | Branch | PullRequest | Merge | NativeReadback
-  type JournalStatus = JournalEmpty | Intent | Dispatching | Applied
-  type HostPhase = HostReady | AwaitingIntent | AwaitingDispatch | AwaitingEffect | AwaitingApplied
+  type JournalStatus = JournalEmpty | Intent | Dispatching | Unknown | ProvenAbsent | Applied
+  type HostPhase =
+    | HostReady
+    | AwaitingIntent
+    | AwaitingDispatch
+    | AwaitingEffect
+    | AwaitingUnknown
+    | AwaitingReconcile
+    | AwaitingApplied
+    | HostPaused
+    | AwaitingAuthority
+    | AwaitingResume
 
   type OperationRef = {
     route: str,
@@ -5103,12 +5112,24 @@ module O2HostedWriterChoreoModel {
     phase: HostPhase,
     current: Option[OperationRef],
     completed: Set[EffectKind],
+    paused: bool,
+    journalRecovered: bool,
+    authorityFresh: bool,
+    resumeAuthenticated: bool,
+    unknownObserved: bool,
+    retryObserved: bool,
+    duplicateRejected: bool,
+    staleRejected: bool,
+    identityRejected: bool,
+    sequenceRejected: bool,
+    recoveredStatus: JournalStatus,
   }
 
   type JournalState = {
     status: JournalStatus,
     current: Option[OperationRef],
     appendCount: int,
+    rejectionCount: int,
   }
 
   type RunnerState = {
@@ -5116,9 +5137,15 @@ module O2HostedWriterChoreoModel {
     generation: int,
     session: str,
     revision: int,
+    lastResponse: Option[OperationRef],
+    applyCount: int,
   }
 
-  type ProviderState = { applied: Set[EffectKind] }
+  type ProviderState = {
+    applied: Set[EffectKind],
+    lastResponse: Option[OperationRef],
+    applyCount: int,
+  }
 
   type ProcessState =
     | HostLocal(HostState)
@@ -5134,10 +5161,29 @@ module O2HostedWriterChoreoModel {
     | RunEffect(OperationRef)
     | PerformEffect(OperationRef)
     | EffectApplied(OperationRef)
+    | EffectUnknown(OperationRef)
+    | RecordUnknown(OperationRef)
+    | UnknownRecorded(OperationRef)
+    | ReconcileEffect(OperationRef)
+    | ReconcileApplied(OperationRef)
+    | ReconcileAbsent(OperationRef)
+    | RecordAbsent(OperationRef)
+    | AbsentRecorded(OperationRef)
     | RecordApplied(OperationRef)
     | AppliedRecorded(OperationRef)
+    | RecoverJournal(())
+    | JournalRecovered({ operation: Option[OperationRef], status: JournalStatus })
+    | ReadAuthority(Option[OperationRef])
+    | AuthorityRead(Option[OperationRef])
+    | AppendRejected(OperationRef)
 
-  type CustomEffect = Consume({ at: Process, message: Message })
+  type MessageKey = {
+    tag: int,
+    operation: Option[OperationRef],
+    status: JournalStatus,
+  }
+
+  type CustomEffect = Consume({ at: Process, key: MessageKey })
   type Event = ()
   type Extension = ()
   type StateFields = { local: ProcessState }
@@ -5155,6 +5201,7 @@ module O2HostedWriterChoreoModel {
   type Transition = choreo::Transition[Process, StateFields, Message, Event, CustomEffect]
   type Effect = choreo::Effect[Process, Message, Event, CustomEffect]
   type GlobalContext = choreo::GlobalContext[Process, StateFields, Message, Event, Extension]
+  pure val noTransitions: Set[Transition] = Set()
 
   pure def operationName(effect: EffectKind): str = match effect {
     | Claim => "op-claim"
@@ -5178,13 +5225,96 @@ module O2HostedWriterChoreoModel {
     revision: 1,
   }
 
+  pure def isNextRevision(previous: OperationRef, current: OperationRef): bool = and {
+    previous.route == current.route,
+    previous.attempt == current.attempt,
+    previous.operation == current.operation,
+    previous.effectKind == current.effectKind,
+    previous.candidate == current.candidate,
+    previous.repository == current.repository,
+    previous.generation == current.generation,
+    previous.session == current.session,
+    current.revision == previous.revision + 1,
+  }
+
+  pure def expectedEffect(completed: Set[EffectKind]): Option[EffectKind] =
+    if (not(completed.contains(Claim))) Some(Claim)
+    else if (not(completed.contains(ProcessWork))) Some(ProcessWork)
+    else if (not(completed.contains(Candidate))) Some(Candidate)
+    else if (not(completed.contains(Branch))) Some(Branch)
+    else if (not(completed.contains(PullRequest))) Some(PullRequest)
+    else if (not(completed.contains(Merge))) Some(Merge)
+    else if (not(completed.contains(NativeReadback))) Some(NativeReadback)
+    else None
+
+  pure val emptyHost: HostState = {
+    phase: HostReady,
+    current: None,
+    completed: Set(),
+    paused: false,
+    journalRecovered: true,
+    authorityFresh: true,
+    resumeAuthenticated: true,
+    unknownObserved: false,
+    retryObserved: false,
+    duplicateRejected: false,
+    staleRejected: false,
+    identityRejected: false,
+    sequenceRejected: false,
+    recoveredStatus: JournalEmpty,
+  }
+  pure val emptyJournal: JournalState = {
+    status: JournalEmpty, current: None, appendCount: 0, rejectionCount: 0,
+  }
+  pure val emptyRunner: RunnerState = {
+    applied: Set(), generation: 1, session: "session-1", revision: 1,
+    lastResponse: None, applyCount: 0,
+  }
+  pure val emptyProvider: ProviderState = {
+    applied: Set(), lastResponse: None, applyCount: 0,
+  }
+
+  pure def isHostState(local: ProcessState): bool = match local {
+    | HostLocal(_) => true
+    | _ => false
+  }
+  pure def isJournalState(local: ProcessState): bool = match local {
+    | JournalLocal(_) => true
+    | _ => false
+  }
+  pure def isRunnerState(local: ProcessState): bool = match local {
+    | RunnerLocal(_) => true
+    | _ => false
+  }
+  pure def isProviderState(local: ProcessState): bool = match local {
+    | ProviderLocal(_) => true
+    | _ => false
+  }
+
+  pure def hostState(local: ProcessState): HostState = match local {
+    | HostLocal(value) => value
+    | _ => emptyHost
+  }
+  pure def journalState(local: ProcessState): JournalState = match local {
+    | JournalLocal(value) => value
+    | _ => emptyJournal
+  }
+  pure def runnerState(local: ProcessState): RunnerState = match local {
+    | RunnerLocal(value) => value
+    | _ => emptyRunner
+  }
+  pure def providerState(local: ProcessState): ProviderState = match local {
+    | ProviderLocal(value) => value
+    | _ => emptyProvider
+  }
+
   pure def initialState(process: Process): LocalState = {
     process_id: process,
     local:
-      if (process == HOST) HostLocal({ phase: HostReady, current: None, completed: Set() })
-      else if (process == JOURNAL) JournalLocal({ status: JournalEmpty, current: None, appendCount: 0 })
-      else if (process == RUNNER) RunnerLocal({ applied: Set(), generation: 1, session: "session-1", revision: 1 })
-      else ProviderLocal({ applied: Set() }),
+      if (process == HOST) HostLocal(emptyHost)
+      else if (process == JOURNAL) JournalLocal(emptyJournal)
+      else if (process == RUNNER) RunnerLocal(emptyRunner)
+      else ProviderLocal(emptyProvider),
   }
 
   action init = choreo::init({
@@ -5194,37 +5324,82 @@ module O2HostedWriterChoreoModel {
     extensions: (),
   })
 
+  pure def messageKey(message: Message): MessageKey = match message {
+    | RecordIntent(operation) => { tag: 1, operation: Some(operation), status: JournalEmpty }
+    | IntentRecorded(operation) => { tag: 2, operation: Some(operation), status: JournalEmpty }
+    | RecordDispatch(operation) => { tag: 3, operation: Some(operation), status: JournalEmpty }
+    | DispatchRecorded(operation) => { tag: 4, operation: Some(operation), status: JournalEmpty }
+    | RunEffect(operation) => { tag: 5, operation: Some(operation), status: JournalEmpty }
+    | PerformEffect(operation) => { tag: 6, operation: Some(operation), status: JournalEmpty }
+    | EffectApplied(operation) => { tag: 7, operation: Some(operation), status: JournalEmpty }
+    | EffectUnknown(operation) => { tag: 8, operation: Some(operation), status: JournalEmpty }
+    | RecordUnknown(operation) => { tag: 9, operation: Some(operation), status: JournalEmpty }
+    | UnknownRecorded(operation) => { tag: 10, operation: Some(operation), status: JournalEmpty }
+    | ReconcileEffect(operation) => { tag: 11, operation: Some(operation), status: JournalEmpty }
+    | ReconcileApplied(operation) => { tag: 12, operation: Some(operation), status: JournalEmpty }
+    | ReconcileAbsent(operation) => { tag: 13, operation: Some(operation), status: JournalEmpty }
+    | RecordAbsent(operation) => { tag: 14, operation: Some(operation), status: JournalEmpty }
+    | AbsentRecorded(operation) => { tag: 15, operation: Some(operation), status: JournalEmpty }
+    | RecordApplied(operation) => { tag: 16, operation: Some(operation), status: JournalEmpty }
+    | AppliedRecorded(operation) => { tag: 17, operation: Some(operation), status: JournalEmpty }
+    | RecoverJournal(_) => { tag: 18, operation: None, status: JournalEmpty }
+    | JournalRecovered(recovered) => {
+        tag: 19, operation: recovered.operation, status: recovered.status,
+      }
+    | ReadAuthority(operation) => { tag: 20, operation: operation, status: JournalEmpty }
+    | AuthorityRead(operation) => { tag: 21, operation: operation, status: JournalEmpty }
+    | AppendRejected(operation) => { tag: 22, operation: Some(operation), status: JournalEmpty }
+  }
+
   pure def consume(at: Process, message: Message): Effect =
-    choreo::CustomEffect(Consume({ at: at, message: message }))
+    choreo::CustomEffect(Consume({ at: at, key: messageKey(message) }))
+
+  pure def messagesWithTag(ctx: LocalContext, tag: int): Set[Message] =
+    ctx.messages.filter(message => messageKey(message).tag == tag)
+
+  pure def messageOperation(message: Message): OperationRef =
+    unwrap(messageKey(message).operation)
 
   pure def applyCustomEffect(context: GlobalContext, effect: CustomEffect): GlobalContext =
     match effect {
       | Consume(record) => {
           ...context,
-          messages: context.messages.setBy(record.at, messages => messages.setRemove(record.message)),
+          messages: context.messages.setBy(
+            record.at,
+            messages => messages.filter(message => messageKey(message) != record.key)
+          ),
         }
     }
 
   pure def beginEffect(ctx: LocalContext, effect: EffectKind): Set[Transition] =
-    match ctx.state.local {
-      | HostLocal(host) => {
-          if (host.phase == HostReady and host.current == None and not(host.completed.contains(effect))) {
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) {
+          if (host.phase == HostReady
+              and not(host.paused)
+              and host.current == None
+              and expectedEffect(host.completed) == Some(effect)) {
             val operation = operationFor(effect)
             Set({
               post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingIntent, current: Some(operation) }) },
               effects: Set(choreo::Send({ to: JOURNAL, message: RecordIntent(operation) })),
             })
-          } else Set()
+          } else noTransitions
         }
-      | _ => Set()
+      else noTransitions
     }
 
   pure def journalRecordsIntent(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | JournalLocal(journal) => ctx.messages.filterMap(message => match message {
-          | RecordIntent(operation) => {
-              if (journal.status == JournalEmpty or journal.status == Applied) {
-                Some({
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 1).map(message => {
+          val operation = messageOperation(message)
+              if ((journal.status == JournalEmpty or journal.status == Applied)
+                  or (journal.status == ProvenAbsent and match journal.current {
+                    | Some(previous) => isNextRevision(previous, operation)
+                    | None => false
+                  })) {
+                Set({
                   post_state: { ...ctx.state, local: JournalLocal({
                     ...journal, status: Intent, current: Some(operation), appendCount: journal.appendCount + 1,
                   }) },
@@ -5233,38 +5408,36 @@ module O2HostedWriterChoreoModel {
                     choreo::Send({ to: HOST, message: IntentRecorded(operation) })
                   ),
                 })
-              } else None
-            }
-          | _ => None
-        })
-      | _ => Set()
+              } else noTransitions
+        }).flatten()
+      else noTransitions
     }
 
   pure def hostAcceptsIntent(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | HostLocal(host) => ctx.messages.filterMap(message => match message {
-          | IntentRecorded(operation) => {
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 2).map(message => {
+          val operation = messageOperation(message)
               if (host.phase == AwaitingIntent and host.current == Some(operation)) {
-                Some({
+                Set({
                   post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingDispatch }) },
                   effects: Set(
                     consume(HOST, message),
                     choreo::Send({ to: JOURNAL, message: RecordDispatch(operation) })
                   ),
                 })
-              } else None
-            }
-          | _ => None
-        })
-      | _ => Set()
+              } else noTransitions
+        }).flatten()
+      else noTransitions
     }
 
   pure def journalRecordsDispatch(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | JournalLocal(journal) => ctx.messages.filterMap(message => match message {
-          | RecordDispatch(operation) => {
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 3).map(message => {
+          val operation = messageOperation(message)
               if (journal.status == Intent and journal.current == Some(operation)) {
-                Some({
+                Set({
                   post_state: { ...ctx.state, local: JournalLocal({
                     ...journal, status: Dispatching, appendCount: journal.appendCount + 1,
                   }) },
@@ -5273,101 +5446,590 @@ module O2HostedWriterChoreoModel {
                     choreo::Send({ to: HOST, message: DispatchRecorded(operation) })
                   ),
                 })
-              } else None
-            }
-          | _ => None
-        })
-      | _ => Set()
+              } else noTransitions
+        }).flatten()
+      else noTransitions
     }
 
   pure def hostDispatches(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | HostLocal(host) => ctx.messages.filterMap(message => match message {
-          | DispatchRecorded(operation) => {
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 4).map(message => {
+          val operation = messageOperation(message)
               if (host.phase == AwaitingDispatch and host.current == Some(operation)) {
                 val request = if (operation.effectKind == ProcessWork) RunEffect(operation) else PerformEffect(operation)
                 val destination = if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
-                Some({
+                Set({
                   post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingEffect }) },
                   effects: Set(consume(HOST, message), choreo::Send({ to: destination, message: request })),
                 })
-              } else None
-            }
-          | _ => None
-        })
-      | _ => Set()
+              } else noTransitions
+        }).flatten()
+      else noTransitions
     }
 
   pure def runnerPerforms(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | RunnerLocal(runner) => ctx.messages.filterMap(message => match message {
-          | RunEffect(operation) => {
+    {
+      val runner = runnerState(ctx.state.local)
+      if (isRunnerState(ctx.state.local)) messagesWithTag(ctx, 5).map(message => {
+          val operation = messageOperation(message)
               if (operation.effectKind == ProcessWork
                   and operation.generation == runner.generation
                   and operation.session == runner.session
-                  and operation.revision == runner.revision) {
-                Some({
+                  and (operation.revision == runner.revision
+                    or operation.revision == runner.revision + 1)) {
+                Set({
                   post_state: { ...ctx.state, local: RunnerLocal({
-                    ...runner, applied: runner.applied.setAdd(operation.effectKind),
+                    ...runner,
+                    applied: runner.applied.setAdd(operation.effectKind),
+                    lastResponse: Some(operation),
+                    applyCount: runner.applyCount + 1,
+                    revision: operation.revision,
                   }) },
                   effects: Set(
                     consume(RUNNER, message),
                     choreo::Send({ to: HOST, message: EffectApplied(operation) })
                   ),
                 })
-              } else None
-            }
-          | _ => None
-        })
-      | _ => Set()
+              } else noTransitions
+        }).flatten()
+      else noTransitions
     }
 
   pure def providerPerforms(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | ProviderLocal(provider) => ctx.messages.filterMap(message => match message {
-          | PerformEffect(operation) => {
+    {
+      val provider = providerState(ctx.state.local)
+      if (isProviderState(ctx.state.local)) messagesWithTag(ctx, 6).map(message => {
+          val operation = messageOperation(message)
               if (operation.effectKind != ProcessWork) {
-                Some({
+                Set({
                   post_state: { ...ctx.state, local: ProviderLocal({
-                    ...provider, applied: provider.applied.setAdd(operation.effectKind),
+                    ...provider,
+                    applied: provider.applied.setAdd(operation.effectKind),
+                    lastResponse: Some(operation),
+                    applyCount: provider.applyCount + 1,
                   }) },
                   effects: Set(
                     consume(GITHUB_PROVIDER, message),
                     choreo::Send({ to: HOST, message: EffectApplied(operation) })
                   ),
                 })
-              } else None
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  // An external invocation may return an ambiguous outcome without claiming application.
+  // Reconciliation, never redispatch, decides whether the durable operation advances.
+  pure def externalOutcomeUnknown(ctx: LocalContext): Set[Transition] =
+    {
+      val runner = runnerState(ctx.state.local)
+      if (isRunnerState(ctx.state.local)) messagesWithTag(ctx, 5).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind == ProcessWork
+                  and operation.generation == runner.generation
+                  and operation.session == runner.session
+                  and (operation.revision == runner.revision
+                    or operation.revision == runner.revision + 1)) {
+                Set({
+                  post_state: { ...ctx.state, local: RunnerLocal({
+                    ...runner, revision: operation.revision,
+                  }) },
+                  effects: Set(
+                    consume(RUNNER, message),
+                    choreo::Send({ to: HOST, message: EffectUnknown(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else if (isProviderState(ctx.state.local)) messagesWithTag(ctx, 6).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind != ProcessWork) {
+                Set({
+                  post_state: ctx.state,
+                  effects: Set(
+                    consume(GITHUB_PROVIDER, message),
+                    choreo::Send({ to: HOST, message: EffectUnknown(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostRecordsUnknown(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) ctx.messages
+        .filter(message => messageKey(message).tag == 7 or messageKey(message).tag == 8)
+        .map(message => {
+          val operation = messageOperation(message)
+          if (host.phase == AwaitingEffect and host.current == Some(operation)) {
+            Set({
+              post_state: { ...ctx.state, local: HostLocal({
+                ...host, phase: AwaitingUnknown, unknownObserved: true,
+              }) },
+              effects: Set(
+                consume(HOST, message),
+                choreo::Send({ to: JOURNAL, message: RecordUnknown(operation) })
+              ),
+            })
+          } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def journalRecordsUnknown(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 9).map(message => {
+          val operation = messageOperation(message)
+              if (journal.status == Dispatching and journal.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: Unknown, appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: UnknownRecorded(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostBeginsReconciliation(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 10).map(message => {
+          val operation = messageOperation(message)
+              if (host.phase == AwaitingUnknown and host.current == Some(operation)) {
+                val destination = if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingReconcile }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: destination, message: ReconcileEffect(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def externalReconciles(ctx: LocalContext): Set[Transition] =
+    {
+      val runner = runnerState(ctx.state.local)
+      val provider = providerState(ctx.state.local)
+      if (isRunnerState(ctx.state.local)) messagesWithTag(ctx, 11).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind == ProcessWork
+                  and operation.generation == runner.generation
+                  and operation.session == runner.session
+                  and operation.revision == runner.revision) {
+                val response =
+                  if (runner.applied.contains(operation.effectKind)) ReconcileApplied(operation)
+                  else ReconcileAbsent(operation)
+                Set({
+                  post_state: ctx.state,
+                  effects: Set(consume(RUNNER, message), choreo::Send({ to: HOST, message: response })),
+                })
+              } else noTransitions
+        }).flatten()
+      else if (isProviderState(ctx.state.local)) messagesWithTag(ctx, 11).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind != ProcessWork) {
+                val response =
+                  if (provider.applied.contains(operation.effectKind)) ReconcileApplied(operation)
+                  else ReconcileAbsent(operation)
+                Set({
+                  post_state: ctx.state,
+                  effects: Set(
+                    consume(GITHUB_PROVIDER, message),
+                    choreo::Send({ to: HOST, message: response })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostAcceptsReconciliation(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) Set(
+        messagesWithTag(ctx, 12).map(message => {
+          val operation = messageOperation(message)
+          if (host.phase == AwaitingReconcile and host.current == Some(operation)) Set({
+            post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingApplied }) },
+            effects: Set(
+              consume(HOST, message),
+              choreo::Send({ to: JOURNAL, message: RecordApplied(operation) })
+            ),
+          }) else noTransitions
+        }).flatten(),
+        messagesWithTag(ctx, 13).map(message => {
+          val operation = messageOperation(message)
+          if (host.phase == AwaitingReconcile and host.current == Some(operation)) Set({
+            post_state: ctx.state,
+            effects: Set(
+              consume(HOST, message),
+              choreo::Send({ to: JOURNAL, message: RecordAbsent(operation) })
+            ),
+          }) else noTransitions
+        }).flatten()
+      ).flatten()
+      else noTransitions
+    }
+
+  pure def journalRecordsAbsent(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 14).map(message => {
+          val operation = messageOperation(message)
+              if (journal.status == Unknown and journal.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: ProvenAbsent, appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: AbsentRecorded(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostRetriesProvenAbsent(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 15).map(message => {
+          val operation = messageOperation(message)
+              if (host.phase == AwaitingReconcile and host.current == Some(operation)) {
+                val retried = { ...operation, revision: operation.revision + 1 }
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({
+                    ...host, phase: AwaitingIntent, current: Some(retried), retryObserved: true,
+                  }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: JOURNAL, message: RecordIntent(retried) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def crashHost(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) {
+          if (not(host.paused)) Set({
+            post_state: { ...ctx.state, local: HostLocal({
+              ...host,
+              phase: HostPaused,
+              current: None,
+              paused: true,
+              journalRecovered: false,
+              authorityFresh: false,
+              resumeAuthenticated: false,
+            }) },
+            effects: Set(choreo::Send({ to: JOURNAL, message: RecoverJournal(()) })),
+          }) else noTransitions
+        }
+      else noTransitions
+    }
+
+  pure def journalRecovers(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 18).map(message =>
+          if (ctx.messages == Set(message)) Set({
+            post_state: ctx.state,
+            effects: Set(
+              consume(JOURNAL, message),
+              choreo::Send({
+                to: HOST,
+                message: JournalRecovered({ operation: journal.current, status: journal.status }),
+              })
+            ),
+          }) else noTransitions
+        ).flatten()
+      else noTransitions
+    }
+
+  pure def hostAcceptsRecovery(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 19).map(message => {
+              val recoveredOperation = messageKey(message).operation
+              val recoveredStatus = messageKey(message).status
+              if (host.paused and not(host.journalRecovered)) {
+                val destination = match recoveredOperation {
+                  | Some(operation) =>
+                      if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
+                  | None => GITHUB_PROVIDER
+                }
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({
+                    ...host,
+                    phase: AwaitingAuthority,
+                    current: recoveredOperation,
+                    journalRecovered: true,
+                    recoveredStatus: recoveredStatus,
+                  }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: destination, message: ReadAuthority(recoveredOperation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def externalReadsAuthority(ctx: LocalContext): Set[Transition] =
+    if (isRunnerState(ctx.state.local)) ctx.messages
+        .filter(message => messageKey(message).tag == 20)
+        .map(message => {
+            val operation = messageKey(message).operation
+            Set({
+              post_state: ctx.state,
+              effects: Set(
+                consume(RUNNER, message),
+                choreo::Send({ to: HOST, message: AuthorityRead(operation) })
+              ),
+            })
+        }).flatten()
+    else if (isProviderState(ctx.state.local)) ctx.messages
+        .filter(message => messageKey(message).tag == 20)
+        .map(message => {
+            val operation = messageKey(message).operation
+            Set({
+              post_state: ctx.state,
+              effects: Set(
+                consume(GITHUB_PROVIDER, message),
+                choreo::Send({ to: HOST, message: AuthorityRead(operation) })
+              ),
+            })
+        }).flatten()
+    else noTransitions
+
+  pure def hostAcceptsAuthority(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 21).map(message => {
+          val operation = messageKey(message).operation
+              if (host.phase == AwaitingAuthority
+                  and host.journalRecovered
+                  and host.current == operation) {
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({
+                    ...host, phase: AwaitingResume, authorityFresh: true,
+                  }) },
+                  effects: Set(consume(HOST, message)),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostAuthenticatesResume(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) {
+          if (host.phase == AwaitingResume
+              and host.paused
+              and host.journalRecovered
+              and host.authorityFresh
+              and not(host.resumeAuthenticated)) {
+            val nextPhase =
+              if (host.recoveredStatus == JournalEmpty or host.recoveredStatus == Applied) HostReady
+              else if (host.recoveredStatus == Intent) AwaitingDispatch
+              else if (host.recoveredStatus == ProvenAbsent) AwaitingIntent
+              else AwaitingReconcile
+            val nextEffects = match host.current {
+              | Some(operation) =>
+                  if (host.recoveredStatus == Intent)
+                    Set(choreo::Send({ to: JOURNAL, message: RecordDispatch(operation) }))
+                  else if (host.recoveredStatus == ProvenAbsent)
+                    Set(choreo::Send({ to: JOURNAL, message: RecordIntent(operation) }))
+                  else if (host.recoveredStatus == Dispatching or host.recoveredStatus == Unknown) {
+                    val destination =
+                      if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
+                    Set(choreo::Send({ to: destination, message: ReconcileEffect(operation) }))
+                  } else Set()
+              | None => Set()
             }
-          | _ => None
+            val nextCompleted = match host.current {
+              | Some(operation) =>
+                  if (host.recoveredStatus == Applied)
+                    host.completed.setAdd(operation.effectKind)
+                  else host.completed
+              | None => host.completed
+            }
+            Set({
+              post_state: { ...ctx.state, local: HostLocal({
+                ...host,
+                phase: nextPhase,
+                current: if (nextPhase == HostReady) None else host.current,
+                completed: nextCompleted,
+                paused: false,
+                resumeAuthenticated: true,
+              }) },
+              effects: nextEffects,
+            })
+          } else noTransitions
+        }
+      else noTransitions
+    }
+
+  pure def externalRedelivers(ctx: LocalContext): Set[Transition] =
+    {
+      val runner = runnerState(ctx.state.local)
+      val provider = providerState(ctx.state.local)
+      if (isRunnerState(ctx.state.local)) match runner.lastResponse {
+          | Some(operation) => Set({
+              post_state: ctx.state,
+              effects: Set(choreo::Send({ to: HOST, message: EffectApplied(operation) })),
+            })
+          | None => noTransitions
+        }
+      else if (isProviderState(ctx.state.local)) match provider.lastResponse {
+          | Some(operation) => Set({
+              post_state: ctx.state,
+              effects: Set(choreo::Send({ to: HOST, message: EffectApplied(operation) })),
+            })
+          | None => noTransitions
+        }
+      else noTransitions
+    }
+
+  pure val staleOperation: OperationRef = { ...operationFor(Claim), generation: 0 }
+  pure val wrongIdentityOperation: OperationRef = {
+    ...operationFor(Claim), candidate: "candidate-other", repository: "repository-other",
+  }
+
+  pure def providerInjectsStale(ctx: LocalContext): Set[Transition] =
+    if (isProviderState(ctx.state.local)) Set({
+          post_state: ctx.state,
+          effects: Set(choreo::Send({ to: HOST, message: EffectApplied(staleOperation) })),
         })
-      | _ => Set()
+    else noTransitions
+
+  pure def providerInjectsWrongIdentity(ctx: LocalContext): Set[Transition] =
+    if (isProviderState(ctx.state.local)) Set({
+          post_state: ctx.state,
+          effects: Set(choreo::Send({ to: HOST, message: EffectApplied(wrongIdentityOperation) })),
+        })
+    else noTransitions
+
+  pure def hostRejectsInvalidResponse(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 7).map(message => {
+          val operation = messageOperation(message)
+              if (operation.generation != 1) Set({
+                post_state: { ...ctx.state, local: HostLocal({ ...host, staleRejected: true }) },
+                effects: Set(consume(HOST, message)),
+              })
+              else if (operation != operationFor(operation.effectKind)) Set({
+                post_state: { ...ctx.state, local: HostLocal({ ...host, identityRejected: true }) },
+                effects: Set(consume(HOST, message)),
+              })
+              else if (host.phase != AwaitingEffect or host.current != Some(operation)) Set({
+                post_state: { ...ctx.state, local: HostLocal({ ...host, duplicateRejected: true }) },
+                effects: Set(consume(HOST, message)),
+              })
+              else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def journalRejectsInvalidAppend(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) Set(
+        messagesWithTag(ctx, 3).map(message => {
+          val operation = messageOperation(message)
+          if (journal.status != Intent or journal.current != Some(operation)) Set({
+            post_state: { ...ctx.state, local: JournalLocal({
+              ...journal, rejectionCount: journal.rejectionCount + 1,
+            }) },
+            effects: Set(
+              consume(JOURNAL, message),
+              choreo::Send({ to: HOST, message: AppendRejected(operation) })
+            ),
+          }) else noTransitions
+        }).flatten(),
+        messagesWithTag(ctx, 16).map(message => {
+          val operation = messageOperation(message)
+          if ((journal.status != Dispatching and journal.status != Unknown)
+              or journal.current != Some(operation)) Set({
+            post_state: { ...ctx.state, local: JournalLocal({
+              ...journal, rejectionCount: journal.rejectionCount + 1,
+            }) },
+            effects: Set(
+              consume(JOURNAL, message),
+              choreo::Send({ to: HOST, message: AppendRejected(operation) })
+            ),
+          }) else noTransitions
+        }).flatten()
+      ).flatten()
+      else noTransitions
+    }
+
+  pure def hostInjectsOutOfSequence(ctx: LocalContext): Set[Transition] =
+    if (isHostState(ctx.state.local)) Set({
+          post_state: ctx.state,
+          effects: Set(choreo::Send({
+            to: JOURNAL, message: RecordDispatch(operationFor(Claim)),
+          })),
+        })
+    else noTransitions
+
+  pure def hostAcceptsAppendRejection(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 22).map(message =>
+          Set({
+              post_state: { ...ctx.state, local: HostLocal({ ...host, sequenceRejected: true }) },
+              effects: Set(consume(HOST, message)),
+            })
+        ).flatten()
+      else noTransitions
     }
 
   pure def hostObservesApplied(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | HostLocal(host) => ctx.messages.filterMap(message => match message {
-          | EffectApplied(operation) => {
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 7).map(message => {
+          val operation = messageOperation(message)
               if (host.phase == AwaitingEffect and host.current == Some(operation)) {
-                Some({
+                Set({
                   post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingApplied }) },
                   effects: Set(
                     consume(HOST, message),
                     choreo::Send({ to: JOURNAL, message: RecordApplied(operation) })
                   ),
                 })
-              } else None
-            }
-          | _ => None
-        })
-      | _ => Set()
+              } else noTransitions
+        }).flatten()
+      else noTransitions
     }
 
   pure def journalRecordsApplied(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | JournalLocal(journal) => ctx.messages.filterMap(message => match message {
-          | RecordApplied(operation) => {
-              if (journal.status == Dispatching and journal.current == Some(operation)) {
-                Some({
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 16).map(message => {
+          val operation = messageOperation(message)
+              if ((journal.status == Dispatching or journal.status == Unknown)
+                  and journal.current == Some(operation)) {
+                Set({
                   post_state: { ...ctx.state, local: JournalLocal({
                     ...journal, status: Applied, appendCount: journal.appendCount + 1,
                   }) },
@@ -5376,32 +6038,62 @@ module O2HostedWriterChoreoModel {
                     choreo::Send({ to: HOST, message: AppliedRecorded(operation) })
                   ),
                 })
-              } else None
-            }
-          | _ => None
-        })
-      | _ => Set()
+              } else noTransitions
+        }).flatten()
+      else noTransitions
     }
 
   pure def hostSettles(ctx: LocalContext): Set[Transition] =
-    match ctx.state.local {
-      | HostLocal(host) => ctx.messages.filterMap(message => match message {
-          | AppliedRecorded(operation) => {
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 17).map(message => {
+          val operation = messageOperation(message)
               if (host.phase == AwaitingApplied and host.current == Some(operation)) {
-                Some({
+                Set({
                   post_state: { ...ctx.state, local: HostLocal({
-                    phase: HostReady, current: None, completed: host.completed.setAdd(operation.effectKind),
+                    ...host,
+                    phase: HostReady,
+                    current: None,
+                    completed: host.completed.setAdd(operation.effectKind),
                   }) },
                   effects: Set(consume(HOST, message)),
                 })
-              } else None
-            }
-          | _ => None
-        })
-      | _ => Set()
+              } else noTransitions
+        }).flatten()
+      else noTransitions
     }
 
   pure def mainListener(ctx: LocalContext): Set[Transition] = Set(
+    EFFECTS.map(effect => beginEffect(ctx, effect)).flatten(),
+    journalRecordsIntent(ctx),
+    hostAcceptsIntent(ctx),
+    journalRecordsDispatch(ctx),
+    hostDispatches(ctx),
+    runnerPerforms(ctx),
+    providerPerforms(ctx),
+    externalOutcomeUnknown(ctx),
+    hostRecordsUnknown(ctx),
+    journalRecordsUnknown(ctx),
+    hostBeginsReconciliation(ctx),
+    externalReconciles(ctx),
+    hostAcceptsReconciliation(ctx),
+    journalRecordsAbsent(ctx),
+    hostRetriesProvenAbsent(ctx),
+    hostObservesApplied(ctx),
+    journalRecordsApplied(ctx),
+    hostSettles(ctx),
+    crashHost(ctx),
+    journalRecovers(ctx),
+    hostAcceptsRecovery(ctx),
+    externalReadsAuthority(ctx),
+    hostAcceptsAuthority(ctx),
+    hostAuthenticatesResume(ctx),
+    hostRejectsInvalidResponse(ctx),
+    journalRejectsInvalidAppend(ctx),
+    hostAcceptsAppendRejection(ctx)
+  ).flatten()
+
+  pure def nonFaultingListener(ctx: LocalContext): Set[Transition] = Set(
     EFFECTS.map(effect => beginEffect(ctx, effect)).flatten(),
     journalRecordsIntent(ctx),
     hostAcceptsIntent(ctx),
@@ -5415,6 +6107,7 @@ module O2HostedWriterChoreoModel {
   ).flatten()
 
   action step = choreo::step(mainListener, applyCustomEffect)
+  action normalProgressStep = choreo::step(nonFaultingListener, applyCustomEffect)
   action stepWith(process: Process, listener: LocalContext => Set[Transition]): bool =
     choreo::step_with(process, listener, applyCustomEffect)
   action start(effect: EffectKind): bool = stepWith(HOST, ctx => beginEffect(ctx, effect))
@@ -5423,8 +6116,7 @@ module O2HostedWriterChoreoModel {
     stepWith(GITHUB_PROVIDER, providerPerforms),
   }
 
-  action completeEffect(effect: EffectKind): bool = init
-    .then(start(effect))
+  action completeEffect(effect: EffectKind): bool = start(effect)
     .then(stepWith(JOURNAL, journalRecordsIntent))
     .then(stepWith(HOST, hostAcceptsIntent))
     .then(stepWith(JOURNAL, journalRecordsDispatch))
@@ -5444,53 +6136,362 @@ module O2HostedWriterChoreoModel {
         | IntentRecorded(_) => true
         | DispatchRecorded(_) => true
         | EffectApplied(_) => true
+        | EffectUnknown(_) => true
+        | UnknownRecorded(_) => true
+        | ReconcileApplied(_) => true
+        | ReconcileAbsent(_) => true
+        | AbsentRecorded(_) => true
         | AppliedRecorded(_) => true
+        | JournalRecovered(_) => true
+        | AuthorityRead(_) => true
+        | AppendRejected(_) => true
         | _ => false
       }
     else if (process == JOURNAL) match message {
         | RecordIntent(_) => true
         | RecordDispatch(_) => true
+        | RecordUnknown(_) => true
+        | RecordAbsent(_) => true
         | RecordApplied(_) => true
+        | RecoverJournal(_) => true
         | _ => false
       }
-    else if (process == RUNNER) match message { | RunEffect(_) => true | _ => false }
-    else match message { | PerformEffect(_) => true | _ => false }
+    else if (process == RUNNER) match message {
+        | RunEffect(_) => true
+        | ReconcileEffect(_) => true
+        | ReadAuthority(_) => true
+        | _ => false
+      }
+    else match message {
+        | PerformEffect(_) => true
+        | ReconcileEffect(_) => true
+        | ReadAuthority(_) => true
+        | _ => false
+      }
   }
 
   val typedMessageSoup = PROCESSES.forall(process =>
     choreo::s.messages.get(process).forall(message => messageAllowedAt(process, message)))
 
+  type LegacyProjection = {
+    stage: int,
+    operationId: str,
+    operationStatus: str,
+    paused: bool,
+    readbackCurrent: bool,
+    claimCurrent: bool,
+    candidateDurable: bool,
+    branchPublished: bool,
+    pullRequestObserved: bool,
+    mergeObserved: bool,
+    nativeReadbackObserved: bool,
+  }
+
+  pure def completedStage(completed: Set[EffectKind]): int =
+    if (completed.contains(NativeReadback)) 7
+    else if (completed.contains(Merge)) 6
+    else if (completed.contains(PullRequest)) 5
+    else if (completed.contains(Branch)) 4
+    else if (completed.contains(Candidate)) 3
+    else if (completed.contains(ProcessWork)) 2
+    else if (completed.contains(Claim)) 1
+    else 0
+
+  pure def projectedStatus(status: JournalStatus): str = match status {
+    | JournalEmpty => "none"
+    | Intent => "intent"
+    | Dispatching => "dispatching"
+    | Unknown => "unknown"
+    | ProvenAbsent => "absent"
+    | Applied => "none"
+  }
+
+  val legacyProjection: LegacyProjection = {
+    val host = match choreo::s.system.get(HOST).local {
+      | HostLocal(value) => value
+      | _ => {
+          phase: HostPaused, current: None, completed: Set(), paused: true,
+          journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
+          unknownObserved: false, retryObserved: false, duplicateRejected: false,
+          staleRejected: false, identityRejected: false, sequenceRejected: false,
+          recoveredStatus: JournalEmpty,
+        }
+    }
+    val journal = match choreo::s.system.get(JOURNAL).local {
+      | JournalLocal(value) => value
+      | _ => {
+          status: JournalEmpty, current: None, appendCount: 0, rejectionCount: 0,
+        }
+    }
+    {
+      stage: completedStage(host.completed),
+      operationId: match journal.current {
+        | Some(operation) => if (journal.status == Applied) "" else operation.operation
+        | None => ""
+      },
+      operationStatus: projectedStatus(journal.status),
+      paused: host.paused,
+      readbackCurrent: host.authorityFresh,
+      claimCurrent: host.completed.contains(Claim),
+      candidateDurable: host.completed.contains(Candidate),
+      branchPublished: host.completed.contains(Branch),
+      pullRequestObserved: host.completed.contains(PullRequest),
+      mergeObserved: host.completed.contains(Merge),
+      nativeReadbackObserved: host.completed.contains(NativeReadback),
+    }
+  }
+
+  pure def completionPrefix(completed: Set[EffectKind]): bool = and {
+    completed.contains(ProcessWork) implies completed.contains(Claim),
+    completed.contains(Candidate) implies completed.contains(ProcessWork),
+    completed.contains(Branch) implies completed.contains(Candidate),
+    completed.contains(PullRequest) implies completed.contains(Branch),
+    completed.contains(Merge) implies completed.contains(PullRequest),
+    completed.contains(NativeReadback) implies completed.contains(Merge),
+  }
+
+  pure def appliedIsAuthorized(
+    effect: EffectKind,
+    host: HostState,
+    journal: JournalState
+  ): bool = host.completed.contains(effect) or match journal.current {
+    | Some(operation) => and {
+        operation.effectKind == effect,
+        Set(Dispatching, Unknown, Applied).contains(journal.status),
+      }
+    | None => false
+  }
+
+  val retainedProjectionSafety = and {
+    legacyProjection.stage >= 0,
+    legacyProjection.stage <= 7,
+    legacyProjection.branchPublished implies legacyProjection.candidateDurable,
+    legacyProjection.pullRequestObserved implies legacyProjection.branchPublished,
+    legacyProjection.mergeObserved implies legacyProjection.pullRequestObserved,
+    legacyProjection.nativeReadbackObserved implies legacyProjection.mergeObserved,
+    legacyProjection.stage == 7 implies legacyProjection.nativeReadbackObserved,
+    legacyProjection.operationStatus == "unknown" implies
+      choreo::s.messages.get(RUNNER).forall(message => match message {
+        | RunEffect(_) => false
+        | _ => true
+      }),
+    legacyProjection.operationStatus == "unknown" implies
+      choreo::s.messages.get(GITHUB_PROVIDER).forall(message => match message {
+        | PerformEffect(_) => false
+        | _ => true
+      }),
+  }
+
   val safety = and {
     typedMessageSoup,
+    retainedProjectionSafety,
+    match choreo::s.system.get(HOST).local {
+      | HostLocal(host) => and {
+          completionPrefix(host.completed),
+          not(host.journalRecovered) implies host.paused,
+          not(host.authorityFresh) implies host.paused,
+          not(host.resumeAuthenticated) implies host.paused,
+        }
+      | _ => false
+    },
     match choreo::s.system.get(JOURNAL).local {
-      | JournalLocal(journal) => journal.appendCount >= 0
+      | JournalLocal(journal) => and {
+          journal.appendCount >= 0,
+          journal.rejectionCount >= 0,
+          journal.status == JournalEmpty implies journal.current == None,
+          journal.status != JournalEmpty implies journal.current != None,
+        }
       | _ => false
     },
-    match choreo::s.system.get(RUNNER).local {
-      | RunnerLocal(runner) => runner.applied.forall(effect => effect == ProcessWork)
+    {
+      val host = match choreo::s.system.get(HOST).local {
+        | HostLocal(value) => value
+        | _ => {
+            phase: HostPaused, current: None, completed: Set(), paused: true,
+            journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
+            unknownObserved: false, retryObserved: false, duplicateRejected: false,
+            staleRejected: false, identityRejected: false, sequenceRejected: false,
+            recoveredStatus: JournalEmpty,
+          }
+      }
+      val journal = match choreo::s.system.get(JOURNAL).local {
+        | JournalLocal(value) => value
+        | _ => { status: JournalEmpty, current: None, appendCount: 0, rejectionCount: 0 }
+      }
+      match choreo::s.system.get(RUNNER).local {
+      | RunnerLocal(runner) => and {
+          runner.applied.forall(effect => effect == ProcessWork),
+          runner.applied.forall(effect => appliedIsAuthorized(effect, host, journal)),
+          runner.applyCount == runner.applied.size(),
+        }
       | _ => false
+      }
     },
-    match choreo::s.system.get(GITHUB_PROVIDER).local {
-      | ProviderLocal(provider) => not(provider.applied.contains(ProcessWork))
+    {
+      val host = match choreo::s.system.get(HOST).local {
+        | HostLocal(value) => value
+        | _ => {
+            phase: HostPaused, current: None, completed: Set(), paused: true,
+            journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
+            unknownObserved: false, retryObserved: false, duplicateRejected: false,
+            staleRejected: false, identityRejected: false, sequenceRejected: false,
+            recoveredStatus: JournalEmpty,
+          }
+      }
+      val journal = match choreo::s.system.get(JOURNAL).local {
+        | JournalLocal(value) => value
+        | _ => { status: JournalEmpty, current: None, appendCount: 0, rejectionCount: 0 }
+      }
+      match choreo::s.system.get(GITHUB_PROVIDER).local {
+      | ProviderLocal(provider) => and {
+          not(provider.applied.contains(ProcessWork)),
+          provider.applied.forall(effect => appliedIsAuthorized(effect, host, journal)),
+          provider.applyCount == provider.applied.size(),
+        }
       | _ => false
+      }
     },
   }
 
-  run claimFoundation = completeEffect(Claim).expect(hostCompleted(Claim) and safety)
-  run processFoundation = completeEffect(ProcessWork).expect(hostCompleted(ProcessWork) and safety)
-  run candidateFoundation = completeEffect(Candidate).expect(hostCompleted(Candidate) and safety)
-  run branchFoundation = completeEffect(Branch).expect(hostCompleted(Branch) and safety)
-  run pullRequestFoundation = completeEffect(PullRequest).expect(hostCompleted(PullRequest) and safety)
-  run mergeFoundation = completeEffect(Merge).expect(hostCompleted(Merge) and safety)
-  run nativeReadbackFoundation = completeEffect(NativeReadback).expect(hostCompleted(NativeReadback) and safety)
+  def workflowCompleted: bool = hostCompleted(NativeReadback)
+  val unknownReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.unknownObserved
+    | _ => false
+  }
+  val retryReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.retryObserved
+    | _ => false
+  }
+  val restartGatesReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => and {
+        not(host.paused), host.journalRecovered, host.authorityFresh, host.resumeAuthenticated,
+      }
+    | _ => false
+  }
+  val duplicateRejected = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.duplicateRejected and host.completed.size() == 1
+    | _ => false
+  }
+  val staleGenerationRejectionReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.staleRejected and host.completed.size() == 0
+    | _ => false
+  }
+  val wrongIdentityRejectionReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.identityRejected and host.completed.size() == 0
+    | _ => false
+  }
+  val journalSequenceRejectionReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.sequenceRejected and host.completed.size() == 0
+    | _ => false
+  }
+
+  temporal progress: bool =
+    normalProgressStep.weakFair(Set(choreo::s)).implies(eventually(workflowCompleted))
+  temporal faultSafety: bool = always(safety)
+}
+
+module O2HostedWriterChoreoTests {
+  import O2HostedWriterChoreoModel.*
+
+  action throughClaim = init.then(completeEffect(Claim))
+  action throughProcess = throughClaim.then(completeEffect(ProcessWork))
+  action throughCandidate = throughProcess.then(completeEffect(Candidate))
+  action throughBranch = throughCandidate.then(completeEffect(Branch))
+  action throughPullRequest = throughBranch.then(completeEffect(PullRequest))
+  action throughMerge = throughPullRequest.then(completeEffect(Merge))
+  action throughNativeReadback = throughMerge.then(completeEffect(NativeReadback))
+
+  action lostAppliedScenario = init
+    .then(start(Claim))
+    .then(stepWith(JOURNAL, journalRecordsIntent))
+    .then(stepWith(HOST, hostAcceptsIntent))
+    .then(stepWith(JOURNAL, journalRecordsDispatch))
+    .then(stepWith(HOST, hostDispatches))
+    .then(stepWith(GITHUB_PROVIDER, providerPerforms))
+    .then(stepWith(HOST, hostRecordsUnknown))
+    .then(stepWith(JOURNAL, journalRecordsUnknown))
+    .then(stepWith(HOST, hostBeginsReconciliation))
+    .then(stepWith(GITHUB_PROVIDER, externalReconciles))
+    .then(stepWith(HOST, hostAcceptsReconciliation))
+    .then(stepWith(JOURNAL, journalRecordsApplied))
+    .then(stepWith(HOST, hostSettles))
+
+  action provenAbsentRetryScenario = init
+    .then(start(Claim))
+    .then(stepWith(JOURNAL, journalRecordsIntent))
+    .then(stepWith(HOST, hostAcceptsIntent))
+    .then(stepWith(JOURNAL, journalRecordsDispatch))
+    .then(stepWith(HOST, hostDispatches))
+    .then(stepWith(GITHUB_PROVIDER, externalOutcomeUnknown))
+    .then(stepWith(HOST, hostRecordsUnknown))
+    .then(stepWith(JOURNAL, journalRecordsUnknown))
+    .then(stepWith(HOST, hostBeginsReconciliation))
+    .then(stepWith(GITHUB_PROVIDER, externalReconciles))
+    .then(stepWith(HOST, hostAcceptsReconciliation))
+    .then(stepWith(JOURNAL, journalRecordsAbsent))
+    .then(stepWith(HOST, hostRetriesProvenAbsent))
+    .then(stepWith(JOURNAL, journalRecordsIntent))
+    .then(stepWith(HOST, hostAcceptsIntent))
+    .then(stepWith(JOURNAL, journalRecordsDispatch))
+    .then(stepWith(HOST, hostDispatches))
+    .then(stepWith(GITHUB_PROVIDER, providerPerforms))
+    .then(stepWith(HOST, hostObservesApplied))
+    .then(stepWith(JOURNAL, journalRecordsApplied))
+    .then(stepWith(HOST, hostSettles))
+
+  run claimFoundation = throughClaim.expect(hostCompleted(Claim) and safety)
+  run processFoundation = throughProcess.expect(hostCompleted(ProcessWork) and safety)
+  run candidateFoundation = throughCandidate.expect(hostCompleted(Candidate) and safety)
+  run branchFoundation = throughBranch.expect(hostCompleted(Branch) and safety)
+  run pullRequestFoundation = throughPullRequest.expect(hostCompleted(PullRequest) and safety)
+  run mergeFoundation = throughMerge.expect(hostCompleted(Merge) and safety)
+  run nativeReadbackFoundation =
+    throughNativeReadback.expect(workflowCompleted and legacyProjection.stage == 7 and safety)
+  run lostAppliedReconciles =
+    lostAppliedScenario.expect(hostCompleted(Claim) and unknownReached and safety)
+  run provenAbsentRetriesSameOperation =
+    provenAbsentRetryScenario.expect(hostCompleted(Claim) and unknownReached and retryReached and safety)
+  run restartRequiresThreeGates = init
+    .then(stepWith(HOST, crashHost))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(JOURNAL, journalRecovers))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(HOST, hostAcceptsRecovery))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(GITHUB_PROVIDER, externalReadsAuthority))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(HOST, hostAcceptsAuthority))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(HOST, hostAuthenticatesResume))
+    .expect(restartGatesReached and safety)
+  run duplicateResponseRejected = throughClaim
+    .then(stepWith(GITHUB_PROVIDER, externalRedelivers))
+    .then(stepWith(HOST, hostRejectsInvalidResponse))
+    .expect(duplicateRejected and safety)
+  run staleGenerationRejected = init
+    .then(stepWith(GITHUB_PROVIDER, providerInjectsStale))
+    .then(stepWith(HOST, hostRejectsInvalidResponse))
+    .expect(staleGenerationRejectionReached and safety)
+  run wrongIdentityRejected = init
+    .then(stepWith(GITHUB_PROVIDER, providerInjectsWrongIdentity))
+    .then(stepWith(HOST, hostRejectsInvalidResponse))
+    .expect(wrongIdentityRejectionReached and safety)
+  run journalSequenceRejected = init
+    .then(stepWith(HOST, hostInjectsOutOfSequence))
+    .then(stepWith(JOURNAL, journalRejectsInvalidAppend))
+    .then(stepWith(HOST, hostAcceptsAppendRejection))
+    .expect(journalSequenceRejectionReached and safety)
+  run missingNativeReadbackCannotComplete =
+    throughMerge.expect(not(workflowCompleted) and legacyProjection.stage == 6 and safety)
 }
 
 module ChoreoSourcePinSmoke {
   import O2HostedWriterChoreoModel.*
+  import O2HostedWriterChoreoTests.throughClaim
 
   // C1's source-pin smoke now exercises the smallest complete C2 message path while
   // retaining its stable manifest entry point.
-  run choreoSourcePinSmoke = completeEffect(Claim).expect(hostCompleted(Claim) and safety)
+  run choreoSourcePinSmoke = throughClaim.expect(hostCompleted(Claim) and safety)
 }
 
 ```
