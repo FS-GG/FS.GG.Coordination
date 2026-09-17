@@ -53,8 +53,8 @@ let ``checked-in GS2-08-9 aggregate refuses closure with the exact pending code`
     Assert.Equal(78, exitCode)
     Assert.Empty(output)
     Assert.Contains("GS2089-PENDING", error)
-    Assert.Contains("helper PR #3530 merge", error)
-    Assert.Contains("GS2-08.8 PR #417 merge/receipt", error)
+    Assert.Contains("container/runtime retirement remains required", error)
+    Assert.Contains("GS2-08.8 and helper source are merged", error)
     Assert.False(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.9.json")))
 
 [<Fact>]
@@ -83,6 +83,16 @@ let ``aggregate binds the protected seals disabled workflows and retained Q4 bou
             Assert.False(scope.GetProperty("renderingPresentAfter").GetBoolean())
     )
     Assert.False(dispatch.GetProperty("historicalCaller").GetProperty("executed").GetBoolean())
+
+    let receiver = value.GetProperty("receiverAdoption")
+    Assert.Equal("accepted", receiver.GetProperty("state").GetString())
+    Assert.Equal("ff0afa32fbcd55247ead2d1321d2df72ada91600", receiver.GetProperty("protectedMerge").GetString())
+    Assert.Equal(35227810436L, receiver.GetProperty("qualificationRun").GetInt64())
+    Assert.True(receiver.GetProperty("acceptedReceiptPresent").GetBoolean())
+
+    let helper = value.GetProperty("helperBoundary")
+    Assert.Equal("4d92bd4181725745fb9517437aa31d58f0668a12", helper.GetProperty("protectedMerge").GetString())
+    Assert.True(helper.GetProperty("mergedToMain").GetBoolean())
 
 [<Fact>]
 let ``bounded controls reject route capability identity telemetry and helper misstatements`` () =
@@ -116,6 +126,10 @@ let ``bounded controls reject route capability identity telemetry and helper mis
                 |> arrayObject 0
                 |> fun workflow -> workflow["state"] <- "active"
             "stale-source-identity", fun value -> value["sourceHead"] <- String('f', 40)
+            "missing-receiver-receipt",
+            fun value -> objectProperty "receiverAdoption" value |> fun receiver -> receiver["acceptedReceiptPresent"] <- false
+            "helper-source-not-merged",
+            fun value -> objectProperty "helperBoundary" value |> fun helper -> helper["mergedToMain"] <- false
             "false-zero-effect",
             fun value -> objectProperty "telemetryBoundary" value |> fun boundary -> boundary["providerMutationCount"] <- 1
             "telemetry-scope-escalation",

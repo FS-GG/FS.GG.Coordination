@@ -34,8 +34,8 @@ require
     "GS2089-ENVELOPE"
     "aggregate must remain a pending, non-receipt GS2-08.9 qualification"
 
-let expectedHead = "81276fbd8572dd5a8b6f9ce1408694cc2b96b303"
-let expectedTree = "13e4f1d5a0160f697fa5e880e662199f43dbfb9b"
+let expectedHead = "4d92bd4181725745fb9517437aa31d58f0668a12"
+let expectedTree = "24c1d7d9037bc04f8d44e6c6fdd199f2ae852fc7"
 
 require
     (text aggregate "sourceHead" = expectedHead && text aggregate "sourceTree" = expectedTree)
@@ -72,12 +72,30 @@ let receiver = aggregate.GetProperty("receiverAdoption")
 
 require
     (text receiver "unit" = "GS2-08.8"
-     && text receiver "state" = "pending-native-receipt"
-     && text receiver "candidateHead" = "643e76b48bfc317e8a06b38ddc5a0c0f22f93eb4"
+     && text receiver "state" = "accepted"
+     && text receiver "candidateHead" = "a9114c944691a900c3a6117c078755ed8c3f3d5e"
      && integer receiver "pullRequest" = 417
-     && not (boolean receiver "acceptedReceiptPresent"))
+     && text receiver "protectedMerge" = "ff0afa32fbcd55247ead2d1321d2df72ada91600"
+     && text receiver "protectedTree" = "1fa95e66142008120f82d2f9453a2faee7373294"
+     && receiver.GetProperty("qualificationRun").GetInt64() = 35227810436L
+     && text receiver "receiptSourceRevision" = "4e1f8d7a66cda144ff5b3af2abfe431b70aeeff7"
+     && text receiver "receiptDigest" = "71eea49d6e8f094e2215f9580cecc64458c95984a1c4266b70113ce238c1eb0c"
+     && boolean receiver "acceptedReceiptPresent")
     "GS2089-RECEIVER"
-    "GS2-08.8 must remain pending until its protected merge and native receipt"
+    "accepted GS2-08.8 head, merge, tree, qualification run or native receipt differs"
+
+let receiverReceiptDocument =
+    JsonDocument.Parse(read "evidence/github-substrate-v2/accepted/GS2-08.8.json")
+
+let receiverReceipt = receiverReceiptDocument.RootElement
+
+require
+    (text receiverReceipt "unitId" = "GS2-08.8"
+     && text receiverReceipt "state" = "accepted"
+     && text receiverReceipt "sourceRevision" = text receiver "receiptSourceRevision"
+     && text receiverReceipt "digest" = text receiver "receiptDigest")
+    "GS2089-RECEIVER"
+    "checked-in GS2-08.8 native receipt bytes differ"
 
 let expectedSeals =
     Map.ofList
@@ -93,8 +111,8 @@ let expectedSeals =
              "tests/gs2-08-9-dispatch-repair/disposition.json",
              "0cf7e999204184681682d694fd1eb298914d3d29c887fcb21d732d12f34ea337")
             "release-publication",
-            (expectedHead,
-             expectedTree,
+            ("81276fbd8572dd5a8b6f9ce1408694cc2b96b303",
+             "13e4f1d5a0160f697fa5e880e662199f43dbfb9b",
              "docs/reports/gs2-08-9-release-route-dispositions.json",
              "4ca6c682f120117ba68907369d52584c5058cf84ad95b0f1abb47b2dcfd0f5f0")
         ]
@@ -140,7 +158,7 @@ let validRouteStates =
             "dispatch-repair", Set.ofList [ "current-source-sealed" ]
             "release-publication", Set.ofList [ "current-source-sealed" ]
             "release-administration", Set.ofList [ "admin-disabled" ]
-            "helper", Set.ofList [ "pending-merge-and-copy-retirement" ]
+            "helper", Set.ofList [ "source-sealed-runtime-retirement-pending" ]
             "telemetry", Set.ofList [ "submission-only" ]
         ]
 
@@ -248,7 +266,9 @@ require
      && text helper "candidateTree" = "24c1d7d9037bc04f8d44e6c6fdd199f2ae852fc7"
      && integer helper "pullRequest" = 3530
      && text helper "reviewerDisposition" = "GO"
-     && not (boolean helper "mergedToMain")
+     && text helper "protectedMerge" = "4d92bd4181725745fb9517437aa31d58f0668a12"
+     && text helper "protectedTree" = "24c1d7d9037bc04f8d44e6c6fdd199f2ae852fc7"
+     && boolean helper "mergedToMain"
      && text helper "newSddWorkspaceSha256" = "b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f"
      && text helper "routineDeliverySha256" = "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429"
      && integer helper "mutationAttempts" = 0
@@ -269,13 +289,9 @@ let pendingIds = pending |> List.map (fun item -> text item "id")
 require
     (pendingIds =
         [
-            "gs2-08.8-native-receipt"
-            "helper-source-merge"
             "helper-container-runtime-retirement"
         ]
-     && text pending[0] "state" = "pending-pr-417-merge"
-     && text pending[1] "state" = "pending-pr-3530-merge"
-     && text pending[2] "state" = "pending-admin-readback")
+     && text pending[0] "state" = "pending-admin-readback")
     "GS2089-PENDING-SET"
     "the three explicit blocking evidence items must remain ordered and pending"
 
@@ -286,6 +302,6 @@ require
     "Q4 must remain unclaimed"
 
 eprintfn
-    "GS2089-PENDING: GS2-08.8 PR #417 merge/receipt, helper PR #3530 merge, and container/runtime retirement remain required; Q4 is unclaimed"
+    "GS2089-PENDING: container/runtime retirement remains required; GS2-08.8 and helper source are merged; Q4 is unclaimed"
 
 Environment.Exit 78
