@@ -219,6 +219,49 @@ let ``hosted writer Choreo faults remain durable identity fenced and project to 
     Assert.DoesNotContain("action hold", protocol.Substring(protocol.IndexOf("module O2HostedWriterChoreoModel {")))
 
 [<Fact>]
+let ``hosted writer correspondence consumes normalized raw Quint Choreo ITF`` () =
+    let fixtureRoot =
+        Path.Combine(root, "tests/FS.GG.Coordination.Orchestration.Host.Tests/Fixtures/Choreo")
+
+    let manifest = JsonNode.Parse(File.ReadAllBytes(Path.Combine(fixtureRoot, "manifest.json"))).AsObject()
+    Assert.Equal("fsgg.quint.choreo-trace-manifest/1", manifest["schema"].GetValue<string>())
+    Assert.Equal("O2HostedWriterChoreoModel::choreo::s", manifest["rawVariable"].GetValue<string>())
+    Assert.Equal(8, manifest["scenarios"].AsArray().Count)
+
+    let mutable stateCount = 0
+
+    for scenarioNode in manifest["scenarios"].AsArray() do
+        let scenario = scenarioNode.AsObject()
+        let tracePath = Path.Combine(fixtureRoot, scenario["file"].GetValue<string>())
+        Assert.Equal(scenario["traceSha256"].GetValue<string>(), sha256Bytes (File.ReadAllBytes tracePath))
+        let trace = JsonNode.Parse(File.ReadAllBytes tracePath).AsObject()
+        let metadata = trace["#meta"].AsObject()
+        Assert.Null(metadata["description"])
+        Assert.Null(metadata["timestamp"])
+        Assert.Equal(
+            "src/FS.GG.Coordination.Protocol/Protocol.md#O2HostedWriterChoreoTests",
+            metadata["source"].GetValue<string>()
+        )
+        let variables = trace["vars"].AsArray()
+        Assert.Equal("O2HostedWriterChoreoModel::choreo::s", variables[0].GetValue<string>())
+        stateCount <- stateCount + trace["states"].AsArray().Count
+
+    Assert.Equal(180, stateCount)
+
+    let replay =
+        File.ReadAllText(
+            Path.Combine(root, "tests/FS.GG.Coordination.Orchestration.Host.Tests/HostedWriterQuintReplayTests.fs")
+        )
+
+    Assert.Contains("ChoreoTrace.load scenarioId", replay)
+    Assert.DoesNotContain("type private WriterModel", replay)
+    Assert.DoesNotContain("let private modelStep", replay)
+    Assert.DoesNotContain("let private trace actions", replay)
+
+    let bounded = File.ReadAllText(Path.Combine(root, "eng/verify-choreo-c2-bounded.sh"))
+    Assert.Contains("verify-choreo-c3-traces.sh\" --scenario happy-path", bounded)
+
+[<Fact>]
 let ``hosted writer Choreo bounded roots cover provider and runner fault schedules`` () =
     let protocol, _, _ = fixture ()
     let script = File.ReadAllText(Path.Combine(root, "eng/verify-choreo-c2-bounded.sh"))

@@ -3,6 +3,8 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="..\FS.GG.Coordination.QuintReplay.Tests\ReplayHarness.fs" Link="QuintReplay\ReplayHarness.fs" />
+    <Compile Include="ChoreoTrace.fs" />
+    <Compile Include="ChoreoTraceTests.fs" />
     <Compile Include="HostedWriterQuintReplayTests.fs" />
     <Compile Include="HostedWriterRuntimeTests.fs" />
     <Compile Include="RunnerWireTests.fs" />
@@ -22,6 +24,9 @@
   <ItemGroup>
     <Content Include="..\..\src\FS.GG.Coordination.Protocol\Protocol.md"
              Link="Fixtures\Protocol.md"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures\Choreo\**\*"
+             Link="Fixtures\Choreo\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

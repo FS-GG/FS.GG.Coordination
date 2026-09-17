@@ -1,6 +1,6 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; C0 and C1 merged; C2 bounded exit implemented in its protected-main PR; C3 next
+Status: accepted design; C0–C2 merged; C3 executable Quint trace contract implemented in its protected-main PR; C4 next
 
 Decision date: 2026-09-16
 
@@ -456,15 +456,74 @@ genuine Quint ITF artifacts.
 
 ### C3 — make Quint traces the executable contract
 
-- [ ] Define and version the stable observable trace schema and trace manifest.
-- [ ] Export actual Quint traces for happy path and the six required fault/identity scenarios.
-- [ ] Extend the F# harness to validate the source/toolchain/Choreo identities and parse the Choreo projection.
-- [ ] Remove F#-generated model transitions from correspondence tests.
-- [ ] Add deterministic regeneration/digest checks and first-divergence diagnostics.
-- [ ] Retain negative mutations proving that an invalid trace cannot pass through a permissive projection.
+- [x] Define and version the stable observable trace schema and trace manifest.
+- [x] Export actual Quint traces for happy path and the six required fault/identity scenarios.
+- [x] Extend the F# harness to validate the source/toolchain/Choreo identities and parse the Choreo projection.
+- [x] Remove F#-generated model transitions from correspondence tests.
+- [x] Add deterministic regeneration/digest checks and first-divergence diagnostics.
+- [x] Retain negative mutations proving that an invalid trace cannot pass through a permissive projection.
 
 Exit evidence: exact seeded command lines, committed small fixtures, reproducible hashes, and F# tests replaying
 Quint output rather than a reimplementation.
+
+C3 exit evidence (2026-09-17): `eng/verify-choreo-c3-traces.sh` extracts the same canonical pinned Choreo source as
+C2, refuses any Quint executable except the accepted 0.32.0 SHA-256, executes deterministic named tests with the
+Rust backend and one sample, removes only Quint's volatile description/timestamp metadata, binds the canonical
+source name, and byte-compares the result. The base semantic shard regenerates the 64-state happy path in
+protected CI. The committed manifest binds the protocol source commit/digest, Quint and Choreo identities, exact
+command shape, normalization, raw variable, scenario, state count, durable milestone list, and trace digest.
+
+Eight genuine raw traces are retained: happy path, lost-applied reconciliation, proven-absence retry, three-gate
+restart, duplicate response, stale generation, wrong identity, and missing native readback. They contain 180 raw
+Choreo states and 69 selected durable milestones. F# validates every raw process-local operation envelope before
+projecting it, derives `QuintReplayTrace` states directly from `O2HostedWriterChoreoModel::choreo::s`, and locates
+source bindings in the canonical Choreo definitions. The former `WriterModel`, `modelStep`, and F# ITF builder are
+deleted. Happy and lost-applied paths replay through the Akka wrapper over the production journal/provider
+contracts; faulty native readback reports the exact final `hostSettles` divergence. Negative controls cross a raw
+generation and corrupt a projected state identity, and both are rejected. Production `ExecutionSessionActor`,
+Host composition, and PostgreSQL correspondence remain deliberately assigned to C4.
+
+#### C3 continuation checkpoint — 2026-09-17
+
+Safe resume branch: `routine/choreo-c3-quint-itf`, based on merged C2 commit
+`a598f27fc8d2c23647f4dc45df7d5119f3461b74`. The branch is intentionally limited to C3; do not begin C4 in the
+same PR. Its draft PR is the durable review/CI handoff.
+
+Completed on the branch:
+
+- eight normalized raw Quint ITF fixtures and the versioned identity/milestone manifest;
+- deterministic all-scenario regeneration plus protected base-shard regeneration of `happy-path`;
+- fail-closed F# parsing of raw Choreo process state and operation envelopes;
+- removal of `WriterModel`, `modelStep`, and the F#-assembled hosted-writer ITF;
+- happy/lost-response Akka wrapper replay, exact native-readback divergence, and two negative mutation controls;
+- architecture guards and this roadmap evidence.
+
+Validated before the checkpoint:
+
+```text
+Release build: Host tests project, 0 warnings / 0 errors
+Host test suite: 63 passed
+Choreo trace + replay focus: 6 passed
+Choreo architecture focus: 9 passed
+Pinned happy-path regeneration: 64 states, SHA-256 422986cf7e35c538151d9fe650e45437b9c9e02c2b986d481e904355577f0b90
+All eight fixture regenerations: byte/digest exact, 180 raw states total
+```
+
+Resume procedure:
+
+1. Fetch the draft PR branch and read this checkpoint plus the C3 exit-evidence paragraphs above.
+2. Run `git diff --check` and `bash eng/verify-choreo-c3-traces.sh` with the accepted Quint binary supplied through
+   `FSGG_QUINT_BIN`; the script refuses any other binary digest.
+3. Run the full Host and architecture suites. On this workstation, use the already-qualified canonical NuGet cache
+   if the locally installed SDK reports the known `FSharp.Core 10.1.302` NU1403 cache collision; clean GitHub
+   runners do not exhibit it.
+4. Inspect draft-PR CI, repair only C3 regressions, mark ready, arm squash auto-merge, and wait for protected checks.
+5. After merge, confirm there are still no packable projects (there were none at C2/C3) and start C4 from fresh
+   `origin/main` on a new branch.
+
+Do not regenerate milestone indices in F#, collapse the committed raw ITF to a hand-authored projection fixture,
+or claim C4 production correspondence from the wrapper actor. The raw `O2HostedWriterChoreoModel::choreo::s`
+state remains the executable source of truth.
 
 ### C4 — close production correspondence gaps
 
