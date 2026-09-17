@@ -1,0 +1,52 @@
+{
+  "schema": "fsgg.gs2-08.7-attestation-verification/1",
+  "repository": "FS-GG/.github",
+  "verifiedWith": "gh attestation verify --repo FS-GG/.github --signer-workflow <exact-component-workflow>",
+  "results": [
+    {
+      "package": "FS.GG.Coord.Cli",
+      "subjectName": "FS.GG.Coord.Cli.0.90.0.nupkg",
+      "subjectSha256": "5d7ed17671338afdf14b9f824d65cffd4477bd53d49a05abe4117798992edcbe",
+      "predicateType": "https://slsa.dev/provenance/v1",
+      "signerWorkflow": ".github/workflows/release-coord-engine.yml",
+      "sourceDigest": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "sourceRepository": "FS-GG/.github",
+      "sourceVisibilityAtSigning": "public",
+      "trigger": "workflow_dispatch",
+      "invocation": "https://github.com/FS-GG/.github/actions/runs/35206596077/attempts/1",
+      "certificateIssuer": "https://token.actions.githubusercontent.com",
+      "rawVerificationSha256": "80558be88fb68dcd75840fe6480692640f1e82944cfac2c42e24bba7d6361230",
+      "verificationCount": 1
+    },
+    {
+      "package": "FS.GG.Drivers",
+      "subjectName": "FS.GG.Drivers.0.90.0.nupkg",
+      "subjectSha256": "a526036e587904b8db942a1beae79c5117fecb78abef8f014c03533f9333e470",
+      "predicateType": "https://slsa.dev/provenance/v1",
+      "signerWorkflow": ".github/workflows/release-drivers.yml",
+      "sourceDigest": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "sourceRepository": "FS-GG/.github",
+      "sourceVisibilityAtSigning": "public",
+      "trigger": "workflow_dispatch",
+      "invocation": "https://github.com/FS-GG/.github/actions/runs/35206593951/attempts/1",
+      "certificateIssuer": "https://token.actions.githubusercontent.com",
+      "rawVerificationSha256": "6c88c6048228b136b65f2e8742cd208bf8cb0a15fae820673b319aac1fd135f3",
+      "verificationCount": 1
+    },
+    {
+      "package": "FS.GG.Kit",
+      "subjectName": "FS.GG.Kit.0.90.0.nupkg",
+      "subjectSha256": "f8a76276b4770f3a4a5bb1911be95e17ce423e4c2cc0bd1e936e7462b6fa9f9a",
+      "predicateType": "https://slsa.dev/provenance/v1",
+      "signerWorkflow": ".github/workflows/release-kit.yml",
+      "sourceDigest": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "sourceRepository": "FS-GG/.github",
+      "sourceVisibilityAtSigning": "public",
+      "trigger": "workflow_dispatch",
+      "invocation": "https://github.com/FS-GG/.github/actions/runs/35206591683/attempts/1",
+      "certificateIssuer": "https://token.actions.githubusercontent.com",
+      "rawVerificationSha256": "d30ab9675709ed1ebae29697eb9e32c4a8b853f84ed4aa65b68fb7c1542a8cf4",
+      "verificationCount": 1
+    }
+  ]
+}

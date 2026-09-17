@@ -1,5 +1,6 @@
 open System
 open System.IO
+open System.Security.Cryptography
 open System.Text.Json
 
 let fail code message = failwith $"{code}: {message}"
@@ -18,10 +19,16 @@ let registrationPath =
     "evidence/github-substrate-v2/gs2-08-7/publication-qualification.json"
 
 let casesPath = "evidence/github-substrate-v2/gs2-08-7/independent-cases.json"
+let readbackPath = "evidence/github-substrate-v2/gs2-08-7/public-readback.json"
+let attestationsPath = "evidence/github-substrate-v2/gs2-08-7/attestation-verification.json"
 let registrationDocument = JsonDocument.Parse(read registrationPath)
 let casesDocument = JsonDocument.Parse(read casesPath)
+let readbackDocument = JsonDocument.Parse(read readbackPath)
+let attestationsDocument = JsonDocument.Parse(read attestationsPath)
 let registration = registrationDocument.RootElement
 let cases = casesDocument.RootElement
+let readbackEvidence = readbackDocument.RootElement
+let attestationEvidence = attestationsDocument.RootElement
 
 let text (value: JsonElement) (name: string) = value.GetProperty(name).GetString()
 
@@ -31,6 +38,9 @@ let strings (value: JsonElement) (name: string) =
 let require condition code message =
     if not condition then
         fail code message
+
+let sha256 relative =
+    SHA256.HashData(read relative) |> Convert.ToHexString |> _.ToLowerInvariant()
 
 let sourceMerge = "155f8897424b49906dfb0464ce684e75dd9bda3c"
 let sourceTree = "52c9dd051467a7782c4e101dd35e0ca561470f81"
@@ -182,6 +192,108 @@ require
      && text cases "network" = "offline")
     "GVPQ-CASES"
     "independent cases must remain offline and synthetic"
+
+let acceptedSourceMerge = "3adada5a9738464291088830c47a30a3a8fc9561"
+let acceptedSourceTree = "0f075e251d90a2d33efe556df1dac38394b0a388"
+let acceptedVersion = "0.90.0"
+
+require
+    (text readbackEvidence "schema" = "fsgg.gs2-08.7-public-readback/1"
+     && text readbackEvidence "unit" = "GS2-08.7"
+     && text readbackEvidence "state" = "qualified"
+     && text readbackEvidence "version" = acceptedVersion)
+    "GVPQ-READBACK"
+    "public readback identity differs"
+
+let acceptedSource = readbackEvidence.GetProperty("source")
+let release = readbackEvidence.GetProperty("release")
+
+require
+    (text acceptedSource "merge" = acceptedSourceMerge
+     && text acceptedSource "tree" = acceptedSourceTree
+     && text release "tag" = "coherent-set/v0.90.0"
+     && not (release.GetProperty("draft").GetBoolean())
+     && text release "contentId" = "sha256:52b2774de277855c16a3c0852bc5113deea13d9076b866e6a7de0acc84f4b9c4")
+    "GVPQ-RELEASE"
+    "promoted release or protected source differs"
+
+let acceptedPackages = readbackEvidence.GetProperty("packages").EnumerateArray() |> Seq.toList
+
+let expectedPayloads =
+    Map.ofList
+        [
+            "FS.GG.Coord.Cli", "725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+            "FS.GG.Drivers", "76c7c7ac186431bc8e55e13e7175897cace654cf9f9ba49cb5b081e830f890f3"
+            "FS.GG.Kit", "f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+        ]
+
+require
+    (acceptedPackages.Length = 3
+     && (acceptedPackages |> List.map (fun package -> text package "id") |> List.sort) = packageIds
+     && acceptedPackages
+        |> List.forall (fun package ->
+            text package "version" = acceptedVersion
+            && text package "payloadSha256" = expectedPayloads[text package "id"]
+            && text package "producerArchiveSha256" <> text package "nugetServedArchiveSha256"))
+    "GVPQ-PUBLIC-PACKAGES"
+    "public coherent package identities differ"
+
+let feeds = readbackEvidence.GetProperty("feeds")
+let publicInstallEvidence = readbackEvidence.GetProperty("publicInstall")
+let bridgeEvidence = readbackEvidence.GetProperty("bridgeQualification")
+let operation = readbackEvidence.GetProperty("operation")
+
+require
+    (text feeds "github-packages" = "verified"
+     && text feeds "nuget-org" = "verified"
+     && text feeds "crossFeedIdentity" = "normalized-payload-sha256"
+     && text publicInstallEvidence "feed" = "nuget-org"
+     && text publicInstallEvidence "authentication" = "anonymous"
+     && text publicInstallEvidence "ambientSources" = "cleared"
+     && text publicInstallEvidence "caches" = "private"
+     && publicInstallEvidence.GetProperty("cliExecuted").GetBoolean()
+     && publicInstallEvidence.GetProperty("closureRestored").GetBoolean()
+     && publicInstallEvidence.GetProperty("restoredFiles").GetInt32() > 0
+     && text bridgeEvidence "state" = "passed"
+     && bridgeEvidence.GetProperty("publicPackage").GetBoolean()
+     && text bridgeEvidence "network" = "loopback-only"
+     && text bridgeEvidence "credential" = "fake"
+     && bridgeEvidence.GetProperty("refusalControls").GetInt32() = 6
+     && not (operation.GetProperty("providerMutation").GetBoolean())
+     && not (operation.GetProperty("credentialRetained").GetBoolean())
+     && not (operation.GetProperty("receiverAdoption").GetBoolean()))
+    "GVPQ-PUBLIC-INSTALL-EVIDENCE"
+    "public install, refusal-control or operation boundary differs"
+
+let attestationReference = readbackEvidence.GetProperty("attestations")
+
+require
+    (text attestationReference "state" = "verified"
+     && attestationReference.GetProperty("count").GetInt32() = 3
+     && text attestationReference "identity" = "keyless-oidc-sigstore"
+     && text attestationReference "evidenceSha256" = sha256 attestationsPath
+     && text attestationEvidence "schema" = "fsgg.gs2-08.7-attestation-verification/1"
+     && text attestationEvidence "repository" = "FS-GG/.github")
+    "GVPQ-ATTESTATION-EVIDENCE"
+    "keyless attestation evidence differs"
+
+let attestationResults = attestationEvidence.GetProperty("results").EnumerateArray() |> Seq.toList
+
+require
+    (attestationResults.Length = 3
+     && attestationResults
+        |> List.forall (fun result ->
+            let package = acceptedPackages |> List.find (fun package -> text package "id" = text result "package")
+            text result "subjectSha256" = text package "producerArchiveSha256"
+            && text result "signerWorkflow" = text package "publisherWorkflow"
+            && text result "sourceDigest" = acceptedSourceMerge
+            && text result "sourceRepository" = "FS-GG/.github"
+            && text result "sourceVisibilityAtSigning" = "public"
+            && text result "trigger" = "workflow_dispatch"
+            && text result "predicateType" = "https://slsa.dev/provenance/v1"
+            && result.GetProperty("verificationCount").GetInt32() = 1))
+    "GVPQ-ATTESTATIONS"
+    "attestation subject, source or workflow binding differs"
 
 type PackageEvidence =
     {
@@ -454,7 +566,7 @@ for independentCase in independentCases do
     require (failures = [ expectedFailure ]) "GVPQ-NEGATIVE" $"{id} expected only {expectedFailure}, got {failureText}"
 
 printfn
-    "github-v1-bridge-publication-contract OK packages=%d feeds=%d controls=%d q=Q3 network=offline state=registered"
+    "github-v1-bridge-publication-contract OK packages=%d feeds=%d controls=%d q=Q3 network=offline state=accepted version=0.90.0"
     packageIds.Length
     requiredFeeds.Length
     independentCases.Length

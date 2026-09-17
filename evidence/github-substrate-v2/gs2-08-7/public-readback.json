@@ -1,0 +1,92 @@
+{
+  "schema": "fsgg.gs2-08.7-public-readback/1",
+  "unit": "GS2-08.7",
+  "state": "qualified",
+  "version": "0.90.0",
+  "release": {
+    "url": "https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.90.0",
+    "tag": "coherent-set/v0.90.0",
+    "draft": false,
+    "publishedAt": "2026-09-17T10:07:37Z",
+    "promotionRun": 35207977254,
+    "resumeRun": 35207748964,
+    "contentId": "sha256:52b2774de277855c16a3c0852bc5113deea13d9076b866e6a7de0acc84f4b9c4",
+    "manifestSha256": "1bbb77f3de10ba3116f9de2ea1df3f5edee38be0de07fa0eaf7c173da3a8456a",
+    "stableChannelSha256": "d849757a5ac92041212df1f7db0e9a747c4952c3ed3b9774aafd2eba9fbad272"
+  },
+  "source": {
+    "merge": "3adada5a9738464291088830c47a30a3a8fc9561",
+    "tree": "0f075e251d90a2d33efe556df1dac38394b0a388"
+  },
+  "feeds": {
+    "github-packages": "verified",
+    "nuget-org": "verified",
+    "crossFeedIdentity": "normalized-payload-sha256"
+  },
+  "packages": [
+    {
+      "id": "FS.GG.Coord.Cli",
+      "version": "0.90.0",
+      "producerArchiveSha256": "5d7ed17671338afdf14b9f824d65cffd4477bd53d49a05abe4117798992edcbe",
+      "nugetServedArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+      "payloadSha256": "725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481",
+      "publisherRun": 35207974150,
+      "publisherWorkflow": ".github/workflows/release-coord-engine.yml"
+    },
+    {
+      "id": "FS.GG.Drivers",
+      "version": "0.90.0",
+      "producerArchiveSha256": "a526036e587904b8db942a1beae79c5117fecb78abef8f014c03533f9333e470",
+      "nugetServedArchiveSha256": "103292c164806bb0fb887edf268a60053e706545d0fdd9e1a9c5707e9f3873d5",
+      "payloadSha256": "76c7c7ac186431bc8e55e13e7175897cace654cf9f9ba49cb5b081e830f890f3",
+      "publisherRun": 35207972265,
+      "publisherWorkflow": ".github/workflows/release-drivers.yml"
+    },
+    {
+      "id": "FS.GG.Kit",
+      "version": "0.90.0",
+      "producerArchiveSha256": "f8a76276b4770f3a4a5bb1911be95e17ce423e4c2cc0bd1e936e7462b6fa9f9a",
+      "nugetServedArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+      "payloadSha256": "f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4",
+      "publisherRun": 35207970277,
+      "publisherWorkflow": ".github/workflows/release-kit.yml"
+    }
+  ],
+  "attestations": {
+    "state": "verified",
+    "count": 3,
+    "evidenceSha256": "d3da47b2baec6e1a0dd244f37a5da8083952422c90c4c6a903b41920b5c51e12",
+    "identity": "keyless-oidc-sigstore"
+  },
+  "publicInstall": {
+    "feed": "nuget-org",
+    "authentication": "anonymous",
+    "ambientSources": "cleared",
+    "caches": "private",
+    "cliExecuted": true,
+    "closureRestored": true,
+    "restoredFiles": 85,
+    "toolInstallLogSha256": "6e95993b8a27f1b6868ddd8a37608b486d6955ff8c5281f47c58e9072c707196",
+    "closureRestoreLogSha256": "562cbde8f350625741c5483a9cc151883810112f7b784bfe37a247c311a150ba",
+    "commandHelpSha256": "771ced41d14e919afce92a8c6fa6f1ca0e450d6dc12ca29840126f36b0454c4e",
+    "restoredFilesSha256": "276a1891f35be8e4f55d5571b37aa7c2b225b156e3ee78d3f3708aeecc5f02dd"
+  },
+  "bridgeQualification": {
+    "state": "passed",
+    "publicPackage": true,
+    "network": "loopback-only",
+    "credential": "fake",
+    "refusalControls": 6,
+    "sha256": "37f98809806128a78d1d1e0e80378aa616cc5bc4ccfc7025a029ef7f1b602d00",
+    "installedAssemblies": {
+      "FS.GG.Coordination.Core": "be468389c045213dd05deb3857a084d077b3e9004ea78fb658066ffcee1f5444",
+      "FS.GG.Coordination.GitHub": "a11ef52027b9f4485ffc0f959ebf3592002d7b5338723a90c3aaa1240ea9ff49",
+      "FS.GG.Coordination.Cli": "c37d76fa42483e76b91275d8764bdcb04881cb9f3643c6e9fe9b0df3914d3512"
+    }
+  },
+  "operation": {
+    "providerMutation": false,
+    "credentialRetained": false,
+    "receiverAdoption": false
+  }
+}
