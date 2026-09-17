@@ -224,7 +224,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 16777216
+        "artifactBytes": 33554432
       },
       "admission": {
         "owner": "authority",
@@ -280,7 +280,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 16777216
+        "artifactBytes": 33554432
       },
       "admission": {
         "owner": "lifecycle",
@@ -337,7 +337,7 @@
         "samples": 200,
         "elapsedMs": 30000,
         "peakMiB": 1024,
-        "artifactBytes": 16777216
+        "artifactBytes": 33554432
       },
       "admission": {
         "owner": "relations",
@@ -394,7 +394,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 16777216
+        "artifactBytes": 33554432
       },
       "admission": {
         "owner": "protocol-streams",
@@ -447,7 +447,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 16777216
+        "artifactBytes": 33554432
       },
       "admission": {
         "owner": "mutation-saga",
@@ -501,7 +501,7 @@
         "samples": 200,
         "elapsedMs": 45000,
         "peakMiB": 1536,
-        "artifactBytes": 16777216
+        "artifactBytes": 33554432
       },
       "admission": {
         "owner": "desired-state",
@@ -557,7 +557,7 @@
         "samples": 200,
         "elapsedMs": 60000,
         "peakMiB": 3072,
-        "artifactBytes": 16777216
+        "artifactBytes": 33554432
       },
       "admission": {
         "owner": "qualification",
