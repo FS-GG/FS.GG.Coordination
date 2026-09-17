@@ -1,5 +1,5 @@
 {
-  "schema": "fsgg.github-substrate.v1-historical-client-blockers/1",
+  "schema": "fsgg.github-substrate.v1-historical-client-blockers/2",
   "unit": "GS2-08.6",
   "clients": [
     {
@@ -7,8 +7,13 @@
       "receivers": [
         "governance"
       ],
-      "proof": "cannot-prove-fence-refusal",
-      "disposition": "GS2-08.9-retain-or-retire"
+      "status": "artifact-unavailable",
+      "disposition": "GS2-08.9-retain-or-retire",
+      "proof": "artifact-unavailable",
+      "missing": [
+        "fs.gg.coord.cli/0.58.0/tools/net10.0/any/fsgg-coord-engine.dll",
+        "fs.gg.coord.cli/0.58.0/fs.gg.coord.cli.0.58.0.nupkg"
+      ]
     },
     {
       "version": "0.75.4",
@@ -19,121 +24,182 @@
         "rendering",
         "templates"
       ],
-      "proof": "cannot-prove-fence-refusal",
-      "disposition": "GS2-08.9-retain-or-retire"
+      "status": "bypass-observed",
+      "disposition": "GS2-08.9-retain-or-retire",
+      "proof": "isolated-provider-bypass-observed",
+      "providerMutationCount": 1,
+      "artifact": {
+        "dllSha256": "a46330791f86c0e93079f936315aa666c9d529ded6f280369d4490fb0b94094d",
+        "nupkgSha256": "64c1a287dca9059af1cf41bcc0fd36ca14fed13c57eccf90cd16d3060d654221"
+      },
+      "command": [
+        "comment",
+        "create",
+        "FS.GG.SDD#43",
+        "FS.GG.SDD#42",
+        "<owned-file>",
+        "--json"
+      ]
     }
   ],
-  "claim": "22 direct workflow, script, publication, protected-administration and non-CLI sources plus 6 legacy receivers remain blockers and are not passing fence results",
   "externalWriterSources": [
     {
       "path": ".github/workflows/dispatch-sender.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "0874e00420ec87d22885860257ccc731e5c7b4b0dc2ef6ae94318ad80d32cbbe",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/feed-autofix.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "f8aeb6384928f6791557dfe37ec6c2795c18e2cfed3ed896e99f1040e858f6c5",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/fsgg-dispatch-broker.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "6da0f197d97129fbb9b43f931879779d4a3b4b0af38b2ef7634eb945eaf6b05c",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/github-substrate-v2-authority-qualification.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "0d5051d560fe60207f992f8312410e82b7f1262b19bc0b3f9d2deeb2cec086e3",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/kit-auto-publish.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "1f35bbd49bd86510d62808580a868701ba22eb6f51cefaa8013030afaed6d1e7",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/kit-materialize.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/lockfile-sync.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/release-coord-engine.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "703d51abf54e75638ea3ce959b95093a0b320adbc799edb4257ab486163e2363",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/release-drivers.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "61e77fb8184521c6a0015cfc6b3aa57374bd381555d62ff75b651ed7c7a46736",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/release-kit.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "4d9afe857dfe3a08c1e6e7bfbae54c655700fe5c8ee9992114184e264b4d2433",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "538b9923a2bcb2bf7a7dfe0a595bd8d243bc84cd20eedc2eb0d4d2615cf5073f",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/release-telemetry-host.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "379fa8e792d30ccfc27ee1019c7912b61bc3a91d78654aaab681094366657fe9",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/release-saga-prepare.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "6498e57524e0552c0beda369b864a12c8b747e57f5c758da21c0cc4a9b0693d3",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/release-saga-start.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "3bbe4278a08d8797faa5b600bd97cfef48fa26887f0889f6de781f719530880f",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/skill-registry-autofix.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "32f9275322622d698ca711ce351e04c406fa6fb5d3b9cf49d6e382ccab0b6b97",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/skillmirror-redrive.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "1c12000dbbf3a8e3c8412af25273e0e24f0aa4cbc766401a59111e0d82e26bdb",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": ".github/workflows/touch-set-drift.yml",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "7c821737b9fb3c35fc9322e05c4ed08a4580e6e7ab9a1a442f9af73a0548729e",
+      "status": "artifact-unavailable",
+      "reason": "GitHub Actions workflow requires the hosted control plane, event payload, permissions envelope, and repository-scoped credentials; no safe standalone executable artifact exists.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": "scripts/NewSddWorkspace/Program.fs",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "f03ea38ce142e315c6c04e4d4d5ed1a0d4567c6684f031dd2b032222f6556cb5",
+      "status": "no-standalone-artifact",
+      "reason": "Census row is source/library code without a retained standalone executable plus complete invocation inputs.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": "scripts/release-saga-ci.sh",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "9973c309255070ed309d86c30a9a78b77b5f01a933c447e605caf97121775ce5",
+      "status": "not-safely-redirectable",
+      "reason": "Executable hard-codes GitHub Packages and/or nuget.org provider endpoints, so an isolated target cannot capture the mutation without changing the program under test.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": "scripts/release-saga-promote-release.sh",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "3d458d4eb3700be989c39f66ffc7b4a3dd0e5ac7d6369e4a829c1164ba40d440",
+      "status": "not-safely-redirectable",
+      "reason": "Executable hard-codes GitHub Packages and/or nuget.org provider endpoints, so an isolated target cannot capture the mutation without changing the program under test.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": "src/FS.GG.Telemetry.Client/RemoteClient.fs",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "8e03d5ff3609812e2241463ab8cd0bcd05094b208df6e30870e4bc1a045e6713",
+      "status": "no-standalone-artifact",
+      "reason": "Census row is source/library code without a retained standalone executable plus complete invocation inputs.",
       "disposition": "GS2-08.9-retain-or-retire"
     },
     {
       "path": "tools/routine-delivery.py",
-      "proof": "producer-harness-does-not-execute-route",
+      "sha256": "045d38b4ab93434fc0cd00e0fc927f2923091ab4e5dba886f720167af52eab0e",
+      "status": "provider-cli-not-redirectable",
+      "reason": "Executable delegates mutation to authenticated gh against an OWNER/REPO and exposes no isolated provider base; live merge authority is intentionally absent.",
       "disposition": "GS2-08.9-retain-or-retire"
     }
-  ]
+  ],
+  "legacyEvidenceSha256": "f6f12d1f1c8420fa0ba9e734c74dc4acd468fe00f815b0e94f03f0e37143d557",
+  "legacyProbeEvidenceSha256": "38f07dd947f6315fbe60fcc5528ef57fd142549d52dfa319ce7dc1faefc82794",
+  "externalRouteEvidenceSha256": "1d33145d4ad1fd637b3ff1220d659d16d7187a8adb0aab5943a0ad480f1a591d",
+  "claim": "GS2-08.6 attempted or assessed the closed population and preserves every exposed or unavailable route as GS2-08.9 work; no residual is represented as a passing fence result"
 }

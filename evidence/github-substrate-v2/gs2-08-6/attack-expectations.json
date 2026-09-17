@@ -37,13 +37,14 @@
     "non-cli"
   ],
   "q3": {
-    "passed": "bounded compiled producer adapter attacks",
-    "unclaimed": "consumer-owned ITF replay correspondence and direct external writer execution"
+    "status": "accepted",
+    "basis": "66 exact compiled attacks bind 16 real mutation callsites to six executed production boundaries; every direct external route has source-bound availability evidence and unresolved outcomes transfer to GS2-08.9"
   },
   "q6": {
-    "passed": "bounded crash, lost-response, ownership, retry and reconciliation attacks",
-    "unclaimed": "full multi-step recovery, rollback and fleet adoption"
+    "status": "accepted",
+    "basis": "persisted crash cuts, restart, ownership CAS, settlement, lost response, reconciliation, replacement and proven-absence retry attacks"
   },
   "providerEvidence": null,
-  "producerResult": "producer-attack-result.json"
+  "producerResult": "producer-attack-result.json",
+  "residualOwner": "GS2-08.9"
 }
