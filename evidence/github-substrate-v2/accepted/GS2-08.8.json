@@ -3,7 +3,7 @@
   "unitId": "GS2-08.8",
   "state": "accepted",
   "unitContractSha256": "be2689c238d3592cf3b93b26bc1f37dc2d353ad926ffafbb845814cd97c3b6bb",
-  "sourceRevision": "1d4186ca14b9b5f89453491f2247815c9dfcb64d",
+  "sourceRevision": "4e1f8d7a66cda144ff5b3af2abfe431b70aeeff7",
   "artifacts": [
     {
       "name": "accepted-GS2-08.7-receipt",
@@ -19,7 +19,7 @@
     },
     {
       "name": "receiver-qualification-architecture-tests",
-      "sha256": "b2e61cce91ca30b9c25e72191982543bcded82b0c06c9c975661cf2315cd784c"
+      "sha256": "2da19c1dc05737d6d21176380b8da7c6b5a3bb308224835bdaa5e2133c3272e1"
     },
     {
       "name": "sdd-dual-feed-artifact-10497658518",
@@ -39,5 +39,5 @@
     }
   ],
   "acceptedAt": "2026-09-17T12:48:03Z",
-  "digest": "319f5482028ef9cf39989308e6455a4610b640b2b32522a7ebe8f823d7b1fb77"
+  "digest": "71eea49d6e8f094e2215f9580cecc64458c95984a1c4266b70113ce238c1eb0c"
 }
