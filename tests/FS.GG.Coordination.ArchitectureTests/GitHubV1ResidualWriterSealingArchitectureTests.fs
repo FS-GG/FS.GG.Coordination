@@ -149,9 +149,9 @@ let ``GS2-08-9 registration gate receipt and storage index bind the qualified so
     use receipt = JsonDocument.Parse(receiptBytes)
     let receiptValue = receipt.RootElement
     Assert.Equal("accepted", receiptValue.GetProperty("state").GetString())
-    Assert.Equal("179a485e249d39794f5f1b02fe7ddbbfbf1e88a1", receiptValue.GetProperty("sourceRevision").GetString())
+    Assert.Equal("f9e30d7b4a910a618a85099757bd7836864f1028", receiptValue.GetProperty("sourceRevision").GetString())
     Assert.Equal(unitValue.GetProperty("contractSha256").GetString(), receiptValue.GetProperty("unitContractSha256").GetString())
-    Assert.Equal("dfee1381892be08a5a3ced90a596c4084fba81c4f702f930ccc6f0b784d4470c", receiptValue.GetProperty("digest").GetString())
+    Assert.Equal("5763daf077fa1eb271bd65fd6a77b0e53b4deee63fcdb44842ca1462a5f3c5f5", receiptValue.GetProperty("digest").GetString())
     Assert.True(AcceptanceReceiptDigest.verify (ReadOnlyMemory receiptBytes) "GS2-08.9" (receiptValue.GetProperty("digest").GetString()) receiptValue |> Result.isOk)
 
     let artifacts =
@@ -159,7 +159,7 @@ let ``GS2-08-9 registration gate receipt and storage index bind the qualified so
         |> Seq.map (fun artifact -> artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString())
         |> Map.ofSeq
 
-    Assert.Equal("44abcf15afa2cdd14ffee9ee41c6e3820dcf4d8a7876015c5b15b05f19f08d71", artifacts["residual-writer-sealing-aggregate"])
+    Assert.Equal("aa3204f4802deacd7d92541776c4853216e9c02ac796dc1471ae3cc08a6fc036", artifacts["residual-writer-sealing-aggregate"])
     Assert.Equal("fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549", artifacts["host-helper-retirement-mailbox-evidence"])
 
     use index = JsonDocument.Parse(bytes "evidence/github-substrate-v2/index.json")

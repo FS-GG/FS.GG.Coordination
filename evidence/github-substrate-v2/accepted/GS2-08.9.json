@@ -3,7 +3,7 @@
   "unitId": "GS2-08.9",
   "state": "accepted",
   "unitContractSha256": "c6ca8e280ab1cac9fe19355073b5ab3e92a4d6ff78a83cf63c0689a0d7a52c8f",
-  "sourceRevision": "179a485e249d39794f5f1b02fe7ddbbfbf1e88a1",
+  "sourceRevision": "f9e30d7b4a910a618a85099757bd7836864f1028",
   "artifacts": [
     {
       "name": "accepted-GS2-08.8-receipt",
@@ -11,21 +11,21 @@
     },
     {
       "name": "residual-writer-sealing-aggregate",
-      "sha256": "44abcf15afa2cdd14ffee9ee41c6e3820dcf4d8a7876015c5b15b05f19f08d71"
+      "sha256": "aa3204f4802deacd7d92541776c4853216e9c02ac796dc1471ae3cc08a6fc036"
     },
     {
       "name": "residual-writer-sealing-validator",
-      "sha256": "154394fb10cf1aa75ae37c818c8fa7b06d219304347f913e94370717ebd7057b"
+      "sha256": "a0f6641a0ed4a7f5ad31b93cf0f3b67ff64675258a4058f395ab8ef42776281b"
     },
     {
       "name": "residual-writer-sealing-architecture-tests",
-      "sha256": "96f18f2244220d771eb858c6ecfd4f948b1ca6fd2f02b2c6545f8cea080aa81b"
+      "sha256": "7b9e502fd7cc9aa600579141f4292cf1fc444eb9fbf0ce890001c50b38fea69b"
     },
     {
       "name": "host-helper-retirement-mailbox-evidence",
       "sha256": "fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549"
     }
   ],
-  "acceptedAt": "2026-09-17T14:12:04Z",
-  "digest": "dfee1381892be08a5a3ced90a596c4084fba81c4f702f930ccc6f0b784d4470c"
+  "acceptedAt": "2026-09-17T14:19:38Z",
+  "digest": "5763daf077fa1eb271bd65fd6a77b0e53b4deee63fcdb44842ca1462a5f3c5f5"
 }
