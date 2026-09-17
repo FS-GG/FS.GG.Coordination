@@ -389,6 +389,9 @@ the existing inner ceiling enforceable; it does not increase any semantic or res
 infrastructure attempt is represented by the receipt's explicit physical-process/startup-retry counters, while
 elapsed and peak measurements use the one successful logical attempt. Otherwise a retry triggered exactly at the
 ceiling could never pass the unchanged semantic budget, even when the fresh attempt completed immediately.
+The same 150-second maximum ceiling also guards unmeasured Apalache `verify` calls used by the base invariant and
+negative-control suite; those calls use the same one-retry lifecycle classification, and negative controls must
+still emit their expected invariant/ITF evidence, so a timeout cannot be mistaken for a successful red control.
 
 ### C3 — make Quint traces the executable contract
 

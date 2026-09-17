@@ -296,8 +296,32 @@ let run workingDirectory (executable: string) arguments environment =
         use child = Process.Start info
         let output = child.StandardOutput.ReadToEndAsync()
         let error = child.StandardError.ReadToEndAsync()
+        let clock = Stopwatch.StartNew()
+        let boundedVerify = isQuint && List.tryHead arguments = Some "verify"
+        let mutable timedOut = false
+
+        while not child.HasExited && not timedOut do
+            if boundedVerify && clock.ElapsedMilliseconds > 150000L then
+                timedOut <- true
+
+                try
+                    child.Kill(true)
+                with _ ->
+                    ()
+            else
+                Thread.Sleep 10
+
         child.WaitForExit()
-        child.ExitCode, output.Result.Trim(), error.Result.Trim()
+
+        let timeoutDiagnostic =
+            if timedOut then
+                $"APALACHE_EXECUTION_TIMEOUT elapsedMs=%d{clock.ElapsedMilliseconds} budgetMs=150000"
+            else
+                ""
+
+        (if timedOut then 124 else child.ExitCode),
+        output.Result.Trim(),
+        (String.concat "\n" [ error.Result.Trim(); timeoutDiagnostic ]).Trim()
 
     let firstExit, firstOutput, firstError = invoke ()
 
