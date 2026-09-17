@@ -168,8 +168,8 @@ let ``GS2-08-8 registration binds accepted publication and exact offline command
     Assert.Equal("GS2-08.8", receiptValue.GetProperty("unitId").GetString())
     Assert.Equal("accepted", receiptValue.GetProperty("state").GetString())
     Assert.Equal(unitValue.GetProperty("contractSha256").GetString(), receiptValue.GetProperty("unitContractSha256").GetString())
-    Assert.Equal("774c78fdd576d2c7988aca304f9ecf0eeb2a62b9", receiptValue.GetProperty("sourceRevision").GetString())
-    Assert.Equal("4e5afa7d66fe3fbc694e9ce5115cdccb67182e4a29ccc502e9a0a4892c96bdac", receiptValue.GetProperty("digest").GetString())
+    Assert.Equal("1d4186ca14b9b5f89453491f2247815c9dfcb64d", receiptValue.GetProperty("sourceRevision").GetString())
+    Assert.Equal("319f5482028ef9cf39989308e6455a4610b640b2b32522a7ebe8f823d7b1fb77", receiptValue.GetProperty("digest").GetString())
 
     let contract = unitValue.GetProperty("gateContracts").EnumerateArray() |> Seq.exactlyOne
 
