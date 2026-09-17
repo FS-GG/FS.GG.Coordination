@@ -49,7 +49,7 @@ let ``GS2-08-7 acceptance binds the promoted immutable bridge`` () =
     Assert.Contains("3adada5a9738464291088830c47a30a3a8fc9561", exitGate)
     Assert.Contains("0f075e251d90a2d33efe556df1dac38394b0a388", exitGate)
     Assert.Contains("keyless in-toto/SLSA attestations", exitGate)
-    Assert.Contains("receiver adoption remains exclusively GS2-08.8", exitGate)
+    Assert.Contains("leaves adoption exclusively to GS2-08.8", exitGate)
     Assert.True(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.7.json")))
 
     let receiptBytes = bytes "evidence/github-substrate-v2/accepted/GS2-08.7.json"
