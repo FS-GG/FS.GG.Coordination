@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.github-substrate.v1-residual-writer-sealing/1",
   "unit": "GS2-08.9",
-  "state": "pending-external-evidence",
+  "state": "qualified",
   "sourceRepository": "FS-GG/.github",
   "sourceHead": "4d92bd4181725745fb9517437aa31d58f0668a12",
   "sourceTree": "24c1d7d9037bc04f8d44e6c6fdd199f2ae852fc7",
@@ -76,11 +76,11 @@
     { "path": ".github/workflows/skill-registry-autofix.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
     { "path": ".github/workflows/skillmirror-redrive.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
     { "path": ".github/workflows/touch-set-drift.yml", "partition": "dispatch-repair", "state": "current-source-sealed" },
-    { "path": "scripts/NewSddWorkspace/Program.fs", "partition": "helper", "state": "source-sealed-runtime-retirement-pending" },
+    { "path": "scripts/NewSddWorkspace/Program.fs", "partition": "helper", "state": "sealed" },
     { "path": "scripts/release-saga-ci.sh", "partition": "release-publication", "state": "current-source-sealed" },
     { "path": "scripts/release-saga-promote-release.sh", "partition": "release-publication", "state": "current-source-sealed" },
     { "path": "src/FS.GG.Telemetry.Client/RemoteClient.fs", "partition": "telemetry", "state": "submission-only" },
-    { "path": "tools/routine-delivery.py", "partition": "helper", "state": "source-sealed-runtime-retirement-pending" }
+    { "path": "tools/routine-delivery.py", "partition": "helper", "state": "sealed" }
   ],
   "historicalClients": [
     {
@@ -160,8 +160,8 @@
     "routineDeliverySha256": "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429",
     "mutationAttempts": 0,
     "admissionRefusalReadbackAttributedAsDelivery": false,
-    "publishedCopiesRetired": false,
-    "callersRetired": false,
+    "publishedCopiesRetired": true,
+    "callersRetired": true,
     "requiredEvidenceTemplate": {
       "immutablePublicPackages": "retained-history-allowed",
       "sufficientWhen": "Every installed or materialized historical helper copy is removed or replaced, every current caller selects sealed bytes, and no trusted runner, container or workflow can pair retained historical bytes with mutation credentials.",
@@ -184,13 +184,67 @@
       "knownCaller": "SystemAdmin/Containers/Containerfile.fsharp installs FS.GG.NewSddWorkspace and requires replacement or an explicit non-active image disposition."
     }
   },
-  "pendingBlockers": [
-    {
-      "id": "helper-container-runtime-retirement",
-      "state": "pending-admin-readback",
-      "requiredEvidence": "Retire active NewSddWorkspace installations and historical routine-delivery copies/callers from containers and runtimes, then bind the non-secret inventory and credential-absence readback."
+  "runtimeRetirement": {
+    "schema": "fsgg.gs2-08.9.host-helper-retirement/1",
+    "mailboxCommit": "a9dfdfd996b8d4d90a26de833d196ff7ec74d81f",
+    "evidenceSha256": "fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549",
+    "observedAt": "2026-09-17T13:55:39.177603Z",
+    "sourceSeal": {
+      "protectedMerge": "4d92bd4181725745fb9517437aa31d58f0668a12",
+      "expectedHelperSha256": "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429"
+    },
+    "systemAdmin": {
+      "repository": "EHotwagner/SystemAdmin",
+      "revision": "17c49c59aae3e07b82707c307dc9b88d04270efc",
+      "containerfile": "Containers/Containerfile.fsharp",
+      "containerfileSha256": "0e9ab0c77993eb8cfdbb09dd07a85db739aab2b34cc94c824adbba22f9c17197",
+      "newSddWorkspaceInstallReferences": 0
+    },
+    "cleanImage": {
+      "id": "17b42bd409fc7181cd5729862b626e0fba0ef52e37c2b4cb5a68175b3dc46be2",
+      "digest": "sha256:39aa72e67d0ff1947bda2be7ef423de34e5eac8660183d80fc23b2c8ea683de7",
+      "created": "2026-09-17T13:52:02.396000797Z",
+      "repoDigests": [
+        "localhost/fdev-general1@sha256:39aa72e67d0ff1947bda2be7ef423de34e5eac8660183d80fc23b2c8ea683de7",
+        "localhost/fsharp-dev-slim-test@sha256:39aa72e67d0ff1947bda2be7ef423de34e5eac8660183d80fc23b2c8ea683de7",
+        "localhost/fsharp-dev@sha256:39aa72e67d0ff1947bda2be7ef423de34e5eac8660183d80fc23b2c8ea683de7"
+      ]
+    },
+    "uninstallAttempts": [
+      { "name": "initialDotnetUninstallAttempt", "exitStatus": 1, "failure": "Invalid cross-device link" },
+      { "name": "initialDotnetUninstallHomeTmpAttempt", "exitStatus": 1, "failure": "Invalid cross-device link" }
+    ],
+    "manualRemediation": {
+      "exitStatus": 0,
+      "action": "removed exact NewSddWorkspace global shim and store paths",
+      "manifestAndPathAbsenceVerified": true
+    },
+    "inventory": {
+      "selectedHelpers": 1,
+      "retainedHelpers": 61,
+      "liveCallers": 6,
+      "entryPointReferences": 0,
+      "retainedHistoricalContainers": 3,
+      "retainedHelpersSelectedByActiveCaller": false,
+      "retainedContainersSelectedByServiceOrTimer": false
+    },
+    "deferredRunner": {
+      "activationAuthorized": false,
+      "effects": 0,
+      "materializedImagePresent": false,
+      "selectedByServiceOrTimer": false,
+      "mutationCredentialsPresent": false,
+      "sourceInvalidatedByContainerfileRetirement": true
+    },
+    "conclusion": {
+      "accepted": true,
+      "activeImageTagsExcludeHistoricalImages": true,
+      "activeNewSddWorkspaceInstalled": false,
+      "activeTrustedCallerCombinesHistoricalHelperWithMutationCredential": false,
+      "selectedHelperIsSealed": true
     }
-  ],
+  },
+  "pendingBlockers": [],
   "q4": {
     "state": "unclaimed",
     "providerMutationClaimed": false

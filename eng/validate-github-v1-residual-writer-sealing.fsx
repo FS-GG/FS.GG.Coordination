@@ -28,11 +28,11 @@ let require condition code message =
 require
     (text aggregate "schema" = "fsgg.github-substrate.v1-residual-writer-sealing/1"
      && text aggregate "unit" = "GS2-08.9"
-     && text aggregate "state" = "pending-external-evidence"
+     && text aggregate "state" = "qualified"
      && text aggregate "sourceRepository" = "FS-GG/.github"
      && not (boolean aggregate "acceptanceReceiptCreated"))
     "GS2089-ENVELOPE"
-    "aggregate must remain a pending, non-receipt GS2-08.9 qualification"
+    "aggregate must be a qualified, non-receipt GS2-08.9 qualification"
 
 let expectedHead = "4d92bd4181725745fb9517437aa31d58f0668a12"
 let expectedTree = "24c1d7d9037bc04f8d44e6c6fdd199f2ae852fc7"
@@ -158,7 +158,7 @@ let validRouteStates =
             "dispatch-repair", Set.ofList [ "current-source-sealed" ]
             "release-publication", Set.ofList [ "current-source-sealed" ]
             "release-administration", Set.ofList [ "admin-disabled" ]
-            "helper", Set.ofList [ "source-sealed-runtime-retirement-pending" ]
+            "helper", Set.ofList [ "sealed" ]
             "telemetry", Set.ofList [ "submission-only" ]
         ]
 
@@ -273,27 +273,100 @@ require
      && text helper "routineDeliverySha256" = "03adc237c89fc4fd05d29c7fe9191d0d2ab701c3ff8de54c24eacb2e77d0b429"
      && integer helper "mutationAttempts" = 0
      && not (boolean helper "admissionRefusalReadbackAttributedAsDelivery")
-     && not (boolean helper "publishedCopiesRetired")
-     && not (boolean helper "callersRetired")
+     && boolean helper "publishedCopiesRetired"
+     && boolean helper "callersRetired"
      && text helperTemplate "immutablePublicPackages" = "retained-history-allowed"
      && helperTemplate.GetProperty("inventories").GetArrayLength() = 6
      && helperTemplate.GetProperty("readOnlyCommands").GetArrayLength() = 6
      && text helperTemplate "knownCaller" =
         "SystemAdmin/Containers/Containerfile.fsharp installs FS.GG.NewSddWorkspace and requires replacement or an explicit non-active image disposition.")
     "GS2089-HELPER"
-    "helper merge, zero-attempt refusal, readback attribution or historical retirement differs"
+    "helper merge, zero-attempt refusal, readback attribution or runtime retirement differs"
+
+let runtime = aggregate.GetProperty("runtimeRetirement")
+let runtimeSource = runtime.GetProperty("sourceSeal")
+let systemAdmin = runtime.GetProperty("systemAdmin")
+let cleanImage = runtime.GetProperty("cleanImage")
+let uninstallAttempts = runtime.GetProperty("uninstallAttempts").EnumerateArray() |> Seq.toList
+let remediation = runtime.GetProperty("manualRemediation")
+let inventory = runtime.GetProperty("inventory")
+let deferredRunner = runtime.GetProperty("deferredRunner")
+let conclusion = runtime.GetProperty("conclusion")
+
+require
+    (text runtime "schema" = "fsgg.gs2-08.9.host-helper-retirement/1"
+     && text runtime "mailboxCommit" = "a9dfdfd996b8d4d90a26de833d196ff7ec74d81f"
+     && text runtime "evidenceSha256" = "fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549"
+     && text runtime "observedAt" = "2026-09-17T13:55:39.177603Z"
+     && text runtimeSource "protectedMerge" = expectedHead
+     && text runtimeSource "expectedHelperSha256" = text helper "routineDeliverySha256"
+     && text systemAdmin "repository" = "EHotwagner/SystemAdmin"
+     && text systemAdmin "revision" = "17c49c59aae3e07b82707c307dc9b88d04270efc"
+     && text systemAdmin "containerfile" = "Containers/Containerfile.fsharp"
+     && text systemAdmin "containerfileSha256" = "0e9ab0c77993eb8cfdbb09dd07a85db739aab2b34cc94c824adbba22f9c17197"
+     && integer systemAdmin "newSddWorkspaceInstallReferences" = 0)
+    "GS2089-RUNTIME-IDENTITY"
+    "runtime retirement source, mailbox evidence or SystemAdmin revision differs"
+
+let expectedDigest = "sha256:39aa72e67d0ff1947bda2be7ef423de34e5eac8660183d80fc23b2c8ea683de7"
+let expectedRepoDigests =
+    Set.ofList
+        [
+            $"localhost/fdev-general1@{expectedDigest}"
+            $"localhost/fsharp-dev-slim-test@{expectedDigest}"
+            $"localhost/fsharp-dev@{expectedDigest}"
+        ]
+
+require
+    (text cleanImage "id" = "17b42bd409fc7181cd5729862b626e0fba0ef52e37c2b4cb5a68175b3dc46be2"
+     && text cleanImage "digest" = expectedDigest
+     && (cleanImage.GetProperty("repoDigests").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq) = expectedRepoDigests)
+    "GS2089-RUNTIME-IMAGE"
+    "clean image identity or active tag digests differ"
+
+require
+    (uninstallAttempts.Length = 2
+     && uninstallAttempts |> List.map (fun attempt -> text attempt "name") =
+        [ "initialDotnetUninstallAttempt"; "initialDotnetUninstallHomeTmpAttempt" ]
+     && uninstallAttempts |> List.forall (fun attempt -> integer attempt "exitStatus" = 1 && text attempt "failure" = "Invalid cross-device link")
+     && integer remediation "exitStatus" = 0
+     && text remediation "action" = "removed exact NewSddWorkspace global shim and store paths"
+     && boolean remediation "manifestAndPathAbsenceVerified")
+    "GS2089-RUNTIME-REMEDIATION"
+    "failed uninstall observations or exact manual remediation readback differ"
+
+require
+    (integer inventory "selectedHelpers" = 1
+     && integer inventory "retainedHelpers" = 61
+     && integer inventory "liveCallers" = 6
+     && integer inventory "entryPointReferences" = 0
+     && integer inventory "retainedHistoricalContainers" = 3
+     && not (boolean inventory "retainedHelpersSelectedByActiveCaller")
+     && not (boolean inventory "retainedContainersSelectedByServiceOrTimer")
+     && not (boolean deferredRunner "activationAuthorized")
+     && integer deferredRunner "effects" = 0
+     && not (boolean deferredRunner "materializedImagePresent")
+     && not (boolean deferredRunner "selectedByServiceOrTimer")
+     && not (boolean deferredRunner "mutationCredentialsPresent")
+     && boolean deferredRunner "sourceInvalidatedByContainerfileRetirement")
+    "GS2089-RUNTIME-INVENTORY"
+    "helper, caller, retained-container or deferred-runner inventory differs"
+
+require
+    (boolean conclusion "accepted"
+     && boolean conclusion "activeImageTagsExcludeHistoricalImages"
+     && not (boolean conclusion "activeNewSddWorkspaceInstalled")
+     && not (boolean conclusion "activeTrustedCallerCombinesHistoricalHelperWithMutationCredential")
+     && boolean conclusion "selectedHelperIsSealed")
+    "GS2089-RUNTIME-CONCLUSION"
+    "runtime retirement conclusions differ"
 
 let pending = aggregate.GetProperty("pendingBlockers").EnumerateArray() |> Seq.toList
 let pendingIds = pending |> List.map (fun item -> text item "id")
 
-require
-    (pendingIds =
-        [
-            "helper-container-runtime-retirement"
-        ]
-     && text pending[0] "state" = "pending-admin-readback")
+require (pendingIds = [])
     "GS2089-PENDING-SET"
-    "the three explicit blocking evidence items must remain ordered and pending"
+    "qualified aggregate must have no pending evidence blockers"
 
 let q4 = aggregate.GetProperty("q4")
 require
@@ -301,7 +374,4 @@ require
     "GS2089-Q4"
     "Q4 must remain unclaimed"
 
-eprintfn
-    "GS2089-PENDING: container/runtime retirement remains required; GS2-08.8 and helper source are merged; Q4 is unclaimed"
-
-Environment.Exit 78
+printfn "GS2089-QUALIFIED: all residual routes are sealed; Q4 remains unclaimed"

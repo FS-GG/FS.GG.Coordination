@@ -48,20 +48,19 @@ let private runValidator (evidence: JsonObject option) =
         if File.Exists temporary then File.Delete temporary
 
 [<Fact>]
-let ``checked-in GS2-08-9 aggregate refuses closure with the exact pending code`` () =
+let ``checked-in GS2-08-9 aggregate qualifies without minting a receipt`` () =
     let exitCode, output, error = runValidator None
-    Assert.Equal(78, exitCode)
-    Assert.Empty(output)
-    Assert.Contains("GS2089-PENDING", error)
-    Assert.Contains("container/runtime retirement remains required", error)
-    Assert.Contains("GS2-08.8 and helper source are merged", error)
+    Assert.Equal(0, exitCode)
+    Assert.Contains("GS2089-QUALIFIED", output)
+    Assert.Contains("Q4 remains unclaimed", output)
+    Assert.Empty(error)
     Assert.False(File.Exists(Path.Combine(root, "evidence/github-substrate-v2/accepted/GS2-08.9.json")))
 
 [<Fact>]
 let ``aggregate binds the protected seals disabled workflows and retained Q4 boundary`` () =
     use document = JsonDocument.Parse(read "evidence/github-substrate-v2/gs2-08-9/sealing-qualification.json")
     let value = document.RootElement
-    Assert.Equal("pending-external-evidence", value.GetProperty("state").GetString())
+    Assert.Equal("qualified", value.GetProperty("state").GetString())
     Assert.Equal(22, value.GetProperty("routes").GetArrayLength())
     Assert.Equal(3, value.GetProperty("sourceSeals").GetArrayLength())
     Assert.Equal(5, value.GetProperty("workflowAdministration").GetProperty("workflows").GetArrayLength())
@@ -93,6 +92,16 @@ let ``aggregate binds the protected seals disabled workflows and retained Q4 bou
     let helper = value.GetProperty("helperBoundary")
     Assert.Equal("4d92bd4181725745fb9517437aa31d58f0668a12", helper.GetProperty("protectedMerge").GetString())
     Assert.True(helper.GetProperty("mergedToMain").GetBoolean())
+    Assert.True(helper.GetProperty("publishedCopiesRetired").GetBoolean())
+    Assert.True(helper.GetProperty("callersRetired").GetBoolean())
+
+    let runtime = value.GetProperty("runtimeRetirement")
+    Assert.Equal("fd3b625f5938840d4d63b9a650326799bcabae024ec964a731ab923765112549", runtime.GetProperty("evidenceSha256").GetString())
+    Assert.Equal("17c49c59aae3e07b82707c307dc9b88d04270efc", runtime.GetProperty("systemAdmin").GetProperty("revision").GetString())
+    Assert.Equal(2, runtime.GetProperty("uninstallAttempts").GetArrayLength())
+    Assert.All(runtime.GetProperty("uninstallAttempts").EnumerateArray(), fun attempt -> Assert.Equal(1, attempt.GetProperty("exitStatus").GetInt32()))
+    Assert.Equal(0, runtime.GetProperty("manualRemediation").GetProperty("exitStatus").GetInt32())
+    Assert.True(runtime.GetProperty("manualRemediation").GetProperty("manifestAndPathAbsenceVerified").GetBoolean())
 
 [<Fact>]
 let ``bounded controls reject route capability identity telemetry and helper misstatements`` () =
@@ -142,6 +151,27 @@ let ``bounded controls reject route capability identity telemetry and helper mis
             fun value ->
                 objectProperty "helperBoundary" value
                 |> fun boundary -> boundary["admissionRefusalReadbackAttributedAsDelivery"] <- true
+            "failed-uninstall-observation-erased",
+            fun value ->
+                objectProperty "runtimeRetirement" value
+                |> arrayProperty "uninstallAttempts"
+                |> arrayObject 0
+                |> fun attempt -> attempt["exitStatus"] <- 0
+            "manual-remediation-not-verified",
+            fun value ->
+                objectProperty "runtimeRetirement" value
+                |> objectProperty "manualRemediation"
+                |> fun remediation -> remediation["manifestAndPathAbsenceVerified"] <- false
+            "retained-helper-selected",
+            fun value ->
+                objectProperty "runtimeRetirement" value
+                |> objectProperty "inventory"
+                |> fun inventory -> inventory["retainedHelpersSelectedByActiveCaller"] <- true
+            "runtime-conclusion-not-accepted",
+            fun value ->
+                objectProperty "runtimeRetirement" value
+                |> objectProperty "conclusion"
+                |> fun conclusion -> conclusion["accepted"] <- false
         ]
 
     let valid = aggregate ()
@@ -150,7 +180,6 @@ let ``bounded controls reject route capability identity telemetry and helper mis
         let candidate = clone valid
         mutate candidate
         let exitCode, output, error = runValidator (Some candidate)
-        Assert.NotEqual(78, exitCode)
         Assert.True(exitCode <> 0, $"{name} unexpectedly passed: {output} {error}")
 
 [<Fact>]
