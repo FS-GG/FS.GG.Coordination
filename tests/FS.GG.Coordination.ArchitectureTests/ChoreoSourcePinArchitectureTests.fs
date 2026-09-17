@@ -217,3 +217,69 @@ let ``hosted writer Choreo faults remain durable identity fenced and project to 
 
     Assert.Contains("module O2HostedWriterChoreoTests {", protocol)
     Assert.DoesNotContain("action hold", protocol.Substring(protocol.IndexOf("module O2HostedWriterChoreoModel {")))
+
+[<Fact>]
+let ``hosted writer Choreo bounded roots cover provider and runner fault schedules`` () =
+    let protocol, _, _ = fixture ()
+    let script = File.ReadAllText(Path.Combine(root, "eng/verify-choreo-c2-bounded.sh"))
+    let validator = File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+    let workflow = File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
+    let boundedStart = protocol.IndexOf("action boundedFaultStep(effect: EffectKind): bool", StringComparison.Ordinal)
+    let boundedEnd = protocol.IndexOf("action completeEffect(effect: EffectKind): bool", boundedStart, StringComparison.Ordinal)
+    Assert.True(boundedStart >= 0 && boundedEnd > boundedStart)
+    let boundedRoot = protocol.Substring(boundedStart, boundedEnd - boundedStart)
+
+    for required in
+        [
+            "restartObserved: bool"
+            "action initAfterClaim = choreo::init({"
+            "pure def firstProvenAbsentRetry"
+            "pure def firstCrash"
+            "action boundedFaultStep(effect: EffectKind): bool"
+            "module O2HostedWriterChoreoProviderBounded {"
+            "action step = model::boundedFaultStep(model::Claim)"
+            "module O2HostedWriterChoreoRunnerBounded {"
+            "action step = model::boundedFaultStep(model::ProcessWork)"
+        ] do
+        Assert.Contains(required, protocol)
+
+    for listener in
+        [
+            "start(effect)"
+            "journalRecordsIntent"
+            "hostAcceptsIntent"
+            "journalRecordsDispatch"
+            "hostDispatches"
+            "runnerPerforms"
+            "providerPerforms"
+            "externalOutcomeUnknown"
+            "hostRecordsUnknown"
+            "journalRecordsUnknown"
+            "hostBeginsReconciliation"
+            "externalReconciles"
+            "hostAcceptsReconciliation"
+            "journalRecordsAbsent"
+            "firstProvenAbsentRetry"
+            "hostObservesApplied"
+            "journalRecordsApplied"
+            "hostSettles"
+            "firstCrash"
+            "journalRecovers"
+            "hostAcceptsRecovery"
+            "externalReadsAuthority"
+            "hostAcceptsAuthority"
+            "hostAuthenticatesResume"
+            "hostRejectsInvalidResponse"
+            "journalRejectsInvalidAppend"
+            "hostAcceptsAppendRejection"
+        ] do
+        Assert.Contains(listener, boundedRoot)
+
+    Assert.Contains("verify_lane O2HostedWriterChoreoProviderBounded", script)
+    Assert.Contains("verify_lane O2HostedWriterChoreoRunnerBounded", script)
+    Assert.Contains("--max-steps=20", script)
+    Assert.Contains("timeout 150s", script)
+    Assert.Contains("let choreoBoundary = \"// BEGIN PINNED quint-co/choreo spells/basicSpells.qnt\"", validator)
+    Assert.Contains("let qualificationQnt = Path.Combine(scratch, \"protocol-q2-legacy-qualification.qnt\")", validator)
+    Assert.Contains("File.WriteAllText(qualificationQnt, q2Source.Substring(0, choreoBoundaryIndex)", validator)
+    Assert.Contains("bash eng/verify-choreo-c2-bounded.sh", workflow)

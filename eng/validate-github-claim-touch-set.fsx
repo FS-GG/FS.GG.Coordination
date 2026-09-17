@@ -171,7 +171,7 @@ let generatedMutation =
             }
     | GitHubClaimTouchSetControl.QuintAndPrerequisite ->
         sha256 receiptPath = "12b80b146b3c17d5090603dfe7bd8ee16d2fc5f7736fc7fc5ab98ccc0e43ab4e"
-        && sha256 quintPath = "66212339baaac357712c19ec1607e944cd39f9dd6dbcffc88f2086f93cbce154"
+        && sha256 quintPath = "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9"
 
 // Independent producer: distinct assertions over the public boundary, not a call to generatedMutation.
 let independentMutation =
