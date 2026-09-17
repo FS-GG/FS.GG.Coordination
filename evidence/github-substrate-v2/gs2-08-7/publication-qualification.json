@@ -1,0 +1,157 @@
+{
+  "schema": "fsgg.gs2-08.7-publication-qualification/1",
+  "unit": "GS2-08.7",
+  "state": "registered",
+  "accepted": false,
+  "publicationAuthorized": false,
+  "producer": {
+    "repository": "FS-GG/.github",
+    "merge": "155f8897424b49906dfb0464ce684e75dd9bda3c",
+    "tree": "52c9dd051467a7782c4e101dd35e0ca561470f81",
+    "p1Probe": "tests/bridge-package/run.sh"
+  },
+  "coherentSet": {
+    "observedP1BaselineVersion": "0.89.0",
+    "publicationVersion": {
+      "state": "unselected",
+      "selectionMilestone": "P3",
+      "selectionAuthority": "fresh-required-feed-state",
+      "syntheticQualificationSentinel": "0.0.0-gs2-08-7-p2-synthetic"
+    },
+    "packages": [
+      "FS.GG.Coord.Cli",
+      "FS.GG.Drivers",
+      "FS.GG.Kit"
+    ],
+    "artifactClosure": [
+      "package-id",
+      "version",
+      "archive-sha256",
+      "payload-sha256",
+      "source-merge",
+      "source-tree",
+      "signature-subject",
+      "attestation-subject"
+    ]
+  },
+  "requiredFeeds": [
+    {
+      "id": "github-packages",
+      "visibility": "authenticated",
+      "byteIdentity": "payload-sha256-after-registry-signature-normalization"
+    },
+    {
+      "id": "nuget-org",
+      "visibility": "anonymous-public",
+      "byteIdentity": "payload-sha256-after-registry-signature-normalization"
+    }
+  ],
+  "signing": {
+    "required": true,
+    "producerSemantics": "verified-producer-signature-over-producer-archive-sha256",
+    "producerIdentity": "declared-signer-identity-bound-to-release-workflow",
+    "registrySemantics": "served-archive-may-differ-by-repository-signature",
+    "crossFeedIdentity": "normalized-payload-sha256-excluding-registry-signature-and-package-services-metadata"
+  },
+  "attestation": {
+    "required": true,
+    "statementType": "https://in-toto.io/Statement/v1",
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "subject": "exact-producer-package-archive-sha256",
+    "source": "exact-producer-merge-and-tree",
+    "builder": "exact-saga-preparation-and-component-publisher-workflow-identities"
+  },
+  "publicInstall": {
+    "feed": "nuget-org",
+    "authentication": "anonymous",
+    "ambientSources": "cleared",
+    "caches": "private",
+    "requirements": [
+      "restore-each-coherent-package",
+      "install-and-execute-fsgg-coord-engine",
+      "verify-served-archive-feed-identity-normalized-payload-source-receipt-and-installed-assembly-digests"
+    ]
+  },
+  "workflowCorrespondence": [
+    {
+      "path": ".github/workflows/release-kit.yml",
+      "sha256": "4d9afe857dfe3a08c1e6e7bfbae54c655700fe5c8ee9992114184e264b4d2433",
+      "packages": [
+        "FS.GG.Kit"
+      ]
+    },
+    {
+      "path": ".github/workflows/release-drivers.yml",
+      "sha256": "61e77fb8184521c6a0015cfc6b3aa57374bd381555d62ff75b651ed7c7a46736",
+      "packages": [
+        "FS.GG.Drivers"
+      ]
+    },
+    {
+      "path": ".github/workflows/release-coord-engine.yml",
+      "sha256": "703d51abf54e75638ea3ce959b95093a0b320adbc799edb4257ab486163e2363",
+      "packages": [
+        "FS.GG.Coord.Cli"
+      ]
+    },
+    {
+      "path": ".github/workflows/release-saga-start.yml",
+      "sha256": "3bbe4278a08d8797faa5b600bd97cfef48fa26887f0889f6de781f719530880f",
+      "packages": [
+        "FS.GG.Coord.Cli",
+        "FS.GG.Drivers",
+        "FS.GG.Kit"
+      ]
+    },
+    {
+      "path": ".github/workflows/release-saga-prepare.yml",
+      "sha256": "6498e57524e0552c0beda369b864a12c8b747e57f5c758da21c0cc4a9b0693d3",
+      "packages": [
+        "FS.GG.Coord.Cli",
+        "FS.GG.Drivers",
+        "FS.GG.Kit"
+      ]
+    },
+    {
+      "path": ".github/workflows/release-saga-promote.yml",
+      "sha256": "d16b8cc4ab40de440e17013431e6c9e028b462cd92a02e081e0830db828d2d56",
+      "packages": [
+        "FS.GG.Coord.Cli",
+        "FS.GG.Drivers",
+        "FS.GG.Kit"
+      ]
+    }
+  ],
+  "failureStates": [
+    "substituted-package",
+    "stale-or-mixed-source",
+    "incomplete-coherent-set",
+    "wrong-attestation-subject",
+    "partial-feeds",
+    "missing-or-invalid-signature",
+    "missing-public-install",
+    "workflow-mismatch",
+    "incomplete-evidence",
+    "dashboard-receipt-is-not-adoption",
+    "operation-not-authorized"
+  ],
+  "operationCeiling": {
+    "allowed": [
+      "repository-local-registration",
+      "offline-synthetic-qualification"
+    ],
+    "forbidden": [
+      "package-publication",
+      "publication-authorization",
+      "unit-acceptance",
+      "receiver-adoption",
+      "live-github-mutation",
+      "credential-use"
+    ]
+  },
+  "remaining": [
+    "P3-release-path-qualification-provenance-binding-and-version-preparation",
+    "P4-protected-coherent-publication",
+    "P5-public-only-readback-and-native-GS2-08.7-acceptance"
+  ]
+}
