@@ -88,6 +88,23 @@ let ``independent offline controls reject receiver package revision route and fa
                 |> arrayProperty "packages"
                 |> arrayObject 0
                 |> fun package -> package["payloadSha256"] <- String('0', 64)
+            "duplicate-cli-pin-replacing-kit",
+            fun value ->
+                receiverAt 0 value
+                |> arrayProperty "pins"
+                |> arrayObject 1
+                |> fun pin -> pin["package"] <- "FS.GG.Coord.Cli"
+            "wrong-route-sha",
+            fun value ->
+                receiverAt 0 value
+                |> arrayProperty "routes"
+                |> arrayObject 0
+                |> fun route -> route["sha256"] <- String('0', 64)
+            "swapped-hub-route-dispositions",
+            fun value ->
+                let routes = receiverAt 0 value |> arrayProperty "routes"
+                (arrayObject 0 routes)["disposition"] <- "gs2-08.9-sealing"
+                (arrayObject 3 routes)["disposition"] <- "bridge-adopted"
             "stale-head",
             fun value -> receiverAt 0 value |> objectProperty "protected" |> fun state -> state["observedHead"] <- String('f', 40)
             "stale-tree",

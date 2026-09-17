@@ -1051,12 +1051,62 @@
           "failures": 0
         }
       ],
-      "outcomeBindings": {
-        "cleanCreation": "q3:fresh-cache-install-before-isolation",
-        "upgrade": "q3:profile1-retention+accepted-bounded-migration",
-        "oldClientRefused": "q3:wrong-tool-refusal+wrong-profile-refusal+freshness-refusal",
-        "publicInstall": "release-log:clean-public-install+FS.GG.SDD.Cli-2.0.1+FS.GG.SDD.Artifacts-2.0.1"
-      }
+      "adoptionEvidence": {
+        "protectedMerge": "f48204831a2e90db9bfbbbdd59d49d0139c2bf19",
+        "protectedTree": "6de1bef60009435abc6a0c907e916de6956185db",
+        "reportSha256": "d6c8f7a9d7aa2d2d8cb8d120ccf05bfc03cda6812f67763bdce73cbed9038bed",
+        "route": {
+          "entrypoint": "fsgg-sdd scaffold",
+          "sourcePath": "src/FS.GG.SDD.Commands/CommandWorkflow/ScaffoldMutation.fs",
+          "sha256": "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7",
+          "disposition": "bridge-adopted",
+          "behavior": "fresh-emits-exact-existing-preserves-unrelated-conflict-refuses"
+        },
+        "qualification": {
+          "publicRestore": true,
+          "installedCommand": true,
+          "productionMutation": "refused-unavailable-fence",
+          "providerRequests": 0,
+          "materializerFiles": 37,
+          "materializerWritten": 0,
+          "materializerSource": "FS.GG.Kit 0.90.0",
+          "scaffoldAndDriverPassed": 140,
+          "materializerContract": "passed",
+          "failed": 0
+        },
+        "gate": {
+          "runId": 35215576977,
+          "head": "58521f34d1b89c6d04df16255f51ea73ba3cc018",
+          "tree": "6de1bef60009435abc6a0c907e916de6956185db",
+          "workflowSha256": "8d284a599298ce4bdc12164f967ff16ce1f0e6f17add3db4a09fe97bdab95080",
+          "readbackSha256": "9b98e84e1740ebd4777285a49780a5ece64473c4abfafd7e670dd4472ba2ba20",
+          "logSha256": "625eeb5300e7ab2155bc5ac9e09c191c2c5767f800eb338d02f450ab632ce021",
+          "jobId": 105183136033,
+          "conclusion": "success",
+          "commandsPassed": 1355,
+          "acceptancePassed": 46,
+          "acceptanceSkipped": 5,
+          "failed": 0
+        }
+      },
+      "releaseSourcePreservation": {
+        "adoptionMerge": "f48204831a2e90db9bfbbbdd59d49d0139c2bf19",
+        "adoptionTree": "6de1bef60009435abc6a0c907e916de6956185db",
+        "releaseMerge": "7013aa1915a37c341107fcf9a66f87f3f73cc8c8",
+        "releaseTree": "7c1603942e83a492a66876325ce28d65a0368e6c",
+        "adoptionIsAncestor": true,
+        "scaffoldSourcePath": "src/FS.GG.SDD.Commands/CommandWorkflow/ScaffoldMutation.fs",
+        "adoptionScaffoldSha256": "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7",
+        "releaseScaffoldSha256": "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7"
+      },
+      "outcomeEvidence": {
+        "cleanCreation": "protected-report:fresh-emits-exact",
+        "upgrade": "protected-report:existing-preserves-unrelated-conflict-refuses",
+        "oldClientRefused": "protected-report:installed-cli-refused-unavailable-fence-zero-provider-requests",
+        "publicInstall": "release-run:clean-public-install-2.0.1",
+        "composition": "protected-adoption-tree-gate+unchanged-release-source+public-release-readback"
+      },
+      "publicReceiptsScope": "typed-sdd-quint-only-not-scaffold-bridge-proof"
     },
     "templates": {
       "state": "passed",

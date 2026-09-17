@@ -62,6 +62,61 @@ let expectedReceivers =
 let expectedRepositories = expectedReceivers |> List.map _.Repository
 let receiverIdentities = expectedReceivers |> List.map (fun identity -> identity.Repository, identity) |> Map.ofList
 
+let expectedRouteIdentities =
+    Map.ofList
+        [
+            "FS-GG/.github",
+            [
+                "dist/dotnet/.config/dotnet-tools.json", "31bcff6fe195cb13c6ade2389cbdc8a5f5ebdde590f99b6923399ce445189f5e", "bridge-adopted"
+                "tests/bridge-receivers/run.sh", "864dbc6a85042b8d0dad62fad9b93dfee75e8f8b8d2ebf9e8613e1e6bc45531d", "read-only-local-only"
+                ".github/workflows/release-saga-tooling.yml", "4a9d96d5647ab067ae70c5ff22fa159f7235f4e356e8c1dab02802b0e1049463", "read-only-local-only"
+                "docs/coordination/v1-writer-receiver-census.json", "3d7de0dee094991e08aed09b7478ea1191d6ee7f50baaad0087975a88e8f90db", "gs2-08.9-sealing"
+            ]
+            "FS-GG/FS.GG.SDD",
+            [
+                "scripts/fsgg-coord", "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf", "bridge-adopted"
+                "fsgg-sdd scaffold", "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7", "bridge-adopted"
+                ".github/workflows/release.yml", "a530cc3adb53efb4c79e061c1e8045b8d8f03f61f6030aab742e8b25b075f80d", "gs2-08.9-sealing"
+            ]
+            "FS-GG/FS.GG.Rendering",
+            [
+                "scripts/fsgg-coord", "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf", "bridge-adopted"
+                ".config/kit/FS.GG.Kit.receiver.proj", "3a2732d0d6c02cdcaf5409eb53d5ede7ae3caa1039441ea466415fcf846d1ef9", "read-only-local-only"
+                ".github/workflows/release.yml", "fa4caa73b2e456bb13efcd1dee307275ad9150dc5326c5b480f3d39b1e577158", "gs2-08.9-sealing"
+            ]
+            "FS-GG/FS.GG.Governance",
+            [
+                "scripts/fsgg-coord", "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf", "bridge-adopted"
+                "scripts/materialize-skill-roots.sh", "2eb2821d6529f788d809c506ebdd7ed01393ad4cf4e725e65541411c71b4e866", "read-only-local-only"
+                ".github/workflows/publish.yml", "bf9de19f5e39f4c41a1bda488a63a1dff6f4c197246a79c5d94e4b0267a6380c", "gs2-08.9-sealing"
+            ]
+            "FS-GG/FS.GG.Templates",
+            [
+                "scripts/fsgg-coord", "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf", "bridge-adopted"
+                "scripts/fsgg-coord-report", "e1f63cda5b499f4fdd4396626c0bac013c49019daf182336df8c7513d24918ba", "read-only-local-only"
+                ".github/workflows/release.yml", "2496178a962cfb812622a11d962c1b80afd71aa181b350809d3a7fb6369b914e", "gs2-08.9-sealing"
+            ]
+            "FS-GG/FS.GG.Game",
+            [
+                "scripts/fsgg-coord", "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf", "bridge-adopted"
+                "scripts/fsgg-coord-report", "e1f63cda5b499f4fdd4396626c0bac013c49019daf182336df8c7513d24918ba", "read-only-local-only"
+                ".github/workflows/release.yml", "1942809b5558786be6edb6551e88114bb1182d5f9fe38cd4acae1069f1efdd34", "gs2-08.9-sealing"
+                ".github/workflows/release-skills.yml", "0ae77282741f93390b24c80de847782bf21d034da949b4f89d45d5dd78ccd809", "gs2-08.9-sealing"
+                ".github/workflows/skills-package.yml", "4fdbaee168b20af4b58013c1fa20e2484d509214cbd723ecb23826cc9ff50475", "gs2-08.9-sealing"
+            ]
+            "FS-GG/FS.GG.Audio",
+            [
+                "scripts/fsgg-coord", "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf", "bridge-adopted"
+                "FS-GG/.github:tests/bridge-package/run.sh@3adada5a9738464291088830c47a30a3a8fc9561", "84e40c27d3f89a8c305eb5aebfe6de148411ca914e334d12c7419360860d8b41", "read-only-local-only"
+                ".github/workflows/release.yml", "16bfa564c4f4f691e7d6515c9d4eabc2715541639e8774701e0fb96cb02b4084", "gs2-08.9-sealing"
+            ]
+            "FS-GG/FS.GG.Net",
+            [
+                "scripts/fsgg-coord", "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf", "bridge-adopted"
+                ".github/workflows/release.yml", "4a7ee3366f32f0191108ce623f3c2f5007972cc6102b60515f930ee4c43581ed", "gs2-08.9-sealing"
+            ]
+        ]
+
 let expectedPackages =
     Map.ofList
         [
@@ -172,6 +227,9 @@ for receiver in receivers do
     let pins = array receiver "pins"
     require (pins.Length = identity.PackageIds.Count) "GVBR-PINS" $"{repository} package pin closure differs"
 
+    let pinnedPackageIds = pins |> List.map (fun pin -> text pin "package") |> Set.ofList
+    require (pinnedPackageIds = identity.PackageIds) "GVBR-PINS" $"{repository} package pin identities differ"
+
     for pin in pins do
         require
             (identity.PackageIds.Contains(text pin "package")
@@ -182,6 +240,15 @@ for receiver in receivers do
 
     let receiverRoutes = array receiver "routes"
     require (receiverRoutes.Length = identity.RouteCount) "GVBR-ROUTE-REPORT" $"{repository} route cardinality differs"
+
+    let observedRouteIdentities =
+        receiverRoutes
+        |> List.map (fun route -> text route "id", text route "sha256", text route "disposition")
+
+    require
+        (observedRouteIdentities = expectedRouteIdentities[repository])
+        "GVBR-ROUTE-REPORT"
+        $"{repository} exact route identity, bytes or disposition differs"
 
     for route in receiverRoutes do
         let disposition = text route "disposition"
@@ -354,7 +421,12 @@ let sddRun = sdd.GetProperty("run")
 let sddArtifact = sdd.GetProperty("artifact")
 let sddPackages = array sdd "packages"
 let sddReceipts = array sdd "publicReceipts"
-let sddOutcomes = sdd.GetProperty("outcomeBindings")
+let sddAdoption = sdd.GetProperty("adoptionEvidence")
+let sddAdoptionRoute = sddAdoption.GetProperty("route")
+let sddAdoptionQualification = sddAdoption.GetProperty("qualification")
+let sddAdoptionGate = sddAdoption.GetProperty("gate")
+let sddReleasePreservation = sdd.GetProperty("releaseSourcePreservation")
+let sddOutcomes = sdd.GetProperty("outcomeEvidence")
 
 require
     (text sddRelease "tag" = "v2.0.1"
@@ -430,10 +502,58 @@ for receipt, (path, receiptSha, tests) in List.zip sddReceipts expectedSddReceip
         $"SDD public receipt differs for {path}"
 
 require
-    (text sddOutcomes "cleanCreation" = "q3:fresh-cache-install-before-isolation"
-     && text sddOutcomes "upgrade" = "q3:profile1-retention+accepted-bounded-migration"
-     && text sddOutcomes "oldClientRefused" = "q3:wrong-tool-refusal+wrong-profile-refusal+freshness-refusal"
-     && text sddOutcomes "publicInstall" = "release-log:clean-public-install+FS.GG.SDD.Cli-2.0.1+FS.GG.SDD.Artifacts-2.0.1")
+    (text sdd "publicReceiptsScope" = "typed-sdd-quint-only-not-scaffold-bridge-proof"
+     && text sddAdoption "protectedMerge" = "f48204831a2e90db9bfbbbdd59d49d0139c2bf19"
+     && text sddAdoption "protectedTree" = "6de1bef60009435abc6a0c907e916de6956185db"
+     && text sddAdoption "reportSha256" = "d6c8f7a9d7aa2d2d8cb8d120ccf05bfc03cda6812f67763bdce73cbed9038bed"
+     && text sddAdoptionRoute "entrypoint" = "fsgg-sdd scaffold"
+     && text sddAdoptionRoute "sourcePath" = "src/FS.GG.SDD.Commands/CommandWorkflow/ScaffoldMutation.fs"
+     && text sddAdoptionRoute "sha256" = "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7"
+     && text sddAdoptionRoute "disposition" = "bridge-adopted"
+     && text sddAdoptionRoute "behavior" = "fresh-emits-exact-existing-preserves-unrelated-conflict-refuses"
+     && boolean sddAdoptionQualification "publicRestore"
+     && boolean sddAdoptionQualification "installedCommand"
+     && text sddAdoptionQualification "productionMutation" = "refused-unavailable-fence"
+     && integer sddAdoptionQualification "providerRequests" = 0
+     && integer sddAdoptionQualification "materializerFiles" = 37
+     && integer sddAdoptionQualification "materializerWritten" = 0
+     && text sddAdoptionQualification "materializerSource" = "FS.GG.Kit 0.90.0"
+     && integer sddAdoptionQualification "scaffoldAndDriverPassed" = 140
+     && text sddAdoptionQualification "materializerContract" = "passed"
+     && integer sddAdoptionQualification "failed" = 0)
+    "GVBR-SCAFFOLD"
+    "SDD protected bridge scaffold report binding differs"
+
+require
+    (integer64 sddAdoptionGate "runId" = 35215576977L
+     && text sddAdoptionGate "head" = "58521f34d1b89c6d04df16255f51ea73ba3cc018"
+     && text sddAdoptionGate "tree" = "6de1bef60009435abc6a0c907e916de6956185db"
+     && text sddAdoptionGate "workflowSha256" = "8d284a599298ce4bdc12164f967ff16ce1f0e6f17add3db4a09fe97bdab95080"
+     && text sddAdoptionGate "readbackSha256" = "9b98e84e1740ebd4777285a49780a5ece64473c4abfafd7e670dd4472ba2ba20"
+     && text sddAdoptionGate "logSha256" = "625eeb5300e7ab2155bc5ac9e09c191c2c5767f800eb338d02f450ab632ce021"
+     && integer64 sddAdoptionGate "jobId" = 105183136033L
+     && text sddAdoptionGate "conclusion" = "success"
+     && integer sddAdoptionGate "commandsPassed" = 1355
+     && integer sddAdoptionGate "acceptancePassed" = 46
+     && integer sddAdoptionGate "acceptanceSkipped" = 5
+     && integer sddAdoptionGate "failed" = 0)
+    "GVBR-SCAFFOLD"
+    "SDD protected bridge scaffold gate binding differs"
+
+require
+    (text sddReleasePreservation "adoptionMerge" = "f48204831a2e90db9bfbbbdd59d49d0139c2bf19"
+     && text sddReleasePreservation "adoptionTree" = "6de1bef60009435abc6a0c907e916de6956185db"
+     && text sddReleasePreservation "releaseMerge" = "7013aa1915a37c341107fcf9a66f87f3f73cc8c8"
+     && text sddReleasePreservation "releaseTree" = "7c1603942e83a492a66876325ce28d65a0368e6c"
+     && boolean sddReleasePreservation "adoptionIsAncestor"
+     && text sddReleasePreservation "scaffoldSourcePath" = "src/FS.GG.SDD.Commands/CommandWorkflow/ScaffoldMutation.fs"
+     && text sddReleasePreservation "adoptionScaffoldSha256" = "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7"
+     && text sddReleasePreservation "releaseScaffoldSha256" = "f508712e6989844e51228e00eea45aae2fca752121cc8160573f1252d6f2c2e7"
+     && text sddOutcomes "cleanCreation" = "protected-report:fresh-emits-exact"
+     && text sddOutcomes "upgrade" = "protected-report:existing-preserves-unrelated-conflict-refuses"
+     && text sddOutcomes "oldClientRefused" = "protected-report:installed-cli-refused-unavailable-fence-zero-provider-requests"
+     && text sddOutcomes "publicInstall" = "release-run:clean-public-install-2.0.1"
+     && text sddOutcomes "composition" = "protected-adoption-tree-gate+unchanged-release-source+public-release-readback")
     "GVBR-SCAFFOLD"
     "SDD public install, creation, upgrade or refusal outcome binding differs"
 
