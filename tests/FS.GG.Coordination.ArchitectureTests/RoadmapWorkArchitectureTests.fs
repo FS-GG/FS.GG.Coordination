@@ -623,6 +623,9 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("Started Apalache server on pid=", validator)
     Assert.Contains("Shutting down Apalache server", validator)
     Assert.Contains("successfulExitAfterParserWithoutResult", validator)
+    Assert.Contains("APALACHE_EXECUTION_TIMEOUT", validator)
+    Assert.Contains("let runMeasured timeoutMs", validator)
+    Assert.Contains("child.Kill(true)", validator)
     Assert.Contains("PASS #0: SanyParser", validator)
     Assert.Contains("states generated", validator)
     Assert.Contains("Invariant violated", validator)
@@ -1564,21 +1567,51 @@ let ``GS2-08-2 acceptance binds exact live ledger and monitoring evidence`` () =
 
     let value = receipt.RootElement
     Assert.Equal("accepted", value.GetProperty("state").GetString())
-    Assert.Equal("a5eeca225c9fbc554913332c15f2182ba764d4994f6971d895a0403431452aad", value.GetProperty("unitContractSha256").GetString())
+
+    Assert.Equal(
+        "a5eeca225c9fbc554913332c15f2182ba764d4994f6971d895a0403431452aad",
+        value.GetProperty("unitContractSha256").GetString()
+    )
+
     Assert.Equal("3139078ae3db01928a731e343d4d2a18e00f5982", value.GetProperty("sourceRevision").GetString())
-    Assert.Equal("e1622382d599f9dac58fffe0171b4c658c82e2bb48d71efbcd7db780eca81f59", value.GetProperty("digest").GetString())
+
+    Assert.Equal(
+        "e1622382d599f9dac58fffe0171b4c658c82e2bb48d71efbcd7db780eca81f59",
+        value.GetProperty("digest").GetString()
+    )
 
     let artifacts =
         value.GetProperty("artifacts").EnumerateArray()
-        |> Seq.map (fun artifact -> artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString())
+        |> Seq.map (fun artifact ->
+            artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString())
         |> Map.ofSeq
 
     Assert.Equal(9, artifacts.Count)
-    Assert.Equal("0c9ab3211b80089255ae0e3f64a86767b14491dc1f384d17cab624b31fbf817d", artifacts["native-acceptance-candidate"])
-    Assert.Equal("c11e818c110e84e555495e4064d35126981f09e5cd53fd98f557d2e2620f2f3c", artifacts["settings-operational-evidence"])
-    Assert.Equal("fdefb8890da79a44c10e53b04eee6e317ba119df271c6c46ba5f92fe992cd7bf", artifacts["custody-operational-evidence"])
-    Assert.Equal("a3fc80eb1f8344b14b5338bc1f99efa1728919618d08df358960916a7948bb71", artifacts["initialization-operational-evidence"])
-    Assert.Equal("4091136c7c7bb4e21207ca69d1eb9bf73488efeff1feeef5d6dd6cb7fb4ea442", artifacts["monitoring-operational-evidence"])
+
+    Assert.Equal(
+        "0c9ab3211b80089255ae0e3f64a86767b14491dc1f384d17cab624b31fbf817d",
+        artifacts["native-acceptance-candidate"]
+    )
+
+    Assert.Equal(
+        "c11e818c110e84e555495e4064d35126981f09e5cd53fd98f557d2e2620f2f3c",
+        artifacts["settings-operational-evidence"]
+    )
+
+    Assert.Equal(
+        "fdefb8890da79a44c10e53b04eee6e317ba119df271c6c46ba5f92fe992cd7bf",
+        artifacts["custody-operational-evidence"]
+    )
+
+    Assert.Equal(
+        "a3fc80eb1f8344b14b5338bc1f99efa1728919618d08df358960916a7948bb71",
+        artifacts["initialization-operational-evidence"]
+    )
+
+    Assert.Equal(
+        "4091136c7c7bb4e21207ca69d1eb9bf73488efeff1feeef5d6dd6cb7fb4ea442",
+        artifacts["monitoring-operational-evidence"]
+    )
 
 [<Fact>]
 let ``GS2-08-3 acceptance binds both exact census sources and native gates`` () =
@@ -1602,10 +1635,7 @@ let ``GS2-08-3 acceptance binds both exact census sources and native gates`` () 
 
     Assert.Equal("4b4e699c8e811d21c22f6586137eaa78bbe61b80", value.GetProperty("sourceRevision").GetString())
 
-    Assert.Equal(
-        AcceptanceReceiptDigest.Gs2083LegacyDigest,
-        value.GetProperty("digest").GetString()
-    )
+    Assert.Equal(AcceptanceReceiptDigest.Gs2083LegacyDigest, value.GetProperty("digest").GetString())
 
     Assert.Equal(
         AcceptanceReceiptDigest.Gs2083CanonicalDigest,
@@ -1687,8 +1717,7 @@ let ``GS2-08-4 acceptance binds the common fence source and native gates`` () =
             "7f7aa3129eaee23d4aa68605f4c279744804b9c962a0e1647b0f83352eb1971b"
             "source-bootstrap-run-34320097332", "c3db56e94e6c53658aee21d2645181b2ecc981601a172d7f574fad6cde8d5359"
             "source-codeql-run-34320094556", "00f7acd29de432bce54d04d45b5d01cfa0ae7da6336c5779e094914833c88ec7"
-            "protected-bootstrap-run-34322023243",
-            "39628c888d5034390918d234e060a5f0c73506c1457a60eb794d191410b08148"
+            "protected-bootstrap-run-34322023243", "39628c888d5034390918d234e060a5f0c73506c1457a60eb794d191410b08148"
             "protected-codeql-run-34322023304", "0942f730755375b26a93b7a9b7299c66ddd581c06b629160044bec1de709481b"
         ]
         |> Map.ofList
@@ -4270,10 +4299,7 @@ let ``full receipt directory prerequisites accepts exact GS2-08-3 migration and 
         let roadmapBytes = Encoding.UTF8.GetBytes roadmap
 
         index["roadmap"].AsObject()["sha256"] <-
-            roadmapBytes
-            |> SHA256.HashData
-            |> Convert.ToHexString
-            |> _.ToLowerInvariant()
+            roadmapBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
         let indexPath = Path.Combine(tempRoot, "units.json")
         let roadmapPath = Path.Combine(tempRoot, "roadmap.md")

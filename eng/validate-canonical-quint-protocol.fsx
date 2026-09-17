@@ -237,9 +237,15 @@ let classifyTransientApalacheStartupFailure exitCode (output: string) (error: st
         && not (diagnostic.Contains("states generated", StringComparison.Ordinal))
         && not (diagnostic.Contains("Invariant violated", StringComparison.Ordinal))
 
+    let executionTimeout =
+        exitCode = 124
+        && diagnostic.Contains("APALACHE_EXECUTION_TIMEOUT", StringComparison.Ordinal)
+
     let earlyLifecycleExit =
-        launchedAndStopped
-        && (Regex.IsMatch(diagnostic, "(?m)^error: error\\s*$") || successfulExitAfterParserWithoutResult)
+        executionTimeout
+        || (launchedAndStopped
+            && (Regex.IsMatch(diagnostic, "(?m)^error: error\\s*$")
+                || successfulExitAfterParserWithoutResult))
 
     if reflectionDeadline then Some "reflection-deadline"
     elif earlyLifecycleExit then Some "early-lifecycle-exit"
@@ -350,7 +356,7 @@ let private processTreeRssBytes rootPid =
 
     collect Set.empty rootPid |> fst
 
-let runMeasured workingDirectory (executable: string) arguments environment =
+let runMeasured timeoutMs workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
     incrementInvocation (classifyInvocation isQuint arguments)
@@ -381,17 +387,33 @@ let runMeasured workingDirectory (executable: string) arguments environment =
         let error = child.StandardError.ReadToEndAsync()
         let clock = Stopwatch.StartNew()
         let mutable peakBytes = 0L
+        let mutable timedOut = false
 
-        while not child.HasExited do
+        while not child.HasExited && not timedOut do
             peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
-            Thread.Sleep 10
+
+            if clock.ElapsedMilliseconds > int64 timeoutMs then
+                timedOut <- true
+
+                try
+                    child.Kill(true)
+                with _ ->
+                    ()
+            else
+                Thread.Sleep 10
 
         child.WaitForExit()
         peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
 
-        child.ExitCode,
+        let timeoutDiagnostic =
+            if timedOut then
+                $"APALACHE_EXECUTION_TIMEOUT elapsedMs=%d{clock.ElapsedMilliseconds} budgetMs=%d{timeoutMs}"
+            else
+                ""
+
+        (if timedOut then 124 else child.ExitCode),
         output.Result.Trim(),
-        error.Result.Trim(),
+        (String.concat "\n" [ error.Result.Trim(); timeoutDiagnostic ]).Trim(),
         clock.ElapsedMilliseconds,
         int (Math.Ceiling(float peakBytes / 1048576.0))
 
@@ -1971,6 +1993,7 @@ try
 
         let exitCode, output, error, elapsedMs, peakMiB =
             runMeasured
+                elapsedBudget
                 scratch
                 quint
                 [
@@ -2157,12 +2180,13 @@ try
     // one deterministic Rust projection for every declared removed-step model before entering
     // the TLC loop.  The result is retained as the first of the two reproducibility samples,
     // so this changes failure order without adding process work.
-    let runProjection formalId main init removedStep blockedInvariant depth ordinal =
+    let runProjection formalId main init removedStep blockedInvariant depth elapsedBudget ordinal =
         let pattern =
             Path.Combine(formalArtifactDirectory, $"%s{formalId}-counterexample-%d{ordinal}-{{seq}}.itf.json")
 
         let exitCode, output, error, elapsedMs, peakMiB =
             runMeasured
+                elapsedBudget
                 scratch
                 quint
                 [
@@ -2203,8 +2227,27 @@ try
         formalTests
         |> List.map
             (fun
-                (formalId, main, init, _, _, _, _, _, removedStep, _, blockedInvariant, _, _, _, depth, _, _, _, _, _, _) ->
-                formalId, runProjection formalId main init removedStep blockedInvariant depth 1)
+                (formalId,
+                 main,
+                 init,
+                 _,
+                 _,
+                 _,
+                 _,
+                 _,
+                 removedStep,
+                 _,
+                 blockedInvariant,
+                 _,
+                 _,
+                 _,
+                 depth,
+                 _,
+                 _,
+                 _,
+                 elapsedBudget,
+                 _,
+                 _) -> formalId, runProjection formalId main init removedStep blockedInvariant depth elapsedBudget 1)
         |> Map.ofList
 
     for formalId,
@@ -2230,6 +2273,7 @@ try
         artifactBudget in formalTests do
         let temporalExit, temporalOutput, temporalError, temporalElapsed, temporalPeak =
             runMeasured
+                elapsedBudget
                 scratch
                 quint
                 [
@@ -2279,6 +2323,7 @@ try
 
         let safetyExit, safetyOutput, safetyError, safetyElapsed, safetyPeak =
             runMeasured
+                elapsedBudget
                 scratch
                 quint
                 [
@@ -2317,6 +2362,7 @@ try
         let runCounterexample ordinal =
             let temporalExitCode, temporalOutput, temporalError, temporalElapsedMs, temporalPeakMiB =
                 runMeasured
+                    elapsedBudget
                     scratch
                     quint
                     [
@@ -2379,7 +2425,7 @@ try
                 if ordinal = 1 then
                     projectionPreflights[formalId]
                 else
-                    runProjection formalId main init removedStep blockedInvariant depth ordinal
+                    runProjection formalId main init removedStep blockedInvariant depth elapsedBudget ordinal
 
             path,
             projection,

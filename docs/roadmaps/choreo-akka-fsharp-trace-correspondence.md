@@ -379,6 +379,14 @@ result. The existing bounded startup retry now classifies that exact signature a
 the already recognized nonzero early-exit signature. It retries once on a fresh isolated endpoint and remains
 fail-closed if the retry does not produce a real result; retry counts remain explicit in qualification receipts.
 
+The combined C2 plus GS2-08.5 source then exposed a second lifecycle defect: an Apalache child could remain alive
+after simulation until GitHub canceled the entire semantic job at 90 minutes. The retained elapsed ceilings had
+previously been checked only after child exit, so they measured completed work but could not enforce a bound on a
+hung process. `runMeasured` now treats each formal test's declared 135/150-second elapsed ceiling as a wall-clock
+process deadline, kills the complete child tree when it expires, emits `APALACHE_EXECUTION_TIMEOUT`, and routes a
+timed-out `verify` through the same single bounded fresh-endpoint retry. A second timeout fails closed. This makes
+the existing inner ceiling enforceable; it does not increase any semantic or resource bound.
+
 ### C3 — make Quint traces the executable contract
 
 - [ ] Define and version the stable observable trace schema and trace manifest.
