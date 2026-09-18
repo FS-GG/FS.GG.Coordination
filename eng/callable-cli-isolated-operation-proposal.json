@@ -1,12 +1,12 @@
 {
-  "schema": "fsgg.coordination.callable-isolated-operation-proposal/3",
+  "schema": "fsgg.coordination.callable-isolated-operation-proposal/4",
   "identity": "v2-call-01-4b-isolated-native-v1",
   "state": "prepared-not-authorized",
   "authorized": false,
   "contract": {
     "path": "eng/callable-cli-isolated-operation-contract.json",
-    "sha256": "cc17065452ee941295a17844facfbdb13d305df179d7634b40459c0f63579a25",
-    "operationSourceSha256": "0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e",
+    "sha256": "3ebf436e7e2efdf221b9b08f96b6d5216bbeb22053af26bd7cdd2d0d11ef561d",
+    "operationSourceSha256": "b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c",
     "validator": "github-callable-isolated-operation-preparation-contract"
   },
   "phases": [
@@ -47,8 +47,16 @@
     "fresh-complete-capability-readback",
     "exact-plan-source-contract-package-receiver-and-target-binding",
     "exact-authorization-run-attempt-environment-and-grant-artifact-readback",
+    "immutable-grant-payload-plus-independent-server-artifact-envelope-readback",
     "separate-expiring-role-credentials-with-exact-phase-scope"
   ],
+  "executorIntegration": {
+    "grantPayload": "canonical-json-without-artifact-coordinates",
+    "artifactEnvelopeSchema": "fsgg.coordination.callable-isolated-operation-grant-artifact-envelope/1",
+    "artifactEnvelopeFields": ["repository", "artifactId", "artifactName", "artifactSha256", "payloadSha256", "workflowRunId", "workflowRunAttempt", "expiresAt"],
+    "operatorOption": "--grant-artifact-envelope",
+    "observation": "download-envelope-artifact-and-verify-api-metadata-archive-digest-and-single-canonical-payload"
+  },
   "recovery": {
     "persistBeforeCleanup": true,
     "persistBeforeCreation": true,
@@ -69,5 +77,5 @@
     "migration-or-cutover",
     "external-acceptance-or-Q4-inference"
   ],
-  "proposalSha256": "3e9075b9f94301f5cae05bbc201bec92b10e193532650a3a89c6e8999b112942"
+  "proposalSha256": "6af4760f429379d6e4a20f3424ee70b33e21cce220930ac53c177755049bd78a"
 }

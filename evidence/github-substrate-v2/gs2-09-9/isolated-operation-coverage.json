@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.coordination.callable-isolated-operation-coverage/1",
   "operationIdentity": "v2-call-01-4b-isolated-native-v1",
-  "contractSha256": "cc17065452ee941295a17844facfbdb13d305df179d7634b40459c0f63579a25",
-  "operationSourceSha256": "0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e",
+  "contractSha256": "3ebf436e7e2efdf221b9b08f96b6d5216bbeb22053af26bd7cdd2d0d11ef561d",
+  "operationSourceSha256": "b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c",
   "positiveControls": [
     "deterministic-sealed-creation-plan",
     "identity-bound-second-phase-plan",
@@ -15,6 +15,7 @@
     "retained-cleanup-intent-restart-settlement",
     "public-prepare-and-admission-command-path",
     "protected-grant-artifact-canonical-payload-readback",
+    "independent-server-artifact-envelope-live-readback",
     "public-execute-and-resume-command-path"
   ],
   "negativeControls": [
@@ -32,6 +33,10 @@
     "wrong-authority-repository-workflow-or-environment",
     "wrong-run-attempt-or-approval-environment-identity",
     "altered-missing-or-wrong-grant-artifact",
+    "grant-payload-artifact-self-reference",
+    "wrong-artifact-run-attempt-expiry-or-payload",
+    "malformed-or-multiple-file-grant-artifact",
+    "replayed-or-substituted-grant-payload",
     "incomplete-admission-observation",
     "wrong-observation-binding",
     "failed-or-non-dispatch-protected-run",
@@ -78,5 +83,5 @@
     "epochOrJournal": 0
   },
   "externalAcceptance": false,
-  "coverageSha256": "e059785b9ef748951891ce784ae3f92150195ea61005a6dec01dbe48fcb08373"
+  "coverageSha256": "bc05525f552efb8b7c4c22dc65f51356c1c5f62b47118922493126209f59c50d"
 }

@@ -173,9 +173,33 @@ def require_unexpired(grant: dict[str, object], now: dt.datetime) -> None:
         raise Refused("grant-expired")
 
 
+def validate_artifact_envelope(contract: dict[str, object], grant: dict[str, object], envelope: dict[str, object]) -> None:
+    """Validate executor-supplied server coordinates without making them part of the grant payload."""
+    authority = grant.get("authority")
+    required = contract["authorization"]
+    expected_fields = {
+        "schema", "repository", "artifactId", "artifactName", "artifactSha256", "payloadSha256",
+        "workflowRunId", "workflowRunAttempt", "expiresAt",
+    }
+    if set(envelope) != expected_fields or envelope.get("schema") != required["grantArtifactEnvelopeSchema"]:
+        raise Refused("grant-artifact-envelope-schema")
+    if not isinstance(authority, dict):
+        raise Refused("grant-authority")
+    expected_name = f"{required['grantArtifactNamePrefix']}-{authority.get('runId')}-{authority.get('runAttempt')}"
+    if (envelope.get("repository") != required["repository"]
+            or not isinstance(envelope.get("artifactId"), int) or envelope["artifactId"] <= 0
+            or envelope.get("artifactName") != expected_name
+            or not SHA256.fullmatch(str(envelope.get("artifactSha256", "")))
+            or envelope.get("payloadSha256") != digest(canonical(grant))
+            or envelope.get("workflowRunId") != authority.get("runId")
+            or envelope.get("workflowRunAttempt") != authority.get("runAttempt")):
+        raise Refused("grant-artifact-envelope-binding")
+    parse_time(envelope.get("expiresAt"), "grant-artifact-expiry")
+
+
 def load_contract(path: str | pathlib.Path) -> dict[str, object]:
     value = read_json(path)
-    if value.get("schema") != "fsgg.coordination.callable-isolated-operation-contract/3":
+    if value.get("schema") != "fsgg.coordination.callable-isolated-operation-contract/4":
         raise Refused("contract-schema")
     if value.get("state") != "prepared-not-authorized" or value.get("authorized") is not False:
         raise Refused("contract-must-remain-unauthorized")
@@ -216,7 +240,7 @@ def validate_preflight(contract: dict[str, object], value: dict[str, object]) ->
 
 def load_proposal(path: str | pathlib.Path, contract: dict[str, object], preflight: dict[str, object]) -> dict[str, object]:
     value = read_json(path)
-    if value.get("schema") != "fsgg.coordination.callable-isolated-operation-proposal/3":
+    if value.get("schema") != "fsgg.coordination.callable-isolated-operation-proposal/4":
         raise Refused("proposal-schema")
     verify_digest(value, "proposalSha256", "proposal")
     if value.get("identity") != contract.get("identity") or value.get("state") != "prepared-not-authorized" or value.get("authorized") is not False:
@@ -331,7 +355,7 @@ def validate_plan(contract: dict[str, object], plan: dict[str, object]) -> None:
         raise Refused("operation-plan-target-binding")
 
 
-def validate_admission(contract: dict[str, object], plan: dict[str, object], grant: dict[str, object], observation: dict[str, object], now: dt.datetime) -> None:
+def validate_admission(contract: dict[str, object], plan: dict[str, object], grant: dict[str, object], artifact_envelope: dict[str, object], observation: dict[str, object], now: dt.datetime) -> None:
     validate_plan(contract, plan)
     if grant.get("schema") != "fsgg.coordination.callable-isolated-operation-grant/1" or grant.get("authorized") is not True:
         raise Refused("grant-not-authorized")
@@ -341,6 +365,8 @@ def validate_admission(contract: dict[str, object], plan: dict[str, object], gra
         raise Refused("grant-plan-binding")
     if grant.get("sourceSha256") != contract["source"]["operationSourceSha256"]:
         raise Refused("grant-source-binding")
+    if "artifact" in grant:
+        raise Refused("grant-artifact-self-reference")
     require_unexpired(grant, now)
     authority = grant.get("authority")
     required = contract["authorization"]
@@ -354,11 +380,7 @@ def validate_admission(contract: dict[str, object], plan: dict[str, object], gra
             or authority["runAttempt"] <= 0 or not OID.fullmatch(str(authority.get("workflowRevision", "")))
             or not SHA256.fullmatch(str(authority.get("workflowSha256", "")))):
         raise Refused("grant-authority-identity")
-    artifact = grant.get("artifact")
-    if (not isinstance(artifact, dict) or not isinstance(artifact.get("id"), int)
-            or artifact.get("name") != required["grantArtifactName"]
-            or not SHA256.fullmatch(str(artifact.get("sha256", "")))):
-        raise Refused("grant-artifact-identity")
+    validate_artifact_envelope(contract, grant, artifact_envelope)
     if observation.get("schema") != "fsgg.coordination.callable-isolated-admission-observation/1" or observation.get("complete") is not True:
         raise Refused("admission-observation-incomplete")
     if observation.get("contractSha256") != contract.get("contractSha256") or observation.get("planSeal") != plan.get("seal"):
@@ -374,12 +396,17 @@ def validate_admission(contract: dict[str, object], plan: dict[str, object], gra
     if not isinstance(workflow, dict) or workflow.get("sha256") != authority["workflowSha256"] or workflow.get("revision") != authority["workflowRevision"]:
         raise Refused("protected-workflow")
     observed_artifact = observation.get("grantArtifact")
-    if (not isinstance(observed_artifact, dict) or observed_artifact.get("id") != artifact["id"]
-            or observed_artifact.get("name") != artifact["name"]
-            or observed_artifact.get("sha256") != artifact["sha256"]
-            or observed_artifact.get("payloadSha256") != digest(canonical(grant))
-            or observed_artifact.get("workflowRunId") != authority["runId"]
-            or observed_artifact.get("expired") is not False):
+    if (not isinstance(observed_artifact, dict)
+            or observed_artifact.get("repository") != artifact_envelope["repository"]
+            or observed_artifact.get("id") != artifact_envelope["artifactId"]
+            or observed_artifact.get("name") != artifact_envelope["artifactName"]
+            or observed_artifact.get("sha256") != artifact_envelope["artifactSha256"]
+            or observed_artifact.get("payloadSha256") != artifact_envelope["payloadSha256"]
+            or observed_artifact.get("workflowRunId") != artifact_envelope["workflowRunId"]
+            or observed_artifact.get("workflowRunAttempt") != artifact_envelope["workflowRunAttempt"]
+            or observed_artifact.get("expiresAt") != artifact_envelope["expiresAt"]
+            or observed_artifact.get("expired") is not False
+            or parse_time(observed_artifact.get("expiresAt"), "grant-artifact-expiry") <= now):
         raise Refused("grant-artifact-readback")
     approvals = observation.get("approvals")
     reviewer = contract["authorization"]["requiredReviewer"]
@@ -739,10 +766,11 @@ def installation_repositories(client: GitHub, label: str) -> list[dict[str, obje
     return [item for item in repositories if isinstance(item, dict)]
 
 
-def live_observation(clients: dict[str, GitHub], contract: dict[str, object], plan: dict[str, object], grant: dict[str, object], tool_command: str | None = None) -> dict[str, object]:
+def live_observation(clients: dict[str, GitHub], contract: dict[str, object], plan: dict[str, object], grant: dict[str, object], artifact_envelope: dict[str, object], tool_command: str | None = None) -> dict[str, object]:
     authority = grant["authority"]
     if set(clients) != set(ROLE_NAMES):
         raise Refused("credential-client-role-set")
+    validate_artifact_envelope(contract, grant, artifact_envelope)
     authority_client = clients["authority-observer"]
     status, run = authority_client.request("GET", f"repos/{authority['repository']}/actions/runs/{authority['runId']}")
     if status != 200:
@@ -757,14 +785,23 @@ def live_observation(clients: dict[str, GitHub], contract: dict[str, object], pl
         workflow_bytes = base64.b64decode(str(workflow.get("content", "")).replace("\n", ""), validate=True)
     except ValueError as error:
         raise Refused("protected-workflow-content") from error
-    artifact_identity = grant.get("artifact") or {}
-    status, artifact = authority_client.request("GET", f"repos/{authority['repository']}/actions/artifacts/{artifact_identity.get('id')}")
+    artifact_id = artifact_envelope["artifactId"]
+    status, artifact = authority_client.request("GET", f"repos/{authority['repository']}/actions/artifacts/{artifact_id}")
     if status != 200 or not isinstance(artifact, dict):
         raise Refused(f"grant-artifact-readback:{status}")
     status, artifact_archive = authority_client.request_bytes(
-        "GET", f"repos/{authority['repository']}/actions/artifacts/{artifact_identity.get('id')}/zip")
+        "GET", f"repos/{authority['repository']}/actions/artifacts/{artifact_id}/zip")
     if status != 200:
         raise Refused(f"grant-artifact-content-readback:{status}")
+    artifact_sha256 = str(artifact.get("digest", "")).removeprefix("sha256:")
+    if (artifact.get("id") != artifact_envelope["artifactId"]
+            or artifact.get("name") != artifact_envelope["artifactName"]
+            or artifact_sha256 != artifact_envelope["artifactSha256"]
+            or digest(artifact_archive) != artifact_envelope["artifactSha256"]
+            or (artifact.get("workflow_run") or {}).get("id") != artifact_envelope["workflowRunId"]
+            or artifact.get("expires_at") != artifact_envelope["expiresAt"]
+            or artifact.get("expired") is not False):
+        raise Refused("grant-artifact-envelope-readback")
     artifact_grant = grant_artifact_payload(artifact_archive)
     if artifact_grant != grant:
         raise Refused("grant-artifact-content-binding")
@@ -819,10 +856,12 @@ def live_observation(clients: dict[str, GitHub], contract: dict[str, object], pl
         "planSeal": plan["seal"],
         "protectedRun": {"id": run.get("id"), "attempt": run.get("run_attempt"), "conclusion": run.get("conclusion"), "event": run.get("event"), "headSha": run.get("head_sha"), "path": run.get("path")},
         "workflow": {"revision": authority["workflowRevision"], "sha256": digest(workflow_bytes)},
-        "grantArtifact": {"id": artifact.get("id"), "name": artifact.get("name"),
-                          "sha256": str(artifact.get("digest", "")).removeprefix("sha256:"),
+        "grantArtifact": {"repository": authority["repository"], "id": artifact.get("id"), "name": artifact.get("name"),
+                          "sha256": artifact_sha256,
                           "payloadSha256": digest(canonical(artifact_grant)),
-                          "workflowRunId": (artifact.get("workflow_run") or {}).get("id"), "expired": artifact.get("expired")},
+                          "workflowRunId": (artifact.get("workflow_run") or {}).get("id"),
+                          "workflowRunAttempt": run.get("run_attempt"), "expiresAt": artifact.get("expires_at"),
+                          "expired": artifact.get("expired")},
         "approvals": [{"state": item.get("state"), "userId": (item.get("user") or {}).get("id"),
                        "environment": ((item.get("environments") or [{}])[0]).get("name"),
                        "environmentId": ((item.get("environments") or [{}])[0]).get("id")}
@@ -1137,11 +1176,13 @@ def main(argv: list[str] | None = None, client_factory=GitHub, now_provider=utc_
     admission = commands.add_parser("validate-admission")
     admission.add_argument("--plan", required=True)
     admission.add_argument("--grant", required=True)
+    admission.add_argument("--grant-artifact-envelope", required=True)
     admission.add_argument("--observation", required=True)
     admission.add_argument("--now", required=True)
     execute = commands.add_parser("execute")
     execute.add_argument("--plan", required=True)
     execute.add_argument("--grant", required=True)
+    execute.add_argument("--grant-artifact-envelope", required=True)
     execute.add_argument("--api-base", default="https://api.github.com/")
     for role in ROLE_NAMES:
         execute.add_argument(f"--{role}-token-env", required=True)
@@ -1159,13 +1200,16 @@ def main(argv: list[str] | None = None, client_factory=GitHub, now_provider=utc_
         elif args.action == "prepare-operation":
             write_private(args.output, prepare_operation(contract, read_json(args.creation_receipt)))
         elif args.action == "validate-admission":
-            validate_admission(contract, read_json(args.plan), read_json(args.grant), read_json(args.observation), parse_time(args.now, "now"))
+            validate_admission(contract, read_json(args.plan), read_json(args.grant),
+                               read_json(args.grant_artifact_envelope), read_json(args.observation),
+                               parse_time(args.now, "now"))
             print('{"admission":"valid","effects":0}')
         else:
             if not args.receipt:
                 raise Refused("receipt-path-required")
             plan = read_json(args.plan)
             grant = read_json(args.grant)
+            artifact_envelope = read_json(args.grant_artifact_envelope)
             token_environments = {role: getattr(args, role.replace("-", "_") + "_token_env") for role in ROLE_NAMES}
             tokens = {role: os.environ.get(environment, "") for role, environment in token_environments.items()}
             if any(not token for token in tokens.values()):
@@ -1173,8 +1217,8 @@ def main(argv: list[str] | None = None, client_factory=GitHub, now_provider=utc_
             if len(set(tokens.values())) != len(ROLE_NAMES):
                 raise Refused("credential-token-role-alias")
             clients = {role: client_factory(tokens[role], args.api_base) for role in ROLE_NAMES}
-            observation = live_observation(clients, contract, plan, grant, args.tool_command)
-            validate_admission(contract, plan, grant, observation, now_provider())
+            observation = live_observation(clients, contract, plan, grant, artifact_envelope, args.tool_command)
+            validate_admission(contract, plan, grant, artifact_envelope, observation, now_provider())
             require_unexpired(grant, now_provider())
             if plan["phase"] == "creation":
                 receipt = execute_creation(clients["creation"], contract, plan, args.receipt, now_provider())
