@@ -218,8 +218,9 @@ Projection into `.github` is asynchronous after authoritative merge/readback.
 
 Remaining gaps are deliberate: `FS.GG.Coordination.Cli` `0.1.0` is published and read back from both designated
 feeds and the canonical `.github` receiver selects it opt-in, but no isolated external or production provider
-effect ran, no Q4/native external acceptance exists, no continuous webhook host exists, and private roadmap
-telemetry is `not-configured` with native collaboration usage interception unsupported. Those gaps block `.4`,
-not the completed producer preparation, publication and opt-in adoption windows. GS2-09 discovery, migration
+effect ran, no Q4/native external acceptance exists, no continuous webhook host exists, and native collaboration
+usage interception remains unsupported even though private roadmap telemetry is now workspace-associated. Those
+gaps block `.4b` and `.4c`, not the completed producer preparation, publication, opt-in adoption or `.4a`
+source-qualification windows. GS2-09 discovery, migration
 manifests/transforms/archive/rollback/rehearsal remain a separate pending feature, and OpenV2 and Q4 remain
 unclaimed.
