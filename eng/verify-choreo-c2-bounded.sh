@@ -43,10 +43,20 @@ awk '
 ' "$repo_root/src/FS.GG.Coordination.Protocol/Protocol.md" > "$test_model"
 test -s "$model" && test -s "$test_model"
 
+# Quint's default suffix convention skips these descriptive run names. Select
+# only runs declared by this suite, excluding imported actions and predicates.
+test_names="$(awk '
+  /^module O2HostedWriterChoreoTests \{$/ { selected = 1; next }
+  selected && /^\}$/ { exit }
+  selected && /^  run / { printf "%s%s", separator, $2; separator = "|" }
+' "$test_model")"
+test -n "$test_names"
+
 cd "$scratch_root"
 "$quint_bin" typecheck "$model"
 "$quint_bin" test "$test_model" \
   --main=O2HostedWriterChoreoTests \
+  --match="^($test_names)$" \
   --max-samples=10000 \
   --backend=rust \
   --verbosity=1

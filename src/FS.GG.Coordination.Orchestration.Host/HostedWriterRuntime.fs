@@ -135,10 +135,14 @@ type HostedWriterProviderAdapter private (calls: HostedWriterProviderCalls) =
 
 [<RequireQualifiedAccess>]
 module HostedWriterJournal =
-    let private eventChange =
+    let private eventChange (state: State) =
         function
         | EffectIntentRecorded intent -> IntentAdded intent
         | EffectSettled(operationId, _) -> Settled operationId
+        | EffectRetryAuthorized operationId ->
+            match Map.tryFind operationId state.Operations with
+            | Some(OperationState.Settled(intent, ProvenAbsent)) -> IntentAdded intent
+            | _ -> invalidOp "retry metadata requires a durably proven-absent operation"
         | _ -> NoEffect
 
     let private eventId (commandId: CommandId) sequence =
@@ -188,14 +192,17 @@ module HostedWriterJournal =
                             }
         }
 
-    let appendRequest persistenceId receivedAt expectedSequence (envelope: CommandEnvelope) (decision: Decision) =
+    let appendRequest persistenceId receivedAt expectedSequence state (envelope: CommandEnvelope) (decision: Decision) =
         let bodySha256 = canonicalEnvelopeSha256 envelope
+        let mutable eventState = state
 
         let events =
             decision.Events
             |> List.mapi (fun index eventValue ->
                 let sequence = expectedSequence + int64 index + 1L
                 let payload = EventEnvelope.encode eventValue
+                let change = eventChange eventState eventValue
+                eventState <- evolve eventState eventValue
 
                 {
                     PersistenceId = persistenceId
@@ -205,7 +212,7 @@ module HostedWriterJournal =
                     SerializerVersion = EventEnvelope.serializerVersion
                     Payload = payload
                     PayloadSha256 = payload |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
-                    EffectChange = eventChange eventValue
+                    EffectChange = change
                     RecordedAt = receivedAt
                 })
 
@@ -231,7 +238,13 @@ module HostedWriterJournal =
                 let decision = decide (clock.GetUtcNow()) recovery.State envelope
 
                 let request =
-                    appendRequest recovery.PersistenceId (clock.GetUtcNow()) recovery.Sequence envelope decision
+                    appendRequest
+                        recovery.PersistenceId
+                        (clock.GetUtcNow())
+                        recovery.Sequence
+                        recovery.State
+                        envelope
+                        decision
 
                 let! appended = store.Append(request, cancellationToken)
 

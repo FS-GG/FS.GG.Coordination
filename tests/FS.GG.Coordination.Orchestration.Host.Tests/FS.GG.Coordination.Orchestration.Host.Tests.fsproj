@@ -11,6 +11,7 @@
     <Compile Include="RunnerWireRuntimeTests.fs" />
     <Compile Include="InstalledAdoptionVerificationTests.fs" />
     <Compile Include="HostTests.fs" />
+    <Compile Include="ChoreoProductionReplayTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

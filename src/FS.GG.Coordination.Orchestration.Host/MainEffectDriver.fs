@@ -13,6 +13,7 @@ type MainEffectDriveResult =
     | EffectNeedsReconciliation of OperationId * int64
     | EffectNeedsExternalReconciliation of OperationId * int64
     | EffectAlreadySettled of OperationId
+    | EffectProvenAbsent of OperationId * int64
     | EffectDriveRefused of string
 
 /// Durable Main-side effect pump. Reducer state is the only authority; providers are
@@ -106,6 +107,8 @@ type MainEffectDriver
             | Error failures -> return EffectDriveRefused(sprintf "%A" failures)
             | Ok current ->
                 match current.State.HostedRoute, Map.tryFind operationId current.State.Operations with
+                | _, Some(OperationState.Settled(_, ProvenAbsent)) ->
+                    return EffectProvenAbsent(operationId, current.Sequence)
                 | _, Some(OperationState.Settled _) -> return EffectAlreadySettled operationId
                 | None, _ -> return EffectDriveRefused "hosted-route-not-selected"
                 | _, None -> return EffectDriveRefused "effect-intent-not-recorded"
@@ -198,6 +201,10 @@ type MainEffectDriver
 
                 match appended with
                 | Error reason -> return EffectDriveRefused reason
+                | Ok sequence when not readback.Exists ->
+                    // Absence permits a separately authorized same-operation retry;
+                    // it is never completion and must not schedule the next effect.
+                    return EffectProvenAbsent(intent.OperationId, sequence)
                 | Ok sequence ->
                     let! advanced = advance route intent (HostedEffect readback) cancellationToken
 
