@@ -122,14 +122,18 @@ are never acceptance evidence.
 - [ ] **V2-CALL-01.4 — Qualify installed isolated-provider and native execution.** Version 0.1.0 remains the
   selected candidate; no defect requiring a replacement version is currently proved. Execute the three windows
   below in order. Only `.4a` is admitted after this plan lands.
-  - [ ] **V2-CALL-01.4a — Close recovery coverage and build the installed harness (routine).** Extend the Q3/Q6
+  - [x] **V2-CALL-01.4a — Close recovery coverage and build the installed harness (routine).** Extend the Q3/Q6
     validator so its registered evidence includes production-runtime tests, not only the current domain tests.
     Cover unknown, proven-absent and applied effects; lost dispatch responses and journal acknowledgements;
     stale retry observations; durable intent across a fresh process; and native-completion reconciliation. Build
     a clean public-feed installation harness around the exact 0.1.0 CLI and the production GitHub-backed journal,
     using controlled HTTP before any live provider. Retain exact source, package, served, installed-command,
     request and journal hashes plus authoritative readback. A nonzero CLI exit or `AdvancePending` is an
-    incomplete/refused result, never acceptance. This source window performs no external mutation.
+    incomplete/refused result, never acceptance. This source window performs no external mutation. Completed by
+    extending both registered commands over the production runtime suite and retaining the exact recovery map,
+    public-feed installed-harness result, and still-unauthorized `.4b` operation proposal under
+    `evidence/github-substrate-v2/gs2-09-9/` and `eng/`. The installed 0.1.0 bytes passed; no replacement version
+    or product repair was required.
   - [ ] **V2-CALL-01.4b — Admit one compatible isolated operation (separate protected authority).** GS2-09.9's
     current permission ceiling excludes provider mutation and external acceptance, so a later operation packet
     must bind the exact target, actor/credential authority, package and receiver revisions, source/base/check,
@@ -152,8 +156,8 @@ are never acceptance evidence.
 Workspace and telemetry disposition: `.4a` adds qualification source and an installed harness but changes no
 provider or lifecycle default. Freeze 0.1.0 through `.4`; a demonstrated package/runtime defect requires a new
 version, protected publication and explicit receiver adoption rather than substituting bytes under the existing
-identity. Private roadmap telemetry remains `not-configured`; native collaboration interception and usage remain
-unknown, not zero, and do not become acceptance evidence.
+identity. Private roadmap telemetry for `.4a` is associated through the `.github` workspace; native collaboration
+interception remains unsupported and usage remains unknown, not zero, and neither becomes acceptance evidence.
 
 Completion evidence for `.1` and `.2`: the exact candidate runs a warning-free Release solution build; all 417
 unit tests and all 651 architecture tests pass; the focused ordinary suite contributes five unit and two
@@ -171,6 +175,19 @@ outputs to identical bytes, verifies the exact source-bound manifest, installs `
 local-only feed, runs it without checkout dependencies, and refuses package corruption and source substitution.
 The final PR marker and native check suite bind those results to the reviewed head; merge and authoritative
 readback are required before `.3a` is reported outside this plan as delivered.
+
+Completion evidence for `.4a`: both Q3/Q6 commands now execute the five domain and eleven production-runtime
+controls. The clean-process harness installs the exact public `FS.GG.Coordination.Cli` 0.1.0 package, whose
+nuget.org archive is `e7f440a2a1f94d51dbcdd7146494c97e6386f9dcc8034a028e3e851d364390e3`, and binds it to
+candidate `ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf`, source/tree
+`1bd60a3e…`/`79de47c7…`, receiver merge `587f46e1…`, and installed command
+`21d36ec3cdbb153453833ed57f2320f9f256a26f35aea52bb75c52a68efada04`. Five recovery scenarios cover three
+lost journal acknowledgements, a lost dispatch response, native-completion reconciliation and fresh-process
+no-op replay; nine independent negatives cover pre-open refusal, stale policy/source/base/check/epoch, wrong
+subject, incomplete pagination and observer outage. Exact request sequence
+`c30cd043a8a3a30bc9daffbb59bb0f6d9bfef997695da3d6d823d9a94597b317` and journal set
+`520b08adbea6ee20b21b396f3200eeff7e970a6beaf81947942fd9f9af3cf968` are retained. Every provider mutation
+is loopback-only, and `.4b`, `.4c`, live acceptance, Q4, `OpenV2` and migration remain pending.
 
 ## Dependencies, invalidators, and completion examples
 
@@ -201,8 +218,9 @@ Projection into `.github` is asynchronous after authoritative merge/readback.
 
 Remaining gaps are deliberate: `FS.GG.Coordination.Cli` `0.1.0` is published and read back from both designated
 feeds and the canonical `.github` receiver selects it opt-in, but no isolated external or production provider
-effect ran, no Q4/native external acceptance exists, no continuous webhook host exists, and private roadmap
-telemetry is `not-configured` with native collaboration usage interception unsupported. Those gaps block `.4`,
-not the completed producer preparation, publication and opt-in adoption windows. GS2-09 discovery, migration
+effect ran, no Q4/native external acceptance exists, no continuous webhook host exists, and native collaboration
+usage interception remains unsupported even though private roadmap telemetry is now workspace-associated. Those
+gaps block `.4b` and `.4c`, not the completed producer preparation, publication, opt-in adoption or `.4a`
+source-qualification windows. GS2-09 discovery, migration
 manifests/transforms/archive/rollback/rehearsal remain a separate pending feature, and OpenV2 and Q4 remain
 unclaimed.

@@ -56,6 +56,41 @@ requireContains
     [ "\"inspect\""; "\"plan\""; "\"advance\""; "--provider-response" ]
 
 requireContains
+    "eng/callable-cli-installed-harness.json"
+    [
+        "ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf"
+        "e7f440a2a1f94d51dbcdd7146494c97e6386f9dcc8034a028e3e851d364390e3"
+        "587f46e15e1404dbe0dc1e9e6b47cf2861d7b502"
+        "separate-protected-.4b-operation"
+        "observed-403-entitlement-unknown-not-absence"
+    ]
+
+requireContains
+    "eng/callable-cli-isolated-operation-proposal.json"
+    [
+        "v2-call-01-4b-isolated-native-v1"
+        "FS-GG/FS.GG.Coordination.CallableSandbox"
+        "separateProtectedAuthority"
+        "required_status_checks returned 403"
+        "billing-change"
+        "pendingIsNotAcceptance"
+    ]
+
+requireContains
+    "eng/test-callable-cli-installed-harness.py"
+    [ "127.0.0.1"; "loopback-only"; "AdvancePending"; "providerMutations" ]
+
+requireContains
+    "evidence/github-substrate-v2/gs2-09-9/recovery-coverage.json"
+    [
+        "effect-outcomes-proven-absent-unknown-applied"
+        "lost-journal-acknowledgements"
+        "native-completion-reconciliation"
+        "pending-or-nonzero-is-not-acceptance"
+        "productionRuntimeTests"
+    ]
+
+requireContains
     "evidence/github-substrate-v2/roadmap-amendments/GS2-09.9.json"
     [
         "7d2db1c32c47b6f9c445a77f9a91510c61a17281"
@@ -78,7 +113,7 @@ let units = JsonDocument.Parse(File.ReadAllBytes(path "eng/github-substrate-v2-u
 let unit =
     units.RootElement.GetProperty("units").EnumerateArray()
     |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-09.9")
-if unit.GetProperty("contractSha256").GetString() <> "78899871f3716eb393786ae0b0d2266ef9f2df511d9c291dc19252014655c5e8" then
+if unit.GetProperty("contractSha256").GetString() <> "c2ef3bf04c91c4d9dbf3c332e827d42a0d15cc6599e0f3b034b2b1d3c112a343" then
     failwith "GS2-09.9 contract digest drift"
 
 let testOutput =
@@ -91,7 +126,7 @@ let testOutput =
             "Release"
             "--no-restore"
             "--filter"
-            "FullyQualifiedName~GitHubOrdinaryDeliveryTests"
+            "FullyQualifiedName~GitHubOrdinaryDeliveryTests|FullyQualifiedName~GitHubOrdinaryRuntimeTests"
             "--logger"
             "console;verbosity=minimal"
         ]
@@ -113,6 +148,11 @@ try
         run "dotnet" [ "run"; "--project"; cli; "--configuration"; "Release"; "--no-build"; "--"; "delivery"; "advance"; "--observation"; observation; "--plan"; planPath; "--provider-response"; "evidence/github-substrate-v2/gs2-09-9/provider-absent.json" ]
     if phase = "recovery" && (not (advanced.Contains("AdvanceSettled", StringComparison.Ordinal)) || not (advanced.Contains("\"dispatches\":1", StringComparison.Ordinal))) then
         failwith $"controlled advancement did not settle exactly one dispatch: {advanced}"
+
+    if phase = "recovery" then
+        let installed = run "python3" [ "eng/test-callable-cli-installed-harness.py" ] |> fun value -> value.Trim()
+        let retained = File.ReadAllText(path "evidence/github-substrate-v2/gs2-09-9/installed-harness.json").Trim()
+        if installed <> retained then failwith "installed harness readback differs from retained exact evidence"
 finally
     Directory.Delete(temporary, true)
 
