@@ -2,6 +2,17 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>fsgg-coordination</ToolCommandName>
+    <PackageId>FS.GG.Coordination.Cli</PackageId>
+    <Version>0.1.0</Version>
+    <PackageVersion>0.1.0</PackageVersion>
+    <Authors>FS-GG</Authors>
+    <Description>Callable FS.GG Coordination boundary. Production effects remain governed by authoritative epoch and journal policy.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/FS-GG/FS.GG.Coordination</RepositoryUrl>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
   <ItemGroup>

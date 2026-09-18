@@ -20,9 +20,10 @@ Local files are immutable qualification requests or diagnostics, never authority
 remains authoritative; continuous webhook hosting is not a prerequisite. Native observations retain unknown
 telemetry and usage rather than replacing them with a second ledger.
 
-The first installed behavior change is `.3`; `.1` and `.2` change source and repository-local qualification only.
-Clean creation and retained upgrade are separate opt-in paths, and both must refuse before `OpenV2`. No provider
-or lifecycle default changes here.
+The first installed behavior change is `.3c`; `.1`, `.2`, and `.3a` change source and repository-local
+qualification/preparation only, while `.3b` is separately authorized publication. Clean creation and retained
+upgrade are separate opt-in paths, and both must refuse before `OpenV2`. No provider or lifecycle default changes
+here.
 
 ## Selected architecture
 
@@ -78,9 +79,25 @@ are never acceptance evidence.
   effect remains pending, settled replay is a no-op, changed source/base/policy needs a new decision, missing
   observation is not absence, observer outage retains delivery state, and failed required checks block merge.
   Repository-local controlled-provider qualification passes without Host, PostgreSQL, or a model process.
-- [ ] **V2-CALL-01.3 — Publish and adopt the exact callable artifact.** First installed behavior change; separately
-  authorize publication, immutable artifact verification, clean creation, retained upgrade, receiver selection,
-  and pre-`OpenV2` refusal.
+- [ ] **V2-CALL-01.3a — Prepare the callable producer and exact release operation.** `.1`/`.2` remain valid
+  controlled-provider source acceptance, but their file-only/in-memory runtime is simulated and does not prove
+  real GitHub or journal composition. Compose the production GitHub REST observation/readback path, protected
+  sharded Git journal, and native merge interpreter behind the same command. Bind epoch generation and commit,
+  preserve pending/unknown outcomes and persist-before-effect/CAS recovery across process restart, and keep the
+  interpreter limited to ordinary source delivery. Produce the standalone `fsgg-coordination` dotnet tool with
+  its complete private dependency closure, a reproducible/custodied `FS.GG.Coordination.Cli` `0.1.0` candidate,
+  clean local install proof, corruption/substitution/refusal controls, and a preparation-only release route. The
+  proposed package/tag identity remains unreserved while GitHub Packages ownership inventory is unavailable
+  (`403`); no package, tag, receiver, credential, or provider effect is created by this window.
+- [ ] **V2-CALL-01.3b — Publish the protected dual-feed artifact.** Requires concrete separate publication
+  authority and collision-free live ownership readback. Publish first to GitHub Packages, verify provenance and
+  served bytes, then publish the byte-identical candidate to nuget.org. Recover partial publication by reading
+  the first feed before resuming, prove both served digests, and create `v0.1.0` only after served readback. This
+  does not authorize receiver adoption.
+- [ ] **V2-CALL-01.3c — Adopt the exact callable artifact.** First installed behavior change. Separately authorize
+  clean creation and retained upgrade as opt-in receiver paths, prove idempotency, explicit conflict, and no
+  partial writes, and preserve coexistence with the legacy bridge. Both paths refuse effects before `OpenV2` and
+  require class/receiver admission; no provider or lifecycle default changes implicitly.
 - [ ] **V2-CALL-01.4 — Qualify installed isolated provider journey and native acceptance.** Exercise the installed
   artifact against an authorized isolated provider and obtain native external acceptance; do not reuse local
   controlled responses as Q4.
@@ -109,6 +126,13 @@ cannot both reserve; a response lost after merge is reconciled from native effec
 effect but before settlement produces exactly one dispatch; replay of the settled plan does nothing; an observer
 outage returns pending/refusal and never erases an already observed delivery.
 
+For `.3a`, completion additionally means the production REST/journal composition passes loopback provider tests
+for three crash cuts, duplicate prevention, stale generation/check/source/policy/epoch, incomplete pagination,
+wrong subject, unknown merge result, observer outage, and restart persistence. Two independent preparations must
+produce byte-identical canonical package bytes, an isolated local-only feed must install and run the tool without
+checkout dependencies, manifest verification must reject corruption or substituted identity, and the release
+workflow must be mechanically incapable of publishing or tagging. Live provider delivery is not `.3a` evidence.
+
 ## §9.9 impact and observation gaps
 
 This owner amendment adds GS2-09.9 as the callable prerequisite to representative rehearsal while leaving
@@ -116,7 +140,10 @@ GS2-09.1–.8 migration scope unchanged. The eventual Unified index row points t
 `https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/callable-ordinary-v2-execution.md`.
 Projection into `.github` is asynchronous after authoritative merge/readback.
 
-Remaining gaps are deliberate: no package is published, no receiver selects this source, no sandbox or production
-provider effect ran, no Q4/native external acceptance exists, no continuous webhook host exists, and private
-roadmap telemetry is `not-configured` with native collaboration usage interception unsupported. Those gaps block
-`.3`/`.4` activation, not this repository-local source and recovery window.
+Remaining gaps are deliberate: no package is published, the proposed `FS.GG.Coordination.Cli` `0.1.0` identity is
+not reserved because organization package inventory returned `403`, no receiver selects this source, no sandbox
+or production provider effect ran, no Q4/native external acceptance exists, no continuous webhook host exists,
+and private roadmap telemetry is `not-configured` with native collaboration usage interception unsupported. Those
+gaps block `.3b`/`.3c`/`.4` activation, not the `.3a` producer-preparation window. GS2-09 discovery, migration
+manifests/transforms/archive/rollback/rehearsal remain a separate pending feature, and OpenV2 and Q4 remain
+unclaimed.

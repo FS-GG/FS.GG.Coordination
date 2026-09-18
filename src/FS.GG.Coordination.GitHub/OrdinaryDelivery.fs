@@ -29,6 +29,8 @@ type OrdinaryDeliveryObservation =
         PolicyRevision: string
         Checks: OrdinaryCheckFact list
         Epoch: string
+        EpochGeneration: int64
+        EpochCommit: string
         JournalGeneration: int64
         JournalHead: string
         SourceComplete: bool
@@ -51,6 +53,8 @@ type OrdinaryDeliveryPlan =
         PolicyRevision: string
         CheckIdentities: string list
         Epoch: string
+        EpochGeneration: int64
+        EpochCommit: string
         JournalGeneration: int64
         JournalHead: string
         Effect: string
@@ -64,6 +68,7 @@ type OrdinaryDeliveryFailure =
     | UnsupportedObservation
     | CrossSubjectObservation
     | StalePolicy
+    | StaleEpoch
     | ChangedSource
     | InvalidIdentity of string
     | RequiredCheckNotPassed of string
@@ -95,7 +100,7 @@ type IOrdinaryDeliveryRuntime =
 
 [<RequireQualifiedAccess>]
 module OrdinaryDelivery =
-    let private schema = "fsgg.coordination.ordinary-delivery-plan/1"
+    let private schema = "fsgg.coordination.ordinary-delivery-plan/2"
 
     let private validText (value: string) =
         not (String.IsNullOrWhiteSpace value) && value = value.Trim()
@@ -154,6 +159,9 @@ module OrdinaryDelivery =
                     yield InvalidIdentity "journal-head"
                 if not (Set.contains observation.Epoch (Set.ofList [ "OperatingV1"; "Frozen"; "OpenV2" ])) then
                     yield InvalidIdentity "epoch"
+                if observation.EpochGeneration <= 0L then yield InvalidIdentity "epoch-generation"
+                if not (validSha 40 observation.EpochCommit || validSha 64 observation.EpochCommit) then
+                    yield InvalidIdentity "epoch-commit"
                 if List.isEmpty checks then yield MissingCheckPages
                 for check in checks do
                     if not (validText check.Identity) || check.AppId <= 0L then
@@ -180,6 +188,8 @@ module OrdinaryDelivery =
         root.Add("checks", checks)
         root.Add("effect", "ordinary-source-delivery")
         root.Add("epoch", observation.Epoch)
+        root.Add("epochCommit", observation.EpochCommit.ToLowerInvariant())
+        root.Add("epochGeneration", observation.EpochGeneration)
         root.Add("headSha", observation.HeadSha.ToLowerInvariant())
         root.Add("journalGeneration", observation.JournalGeneration)
         root.Add("journalHead", observation.JournalHead.ToLowerInvariant())
@@ -221,6 +231,8 @@ module OrdinaryDelivery =
                     PolicyRevision = observed.PolicyRevision.ToLowerInvariant()
                     CheckIdentities = observed.Checks |> List.map (fun check -> $"{check.Identity}@{check.AppId}:{checkText check.Conclusion}")
                     Epoch = observed.Epoch
+                    EpochGeneration = observed.EpochGeneration
+                    EpochCommit = observed.EpochCommit.ToLowerInvariant()
                     JournalGeneration = observed.JournalGeneration
                     JournalHead = observed.JournalHead.ToLowerInvariant()
                     Effect = "ordinary-source-delivery"
@@ -238,7 +250,7 @@ module OrdinaryDelivery =
             use document = JsonDocument.Parse bytes
             let root = document.RootElement
             let expectedNames =
-                set [ "baseRef"; "baseSha"; "checks"; "effect"; "epoch"; "headSha"; "journalGeneration"; "journalHead"; "operationId"; "policyRevision"; "pullRequestNodeId"; "pullRequestNumber"; "repository"; "repositoryId"; "schema"; "seal" ]
+                set [ "baseRef"; "baseSha"; "checks"; "effect"; "epoch"; "epochCommit"; "epochGeneration"; "headSha"; "journalGeneration"; "journalHead"; "operationId"; "policyRevision"; "pullRequestNodeId"; "pullRequestNumber"; "repository"; "repositoryId"; "schema"; "seal" ]
             let names = root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
 
             if root.ValueKind <> JsonValueKind.Object || Set.ofList names <> expectedNames || List.distinct names <> names then
@@ -275,6 +287,8 @@ module OrdinaryDelivery =
                             PolicyRevision = requiredString "policyRevision" root |> Option.defaultValue ""
                             CheckIdentities = checkIdentities
                             Epoch = requiredString "epoch" root |> Option.defaultValue ""
+                            EpochGeneration = root.GetProperty("epochGeneration").GetInt64()
+                            EpochCommit = requiredString "epochCommit" root |> Option.defaultValue ""
                             JournalGeneration = root.GetProperty("journalGeneration").GetInt64()
                             JournalHead = requiredString "journalHead" root |> Option.defaultValue ""
                             Effect = requiredString "effect" root |> Option.defaultValue ""
@@ -296,6 +310,8 @@ module OrdinaryDelivery =
             elif observed.PolicyRevision.ToLowerInvariant() <> plan.PolicyRevision then Error [ StalePolicy ]
             elif observed.HeadSha.ToLowerInvariant() <> plan.HeadSha || observed.BaseSha.ToLowerInvariant() <> plan.BaseSha || observed.BaseRef <> plan.BaseRef then Error [ ChangedSource ]
             elif checks <> plan.CheckIdentities then Error [ ChangedSource ]
+            elif observed.Epoch <> plan.Epoch || observed.EpochGeneration <> plan.EpochGeneration || observed.EpochCommit.ToLowerInvariant() <> plan.EpochCommit then
+                Error [ StaleEpoch ]
             elif observed.Epoch <> "OpenV2" then Error [ PreOpenV2Refusal ]
             else
                 let failed = observed.Checks |> List.tryFind (fun check -> check.Conclusion <> CheckPassed)
@@ -353,7 +369,7 @@ module OrdinaryDelivery =
         | Ok plan ->
             match runtime.Observe() |> bindRuntime |> Result.bind (decisionMatches plan) with
             | Error failures -> Error failures
-            | Ok _ ->
+            | Ok observed ->
                 match runtime.ObserveJournal plan.OperationId |> bindRuntime with
                 | Error failures -> Error failures
                 | Ok(Some authority) when authority.PlanDigest <> plan.Seal -> Error [ JournalConflict ]
@@ -363,11 +379,14 @@ module OrdinaryDelivery =
                     | None -> Error [ JournalConflict ]
                 | Ok(Some authority) -> continueFrom plan authority
                 | Ok None ->
-                    match runtime.PersistIntent(plan.JournalGeneration, plan.Seal, plan.OperationId) with
-                    | CasAccepted authority -> continueFrom plan authority
-                    | CasUnknown -> Ok(AdvancePending "intent-outcome-unknown")
-                    | CasConflict ->
-                        match runtime.ObserveJournal plan.OperationId |> bindRuntime with
-                        | Ok(Some authority) when authority.PlanDigest = plan.Seal -> continueFrom plan authority
-                        | Ok _ -> Error [ JournalConflict ]
-                        | Error failures -> Error failures
+                    if observed.JournalGeneration <> plan.JournalGeneration || observed.JournalHead.ToLowerInvariant() <> plan.JournalHead then
+                        Error [ JournalConflict ]
+                    else
+                        match runtime.PersistIntent(plan.JournalGeneration, plan.Seal, plan.OperationId) with
+                        | CasAccepted authority -> continueFrom plan authority
+                        | CasUnknown -> Ok(AdvancePending "intent-outcome-unknown")
+                        | CasConflict ->
+                            match runtime.ObserveJournal plan.OperationId |> bindRuntime with
+                            | Ok(Some authority) when authority.PlanDigest = plan.Seal -> continueFrom plan authority
+                            | Ok _ -> Error [ JournalConflict ]
+                            | Error failures -> Error failures

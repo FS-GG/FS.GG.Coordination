@@ -24,6 +24,8 @@ let private observation epoch =
                 { Identity = "routine-eligibility"; AppId = 11L; Conclusion = CheckPassed }
             ]
         Epoch = epoch
+        EpochGeneration = 3L
+        EpochCommit = sha "9"
         JournalGeneration = 7L
         JournalHead = sha "d"
         SourceComplete = true
@@ -164,6 +166,9 @@ let ``changed source policy subject outage and competing generation cannot advan
 
     let stale = Runtime { observed with PolicyRevision = sha "f" }
     Assert.Equal(Error [ StalePolicy ], OrdinaryDelivery.advance bytes NoCut stale)
+
+    let staleEpoch = Runtime { observed with EpochGeneration = 4L }
+    Assert.Equal(Error [ StaleEpoch ], OrdinaryDelivery.advance bytes NoCut staleEpoch)
 
     let crossed = Runtime { observed with PullRequestNumber = 422 }
     Assert.Equal(Error [ CrossSubjectObservation ], OrdinaryDelivery.advance bytes NoCut crossed)
