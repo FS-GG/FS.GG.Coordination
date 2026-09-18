@@ -41,6 +41,8 @@ type private ProviderState() =
     member val IncompleteChecks = false with get, set
     member val Outage = false with get, set
     member val UnknownDispatch = false with get, set
+    member val JournalWrites = 0 with get, set
+    member val LoseJournalAcknowledgementAt: int option = None with get, set
 
 type private LoopbackTransport(state: ProviderState) =
     let json (node: JsonNode) = node.ToJsonString(JsonSerializerOptions(WriteIndented = false))
@@ -88,7 +90,9 @@ type private LoopbackTransport(state: ProviderState) =
                     state.JournalContent <- Some(Encoding.UTF8.GetString(Convert.FromBase64String(root.GetProperty("content").GetString())))
                     state.JournalBlobSha <- sha (string ((int state.JournalBlobSha[0] + 1) % 10))
                     state.Mutations <- state.Mutations + 1
-                    response 201 "{}" Map.empty
+                    state.JournalWrites <- state.JournalWrites + 1
+                    if state.LoseJournalAcknowledgementAt = Some state.JournalWrites then NetworkFailure
+                    else response 201 "{}" Map.empty
             elif rest.Method = Put && path.EndsWith("/pulls/7/merge", StringComparison.Ordinal) then
                 state.Dispatches <- state.Dispatches + 1
                 state.Merged <- true
@@ -153,6 +157,36 @@ let ``unknown merge response is pending and restart readback prevents duplicate`
     Assert.Equal(Ok(AdvanceSettled state.MergeCommit), OrdinaryDelivery.advance bytes NoCut (runtime state))
     Assert.Equal(1, state.Dispatches)
 
+[<Theory>]
+[<InlineData(1, "intent-outcome-unknown")>]
+[<InlineData(2, "pending-journal-outcome-unknown")>]
+[<InlineData(3, "settlement-outcome-unknown")>]
+let ``lost journal acknowledgement replays durable authority without duplicate merge`` writeNumber pendingReason =
+    let state = ProviderState()
+    let bytes = plan state
+    state.LoseJournalAcknowledgementAt <- Some writeNumber
+
+    let first = OrdinaryDelivery.advance bytes NoCut (runtime state)
+    Assert.Equal(sprintf "%A" (Ok(AdvancePending pendingReason)), sprintf "%A" first)
+    state.LoseJournalAcknowledgementAt <- None
+    let recovered = OrdinaryDelivery.advance bytes NoCut (runtime state)
+    if writeNumber = 3 then Assert.Equal(Ok(AdvanceAlreadySettled state.MergeCommit), recovered)
+    else Assert.Equal(Ok(AdvanceSettled state.MergeCommit), recovered)
+    Assert.Equal(Ok(AdvanceAlreadySettled state.MergeCommit), OrdinaryDelivery.advance bytes NoCut (runtime state))
+    Assert.Equal(1, state.Dispatches)
+
+[<Fact>]
+let ``native completion is reconciled from pending journal without another dispatch`` () =
+    let state = ProviderState()
+    let bytes = plan state
+    let first = runtime state
+    Assert.Equal(Ok(AdvanceInterrupted "before-dispatch"), OrdinaryDelivery.advance bytes StopAfterIntent first)
+    state.Merged <- true
+
+    Assert.Equal(Ok(AdvanceSettled state.MergeCommit), OrdinaryDelivery.advance bytes NoCut (runtime state))
+    Assert.Equal(0, state.Dispatches)
+    Assert.Equal(Ok(AdvanceAlreadySettled state.MergeCommit), OrdinaryDelivery.advance bytes NoCut (runtime state))
+
 [<Fact>]
 let ``provider negatives preserve unknown and immutable decision facts`` () =
     let state = ProviderState()
@@ -161,6 +195,9 @@ let ``provider negatives preserve unknown and immutable decision facts`` () =
     state.PolicySha <- sha "4"
     Assert.Equal(Error [ StalePolicy ], OrdinaryDelivery.advance bytes NoCut (runtime state))
     state.PolicySha <- sha "c"
+    state.BaseSha <- sha "6"
+    Assert.Equal(Error [ ChangedSource ], OrdinaryDelivery.advance bytes NoCut (runtime state))
+    state.BaseSha <- sha "a"
     state.EpochGeneration <- 4L
     Assert.Equal(Error [ StaleEpoch ], OrdinaryDelivery.advance bytes NoCut (runtime state))
     state.EpochGeneration <- 3L

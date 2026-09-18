@@ -83,3 +83,43 @@ let ``native ordinary provider uses typed REST transport and protected journal a
     Assert.Contains("ordinary-delivery-journal/1", source, StringComparison.Ordinal)
     for forbidden in [ "Process.Start"; "gh "; "git merge"; "GitHubRouteClient" ] do
         Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal)
+
+[<Fact>]
+let ``installed harness binds frozen artifact receiver and loopback-only recovery`` () =
+    let contract = read "eng/callable-cli-installed-harness.json"
+    let retained = read "evidence/github-substrate-v2/gs2-09-9/installed-harness.json"
+    let coverage = read "evidence/github-substrate-v2/gs2-09-9/recovery-coverage.json"
+    let harness = read "eng/test-callable-cli-installed-harness.py"
+    let proposal = read "eng/callable-cli-isolated-operation-proposal.json"
+    let validator = read "eng/validate-github-callable-ordinary-delivery.fsx"
+    for expected in
+        [
+            "ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf"
+            "e7f440a2a1f94d51dbcdd7146494c97e6386f9dcc8034a028e3e851d364390e3"
+            "587f46e15e1404dbe0dc1e9e6b47cf2861d7b502"
+            "separate-protected-.4b-operation"
+            "observed-403-entitlement-unknown-not-absence"
+        ] do Assert.Contains(expected, contract, StringComparison.Ordinal)
+    for expected in [ "loopback-only"; "AdvancePending"; "providerMutations"; "127.0.0.1" ] do
+        Assert.Contains(expected, harness, StringComparison.Ordinal)
+    Assert.Contains("GitHubOrdinaryDeliveryTests|FullyQualifiedName~GitHubOrdinaryRuntimeTests", validator, StringComparison.Ordinal)
+    Assert.Contains("test-callable-cli-installed-harness.py", validator, StringComparison.Ordinal)
+    Assert.Contains("\"providerMutations\":0", retained, StringComparison.Ordinal)
+    Assert.Contains("\"firstAccepted\":false", retained, StringComparison.Ordinal)
+    Assert.Contains("\"replayNoOp\":true", retained, StringComparison.Ordinal)
+    for expected in
+        [
+            "effect-outcomes-proven-absent-unknown-applied"
+            "lost-journal-acknowledgements"
+            "native-completion-reconciliation"
+            "pending-or-nonzero-is-not-acceptance"
+            "\"externalProviderMutation\":false"
+        ] do Assert.Contains(expected, coverage, StringComparison.Ordinal)
+    for expected in
+        [
+            "v2-call-01-4b-isolated-native-v1"
+            "FS-GG/FS.GG.Coordination.CallableSandbox"
+            "\"authorized\":false"
+            "separateProtectedAuthority"
+            "required_status_checks returned 403"
+        ] do Assert.Contains(expected, proposal, StringComparison.Ordinal)
