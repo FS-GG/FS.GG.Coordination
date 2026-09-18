@@ -108,10 +108,17 @@ are never acceptance evidence.
   Immutable tag and [release `v0.1.0`](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.0) bind
   exact source merge `1bd60a3e2dddc37827a7562b133305e1282e2c20`; release assets were independently downloaded and
   matched the retained package, preparation manifest, and dual-feed readback receipt.
-- [ ] **V2-CALL-01.3c — Adopt the exact callable artifact.** First installed behavior change. Separately authorize
+- [x] **V2-CALL-01.3c — Adopt the exact callable artifact.** First installed behavior change. Separately authorize
   clean creation and retained upgrade as opt-in receiver paths, prove idempotency, explicit conflict, and no
   partial writes, and preserve coexistence with the legacy bridge. Both paths refuse effects before `OpenV2` and
-  require class/receiver admission; no provider or lifecycle default changes implicitly.
+  require class/receiver admission; no provider or lifecycle default changes implicitly. Completed by
+  [`.github` PR #3539](https://github.com/FS-GG/.github/pull/3539), exact tested head
+  `08b8daa5c98c590c12663a909c9e0d354bddae3a`, merge
+  `587f46e15e1404dbe0dc1e9e6b47cf2861d7b502`: the canonical opt-in manifest pins
+  `FS.GG.Coordination.Cli` 0.1.0 alongside `FS.GG.Coord.Cli` 0.90.0, and the receiver proof covers clean and
+  retained installation, idempotency, conflicting-pin refusal before write, peer/lifecycle/operation
+  preservation, scoped uninstall, isolated nuget.org resolution, installed invocation and pre-`OpenV2`
+  refusal. All 43 current-head checks passed with two expected skips; production effects remain disabled.
 - [ ] **V2-CALL-01.4 — Qualify installed isolated provider journey and native acceptance.** Exercise the installed
   artifact against an authorized isolated provider and obtain native external acceptance; do not reuse local
   controlled responses as Q4.
@@ -164,9 +171,9 @@ GS2-09.1–.8 migration scope unchanged. The eventual Unified index row points t
 Projection into `.github` is asynchronous after authoritative merge/readback.
 
 Remaining gaps are deliberate: `FS.GG.Coordination.Cli` `0.1.0` is published and read back from both designated
-feeds, but no receiver selects it, no sandbox or production provider effect ran, no Q4/native external acceptance
-exists, no continuous webhook host exists, and private roadmap telemetry is `not-configured` with native
-collaboration usage interception unsupported. Those gaps block `.3c`/`.4` activation, not the completed producer
-preparation and publication windows. GS2-09 discovery, migration
+feeds and the canonical `.github` receiver selects it opt-in, but no isolated external or production provider
+effect ran, no Q4/native external acceptance exists, no continuous webhook host exists, and private roadmap
+telemetry is `not-configured` with native collaboration usage interception unsupported. Those gaps block `.4`,
+not the completed producer preparation, publication and opt-in adoption windows. GS2-09 discovery, migration
 manifests/transforms/archive/rollback/rehearsal remain a separate pending feature, and OpenV2 and Q4 remain
 unclaimed.
