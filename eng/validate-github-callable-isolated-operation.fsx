@@ -60,8 +60,8 @@ requireContains
 requireContains
     "evidence/github-substrate-v2/gs2-09-9/isolated-operation-coverage.json"
     [
-        "812faf096bcc7466a72d38b8edf28a8bbf7ea0af65bfabd01e29803a1e3caa4a"
-        "e0c394aae191fcd4169450cda112be118c5cf86dbdd775bd976f8d3f536769e8"
+        "7936a97b5e1ba55d4d6a91880a0716cca61cf9317ab9c583b82758d1668bd1ef"
+        "525a1bed96c83bd9fe601a7e210ec0bd0767610cf831dc42c7ed20d73a24a53f"
         "unproved-reviewer-membership-403"
         "unknown-create-without-readback"
         "nonzero-or-pending-installed-cli"
@@ -96,7 +96,7 @@ if inspection.GetProperty("disposition").GetString() <> "refused-no-compatible-a
 
 let testOutput, testError = run "python3" [ "eng/test-callable-cli-isolated-operation.py" ]
 let combined = testOutput + testError
-if not (combined.Contains("Ran 7 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
+if not (combined.Contains("Ran 8 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
     failwith $"isolated operation controls did not report the expected bounded suite: {combined}"
 
 printfn "callable isolated operation source qualification passed; prepared-not-authorized; zero provider effects"

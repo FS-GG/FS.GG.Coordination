@@ -621,11 +621,15 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     if status == 404 and pathlib.Path(receipt_path).is_file():
         retained = read_json(receipt_path)
         if (retained.get("schema") == "fsgg.coordination.callable-isolated-operation-receipt/1"
-                and retained.get("contractSha256") == contract["contractSha256"] and retained.get("planSeal") == plan["seal"]
-                and (retained.get("cleanup") or {}).get("state") == "intent-persisted"):
-            retained["cleanup"] = {"state": "settled", "repositoryHttpStatus": 404}
-            retained["receiptSha256"] = digest(canonical(without(retained, "receiptSha256")))
-            return retained
+                and retained.get("contractSha256") == contract["contractSha256"] and retained.get("planSeal") == plan["seal"]):
+            verify_digest(retained, "receiptSha256", "operation-receipt")
+            cleanup = retained.get("cleanup") or {}
+            if cleanup.get("state") == "settled" and cleanup.get("repositoryHttpStatus") == 404:
+                return retained
+            if cleanup.get("state") == "intent-persisted":
+                retained["cleanup"] = {"state": "settled", "repositoryHttpStatus": 404}
+                retained["receiptSha256"] = digest(canonical(without(retained, "receiptSha256")))
+                return retained
         raise Refused("cleanup-readback-without-bound-intent")
     if status != 200 or not isinstance(observed, dict) or observed.get("id") != target["repositoryId"] or observed.get("visibility") != "public":
         raise Refused("operation-target-readback")

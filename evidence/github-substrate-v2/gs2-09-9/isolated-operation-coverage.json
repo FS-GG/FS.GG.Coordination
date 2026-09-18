@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.coordination.callable-isolated-operation-coverage/1",
   "operationIdentity": "v2-call-01-4b-isolated-native-v1",
-  "contractSha256": "812faf096bcc7466a72d38b8edf28a8bbf7ea0af65bfabd01e29803a1e3caa4a",
-  "operationSourceSha256": "e0c394aae191fcd4169450cda112be118c5cf86dbdd775bd976f8d3f536769e8",
+  "contractSha256": "7936a97b5e1ba55d4d6a91880a0716cca61cf9317ab9c583b82758d1668bd1ef",
+  "operationSourceSha256": "525a1bed96c83bd9fe601a7e210ec0bd0767610cf831dc42c7ed20d73a24a53f",
   "positiveControls": [
     "deterministic-sealed-creation-plan",
     "identity-bound-second-phase-plan",
@@ -57,5 +57,5 @@
     "epochOrJournal": 0
   },
   "externalAcceptance": false,
-  "coverageSha256": "6fc8d83776c8e1beba51d490ad5ebc1537f7dce7f6056571904e80d2ab6552b0"
+  "coverageSha256": "9991723a14661c4417e65c6c6859ce480f43f6a5177468d97b6b2ebe481f9ddc"
 }

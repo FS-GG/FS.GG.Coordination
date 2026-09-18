@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 import datetime as dt
 import importlib.util
@@ -37,6 +38,70 @@ class FakeGitHub:
         if isinstance(response, Exception):
             raise response
         return response
+
+
+class FullOperationGitHub:
+    def __init__(self, contract: dict[str, object], plan: dict[str, object]):
+        self.contract = contract
+        self.plan = plan
+        self.exists = True
+        self.refs = {"refs/heads/main": "a" * 40}
+        self.contents: dict[str, bytes] = {}
+        self.source_revision = 0
+        self.pull = None
+        self.protection = None
+        self.calls: list[tuple[str, str, object | None]] = []
+
+    def request(self, method: str, path: str, body: object | None = None):
+        self.calls.append((method, path, body))
+        full_name = self.plan["target"]["fullName"]
+        if path == f"repos/{full_name}" and method == "GET":
+            if not self.exists:
+                return 404, {}
+            return 200, {"id": self.plan["target"]["repositoryId"], "visibility": "public", "default_branch": "main"}
+        if path.startswith(f"repos/{full_name}/git/ref/") and method == "GET":
+            ref = "refs/" + path.split("/git/ref/", 1)[1]
+            return (200, {"object": {"sha": self.refs[ref]}}) if ref in self.refs else (404, {})
+        if path == f"repos/{full_name}/git/refs" and method == "POST":
+            self.refs[body["ref"]] = body["sha"]
+            return 201, {}
+        if path.startswith(f"repos/{full_name}/contents/") and method == "GET":
+            content_path = path.split("/contents/", 1)[1].split("?", 1)[0]
+            if content_path.startswith("ordinary/"):
+                merge = "f" * 40
+                state = operation.canonical({"schema": "fsgg.coordination.ordinary-delivery-journal/1", "stage": "settled", "mergeCommit": merge})
+                return 200, {"sha": "9" * 40, "content": base64.b64encode(state).decode()}
+            if content_path not in self.contents:
+                return 404, {}
+            return 200, {"sha": "8" * 40, "content": base64.b64encode(self.contents[content_path]).decode()}
+        if path.startswith(f"repos/{full_name}/contents/") and method == "PUT":
+            content_path = path.split("/contents/", 1)[1]
+            self.contents[content_path] = base64.b64decode(body["content"])
+            self.source_revision += 1
+            self.refs[f"refs/heads/{operation.SOURCE_BRANCH}"] = str(self.source_revision) * 40
+            return 201, {}
+        if path.startswith(f"repos/{full_name}/git/trees/") and method == "GET":
+            return 200, {"truncated": False, "tree": [{"path": item, "type": "blob"} for item in
+                ["README.md", ".github/workflows/callable-synthetic.yml", "synthetic.txt", "epoch.json"]]}
+        if path.startswith(f"repos/{full_name}/pulls?") and method == "GET":
+            return 200, [] if self.pull is None else [self.pull]
+        if path == f"repos/{full_name}/pulls" and method == "POST":
+            source = self.refs[f"refs/heads/{operation.SOURCE_BRANCH}"]
+            self.pull = {"number": 7, "node_id": "PR_synthetic", "head": {"sha": source}, "base": {"sha": "a" * 40}}
+            return 201, self.pull
+        if path.endswith("/check-runs?per_page=100") and method == "GET":
+            return 200, {"total_count": 1, "check_runs": [{"name": operation.CHECK_NAME, "status": "completed", "conclusion": "success", "app": {"id": 15368}}]}
+        if path == f"repos/{full_name}/branches/main/protection" and method == "GET":
+            return (200, self.protection) if self.protection is not None else (404, {})
+        if path == f"repos/{full_name}/branches/main/protection" and method == "PUT":
+            self.protection = body
+            return 200, body
+        if path == f"repos/{full_name}/pulls/7" and method == "GET":
+            return 200, {"merged": True, "merge_commit_sha": "f" * 40}
+        if path == f"repos/{full_name}" and method == "DELETE":
+            self.exists = False
+            return 204, {}
+        raise AssertionError(f"unexpected request: {method} {path}")
 
 
 class IsolatedOperationTests(unittest.TestCase):
@@ -190,6 +255,45 @@ class IsolatedOperationTests(unittest.TestCase):
         with self.assertRaisesRegex(operation.Refused, "operation-target-readback"):
             operation.execute_identity_bound(live, self.contract, plan, "/not-used", "TOKEN", "/not-used")
         self.assertEqual(["GET"], [method for method, _, _ in live.calls])
+
+    def test_identity_bound_interpreter_persists_before_cleanup_and_replay_is_noop(self):
+        plan = operation.prepare_operation(self.contract, self.creation_receipt())
+        client = FullOperationGitHub(self.contract, plan)
+        original_installed = operation.installed_command
+        original_run = operation.run_cli
+        calls = []
+
+        class Result:
+            def __init__(self, code, stdout):
+                self.returncode = code
+                self.stdout = stdout
+                self.stderr = b""
+
+        def run(_command, arguments, _token_environment):
+            calls.append(arguments[1])
+            if arguments[1] == "plan":
+                return Result(0, b'{"sealed":"synthetic"}')
+            if len([item for item in calls if item == "advance"]) == 1:
+                return Result(0, b'AdvanceSettled')
+            return Result(0, b'AdvanceAlreadySettled')
+
+        operation.installed_command = lambda *_: pathlib.Path("/qualified/fsgg-coordination")
+        operation.run_cli = run
+        try:
+            with tempfile.TemporaryDirectory() as scratch:
+                receipt_path = pathlib.Path(scratch) / "receipt.json"
+                receipt = operation.execute_identity_bound(client, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN", receipt_path)
+                self.assertEqual("settled", receipt["cleanup"]["state"])
+                self.assertEqual(["plan", "advance", "advance"], calls)
+                persisted = operation.read_json(receipt_path)
+                self.assertEqual("intent-persisted", persisted["cleanup"]["state"])
+                operation.write_private(receipt_path, receipt)
+                replay = operation.execute_identity_bound(client, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN", receipt_path)
+                self.assertEqual(receipt, replay)
+                self.assertEqual(1, sum(1 for method, _, _ in client.calls if method == "DELETE"))
+        finally:
+            operation.installed_command = original_installed
+            operation.run_cli = original_run
 
 
 if __name__ == "__main__":
