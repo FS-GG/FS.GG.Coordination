@@ -13,9 +13,11 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/FS-GG/FS.GG.Coordination</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
     <Compile Include="RoadmapCommand.fs" />
     <Compile Include="QualificationManifestCommand.fs" />
     <Compile Include="WorkflowSelectionCommand.fs" />
