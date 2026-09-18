@@ -129,6 +129,14 @@
           "FSharp.Core": "4.7.0"
         }
       },
+      "FsQuint": {
+        "type": "Transitive",
+        "resolved": "0.1.0-preview.1",
+        "contentHash": "obymfwaTEfmYR8SmMOFgJa2IkK5yistD10L7BRjLyV89ETMIziafQ/EVKlg0iFVSP1agkG7nPqdKEQyGAQMo9A==",
+        "dependencies": {
+          "FSharp.Core": "10.1.302"
+        }
+      },
       "Google.Protobuf": {
         "type": "Transitive",
         "resolved": "3.26.1",
@@ -346,6 +354,7 @@
         "dependencies": {
           "FS.GG.SDD.Artifacts": "[1.5.0, 1.5.0]",
           "FSharp.Core": "[10.1.302, )",
+          "FsQuint": "[0.1.0-preview.1, )",
           "Microsoft.NET.Test.Sdk": "[18.8.1, )",
           "fsgg-coord-orchestration-host": "[1.0.0, )",
           "xunit": "[2.9.3, )"
