@@ -3,7 +3,7 @@ module FS.GG.Coordination.Orchestration.Host.Tests.ChoreoTraceTests
 open System
 open System.IO
 open System.Text.Json.Nodes
-open FS.GG.SDD.Artifacts.TypedSpecifications
+open FsQuint
 open Xunit
 
 [<Fact>]

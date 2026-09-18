@@ -8,6 +8,15 @@
         "resolved": "10.1.302",
         "contentHash": "bN7XMQrAQg1dyHScJ7FcsznERBkvm74LtIo1O6C5mUzgbDqSwNbDpb3+nBGaJAjDmtC/suK5Vx5pFysKY6Hm+Q=="
       },
+      "FsQuint": {
+        "type": "Direct",
+        "requested": "[0.1.0-preview.1, )",
+        "resolved": "0.1.0-preview.1",
+        "contentHash": "obymfwaTEfmYR8SmMOFgJa2IkK5yistD10L7BRjLyV89ETMIziafQ/EVKlg0iFVSP1agkG7nPqdKEQyGAQMo9A==",
+        "dependencies": {
+          "FSharp.Core": "10.1.302"
+        }
+      },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
         "requested": "[18.8.1, )",

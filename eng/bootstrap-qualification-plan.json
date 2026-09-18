@@ -72,6 +72,7 @@
     "exactPaths": [
       ".github/workflows/bootstrap-qualification.yml",
       "Directory.Packages.props",
+      "Directory.Packages.local.props",
       "eng/bootstrap-gates/canonical-quint.sh",
       "eng/bootstrap-gates/canonical-quint-aggregate.sh",
       "eng/bootstrap-gates/canonical-quint-performance.sh",
@@ -94,7 +95,8 @@
     "pathPrefixes": [
       "src/FS.GG.Coordination.Protocol/",
       "eng/vendor/choreo/",
-      "tests/FS.GG.Coordination.Orchestration.Host.Tests/Fixtures/Choreo/",
+      "tests/FS.GG.Coordination.Orchestration.Host.Tests/",
+      "tests/FS.GG.Coordination.QuintReplay.Tests/",
       "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/"
     ]
   },

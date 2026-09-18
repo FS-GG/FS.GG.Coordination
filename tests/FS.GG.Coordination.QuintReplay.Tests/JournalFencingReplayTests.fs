@@ -7,7 +7,7 @@ open System.Text
 open System.Text.Json.Nodes
 open System.Threading.Tasks
 open FS.GG.Coordination.GitHub
-open FS.GG.SDD.Artifacts.TypedSpecifications
+open FsQuint
 open Xunit
 
 type private ModelState =
@@ -286,11 +286,18 @@ let private apply faultyProjection (step: QuintReplayStep) runtime =
 
     Task.FromResult(Ok next)
 
-let private driver faultyProjection : ReplayDriver<Runtime> =
+let private driver faultyProjection : ReplayDriver<Runtime ref> =
     {
-        Initialize = fun _ -> Ok(initialRuntime ())
-        Apply = apply faultyProjection
-        Observe = fun runtime -> Ok(project runtime.Model)
+        Initialize = fun _ _ -> Task.FromResult(Ok(ref (initialRuntime ())))
+        Apply =
+            fun step runtime token ->
+                task {
+                    token.ThrowIfCancellationRequested()
+                    let! next = apply faultyProjection step runtime.Value
+                    return next |> Result.map (fun value -> runtime.Value <- value)
+                }
+        Observe = fun runtime _ -> Task.FromResult(Ok(project runtime.Value.Model))
+        Cleanup = fun _ _ -> Task.FromResult(Ok())
     }
 
 let private fixture name =
@@ -407,21 +414,29 @@ let private trace () =
 [<Fact>]
 let ``F# journal adapter exactly replays the Quint fencing trace`` () =
     task {
-        match! ReplayHarness.run (trace ()) (driver false) with
-        | Ok QuintReplayResult.Equivalent -> ()
+        match!
+            Replay.run (TimeSpan.FromSeconds 30.) System.Threading.CancellationToken.None (driver false) (trace ())
+        with
+        | {
+              Outcome = ReplayOutcome.Equivalent
+              CleanupFailure = None
+          } -> ()
         | result -> Assert.Fail($"expected an equivalent replay, got %A{result}")
     }
 
 [<Fact>]
 let ``replay identifies the first faulty F# projection and its Quint source`` () =
     task {
-        match! ReplayHarness.run (trace ()) (driver true) with
-        | Ok(QuintReplayResult.Diverged divergence) ->
-            Assert.Equal(4, divergence.Step)
-            Assert.Equal("retryLoser", divergence.Action)
-            Assert.Equal(source "retryLoser", divergence.Source)
-            Assert.Equal("state", divergence.Reason)
-            Assert.True(divergence.Expected.IsSome)
-            Assert.True(divergence.Actual.IsSome)
+        match!
+            Replay.run (TimeSpan.FromSeconds 30.) System.Threading.CancellationToken.None (driver true) (trace ())
+        with
+        | {
+              Outcome = ReplayOutcome.Diverged(step, action, actualSource, path, _, _)
+              CleanupFailure = None
+          } ->
+            Assert.Equal(4, step)
+            Assert.Equal(Some "retryLoser", action)
+            Assert.Equal(Some(source "retryLoser"), actualSource)
+            Assert.StartsWith("$/bindings/", path)
         | result -> Assert.Fail($"expected an exact replay divergence, got %A{result}")
     }

@@ -5,7 +5,7 @@ open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json.Nodes
-open FS.GG.SDD.Artifacts.TypedSpecifications
+open FsQuint
 
 type ChoreoSnapshot =
     {
@@ -52,8 +52,13 @@ module ChoreoTrace =
     let private manifestSchema = "fsgg.quint.choreo-trace-manifest/1"
     let private observableSchema = "fsgg.coordination.hosted-writer-observation/1"
     let private rawVariable = "O2HostedWriterChoreoModel::choreo::s"
-    let private canonicalSource = "src/FS.GG.Coordination.Protocol/Protocol.md#O2HostedWriterChoreoTests"
-    let private quintSha = "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+
+    let private canonicalSource =
+        "src/FS.GG.Coordination.Protocol/Protocol.md#O2HostedWriterChoreoTests"
+
+    let private quintSha =
+        "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
+
     let private choreoCommit = "000cf4eed315187dc6f216a148781cff7dde6521"
 
     let private sha256Bytes (bytes: byte array) =
@@ -74,8 +79,11 @@ module ChoreoTrace =
     let private text (value: JsonObject) (name: string) = value[name].GetValue<string>()
     let private integer (value: JsonObject) (name: string) = value[name].GetValue<int>()
 
-    let private fixtureRoot () = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Choreo")
-    let private protocolPath () = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md")
+    let private fixtureRoot () =
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "Choreo")
+
+    let private protocolPath () =
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md")
 
     let private mapValue name (value: JsonObject) =
         value["#map"].AsArray()
@@ -107,7 +115,15 @@ module ChoreoTrace =
                 || not (Set.ofList [ "1"; "2" ] |> Set.contains (bigint operation "revision"))
                 || not (
                     Set.ofList
-                        [ "op-claim"; "op-process"; "op-candidate"; "op-branch"; "op-pr"; "op-merge"; "op-readback" ]
+                        [
+                            "op-claim"
+                            "op-process"
+                            "op-candidate"
+                            "op-branch"
+                            "op-pr"
+                            "op-merge"
+                            "op-readback"
+                        ]
                     |> Set.contains operationId
                 )
             then
@@ -160,7 +176,11 @@ module ChoreoTrace =
         let metadata = root["#meta"].AsObject()
         exactProperties "ITF metadata" [ "format"; "format-description"; "source"; "status" ] metadata
 
-        if text metadata "format" <> "ITF" || text metadata "status" <> "ok" || text metadata "source" <> canonicalSource then
+        if
+            text metadata "format" <> "ITF"
+            || text metadata "status" <> "ok"
+            || text metadata "source" <> canonicalSource
+        then
             failwith $"{id} normalized ITF metadata differs"
 
         let vars = root["vars"].AsArray()
@@ -183,8 +203,17 @@ module ChoreoTrace =
 
         states
 
+    let private readRaw (bytes: byte array) =
+        // FsQuint owns generic ITF limits and value validation. The guards below
+        // additionally enforce this model's exact provenance and operation policy.
+        match Itf.read Itf.defaultLimits bytes with
+        | Error diagnostics -> failwith $"invalid raw ITF: %A{diagnostics}"
+        | Ok _ -> JsonNode.Parse(bytes).AsObject()
+
     let validateRawText (textValue: string) =
-        JsonNode.Parse(textValue).AsObject() |> validateRawRoot "untrusted"
+        UTF8Encoding(false, true).GetBytes(textValue)
+        |> readRaw
+        |> validateRawRoot "untrusted"
         |> ignore
 
     let private integerValue value = QuintReplayValue.Integer(string value)
@@ -217,7 +246,12 @@ module ChoreoTrace =
                         QuintReplayValue.Record
                             [
                                 "activeAssignments",
-                                integerValue (if state.Stage = 7 || (state.Paused && state.OperationId = "") then 0 else 1)
+                                integerValue (
+                                    if state.Stage = 7 || (state.Paused && state.OperationId = "") then
+                                        0
+                                    else
+                                        1
+                                )
                                 "adapterClaimedComplete", booleanValue false
                                 "attemptId", textValue "attempt-1"
                                 "branchPublished", booleanValue (progressed 4)
@@ -266,10 +300,12 @@ module ChoreoTrace =
         let lines = File.ReadAllLines(protocolPath ())
 
         let moduleStart =
-            lines |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterChoreoModel {")
+            lines
+            |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterChoreoModel {")
 
         let moduleEnd =
-            lines |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterChoreoTests {")
+            lines
+            |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterChoreoTests {")
 
         let matches =
             lines
@@ -348,7 +384,15 @@ module ChoreoTrace =
     let private parseScenario sourceSha (value: JsonObject) =
         exactProperties
             "scenario"
-            [ "id"; "quintTest"; "file"; "stateCount"; "traceSha256"; "invariant"; "milestones" ]
+            [
+                "id"
+                "quintTest"
+                "file"
+                "stateCount"
+                "traceSha256"
+                "invariant"
+                "milestones"
+            ]
             value
 
         let id = text value "id"
@@ -358,16 +402,21 @@ module ChoreoTrace =
         if sha256File tracePath <> text value "traceSha256" then
             failwith $"{id} trace digest differs"
 
-        let root = JsonNode.Parse(File.ReadAllBytes tracePath).AsObject()
+        let root = File.ReadAllBytes tracePath |> readRaw
         let states = validateRawRoot id root
         let stateCount = integer value "stateCount"
 
         if states.Count <> stateCount then
             failwith $"{id} expected {stateCount} states, got {states.Count}"
 
-        let milestones = value["milestones"].AsArray() |> Seq.map (parseMilestone states) |> List.ofSeq
+        let milestones =
+            value["milestones"].AsArray() |> Seq.map (parseMilestone states) |> List.ofSeq
 
-        if milestones.IsEmpty || milestones.Head.StateIndex <> 0 || milestones.Head.Action <> "init" then
+        if
+            milestones.IsEmpty
+            || milestones.Head.StateIndex <> 0
+            || milestones.Head.Action <> "init"
+        then
             failwith $"{id} must begin at raw state zero with init"
 
         let indices = milestones |> List.map _.StateIndex
@@ -406,18 +455,30 @@ module ChoreoTrace =
             ]
             root
 
-        if text root "schema" <> manifestSchema then failwith "Choreo trace manifest schema differs"
-        if text root "model" <> "O2HostedWriterChoreoModel" then failwith "Choreo trace model differs"
-        if text root "observableSchema" <> observableSchema then failwith "Choreo observable schema differs"
-        if text root "rawVariable" <> rawVariable then failwith "Choreo raw variable differs"
+        if text root "schema" <> manifestSchema then
+            failwith "Choreo trace manifest schema differs"
+
+        if text root "model" <> "O2HostedWriterChoreoModel" then
+            failwith "Choreo trace model differs"
+
+        if text root "observableSchema" <> observableSchema then
+            failwith "Choreo observable schema differs"
+
+        if text root "rawVariable" <> rawVariable then
+            failwith "Choreo raw variable differs"
 
         let source = root["source"].AsObject()
         exactProperties "manifest source" [ "path"; "commit"; "sha256" ] source
         let sourceSha = text source "sha256"
 
-        if text source "path" <> "src/FS.GG.Coordination.Protocol/Protocol.md" then failwith "source path differs"
-        if text source "commit" <> "e1ff2a32649a180121c756f762d174e9c74f6620" then failwith "source commit differs"
-        if sha256File (protocolPath ()) <> sourceSha then failwith "protocol source digest differs"
+        if text source "path" <> "src/FS.GG.Coordination.Protocol/Protocol.md" then
+            failwith "source path differs"
+
+        if text source "commit" <> "e1ff2a32649a180121c756f762d174e9c74f6620" then
+            failwith "source commit differs"
+
+        if sha256File (protocolPath ()) <> sourceSha then
+            failwith "protocol source digest differs"
 
         let quint = root["quint"].AsObject()
         exactProperties "manifest Quint" [ "version"; "binarySha256"; "backend"; "maxSamples" ] quint
@@ -431,12 +492,21 @@ module ChoreoTrace =
         let choreo = root["choreo"].AsObject()
         exactProperties "manifest Choreo" [ "repository"; "commit" ] choreo
 
-        if text choreo "repository" <> "https://github.com/quint-co/choreo" || text choreo "commit" <> choreoCommit then
+        if
+            text choreo "repository" <> "https://github.com/quint-co/choreo"
+            || text choreo "commit" <> choreoCommit
+        then
             failwith "Choreo source identity differs"
 
-        let scenarios = root["scenarios"].AsArray() |> Seq.map (fun item -> parseScenario sourceSha (item.AsObject())) |> List.ofSeq
+        let scenarios =
+            root["scenarios"].AsArray()
+            |> Seq.map (fun item -> parseScenario sourceSha (item.AsObject()))
+            |> List.ofSeq
 
-        if scenarios.Length <> 8 || (scenarios |> List.map _.Id |> List.distinct |> List.length) <> 8 then
+        if
+            scenarios.Length <> 8
+            || (scenarios |> List.map _.Id |> List.distinct |> List.length) <> 8
+        then
             failwith "expected eight distinct deterministic Choreo scenarios"
 
         scenarios

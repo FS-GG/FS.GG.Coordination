@@ -45,7 +45,6 @@
     <Compile Include="GitHubCommentProjectionTests.fs" />
     <Compile Include="GitHubTransportTests.fs" />
     <Compile Include="GitHubShardedJournalTests.fs" />
-    <Compile Include="..\FS.GG.Coordination.QuintReplay.Tests\ReplayHarness.fs" Link="QuintReplay\ReplayHarness.fs" />
     <Compile Include="..\FS.GG.Coordination.QuintReplay.Tests\JournalFencingReplayTests.fs" Link="QuintReplay\JournalFencingReplayTests.fs" />
     <Compile Include="GitHubRepositorySettingsTests.fs" />
     <Compile Include="GitHubActionsReleaseFeedTests.fs" />
@@ -59,6 +58,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="FsQuint" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
   </ItemGroup>

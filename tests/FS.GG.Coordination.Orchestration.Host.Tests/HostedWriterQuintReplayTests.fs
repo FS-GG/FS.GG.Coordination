@@ -13,8 +13,7 @@ open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Host
 open FS.GG.Coordination.Orchestration.PostgreSql
 open FS.GG.Coordination.Orchestration.Runner.Protocol
-open FS.GG.Coordination.QuintReplay.Tests
-open FS.GG.SDD.Artifacts.TypedSpecifications
+open FsQuint
 open Xunit
 
 module Fixture =
@@ -681,26 +680,43 @@ type private HostedWriterReplayActor(faultyNative: bool) =
 let private actorProps faultyNative =
     Props.Create(typeof<HostedWriterReplayActor>, [| box faultyNative |])
 
-let private driver (system: ActorSystem) faultyNative initial : ReplayDriver<ActorRuntime> =
+let private driver (system: ActorSystem) faultyNative initial : ReplayDriver<ActorRuntime ref> =
     {
         Initialize =
-            fun _ ->
-                Ok
-                    {
-                        Actor = system.ActorOf(actorProps faultyNative)
-                        Projection = initial
-                    }
+            fun _ _ ->
+                Task.FromResult(
+                    Ok(
+                        ref
+                            {
+                                Actor = system.ActorOf(actorProps faultyNative)
+                                Projection = initial
+                            }
+                    )
+                )
         Apply =
-            fun step runtime ->
+            fun step runtime token ->
                 task {
+                    token.ThrowIfCancellationRequested()
+
                     let! result =
-                        runtime.Actor.Ask<Result<QuintReplayState, string>>(ApplyReplay step, TimeSpan.FromSeconds 10.)
+                        runtime.Value.Actor.Ask<Result<QuintReplayState, string>>(
+                            ApplyReplay step,
+                            TimeSpan.FromSeconds 10.
+                        )
 
                     return
                         result
-                        |> Result.map (fun projection -> { runtime with Projection = projection })
+                        |> Result.map (fun projection ->
+                            runtime.Value <-
+                                { runtime.Value with
+                                    Projection = projection
+                                })
                 }
-        Observe = fun runtime -> Ok runtime.Projection
+        Observe = fun runtime _ -> Task.FromResult(Ok runtime.Value.Projection)
+        Cleanup =
+            fun runtime _ ->
+                system.Stop(runtime.Value.Actor)
+                Task.FromResult(Ok())
     }
 
 let private runReplay faultyNative scenarioId =
@@ -709,7 +725,11 @@ let private runReplay faultyNative scenarioId =
         let replayTrace = (ChoreoTrace.load scenarioId).Replay
 
         let! result =
-            ReplayHarness.run replayTrace (driver system faultyNative replayTrace.Initial)
+            Replay.run
+                (TimeSpan.FromSeconds 60.)
+                System.Threading.CancellationToken.None
+                (driver system faultyNative replayTrace.Initial)
+                replayTrace
 
         do! system.Terminate()
         return result
@@ -719,7 +739,10 @@ let private runReplay faultyNative scenarioId =
 let ``Akka hosted writer replays the genuine Quint Choreo happy path`` () =
     task {
         match! runReplay false "happy-path" with
-        | Ok QuintReplayResult.Equivalent -> ()
+        | {
+              Outcome = ReplayOutcome.Equivalent
+              CleanupFailure = None
+          } -> ()
         | result -> Assert.Fail($"expected equivalent replay, got %A{result}")
     }
 
@@ -727,7 +750,10 @@ let ``Akka hosted writer replays the genuine Quint Choreo happy path`` () =
 let ``Akka hosted writer reconciliation does not redispatch after a lost response`` () =
     task {
         match! runReplay false "lost-applied" with
-        | Ok QuintReplayResult.Equivalent -> ()
+        | {
+              Outcome = ReplayOutcome.Equivalent
+              CleanupFailure = None
+          } -> ()
         | result -> Assert.Fail($"expected equivalent recovery replay, got %A{result}")
     }
 
@@ -737,10 +763,13 @@ let ``missing native readback projection diverges at exact Quint action`` () =
         let trace = (ChoreoTrace.load "happy-path").Replay
 
         match! runReplay true "happy-path" with
-        | Ok(QuintReplayResult.Diverged divergence) ->
-            Assert.Equal(trace.Steps.Length, divergence.Step)
-            Assert.Equal("observeApplied", divergence.Action)
-            Assert.Equal(trace.Steps |> List.last |> _.Source, divergence.Source)
-            Assert.Equal("state", divergence.Reason)
+        | {
+              Outcome = ReplayOutcome.Diverged(step, action, actualSource, path, _, _)
+              CleanupFailure = None
+          } ->
+            Assert.Equal(trace.Steps.Length, step)
+            Assert.Equal(Some "observeApplied", action)
+            Assert.Equal(Some(trace.Steps |> List.last |> _.Source), actualSource)
+            Assert.StartsWith("$/bindings/", path)
         | result -> Assert.Fail($"expected exact native-readback divergence, got %A{result}")
     }
