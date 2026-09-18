@@ -109,6 +109,7 @@ class IsolatedOperationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.contract = operation.load_contract(ROOT / "eng/callable-cli-isolated-operation-contract.json")
         cls.preflight = operation.read_json(ROOT / "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json")
+        cls.proposal = operation.load_proposal(ROOT / "eng/callable-cli-isolated-operation-proposal.json", cls.contract, cls.preflight)
 
     def create_plan(self):
         return operation.prepare_create(self.contract)
@@ -169,11 +170,18 @@ class IsolatedOperationTests(unittest.TestCase):
             operation.validate_admission(contract, plan, grant, observation, operation.parse_time(now, "now"))
 
     def test_checked_in_state_is_prepared_not_authorized_with_preflight_refusal(self):
-        inspected = operation.inspect(self.contract, self.preflight)
+        inspected = operation.inspect(self.contract, self.preflight, self.proposal)
         self.assertEqual("prepared-not-authorized", inspected["state"])
         self.assertFalse(inspected["authorized"])
         self.assertEqual(0, inspected["liveEffects"])
         self.assertEqual("refused-no-compatible-admitted-target", inspected["disposition"])
+        with tempfile.TemporaryDirectory() as scratch:
+            changed = copy.deepcopy(self.proposal)
+            changed["authorized"] = True
+            path = pathlib.Path(scratch) / "proposal.json"
+            path.write_text(operation.canonical(changed).decode())
+            with self.assertRaisesRegex(operation.Refused, "proposal-digest"):
+                operation.load_proposal(path, self.contract, self.preflight)
 
     def test_creation_plan_is_deterministic_sealed_and_cannot_self_authorize(self):
         first = self.create_plan()

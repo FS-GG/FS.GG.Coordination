@@ -23,6 +23,12 @@ let ``isolated operation contract is source-bound sealed and unauthorized`` () =
     Assert.Equal("workflow-environment-grant-credential-and-capabilities-unavailable", value.GetProperty("authorization").GetProperty("currentStatus").GetString())
     Assert.Contains(value.GetProperty("forbidden").EnumerateArray(), fun item -> item.GetString() = "effect-before-protected-grant-and-fresh-capability-readback")
 
+    use proposal = JsonDocument.Parse(bytes "eng/callable-cli-isolated-operation-proposal.json")
+    let prepared = proposal.RootElement
+    Assert.Equal(prepared.GetProperty("proposalSha256").GetString(), AcceptanceReceiptDigest.canonicalBytesOmitting "proposalSha256" prepared |> sha256)
+    Assert.False(prepared.GetProperty("authorized").GetBoolean())
+    Assert.Equal(value.GetProperty("contractSha256").GetString(), prepared.GetProperty("contract").GetProperty("sha256").GetString())
+
 [<Fact>]
 let ``preflight records refusals without inferring authority or compatibility`` () =
     use preflight = JsonDocument.Parse(bytes "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json")

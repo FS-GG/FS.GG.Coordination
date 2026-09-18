@@ -26,6 +26,7 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_CONTRACT = ROOT / "eng/callable-cli-isolated-operation-contract.json"
+DEFAULT_PROPOSAL = ROOT / "eng/callable-cli-isolated-operation-proposal.json"
 DEFAULT_PREFLIGHT = ROOT / "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 OID = re.compile(r"^[0-9a-f]{40}$")
@@ -156,6 +157,27 @@ def validate_preflight(contract: dict[str, object], value: dict[str, object]) ->
         raise Refused("preflight-fact-drift")
     if facts.get("proposedTarget404Meaning") != "unobserved-target-only-not-ownership-reservation-or-authority":
         raise Refused("preflight-absence-inference")
+
+
+def load_proposal(path: str | pathlib.Path, contract: dict[str, object], preflight: dict[str, object]) -> dict[str, object]:
+    value = read_json(path)
+    if value.get("schema") != "fsgg.coordination.callable-isolated-operation-proposal/2":
+        raise Refused("proposal-schema")
+    verify_digest(value, "proposalSha256", "proposal")
+    if value.get("identity") != contract.get("identity") or value.get("state") != "prepared-not-authorized" or value.get("authorized") is not False:
+        raise Refused("proposal-state")
+    binding = value.get("contract")
+    if (not isinstance(binding, dict) or binding.get("sha256") != contract.get("contractSha256")
+            or binding.get("operationSourceSha256") != contract["source"]["operationSourceSha256"]):
+        raise Refused("proposal-contract-binding")
+    observed = value.get("preflight")
+    if (not isinstance(observed, dict) or observed.get("sha256") != preflight.get("evidenceSha256")
+            or observed.get("disposition") != preflight.get("disposition")):
+        raise Refused("proposal-preflight-binding")
+    phases = value.get("phases")
+    if not isinstance(phases, list) or [item.get("id") for item in phases if isinstance(item, dict)] != ["creation", "identity-bound-operation"]:
+        raise Refused("proposal-phase-order")
+    return value
 
 
 def prepare_create(contract: dict[str, object]) -> dict[str, object]:
@@ -735,8 +757,10 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     return receipt
 
 
-def inspect(contract: dict[str, object], preflight: dict[str, object]) -> dict[str, object]:
+def inspect(contract: dict[str, object], preflight: dict[str, object], proposal: dict[str, object] | None = None) -> dict[str, object]:
     validate_preflight(contract, preflight)
+    if proposal is None or proposal.get("proposalSha256") is None:
+        raise Refused("proposal-required")
     return {
         "schema": "fsgg.coordination.callable-isolated-operation-inspection/1",
         "operationIdentity": contract["identity"], "contractSha256": contract["contractSha256"],
@@ -748,6 +772,7 @@ def inspect(contract: dict[str, object], preflight: dict[str, object]) -> dict[s
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract", default=str(DEFAULT_CONTRACT))
+    parser.add_argument("--proposal", default=str(DEFAULT_PROPOSAL))
     parser.add_argument("--preflight", default=str(DEFAULT_PREFLIGHT))
     commands = parser.add_subparsers(dest="action", required=True)
     commands.add_parser("inspect")
@@ -771,8 +796,10 @@ def main() -> int:
     args = parser.parse_args()
     try:
         contract = load_contract(args.contract)
+        preflight = read_json(args.preflight)
+        proposal = load_proposal(args.proposal, contract, preflight)
         if args.action == "inspect":
-            print(canonical(inspect(contract, read_json(args.preflight))).decode())
+            print(canonical(inspect(contract, preflight, proposal)).decode())
         elif args.action == "prepare-create":
             write_private(args.output, prepare_create(contract))
         elif args.action == "prepare-operation":

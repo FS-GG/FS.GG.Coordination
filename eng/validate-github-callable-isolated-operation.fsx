@@ -45,6 +45,18 @@ requireContains
     ]
 
 requireContains
+    "eng/callable-cli-isolated-operation-proposal.json"
+    [
+        "prepared-not-authorized"
+        "2561b7aa978ade63cbb960310a1154ae62495adeb155085b578e66682338e044"
+        "9d0797035c7b71c2b58434d04ba66c61e9a527cc33829d38f7c5d27b0b6ff03a"
+        "45db6ffddcfa6b41514856ca4d6b4d57136b1f363905cf90120dedba008d818f"
+        "identity-bound-operation"
+        "new-separate-protected-short-lived-grant-bound-to-exact-plan"
+        "external-acceptance-or-Q4-inference"
+    ]
+
+requireContains
     "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json"
     [
         "refused-no-compatible-admitted-target"
@@ -60,8 +72,8 @@ requireContains
 requireContains
     "evidence/github-substrate-v2/gs2-09-9/isolated-operation-coverage.json"
     [
-        "7936a97b5e1ba55d4d6a91880a0716cca61cf9317ab9c583b82758d1668bd1ef"
-        "525a1bed96c83bd9fe601a7e210ec0bd0767610cf831dc42c7ed20d73a24a53f"
+        "2561b7aa978ade63cbb960310a1154ae62495adeb155085b578e66682338e044"
+        "9d0797035c7b71c2b58434d04ba66c61e9a527cc33829d38f7c5d27b0b6ff03a"
         "unproved-reviewer-membership-403"
         "unknown-create-without-readback"
         "nonzero-or-pending-installed-cli"
