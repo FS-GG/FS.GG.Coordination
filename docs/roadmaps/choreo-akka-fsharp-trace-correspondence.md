@@ -1,6 +1,6 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; C0–C2 merged; C3 executable Quint trace contract implemented in its protected-main PR; C4 next
+Status: accepted design; C0–C3 merged; C4 production correspondence in protected-main PR; C5 next
 
 Decision date: 2026-09-16
 
@@ -568,6 +568,12 @@ project, `DOTNET_EXE=<pinned-dotnet> bash run-private-postgres.sh`; and
 its own private PostgreSQL 18.6 cluster. The unchanged trace digests and source/tool identities remain in the C3
 manifest. The CLI has become packable through unrelated work since C3's historical checkpoint; C4 changes only
 non-packable Host implementation and tests and does not publish or change the CLI package identity.
+
+C4 also repairs the C2 runner's test selection: Quint defaults to names ending in `Test`, while this suite
+uses descriptive names. The script now extracts the fifteen declared `run` names and selects them explicitly,
+excluding imported helper actions and predicates. Earlier C2 script success alone did not establish that its
+named-test command executed those scenarios; C3 exports did select their scenarios explicitly. The corrected
+C2 invocation and bounded roots are rerun before the formal-workload migration.
 
 ### C5 — qualify and migrate the formal workload
 
