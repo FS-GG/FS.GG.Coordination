@@ -58,6 +58,15 @@ let ``live source admits only protected exact target operation and persists clea
             "reviewer-membership-unproved"
             "creation-credential-scope"
             "operation-credential-scope"
+            "creation-plan-not-canonical-contract"
+            "grant-artifact-readback"
+            "grant-artifact-content-binding"
+            "credential-role-set"
+            "credential-token-role-alias"
+            "retained-plan-missing"
+            "retained-pull-request-identity"
+            "journal-protection-conflict"
+            "journalOperationId"
             "installed-advance-not-settled"
             "installed-replay-not-noop"
             "cleanup\": {\"state\": \"intent-persisted"
@@ -66,3 +75,6 @@ let ``live source admits only protected exact target operation and persists clea
         ] do Assert.Contains(required, source, StringComparison.Ordinal)
     for forbidden in [ "gh api"; "git push"; "visibility\": \"private"; "billing"; "secrets." ] do
         Assert.DoesNotContain(forbidden, source, StringComparison.OrdinalIgnoreCase)
+    Assert.DoesNotContain("TemporaryDirectory", source, StringComparison.Ordinal)
+    Assert.DoesNotContain("request(\"GET\", \"installation\")", source, StringComparison.Ordinal)
+    Assert.Contains("app/installations/", source, StringComparison.Ordinal)

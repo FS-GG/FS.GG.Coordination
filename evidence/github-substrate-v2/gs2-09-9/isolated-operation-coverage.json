@@ -1,21 +1,28 @@
 {
   "schema": "fsgg.coordination.callable-isolated-operation-coverage/1",
   "operationIdentity": "v2-call-01-4b-isolated-native-v1",
-  "contractSha256": "2561b7aa978ade63cbb960310a1154ae62495adeb155085b578e66682338e044",
-  "operationSourceSha256": "9d0797035c7b71c2b58434d04ba66c61e9a527cc33829d38f7c5d27b0b6ff03a",
+  "contractSha256": "cc17065452ee941295a17844facfbdb13d305df179d7634b40459c0f63579a25",
+  "operationSourceSha256": "0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e",
   "positiveControls": [
     "deterministic-sealed-creation-plan",
     "identity-bound-second-phase-plan",
     "complete-protected-creation-admission",
     "complete-protected-identity-bound-admission",
     "unknown-creation-response-settles-by-authoritative-readback",
-    "protected-source-static-boundary"
+    "protected-source-static-boundary",
+    "persisted-creation-intent-lost-response-fresh-process-recovery",
+    "persisted-installed-plan-immutable-pr-native-completion-recovery",
+    "retained-cleanup-intent-restart-settlement",
+    "public-prepare-and-admission-command-path",
+    "protected-grant-artifact-canonical-payload-readback",
+    "public-execute-and-resume-command-path"
   ],
   "negativeControls": [
     "checked-in-authorization-true",
     "altered-proposal-digest",
     "plan-self-authorization",
     "altered-plan-seal",
+    "resealed-out-of-contract-creation-request",
     "altered-creation-receipt",
     "wrong-operation-phase",
     "wrong-contract-digest",
@@ -23,6 +30,8 @@
     "expired-grant",
     "overlong-grant",
     "wrong-authority-repository-workflow-or-environment",
+    "wrong-run-attempt-or-approval-environment-identity",
+    "altered-missing-or-wrong-grant-artifact",
     "incomplete-admission-observation",
     "wrong-observation-binding",
     "failed-or-non-dispatch-protected-run",
@@ -30,12 +39,17 @@
     "changed-workflow-bytes",
     "missing-approved-reviewer",
     "unproved-reviewer-membership-403",
+    "malformed-app-installation-observation",
     "non-app-credential",
     "wrong-credential-owner",
     "wrong-app-or-installation",
+    "aliased-credential-role-token",
+    "authority-observer-extra-repository",
     "insufficient-permission",
     "creation-credential-not-all-repositories",
     "operation-credential-missing-exact-repository",
+    "operation-credential-has-extra-repository",
+    "mid-setup-credential-or-grant-expiry",
     "target-identity-or-visibility-drift",
     "missing-live-capability",
     "existing-target-before-create",
@@ -43,12 +57,18 @@
     "unexpected-setup-content",
     "incomplete-check-pagination",
     "failed-required-check",
+    "pending-or-repeated-required-check",
     "unsupported-required-status-protection-403",
+    "changed-strict-check-app-or-selected-protection-field",
     "nonzero-or-pending-installed-cli",
     "non-noop-fresh-process-replay",
+    "missing-retained-installed-plan",
+    "unknown-native-settlement-remains-pending",
     "unsettled-pr-or-journal-readback",
     "cleanup-without-persisted-intent",
-    "cleanup-response-without-404-readback"
+    "cleanup-response-without-404-readback",
+    "arbitrary-404-without-retained-delete-intent",
+    "same-name-replacement-with-different-repository-id"
   ],
   "effects": {
     "provider": 0,
@@ -58,5 +78,5 @@
     "epochOrJournal": 0
   },
   "externalAcceptance": false,
-  "coverageSha256": "1bdc0ad7d4724f7f83bc985ef453c9193fb0f272e468c5308a38d88f2035aea5"
+  "coverageSha256": "e059785b9ef748951891ce784ae3f92150195ea61005a6dec01dbe48fcb08373"
 }
