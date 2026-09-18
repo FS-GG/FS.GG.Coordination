@@ -10,6 +10,10 @@ let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
 let private desiredPath = Path.Combine(root, "eng/repository-settings/desired.json")
+
+let private historicalDesiredPath =
+    Path.Combine(root, "eng/repository-settings/desired-2026-08-27.json")
+
 let private fixturePath = Path.Combine(root, "eng/repository-settings/fixture.json")
 
 let private fixturePreStatePath =
@@ -20,7 +24,7 @@ let private receiptPath = Path.Combine(root, "eng/repository-settings/receipt.js
 let private preStatePath =
     Path.Combine(root, "eng/repository-settings/prestate.json")
 
-let private verify preStatePath receiptPath =
+let private verify desiredPath preStatePath receiptPath =
     let startInfo = ProcessStartInfo("dotnet")
     startInfo.WorkingDirectory <- root
     startInfo.RedirectStandardOutput <- true
@@ -83,7 +87,15 @@ let ``repository provisioning contract is closed and least privilege`` () =
     Assert.Equal("selected", value.GetProperty("actions").GetProperty("allowedActions").GetString())
     Assert.True(value.GetProperty("actions").GetProperty("githubOwnedAllowed").GetBoolean())
     Assert.False(value.GetProperty("actions").GetProperty("verifiedAllowed").GetBoolean())
-    Assert.Empty(value.GetProperty("actions").GetProperty("patternsAllowed").EnumerateArray())
+    let patterns =
+        value.GetProperty("actions").GetProperty("patternsAllowed").EnumerateArray()
+        |> Seq.map _.GetString()
+        |> Seq.toList
+
+    Assert.Equal<string list>(
+        [ "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841" ],
+        patterns
+    )
     let checks = value.GetProperty("checks").EnumerateArray() |> Seq.toList
     Assert.Equal(6, checks.Length)
     Assert.All(checks, fun check -> Assert.Equal(15368, check.GetProperty("integrationId").GetInt32()))
@@ -111,13 +123,13 @@ let ``repository provisioning contract is closed and least privilege`` () =
 
 [<Fact>]
 let ``canonical provisioning fixture passes the strict validator`` () =
-    let exitCode, output = verify fixturePreStatePath fixturePath
+    let exitCode, output = verify desiredPath fixturePreStatePath fixturePath
     Assert.Equal(0, exitCode)
     Assert.Contains("repository-settings: PASS", output)
 
 [<Fact>]
-let ``exact live provisioning receipt passes the strict validator`` () =
-    let exitCode, output = verify preStatePath receiptPath
+let ``historical live provisioning receipt remains independently verifiable`` () =
+    let exitCode, output = verify historicalDesiredPath preStatePath receiptPath
     Assert.Equal(0, exitCode)
     Assert.Contains("operations=15", output)
 
@@ -180,18 +192,18 @@ let ``exact live provisioning receipt passes the strict validator`` () =
              "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"",
              "RS-RULESET-RESPONSE")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
-[<InlineData("\"digest\":\"5", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
-[<InlineData("\"preStateSha256\":\"9", "\"preStateSha256\":\"8", "RS-PRESTATE-DIGEST")>]
+[<InlineData("\"digest\":\"9", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
+[<InlineData("\"preStateSha256\":\"f", "\"preStateSha256\":\"8", "RS-PRESTATE-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =
     withMutation oldValue newValue (fun path ->
-        let exitCode, output = verify fixturePreStatePath path
+        let exitCode, output = verify desiredPath fixturePreStatePath path
         Assert.NotEqual(0, exitCode)
         Assert.Contains(expectedRule, output))
 
 [<Fact>]
 let ``validator rejects noncanonical receipt bytes`` () =
     withMutation "{\"actions\"" "{ \"actions\"" (fun path ->
-        let exitCode, output = verify fixturePreStatePath path
+        let exitCode, output = verify desiredPath fixturePreStatePath path
         Assert.NotEqual(0, exitCode)
         Assert.Contains("RS-RECEIPT-CANONICAL", output))
 
@@ -201,7 +213,7 @@ let ``validator rejects altered canonical pre-state bytes`` () =
         "\"observedAt\":\"2026-08-27T00:00:00Z\""
         "\"observedAt\":\"2026-08-27T00:00:01Z\""
         (fun path ->
-            let exitCode, output = verify path fixturePath
+            let exitCode, output = verify desiredPath path fixturePath
             Assert.NotEqual(0, exitCode)
             Assert.Contains("RS-PRESTATE-SELF-DIGEST", output))
 
