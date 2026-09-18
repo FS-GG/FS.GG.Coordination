@@ -33,3 +33,18 @@ first appends a pause event to that WorkItem journal and invalidates readback
 currency. Resume and effect dispatch remain refused until a fresh provider
 readback, bound to the selected route and current generation and workflow
 revision, is durably accepted.
+
+The source protocol is checked as a four-process Choreo model (`Host`, `Journal`,
+`Runner`, `GitHubProvider`). Genuine Quint ITF traces replay through production
+Host admission/workflow/effect policy, the execution-session actor and neutral
+coordinator, production callbacks, and memory/PostgreSQL journals. Replay exposed
+and corrected two implementation mismatches: proven absence stops effect
+continuation, and retry intent metadata is reconstructed from recovered journal
+state before a PostgreSQL append.
+
+Changes to these seams must follow [the Choreo correspondence maintenance
+guide](choreo-correspondence.md), including exact trace regeneration, production
+replay, negative controls and canonical qualification. The [qualification
+decision](choreo-qualification.md) records the retained flat-model safety
+abstraction, projection scope and measured bounds. These source checks do not
+activate installed O3 adoption.

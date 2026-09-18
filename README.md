@@ -15,6 +15,12 @@ dotnet test FS.GG.Coordination.sln --no-build --no-restore
 dotnet fsi eng/verify-dependencies.fsx -- --root .
 ```
 
+For hosted-writer protocol or actor changes, follow the
+[Choreo correspondence maintenance guide](docs/architecture/choreo-correspondence.md)
+for model checks, exact trace regeneration, production replay and failure triage.
+The [completed migration roadmap](docs/roadmaps/choreo-akka-fsharp-trace-correspondence.md)
+records the protected qualification and fresh-checkout evidence.
+
 The `Boundary qualification / boundary-qualification` hosted check executes the
 same locked restore, Release build, tests, and dependency policy for every pull
 request and push to `main`.
