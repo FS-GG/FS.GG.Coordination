@@ -63,7 +63,6 @@ jobs:
       - name: Bind operation, protected source, tree, identity, and live collisions
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           OPERATION: ${{ inputs.operation }}
           REQUESTED_SOURCE: ${{ inputs.source }}
           REQUESTED_MERGE: ${{ inputs.protected_merge }}
@@ -85,9 +84,9 @@ jobs:
           test "$(git rev-parse "$EXPECTED_MERGE^{tree}")" = "$EXPECTED_TREE"
           tagged="$(git ls-remote --tags origin refs/tags/v0.1.0 refs/tags/v0.1.0^\{\} | awk '$2=="refs/tags/v0.1.0^{}"{peeled=$1} $2=="refs/tags/v0.1.0"{plain=$1} END{print peeled ? peeled : plain}')"
           test -z "$tagged" || test "$tagged" = "$EXPECTED_MERGE"
-          policy="$(gh api "repos/$GITHUB_REPOSITORY/actions/permissions/selected-actions")"
-          jq -e '.patterns_allowed // [] | any(. == "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841")' <<<"$policy" >/dev/null || {
-            echo "::error::the exact NuGet/login action is not admitted by repository Actions policy"
+          jq -e '.actions | .githubOwnedAllowed == true and .verifiedAllowed == false and .patternsAllowed == ["NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"]' \
+            eng/repository-settings/desired.json >/dev/null || {
+            echo "::error::protected-main desired state does not admit only the exact NuGet/login action"
             exit 1
           }
       - name: Reproduce the reviewed bytes at their preparation root

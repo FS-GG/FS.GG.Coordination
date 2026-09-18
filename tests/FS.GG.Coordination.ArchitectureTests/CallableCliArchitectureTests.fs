@@ -55,6 +55,7 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
             "id-token: write"
             "attestations: write"
             "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"
+            "eng/repository-settings/desired.json"
             "Publish to GitHub Packages first"
             "Observe nuget.org and validate recoverable ordering before either effect"
             "Create immutable tag and GitHub release only after both feeds settle"
@@ -62,6 +63,7 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
         ] do Assert.Contains(expected, workflow, StringComparison.Ordinal)
 
     Assert.DoesNotContain("--skip-duplicate", workflow, StringComparison.Ordinal)
+    Assert.DoesNotContain("actions/permissions/selected-actions", workflow, StringComparison.Ordinal)
     Assert.DoesNotContain("NUGET_API_KEY }}", workflow.Replace("steps.nuget-login.outputs.NUGET_API_KEY }}", ""), StringComparison.Ordinal)
     let githubPush = workflow.IndexOf("nuget.pkg.github.com/FS-GG/index.json", StringComparison.Ordinal)
     let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
