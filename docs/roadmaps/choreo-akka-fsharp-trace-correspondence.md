@@ -1,8 +1,10 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; C0–C4 merged; C5 qualified in its protected-main PR; C6 next
+Status: complete (C0–C6); maintenance entry point and final evidence below
 
 Decision date: 2026-09-16
+
+Completion date: 2026-09-18
 
 Delivery sequence: roadmap merge, replay-baseline repair, pinned Choreo adoption, model and trace migration
 
@@ -92,6 +94,9 @@ process even when a call is locally hosted: durability, append rejection, and re
 boundaries, not implementation details.
 
 ### Existing formal and replay baseline
+
+This is the historical design baseline. C0–C5 below supersede its open defects, workload roots and budgets;
+[the qualification decision](../architecture/choreo-qualification.md) records the accepted current configuration.
 
 The canonical source is `src/FS.GG.Coordination.Protocol/Protocol.md`. It contains the general coordination
 protocol and its tests, `O2PilotPermitModel`, `O2HostedWriterModel`, `GS20310JournalModel`, reconciliation,
@@ -483,7 +488,11 @@ contracts; faulty native readback reports the exact final `hostSettles` divergen
 generation and corrupt a projected state identity, and both are rejected. Production `ExecutionSessionActor`,
 Host composition, and PostgreSQL correspondence remain deliberately assigned to C4.
 
-#### C3 continuation checkpoint — 2026-09-17
+#### Historical C3 continuation checkpoint — 2026-09-17
+
+Superseded by merged [PR #420](https://github.com/FS-GG/FS.GG.Coordination/pull/420) at
+`9222dbdd01a6cf86ac737efa7550fa20c343415b`, followed by C4 and C5. The resume instructions below are retained
+as historical evidence, not the current continuation procedure.
 
 Safe resume branch: `routine/choreo-c3-quint-itf`, rebased onto `origin/main` at
 `794458ec586660aa2603dcb74374a9356abd9d61` (which contains merged C2 commit
@@ -613,18 +622,34 @@ unrelated prose preserves reuse. The shared base-shard entry point runs the comp
 bootstrap and optimistic callers, rather than relying on a workflow-only step.
 
 The retained counterexamples and baseline come from those successful runs. All eight C3 trace bytes remain exact;
-only their source identity advances to `e1ff2a32649a180121c756f762d174e9c74f6620`. Protected CI repeats the sharded
-qualification without refresh mode before this phase can merge. C6 starts from that protected merge.
+only their source identity advances to `e1ff2a32649a180121c756f762d174e9c74f6620`. Protected CI repeated the sharded
+qualification without refresh mode in [run 35307759477](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35307759477).
+After incorporating concurrent repository changes, [run 35309867844](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35309867844)
+accepted the unchanged formal subject and passed the combined head. [PR #425](https://github.com/FS-GG/FS.GG.Coordination/pull/425)
+merged as `d53786bbe68eef26c5977523bb3efe2ba8176253`; C6 starts from that protected merge.
 
 ### C6 — operational handoff and optional expansion
 
-- [ ] Update architecture and contributor documentation with model, trace-regeneration, and failure-triage commands.
-- [ ] Record owner, cadence, upstream-update procedure, and Choreo security/license review.
-- [ ] Confirm O3 installed adoption remains a separate explicit operation with no behavior change from this work.
-- [ ] Evaluate other actor/wire protocols only after hosted-writer evidence is accepted; adoption elsewhere is a new
+- [x] Update architecture and contributor documentation with model, trace-regeneration, and failure-triage commands.
+- [x] Record owner, cadence, upstream-update procedure, and Choreo security/license review.
+- [x] Confirm O3 installed adoption remains a separate explicit operation with no behavior change from this work.
+- [x] Evaluate other actor/wire protocols only after hosted-writer evidence is accepted; adoption elsewhere is a new
   roadmap decision, not an implied rollout.
 
-Exit evidence: a clean-room continuation exercise using only merged docs and repository commands.
+Exit evidence: the clean-room continuation exercise started from merged C5 commit
+`d53786bbe68eef26c5977523bb3efe2ba8176253` in a fresh worktree with no build output or supplied toolchain archive.
+The repository commands downloaded and verified a new toolchain, then passed all fifteen Choreo scenarios,
+seeded randomized safety, both complete bounded graphs (593 provider / 569 Runner states), all eight byte-exact
+raw trace regenerations, legacy safety (2,376 states), and all six parity comparisons. Production Host replay
+passed 78 tests; source/license guards passed 9; the private PostgreSQL 18.6 slice passed 34. The exercise left
+the checkout clean. The complete canonical inventory and performance/accounting receipts were accepted by the
+protected C5 runs linked above.
+
+[The maintenance guide](../architecture/choreo-correspondence.md) records the exact repository commands,
+failure triage, ownership/cadence, Apache-2.0 and pinned-source review, and dedicated upstream-update procedure.
+The hosted-writer architecture and contributor entry point link to it. O3 installed adoption remains a separate
+explicit operation. Further actor/wire protocol adoption is deferred to a new roadmap decision with its own
+invariants, replay seams and budgets; this programme does not authorize expansion.
 
 ## Project impact and non-goals
 
@@ -674,9 +699,10 @@ On any restart or handoff:
    feature branch unless its evidence is part of the same protected-main PR.
 7. Squash-merge after required checks. Start the next phase from the resulting protected-main merge commit.
 
-The immediate continuation after this roadmap merges is C0 on PR 395. The first new Choreo implementation branch
-is C1 and must start only after C0 is merged. If PR 395 cannot meet the C0 boundary without redesign, supersede it
-with a narrowly scoped C0 PR and record that disposition here; do not carry an ambiguous baseline into C1.
+All delivery phases are complete. For ongoing changes, start with
+[the maintenance guide](../architecture/choreo-correspondence.md), reproduce the accepted evidence, and create
+a new scoped PR or roadmap for changed protocol boundaries. Historical checkpoints above must not be used to
+restart completed migration phases.
 
 ## Acceptance gate for the programme
 
