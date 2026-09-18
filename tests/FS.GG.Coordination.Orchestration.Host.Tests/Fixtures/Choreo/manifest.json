@@ -4,8 +4,8 @@
   "observableSchema": "fsgg.coordination.hosted-writer-observation/1",
   "source": {
     "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-    "commit": "a598f27fc8d2c23647f4dc45df7d5119f3461b74",
-    "sha256": "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9"
+    "commit": "e1ff2a32649a180121c756f762d174e9c74f6620",
+    "sha256": "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb"
   },
   "quint": {
     "version": "0.32.0",

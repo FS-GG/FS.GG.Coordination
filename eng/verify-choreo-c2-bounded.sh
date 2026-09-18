@@ -89,6 +89,7 @@ verify_lane() {
 verify_lane O2HostedWriterChoreoProviderBounded
 verify_lane O2HostedWriterChoreoRunnerBounded
 
-FSGG_QUINT_BIN="$quint_bin" bash "$repo_root/eng/verify-choreo-c3-traces.sh" --scenario happy-path
+FSGG_QUINT_BIN="$quint_bin" bash "$repo_root/eng/verify-choreo-c3-traces.sh"
+FSGG_QUINT_BIN="$quint_bin" python3 "$repo_root/eng/verify-choreo-c5-parity.py"
 
 printf 'CHOREO_C2_BOUNDED_OK quintSha256=%s maxSteps=20 lanes=provider,runner\n' "$quint_sha"

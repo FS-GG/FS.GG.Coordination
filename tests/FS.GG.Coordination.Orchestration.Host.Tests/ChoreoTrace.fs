@@ -416,7 +416,7 @@ module ChoreoTrace =
         let sourceSha = text source "sha256"
 
         if text source "path" <> "src/FS.GG.Coordination.Protocol/Protocol.md" then failwith "source path differs"
-        if text source "commit" <> "a598f27fc8d2c23647f4dc45df7d5119f3461b74" then failwith "source commit differs"
+        if text source "commit" <> "e1ff2a32649a180121c756f762d174e9c74f6620" then failwith "source commit differs"
         if sha256File (protocolPath ()) <> sourceSha then failwith "protocol source digest differs"
 
         let quint = root["quint"].AsObject()

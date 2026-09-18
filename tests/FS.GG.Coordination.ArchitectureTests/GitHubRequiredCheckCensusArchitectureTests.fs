@@ -207,6 +207,6 @@ let ``required check census Q3 validator rejects its closed mutation inventory``
 [<Fact>]
 let ``required check census preserves canonical Quint source`` () =
     Assert.Equal(
-        "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9",
+        "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb",
         sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md")
     )

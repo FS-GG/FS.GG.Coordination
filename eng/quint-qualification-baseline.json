@@ -1,10 +1,10 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9",
-  "configurationSha256": "200c71bec7a2b0e6a27cba7436d4d022e7f561190393b2a34011db5066cbbb89",
-  "assembledQuintSha256": "1164d8f1e46b5984a9316f99ab15d8befb37a72451cb693c14f44fa3b92bb8a4",
-  "runnerClass": "linux-x64-local-exact-sdk-10.0.400-refresh",
-  "measuredAt": "2026-09-16T06:15:00Z",
+  "sourceSha256": "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb",
+  "configurationSha256": "e0af0cdedb68a92add9086f1c735c2a6f2d629d1c07b98e9d38f82aed78ce998",
+  "assembledQuintSha256": "9d856fb7250925d17c8b2fcaf1be1f4e2a5a30f06777c40f69d60ec461e30e59",
+  "runnerClass": "linux-x64-local-exact-sdk-10.0.400-cold-sharded-refresh",
+  "measuredAt": "2026-09-18T04:02:48.026879Z",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v1",
   "measurements": [
     {
@@ -12,63 +12,63 @@
       "dependencyDepth": 2,
       "stateCount": 2,
       "sampleCount": 100,
-      "elapsedMs": 2474,
-      "peakMiB": 312,
-      "artifactBytes": 8807637
+      "elapsedMs": 3640,
+      "peakMiB": 345,
+      "artifactBytes": 10844565
     },
     {
       "root": "lifecycle",
       "dependencyDepth": 3,
       "stateCount": 2,
       "sampleCount": 100,
-      "elapsedMs": 2473,
-      "peakMiB": 313,
-      "artifactBytes": 8807888
+      "elapsedMs": 3452,
+      "peakMiB": 354,
+      "artifactBytes": 10844816
     },
     {
       "root": "relations",
       "dependencyDepth": 2,
       "stateCount": 4,
       "sampleCount": 100,
-      "elapsedMs": 2455,
-      "peakMiB": 313,
-      "artifactBytes": 8809337
+      "elapsedMs": 3510,
+      "peakMiB": 348,
+      "artifactBytes": 10846265
     },
     {
       "root": "protocol-streams",
       "dependencyDepth": 2,
-      "stateCount": 8,
+      "stateCount": 4,
       "sampleCount": 100,
-      "elapsedMs": 2508,
-      "peakMiB": 313,
-      "artifactBytes": 8831591
+      "elapsedMs": 3392,
+      "peakMiB": 348,
+      "artifactBytes": 10868519
     },
     {
       "root": "mutation-saga",
       "dependencyDepth": 3,
-      "stateCount": 11,
-      "sampleCount": 11,
-      "elapsedMs": 4097,
-      "peakMiB": 462,
-      "artifactBytes": 8804886
+      "stateCount": 17,
+      "sampleCount": 17,
+      "elapsedMs": 5997,
+      "peakMiB": 440,
+      "artifactBytes": 10841865
     },
     {
       "root": "desired-state",
       "dependencyDepth": 4,
       "stateCount": 5,
       "sampleCount": 5,
-      "elapsedMs": 2926,
-      "peakMiB": 462,
-      "artifactBytes": 8804364
+      "elapsedMs": 3822,
+      "peakMiB": 394,
+      "artifactBytes": 10841292
     },
     {
       "root": "qualification",
       "dependencyDepth": 5,
       "stateCount": 9,
       "sampleCount": 9,
-      "elapsedMs": 3311,
-      "peakMiB": 462,
-      "artifactBytes": 8804634
+      "elapsedMs": 4946,
+      "peakMiB": 423,
+      "artifactBytes": 10841562
     }
   ],
   "formalMeasurements": [
@@ -77,8 +77,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 64376,
-      "peakMiB": 1115,
+      "elapsedMs": 44082,
+      "peakMiB": 1344,
       "artifactBytes": 5674
     },
     {
@@ -86,8 +86,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 68660,
-      "peakMiB": 1161,
+      "elapsedMs": 44056,
+      "peakMiB": 1307,
       "artifactBytes": 4919
     },
     {
@@ -95,8 +95,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 67360,
-      "peakMiB": 1194,
+      "elapsedMs": 44147,
+      "peakMiB": 1301,
       "artifactBytes": 4586
     },
     {
@@ -104,8 +104,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 68512,
-      "peakMiB": 1152,
+      "elapsedMs": 44188,
+      "peakMiB": 1309,
       "artifactBytes": 4559
     },
     {
@@ -113,8 +113,8 @@
       "stateCount": 4,
       "transitionCount": 4,
       "sampleCount": 100,
-      "elapsedMs": 65671,
-      "peakMiB": 1132,
+      "elapsedMs": 44153,
+      "peakMiB": 1316,
       "artifactBytes": 9392
     },
     {
@@ -122,8 +122,8 @@
       "stateCount": 3,
       "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 68533,
-      "peakMiB": 1146,
+      "elapsedMs": 44197,
+      "peakMiB": 1325,
       "artifactBytes": 4582
     },
     {
@@ -131,8 +131,8 @@
       "stateCount": 20,
       "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 78564,
-      "peakMiB": 966,
+      "elapsedMs": 41058,
+      "peakMiB": 1097,
       "artifactBytes": 7536
     },
     {
@@ -140,8 +140,8 @@
       "stateCount": 20,
       "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 104704,
-      "peakMiB": 1023,
+      "elapsedMs": 41495,
+      "peakMiB": 1090,
       "artifactBytes": 9097
     },
     {
@@ -149,8 +149,8 @@
       "stateCount": 51,
       "transitionCount": 163,
       "sampleCount": 1000,
-      "elapsedMs": 104795,
-      "peakMiB": 998,
+      "elapsedMs": 41723,
+      "peakMiB": 1091,
       "artifactBytes": 4615
     },
     {
@@ -158,8 +158,8 @@
       "stateCount": 10,
       "transitionCount": 22,
       "sampleCount": 100,
-      "elapsedMs": 67397,
-      "peakMiB": 1012,
+      "elapsedMs": 41698,
+      "peakMiB": 1087,
       "artifactBytes": 7322
     },
     {
@@ -167,8 +167,8 @@
       "stateCount": 136,
       "transitionCount": 532,
       "sampleCount": 10000,
-      "elapsedMs": 64848,
-      "peakMiB": 1019,
+      "elapsedMs": 42693,
+      "peakMiB": 1078,
       "artifactBytes": 3412
     },
     {
@@ -176,8 +176,8 @@
       "stateCount": 5,
       "transitionCount": 5,
       "sampleCount": 10000,
-      "elapsedMs": 63678,
-      "peakMiB": 1109,
+      "elapsedMs": 45050,
+      "peakMiB": 1147,
       "artifactBytes": 9669
     },
     {
@@ -185,8 +185,8 @@
       "stateCount": 3032,
       "transitionCount": 8002,
       "sampleCount": 10000,
-      "elapsedMs": 67993,
-      "peakMiB": 1092,
+      "elapsedMs": 44304,
+      "peakMiB": 1235,
       "artifactBytes": 9678
     },
     {
@@ -194,35 +194,35 @@
       "stateCount": 14,
       "transitionCount": 14,
       "sampleCount": 10000,
-      "elapsedMs": 69110,
-      "peakMiB": 1046,
+      "elapsedMs": 46018,
+      "peakMiB": 1179,
       "artifactBytes": 9697
     },
     {
       "id": "hosted-writer-progress",
-      "stateCount": 23,
-      "transitionCount": 33,
+      "stateCount": 64,
+      "transitionCount": 63,
       "sampleCount": 10000,
-      "elapsedMs": 100461,
-      "peakMiB": 985,
-      "artifactBytes": 73625
+      "elapsedMs": 144592,
+      "peakMiB": 3619,
+      "artifactBytes": 518084
     },
     {
       "id": "hosted-writer-fault-safety",
-      "stateCount": 2376,
-      "transitionCount": 9678,
+      "stateCount": 1162,
+      "transitionCount": 1387,
       "sampleCount": 10000,
-      "elapsedMs": 83918,
-      "peakMiB": 1000,
-      "artifactBytes": 73642
+      "elapsedMs": 127884,
+      "peakMiB": 3652,
+      "artifactBytes": 43897
     },
     {
       "id": "administrative-retirement-closure",
       "stateCount": 15,
       "transitionCount": 29,
       "sampleCount": 10000,
-      "elapsedMs": 72773,
-      "peakMiB": 1036,
+      "elapsedMs": 42270,
+      "peakMiB": 1140,
       "artifactBytes": 6539
     },
     {
@@ -230,8 +230,8 @@
       "stateCount": 13,
       "transitionCount": 25,
       "sampleCount": 10000,
-      "elapsedMs": 64845,
-      "peakMiB": 1131,
+      "elapsedMs": 42074,
+      "peakMiB": 1103,
       "artifactBytes": 6532
     },
     {
@@ -239,10 +239,10 @@
       "stateCount": 7,
       "transitionCount": 13,
       "sampleCount": 10000,
-      "elapsedMs": 63927,
-      "peakMiB": 986,
+      "elapsedMs": 39313,
+      "peakMiB": 1099,
       "artifactBytes": 7620
     }
   ],
-  "formalMeasuredAt": "2026-09-16T07:21:21Z"
+  "formalMeasuredAt": "2026-09-18T04:11:41.947274Z"
 }

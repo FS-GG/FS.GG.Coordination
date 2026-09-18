@@ -159,8 +159,12 @@ let ``Choreo stays inside the canonical literate source`` () =
 let ``hosted writer Choreo foundation keeps four closed authorities and explicit message consumption`` () =
     let protocol, _, _ = fixture ()
 
-    let modelStart = protocol.IndexOf("module O2HostedWriterChoreoModel {", StringComparison.Ordinal)
-    let modelEnd = protocol.IndexOf("module ChoreoSourcePinSmoke {", modelStart, StringComparison.Ordinal)
+    let modelStart =
+        protocol.IndexOf("module O2HostedWriterChoreoModel {", StringComparison.Ordinal)
+
+    let modelEnd =
+        protocol.IndexOf("module ChoreoSourcePinSmoke {", modelStart, StringComparison.Ordinal)
+
     Assert.True(modelStart >= 0 && modelEnd > modelStart)
     let model = protocol.Substring(modelStart, modelEnd - modelStart)
 
@@ -223,7 +227,9 @@ let ``hosted writer correspondence consumes normalized raw Quint Choreo ITF`` ()
     let fixtureRoot =
         Path.Combine(root, "tests/FS.GG.Coordination.Orchestration.Host.Tests/Fixtures/Choreo")
 
-    let manifest = JsonNode.Parse(File.ReadAllBytes(Path.Combine(fixtureRoot, "manifest.json"))).AsObject()
+    let manifest =
+        JsonNode.Parse(File.ReadAllBytes(Path.Combine(fixtureRoot, "manifest.json"))).AsObject()
+
     Assert.Equal("fsgg.quint.choreo-trace-manifest/1", manifest["schema"].GetValue<string>())
     Assert.Equal("O2HostedWriterChoreoModel::choreo::s", manifest["rawVariable"].GetValue<string>())
     Assert.Equal(8, manifest["scenarios"].AsArray().Count)
@@ -238,10 +244,12 @@ let ``hosted writer correspondence consumes normalized raw Quint Choreo ITF`` ()
         let metadata = trace["#meta"].AsObject()
         Assert.Null(metadata["description"])
         Assert.Null(metadata["timestamp"])
+
         Assert.Equal(
             "src/FS.GG.Coordination.Protocol/Protocol.md#O2HostedWriterChoreoTests",
             metadata["source"].GetValue<string>()
         )
+
         let variables = trace["vars"].AsArray()
         Assert.Equal("O2HostedWriterChoreoModel::choreo::s", variables[0].GetValue<string>())
         stateCount <- stateCount + trace["states"].AsArray().Count
@@ -258,17 +266,29 @@ let ``hosted writer correspondence consumes normalized raw Quint Choreo ITF`` ()
     Assert.DoesNotContain("let private modelStep", replay)
     Assert.DoesNotContain("let private trace actions", replay)
 
-    let bounded = File.ReadAllText(Path.Combine(root, "eng/verify-choreo-c2-bounded.sh"))
-    Assert.Contains("verify-choreo-c3-traces.sh\" --scenario happy-path", bounded)
+    let bounded =
+        File.ReadAllText(Path.Combine(root, "eng/verify-choreo-c2-bounded.sh"))
+
+    Assert.Contains("verify-choreo-c3-traces.sh\"", bounded)
+    Assert.Contains("verify-choreo-c5-parity.py", bounded)
 
 [<Fact>]
 let ``hosted writer Choreo bounded roots cover provider and runner fault schedules`` () =
     let protocol, _, _ = fixture ()
     let script = File.ReadAllText(Path.Combine(root, "eng/verify-choreo-c2-bounded.sh"))
-    let validator = File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
-    let workflow = File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
-    let boundedStart = protocol.IndexOf("action boundedFaultStep(effect: EffectKind): bool", StringComparison.Ordinal)
-    let boundedEnd = protocol.IndexOf("action completeEffect(effect: EffectKind): bool", boundedStart, StringComparison.Ordinal)
+
+    let validator =
+        File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+
+    let workflow =
+        File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
+
+    let boundedStart =
+        protocol.IndexOf("action boundedFaultStep(effect: EffectKind): bool", StringComparison.Ordinal)
+
+    let boundedEnd =
+        protocol.IndexOf("action completeEffect(effect: EffectKind): bool", boundedStart, StringComparison.Ordinal)
+
     Assert.True(boundedStart >= 0 && boundedEnd > boundedStart)
     let boundedRoot = protocol.Substring(boundedStart, boundedEnd - boundedStart)
 
