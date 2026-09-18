@@ -354,7 +354,7 @@ let ``current FsQuint updater inventory rejects drift and policy weakening`` () 
             let cloneExit, _, cloneError =
                 runAt root "git" [ "clone"; "--quiet"; "--no-hardlinks"; root; tempRoot ]
 
-            Assert.True(cloneExit = 0, cloneError)
+            Assert.True((cloneExit = 0), cloneError)
 
             let inventoryPath =
                 Path.Combine(tempRoot, "evidence/fsquint/updater-inventory.json")
