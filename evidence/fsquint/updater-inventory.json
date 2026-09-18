@@ -1,0 +1,15 @@
+{
+  "schema": "fsgg.coordination.updater-inventory/1",
+  "complete": true,
+  "configuration": {
+    "path": "renovate.json",
+    "sha256": "13292dc0cc6a0d48b4fa6a3facaad7cf34bb25c8e593435bca1e57bb0c199a65",
+    "authority": "renovate",
+    "pullRequestOnly": true,
+    "directPush": false
+  },
+  "requiredManagers": [
+    "github-actions",
+    "nuget"
+  ]
+}

@@ -384,8 +384,69 @@ else
                 None)
         |> Set.ofSeq
 
+    // The accepted GS2 corpus remains immutable. This current extension adds one
+    // digest-bound configuration under the same PR-only Renovate authority.
+    let updaterExtension =
+        JsonNode.Parse(File.ReadAllText(Path.Combine(root, "evidence/fsquint/updater-inventory.json"))).AsObject()
+
+    exactProperties
+        "current updater inventory"
+        [ "schema"; "complete"; "configuration"; "requiredManagers" ]
+        updaterExtension
+
+    if
+        text updaterExtension "schema" <> "fsgg.coordination.updater-inventory/1"
+        || not (updaterExtension["complete"].GetValue<bool>())
+    then
+        failwith "current updater inventory is incomplete"
+
+    let configurationNode = updaterExtension["configuration"].AsObject()
+
+    exactProperties
+        "current updater configuration"
+        [ "path"; "sha256"; "authority"; "pullRequestOnly"; "directPush" ]
+        configurationNode
+
+    let currentConfiguration = updaterConfiguration configurationNode
+    let currentManagers = texts updaterExtension "requiredManagers"
+
+    if
+        currentConfiguration.Path <> "renovate.json"
+        || currentConfiguration.Authority <> "renovate"
+        || not currentConfiguration.PullRequestOnly
+        || currentConfiguration.DirectPush
+        || currentManagers <> [ "github-actions"; "nuget" ]
+    then
+        failwith "current updater authority or manager inventory differs"
+
+    let currentConfig =
+        JsonNode.Parse(File.ReadAllText(Path.Combine(root, currentConfiguration.Path))).AsObject()
+
+    if
+        texts currentConfig "enabledManagers" <> currentManagers
+        || currentConfig["automerge"].GetValue<bool>()
+        || text currentConfig "automergeType" <> "pr"
+    then
+        failwith "current updater configuration must preserve reviewed PR updates"
+
+    let currentSnapshot =
+        { snapshot with
+            UpdaterConfigurations = snapshot.UpdaterConfigurations @ [ currentConfiguration ]
+            RequiredManagers = currentManagers
+            Updaters =
+                snapshot.Updaters
+                |> List.map (fun authority ->
+                    { authority with
+                        OwnedManagers = currentManagers
+                    })
+        }
+
+    let currentReport =
+        compile currentSnapshot
+        |> Result.defaultWith (failwithf "current updater inventory refused: %A")
+
     let declaredUpdaterConfigurations =
-        snapshot.UpdaterConfigurations
+        currentSnapshot.UpdaterConfigurations
         |> List.map (fun configuration ->
             configuration.Path,
             configuration.Sha256,
@@ -397,6 +458,12 @@ else
     if observedUpdaterConfigurations <> declaredUpdaterConfigurations then
         failwith
             $"updater configuration inventory differs: observed={observedUpdaterConfigurations.Count} declared={declaredUpdaterConfigurations.Count}"
+
+    printfn
+        "CURRENT_UPDATER_INVENTORY_OK configurations=%d managers=%s seal=%s"
+        currentReport.UpdaterConfigurationCount
+        (String.concat "," currentReport.Managers)
+        currentReport.Seal
 
     let receipt =
         JsonNode
