@@ -150,6 +150,16 @@ are never acceptance evidence.
       private required-status-checks `403`, and organization-installation plus actor-membership `403` as refusal
       facts only. No repository, settings, visibility, billing, credential, workflow, epoch, journal, provider or
       cleanup effect occurred; actual protected admission remains this milestone's next boundary.
+    - [x] **Live-readiness source repair.** The v3 contract limits creation to its canonical method/path/body and
+      persists a marker-bound attempt before POST. Authority, reviewer, App-installation, creation, setup,
+      restricted execution and cleanup credentials are separate, expiring roles; admission binds the exact
+      environment, run attempt, grant artifact and trusted workflow bytes. Operation progress retains immutable
+      PR identity and exact installed plan bytes before dispatch, reconciles a lost CLI response from merged-PR
+      and journal authority, protects the selected journal shard, and makes post-delete restart reachable only
+      from retained evidence and delete intent. Actual UTC is rechecked at effect boundaries. The checked-in
+      proposal remains `prepared-not-authorized`; this repair performs no live provider effect and does not close
+      `.4b` or `.4c`. The historical `.github` authorization source remains undispatched and must be repinned in
+      its separate executor window before it can issue a compatible v3 grant.
   - [ ] **V2-CALL-01.4c — Qualify installed native execution and acceptance.** Run the installed command under
     the admitted operation, obtain independent PR and sharded-journal readback, prove fresh-process no-op replay
     and interruption recovery without duplicate effect, clean up the disposable subject, and bind exact native
@@ -198,13 +208,14 @@ subject, incomplete pagination and observer outage. Exact request sequence
 `520b08adbea6ee20b21b396f3200eeff7e970a6beaf81947942fd9f9af3cf968` are retained. Every provider mutation
 is loopback-only, and `.4b`, `.4c`, live acceptance, Q4, `OpenV2` and migration remain pending.
 
-Completion evidence for `.4b` source preparation: proposal
-`45db6ffddcfa6b41514856ca4d6b4d57136b1f363905cf90120dedba008d818f` binds contract
-`2561b7aa978ade63cbb960310a1154ae62495adeb155085b578e66682338e044`, operation source
-`9d0797035c7b71c2b58434d04ba66c61e9a527cc33829d38f7c5d27b0b6ff03a`, package/receiver identities and
+Completion evidence for `.4b` source preparation and its live-readiness repair: proposal
+`3e9075b9f94301f5cae05bbc201bec92b10e193532650a3a89c6e8999b112942` binds contract
+`cc17065452ee941295a17844facfbdb13d305df179d7634b40459c0f63579a25`, operation source
+`0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e`, package/receiver identities and
 preflight `46c9af2263a8f686c59e90aacb79cc5466c2e1d3c6422221f86b1373fe5813eb`. The registered Q3 command runs
-eight offline tests plus independently compiled architecture controls covering protected authority, target,
-credential, capability, phase, tamper, stale grant, unknown-response, persistence, replay and cleanup refusals.
+twenty offline tests plus independently compiled architecture controls covering canonical creation scope,
+protected environment/run/artifact authority, separated credential roles, target, capability, phase, tamper,
+expiry, unknown-response, durable plan/PR recovery, journal identity/protection, replay and cleanup refusals.
 The prepared source performs zero live effects and grants no `.4b` admission or `.4c` acceptance.
 
 ## Dependencies, invalidators, and completion examples

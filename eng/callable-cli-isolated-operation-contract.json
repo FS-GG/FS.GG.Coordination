@@ -1,12 +1,12 @@
 {
-  "schema": "fsgg.coordination.callable-isolated-operation-contract/2",
+  "schema": "fsgg.coordination.callable-isolated-operation-contract/3",
   "identity": "v2-call-01-4b-isolated-native-v1",
   "state": "prepared-not-authorized",
   "authorized": false,
   "source": {
     "prerequisiteHead": "0028b9efb8481084343aa243aef979de06c9f3b9",
     "operationSource": "eng/callable-cli-isolated-operation.py",
-    "operationSourceSha256": "9d0797035c7b71c2b58434d04ba66c61e9a527cc33829d38f7c5d27b0b6ff03a"
+    "operationSourceSha256": "0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e"
   },
   "target": {
     "owner": "FS-GG",
@@ -30,12 +30,14 @@
     "manifestSha256": "4f4b8ef9c53f87d32ba108ef00c1e1a352c8eac1e01cf0d151953473ac7c5c2d"
   },
   "creation": {
+    "attemptIdentity": "v2-call-01-4b-isolated-native-v1-creation-a1",
     "request": {
       "method": "POST",
       "path": "orgs/FS-GG/repos",
       "body": {
         "name": "FS.GG.Coordination.CallableSandbox",
         "description": "Disposable synthetic target for V2-CALL-01.4b/.4c qualification",
+        "homepage": "https://github.com/FS-GG/.github/actions/workflows/callable-isolated-operation-authorize.yml?operation=v2-call-01-4b-isolated-native-v1-creation-a1",
         "private": false,
         "has_issues": false,
         "has_projects": false,
@@ -51,18 +53,49 @@
     "repository": "FS-GG/.github",
     "workflowPath": ".github/workflows/callable-isolated-operation-authorize.yml",
     "environment": "callable-isolated-operation",
+    "grantArtifactName": "callable-isolated-operation-grant",
     "maximumLifetimeMinutes": 120,
     "requiredReviewer": {"id": 1645484, "login": "EHotwagner", "membership": "active-must-be-observed"},
-    "requiredPermissions": {
-      "administration": "write",
-      "checks": "read",
-      "contents": "write",
-      "metadata": "read",
-      "pull_requests": "write"
+    "credentialRoles": {
+      "app-installation-observer": {
+        "kind": "github-app-jwt",
+        "account": "FS-GG",
+        "permissions": {}
+      },
+      "authority-observer": {
+        "kind": "github-app-installation",
+        "account": "FS-GG",
+        "permissions": {"actions": "read", "contents": "read", "metadata": "read"}
+      },
+      "reviewer-membership-observer": {
+        "kind": "github-app-installation",
+        "account": "FS-GG",
+        "permissions": {"members": "read", "metadata": "read"}
+      },
+      "creation": {
+        "kind": "github-app-installation",
+        "account": "FS-GG",
+        "permissions": {"administration": "write", "metadata": "read"}
+      },
+      "setup": {
+        "kind": "github-app-installation",
+        "account": "FS-GG",
+        "permissions": {"actions": "write", "administration": "write", "checks": "read", "contents": "write", "metadata": "read", "pull_requests": "write", "workflows": "write"}
+      },
+      "execution": {
+        "kind": "github-app-installation",
+        "account": "FS-GG",
+        "permissions": {"checks": "read", "contents": "write", "metadata": "read", "pull_requests": "write"}
+      },
+      "cleanup": {
+        "kind": "github-app-installation",
+        "account": "FS-GG",
+        "permissions": {"administration": "write", "metadata": "read"}
+      }
     },
     "requiredCapabilities": {
       "creation": ["createRepository", "publicRepository", "authoritativeReadback"],
-      "identity-bound-operation": ["branchProtection", "checks", "contents", "deleteRepository", "installedCli", "journalRefs", "pullRequests"]
+      "identity-bound-operation": ["branchProtection", "checks", "contents", "deleteRepository", "installedCli", "journalRefs", "pullRequests", "workflows"]
     },
     "currentStatus": "workflow-environment-grant-credential-and-capabilities-unavailable"
   },
@@ -86,5 +119,5 @@
     "production-writer-enable",
     "effect-before-protected-grant-and-fresh-capability-readback"
   ],
-  "contractSha256": "2561b7aa978ade63cbb960310a1154ae62495adeb155085b578e66682338e044"
+  "contractSha256": "cc17065452ee941295a17844facfbdb13d305df179d7634b40459c0f63579a25"
 }
