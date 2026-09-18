@@ -1,12 +1,12 @@
 {
-  "schema": "fsgg.coordination.callable-isolated-operation-contract/3",
+  "schema": "fsgg.coordination.callable-isolated-operation-contract/4",
   "identity": "v2-call-01-4b-isolated-native-v1",
   "state": "prepared-not-authorized",
   "authorized": false,
   "source": {
     "prerequisiteHead": "0028b9efb8481084343aa243aef979de06c9f3b9",
     "operationSource": "eng/callable-cli-isolated-operation.py",
-    "operationSourceSha256": "0335c253aea68061f338cded634f29268303ec1eea31c6b0472b472d7974ba1e"
+    "operationSourceSha256": "b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c"
   },
   "target": {
     "owner": "FS-GG",
@@ -53,7 +53,10 @@
     "repository": "FS-GG/.github",
     "workflowPath": ".github/workflows/callable-isolated-operation-authorize.yml",
     "environment": "callable-isolated-operation",
-    "grantArtifactName": "callable-isolated-operation-grant",
+    "grantArtifactNamePrefix": "callable-isolated-operation-grant",
+    "grantArtifactEnvelopeSchema": "fsgg.coordination.callable-isolated-operation-grant-artifact-envelope/1",
+    "grantPayloadArtifactCoordinates": "forbidden-self-reference",
+    "artifactCoordinatesAuthority": "trusted-executor-input-verified-against-live-api-and-downloaded-bytes",
     "maximumLifetimeMinutes": 120,
     "requiredReviewer": {"id": 1645484, "login": "EHotwagner", "membership": "active-must-be-observed"},
     "credentialRoles": {
@@ -119,5 +122,5 @@
     "production-writer-enable",
     "effect-before-protected-grant-and-fresh-capability-readback"
   ],
-  "contractSha256": "cc17065452ee941295a17844facfbdb13d305df179d7634b40459c0f63579a25"
+  "contractSha256": "3ebf436e7e2efdf221b9b08f96b6d5216bbeb22053af26bd7cdd2d0d11ef561d"
 }

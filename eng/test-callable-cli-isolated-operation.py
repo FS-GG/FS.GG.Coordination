@@ -33,8 +33,9 @@ def reseal(value: dict[str, object], field: str) -> dict[str, object]:
 
 
 class FakeGitHub:
-    def __init__(self, responses: list[object]):
+    def __init__(self, responses: list[object], byte_responses: list[object] | None = None):
         self.responses = list(responses)
+        self.byte_responses = list(byte_responses or [])
         self.calls: list[tuple[str, str, object | None]] = []
 
     def request(self, method: str, path: str, body: object | None = None):
@@ -43,6 +44,22 @@ class FakeGitHub:
         if isinstance(response, Exception):
             raise response
         return response
+
+    def request_bytes(self, method: str, path: str):
+        self.calls.append((method, path, None))
+        response = self.byte_responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+def grant_archive(payload: dict[str, object], extra: tuple[str, bytes] | None = None) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr(operation.GRANT_ARTIFACT_FILE, operation.canonical(payload))
+        if extra is not None:
+            bundle.writestr(*extra)
+    return buffer.getvalue()
 
 
 class FullOperationGitHub:
@@ -164,13 +181,19 @@ class IsolatedOperationTests(unittest.TestCase):
             "contractSha256": self.contract["contractSha256"], "planSeal": plan["seal"],
             "sourceSha256": self.contract["source"]["operationSourceSha256"],
             "approvedAt": "2026-09-18T12:00:00Z", "expiresAt": "2026-09-18T13:00:00Z",
-            "artifact": {"id": 6101, "name": "callable-isolated-operation-grant", "sha256": "d" * 64},
             "credentials": roles,
             "authority": {
                 "repository": "FS-GG/.github", "workflowPath": ".github/workflows/callable-isolated-operation-authorize.yml",
                 "environment": "callable-isolated-operation", "environmentId": 5001, "runId": 6001, "runAttempt": 2,
                 "workflowRevision": "a" * 40, "workflowSha256": "b" * 64,
             },
+        }
+        artifact_envelope = {
+            "schema": "fsgg.coordination.callable-isolated-operation-grant-artifact-envelope/1",
+            "repository": "FS-GG/.github", "artifactId": 6101,
+            "artifactName": "callable-isolated-operation-grant-6001-2", "artifactSha256": "d" * 64,
+            "payloadSha256": operation.digest(operation.canonical(grant)),
+            "workflowRunId": 6001, "workflowRunAttempt": 2, "expiresAt": "2026-09-19T12:00:00Z",
         }
         repository_ids = [] if plan["phase"] == "creation" else [plan["target"]["repositoryId"]]
         for role in ("setup", "execution", "cleanup"):
@@ -185,20 +208,23 @@ class IsolatedOperationTests(unittest.TestCase):
             "protectedRun": {"id": 6001, "attempt": 2, "conclusion": "success", "event": "workflow_dispatch", "headSha": "a" * 40,
                              "path": ".github/workflows/callable-isolated-operation-authorize.yml"},
             "workflow": {"revision": "a" * 40, "sha256": "b" * 64},
-            "grantArtifact": {"id": 6101, "name": "callable-isolated-operation-grant", "sha256": "d" * 64,
+            "grantArtifact": {"repository": "FS-GG/.github", "id": 6101,
+                              "name": "callable-isolated-operation-grant-6001-2", "sha256": "d" * 64,
                               "payloadSha256": operation.digest(operation.canonical(grant)),
-                              "workflowRunId": 6001, "expired": False},
+                              "workflowRunId": 6001, "workflowRunAttempt": 2,
+                              "expiresAt": "2026-09-19T12:00:00Z", "expired": False},
             "approvals": [{"state": "approved", "userId": 1645484, "environment": "callable-isolated-operation", "environmentId": 5001}],
             "reviewerMembership": {"userId": 1645484, "state": "active"},
             "credentials": observed_roles,
             "target": target,
             "capabilities": {name: True for name in self.contract["authorization"]["requiredCapabilities"][plan["phase"]]},
         }
-        return grant, observation
+        return grant, artifact_envelope, observation
 
-    def assert_refused(self, expected: str, contract, plan, grant, observation, now="2026-09-18T12:01:00Z"):
+    def assert_refused(self, expected: str, contract, plan, grant, artifact_envelope, observation, now="2026-09-18T12:01:00Z"):
         with self.assertRaisesRegex(operation.Refused, expected):
-            operation.validate_admission(contract, plan, grant, observation, operation.parse_time(now, "now"))
+            operation.validate_admission(contract, plan, grant, artifact_envelope, observation,
+                                         operation.parse_time(now, "now"))
 
     def test_checked_in_state_is_prepared_not_authorized_with_preflight_refusal(self):
         inspected = operation.inspect(self.contract, self.preflight, self.proposal)
@@ -235,12 +261,13 @@ class IsolatedOperationTests(unittest.TestCase):
     def test_complete_protected_observation_admits_each_phase_offline_with_zero_effect(self):
         for plan in (self.create_plan(), operation.prepare_operation(self.contract, self.creation_receipt())):
             with self.subTest(phase=plan["phase"]):
-                grant, observation = self.grant_and_observation(plan)
-                operation.validate_admission(self.contract, plan, grant, observation, operation.parse_time("2026-09-18T12:01:00Z", "now"))
+                grant, envelope, observation = self.grant_and_observation(plan)
+                operation.validate_admission(self.contract, plan, grant, envelope, observation,
+                                             operation.parse_time("2026-09-18T12:01:00Z", "now"))
 
     def test_grant_plan_source_time_and_observation_negatives_fail_closed(self):
         plan = operation.prepare_operation(self.contract, self.creation_receipt())
-        base_grant, base_observation = self.grant_and_observation(plan)
+        base_grant, base_envelope, base_observation = self.grant_and_observation(plan)
         cases = [
             ("grant-not-authorized", lambda g, o: g.update(authorized=False)),
             ("grant-operation", lambda g, o: g.update(phase="creation")),
@@ -269,8 +296,9 @@ class IsolatedOperationTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 grant, observation = copy.deepcopy(base_grant), copy.deepcopy(base_observation)
                 mutate(grant, observation)
-                self.assert_refused(expected, self.contract, plan, grant, observation)
-        self.assert_refused("grant-expired", self.contract, plan, base_grant, base_observation, "2026-09-18T13:00:00Z")
+                self.assert_refused(expected, self.contract, plan, grant, base_envelope, observation)
+        self.assert_refused("grant-expired", self.contract, plan, base_grant, base_envelope,
+                            base_observation, "2026-09-18T13:00:00Z")
 
     def test_creation_unknown_response_reconciles_readback_and_never_blindly_retries(self):
         plan = self.create_plan()
@@ -353,7 +381,7 @@ class IsolatedOperationTests(unittest.TestCase):
 
     def test_authority_attempt_environment_artifact_and_role_drift_refuse_offline(self):
         plan = operation.prepare_operation(self.contract, self.creation_receipt())
-        base_grant, base_observation = self.grant_and_observation(plan)
+        base_grant, base_envelope, base_observation = self.grant_and_observation(plan)
         cases = [
             ("protected-run", lambda g, o: o["protectedRun"].update(attempt=99)),
             ("protected-approval", lambda g, o: o["approvals"][0].update(environment="wrong")),
@@ -368,7 +396,28 @@ class IsolatedOperationTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 grant, observation = copy.deepcopy(base_grant), copy.deepcopy(base_observation)
                 mutate(grant, observation)
-                self.assert_refused(expected, self.contract, plan, grant, observation)
+                self.assert_refused(expected, self.contract, plan, grant, base_envelope, observation)
+
+    def test_artifact_envelope_rejects_self_reference_replay_and_coordinate_substitution(self):
+        plan = operation.prepare_operation(self.contract, self.creation_receipt())
+        base_grant, base_envelope, base_observation = self.grant_and_observation(plan)
+        cases = [
+            ("grant-artifact-self-reference", lambda g, e, o: g.update(artifact={"id": 6101})),
+            ("grant-artifact-envelope-binding", lambda g, e, o: e.update(repository="FS-GG/other")),
+            ("grant-artifact-envelope-binding", lambda g, e, o: e.update(payloadSha256="0" * 64)),
+            ("grant-artifact-envelope-binding", lambda g, e, o: e.update(workflowRunId=999)),
+            ("grant-artifact-envelope-binding", lambda g, e, o: e.update(workflowRunAttempt=3)),
+            ("grant-artifact-readback", lambda g, e, o: e.update(artifactId=999)),
+            ("grant-artifact-envelope-binding", lambda g, e, o: e.update(artifactName="wrong")),
+            ("grant-artifact-readback", lambda g, e, o: e.update(artifactSha256="0" * 64)),
+            ("grant-artifact-readback", lambda g, e, o: e.update(expiresAt="2026-09-18T12:00:00Z")),
+        ]
+        for expected, mutate in cases:
+            with self.subTest(expected=expected):
+                grant, envelope, observation = (copy.deepcopy(base_grant), copy.deepcopy(base_envelope),
+                                                copy.deepcopy(base_observation))
+                mutate(grant, envelope, observation)
+                self.assert_refused(expected, self.contract, plan, grant, envelope, observation)
 
     def test_pending_repeated_checks_and_changed_protection_refuse_without_mutation(self):
         pending = FakeGitHub([(200, {"total_count": 1, "check_runs": [
@@ -388,7 +437,7 @@ class IsolatedOperationTests(unittest.TestCase):
 
     def test_mid_setup_expiry_stops_before_cli_or_cleanup(self):
         plan = operation.prepare_operation(self.contract, self.creation_receipt())
-        grant, _ = self.grant_and_observation(plan)
+        grant, _, _ = self.grant_and_observation(plan)
         client = FullOperationGitHub(self.contract, plan)
         original_installed, original_run = operation.installed_command, operation.run_cli
         calls = []
@@ -467,19 +516,22 @@ class IsolatedOperationTests(unittest.TestCase):
                                       cwd=ROOT, capture_output=True, text=True, check=False)
             self.assertEqual(0, prepared.returncode, prepared.stderr)
             plan = operation.read_json(create_path)
-            grant, observation = self.grant_and_observation(plan)
-            grant_path, observation_path = pathlib.Path(scratch) / "grant.json", pathlib.Path(scratch) / "observation.json"
+            grant, envelope, observation = self.grant_and_observation(plan)
+            grant_path, envelope_path = pathlib.Path(scratch) / "grant.json", pathlib.Path(scratch) / "envelope.json"
+            observation_path = pathlib.Path(scratch) / "observation.json"
             operation.write_private(grant_path, grant)
+            operation.write_private(envelope_path, envelope)
             operation.write_private(observation_path, observation)
             admitted = subprocess.run(["python3", str(MODULE_PATH), "validate-admission", "--plan", str(create_path),
-                "--grant", str(grant_path), "--observation", str(observation_path), "--now", "2026-09-18T12:01:00Z"],
+                "--grant", str(grant_path), "--grant-artifact-envelope", str(envelope_path),
+                "--observation", str(observation_path), "--now", "2026-09-18T12:01:00Z"],
                 cwd=ROOT, capture_output=True, text=True, check=False)
             self.assertEqual(0, admitted.returncode, admitted.stderr)
             self.assertIn('"admission":"valid"', admitted.stdout)
 
     def test_grant_artifact_archive_binds_exact_canonical_payload(self):
         plan = self.create_plan()
-        grant, _ = self.grant_and_observation(plan)
+        grant, _, _ = self.grant_and_observation(plan)
         def archive(name, content, extra=None):
             buffer = io.BytesIO()
             with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
@@ -498,20 +550,92 @@ class IsolatedOperationTests(unittest.TestCase):
         self.assertNotEqual(grant, operation.grant_artifact_payload(
             archive(operation.GRANT_ARTIFACT_FILE, b'{"changed":true}')))
 
+    def live_artifact_fixture(self, archive_override=None, artifact_changes=None):
+        plan = self.create_plan()
+        grant, envelope, _ = self.grant_and_observation(plan)
+        workflow_bytes = b"trusted authorization workflow bytes"
+        grant["authority"]["workflowSha256"] = operation.digest(workflow_bytes)
+        archive = archive_override if archive_override is not None else grant_archive(grant)
+        envelope.update(artifactSha256=operation.digest(archive),
+                        payloadSha256=operation.digest(operation.canonical(grant)))
+        run = {"id": 6001, "run_attempt": 2, "conclusion": "success", "event": "workflow_dispatch",
+               "head_sha": "a" * 40, "path": ".github/workflows/callable-isolated-operation-authorize.yml"}
+        artifact = {"id": 6101, "name": envelope["artifactName"],
+                    "digest": "sha256:" + operation.digest(archive), "workflow_run": {"id": 6001},
+                    "expires_at": envelope["expiresAt"], "expired": False}
+        if artifact_changes:
+            artifact.update(artifact_changes)
+        approvals = [{"state": "approved", "user": {"id": 1645484},
+                      "environments": [{"name": "callable-isolated-operation", "id": 5001}]}]
+        workflow = {"content": base64.b64encode(workflow_bytes).decode()}
+        empty_repositories = (200, {"total_count": 0, "repositories": []})
+        authority_repositories = (200, {"total_count": 1, "repositories": [{"id": 1, "full_name": "FS-GG/.github"}]})
+        installation = {"account": {"login": "FS-GG", "type": "Organization"}, "repository_selection": "selected"}
+        creation_installation = {"account": {"login": "FS-GG", "type": "Organization"}, "repository_selection": "all"}
+        installation_responses = []
+        for role in operation.ROLE_NAMES:
+            installation_responses.append((200, creation_installation if role == "creation" else installation))
+        clients = {
+            "app-installation-observer": FakeGitHub(installation_responses),
+            "authority-observer": FakeGitHub([(200, run), (200, approvals), (200, workflow),
+                                                (200, artifact), authority_repositories], [(200, archive)]),
+            "reviewer-membership-observer": FakeGitHub([(200, {"state": "active"}), empty_repositories]),
+            "creation": FakeGitHub([empty_repositories, (404, {})]),
+            "setup": FakeGitHub([empty_repositories]),
+            "execution": FakeGitHub([empty_repositories]),
+            "cleanup": FakeGitHub([empty_repositories]),
+        }
+        return plan, grant, envelope, clients
+
+    def test_live_observation_binds_independent_artifact_envelope_and_canonical_grant(self):
+        plan, grant, envelope, clients = self.live_artifact_fixture()
+        observation = operation.live_observation(clients, self.contract, plan, grant, envelope)
+        operation.validate_admission(self.contract, plan, grant, envelope, observation,
+                                     operation.parse_time("2026-09-18T12:01:00Z", "now"))
+        self.assertNotIn("artifact", grant)
+        self.assertEqual(envelope["artifactId"], observation["grantArtifact"]["id"])
+        self.assertTrue(all(method == "GET" for client in clients.values() for method, _, _ in client.calls))
+
+    def test_live_artifact_substitution_and_malformed_observations_refuse_before_mutation(self):
+        cases = [
+            ("grant-artifact-envelope-readback", None, {"id": 999}),
+            ("grant-artifact-envelope-readback", None, {"name": "wrong"}),
+            ("grant-artifact-envelope-readback", None, {"digest": "sha256:" + "0" * 64}),
+            ("grant-artifact-envelope-readback", None, {"workflow_run": {"id": 999}}),
+            ("grant-artifact-envelope-readback", None, {"expired": True}),
+            ("grant-artifact-content", b"not-a-zip", None),
+            ("grant-artifact-content", grant_archive({"changed": True}, ("extra.json", b"{}")), None),
+            ("grant-artifact-content-binding", grant_archive({"changed": True}), None),
+        ]
+        for expected, archive, changes in cases:
+            with self.subTest(expected=expected, changes=changes):
+                plan, grant, envelope, clients = self.live_artifact_fixture(archive, changes)
+                with self.assertRaisesRegex(operation.Refused, expected):
+                    operation.live_observation(clients, self.contract, plan, grant, envelope)
+                self.assertTrue(all(method == "GET" for client in clients.values() for method, _, _ in client.calls))
+        plan, grant, envelope, clients = self.live_artifact_fixture()
+        envelope["workflowRunAttempt"] = 3
+        with self.assertRaisesRegex(operation.Refused, "grant-artifact-envelope-binding"):
+            operation.live_observation(clients, self.contract, plan, grant, envelope)
+        self.assertEqual([], [call for client in clients.values() for call in client.calls])
+
     def test_public_execute_uses_distinct_tokens_and_reaches_resume_interpreter(self):
         plan = operation.prepare_operation(self.contract, self.creation_receipt())
-        grant, observation = self.grant_and_observation(plan)
+        grant, envelope, observation = self.grant_and_observation(plan)
         receipt = {"schema": "test", "receiptSha256": "e" * 64}
         with tempfile.TemporaryDirectory() as scratch:
             plan_path = pathlib.Path(scratch) / "plan.json"
             grant_path = pathlib.Path(scratch) / "grant.json"
+            envelope_path = pathlib.Path(scratch) / "envelope.json"
             receipt_path = pathlib.Path(scratch) / "receipt.json"
             operation.write_private(plan_path, plan)
             operation.write_private(grant_path, grant)
+            operation.write_private(envelope_path, envelope)
             argv = ["--contract", str(ROOT / "eng/callable-cli-isolated-operation-contract.json"),
                     "--proposal", str(ROOT / "eng/callable-cli-isolated-operation-proposal.json"),
                     "--preflight", str(ROOT / "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json"),
                     "execute", "--plan", str(plan_path), "--grant", str(grant_path),
+                    "--grant-artifact-envelope", str(envelope_path),
                     "--receipt", str(receipt_path), "--command", "/qualified/fsgg-coordination"]
             environment = {}
             for index, role in enumerate(operation.ROLE_NAMES):
@@ -535,13 +659,13 @@ class IsolatedOperationTests(unittest.TestCase):
 
     def test_denied_or_malformed_installation_and_membership_observations_refuse(self):
         plan = operation.prepare_operation(self.contract, self.creation_receipt())
-        grant, observation = self.grant_and_observation(plan)
+        grant, envelope, observation = self.grant_and_observation(plan)
         denied = copy.deepcopy(observation)
         denied["reviewerMembership"] = {"userId": 1645484, "state": "unknown-403"}
-        self.assert_refused("reviewer-membership-unproved", self.contract, plan, grant, denied)
+        self.assert_refused("reviewer-membership-unproved", self.contract, plan, grant, envelope, denied)
         malformed = copy.deepcopy(observation)
         malformed["credentials"]["app-installation-observer"].pop("installationId")
-        self.assert_refused("credential-identity", self.contract, plan, grant, malformed)
+        self.assert_refused("credential-identity", self.contract, plan, grant, envelope, malformed)
         source = MODULE_PATH.read_text()
         self.assertIn('app/installations/{identity.get(\'installationId\')}', source)
         self.assertNotIn('request("GET", "installation")', source)

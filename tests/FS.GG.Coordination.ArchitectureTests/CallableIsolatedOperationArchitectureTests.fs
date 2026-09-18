@@ -16,11 +16,13 @@ let private sha256 (value: byte array) = SHA256.HashData(value) |> Convert.ToHex
 let ``isolated operation contract is source-bound sealed and unauthorized`` () =
     use contract = JsonDocument.Parse(bytes "eng/callable-cli-isolated-operation-contract.json")
     let value = contract.RootElement
+    Assert.Equal("fsgg.coordination.callable-isolated-operation-contract/4", value.GetProperty("schema").GetString())
     Assert.Equal("prepared-not-authorized", value.GetProperty("state").GetString())
     Assert.False(value.GetProperty("authorized").GetBoolean())
     Assert.Equal(value.GetProperty("contractSha256").GetString(), AcceptanceReceiptDigest.canonicalBytesOmitting "contractSha256" value |> sha256)
     Assert.Equal(value.GetProperty("source").GetProperty("operationSourceSha256").GetString(), bytes "eng/callable-cli-isolated-operation.py" |> sha256)
     Assert.Equal("workflow-environment-grant-credential-and-capabilities-unavailable", value.GetProperty("authorization").GetProperty("currentStatus").GetString())
+    Assert.Equal("forbidden-self-reference", value.GetProperty("authorization").GetProperty("grantPayloadArtifactCoordinates").GetString())
     Assert.Contains(value.GetProperty("forbidden").EnumerateArray(), fun item -> item.GetString() = "effect-before-protected-grant-and-fresh-capability-readback")
 
     use proposal = JsonDocument.Parse(bytes "eng/callable-cli-isolated-operation-proposal.json")
@@ -61,6 +63,9 @@ let ``live source admits only protected exact target operation and persists clea
             "creation-plan-not-canonical-contract"
             "grant-artifact-readback"
             "grant-artifact-content-binding"
+            "grant-artifact-self-reference"
+            "grant-artifact-envelope-binding"
+            "grant-artifact-envelope-readback"
             "credential-role-set"
             "credential-token-role-alias"
             "retained-plan-missing"
