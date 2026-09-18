@@ -48,3 +48,11 @@ The existing validator checks the current configuration and rejects additional
 updater routes, changed bytes, missing managers, and direct-push policies.
 Renovate uses the public feed and proposes exact package pins; automatic merging
 is disabled. Quint tool/model pins remain outside this package update rule.
+
+## Stable package adoption
+
+The central pin and lockfiles consume public FsQuint 0.1.0 after upstream
+[release verification](https://github.com/FS-GG/FsQuint/actions/runs/35330871321)
+confirmed matching feed payloads, source identity and anonymous independent use.
+This retains the qualified Unicode fix, domain projection, raw traces and exact
+Quint/model/compiler identities. No installed runtime activation is implied.
