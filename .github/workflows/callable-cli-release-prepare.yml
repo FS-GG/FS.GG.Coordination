@@ -1,0 +1,46 @@
+name: callable-cli-release-prepare
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Exact reviewed source commit
+        required: true
+        type: string
+      version:
+        description: Proposed package version (preparation only)
+        required: true
+        default: 0.1.0
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - run: dotnet restore FS.GG.Coordination.sln --locked-mode
+      - name: Prepare immutable candidate without publication authority
+        env:
+          CANDIDATE_OUTPUT: ${{ runner.temp }}/callable-cli-candidate
+          CANDIDATE_SOURCE: ${{ inputs.source }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: >-
+          dotnet fsi eng/callable-cli-release.fsx prepare
+          --source "$CANDIDATE_SOURCE"
+          --version "$CANDIDATE_VERSION"
+          --output "$CANDIDATE_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: callable-cli-${{ inputs.source }}
+          path: ${{ runner.temp }}/callable-cli-candidate/
+          if-no-files-found: error
+          retention-days: 14

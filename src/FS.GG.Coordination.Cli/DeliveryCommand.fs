@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.Cli
 open System
 open System.Collections.Generic
 open System.IO
+open System.Net.Http
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
@@ -10,7 +11,19 @@ open FS.GG.Coordination.GitHub
 
 [<RequireQualifiedAccess>]
 module DeliveryCommand =
-    let private usage = "delivery <inspect|plan|advance> --observation FILE [--plan FILE] [--provider-response FILE]"
+    type private ResultBuilder() =
+        member _.Bind(value, binder) = Result.bind binder value
+        member _.Return value = Ok value
+        member _.ReturnFrom value = value
+        member _.Zero() = Ok()
+        member _.Delay(generator) = generator
+        member _.Run(generator) = generator()
+        member _.Combine(value, continuation) = Result.bind (fun () -> continuation()) value
+
+    let private result = ResultBuilder()
+
+    let private usage =
+        "delivery <inspect|plan|advance> (--observation FILE [--provider-response FILE] | --provider github --repository OWNER/REPO --pr NUMBER --token-env NAME --policy-ref REF --epoch-repository OWNER/REPO --epoch-ref REF --epoch-path PATH --journal-repository OWNER/REPO) [--plan FILE]"
 
     let private parseOptions (arguments: string array) =
         let values = Dictionary<string, string>(StringComparer.Ordinal)
@@ -66,6 +79,8 @@ module DeliveryCommand =
                     PolicyRevision = text "policyRevision" root
                     Checks = checks
                     Epoch = text "epoch" root
+                    EpochGeneration = root.GetProperty("epochGeneration").GetInt64()
+                    EpochCommit = text "epochCommit" root
                     JournalGeneration = root.GetProperty("journalGeneration").GetInt64()
                     JournalHead = text "journalHead" root
                     SourceComplete = root.GetProperty("sourceComplete").GetBoolean()
@@ -81,7 +96,7 @@ module DeliveryCommand =
         failures |> List.map failureText |> String.concat "," |> eprintfn "delivery-refused:%s"
         3
 
-    let private observationJson (value: OrdinaryDeliveryObservation) =
+    let private observationJson (providerMode: string) (value: OrdinaryDeliveryObservation) =
         let checks = JsonArray()
         for check in value.Checks do
             let item = JsonObject()
@@ -96,12 +111,15 @@ module DeliveryCommand =
         root.Add("checks", checks)
         root.Add("checksComplete", value.ChecksComplete)
         root.Add("epoch", value.Epoch)
+        root.Add("epochCommit", value.EpochCommit.ToLowerInvariant())
+        root.Add("epochGeneration", value.EpochGeneration)
         root.Add("headSha", value.HeadSha.ToLowerInvariant())
         root.Add("journalGeneration", value.JournalGeneration)
         root.Add("journalHead", value.JournalHead.ToLowerInvariant())
         root.Add("policyRevision", value.PolicyRevision.ToLowerInvariant())
         root.Add("pullRequestNodeId", value.PullRequestNodeId)
         root.Add("pullRequestNumber", value.PullRequestNumber)
+        root.Add("providerMode", providerMode)
         root.Add("repository", value.Repository.ToLowerInvariant())
         root.Add("repositoryId", value.RepositoryId)
         root.Add("sourceComplete", value.SourceComplete)
@@ -163,32 +181,101 @@ module DeliveryCommand =
                     CasAccepted value
                 | _ -> CasConflict
 
+    let private githubRuntime (options: Dictionary<string, string>) =
+        let required name =
+            match options.TryGetValue name with
+            | true, value when not (String.IsNullOrWhiteSpace value) -> Ok value
+            | _ -> Error $"missing {name}"
+
+        result {
+            let! repository = required "--repository"
+            let! prText = required "--pr"
+            let! tokenEnvironment = required "--token-env"
+            let! policyRef = required "--policy-ref"
+            let! epochRepository = required "--epoch-repository"
+            let! epochRef = required "--epoch-ref"
+            let! epochPath = required "--epoch-path"
+            let! journalRepository = required "--journal-repository"
+            let apiBase =
+                match options.TryGetValue "--api-base" with
+                | true, value -> value
+                | _ -> "https://api.github.com/"
+            let mutable pr = 0
+            let mutable uri = Unchecked.defaultof<Uri>
+            if not (Int32.TryParse(prText, &pr)) || pr <= 0 then return! Error "invalid --pr"
+            if not (Uri.TryCreate(apiBase, UriKind.Absolute, &uri)) then return! Error "invalid --api-base"
+            let token = Environment.GetEnvironmentVariable tokenEnvironment
+            if String.IsNullOrWhiteSpace token then return! Error $"missing token environment: {tokenEnvironment}"
+            let handler = new HttpClientHandler(AllowAutoRedirect = false)
+            let client = new HttpClient(handler, true, Timeout = TimeSpan.FromSeconds 30.0)
+            let runtime =
+                OrdinaryGitHubRuntime.Runtime(
+                    {
+                        ApiBase = uri
+                        Token = token
+                        UserAgent = "fsgg-coordination/0.1.0"
+                        Repository = repository
+                        PullRequestNumber = pr
+                        PolicyRef = policyRef
+                        EpochRepository = epochRepository
+                        EpochRef = epochRef
+                        EpochPath = epochPath
+                        JournalRepository = journalRepository
+                    },
+                    HttpOrdinaryGitHubTransport(client)
+                )
+            return runtime :> IOrdinaryDeliveryRuntime
+        }
+
+    let private runWithObservation (providerMode: string) (operation: string) (options: Dictionary<string, string>) observation (runtime: IOrdinaryDeliveryRuntime option) metrics =
+        match operation with
+        | "inspect" ->
+            match OrdinaryDelivery.inspect observation with
+            | Ok value -> printfn "%s" (observationJson providerMode value); 0
+            | Error failures -> report failures
+        | "plan" ->
+            match OrdinaryDelivery.plan observation with
+            | Ok(_, bytes) -> Console.OpenStandardOutput().Write(bytes); 0
+            | Error failures -> report failures
+        | "advance" when options.ContainsKey "--plan" && runtime.IsSome ->
+            match OrdinaryDelivery.advance (ReadOnlyMemory(File.ReadAllBytes options["--plan"])) NoCut runtime.Value with
+            | Error failures -> report failures
+            | Ok result ->
+                let measurements = metrics |> Option.map (fun read -> read()) |> Option.defaultValue ""
+                printfn "{\"providerMode\":\"%s\",\"providerOutcome\":\"%s\",\"result\":%s%s}" providerMode (if providerMode = "github" then "native-readback" else "simulated") (JsonSerializer.Serialize(string result)) measurements
+                0
+        | "advance" -> eprintfn "advance requires --plan and a configured runtime; %s" usage; 2
+        | _ -> eprintfn "%s" usage; 2
+
     let run arguments =
         match arguments |> Array.toList with
         | operation :: tail ->
             match parseOptions (List.toArray tail) with
             | Error error -> eprintfn "%s; %s" error usage; 2
-            | Ok options when not (options.ContainsKey "--observation") -> eprintfn "%s" usage; 2
             | Ok options ->
-                match readObservation options["--observation"] with
-                | Error error -> eprintfn "observation-refused:%s" error; 3
-                | Ok observation ->
-                    match operation with
-                    | "inspect" ->
-                        match OrdinaryDelivery.inspect observation with
-                        | Ok value -> printfn "%s" (observationJson value); 0
-                        | Error failures -> report failures
-                    | "plan" ->
-                        match OrdinaryDelivery.plan observation with
-                        | Ok(_, bytes) -> Console.OpenStandardOutput().Write(bytes); 0
-                        | Error failures -> report failures
-                    | "advance" when options.ContainsKey "--plan" && options.ContainsKey "--provider-response" ->
-                        let runtime = ControlledRuntime(observation, options["--provider-response"])
-                        match OrdinaryDelivery.advance (ReadOnlyMemory(File.ReadAllBytes options["--plan"])) NoCut runtime with
-                        | Error failures -> report failures
-                        | Ok result ->
-                            printfn "{\"dispatches\":%d,\"journalMutations\":%d,\"result\":\"%s\"}" runtime.Dispatches runtime.Mutations (string result)
-                            0
-                    | "advance" -> eprintfn "advance requires --plan and --provider-response; %s" usage; 2
-                    | _ -> eprintfn "%s" usage; 2
+                if options.ContainsKey "--observation" then
+                    match readObservation options["--observation"] with
+                    | Error error -> eprintfn "observation-refused:%s" error; 3
+                    | Ok observation ->
+                        if operation = "advance" && not (options.ContainsKey "--provider-response") then
+                            eprintfn "controlled advance requires --provider-response; %s" usage
+                            2
+                        else
+                            let providerPath =
+                                match options.TryGetValue "--provider-response" with true, value -> value | _ -> ""
+                            let runtime = ControlledRuntime(observation, providerPath)
+                            let metrics () = $",\"mutations\":{runtime.Mutations},\"dispatches\":{runtime.Dispatches}"
+                            runWithObservation "controlled" operation options observation (Some(runtime :> IOrdinaryDeliveryRuntime)) (Some metrics)
+                else
+                    match options.TryGetValue "--provider" with
+                    | true, "github" ->
+                        match githubRuntime options with
+                        | Error error -> eprintfn "provider-refused:%s; %s" error usage; 2
+                        | Ok runtime ->
+                            match runtime.Observe() with
+                            | Error error -> eprintfn "observation-refused:%s" error; 3
+                            | Ok observation -> runWithObservation "github" operation options observation (Some runtime) None
+                    | _ ->
+                        eprintfn "%s" usage
+                        2
         | [] -> eprintfn "%s" usage; 2
