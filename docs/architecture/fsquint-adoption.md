@@ -41,8 +41,10 @@ tests passes. This is a local qualification exercise, not a production incident.
 The existing dependency/projection mutation tests require changed package pins and
 lockfiles to invalidate correspondence evidence reuse; unrelated changes remain reusable.
 
-The historical GS2 updater inventory records GitHub Actions updates only. This
-package update is explicitly proposed and qualified; it does not claim live NuGet
-automation. Adding that manager requires a current inventory extension, preserving
-the accepted historical corpus. Every update remains a pull request subject to
-the consumer qualification gates.
+The historical GS2 updater inventory remains unchanged. The current
+`evidence/fsquint/updater-inventory.json` extension binds `renovate.json` by digest,
+retains the sole Renovate authority and adds the NuGet manager for FsQuint only.
+The existing validator checks the current configuration and rejects additional
+updater routes, changed bytes, missing managers, and direct-push policies.
+Renovate uses the public feed and proposes exact package pins; automatic merging
+is disabled. Quint tool/model pins remain outside this package update rule.

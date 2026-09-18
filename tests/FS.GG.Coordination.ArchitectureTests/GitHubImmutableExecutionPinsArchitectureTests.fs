@@ -6,6 +6,7 @@ open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open Xunit
 open FS.GG.Coordination.Qualification.Contracts
 
@@ -342,3 +343,51 @@ let ``immutable execution pins preserve canonical Quint source`` () =
         "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb",
         sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md")
     )
+
+[<Fact>]
+let ``current FsQuint updater inventory rejects drift and policy weakening`` () =
+    for mutation in [ "bytes"; "manager"; "direct-push"; "competing-authority"; "incomplete" ] do
+        let tempRoot =
+            Path.Combine(Path.GetTempPath(), $"fsgg-fsquint-updater-{Guid.NewGuid():N}")
+
+        try
+            let cloneExit, _, cloneError =
+                runAt root "git" [ "clone"; "--quiet"; "--no-hardlinks"; root; tempRoot ]
+
+            Assert.True(cloneExit = 0, cloneError)
+
+            let inventoryPath =
+                Path.Combine(tempRoot, "evidence/fsquint/updater-inventory.json")
+
+            let configPath = Path.Combine(tempRoot, "renovate.json")
+            let inventory = JsonNode.Parse(File.ReadAllText inventoryPath).AsObject()
+            let config = JsonNode.Parse(File.ReadAllText configPath).AsObject()
+
+            match mutation with
+            | "bytes" -> File.AppendAllText(configPath, " ")
+            | "manager" ->
+                config["enabledManagers"] <- JsonNode.Parse("[\"github-actions\"]")
+                File.WriteAllText(configPath, config.ToJsonString())
+            | "direct-push" ->
+                config["automergeType"] <- JsonValue.Create("branch")
+                File.WriteAllText(configPath, config.ToJsonString())
+            | "competing-authority" ->
+                inventory["configuration"]["authority"] <- JsonValue.Create("dependabot")
+                File.WriteAllText(inventoryPath, inventory.ToJsonString())
+            | _ ->
+                inventory["complete"] <- JsonValue.Create(false)
+                File.WriteAllText(inventoryPath, inventory.ToJsonString())
+
+            // Rebinding bytes must not authorize removing managers or direct pushes.
+            if mutation = "manager" || mutation = "direct-push" then
+                inventory["configuration"]["sha256"] <- JsonValue.Create(sha256Text (File.ReadAllText configPath))
+                File.WriteAllText(inventoryPath, inventory.ToJsonString())
+
+            let exitCode, output, error =
+                runAt tempRoot "dotnet" [ "fsi"; "eng/validate-github-immutable-execution-pins.fsx"; "--"; tempRoot ]
+
+            Assert.True(exitCode <> 0, $"{mutation}: weakened update policy passed: {output}{error}")
+            Assert.Contains("updater", output + error)
+        finally
+            if Directory.Exists tempRoot then
+                Directory.Delete(tempRoot, true)

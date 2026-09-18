@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>FS-GG/.github"
+  ],
+  "enabledManagers": [
+    "github-actions",
+    "nuget"
+  ],
+  "automerge": false,
+  "automergeType": "pr",
+  "packageRules": [
+    {
+      "matchManagers": [
+        "nuget"
+      ],
+      "enabled": false
+    },
+    {
+      "matchManagers": [
+        "nuget"
+      ],
+      "matchPackageNames": [
+        "FsQuint",
+        "FsQuint.Tooling"
+      ],
+      "enabled": true,
+      "registryUrls": [
+        "https://api.nuget.org/v3/index.json"
+      ],
+      "automerge": false,
+      "rangeStrategy": "pin"
+    }
+  ]
+}
