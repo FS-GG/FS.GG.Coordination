@@ -119,12 +119,41 @@ are never acceptance evidence.
   retained installation, idempotency, conflicting-pin refusal before write, peer/lifecycle/operation
   preservation, scoped uninstall, isolated nuget.org resolution, installed invocation and pre-`OpenV2`
   refusal. All 43 current-head checks passed with two expected skips; production effects remain disabled.
-- [ ] **V2-CALL-01.4 — Qualify installed isolated provider journey and native acceptance.** Exercise the installed
-  artifact against an authorized isolated provider and obtain native external acceptance; do not reuse local
-  controlled responses as Q4.
-- [ ] **V2-CALL-01.5 — Hand off callable readiness to the migration feature.** Supply GS2-09 discovery/migration
-  work with exact runtime/recovery identities while preserving separate manifest, transform, archive, rollback,
-  and rehearsal acceptance.
+- [ ] **V2-CALL-01.4 — Qualify installed isolated-provider and native execution.** Version 0.1.0 remains the
+  selected candidate; no defect requiring a replacement version is currently proved. Execute the three windows
+  below in order. Only `.4a` is admitted after this plan lands.
+  - [ ] **V2-CALL-01.4a — Close recovery coverage and build the installed harness (routine).** Extend the Q3/Q6
+    validator so its registered evidence includes production-runtime tests, not only the current domain tests.
+    Cover unknown, proven-absent and applied effects; lost dispatch responses and journal acknowledgements;
+    stale retry observations; durable intent across a fresh process; and native-completion reconciliation. Build
+    a clean public-feed installation harness around the exact 0.1.0 CLI and the production GitHub-backed journal,
+    using controlled HTTP before any live provider. Retain exact source, package, served, installed-command,
+    request and journal hashes plus authoritative readback. A nonzero CLI exit or `AdvancePending` is an
+    incomplete/refused result, never acceptance. This source window performs no external mutation.
+  - [ ] **V2-CALL-01.4b — Admit one compatible isolated operation (separate protected authority).** GS2-09.9's
+    current permission ceiling excludes provider mutation and external acceptance, so a later operation packet
+    must bind the exact target, actor/credential authority, package and receiver revisions, source/base/check,
+    epoch/policy/journal identities, allowed mutation, recovery and cleanup. Prefer a fresh intentionally public,
+    synthetic-only disposable target, or use an entitled private target. The registered private sandbox's
+    `required_status_checks` endpoint currently returns `403` because the required entitlement is absent; do not
+    expose that repository, weaken protection, change billing, or reinterpret the refusal as absence.
+  - [ ] **V2-CALL-01.4c — Qualify installed native execution and acceptance.** Run the installed command under
+    the admitted operation, obtain independent PR and sharded-journal readback, prove fresh-process no-op replay
+    and interruption recovery without duplicate effect, clean up the disposable subject, and bind exact native
+    acceptance to the observed identities. This evidence does not imply `OpenV2`, Q4, migration acceptance or a
+    production default.
+- [ ] **V2-CALL-01.5 — Hand off exact callable readiness to GS2-09 migration.** Add durable evidence under
+  `evidence/github-substrate-v2/gs2-09-9/` binding source/release and package/feed hashes, the adopting receiver
+  revision, installed commands and schemas, interpreter identity and permission ceiling, preconditions,
+  observation/decision/journal recovery behavior, native acceptance, and known limitations. Supply those exact
+  identities to GS2-09 discovery/migration work while preserving separate manifest, transform, archive, rollback,
+  omission and representative-rehearsal acceptance.
+
+Workspace and telemetry disposition: `.4a` adds qualification source and an installed harness but changes no
+provider or lifecycle default. Freeze 0.1.0 through `.4`; a demonstrated package/runtime defect requires a new
+version, protected publication and explicit receiver adoption rather than substituting bytes under the existing
+identity. Private roadmap telemetry remains `not-configured`; native collaboration interception and usage remain
+unknown, not zero, and do not become acceptance evidence.
 
 Completion evidence for `.1` and `.2`: the exact candidate runs a warning-free Release solution build; all 417
 unit tests and all 651 architecture tests pass; the focused ordinary suite contributes five unit and two
