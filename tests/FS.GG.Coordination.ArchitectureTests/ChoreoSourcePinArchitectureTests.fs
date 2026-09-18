@@ -280,8 +280,8 @@ let ``hosted writer Choreo bounded roots cover provider and runner fault schedul
     let validator =
         File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
 
-    let workflow =
-        File.ReadAllText(Path.Combine(root, ".github/workflows/bootstrap-qualification.yml"))
+    let shard =
+        File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/canonical-quint-shard.sh"))
 
     let boundedStart =
         protocol.IndexOf("action boundedFaultStep(effect: EffectKind): bool", StringComparison.Ordinal)
@@ -345,4 +345,4 @@ let ``hosted writer Choreo bounded roots cover provider and runner fault schedul
     Assert.Contains("let choreoBoundary = \"// BEGIN PINNED quint-co/choreo spells/basicSpells.qnt\"", validator)
     Assert.Contains("let qualificationQnt = Path.Combine(scratch, \"protocol-q2-legacy-qualification.qnt\")", validator)
     Assert.Contains("File.WriteAllText(qualificationQnt, q2Source.Substring(0, choreoBoundaryIndex)", validator)
-    Assert.Contains("bash eng/verify-choreo-c2-bounded.sh", workflow)
+    Assert.Contains("bash eng/verify-choreo-c2-bounded.sh", shard)

@@ -75,6 +75,19 @@ bisimulation proof or a proof of Akka, PostgreSQL, or GitHub internals. Recordin
 adapters provide external facts while the production Host/journal/actor seams
 make policy decisions. C4 replay covers memory and real PostgreSQL journals.
 
+## Qualification reuse
+
+Both bootstrap and optimistic formal identities bind the Choreo gate scripts,
+source/license pin, raw trace fixtures and retained counterexamples. Mutating any
+of these must invalidate reuse; a byte-mutation regression exercises the live
+bootstrap selector policy, with unrelated prose as a reuse-preserving control.
+The shared base-shard entry point runs bounded verification, trace regeneration
+and parity for every caller, including optimistic fanout. This closes the earlier
+gap where these checks lived only in the bootstrap workflow and their input
+bytes were absent from formal cache selection. The canonical validator already
+creates its receipt directory; the shared shell gate keeps only the necessary
+routing and success checks.
+
 ## Baseline measurements
 
 Formal state and transition counts come from each completed TLC graph. Sample,

@@ -4,9 +4,8 @@ set -euo pipefail
 : "${FSGG_QUINT_TOOLCHAIN_ARCHIVE:?FSGG_QUINT_TOOLCHAIN_ARCHIVE is required}"
 : "${FSGG_QUINT_SHARD_ROOT:?FSGG_QUINT_SHARD_ROOT is required}"
 test -f "$FSGG_QUINT_TOOLCHAIN_ARCHIVE"
-mkdir -p "$FSGG_QUINT_SHARD_ROOT"
 export FSGG_QUINT_FORMAL_SHARD="$FSGG_QUINT_SHARD"
 export FSGG_QUINT_RECEIPT="$FSGG_QUINT_SHARD_ROOT/$FSGG_QUINT_SHARD.json"
 bash eng/bootstrap-gates/canonical-quint.sh
 test -s "$FSGG_QUINT_RECEIPT"
-
+[[ "$FSGG_QUINT_SHARD" != base ]] || bash eng/verify-choreo-c2-bounded.sh

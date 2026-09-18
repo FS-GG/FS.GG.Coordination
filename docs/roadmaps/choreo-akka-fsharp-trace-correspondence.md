@@ -607,6 +607,11 @@ measured 64 states / 63 transitions / 10,000 samples / 144,592 ms / 3,619 MiB / 
 measured 1,162 / 1,387 / 10,000 / 127,884 ms / 3,652 MiB / 43,897 bytes. No state, transition, time, memory, sample
 or artifact budget was raised. Progress simulation depth is explicitly 80 to cover the message microsteps.
 
+C5 also binds the Choreo scripts, source/license pin, raw fixtures and retained counterexamples into bootstrap
+and optimistic formal reuse identities. A regression mutates each input class and requires cache invalidation;
+unrelated prose preserves reuse. The shared base-shard entry point runs the complete Choreo gate for both
+bootstrap and optimistic callers, rather than relying on a workflow-only step.
+
 The retained counterexamples and baseline come from those successful runs. All eight C3 trace bytes remain exact;
 only their source identity advances to `e1ff2a32649a180121c756f762d174e9c74f6620`. Protected CI repeats the sharded
 qualification without refresh mode before this phase can merge. C6 starts from that protected merge.
