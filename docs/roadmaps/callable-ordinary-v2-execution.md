@@ -79,7 +79,7 @@ are never acceptance evidence.
   effect remains pending, settled replay is a no-op, changed source/base/policy needs a new decision, missing
   observation is not absence, observer outage retains delivery state, and failed required checks block merge.
   Repository-local controlled-provider qualification passes without Host, PostgreSQL, or a model process.
-- [ ] **V2-CALL-01.3a — Prepare the callable producer and exact release operation.** `.1`/`.2` remain valid
+- [x] **V2-CALL-01.3a — Prepare the callable producer and exact release operation.** `.1`/`.2` remain valid
   controlled-provider source acceptance, but their file-only/in-memory runtime is simulated and does not prove
   real GitHub or journal composition. Compose the production GitHub REST observation/readback path, protected
   sharded Git journal, and native merge interpreter behind the same command. Bind epoch generation and commit,
@@ -112,6 +112,15 @@ storage self-test reports 57 negative controls; routine eligibility, exact-head,
 pass. `evidence/github-substrate-v2/accepted/` is unchanged. The PR marker and native check suite bind these
 results to the final candidate head; native merged state and merge commit are read back before this window is
 reported complete.
+
+Completion evidence for `.3a`: the warning-free Release solution build, all 424 unit tests, and all 654
+architecture tests pass. The focused provider/domain suite contributes 12 controls and the producer architecture
+suite contributes three controls. Q3/Q6 qualification, the unchanged Protocol reproducibility route, immutable
+workflow inventory, and routine fixtures pass. The preparation command canonicalizes two independent package
+outputs to identical bytes, verifies the exact source-bound manifest, installs `fsgg-coordination` from a
+local-only feed, runs it without checkout dependencies, and refuses package corruption and source substitution.
+The final PR marker and native check suite bind those results to the reviewed head; merge and authoritative
+readback are required before `.3a` is reported outside this plan as delivered.
 
 ## Dependencies, invalidators, and completion examples
 
