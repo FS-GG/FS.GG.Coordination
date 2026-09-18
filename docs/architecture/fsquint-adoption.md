@@ -23,9 +23,8 @@ architecture 107 passed during migration. The initial migration passed full cano
 invariants and 166 negative controls, with unchanged model/tool fingerprints and
 budgets. See [PR429](https://github.com/FS-GG/FS.GG.Coordination/pull/429).
 
-Generic defects are fixed in FsQuint first. Renovate's NuGet manager proposes pinned
-updates here; actual replay, malformed-input controls and relevant canonical gates
-must pass. A rejected update retains the prior immutable pin and compatible evidence;
+Generic defects are fixed in FsQuint first. Pinned package update pull requests
+must pass actual replay, malformed-input controls and relevant canonical gates. A rejected update retains the prior immutable pin and compatible evidence;
 rollback never creates a local generic source fork.
 
 ## Qualified preview 2 update
@@ -42,7 +41,8 @@ tests passes. This is a local qualification exercise, not a production incident.
 The existing dependency/projection mutation tests require changed package pins and
 lockfiles to invalidate correspondence evidence reuse; unrelated changes remain reusable.
 
-Package updates use the organization Renovate authority already recorded by GS2-06.7.
-Its accepted NuGet manager covers the central package pin; there is no competing
-repository-local updater configuration or direct-push route. Every update remains
-a pull request subject to the consumer qualification gates.
+The historical GS2 updater inventory records GitHub Actions updates only. This
+package update is explicitly proposed and qualified; it does not claim live NuGet
+automation. Adding that manager requires a current inventory extension, preserving
+the accepted historical corpus. Every update remains a pull request subject to
+the consumer qualification gates.
