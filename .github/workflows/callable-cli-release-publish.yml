@@ -47,8 +47,8 @@ jobs:
       EXPECTED_TREE: 79de47c7e9627ce040b32ebaed91b151ce17750e
       EXPECTED_MERGE: 1bd60a3e2dddc37827a7562b133305e1282e2c20
       EXPECTED_SHA256: ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf
-      CANDIDATE_OUTPUT: ${{ runner.temp }}/callable-cli-candidate
-      READBACK_OUTPUT: ${{ runner.temp }}/callable-cli-readback
+      CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
+      READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
       CANONICAL_SOURCE: /home/developer/projects/FS.GG.Coordination
     steps:
       - name: Check out the protected workflow revision
