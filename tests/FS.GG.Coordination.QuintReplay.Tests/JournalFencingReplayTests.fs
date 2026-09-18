@@ -440,3 +440,18 @@ let ``replay identifies the first faulty F# projection and its Quint source`` ()
             Assert.StartsWith("$/bindings/", path)
         | result -> Assert.Fail($"expected an exact replay divergence, got %A{result}")
     }
+
+[<Fact>]
+let ``package update rejects malformed Unicode instead of colliding fingerprints`` () =
+    let fingerprint text =
+        QuintReplay.stateFingerprint
+            {
+                Identity = String.replicate 64 "a"
+                Bindings = [ "text", QuintReplayValue.Text text ]
+            }
+
+    match fingerprint (String(char 0xD800, 1)) with
+    | Error findings -> Assert.Contains("QRP-STRING-UNICODE", findings |> List.map _.Code)
+    | Ok _ -> failwith "Malformed UTF-16 must not collide with the replacement character"
+
+    Assert.NotEqual(fingerprint "\uFFFD", fingerprint "😀")

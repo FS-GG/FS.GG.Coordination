@@ -103,24 +103,6 @@
           "Reactive.Streams": "1.0.4"
         }
       },
-      "FS.GG.Contracts": {
-        "type": "Transitive",
-        "resolved": "7.5.2",
-        "contentHash": "1Y2r/C1ibQTY1pJP6RzJdsUrV2d2PccLm+mTrOg74Okz6RgxXmogYrLWqv7Cq7pm+IhVyXSiFsfVAytBVzJU4A==",
-        "dependencies": {
-          "FSharp.Core": "10.1.302"
-        }
-      },
-      "FS.GG.SDD.Artifacts": {
-        "type": "Transitive",
-        "resolved": "1.5.0",
-        "contentHash": "RAVNLuyPScmeoH+v5fSs5Ahd5DlR+S8kO1wSbX+xIOJ6WsLsF9iDIkXbqTCuwZFOWx72fARJEw4nZrBClUUxGw==",
-        "dependencies": {
-          "FS.GG.Contracts": "7.5.2",
-          "FSharp.Core": "10.1.302",
-          "YamlDotNet": "18.1.0"
-        }
-      },
       "FSharp.SystemTextJson": {
         "type": "Transitive",
         "resolved": "1.4.36",
@@ -131,8 +113,8 @@
       },
       "FsQuint": {
         "type": "Transitive",
-        "resolved": "0.1.0-preview.1",
-        "contentHash": "obymfwaTEfmYR8SmMOFgJa2IkK5yistD10L7BRjLyV89ETMIziafQ/EVKlg0iFVSP1agkG7nPqdKEQyGAQMo9A==",
+        "resolved": "0.1.0-preview.2",
+        "contentHash": "sGtx6Utp27mMvNIENgk7wDBtB/kW2USvnvdphqObvV3/VQy9sOe+pFB7pJPxjZe9szJhJBvyzhsD1CbkO2ZF6Q==",
         "dependencies": {
           "FSharp.Core": "10.1.302"
         }
@@ -315,11 +297,6 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "YamlDotNet": {
-        "type": "Transitive",
-        "resolved": "18.1.0",
-        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
-      },
       "fs.gg.coordination.core": {
         "type": "Project",
         "dependencies": {
@@ -352,9 +329,8 @@
       "fs.gg.coordination.orchestration.host.tests": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.SDD.Artifacts": "[1.5.0, 1.5.0]",
           "FSharp.Core": "[10.1.302, )",
-          "FsQuint": "[0.1.0-preview.1, )",
+          "FsQuint": "[0.1.0-preview.2, )",
           "Microsoft.NET.Test.Sdk": "[18.8.1, )",
           "fsgg-coord-orchestration-host": "[1.0.0, )",
           "xunit": "[2.9.3, )"
