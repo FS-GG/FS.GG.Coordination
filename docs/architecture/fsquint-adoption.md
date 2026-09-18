@@ -42,5 +42,7 @@ tests passes. This is a local qualification exercise, not a production incident.
 The existing dependency/projection mutation tests require changed package pins and
 lockfiles to invalidate correspondence evidence reuse; unrelated changes remain reusable.
 
-`renovate.json` enables reviewed FsQuint NuGet updates with no automatic merge. Its
-initial scope is FsQuint; it does not change other dependency update policies.
+Package updates use the organization Renovate authority already recorded by GS2-06.7.
+Its accepted NuGet manager covers the central package pin; there is no competing
+repository-local updater configuration or direct-push route. Every update remains
+a pull request subject to the consumer qualification gates.
