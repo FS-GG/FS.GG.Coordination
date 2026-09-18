@@ -44,6 +44,35 @@ let ``release preparation route has no publication tag or credential authority``
     Assert.Contains("separate-protected-.3b-operation", contract, StringComparison.Ordinal)
 
 [<Fact>]
+let ``protected publication route preserves exact bytes ordering and recovery boundaries`` () =
+    let workflow = read ".github/workflows/callable-cli-release-publish.yml"
+    for expected in
+        [
+            "operation:"
+            "publish-v2-call-01.3b"
+            "ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf"
+            "packages: write"
+            "id-token: write"
+            "attestations: write"
+            "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"
+            "Publish to GitHub Packages first"
+            "Observe nuget.org and validate recoverable ordering before either effect"
+            "Create immutable tag and GitHub release only after both feeds settle"
+            "if: always()"
+        ] do Assert.Contains(expected, workflow, StringComparison.Ordinal)
+
+    Assert.DoesNotContain("--skip-duplicate", workflow, StringComparison.Ordinal)
+    Assert.DoesNotContain("NUGET_API_KEY }}", workflow.Replace("steps.nuget-login.outputs.NUGET_API_KEY }}", ""), StringComparison.Ordinal)
+    let githubPush = workflow.IndexOf("nuget.pkg.github.com/FS-GG/index.json", StringComparison.Ordinal)
+    let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
+    Assert.True(githubPush >= 0 && publicPush > githubPush)
+
+    let operation = read "eng/callable-cli-release-operation.json"
+    Assert.Contains("\"operation\":\"publish-v2-call-01.3b\"", operation, StringComparison.Ordinal)
+    Assert.Contains("\"receiverAdoption\":{\"authorized\":false", operation, StringComparison.Ordinal)
+    Assert.Contains("\"tagAfterBothFeeds\":true", operation, StringComparison.Ordinal)
+
+[<Fact>]
 let ``native ordinary provider uses typed REST transport and protected journal adapter`` () =
     let source = read "src/FS.GG.Coordination.GitHub/OrdinaryGitHubRuntime.fs"
     Assert.Contains("IOrdinaryGitHubTransport", source, StringComparison.Ordinal)
@@ -52,4 +81,3 @@ let ``native ordinary provider uses typed REST transport and protected journal a
     Assert.Contains("ordinary-delivery-journal/1", source, StringComparison.Ordinal)
     for forbidden in [ "Process.Start"; "gh "; "git merge"; "GitHubRouteClient" ] do
         Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal)
-
