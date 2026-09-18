@@ -4000,3 +4000,45 @@ finally:
 
             do! actorSystem.Terminate()
         }
+
+    [<Theory>]
+    [<InlineData("happy-path")>]
+    [<InlineData("lost-applied")>]
+    [<InlineData("proven-absent-retry")>]
+    [<InlineData("restart-gates")>]
+    [<InlineData("duplicate-response")>]
+    [<InlineData("stale-generation")>]
+    [<InlineData("wrong-identity")>]
+    [<InlineData("missing-native-readback")>]
+    member _.``genuine Quint traces replay through production PostgreSQL journals``(scenario: string) =
+        task {
+            let! source, identity = Fixture.reset ()
+            use source = source
+            do! PostgreSqlExecutionSchema.migrate source cancellationToken
+
+            let options =
+                { Fixture.options source identity 0L with
+                    RuntimeSchemaVersion = 2
+                }
+
+            let store = PostgreSqlStore(options) :> IJournalStore
+            let execution = PostgreSqlExecutionStore(options)
+
+            let! _ =
+                FS.GG.Coordination.Orchestration.Host.Tests.ChoreoProductionReplayTests.replay
+                    store
+                    execution
+                    execution
+                    scenario
+                    ""
+            // Reopen both durable stores instead of reusing an in-memory projection.
+            let reopened = PostgreSqlStore(options) :> IJournalStore
+
+            let! recovered =
+                HostedWriterJournal.recover
+                    reopened
+                    FS.GG.Coordination.Orchestration.Host.Tests.HostTests.Fixture.permit.SubjectId
+                    cancellationToken
+
+            Assert.True(Result.isOk recovered)
+        }

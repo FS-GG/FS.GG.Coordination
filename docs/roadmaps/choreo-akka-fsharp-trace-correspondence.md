@@ -528,15 +528,46 @@ state remains the executable source of truth.
 
 ### C4 — close production correspondence gaps
 
-- [ ] Replay runner actions against the production `ExecutionSessionActor` and neutral coordinator.
-- [ ] Replay journal actions against the production journal contract and a real PostgreSQL integration slice.
-- [ ] Replay Host steps through `MainEffectDriver`/`MainRouteWorkflow` with recording external adapters.
-- [ ] Replay GitHub facts through `MainProductionCallbacks` without granting the fake policy authority.
-- [ ] Cover crash/recovery, reconnect, duplicate, stale generation, wrong identity, proven absence, and missing native
+- [x] Replay runner actions against the production `ExecutionSessionActor` and neutral coordinator.
+- [x] Replay journal actions against the production journal contract and a real PostgreSQL integration slice.
+- [x] Replay Host steps through `MainEffectDriver`/`MainRouteWorkflow` with recording external adapters.
+- [x] Replay GitHub facts through `MainProductionCallbacks` without granting the fake policy authority.
+- [x] Cover crash/recovery, reconnect, duplicate, stale generation, wrong identity, proven absence, and missing native
   readback across the composed seam.
-- [ ] Demonstrate that all ambiguity paths are observation-only until durable proven absence.
+- [x] Demonstrate that all ambiguity paths are observation-only until durable proven absence.
 
 Exit evidence: unit, actor, Host composition, and PostgreSQL tests, plus mutation controls at each process boundary.
+
+C4 exit evidence (2026-09-18): C3 merged as `9222dbdd01a6cf86ac737efa7550fa20c343415b` in
+[PR #420](https://github.com/FS-GG/FS.GG.Coordination/pull/420). `ChoreoProductionReplayTests.fs` now reads all
+eight committed raw Quint scenarios and drives `MainAdmissionPreparer`, `MainRouteWorkflow`, `MainEffectDriver`,
+`HostedWriterJournal`, the real `ExecutionSessionActor`/neutral coordinator, and the dispatch/native-readback
+methods of `MainProductionCallbacks`. Recording providers supply external facts; production policy decides
+acceptance. The exact same replay runs against both memory and PostgreSQL work-item/execution journals.
+
+The observable comparison binds completed-effect count, pause state and current authority after each selected
+Quint milestone, plus dispatch/unknown states, duplicate rejection, no redispatch during ambiguity, and no
+continuation on absence. The production workflow eagerly persists its next intent during continuation; this is
+an explicit microstep coalescing, not a second F# transition oracle. Candidate bytes and other external effects
+remain recording boundaries; existing candidate-pipeline and GitHub adapter tests retain their separate scope.
+
+Independent generation, operation, candidate and repository readback mutations fail at raw state 9
+(`hostSettles`); stale journal sequence fails at raw state 4 (`journalRecordsDispatch`); a crossed execution
+actor generation fails at raw state 18; missing native delivery fails at raw state 63. Duplicate provider responses
+leave completion unchanged. Restart replay requires journal recovery, fresh readback and explicit resume.
+
+Replay found and repaired two production defects without changing Quint: `MainEffectDriver` formerly invoked
+its completion continuation for a proven-absence result, and `HostedWriterJournal` omitted retry effect metadata
+that PostgreSQL requires. Absence now returns `EffectProvenAbsent` without advancing, and retry metadata derives
+from the recovered pre-event state. An explicit `AuthorizeEffectRetry` retains the original operation identity.
+Neither repair enables implicit dispatch or changes the canonical protocol.
+
+Commands: `dotnet test tests/FS.GG.Coordination.Orchestration.Host.Tests -c Release`; from the PostgreSQL test
+project, `DOTNET_EXE=<pinned-dotnet> bash run-private-postgres.sh`; and
+`FSGG_QUINT_BIN=<pinned-quint> bash eng/verify-choreo-c3-traces.sh`. The integration command creates and stops
+its own private PostgreSQL 18.6 cluster. The unchanged trace digests and source/tool identities remain in the C3
+manifest. The CLI has become packable through unrelated work since C3's historical checkpoint; C4 changes only
+non-packable Host implementation and tests and does not publish or change the CLI package identity.
 
 ### C5 — qualify and migrate the formal workload
 

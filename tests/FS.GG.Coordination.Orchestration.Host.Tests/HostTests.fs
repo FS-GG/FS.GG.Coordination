@@ -19,7 +19,7 @@ open FS.GG.Coordination.Orchestration.Execution
 open FS.GG.Coordination.Orchestration.PostgreSql
 open FS.GG.Coordination.Orchestration.Runner.Protocol
 
-module private Fixture =
+module Fixture =
     let now = DateTimeOffset.Parse "2026-09-10T15:00:00Z"
     let permitId = Guid.Parse "62000000-0000-0000-0000-000000000001"
 
@@ -123,6 +123,8 @@ module private Fixture =
                 | true, (digest, sequence) when digest = request.Inbox.BodySha256 ->
                     Task.FromResult(AppendOutcome.Duplicate sequence)
                 | true, _ -> Task.FromResult AppendOutcome.Conflict
+                | false, _ when request.ExpectedSequence <> int64 events.Length ->
+                    Task.FromResult(WrongExpectedSequence(int64 events.Length))
                 | false, _ ->
                     let sequence =
                         request.Events
@@ -263,6 +265,14 @@ module private Fixture =
                             Events = [ eventValue ]
                         }
                     )
+
+                    Task.FromResult Appended
+                | true, stored when revision = stored.Revision ->
+                    attempts[key] <-
+                        {
+                            Revision = revision + 1L
+                            Events = stored.Events @ [ eventValue ]
+                        }
 
                     Task.FromResult Appended
                 | true, stored when revision = 0L && stored.Events = [ eventValue ] -> Task.FromResult DuplicateEvent

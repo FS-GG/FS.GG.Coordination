@@ -17,7 +17,7 @@ open FS.GG.Coordination.QuintReplay.Tests
 open FS.GG.SDD.Artifacts.TypedSpecifications
 open Xunit
 
-module private Fixture =
+module Fixture =
     let now = DateTimeOffset.Parse "2026-09-10T19:00:00Z"
     let guid (value: string) = Guid.Parse value
     let sha character = String.replicate 64 character

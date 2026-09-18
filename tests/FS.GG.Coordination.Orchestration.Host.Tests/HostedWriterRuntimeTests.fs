@@ -272,10 +272,10 @@ let ``work item append binds deterministic event ids and effect metadata`` () =
     let persistenceId = WorkItemIdentity.persistenceId Fixture.workItem
 
     let first =
-        HostedWriterJournal.appendRequest persistenceId Fixture.now 0L envelope decision
+        HostedWriterJournal.appendRequest persistenceId Fixture.now 0L initial envelope decision
 
     let replay =
-        HostedWriterJournal.appendRequest persistenceId Fixture.now 0L envelope decision
+        HostedWriterJournal.appendRequest persistenceId Fixture.now 0L initial envelope decision
 
     Assert.Equal(first, replay)
 
@@ -1418,7 +1418,7 @@ let ``work item recovery replays typed events and retains unsettled provider wor
             }
 
         let stored =
-            HostedWriterJournal.appendRequest persistenceId Fixture.now 0L envelope decision
+            HostedWriterJournal.appendRequest persistenceId Fixture.now 0L initial envelope decision
 
         let store =
             FixedStore
