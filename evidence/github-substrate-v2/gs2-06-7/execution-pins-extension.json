@@ -91,6 +91,19 @@
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/callable-cli-release-publish.yml",
+      "sha256": "1f5f1203388f8116c24b33b55714a4576cac5556bb0ec1677a7c154a0f2cbf2f",
+      "externalReferences": [
+        "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
+        "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
     }
   ]
 }
