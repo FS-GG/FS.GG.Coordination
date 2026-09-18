@@ -89,7 +89,7 @@ are never acceptance evidence.
   clean local install proof, corruption/substitution/refusal controls, and a preparation-only release route. The
   proposed package/tag identity remains unreserved while GitHub Packages ownership inventory is unavailable
   (`403`); no package, tag, receiver, credential, or provider effect is created by this window.
-- [ ] **V2-CALL-01.3b — Publish the protected dual-feed artifact.** Requires concrete separate publication
+- [x] **V2-CALL-01.3b — Publish the protected dual-feed artifact.** Requires concrete separate publication
   authority and collision-free live ownership readback. Publish first to GitHub Packages, verify provenance and
   served bytes, then publish the byte-identical candidate to nuget.org. Recover partial publication by reading
   the first feed before resuming, prove both served digests, and create `v0.1.0` only after served readback. This
@@ -97,6 +97,17 @@ are never acceptance evidence.
   `eng/callable-cli-release-operation.json`; its workflow must reproduce the historical prepared archive at its
   original canonical build root, attest and retain it before effects, prove Trusted Publishing authorization
   before the first feed write, and refuse unless repository Actions policy admits the exact pinned login action.
+  Completed through protected runs
+  [`35320209230`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35320209230) and
+  [`35320873209`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35320873209): the first published the
+  retained `ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf` archive to GitHub Packages and
+  then nuget.org before stopping on public indexing, and the recovery observed both existing feeds, performed no
+  duplicate push, proved normalized payload identity, and passed anonymous clean tool install/invocation. The
+  served archives are `ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf` (GitHub Packages)
+  and `e7f440a2a1f94d51dbcdd7146494c97e6386f9dcc8034a028e3e851d364390e3` (repository-signed nuget.org).
+  Immutable tag and [release `v0.1.0`](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.0) bind
+  exact source merge `1bd60a3e2dddc37827a7562b133305e1282e2c20`; release assets were independently downloaded and
+  matched the retained package, preparation manifest, and dual-feed readback receipt.
 - [ ] **V2-CALL-01.3c — Adopt the exact callable artifact.** First installed behavior change. Separately authorize
   clean creation and retained upgrade as opt-in receiver paths, prove idempotency, explicit conflict, and no
   partial writes, and preserve coexistence with the legacy bridge. Both paths refuse effects before `OpenV2` and
@@ -152,10 +163,10 @@ GS2-09.1–.8 migration scope unchanged. The eventual Unified index row points t
 `https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/callable-ordinary-v2-execution.md`.
 Projection into `.github` is asynchronous after authoritative merge/readback.
 
-Remaining gaps are deliberate: no package is published, the proposed `FS.GG.Coordination.Cli` `0.1.0` identity is
-not reserved because organization package inventory returned `403`, no receiver selects this source, no sandbox
-or production provider effect ran, no Q4/native external acceptance exists, no continuous webhook host exists,
-and private roadmap telemetry is `not-configured` with native collaboration usage interception unsupported. Those
-gaps block `.3b`/`.3c`/`.4` activation, not the `.3a` producer-preparation window. GS2-09 discovery, migration
+Remaining gaps are deliberate: `FS.GG.Coordination.Cli` `0.1.0` is published and read back from both designated
+feeds, but no receiver selects it, no sandbox or production provider effect ran, no Q4/native external acceptance
+exists, no continuous webhook host exists, and private roadmap telemetry is `not-configured` with native
+collaboration usage interception unsupported. Those gaps block `.3c`/`.4` activation, not the completed producer
+preparation and publication windows. GS2-09 discovery, migration
 manifests/transforms/archive/rollback/rehearsal remain a separate pending feature, and OpenV2 and Q4 remain
 unclaimed.
