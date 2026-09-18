@@ -4,8 +4,6 @@ open System
 open System.Collections.Generic
 open System.IO
 open System.Security.Cryptography
-open System.Text
-open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
 open Akka.Actor
@@ -18,19 +16,6 @@ open FS.GG.Coordination.Orchestration.Runner.Protocol
 open FS.GG.Coordination.QuintReplay.Tests
 open FS.GG.SDD.Artifacts.TypedSpecifications
 open Xunit
-
-type private WriterModel =
-    {
-        Stage: int
-        OperationId: string
-        OperationStatus: string
-        Paused: bool
-        ReadbackCurrent: bool
-        Restarted: bool
-        FreshReadback: bool
-        AdapterClaimedComplete: bool
-        UnknownObserved: bool
-    }
 
 module private Fixture =
     let now = DateTimeOffset.Parse "2026-09-10T19:00:00Z"
@@ -118,7 +103,6 @@ module private Fixture =
             GenerationAdvanced route.Generation
             ReservationCreated reservation
             HostedRouteSelected route
-            PausedEvent "quint-initial"
         ]
 
     let kinds =
@@ -345,13 +329,6 @@ let private integer value = QuintReplayValue.Integer(string value)
 let private boolean value = QuintReplayValue.Boolean value
 let private textValue value = QuintReplayValue.Text value
 
-let private fingerprint (value: string) =
-    let bytes: byte array = Encoding.UTF8.GetBytes value
-    SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
-
-let private quint032BinarySha256 =
-    "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
-
 let private stateValue
     stage
     operationId
@@ -431,174 +408,6 @@ let private stateValue
             QuintReplay.stateFingerprint draft
             |> Result.defaultWith (fun error -> failwithf "%A" error)
     }
-
-let private modelStep action (model: WriterModel) =
-    match action with
-    | "manualStart" -> { model with Paused = false }
-    | "recordIntent" ->
-        { model with
-            OperationId = Fixture.operationName model.Stage
-            OperationStatus = "intent"
-        }
-    | "dispatch" ->
-        { model with
-            OperationStatus = "dispatching"
-        }
-    | "loseResponse" ->
-        { model with
-            OperationStatus = "unknown"
-            UnknownObserved = true
-        }
-    | "reconcileApplied"
-    | "observeApplied" ->
-        { model with
-            Stage = model.Stage + 1
-            OperationId = ""
-            OperationStatus = "none"
-        }
-    | "restartPaused" ->
-        { model with
-            Paused = true
-            ReadbackCurrent = false
-            Restarted = true
-        }
-    | "reconnect" ->
-        { model with
-            ReadbackCurrent = true
-            FreshReadback = true
-        }
-    | "resume" -> { model with Paused = false }
-    | value -> failwith $"unsupported expected Quint action: {value}"
-
-let private source action =
-    let lines =
-        Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md")
-        |> File.ReadAllLines
-
-    let marker = $"action {action} ="
-
-    let moduleStart =
-        lines
-        |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterModel {")
-
-    let moduleEnd =
-        lines
-        |> Array.findIndex (fun line -> line.Trim() = "module GS20310JournalModel {")
-
-    match
-        lines
-        |> Array.indexed
-        |> Array.filter (fun (index, line) ->
-            index > moduleStart
-            && index < moduleEnd
-            && line.TrimStart().StartsWith(marker, StringComparison.Ordinal))
-    with
-    | [| index, _ |] ->
-        {
-            Path = "src/FS.GG.Coordination.Protocol/Protocol.md"
-            Line = index + 1
-            Column = 3
-        }
-    | matches -> failwith $"expected one Quint action {action}, got {matches.Length}"
-
-let private trace actions =
-    // Transitional C0 fixture for the existing flat O2 model. The reusable replay
-    // harness and production projections are retained, but this state sequence is
-    // still assembled in F#. C3 replaces it with Quint-emitted Choreo ITF.
-    let initialModel =
-        {
-            Stage = 0
-            OperationId = ""
-            OperationStatus = "none"
-            Paused = true
-            ReadbackCurrent = true
-            Restarted = false
-            FreshReadback = false
-            AdapterClaimedComplete = false
-            UnknownObserved = false
-        }
-
-    let states =
-        actions |> List.scan (fun model action -> modelStep action model) initialModel
-
-    let stateJson model =
-        let projection =
-            stateValue
-                model.Stage
-                model.OperationId
-                model.OperationStatus
-                model.Paused
-                model.ReadbackCurrent
-                model.Restarted
-                model.FreshReadback
-                model.AdapterClaimedComplete
-                model.UnknownObserved
-
-        let value projectionValue =
-            let rec node =
-                function
-                | QuintReplayValue.Boolean item -> JsonValue.Create item :> JsonNode
-                | QuintReplayValue.Text item -> JsonValue.Create item :> JsonNode
-                | QuintReplayValue.Integer item ->
-                    let result = JsonObject() in
-                    result["#bigint"] <- item
-                    result
-                | QuintReplayValue.Record fields ->
-                    let result = JsonObject() in
-                    fields |> List.iter (fun (key, item) -> result[key] <- node item)
-                    result
-                | other -> failwith $"unexpected replay value: {other}"
-
-            node projectionValue
-
-        let result = JsonObject()
-        result["state"] <- value (snd projection.Bindings.Head)
-        result
-
-    let root = JsonObject()
-    let metadata = JsonObject()
-    metadata["format"] <- "ITF"
-    metadata["format-description"] <- "https://apalache-mc.org/docs/adr/015adr-trace.html"
-    metadata["source"] <- "src/FS.GG.Coordination.Protocol/Protocol.md#O2HostedWriterModel"
-    metadata["status"] <- "ok"
-    root["#meta"] <- metadata
-    root["vars"] <- JsonArray(JsonValue.Create("state"))
-    let stateNodes = JsonArray()
-
-    states
-    |> List.iteri (fun index model ->
-        let item = stateJson model in
-        let meta = JsonObject() in
-        meta["index"] <- index
-        item["#meta"] <- meta
-        stateNodes.Add item)
-
-    root["states"] <- stateNodes
-
-    let context: QuintItfDecodeContext =
-        {
-            Environment =
-                {
-                    Seed = "deterministic-hosted-writer"
-                    Bounds = [ "maxSteps", int64 actions.Length ]
-                    ToolFingerprint = quint032BinarySha256
-                    ProfileFingerprint = fingerprint "fsgg-quint-profile/2"
-                    ContractFingerprint = fingerprint "O2HostedWriterModel"
-                    AdapterFingerprint = fingerprint "akka-hosted-writer/1"
-                    ImplementationFingerprint = fingerprint "FS.GG.Coordination.Orchestration.Host"
-                }
-            Steps =
-                actions
-                |> List.mapi (fun index action ->
-                    {
-                        Index = index + 1
-                        Action = action
-                        Source = source action
-                    })
-        }
-
-    QuintReplay.decodeItf context (root.ToJsonString())
-    |> Result.defaultWith (fun error -> failwithf "%A" error)
 
 let private appendCommand (store: IJournalStore) command =
     task {
@@ -894,38 +703,10 @@ let private driver (system: ActorSystem) faultyNative initial : ReplayDriver<Act
         Observe = fun runtime -> Ok runtime.Projection
     }
 
-let private normalActions =
-    [
-        yield "manualStart"
-        for _ in 0..6 do
-            yield "recordIntent"
-            yield "dispatch"
-            yield "observeApplied"
-    ]
-
-let private recoveryActions =
-    [
-        yield "manualStart"
-        yield "recordIntent"
-        yield "dispatch"
-        yield "observeApplied"
-        yield "recordIntent"
-        yield "dispatch"
-        yield "loseResponse"
-        yield "restartPaused"
-        yield "reconnect"
-        yield "resume"
-        yield "reconcileApplied"
-        for _ in 2..6 do
-            yield "recordIntent"
-            yield "dispatch"
-            yield "observeApplied"
-    ]
-
-let private runReplay faultyNative actions =
+let private runReplay faultyNative scenarioId =
     task {
         use system = ActorSystem.Create($"hosted-writer-quint-{Guid.NewGuid():N}")
-        let replayTrace = trace actions
+        let replayTrace = (ChoreoTrace.load scenarioId).Replay
 
         let! result =
             ReplayHarness.run replayTrace (driver system faultyNative replayTrace.Initial)
@@ -935,9 +716,9 @@ let private runReplay faultyNative actions =
     }
 
 [<Fact>]
-let ``Akka hosted writer replays transitional flat-model happy path`` () =
+let ``Akka hosted writer replays the genuine Quint Choreo happy path`` () =
     task {
-        match! runReplay false normalActions with
+        match! runReplay false "happy-path" with
         | Ok QuintReplayResult.Equivalent -> ()
         | result -> Assert.Fail($"expected equivalent replay, got %A{result}")
     }
@@ -945,7 +726,7 @@ let ``Akka hosted writer replays transitional flat-model happy path`` () =
 [<Fact>]
 let ``Akka hosted writer reconciliation does not redispatch after a lost response`` () =
     task {
-        match! runReplay false recoveryActions with
+        match! runReplay false "lost-applied" with
         | Ok QuintReplayResult.Equivalent -> ()
         | result -> Assert.Fail($"expected equivalent recovery replay, got %A{result}")
     }
@@ -953,11 +734,13 @@ let ``Akka hosted writer reconciliation does not redispatch after a lost respons
 [<Fact>]
 let ``missing native readback projection diverges at exact Quint action`` () =
     task {
-        match! runReplay true normalActions with
+        let trace = (ChoreoTrace.load "happy-path").Replay
+
+        match! runReplay true "happy-path" with
         | Ok(QuintReplayResult.Diverged divergence) ->
-            Assert.Equal(normalActions.Length, divergence.Step)
+            Assert.Equal(trace.Steps.Length, divergence.Step)
             Assert.Equal("observeApplied", divergence.Action)
-            Assert.Equal(source "observeApplied", divergence.Source)
+            Assert.Equal(trace.Steps |> List.last |> _.Source, divergence.Source)
             Assert.Equal("state", divergence.Reason)
         | result -> Assert.Fail($"expected exact native-readback divergence, got %A{result}")
     }

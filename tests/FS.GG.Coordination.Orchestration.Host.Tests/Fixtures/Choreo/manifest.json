@@ -1,0 +1,177 @@
+{
+  "schema": "fsgg.quint.choreo-trace-manifest/1",
+  "model": "O2HostedWriterChoreoModel",
+  "observableSchema": "fsgg.coordination.hosted-writer-observation/1",
+  "source": {
+    "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+    "commit": "a598f27fc8d2c23647f4dc45df7d5119f3461b74",
+    "sha256": "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9"
+  },
+  "quint": {
+    "version": "0.32.0",
+    "binarySha256": "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
+    "backend": "rust",
+    "maxSamples": 1
+  },
+  "choreo": {
+    "repository": "https://github.com/quint-co/choreo",
+    "commit": "000cf4eed315187dc6f216a148781cff7dde6521"
+  },
+  "command": [
+    "test", "<extracted-model>", "--main=O2HostedWriterChoreoTests", "--match=<quintTest>",
+    "--max-samples=1", "--backend=rust", "--out-itf=<file>", "--verbosity=1"
+  ],
+  "normalization": "remove volatile description/timestamp; bind canonical source; jq -S -c",
+  "rawVariable": "O2HostedWriterChoreoModel::choreo::s",
+  "scenarios": [
+    {
+      "id": "happy-path",
+      "quintTest": "nativeReadbackFoundation",
+      "file": "happy-path.itf.json",
+      "stateCount": 64,
+      "traceSha256": "422986cf7e35c538151d9fe650e45437b9c9e02c2b986d481e904355577f0b90",
+      "invariant": "safety",
+      "milestones": [
+        { "stateIndex": 0, "action": "init", "quintAction": "init", "participant": "Host", "message": "None" },
+        { "stateIndex": 2, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 4, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 9, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 11, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 13, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 18, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 20, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 22, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 27, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 29, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 31, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 36, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 38, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 40, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 45, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 47, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 49, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 54, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 56, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 58, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 63, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" }
+      ]
+    },
+    {
+      "id": "lost-applied",
+      "quintTest": "lostAppliedReconciles",
+      "file": "lost-applied.itf.json",
+      "stateCount": 14,
+      "traceSha256": "c39588dfa08dd72325bd1f52ba3cf4f956341102d3d41898719ee5f02c528289",
+      "invariant": "safety",
+      "milestones": [
+        { "stateIndex": 0, "action": "init", "quintAction": "init", "participant": "Host", "message": "None" },
+        { "stateIndex": 2, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 4, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 8, "action": "loseResponse", "quintAction": "journalRecordsUnknown", "participant": "Journal", "message": "UnknownRecorded" },
+        { "stateIndex": 13, "action": "reconcileApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" }
+      ]
+    },
+    {
+      "id": "proven-absent-retry",
+      "quintTest": "provenAbsentRetriesSameOperation",
+      "file": "proven-absent-retry.itf.json",
+      "stateCount": 22,
+      "traceSha256": "bf1356aa778a457bf341b2f840cc4ec727acd90b7cfff92e4e9dd2754b22d0c6",
+      "invariant": "safety",
+      "milestones": [
+        { "stateIndex": 0, "action": "init", "quintAction": "init", "participant": "Host", "message": "None" },
+        { "stateIndex": 2, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 4, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 8, "action": "loseResponse", "quintAction": "journalRecordsUnknown", "participant": "Journal", "message": "UnknownRecorded" },
+        { "stateIndex": 12, "action": "reconcileAbsent", "quintAction": "journalRecordsAbsent", "participant": "Journal", "message": "AbsentRecorded" },
+        { "stateIndex": 13, "action": "retryProvenAbsent", "quintAction": "hostRetriesProvenAbsent", "participant": "Host", "message": "RecordIntent" },
+        { "stateIndex": 14, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 16, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 21, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" }
+      ]
+    },
+    {
+      "id": "restart-gates",
+      "quintTest": "restartRequiresThreeGates",
+      "file": "restart-gates.itf.json",
+      "stateCount": 7,
+      "traceSha256": "19bae385079212c75efff62270602afb4c9bbcaa13d24637187f456e151c2f72",
+      "invariant": "safety",
+      "milestones": [
+        { "stateIndex": 0, "action": "init", "quintAction": "init", "participant": "Host", "message": "None" },
+        { "stateIndex": 1, "action": "restartPaused", "quintAction": "crashHost", "participant": "Host", "message": "RecoverJournal" },
+        { "stateIndex": 3, "action": "recoverJournal", "quintAction": "hostAcceptsRecovery", "participant": "Host", "message": "ReadAuthority" },
+        { "stateIndex": 5, "action": "reconnect", "quintAction": "hostAcceptsAuthority", "participant": "Host", "message": "None" },
+        { "stateIndex": 6, "action": "resume", "quintAction": "hostAuthenticatesResume", "participant": "Host", "message": "None" }
+      ]
+    },
+    {
+      "id": "duplicate-response",
+      "quintTest": "duplicateResponseRejected",
+      "file": "duplicate-response.itf.json",
+      "stateCount": 12,
+      "traceSha256": "8ce4829b811ac29985cf779b2e79e30f88abe0f82494c00181381d164f2875c9",
+      "invariant": "safety",
+      "milestones": [
+        { "stateIndex": 0, "action": "init", "quintAction": "init", "participant": "Host", "message": "None" },
+        { "stateIndex": 2, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 4, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 9, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 11, "action": "rejectDuplicateResponse", "quintAction": "hostRejectsInvalidResponse", "participant": "Host", "message": "None" }
+      ]
+    },
+    {
+      "id": "stale-generation",
+      "quintTest": "staleGenerationRejected",
+      "file": "stale-generation.itf.json",
+      "stateCount": 3,
+      "traceSha256": "73e2ff534b8682f3865c3ff6baee7a73cc7b04a87b837d17ec3f3ce3fdd3e51a",
+      "invariant": "safety",
+      "milestones": [
+        { "stateIndex": 0, "action": "init", "quintAction": "init", "participant": "Host", "message": "None" },
+        { "stateIndex": 2, "action": "rejectStaleGeneration", "quintAction": "hostRejectsInvalidResponse", "participant": "Host", "message": "None" }
+      ]
+    },
+    {
+      "id": "wrong-identity",
+      "quintTest": "wrongIdentityRejected",
+      "file": "wrong-identity.itf.json",
+      "stateCount": 3,
+      "traceSha256": "5fcfad919f04972f3f22a3cc28098643b6ae08bacee204ad1a60ce702939e6a9",
+      "invariant": "safety",
+      "milestones": [
+        { "stateIndex": 0, "action": "init", "quintAction": "init", "participant": "Host", "message": "None" },
+        { "stateIndex": 2, "action": "rejectWrongIdentity", "quintAction": "hostRejectsInvalidResponse", "participant": "Host", "message": "None" }
+      ]
+    },
+    {
+      "id": "missing-native-readback",
+      "quintTest": "missingNativeReadbackCannotComplete",
+      "file": "missing-native-readback.itf.json",
+      "stateCount": 55,
+      "traceSha256": "51b05718befb2b687e6e63b2e60188c8c27147c17c3e82ec593d0f3fd78550fb",
+      "invariant": "safety",
+      "milestones": [
+        { "stateIndex": 0, "action": "init", "quintAction": "init", "participant": "Host", "message": "None" },
+        { "stateIndex": 2, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 4, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 9, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 11, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 13, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 18, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 20, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 22, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 27, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 29, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 31, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 36, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 38, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 40, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 45, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" },
+        { "stateIndex": 47, "action": "recordIntent", "quintAction": "journalRecordsIntent", "participant": "Journal", "message": "IntentRecorded" },
+        { "stateIndex": 49, "action": "dispatch", "quintAction": "journalRecordsDispatch", "participant": "Journal", "message": "DispatchRecorded" },
+        { "stateIndex": 54, "action": "observeApplied", "quintAction": "hostSettles", "participant": "Host", "message": "None" }
+      ]
+    }
+  ]
+}
