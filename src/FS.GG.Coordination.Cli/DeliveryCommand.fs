@@ -227,7 +227,7 @@ module DeliveryCommand =
             return runtime :> IOrdinaryDeliveryRuntime
         }
 
-    let private runWithObservation (providerMode: string) (operation: string) (options: Dictionary<string, string>) observation (runtime: IOrdinaryDeliveryRuntime option) =
+    let private runWithObservation (providerMode: string) (operation: string) (options: Dictionary<string, string>) observation (runtime: IOrdinaryDeliveryRuntime option) metrics =
         match operation with
         | "inspect" ->
             match OrdinaryDelivery.inspect observation with
@@ -241,7 +241,8 @@ module DeliveryCommand =
             match OrdinaryDelivery.advance (ReadOnlyMemory(File.ReadAllBytes options["--plan"])) NoCut runtime.Value with
             | Error failures -> report failures
             | Ok result ->
-                printfn "{\"providerMode\":\"%s\",\"providerOutcome\":\"%s\",\"result\":\"%s\"}" providerMode (if providerMode = "github" then "native-readback" else "simulated") (string result)
+                let measurements = metrics |> Option.map (fun read -> read()) |> Option.defaultValue ""
+                printfn "{\"providerMode\":\"%s\",\"providerOutcome\":\"%s\",\"result\":%s%s}" providerMode (if providerMode = "github" then "native-readback" else "simulated") (JsonSerializer.Serialize(string result)) measurements
                 0
         | "advance" -> eprintfn "advance requires --plan and a configured runtime; %s" usage; 2
         | _ -> eprintfn "%s" usage; 2
@@ -263,7 +264,8 @@ module DeliveryCommand =
                             let providerPath =
                                 match options.TryGetValue "--provider-response" with true, value -> value | _ -> ""
                             let runtime = ControlledRuntime(observation, providerPath)
-                            runWithObservation "controlled" operation options observation (Some(runtime :> IOrdinaryDeliveryRuntime))
+                            let metrics () = $",\"mutations\":{runtime.Mutations},\"dispatches\":{runtime.Dispatches}"
+                            runWithObservation "controlled" operation options observation (Some(runtime :> IOrdinaryDeliveryRuntime)) (Some metrics)
                 else
                     match options.TryGetValue "--provider" with
                     | true, "github" ->
@@ -272,7 +274,7 @@ module DeliveryCommand =
                         | Ok runtime ->
                             match runtime.Observe() with
                             | Error error -> eprintfn "observation-refused:%s" error; 3
-                            | Ok observation -> runWithObservation "github" operation options observation (Some runtime)
+                            | Ok observation -> runWithObservation "github" operation options observation (Some runtime) None
                     | _ ->
                         eprintfn "%s" usage
                         2
