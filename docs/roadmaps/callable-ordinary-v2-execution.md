@@ -141,6 +141,15 @@ are never acceptance evidence.
     synthetic-only disposable target, or use an entitled private target. The registered private sandbox's
     `required_status_checks` endpoint currently returns `403` because the required entitlement is absent; do not
     expose that repository, weaken protection, change billing, or reinterpret the refusal as absence.
+    - [x] **Source preparation.** The digest-bound v2 proposal and guarded operator implement separate creation
+      and identity-bound setup/execution/readback/cleanup phases. Checked-in state is
+      `prepared-not-authorized`; every effect requires a short-lived protected grant, exact workflow/reviewer,
+      GitHub App installation and fresh capability readback. Unknown create/setup/delete responses reconcile by
+      exact readback, cleanup intent is durable before delete, and pending/nonzero CLI outcomes never accept.
+      The preflight records zero compatible targets among 16 accessible repositories, the proposed target `404`,
+      private required-status-checks `403`, and organization-installation plus actor-membership `403` as refusal
+      facts only. No repository, settings, visibility, billing, credential, workflow, epoch, journal, provider or
+      cleanup effect occurred; actual protected admission remains this milestone's next boundary.
   - [ ] **V2-CALL-01.4c — Qualify installed native execution and acceptance.** Run the installed command under
     the admitted operation, obtain independent PR and sharded-journal readback, prove fresh-process no-op replay
     and interruption recovery without duplicate effect, clean up the disposable subject, and bind exact native
@@ -188,6 +197,15 @@ subject, incomplete pagination and observer outage. Exact request sequence
 `c30cd043a8a3a30bc9daffbb59bb0f6d9bfef997695da3d6d823d9a94597b317` and journal set
 `520b08adbea6ee20b21b396f3200eeff7e970a6beaf81947942fd9f9af3cf968` are retained. Every provider mutation
 is loopback-only, and `.4b`, `.4c`, live acceptance, Q4, `OpenV2` and migration remain pending.
+
+Completion evidence for `.4b` source preparation: proposal
+`45db6ffddcfa6b41514856ca4d6b4d57136b1f363905cf90120dedba008d818f` binds contract
+`2561b7aa978ade63cbb960310a1154ae62495adeb155085b578e66682338e044`, operation source
+`9d0797035c7b71c2b58434d04ba66c61e9a527cc33829d38f7c5d27b0b6ff03a`, package/receiver identities and
+preflight `46c9af2263a8f686c59e90aacb79cc5466c2e1d3c6422221f86b1373fe5813eb`. The registered Q3 command runs
+eight offline tests plus independently compiled architecture controls covering protected authority, target,
+credential, capability, phase, tamper, stale grant, unknown-response, persistence, replay and cleanup refusals.
+The prepared source performs zero live effects and grants no `.4b` admission or `.4c` acceptance.
 
 ## Dependencies, invalidators, and completion examples
 

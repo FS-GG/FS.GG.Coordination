@@ -24,6 +24,7 @@
     <Compile Include="GitHubReviewDeliveryArchitectureTests.fs" />
     <Compile Include="GitHubOrdinaryDeliveryArchitectureTests.fs" />
     <Compile Include="CallableCliArchitectureTests.fs" />
+    <Compile Include="CallableIsolatedOperationArchitectureTests.fs" />
     <Compile Include="GitHubLifecycleProjectionArchitectureTests.fs" />
     <Compile Include="GitHubFleetShadowArchitectureTests.fs" />
     <Compile Include="GitHubRepositoryProfileArchitectureTests.fs" />

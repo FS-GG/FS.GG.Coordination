@@ -70,10 +70,10 @@ requireContains
     [
         "v2-call-01-4b-isolated-native-v1"
         "FS-GG/FS.GG.Coordination.CallableSandbox"
-        "separateProtectedAuthority"
-        "required_status_checks returned 403"
-        "billing-change"
-        "pendingIsNotAcceptance"
+        "prepared-not-authorized"
+        "refused-no-compatible-admitted-target"
+        "private-sandbox-visibility-or-billing-change"
+        "pendingCliIsAcceptance"
     ]
 
 requireContains
@@ -113,7 +113,7 @@ let units = JsonDocument.Parse(File.ReadAllBytes(path "eng/github-substrate-v2-u
 let unit =
     units.RootElement.GetProperty("units").EnumerateArray()
     |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-09.9")
-if unit.GetProperty("contractSha256").GetString() <> "c2ef3bf04c91c4d9dbf3c332e827d42a0d15cc6599e0f3b034b2b1d3c112a343" then
+if unit.GetProperty("contractSha256").GetString() <> "7c247e89200b7307a3281c0a8800f796219b22328a912c6f6bdd937a4cda8bf0" then
     failwith "GS2-09.9 contract digest drift"
 
 let testOutput =

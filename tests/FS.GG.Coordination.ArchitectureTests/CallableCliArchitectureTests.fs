@@ -119,7 +119,7 @@ let ``installed harness binds frozen artifact receiver and loopback-only recover
         [
             "v2-call-01-4b-isolated-native-v1"
             "FS-GG/FS.GG.Coordination.CallableSandbox"
-            "\"authorized\":false"
-            "separateProtectedAuthority"
-            "required_status_checks returned 403"
+            "\"authorized\": false"
+            "prepared-not-authorized"
+            "refused-no-compatible-admitted-target"
         ] do Assert.Contains(expected, proposal, StringComparison.Ordinal)

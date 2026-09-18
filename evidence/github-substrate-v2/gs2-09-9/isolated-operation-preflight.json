@@ -1,0 +1,34 @@
+{
+  "schema": "fsgg.coordination.callable-isolated-operation-preflight/1",
+  "operationIdentity": "v2-call-01-4b-isolated-native-v1",
+  "observationDate": "2026-09-18",
+  "source": "operator-provided-live-preflight",
+  "authorized": false,
+  "disposition": "refused-no-compatible-admitted-target",
+  "facts": {
+    "accessibleRepositoryCount": 16,
+    "compatibleTargetCount": 0,
+    "proposedTarget": "FS-GG/FS.GG.Coordination.CallableSandbox",
+    "proposedTargetHttpStatus": 404,
+    "proposedTarget404Meaning": "unobserved-target-only-not-ownership-reservation-or-authority",
+    "privateSandbox": "FS-GG/FS.GG.GitHub.Substrate.Sandbox",
+    "privateSandboxRequiredStatusChecksHttpStatus": 403,
+    "privateSandbox403Meaning": "entitlement-or-authorization-unknown-not-supported",
+    "organizationInstallationHttpStatus": 403,
+    "actorMembershipHttpStatus": 403,
+    "actorId": 1645484,
+    "actorLogin": "EHotwagner",
+    "authorizationMeaning": "no-target-no-credential-no-capability-no-protected-grant"
+  },
+  "zeroEffects": [
+    "repository-create",
+    "settings-or-visibility",
+    "billing-or-entitlement",
+    "credential-or-app",
+    "workflow-dispatch",
+    "epoch-or-journal",
+    "provider-delivery",
+    "cleanup-delete"
+  ],
+  "evidenceSha256": "46c9af2263a8f686c59e90aacb79cc5466c2e1d3c6422221f86b1373fe5813eb"
+}

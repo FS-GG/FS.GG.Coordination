@@ -1,0 +1,90 @@
+{
+  "schema": "fsgg.coordination.callable-isolated-operation-contract/2",
+  "identity": "v2-call-01-4b-isolated-native-v1",
+  "state": "prepared-not-authorized",
+  "authorized": false,
+  "source": {
+    "prerequisiteHead": "0028b9efb8481084343aa243aef979de06c9f3b9",
+    "operationSource": "eng/callable-cli-isolated-operation.py",
+    "operationSourceSha256": "9d0797035c7b71c2b58434d04ba66c61e9a527cc33829d38f7c5d27b0b6ff03a"
+  },
+  "target": {
+    "owner": "FS-GG",
+    "name": "FS.GG.Coordination.CallableSandbox",
+    "fullName": "FS-GG/FS.GG.Coordination.CallableSandbox",
+    "visibility": "public",
+    "purpose": "synthetic-only-disposable",
+    "existingProductionTargetAllowed": false
+  },
+  "package": {
+    "id": "FS.GG.Coordination.Cli",
+    "version": "0.1.0",
+    "candidateSha256": "ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf",
+    "nugetOrgServedSha256": "e7f440a2a1f94d51dbcdd7146494c97e6386f9dcc8034a028e3e851d364390e3",
+    "installedManagedCommandSha256": "21d36ec3cdbb153453833ed57f2320f9f256a26f35aea52bb75c52a68efada04"
+  },
+  "receiver": {
+    "repository": "FS-GG/.github",
+    "merge": "587f46e15e1404dbe0dc1e9e6b47cf2861d7b502",
+    "manifest": "dist/dotnet/.config/dotnet-tools.json",
+    "manifestSha256": "4f4b8ef9c53f87d32ba108ef00c1e1a352c8eac1e01cf0d151953473ac7c5c2d"
+  },
+  "creation": {
+    "request": {
+      "method": "POST",
+      "path": "orgs/FS-GG/repos",
+      "body": {
+        "name": "FS.GG.Coordination.CallableSandbox",
+        "description": "Disposable synthetic target for V2-CALL-01.4b/.4c qualification",
+        "private": false,
+        "has_issues": false,
+        "has_projects": false,
+        "has_wiki": false,
+        "auto_init": true
+      }
+    },
+    "unknownOutcome": "reread-exact-full-name-before-any-retry",
+    "identityFields": ["repositoryId", "nodeId", "fullName", "owner", "visibility", "defaultBranch"]
+  },
+  "operationStages": ["setup", "installed-execution", "independent-readback", "cleanup"],
+  "authorization": {
+    "repository": "FS-GG/.github",
+    "workflowPath": ".github/workflows/callable-isolated-operation-authorize.yml",
+    "environment": "callable-isolated-operation",
+    "maximumLifetimeMinutes": 120,
+    "requiredReviewer": {"id": 1645484, "login": "EHotwagner", "membership": "active-must-be-observed"},
+    "requiredPermissions": {
+      "administration": "write",
+      "checks": "read",
+      "contents": "write",
+      "metadata": "read",
+      "pull_requests": "write"
+    },
+    "requiredCapabilities": {
+      "creation": ["createRepository", "publicRepository", "authoritativeReadback"],
+      "identity-bound-operation": ["branchProtection", "checks", "contents", "deleteRepository", "installedCli", "journalRefs", "pullRequests"]
+    },
+    "currentStatus": "workflow-environment-grant-credential-and-capabilities-unavailable"
+  },
+  "acceptance": {
+    "requiredCliOutcome": "AdvanceSettled",
+    "pendingIsAcceptance": false,
+    "nonzeroExitIsAcceptance": false,
+    "freshProcessReplay": "AdvanceAlreadySettled",
+    "independentNativeReadback": true,
+    "cleanupReadback": "repository-404-after-known-delete-or-reread",
+    "externalAcceptance": "separate-.4c-only"
+  },
+  "forbidden": [
+    "private-target-visibility-change",
+    "billing-or-entitlement-change",
+    "credential-or-app-provisioning",
+    "production-target",
+    "release-or-publication",
+    "fleet-epoch-mutation",
+    "migration-or-cutover",
+    "production-writer-enable",
+    "effect-before-protected-grant-and-fresh-capability-readback"
+  ],
+  "contractSha256": "2561b7aa978ade63cbb960310a1154ae62495adeb155085b578e66682338e044"
+}
