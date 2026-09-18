@@ -3647,6 +3647,33 @@ module O2HostedWriterModel {
   temporal eventuallyReached: bool = eventually(reached)
 }
 
+
+module O2HostedWriterLegacyScenarios {
+  import O2HostedWriterModel.*
+  action admitted = init.then(manualStart)
+  action complete = recordIntent.then(dispatch).then(observeApplied)
+  action throughClaim = admitted.then(complete)
+  action throughProcess = throughClaim.then(complete)
+  action throughCandidate = throughProcess.then(complete)
+  action throughBranch = throughCandidate.then(complete)
+  action throughPullRequest = throughBranch.then(complete)
+  action throughMerge = throughPullRequest.then(complete)
+  run happy = throughMerge.then(complete).expect(reached and safety)
+  run lostApplied = admitted.then(recordIntent).then(dispatch)
+    .then(loseResponse).then(reconcileApplied).expect(state.stage == 1 and safety)
+  run claimAbsent = admitted.then(recordIntent).then(dispatch)
+    .then(loseResponse).then(observeProvenAbsent)
+    .expect(state.operationStatus == "absent" and not(state.claimCurrent) and not(mayDispatch(state)) and safety)
+  run processRetry = throughClaim.then(recordIntent).then(dispatch)
+    .then(loseResponse).then(observeProvenAbsent).then(retrySameOperation)
+    .then(dispatch).then(observeApplied)
+    .expect(state.stage == 2 and state.sameOperationRetried and safety)
+  run restart = admitted.then(restartPaused).then(reconnect).then(resume)
+    .expect(not(state.paused) and state.freshReadback and safety)
+  run missingNative = throughMerge.then(adapterClaimsCompletion)
+    .expect(not(reached) and state.stage == 6 and safety)
+}
+
 // GS2-03.10 model 1: two workers race sibling commits on shard 0 while shard 1 progresses
 // independently. Expected-parent CAS chooses at most one sibling, retry advances generation,
 // and effect-time fencing rejects the superseded grant. The unsafe actions are semantic mutants:
@@ -6477,6 +6504,25 @@ module O2HostedWriterChoreoModel {
     | _ => false
   }
 
+  // Qualification-only controls: deliberately omit a real protocol obligation.
+  val externalApplicationPending = hostState(choreo::s.system.get(HOST).local).phase == AwaitingEffect
+  action qualificationUnsafeCompletion = {
+    val process = choreo::s.system.get(HOST)
+    val host = hostState(process.local)
+    choreo::s' = { ...choreo::s, system: choreo::s.system.set(HOST,
+      { ...process, local: HostLocal({ ...host, completed: Set(NativeReadback) }) }) }
+  }
+  action qualificationWithoutNativeReadback =
+    if (hostCompleted(Merge)) choreo::s' = choreo::s
+    else normalProgressStep
+  action qualificationWithoutExternalApplication(effect: EffectKind): bool =
+    if (externalApplicationPending) choreo::s' = choreo::s
+    else any {
+      start(effect), stepWith(JOURNAL, journalRecordsIntent),
+      stepWith(HOST, hostAcceptsIntent), stepWith(JOURNAL, journalRecordsDispatch),
+      stepWith(HOST, hostDispatches),
+    }
+
   temporal progress: bool =
     normalProgressStep.weakFair(Set(choreo::s)).implies(eventually(workflowCompleted))
   temporal faultSafety: bool = always(safety)
@@ -6498,6 +6544,43 @@ module O2HostedWriterChoreoRunnerBounded {
   action init = model::initAfterClaim
   action step = model::boundedFaultStep(model::ProcessWork)
   val safety = model::safety
+}
+
+module O2HostedWriterChoreoProgressQualification {
+  import O2HostedWriterChoreoModel as model
+  action init = model::init
+  action step = model::normalProgressStep
+  val safety = model::safety
+  val reached = model::workflowCompleted
+  temporal progress: bool = model::progress
+  temporal eventuallyReached: bool = eventually(reached)
+  val blockedInvariant = not(model::hostCompleted(model::Merge))
+  action withoutNativeReadback = model::qualificationWithoutNativeReadback
+  action unsafeCompletion = model::qualificationUnsafeCompletion
+}
+module O2HostedWriterChoreoFaultQualification {
+  import O2HostedWriterChoreoModel as model
+  var runnerLane: bool
+  action init = any {
+    all { model::init, runnerLane' = false },
+    all { model::initAfterClaim, runnerLane' = true },
+  }
+  val selectedEffect = if (runnerLane) model::ProcessWork else model::Claim
+  action step = all {
+    model::boundedFaultStep(selectedEffect), runnerLane' = runnerLane,
+  }
+  val safety = model::safety
+  val unknownReached = model::unknownReached
+  temporal faultSafety: bool = always(safety)
+  val blockedInvariant = not(model::externalApplicationPending)
+  temporal eventuallyReached: bool = eventually(model::hostCompleted(selectedEffect))
+  action withoutExternalApplication = all {
+    runnerLane' = runnerLane,
+    model::qualificationWithoutExternalApplication(selectedEffect),
+  }
+  action unsafeCompletion = all {
+    runnerLane' = runnerLane, model::qualificationUnsafeCompletion,
+  }
 }
 
 module O2HostedWriterChoreoTests {

@@ -173,7 +173,7 @@ let private createArtifacts root =
             let preparationDigest = String.replicate 64 "c"
 
             let sourceDigest =
-                "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9"
+                "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb"
 
             let contractDigest =
                 "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
@@ -498,6 +498,90 @@ let ``formal subject ignores unrelated files but binds every selected byte`` () 
     |> ignore
 
 [<Fact>]
+let ``formal reuse invalidates when correspondence gates or retained evidence change`` () =
+    let policy =
+        File.ReadAllBytes(Path.Combine(repositoryRoot, "eng/bootstrap-qualification-plan.json"))
+
+    use document = JsonDocument.Parse policy
+    let formal = document.RootElement.GetProperty("formalReuse")
+
+    let selectors =
+        [
+            for path in formal.GetProperty("exactPaths").EnumerateArray() do
+                QualificationReuse.Exact(path.GetString())
+            for prefix in formal.GetProperty("pathPrefixes").EnumerateArray() do
+                QualificationReuse.Prefix(prefix.GetString())
+        ]
+
+    let critical =
+        [
+            "eng/choreo-source-pin.json"
+            "eng/vendor/choreo/LICENSE"
+            "eng/verify-choreo-c2-bounded.sh"
+            "eng/verify-choreo-c3-traces.sh"
+            "eng/verify-choreo-c5-parity.py"
+            "tests/FS.GG.Coordination.Orchestration.Host.Tests/Fixtures/Choreo/manifest.json"
+            "tests/FS.GG.Coordination.Orchestration.Host.Tests/Fixtures/Choreo/happy-path.itf.json"
+            "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-progress.itf.json"
+            "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-progress.quint-trace.json"
+            "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/hosted-writer-progress.manifest.json"
+        ]
+
+    let selected path =
+        selectors
+        |> List.exists (function
+            | QualificationReuse.Exact expected -> path = expected
+            | QualificationReuse.Prefix prefix -> path.StartsWith(prefix, StringComparison.Ordinal))
+
+    let start = ProcessStartInfo("git")
+    start.WorkingDirectory <- repositoryRoot
+    start.RedirectStandardOutput <- true
+
+    for argument in [ "ls-files"; "-z" ] do
+        start.ArgumentList.Add argument
+
+    use child = Process.Start start
+
+    let paths =
+        child.StandardOutput.ReadToEnd().Split('\000', StringSplitOptions.RemoveEmptyEntries)
+
+    child.WaitForExit()
+    Assert.Equal(0, child.ExitCode)
+
+    for path in critical do
+        Assert.Contains(path, paths)
+
+    let files =
+        paths
+        |> Array.filter (fun path -> selected path || List.contains path critical || path = "README.md")
+        |> Array.map (fun path ->
+            ({
+                Mode = "100644"
+                Path = path
+                Bytes = File.ReadAllBytes(Path.Combine(repositoryRoot, path))
+            }
+            : QualificationReuse.TrackedFile))
+        |> Array.toList
+
+    let baseline = QualificationReuse.createFormalSubject files selectors policy
+
+    let changed path =
+        files
+        |> List.map (fun file ->
+            if file.Path = path then
+                { file with
+                    Bytes = Array.append file.Bytes [| 0uy |]
+                }
+            else
+                file)
+        |> fun values -> QualificationReuse.createFormalSubject values selectors policy
+
+    for path in critical do
+        Assert.NotEqual(baseline.SubjectSha256, (changed path).SubjectSha256)
+
+    Assert.Equal(baseline.SubjectSha256, (changed "README.md").SubjectSha256)
+
+[<Fact>]
 let ``current scoped milestone binds the accepted prefix without contract drift`` () =
     let statePath = Path.Combine(repositoryRoot, "eng/milestone-qualification.json")
 
@@ -788,7 +872,8 @@ let ``canonical Quint shards remain parallel and aggregate fail closed`` () =
     let performanceBlock =
         workflow.Substring(
             workflow.IndexOf("  canonical-quint-performance:"),
-            workflow.IndexOf("  canonical-quint:") - workflow.IndexOf("  canonical-quint-performance:")
+            workflow.IndexOf("  canonical-quint:")
+            - workflow.IndexOf("  canonical-quint-performance:")
         )
 
     Assert.Contains("timeout-minutes: 30", performanceBlock)

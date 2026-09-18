@@ -110,7 +110,8 @@ let validateDocument root (document: JsonObject) =
                     "GS20310ReviewEpochModel"
                     "GS20310CutoverModel"
                     "O2PilotPermitModel"
-                    "O2HostedWriterModel"
+                    "O2HostedWriterChoreoProgressQualification"
+                    "O2HostedWriterChoreoFaultQualification"
                     "O2AdministrativeRetirementModel"
                     "O2AdministrativeRetirementOldPlanModel"
                 ]

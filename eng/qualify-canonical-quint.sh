@@ -90,7 +90,7 @@ dotnet tool install FS.GG.SDD.Cli \
 : "${NUGET_PACKAGES:=$HOME/.nuget/packages}"
 lmt_source="$NUGET_PACKAGES/fs.gg.sdd.artifacts/1.5.0/quint/lmt/main.go"
 test -f "$lmt_source"
-GO111MODULE=off "$go" build \
+CGO_ENABLED=1 GO111MODULE=off "$go" build \
   -trimpath \
   -ldflags '-buildid=IvXAt1kJ-3iINki1alCT/Ut12KGabgkWIkwVpw-xO/c4zkZMLAubfWHvjZOY8o/8-oR_8tNNndNgfMVoD8F -B 0x03d1703027f57ed4dd2ba90b7cdfc8cdea2815da' \
   -o "$cache/objects/$lmt_sha" \

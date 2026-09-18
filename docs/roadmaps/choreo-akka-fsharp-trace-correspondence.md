@@ -1,6 +1,6 @@
 # Choreo, Akka, and F# trace correspondence
 
-Status: accepted design; C0–C3 merged; C4 production correspondence in protected-main PR; C5 next
+Status: accepted design; C0–C4 merged; C5 qualified in its protected-main PR; C6 next
 
 Decision date: 2026-09-16
 
@@ -577,15 +577,44 @@ C2 invocation and bounded roots are rerun before the formal-workload migration.
 
 ### C5 — qualify and migrate the formal workload
 
-- [ ] Measure state-space and trace sizes; introduce safe symmetry or bounds without erasing identity failures.
-- [ ] Add Choreo progress/fault-safety entries to `eng/quint-qualification.json` with explicit budgets.
-- [ ] Run the complete canonical aggregate, sharded CI path, and performance baseline from a cold preparation.
-- [ ] Compare legacy and Choreo scenario projections and document every intentional strengthening/weakening.
-- [ ] Switch the hosted-writer qualification root only after parity and negative controls pass.
-- [ ] Decide explicitly whether the flat model remains an abstraction test or becomes projection-only.
+- [x] Measure state-space and trace sizes; introduce safe symmetry or bounds without erasing identity failures.
+- [x] Add Choreo progress/fault-safety entries to `eng/quint-qualification.json` with explicit budgets.
+- [x] Run the complete canonical aggregate, sharded CI path, and performance baseline from a cold preparation.
+- [x] Compare legacy and Choreo scenario projections and document every intentional strengthening/weakening.
+- [x] Switch the hosted-writer qualification root only after parity and negative controls pass.
+- [x] Decide explicitly whether the flat model remains an abstraction test or becomes projection-only.
 
 Exit evidence: protected-main qualification artifacts, updated baseline, within-budget execution, and an architecture
 decision recording the legacy-model disposition.
+
+C5 exit evidence (2026-09-18): C4 merged in [PR #424](https://github.com/FS-GG/FS.GG.Coordination/pull/424)
+as `58140bda721e45944a14c9e23f3ebe6d3cd8412e`. The two hosted-writer entries now select
+`O2HostedWriterChoreoProgressQualification` and `O2HostedWriterChoreoFaultQualification`. The progress graph
+contains 64 distinct states; the combined provider/Runner fault graph contains 1,162. All 10,000 non-faulting
+simulation traces reached native completion. The safety mutant and both removed-transition controls failed as
+intended. The production transition relation and the nineteen-entry formal inventory are unchanged.
+
+[The qualification decision](../architecture/choreo-qualification.md) records exact bounds, projection comparisons,
+legacy disposition, and intentional scope differences. The base gate regenerates all eight Choreo fixtures,
+exhausts the retained legacy safety graph (2,376 states), and compares six actual legacy/Choreo scenario projections.
+The published compiler produced the unchanged behavioral contract. A fresh toolchain download/build passed every
+existing digest check; extractor preparation now explicitly fixes the expected Go CGO setting.
+
+The cold-prepared base plus nineteen formal shards passed and the repository aggregate/performance scripts
+accepted their receipts: eight positive invariants, 166 expected negative controls, 242 logical external processes,
+217 Quint CLI calls and 71 verifier calls. Epoch performance was 44,153 ms against 300,000 ms. Choreo progress
+measured 64 states / 63 transitions / 10,000 samples / 144,592 ms / 3,619 MiB / 518,084 artifact bytes; fault safety
+measured 1,162 / 1,387 / 10,000 / 127,884 ms / 3,652 MiB / 43,897 bytes. No state, transition, time, memory, sample
+or artifact budget was raised. Progress simulation depth is explicitly 80 to cover the message microsteps.
+
+C5 also binds the Choreo scripts, source/license pin, raw fixtures and retained counterexamples into bootstrap
+and optimistic formal reuse identities. A regression mutates each input class and requires cache invalidation;
+unrelated prose preserves reuse. The shared base-shard entry point runs the complete Choreo gate for both
+bootstrap and optimistic callers, rather than relying on a workflow-only step.
+
+The retained counterexamples and baseline come from those successful runs. All eight C3 trace bytes remain exact;
+only their source identity advances to `e1ff2a32649a180121c756f762d174e9c74f6620`. Protected CI repeats the sharded
+qualification without refresh mode before this phase can merge. C6 starts from that protected merge.
 
 ### C6 — operational handoff and optional expansion
 

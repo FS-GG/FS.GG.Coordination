@@ -31,7 +31,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9"
+    "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb"
 
 let expectedContract =
     "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
@@ -1769,9 +1769,9 @@ try
     // compiled above as part of that source identity. Quint 0.32's TLC flattener,
     // however, resolves every later module while flattening an unrelated legacy
     // root and loses names imported through Choreo's parameterized module alias.
-    // C2/C3 deliberately retain the legacy qualification roots unchanged, so run
-    // those roots against the exact pre-Choreo prefix and qualify Choreo through
-    // its dedicated pinned-source and bounded gates instead.
+    // Select exact canonical regions for each root after the combined typecheck.
+    // Legacy roots retain the pre-Choreo prefix; C5's two hosted-writer roots use
+    // the pinned Choreo region, including qualification-only negative controls.
     let choreoBoundary = "// BEGIN PINNED quint-co/choreo spells/basicSpells.qnt"
     let choreoBoundaryIndex = q2Source.IndexOf(choreoBoundary, StringComparison.Ordinal)
 
@@ -1780,6 +1780,27 @@ try
 
     let qualificationQnt = Path.Combine(scratch, "protocol-q2-legacy-qualification.qnt")
     File.WriteAllText(qualificationQnt, q2Source.Substring(0, choreoBoundaryIndex), UTF8Encoding(false))
+
+    let choreoTestsIndex =
+        q2Source.IndexOf("module O2HostedWriterChoreoTests {", choreoBoundaryIndex, StringComparison.Ordinal)
+
+    if choreoTestsIndex <= choreoBoundaryIndex then
+        fail "QUINT-CHOREO-BOUNDARY" "missing Choreo tests boundary"
+
+    let choreoQualificationQnt =
+        Path.Combine(scratch, "protocol-q2-choreo-qualification.qnt")
+
+    File.WriteAllText(
+        choreoQualificationQnt,
+        q2Source.Substring(choreoBoundaryIndex, choreoTestsIndex - choreoBoundaryIndex),
+        UTF8Encoding(false)
+    )
+
+    let formalQnt main =
+        match main with
+        | "O2HostedWriterChoreoProgressQualification"
+        | "O2HostedWriterChoreoFaultQualification" -> choreoQualificationQnt
+        | _ -> qualificationQnt
 
     use qualificationConfigurationDocument =
         JsonDocument.Parse(File.ReadAllBytes qualificationConfiguration)
@@ -2038,7 +2059,7 @@ try
                 quint
                 [
                     "run"
-                    qualificationQnt
+                    (formalQnt main)
                     "--main"
                     main
                     "--init"
@@ -2231,7 +2252,7 @@ try
                 quint
                 [
                     "run"
-                    qualificationQnt
+                    (formalQnt main)
                     "--main"
                     main
                     "--init"
@@ -2318,7 +2339,7 @@ try
                 quint
                 [
                     "verify"
-                    qualificationQnt
+                    (formalQnt main)
                     "--main"
                     main
                     "--init"
@@ -2368,7 +2389,7 @@ try
                 quint
                 [
                     "run"
-                    qualificationQnt
+                    (formalQnt main)
                     "--main"
                     main
                     "--init"
@@ -2407,7 +2428,7 @@ try
                     quint
                     [
                         "verify"
-                        qualificationQnt
+                        (formalQnt main)
                         "--main"
                         main
                         "--init"

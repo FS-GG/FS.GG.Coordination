@@ -78,16 +78,25 @@
       "eng/bootstrap-gates/canonical-quint-prepare.sh",
       "eng/bootstrap-gates/canonical-quint-shard.sh",
       "eng/bootstrap-qualification-plan.json",
+      "eng/choreo-source-pin.json",
       "eng/generate-compiled-contract-outputs.fsx",
       "eng/qualify-canonical-quint.sh",
       "eng/quint-qualification-baseline.json",
       "eng/quint-qualification.json",
       "eng/validate-canonical-quint-protocol.fsx",
       "eng/validate-quint-qualification.fsx",
+      "eng/verify-choreo-c2-bounded.sh",
+      "eng/verify-choreo-c3-traces.sh",
+      "eng/verify-choreo-c5-parity.py",
       "global.json",
       "src/FS.GG.Coordination.Qualification.Contracts/packages.lock.json"
     ],
-    "pathPrefixes": ["src/FS.GG.Coordination.Protocol/"]
+    "pathPrefixes": [
+      "src/FS.GG.Coordination.Protocol/",
+      "eng/vendor/choreo/",
+      "tests/FS.GG.Coordination.Orchestration.Host.Tests/Fixtures/Choreo/",
+      "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/"
+    ]
   },
   "economics": {
     "jobId": "qualification-economics",

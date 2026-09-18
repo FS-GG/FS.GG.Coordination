@@ -121,9 +121,6 @@ jobs:
           path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain
       - name: Run one independent canonical shard
         run: bash eng/bootstrap-gates/canonical-quint-shard.sh
-      - name: Verify the bounded Choreo provider and runner lanes
-        if: ${{ matrix.shard == 'base' }}
-        run: bash eng/verify-choreo-c2-bounded.sh
       - name: Upload the canonical shard receipt
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

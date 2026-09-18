@@ -848,9 +848,6 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "          path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain"
     line "      - name: Run one independent canonical shard"
     line "        run: bash eng/bootstrap-gates/canonical-quint-shard.sh"
-    line "      - name: Verify the bounded Choreo provider and runner lanes"
-    line "        if: ${{ matrix.shard == 'base' }}"
-    line "        run: bash eng/verify-choreo-c2-bounded.sh"
     line "      - name: Upload the canonical shard receipt"
     line "        if: ${{ always() }}"
     line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
@@ -1581,7 +1578,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
 
             let expectedInputs =
                 [
-                    "sourceSha256", "22ce12b4b053130715ab758e1ac1a6d596aea36306c7909898bd8dfc2af173c9"
+                    "sourceSha256", "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb"
                     "contractSha256", "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
                 ]
 
