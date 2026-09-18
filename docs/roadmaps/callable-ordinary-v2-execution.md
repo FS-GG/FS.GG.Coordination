@@ -93,7 +93,10 @@ are never acceptance evidence.
   authority and collision-free live ownership readback. Publish first to GitHub Packages, verify provenance and
   served bytes, then publish the byte-identical candidate to nuget.org. Recover partial publication by reading
   the first feed before resuming, prove both served digests, and create `v0.1.0` only after served readback. This
-  does not authorize receiver adoption.
+  does not authorize receiver adoption. The separately authorized operation is bound by
+  `eng/callable-cli-release-operation.json`; its workflow must reproduce the historical prepared archive at its
+  original canonical build root, attest and retain it before effects, prove Trusted Publishing authorization
+  before the first feed write, and refuse unless repository Actions policy admits the exact pinned login action.
 - [ ] **V2-CALL-01.3c — Adopt the exact callable artifact.** First installed behavior change. Separately authorize
   clean creation and retained upgrade as opt-in receiver paths, prove idempotency, explicit conflict, and no
   partial writes, and preserve coexistence with the legacy bridge. Both paths refuse effects before `OpenV2` and
