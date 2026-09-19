@@ -1,0 +1,68 @@
+name: callable-cli-release-prepare-011
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: callable-cli-release-prepare-011
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Reproduce exact 0.1.1 candidate without publication
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: f4837f054a4222a2195c7edcb4f59058459807f4
+      SOURCE_TREE: e43f8469c82d60db43f9238b21d62421b4e6dede
+      SOURCE_MERGE: 414c338f8ba506b6dc9ee35fcd67153e2a3d3a37
+      PACKAGE_SHA256: 2c8108ba28db4f44089063ed30dedc5d7ab5b745d01d138b5a6a027a72a3978e
+      CANONICAL_SOURCE: /home/developer/projects/FS.GG.Coordination.CallableCli011
+      OUTPUT: /tmp/callable-cli-release-011-candidate
+    steps:
+      - name: Check out protected source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up exact SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Prepare at the exact canonical source root
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git fetch --no-tags origin +refs/pull/441/head:refs/remotes/origin/callable-cli-prepared
+          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          test "$(git rev-parse refs/remotes/origin/callable-cli-prepared)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor "$SOURCE_MERGE" "$GITHUB_SHA"
+          test "$(git rev-parse "$SOURCE_SHA^{tree}")" = "$SOURCE_TREE"
+          test "$(git rev-parse "$SOURCE_MERGE^{tree}")" = "$SOURCE_TREE"
+          test ! -e "$CANONICAL_SOURCE"
+          sudo install -d -o "$(id -u)" -g "$(id -g)" "$(dirname "$CANONICAL_SOURCE")"
+          git clone --no-local --no-checkout "$GITHUB_WORKSPACE" "$CANONICAL_SOURCE"
+          git -C "$CANONICAL_SOURCE" fetch origin "$SOURCE_SHA"
+          git -C "$CANONICAL_SOURCE" checkout --detach FETCH_HEAD
+          git -C "$CANONICAL_SOURCE" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          dotnet restore "$CANONICAL_SOURCE/FS.GG.Coordination.sln" --locked-mode
+          mkdir "$OUTPUT"
+          (
+            cd "$CANONICAL_SOURCE"
+            dotnet fsi eng/callable-cli-release.fsx prepare \
+              --source "$SOURCE_SHA" --version 0.1.1 --output "$OUTPUT"
+          )
+          test "$(sha256sum "$OUTPUT/FS.GG.Coordination.Cli.0.1.1.nupkg" | cut -d' ' -f1)" = "$PACKAGE_SHA256"
+          test "$(jq -r .sourceTree "$OUTPUT/callable-cli-release-manifest.json")" = "$SOURCE_TREE"
+      - name: Retain exact preflight candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: callable-cli-release-preflight-011-${{ github.run_id }}
+          path: /tmp/callable-cli-release-011-candidate/
+          if-no-files-found: error
+          retention-days: 90

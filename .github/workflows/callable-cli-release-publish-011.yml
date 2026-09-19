@@ -1,0 +1,289 @@
+name: callable-cli-release-publish-011
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Exact protected operation identity
+        required: true
+        type: string
+      source:
+        description: Exact reviewed candidate commit
+        required: true
+        type: string
+      protected_merge:
+        description: Exact protected-main merge with the candidate tree
+        required: true
+        type: string
+      expected_sha256:
+        description: Exact prepared package digest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: callable-cli-release-v0.1.1
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish and read back exact callable CLI
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      PACKAGE_ID: FS.GG.Coordination.Cli
+      PACKAGE_VERSION: 0.1.1
+      PACKAGE_FILE: FS.GG.Coordination.Cli.0.1.1.nupkg
+      EXPECTED_SOURCE: f4837f054a4222a2195c7edcb4f59058459807f4
+      EXPECTED_TREE: e43f8469c82d60db43f9238b21d62421b4e6dede
+      EXPECTED_MERGE: 414c338f8ba506b6dc9ee35fcd67153e2a3d3a37
+      EXPECTED_SHA256: 2c8108ba28db4f44089063ed30dedc5d7ab5b745d01d138b5a6a027a72a3978e
+      CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
+      READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
+      CANONICAL_SOURCE: /home/developer/projects/FS.GG.Coordination.CallableCli011
+    steps:
+      - name: Check out the protected workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Bind operation, protected source, tree, identity, and live collisions
+        shell: bash
+        env:
+          OPERATION: ${{ inputs.operation }}
+          REQUESTED_SOURCE: ${{ inputs.source }}
+          REQUESTED_MERGE: ${{ inputs.protected_merge }}
+          REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$OPERATION" = publish-v2-call-01-4b-cli-011
+          test "$REQUESTED_SOURCE" = "$EXPECTED_SOURCE"
+          test "$REQUESTED_MERGE" = "$EXPECTED_MERGE"
+          test "$REQUESTED_SHA256" = "$EXPECTED_SHA256"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git fetch --no-tags origin +refs/pull/441/head:refs/remotes/origin/callable-cli-prepared
+          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          test "$(git rev-parse refs/remotes/origin/callable-cli-prepared)" = "$EXPECTED_SOURCE"
+          git merge-base --is-ancestor "$EXPECTED_MERGE" refs/remotes/origin/main
+          test "$(git rev-parse "$EXPECTED_SOURCE^{tree}")" = "$EXPECTED_TREE"
+          test "$(git rev-parse "$EXPECTED_MERGE^{tree}")" = "$EXPECTED_TREE"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.1.1 refs/tags/v0.1.1^\{\} | awk '$2=="refs/tags/v0.1.1^{}"{peeled=$1} $2=="refs/tags/v0.1.1"{plain=$1} END{print peeled ? peeled : plain}')"
+          test -z "$tagged" || test "$tagged" = "$EXPECTED_MERGE"
+          jq -e '.actions | .githubOwnedAllowed == true and .verifiedAllowed == false and .patternsAllowed == ["NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"]' \
+            eng/repository-settings/desired.json >/dev/null || {
+            echo "::error::protected-main desired state does not admit only the exact NuGet/login action"
+            exit 1
+          }
+      - name: Reproduce the reviewed bytes at their preparation root
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e "$CANONICAL_SOURCE"
+          sudo install -d -o "$(id -u)" -g "$(id -g)" "$(dirname "$CANONICAL_SOURCE")"
+          git clone --no-local --no-checkout "$GITHUB_WORKSPACE" "$CANONICAL_SOURCE"
+          git -C "$CANONICAL_SOURCE" fetch origin "$EXPECTED_SOURCE"
+          git -C "$CANONICAL_SOURCE" checkout --detach FETCH_HEAD
+          git -C "$CANONICAL_SOURCE" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$CANONICAL_SOURCE" tag -d v0.1.1 2>/dev/null || true
+          dotnet restore "$CANONICAL_SOURCE/FS.GG.Coordination.sln" --locked-mode
+          mkdir "$CANDIDATE_OUTPUT"
+          (
+            cd "$CANONICAL_SOURCE"
+            dotnet fsi eng/callable-cli-release.fsx prepare \
+              --source "$EXPECTED_SOURCE" --version "$PACKAGE_VERSION" --output "$CANDIDATE_OUTPUT"
+          )
+          test "$(sha256sum "$CANDIDATE_OUTPUT/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          test "$(jq -r .sourceTree "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_TREE"
+      - name: Retain exact candidate before any external package or tag effect
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: callable-cli-release-custody-${{ env.EXPECTED_SHA256 }}
+          path: |
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
+            ${{ env.CANDIDATE_OUTPUT }}/callable-cli-release-manifest.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Attest the exact prepared archive
+        id: attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
+      - name: Verify provenance and local install before publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "$CANDIDATE_OUTPUT/$PACKAGE_FILE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/callable-cli-release-publish-011.yml"
+          config="$RUNNER_TEMP/local-only.config"
+          cat > "$config" <<CFG
+          <?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="candidate" value="$CANDIDATE_OUTPUT"/></packageSources></configuration>
+          CFG
+          dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$RUNNER_TEMP/prepublish-tool" --configfile "$config" --no-cache
+          "$RUNNER_TEMP/prepublish-tool/fsgg-coordination"
+      - name: Observe GitHub Packages before the first effect
+        id: org
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$READBACK_OUTPUT/github"
+          url="https://nuget.pkg.github.com/fs-gg/download/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
+          status="$(curl --silent --location --output "$READBACK_OUTPUT/github/$PACKAGE_FILE" --write-out '%{http_code}' --user "${GITHUB_ACTOR}:${GH_TOKEN}" "$url")"
+          case "$status" in
+            404) rm -f "$READBACK_OUTPUT/github/$PACKAGE_FILE"; echo 'push=true' >> "$GITHUB_OUTPUT" ;;
+            200) python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github/$PACKAGE_FILE" github-packages ;;
+            *) echo "::error::GitHub Packages observation is unknown (HTTP $status)"; exit 1 ;;
+          esac
+      - name: Observe nuget.org and validate recoverable ordering before either effect
+        id: public
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$READBACK_OUTPUT/nuget"
+          url="https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
+          status="$(curl --silent --location --output "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" --write-out '%{http_code}' "$url")"
+          case "$status" in
+            404) rm -f "$READBACK_OUTPUT/nuget/$PACKAGE_FILE"; echo 'push=true' >> "$GITHUB_OUTPUT" ;;
+            200) python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org ;;
+            *) echo "::error::nuget.org observation is unknown (HTTP $status)"; exit 1 ;;
+          esac
+          if test "${{ steps.org.outputs.push }}" = true && test "$status" = 200; then
+            echo "::error::nuget.org is populated while the required first GitHub Packages effect is absent"
+            exit 1
+          fi
+      - name: Prove Trusted Publishing authorization before the first package effect
+        if: steps.public.outputs.push == 'true'
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
+        with:
+          user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+      - name: Publish to GitHub Packages first
+        if: steps.org.outputs.push == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE" \
+            --source https://nuget.pkg.github.com/FS-GG/index.json \
+            --api-key "$GH_TOKEN"
+      - name: Verify exact bytes served by GitHub Packages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://nuget.pkg.github.com/fs-gg/download/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
+          for attempt in {1..60}; do
+            if curl --fail --location --silent --show-error --user "${GITHUB_ACTOR}:${GH_TOKEN}" \
+              --output "$READBACK_OUTPUT/github/$PACKAGE_FILE" "$url"; then break; fi
+            test "$attempt" != 60
+            sleep 10
+          done
+          test "$(sha256sum "$READBACK_OUTPUT/github/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+      - name: Publish the same retained bytes to nuget.org
+        if: steps.public.outputs.push == 'true'
+        shell: bash
+        run: >-
+          dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE"
+          --source https://api.nuget.org/v3/index.json
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+      - name: Read back nuget.org and verify payload identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
+          for attempt in {1..60}; do
+            if curl --fail --location --silent --show-error --output "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" "$url"; then break; fi
+            test "$attempt" != 60
+            sleep 10
+          done
+          python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org
+      - name: Anonymous public install and invocation
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/public-only.config"
+          cat > "$config" <<'CFG'
+          <?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>
+          CFG
+          dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$RUNNER_TEMP/public-tool" --configfile "$config" --no-cache
+          "$RUNNER_TEMP/public-tool/fsgg-coordination"
+      - name: Record dual-feed readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 eng/verify-callable-cli-served.py \
+            "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github/$PACKAGE_FILE" github-packages \
+            > "$READBACK_OUTPUT/github.json"
+          python3 eng/verify-callable-cli-served.py \
+            "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org \
+            > "$READBACK_OUTPUT/nuget.json"
+          jq -n \
+            --arg source "$EXPECTED_SOURCE" --arg tree "$EXPECTED_TREE" --arg merge "$EXPECTED_MERGE" \
+            --arg package "$PACKAGE_ID" --arg version "$PACKAGE_VERSION" --arg digest "$EXPECTED_SHA256" \
+            --slurpfile github "$READBACK_OUTPUT/github.json" --slurpfile nuget "$READBACK_OUTPUT/nuget.json" \
+            '{schema:"fsgg.coordination.callable-cli-release-readback/1",source:$source,sourceTree:$tree,protectedMerge:$merge,packageId:$package,version:$version,packageSha256:$digest,feeds:{githubPackages:$github[0],nugetOrg:$nuget[0]}}' \
+            > "$READBACK_OUTPUT/release-readback.json"
+      - name: Create immutable tag and GitHub release only after both feeds settle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(sha256sum "$READBACK_OUTPUT/github/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org >/dev/null
+          tagged="$(git ls-remote --tags origin refs/tags/v0.1.1 refs/tags/v0.1.1^\{\} | awk '$2=="refs/tags/v0.1.1^{}"{peeled=$1} $2=="refs/tags/v0.1.1"{plain=$1} END{print peeled ? peeled : plain}')"
+          if test -z "$tagged"; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.1.1 -f sha="$EXPECTED_MERGE"
+          else
+            test "$tagged" = "$EXPECTED_MERGE"
+          fi
+          if ! gh release view v0.1.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create v0.1.1 --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "FS.GG.Coordination.Cli 0.1.1" \
+              --notes "V2-CALL-01.4b repair artifact; receiver adoption and isolated execution remain separately gated." \
+              "$CANDIDATE_OUTPUT/$PACKAGE_FILE" \
+              "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" \
+              "$READBACK_OUTPUT/release-readback.json"
+          fi
+          release_dir="$RUNNER_TEMP/release-readback"
+          mkdir "$release_dir"
+          for path in "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$READBACK_OUTPUT/release-readback.json"; do
+            name="$(basename "$path")"
+            if ! gh release view v0.1.1 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+              gh release upload v0.1.1 --repo "$GITHUB_REPOSITORY" "$path"
+            fi
+            gh release download v0.1.1 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
+            test "$(sha256sum "$release_dir/$name" | cut -d' ' -f1)" = "$(sha256sum "$path" | cut -d' ' -f1)"
+          done
+      - name: Retain terminal or partial recovery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: callable-cli-release-state-${{ github.run_id }}
+          path: |
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
+            ${{ env.CANDIDATE_OUTPUT }}/callable-cli-release-manifest.json
+            ${{ env.READBACK_OUTPUT }}/**
+          if-no-files-found: warn
+          retention-days: 90
