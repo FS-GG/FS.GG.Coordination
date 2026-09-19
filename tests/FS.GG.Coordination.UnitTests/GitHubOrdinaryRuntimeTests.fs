@@ -43,6 +43,10 @@ type private ProviderState() =
     member val UnknownDispatch = false with get, set
     member val JournalWrites = 0 with get, set
     member val LoseJournalAcknowledgementAt: int option = None with get, set
+    member val UserPush = true with get, set
+    member val InstallationRepositoryId = 101L with get, set
+    member val InstallationReadStatus = 200 with get, set
+    member val InstallationTotalCount = 1 with get, set
 
 type private LoopbackTransport(state: ProviderState) =
     let json (node: JsonNode) = node.ToJsonString(JsonSerializerOptions(WriteIndented = false))
@@ -54,7 +58,9 @@ type private LoopbackTransport(state: ProviderState) =
             let path = rest.Uri.AbsolutePath
             if state.Outage && rest.Method = Get then NetworkFailure
             elif rest.Method = Get && path = "/repos/FS-GG/FS.GG.Coordination" then
-                response 200 $"{{\"id\":{state.RepositoryId},\"full_name\":\"FS-GG/FS.GG.Coordination\",\"permissions\":{{\"push\":true}}}}" Map.empty
+                response 200 $"{{\"id\":{state.RepositoryId},\"full_name\":\"FS-GG/FS.GG.Coordination\",\"permissions\":{{\"push\":{state.UserPush.ToString().ToLowerInvariant()}}}}}" Map.empty
+            elif rest.Method = Get && path = "/installation/repositories" then
+                response state.InstallationReadStatus $"{{\"total_count\":{state.InstallationTotalCount},\"repositories\":[{{\"id\":{state.InstallationRepositoryId},\"full_name\":\"FS-GG/FS.GG.Coordination\"}}]}}" Map.empty
             elif rest.Method = Get && path = "/repos/FS-GG/FS.GG.Coordination/pulls/7" then
                 response 200 $"{{\"node_id\":\"{state.NodeId}\",\"base\":{{\"ref\":\"main\",\"sha\":\"{state.BaseSha}\"}},\"head\":{{\"sha\":\"{state.HeadSha}\"}},\"merged\":{state.Merged.ToString().ToLowerInvariant()},\"merge_commit_sha\":\"{state.MergeCommit}\"}}" Map.empty
             elif rest.Method = Get && path.EndsWith("/git/ref/heads/policy", StringComparison.Ordinal) then
@@ -120,6 +126,29 @@ let private plan state =
     let provider = runtime state
     let observed = provider.Observe() |> Result.defaultWith failwith
     OrdinaryDelivery.plan observed |> Result.defaultWith (sprintf "%A" >> failwith) |> snd
+
+[<Fact>]
+let ``installation token authorizes selected repository despite false user push`` () =
+    let state = ProviderState()
+    state.UserPush <- false
+    Assert.True((runtime state).Observe() |> Result.defaultWith failwith |> fun observed -> observed.Authorized)
+    Assert.NotEmpty(plan state)
+
+[<Fact>]
+let ``installation token refuses a different repository or unreadable selection`` () =
+    let state = ProviderState()
+    state.UserPush <- false
+    state.InstallationRepositoryId <- 999L
+    Assert.False((runtime state).Observe() |> Result.defaultWith failwith |> fun observed -> observed.Authorized)
+    state.InstallationReadStatus <- 403
+    Assert.Equal(Error "github-read:403", (runtime state).Observe() |> Result.map (fun _ -> ""))
+
+[<Fact>]
+let ``installation token refuses incomplete repository selection`` () =
+    let state = ProviderState()
+    state.UserPush <- false
+    state.InstallationTotalCount <- 2
+    Assert.Equal(Error "installation-pagination-incomplete", (runtime state).Observe() |> Result.map (fun _ -> ""))
 
 [<Fact>]
 let ``provider composition refuses before OpenV2 without mutations`` () =

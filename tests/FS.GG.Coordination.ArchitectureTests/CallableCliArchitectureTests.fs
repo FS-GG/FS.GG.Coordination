@@ -22,7 +22,7 @@ let ``callable CLI is the only explicitly packable stable tool boundary`` () =
             "<PackAsTool>true</PackAsTool>"
             "<ToolCommandName>fsgg-coordination</ToolCommandName>"
             "<PackageId>FS.GG.Coordination.Cli</PackageId>"
-            "<Version>0.1.0</Version>"
+            "<Version>0.1.1</Version>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
     let otherProjects =

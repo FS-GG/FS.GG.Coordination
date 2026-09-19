@@ -292,10 +292,44 @@ module OrdinaryGitHubRuntime =
                 let! fullName = requiredString "full_name" repositoryRoot
                 let repositoryId = repositoryRoot.GetProperty("id").GetInt64()
                 let mutable permissions = Unchecked.defaultof<JsonElement>
-                let authorized =
+                let userPush =
                     repositoryRoot.TryGetProperty("permissions", &permissions)
                     && permissions.TryGetProperty("push", &permissions)
                     && permissions.GetBoolean()
+
+                // GitHub reports user collaboration permissions as false for installation
+                // tokens. For that credential kind, prove the exact repository is in the
+                // token's installation selection instead of treating `permissions.push`
+                // as an App permission. The operation grant separately binds the minted
+                // token's write permissions; mutation responses still fail closed.
+                let rec installationContains (page: int) (seen: Set<string>) (uri: Uri) =
+                    if page >= 10 || Set.contains uri.AbsoluteUri seen then Error "installation-pagination-incomplete"
+                    else
+                        getJson uri
+                        |> Result.bind (fun (response, document) ->
+                            use document = document
+                            let root = document.RootElement
+                            let repositories = root.GetProperty("repositories").EnumerateArray() |> Seq.toList
+                            let found =
+                                repositories
+                                |> List.exists (fun item ->
+                                    item.GetProperty("id").GetInt64() = repositoryId
+                                    && item.GetProperty("full_name").GetString().Equals(fullName, StringComparison.OrdinalIgnoreCase))
+                            match Map.tryFind "link" response.Headers with
+                            | Some link ->
+                                match Transport.tryNextLink link with
+                                | Error _ -> Error "installation-pagination-incomplete"
+                                | Ok(Some next) ->
+                                    installationContains (page + 1) (Set.add uri.AbsoluteUri seen) next
+                                    |> Result.map (fun later -> found || later)
+                                | Ok None -> Ok found
+                            | None ->
+                                let total = root.GetProperty("total_count").GetInt32()
+                                if total > repositories.Length then Error "installation-pagination-incomplete"
+                                else Ok found)
+                let! authorized =
+                    if userPush then Ok true
+                    else installationContains 0 Set.empty (combine options.ApiBase "installation/repositories?per_page=100")
 
                 let pullUri = combine options.ApiBase $"repos/{repoPath options.Repository}/pulls/{options.PullRequestNumber}"
                 let! _, pullDocument = getJson pullUri

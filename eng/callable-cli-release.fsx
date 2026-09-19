@@ -73,7 +73,7 @@ let command, options =
 
 let source = required "--source" options
 let output = required "--output" options |> Path.GetFullPath
-let version = options |> Map.tryFind "--version" |> Option.defaultValue "0.1.0"
+let version = options |> Map.tryFind "--version" |> Option.defaultValue "0.1.1"
 let packageId = "FS.GG.Coordination.Cli"
 let packageName = $"{packageId}.{version}.nupkg"
 let packagePath = Path.Combine(output, packageName)
@@ -96,12 +96,12 @@ let verify () =
 
 match command with
 | "prepare" ->
-    require (version = "0.1.0") "only the proposed first stable version 0.1.0 may be prepared"
+    require (version = "0.1.1") "only the reviewed callable repair version 0.1.1 may be prepared"
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (capture repo "git" [ "rev-parse"; "HEAD" ] = source) "source does not equal HEAD"
     require (String.IsNullOrWhiteSpace(capture repo "git" [ "status"; "--porcelain" ])) "source worktree is not clean"
-    let tags = capture repo "git" [ "tag"; "--list"; "v0.1.0" ]
-    require (String.IsNullOrWhiteSpace tags) "v0.1.0 already exists"
+    let tags = capture repo "git" [ "tag"; "--list"; "v0.1.1" ]
+    require (String.IsNullOrWhiteSpace tags) "v0.1.1 already exists"
     require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "output must be empty"
     Directory.CreateDirectory output |> ignore
     let scratch = Path.Combine(Path.GetTempPath(), "fsgg-callable-cli-" + Guid.NewGuid().ToString("N"))
@@ -129,7 +129,7 @@ match command with
         manifest.Add("schema", "fsgg.coordination.callable-cli-release-preparation/1")
         manifest.Add("sourceCommit", source.ToLowerInvariant())
         manifest.Add("sourceTree", capture repo "git" [ "rev-parse"; source + "^{tree}" ])
-        manifest.Add("tag", "v0.1.0")
+        manifest.Add("tag", "v0.1.1")
         manifest.Add("tagAuthorized", false)
         manifest.Add("version", version)
         let ownership = JsonObject()

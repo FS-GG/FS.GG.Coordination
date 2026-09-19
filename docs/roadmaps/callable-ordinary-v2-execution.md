@@ -192,6 +192,12 @@ version, protected publication and explicit receiver adoption rather than substi
 identity. Private roadmap telemetry for `.4a` is associated through the `.github` workspace; native collaboration
 interception remains unsupported and usage remains unknown, not zero, and neither becomes acceptance evidence.
 
+During `.4b` identity-bound execution, [run `35418940289`](https://github.com/FS-GG/.github/actions/runs/35418940289)
+retained a `setup-intent` checkpoint and the installed 0.1.0 command refused planning with
+`UnauthorizedObservation`. GitHub returned `permissions.push=false` for both scoped App tokens while the target
+repository and PR remained readable. Producer version 0.1.1 repairs this App-token observation; protected
+publication, explicit receiver repin, installed execution, native acceptance, and cleanup remain pending.
+
 Completion evidence for `.1` and `.2`: the exact candidate runs a warning-free Release solution build; all 417
 unit tests and all 651 architecture tests pass; the focused ordinary suite contributes five unit and two
 architecture controls; both registered Q3/Q6 commands report passed controlled-provider qualification; evidence
