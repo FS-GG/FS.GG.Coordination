@@ -48,9 +48,9 @@ requireContains
     "eng/callable-cli-isolated-operation-proposal.json"
     [
         "prepared-not-authorized"
-        "3ebf436e7e2efdf221b9b08f96b6d5216bbeb22053af26bd7cdd2d0d11ef561d"
-        "b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c"
-        "6af4760f429379d6e4a20f3424ee70b33e21cce220930ac53c177755049bd78a"
+        "828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c6205812a1b383a6e07d5c"
+        "392617a63fb622eb8d243f7973f1c74d63d13ac256aac2c86532cdeb51c1d5b2"
+        "4b2bc6086bb57af82f9f1812a0e9b22933c406d0ac6276bc926f03dd4cd84f89"
         "canonical-json-without-artifact-coordinates"
         "--grant-artifact-envelope"
         "identity-bound-operation"
@@ -74,13 +74,14 @@ requireContains
 requireContains
     "evidence/github-substrate-v2/gs2-09-9/isolated-operation-coverage.json"
     [
-        "3ebf436e7e2efdf221b9b08f96b6d5216bbeb22053af26bd7cdd2d0d11ef561d"
-        "b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c"
+        "828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c6205812a1b383a6e07d5c"
+        "392617a63fb622eb8d243f7973f1c74d63d13ac256aac2c86532cdeb51c1d5b2"
         "unproved-reviewer-membership-403"
         "unknown-create-without-readback"
         "nonzero-or-pending-installed-cli"
         "cleanup-response-without-404-readback"
         "protected-grant-artifact-canonical-payload-readback"
+        "cross-origin-artifact-redirect-strips-credentials-and-refuses-downgrade"
         "aliased-credential-role-token"
         "\"externalAcceptance\": false"
     ]
@@ -103,6 +104,7 @@ requireContains
         "grant-artifact-content-binding"
         "grant-artifact-self-reference"
         "grant-artifact-envelope-binding"
+        "CredentialStrippingRedirectHandler"
         "credential-token-role-alias"
         "retained-plan-missing"
         "journal-protection-conflict"
@@ -120,7 +122,7 @@ if inspection.GetProperty("disposition").GetString() <> "refused-no-compatible-a
 
 let testOutput, testError = run "python3" [ "eng/test-callable-cli-isolated-operation.py" ]
 let combined = testOutput + testError
-if not (combined.Contains("Ran 23 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
+if not (combined.Contains("Ran 24 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
     failwith $"isolated operation controls did not report the expected bounded suite: {combined}"
 
 printfn "callable isolated operation source qualification passed; prepared-not-authorized; zero provider effects"

@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import unittest
 import unittest.mock
+import urllib.request
 import zipfile
 
 
@@ -549,6 +550,22 @@ class IsolatedOperationTests(unittest.TestCase):
                 operation.grant_artifact_payload(payload)
         self.assertNotEqual(grant, operation.grant_artifact_payload(
             archive(operation.GRANT_ARTIFACT_FILE, b'{"changed":true}')))
+
+    def test_artifact_redirect_strips_credentials_only_across_origins(self):
+        handler = operation.CredentialStrippingRedirectHandler()
+        request = urllib.request.Request(
+            "https://api.github.com/repos/FS-GG/.github/actions/artifacts/6101/zip",
+            headers={"Authorization": "Bearer secret", "Proxy-Authorization": "proxy secret"})
+        cross_origin = handler.redirect_request(
+            request, None, 302, "Found", {}, "https://artifact.example.test/signed/archive.zip")
+        self.assertIsNotNone(cross_origin)
+        self.assertFalse(cross_origin.has_header("Authorization"))
+        self.assertFalse(cross_origin.has_header("Proxy-Authorization"))
+        same_origin = handler.redirect_request(
+            request, None, 302, "Found", {}, "https://api.github.com/same-origin")
+        self.assertEqual("Bearer secret", same_origin.get_header("Authorization"))
+        self.assertIsNone(handler.redirect_request(
+            request, None, 302, "Found", {}, "http://artifact.example.test/archive.zip"))
 
     def live_artifact_fixture(self, archive_override=None, artifact_changes=None):
         plan = self.create_plan()

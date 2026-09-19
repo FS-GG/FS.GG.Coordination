@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 
@@ -471,6 +472,23 @@ def validate_admission(contract: dict[str, object], plan: dict[str, object], gra
         raise Refused("required-capability-unproved")
 
 
+class CredentialStrippingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow artifact redirects without disclosing the GitHub App token."""
+
+    def redirect_request(self, request, fp, code, message, headers, new_url):
+        redirected = super().redirect_request(request, fp, code, message, headers, new_url)
+        if redirected is None:
+            return None
+        source = urllib.parse.urlsplit(request.full_url)
+        target = urllib.parse.urlsplit(new_url)
+        if source.scheme == "https" and target.scheme != "https":
+            return None
+        if (source.scheme, source.netloc) != (target.scheme, target.netloc):
+            redirected.remove_header("Authorization")
+            redirected.remove_header("Proxy-Authorization")
+        return redirected
+
+
 class GitHub:
     def __init__(self, token: str, api_base: str = "https://api.github.com/") -> None:
         if not token:
@@ -503,7 +521,8 @@ class GitHub:
             headers={"accept": "application/vnd.github+json", "authorization": f"Bearer {self.token}",
                      "user-agent": "fsgg-coordination-callable-isolated/1", "x-github-api-version": "2022-11-28"})
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            opener = urllib.request.build_opener(CredentialStrippingRedirectHandler())
+            with opener.open(request, timeout=30) as response:
                 return response.status, response.read()
         except urllib.error.HTTPError as error:
             return error.code, error.read()

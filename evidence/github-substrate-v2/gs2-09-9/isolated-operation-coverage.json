@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.coordination.callable-isolated-operation-coverage/1",
   "operationIdentity": "v2-call-01-4b-isolated-native-v1",
-  "contractSha256": "3ebf436e7e2efdf221b9b08f96b6d5216bbeb22053af26bd7cdd2d0d11ef561d",
-  "operationSourceSha256": "b5a20b2c511bf37833dac99c35eb1fa420f410f5b324fd26883e5af928cb145c",
+  "contractSha256": "828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c6205812a1b383a6e07d5c",
+  "operationSourceSha256": "392617a63fb622eb8d243f7973f1c74d63d13ac256aac2c86532cdeb51c1d5b2",
   "positiveControls": [
     "deterministic-sealed-creation-plan",
     "identity-bound-second-phase-plan",
@@ -16,6 +16,7 @@
     "public-prepare-and-admission-command-path",
     "protected-grant-artifact-canonical-payload-readback",
     "independent-server-artifact-envelope-live-readback",
+    "cross-origin-artifact-redirect-strips-credentials-and-refuses-downgrade",
     "public-execute-and-resume-command-path"
   ],
   "negativeControls": [
@@ -83,5 +84,5 @@
     "epochOrJournal": 0
   },
   "externalAcceptance": false,
-  "coverageSha256": "bc05525f552efb8b7c4c22dc65f51356c1c5f62b47118922493126209f59c50d"
+  "coverageSha256": "57f1d2ad02f6de3edc3c62df8bb0cb256f119cc1fabea478f1dad22d0cd91f24"
 }
