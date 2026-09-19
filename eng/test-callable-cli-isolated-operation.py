@@ -386,11 +386,10 @@ class IsolatedOperationTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as scratch:
                 receipt_path = pathlib.Path(scratch) / "receipt.json"
-                receipt = operation.execute_identity_bound(client, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN", receipt_path,
-                                                           plan_token_environment="SETUP_TOKEN")
+                receipt = operation.execute_identity_bound(client, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN", receipt_path)
                 self.assertEqual("settled", receipt["cleanup"]["state"])
                 self.assertEqual(["plan", "advance", "advance"], calls)
-                self.assertEqual(["SETUP_TOKEN", "TOKEN", "TOKEN"], environments)
+                self.assertEqual(["TOKEN", "TOKEN", "TOKEN"], environments)
                 persisted = operation.read_json(receipt_path)
                 self.assertEqual("settled", persisted["cleanup"]["state"])
                 self.assertEqual(9001, persisted["cleanup"]["expectedRepositoryId"])

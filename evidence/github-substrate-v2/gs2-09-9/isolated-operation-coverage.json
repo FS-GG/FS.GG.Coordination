@@ -1,8 +1,8 @@
 {
   "schema": "fsgg.coordination.callable-isolated-operation-coverage/1",
   "operationIdentity": "v2-call-01-4b-isolated-native-v1",
-  "contractSha256": "b0c311aca5481ee21652d428f40c33330d3a03a07636f763b306775387b7d069",
-  "operationSourceSha256": "b1ccf5bb1a68d577ccab833f3752484c9fb74239d2bfd2e5d592791c85a3c070",
+  "contractSha256": "ccd57e74293b2fb1443614fea6add54525f9f11c8d1126908180479ab5bc18a6",
+  "operationSourceSha256": "2dca8907815c720086c761eff9283aaf682d5786b1c97668351679d452f5591d",
   "positiveControls": [
     "deterministic-sealed-creation-plan",
     "identity-bound-second-phase-plan",
@@ -17,7 +17,7 @@
     "protected-grant-artifact-canonical-payload-readback",
     "independent-server-artifact-envelope-live-readback",
     "cross-origin-artifact-redirect-strips-credentials-and-refuses-downgrade",
-    "setup-credential-read-only-installed-plan-with-execution-credential-advance",
+    "execution-credential-protected-branch-read-and-installed-plan-with-execution-credential-advance",
     "exact-legacy-setup-progress-contract-migration",
     "public-execute-and-resume-command-path"
   ],
@@ -86,5 +86,5 @@
     "epochOrJournal": 0
   },
   "externalAcceptance": false,
-  "coverageSha256": "177ba6a8a01c45a197e5e6125083dca61cbb6be5b617401d79dba07a58eaa9a6"
+  "coverageSha256": "ceae0963352ae3527cdfb23c1e5a80325ba938d5efc64f408e8a47c9cc732593"
 }
