@@ -48,9 +48,9 @@ requireContains
     "eng/callable-cli-isolated-operation-proposal.json"
     [
         "prepared-not-authorized"
-        "828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c6205812a1b383a6e07d5c"
-        "392617a63fb622eb8d243f7973f1c74d63d13ac256aac2c86532cdeb51c1d5b2"
-        "4b2bc6086bb57af82f9f1812a0e9b22933c406d0ac6276bc926f03dd4cd84f89"
+        "b0c311aca5481ee21652d428f40c33330d3a03a07636f763b306775387b7d069"
+        "b1ccf5bb1a68d577ccab833f3752484c9fb74239d2bfd2e5d592791c85a3c070"
+        "5b1b3fbd38cf7ae425b55e84883edb7ff88173a50053959c2bb63f25de927de4"
         "canonical-json-without-artifact-coordinates"
         "--grant-artifact-envelope"
         "identity-bound-operation"
@@ -74,14 +74,16 @@ requireContains
 requireContains
     "evidence/github-substrate-v2/gs2-09-9/isolated-operation-coverage.json"
     [
-        "828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c6205812a1b383a6e07d5c"
-        "392617a63fb622eb8d243f7973f1c74d63d13ac256aac2c86532cdeb51c1d5b2"
+        "b0c311aca5481ee21652d428f40c33330d3a03a07636f763b306775387b7d069"
+        "b1ccf5bb1a68d577ccab833f3752484c9fb74239d2bfd2e5d592791c85a3c070"
         "unproved-reviewer-membership-403"
         "unknown-create-without-readback"
         "nonzero-or-pending-installed-cli"
         "cleanup-response-without-404-readback"
         "protected-grant-artifact-canonical-payload-readback"
         "cross-origin-artifact-redirect-strips-credentials-and-refuses-downgrade"
+        "setup-credential-read-only-installed-plan-with-execution-credential-advance"
+        "exact-legacy-setup-progress-contract-migration"
         "aliased-credential-role-token"
         "\"externalAcceptance\": false"
     ]
@@ -122,7 +124,7 @@ if inspection.GetProperty("disposition").GetString() <> "refused-no-compatible-a
 
 let testOutput, testError = run "python3" [ "eng/test-callable-cli-isolated-operation.py" ]
 let combined = testOutput + testError
-if not (combined.Contains("Ran 24 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
+if not (combined.Contains("Ran 25 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
     failwith $"isolated operation controls did not report the expected bounded suite: {combined}"
 
 printfn "callable isolated operation source qualification passed; prepared-not-authorized; zero provider effects"

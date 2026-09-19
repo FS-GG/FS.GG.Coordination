@@ -237,6 +237,17 @@ to `4b2bc6086bb57af82f9f1812a0e9b22933c406d0ac6276bc926f03dd4cd84f89`,
 `392617a63fb622eb8d243f7973f1c74d63d13ac256aac2c86532cdeb51c1d5b2`; its focused suite runs twenty-four
 offline tests including the redirect credential-boundary control. The two refused live runs performed no target,
 journal, epoch, workflow, cleanup or external-acceptance effect.
+The subsequent phase-two setup reached the installed runtime but its read-only plan observation received `403`
+because branch-protection readback was attempted with the narrower execution credential. The repaired source uses
+the already-authorized setup credential only for installed planning, retains the execution credential for both
+advance calls, and admits/migrates only the exact live creation receipt and `setup-intent` checkpoint. Current
+proposal, contract, operation-source and coverage digests are
+`5b1b3fbd38cf7ae425b55e84883edb7ff88173a50053959c2bb63f25de927de4`,
+`b0c311aca5481ee21652d428f40c33330d3a03a07636f763b306775387b7d069`,
+`b1ccf5bb1a68d577ccab833f3752484c9fb74239d2bfd2e5d592791c85a3c070`, and
+`177ba6a8a01c45a197e5e6125083dca61cbb6be5b617401d79dba07a58eaa9a6`; the focused suite now runs twenty-five
+offline tests. The target remains synthetic and pending protected recovery; `.4c`, Q4 and migration acceptance
+remain outside this evidence.
 
 ## Dependencies, invalidators, and completion examples
 

@@ -329,12 +329,42 @@ class IsolatedOperationTests(unittest.TestCase):
             operation.execute_identity_bound(live, self.contract, plan, "/not-used", "TOKEN", "/not-used")
         self.assertEqual(["GET"], [method for method, _, _ in live.calls])
 
+    def test_exact_live_creation_receipt_and_setup_checkpoint_migrate_to_repaired_contract(self):
+        receipt = {
+            "authoritativeReadback": True,
+            "contractSha256": operation.LEGACY_CREATION_CONTRACT_SHA256,
+            "creationPlanSeal": "0de72b8825a2f11e106e8767f20e3587f1c65e649efdbc9b57e9dea628c80fbf",
+            "receiptSha256": operation.LEGACY_CREATION_RECEIPT_SHA256,
+            "schema": "fsgg.coordination.callable-isolated-creation-receipt/1",
+            "target": {"defaultBranch": "main", "fullName": self.contract["target"]["fullName"],
+                       "nodeId": "R_kgDOUgzhnA", "owner": "FS-GG", "repositoryId": 1376575900,
+                       "syntheticOnly": True, "visibility": "public"},
+        }
+        plan = operation.prepare_operation(self.contract, receipt)
+        progress = {
+            "checkpoints": [], "contractSha256": operation.LEGACY_CREATION_CONTRACT_SHA256,
+            "operationIdentity": self.contract["identity"], "planSeal": operation.LEGACY_OPERATION_PLAN_SEAL,
+            "schema": "fsgg.coordination.callable-isolated-operation-progress/1",
+            "seal": operation.LEGACY_SETUP_PROGRESS_SEAL, "stage": "setup-intent",
+            "target": {"fullName": self.contract["target"]["fullName"], "repositoryId": 1376575900},
+        }
+        with tempfile.TemporaryDirectory() as scratch:
+            state = pathlib.Path(scratch) / "checkpoint.json"
+            operation.write_private(state, progress)
+            with self.assertRaisesRegex(operation.Refused, "cleanup-readback-without-bound-intent"):
+                operation.execute_identity_bound(FakeGitHub([(404, {})]), self.contract, plan, "/unused", "TOKEN", state)
+            migrated = operation.read_json(state)
+            self.assertEqual(self.contract["contractSha256"], migrated["contractSha256"])
+            self.assertEqual(plan["seal"], migrated["planSeal"])
+            self.assertNotEqual(operation.LEGACY_SETUP_PROGRESS_SEAL, migrated["seal"])
+
     def test_identity_bound_interpreter_persists_before_cleanup_and_replay_is_noop(self):
         plan = operation.prepare_operation(self.contract, self.creation_receipt())
         client = FullOperationGitHub(self.contract, plan)
         original_installed = operation.installed_command
         original_run = operation.run_cli
         calls = []
+        environments = []
 
         class Result:
             def __init__(self, code, stdout):
@@ -342,8 +372,9 @@ class IsolatedOperationTests(unittest.TestCase):
                 self.stdout = stdout
                 self.stderr = b""
 
-        def run(_command, arguments, _token_environment):
+        def run(_command, arguments, token_environment):
             calls.append(arguments[1])
+            environments.append(token_environment)
             if arguments[1] == "plan":
                 return Result(0, operation.canonical({"seal": "c" * 64}))
             if len([item for item in calls if item == "advance"]) == 1:
@@ -355,9 +386,11 @@ class IsolatedOperationTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as scratch:
                 receipt_path = pathlib.Path(scratch) / "receipt.json"
-                receipt = operation.execute_identity_bound(client, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN", receipt_path)
+                receipt = operation.execute_identity_bound(client, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN", receipt_path,
+                                                           plan_token_environment="SETUP_TOKEN")
                 self.assertEqual("settled", receipt["cleanup"]["state"])
                 self.assertEqual(["plan", "advance", "advance"], calls)
+                self.assertEqual(["SETUP_TOKEN", "TOKEN", "TOKEN"], environments)
                 persisted = operation.read_json(receipt_path)
                 self.assertEqual("settled", persisted["cleanup"]["state"])
                 self.assertEqual(9001, persisted["cleanup"]["expectedRepositoryId"])

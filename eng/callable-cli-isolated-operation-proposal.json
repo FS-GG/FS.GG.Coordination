@@ -5,8 +5,8 @@
   "authorized": false,
   "contract": {
     "path": "eng/callable-cli-isolated-operation-contract.json",
-    "sha256": "828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c6205812a1b383a6e07d5c",
-    "operationSourceSha256": "392617a63fb622eb8d243f7973f1c74d63d13ac256aac2c86532cdeb51c1d5b2",
+    "sha256": "b0c311aca5481ee21652d428f40c33330d3a03a07636f763b306775387b7d069",
+    "operationSourceSha256": "b1ccf5bb1a68d577ccab833f3752484c9fb74239d2bfd2e5d592791c85a3c070",
     "validator": "github-callable-isolated-operation-preparation-contract"
   },
   "phases": [
@@ -77,5 +77,5 @@
     "migration-or-cutover",
     "external-acceptance-or-Q4-inference"
   ],
-  "proposalSha256": "4b2bc6086bb57af82f9f1812a0e9b22933c406d0ac6276bc926f03dd4cd84f89"
+  "proposalSha256": "5b1b3fbd38cf7ae425b55e84883edb7ff88173a50053959c2bb63f25de927de4"
 }
