@@ -167,6 +167,13 @@ are never acceptance evidence.
       expired, malformed, multi-file, swapped and replayed artifacts refuse before mutation. Public
       `validate-admission` and `execute` require the envelope explicitly. The `.github` authorization/executor
       sources must be repinned to this v4 contract and input shape before dispatch; `.4b` remains incomplete.
+    - [x] **Live artifact-download source repair.** Protected executor runs `35407504607` and `35407577880`
+      refused before provider dispatch: the first on a non-canonical payload digest supplied to the envelope and
+      the second when Python forwarded the App authorization header across GitHub's signed cross-origin artifact
+      redirect and received `401`. No checkpoint was emitted and the target remained absent. The operator now
+      strips authorization and proxy-authorization on cross-origin redirects while refusing HTTPS downgrade;
+      same-origin authentication, exact archive digest and canonical-payload validation remain intact. Fresh
+      `.github` source must repin this repair and obtain new plans and grants; `.4b` and `.4c` remain incomplete.
   - [ ] **V2-CALL-01.4c — Qualify installed native execution and acceptance.** Run the installed command under
     the admitted operation, obtain independent PR and sharded-journal readback, prove fresh-process no-op replay
     and interruption recovery without duplicate effect, clean up the disposable subject, and bind exact native
@@ -224,6 +231,12 @@ twenty-three offline tests plus independently compiled architecture controls cov
 protected environment/run/artifact authority, separated credential roles, target, capability, phase, tamper,
 expiry, unknown-response, durable plan/PR recovery, journal identity/protection, replay and cleanup refusals.
 The prepared source performs zero live effects and grants no `.4b` admission or `.4c` acceptance.
+The follow-up live artifact-download repair advances the current proposal, contract and operation-source digests
+to `4b2bc6086bb57af82f9f1812a0e9b22933c406d0ac6276bc926f03dd4cd84f89`,
+`828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c6205812a1b383a6e07d5c`, and
+`392617a63fb622eb8d243f7973f1c74d63d13ac256aac2c86532cdeb51c1d5b2`; its focused suite runs twenty-four
+offline tests including the redirect credential-boundary control. The two refused live runs performed no target,
+journal, epoch, workflow, cleanup or external-acceptance effect.
 
 ## Dependencies, invalidators, and completion examples
 
