@@ -57,6 +57,10 @@ ROLE_NAMES = (
     "app-installation-observer", "authority-observer", "reviewer-membership-observer",
     "creation", "setup", "execution", "cleanup",
 )
+LEGACY_CREATION_CONTRACT_SHA256 = "828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c6205812a1b383a6e07d5c"
+LEGACY_CREATION_RECEIPT_SHA256 = "9b7bc9d5c49ba245410bac52c88ab8e23cd5f02c359b1c7d486dc89652f4698b"
+LEGACY_SETUP_PROGRESS_SEAL = "4befec5c2a1523966386320f3e1b33825c49bc4e70ff493308ff501aaa41d1ee"
+LEGACY_OPERATION_PLAN_SEAL = "364b59f95a8ae0ac7958d580d3d1c63d13fbdcae378310393161894081525aaa"
 
 
 class Refused(RuntimeError):
@@ -281,7 +285,9 @@ def creation_identity(contract: dict[str, object], receipt: dict[str, object]) -
     if receipt.get("schema") != "fsgg.coordination.callable-isolated-creation-receipt/1":
         raise Refused("creation-receipt-schema")
     verify_digest(receipt, "receiptSha256", "creation-receipt")
-    if receipt.get("contractSha256") != contract.get("contractSha256"):
+    legacy_receipt = (receipt.get("contractSha256") == LEGACY_CREATION_CONTRACT_SHA256
+                      and receipt.get("receiptSha256") == LEGACY_CREATION_RECEIPT_SHA256)
+    if receipt.get("contractSha256") != contract.get("contractSha256") and not legacy_receipt:
         raise Refused("creation-receipt-contract")
     target = receipt.get("target")
     expected = contract["target"]
@@ -985,7 +991,8 @@ def execute_creation(client: GitHub, contract: dict[str, object], plan: dict[str
 
 def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: dict[str, object], command: str,
                            token_environment: str, receipt_path: str | pathlib.Path, cleanup_client: GitHub | None = None,
-                           grant: dict[str, object] | None = None, now_provider=utc_now) -> dict[str, object]:
+                           grant: dict[str, object] | None = None, now_provider=utc_now,
+                           plan_token_environment: str | None = None) -> dict[str, object]:
     validate_plan(contract, plan)
     cleanup_client = cleanup_client or client
     target = plan["target"]
@@ -993,10 +1000,24 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
         raise Refused("operation-stage-order")
     retained = read_json(receipt_path) if pathlib.Path(receipt_path).is_file() else None
     if retained is not None:
-        if (retained.get("contractSha256") != contract["contractSha256"] or retained.get("planSeal") != plan["seal"]
-                or retained.get("operationIdentity") != contract["identity"]):
-            raise Refused("progress-binding")
         verify_digest(retained, "receiptSha256" if retained.get("schema", "").endswith("receipt/1") else "seal", "operation-progress")
+        legacy_progress = (
+            retained.get("schema") == "fsgg.coordination.callable-isolated-operation-progress/1"
+            and retained.get("stage") == "setup-intent"
+            and retained.get("contractSha256") == LEGACY_CREATION_CONTRACT_SHA256
+            and retained.get("planSeal") == LEGACY_OPERATION_PLAN_SEAL
+            and retained.get("seal") == LEGACY_SETUP_PROGRESS_SEAL
+            and retained.get("operationIdentity") == contract["identity"]
+            and retained.get("target") == {"repositoryId": plan["target"]["repositoryId"], "fullName": plan["target"]["fullName"]}
+        )
+        if legacy_progress:
+            migrated = without(retained, "seal")
+            migrated.update({"contractSha256": contract["contractSha256"], "planSeal": plan["seal"]})
+            retained = sealed(migrated)
+            write_private(receipt_path, retained)
+        elif (retained.get("contractSha256") != contract["contractSha256"] or retained.get("planSeal") != plan["seal"]
+              or retained.get("operationIdentity") != contract["identity"]):
+            raise Refused("progress-binding")
     status, observed = client.request("GET", f"repos/{target['fullName']}")
     if status == 404:
         cleanup = retained.get("cleanup") if isinstance(retained, dict) else None
@@ -1057,15 +1078,18 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     ensure_ref(client, target["fullName"], journal_ref, source_sha)
     ensure_journal_protection(client, target["fullName"], journal_ref)
     executable = installed_command(command, contract["package"]["installedManagedCommandSha256"])
-    common = ["delivery", "--provider", "github", "--repository", target["fullName"], "--pr", str(number),
-              "--token-env", token_environment, "--policy-ref", POLICY_REF,
-              "--epoch-repository", target["fullName"], "--epoch-ref", EPOCH_REF, "--epoch-path", "epoch.json",
-              "--journal-repository", target["fullName"]]
+    def common(environment: str) -> list[str]:
+        return ["delivery", "--provider", "github", "--repository", target["fullName"], "--pr", str(number),
+                "--token-env", environment, "--policy-ref", POLICY_REF,
+                "--epoch-repository", target["fullName"], "--epoch-ref", EPOCH_REF, "--epoch-path", "epoch.json",
+                "--journal-repository", target["fullName"]]
+    execution_common = common(token_environment)
     encoded_plan = retained.get("installedPlanBase64")
     if encoded_plan is None:
         if retained.get("stage") in {"cli-intent", "native-readback", "cleanup-intent"}:
             raise Refused("retained-plan-missing")
-        planned = run_cli(executable, ["delivery", "plan", *common[1:]], token_environment)
+        planning_environment = plan_token_environment or token_environment
+        planned = run_cli(executable, ["delivery", "plan", *common(planning_environment)[1:]], planning_environment)
         if planned.returncode != 0 or not planned.stdout:
             raise Refused("installed-plan-refused")
         installed_plan = planned.stdout
@@ -1103,7 +1127,7 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
         if grant is not None:
             require_unexpired(grant, now_provider())
         try:
-            advanced = run_cli(executable, ["delivery", "advance", *common[1:], "--plan", str(plan_file)], token_environment)
+            advanced = run_cli(executable, ["delivery", "advance", *execution_common[1:], "--plan", str(plan_file)], token_environment)
         except (subprocess.TimeoutExpired, OSError) as error:
             raise Refused("installed-advance-outcome-unknown-requires-readback") from error
         if advanced.returncode != 0 or b"AdvancePending" in advanced.stdout or b"AdvanceSettled" not in advanced.stdout:
@@ -1127,7 +1151,7 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
             or not isinstance(journal_state.get("generation"), int) or journal_state["generation"] < 1
             or not OID.fullmatch(str(journal_value.get("sha", "")))):
         raise Refused("journal-not-settled")
-    replayed = run_cli(executable, ["delivery", "advance", *common[1:], "--plan", str(plan_file)], token_environment)
+    replayed = run_cli(executable, ["delivery", "advance", *execution_common[1:], "--plan", str(plan_file)], token_environment)
     if replayed.returncode != 0 or b"AdvanceAlreadySettled" not in replayed.stdout:
         raise Refused("installed-replay-not-noop")
     receipt = {"schema": "fsgg.coordination.callable-isolated-operation-receipt/1",
@@ -1246,7 +1270,8 @@ def main(argv: list[str] | None = None, client_factory=GitHub, now_provider=utc_
                     raise Refused("installed-command-required")
                 receipt = execute_identity_bound(
                     clients["setup"], contract, plan, args.tool_command,
-                    token_environments["execution"], args.receipt, clients["cleanup"], grant, now_provider)
+                    token_environments["execution"], args.receipt, clients["cleanup"], grant, now_provider,
+                    token_environments["setup"])
             write_private(args.receipt, receipt)
             print(canonical({"outcome": "settled", "receiptSha256": receipt["receiptSha256"]}).decode())
         return 0
