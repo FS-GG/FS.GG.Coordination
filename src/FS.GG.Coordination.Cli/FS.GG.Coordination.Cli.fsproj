@@ -6,8 +6,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coordination</ToolCommandName>
     <PackageId>FS.GG.Coordination.Cli</PackageId>
-    <Version>0.1.0</Version>
-    <PackageVersion>0.1.0</PackageVersion>
+    <Version>0.1.1</Version>
+    <PackageVersion>0.1.1</PackageVersion>
     <Authors>FS-GG</Authors>
     <Description>Callable FS.GG Coordination boundary. Production effects remain governed by authoritative epoch and journal policy.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
