@@ -46,7 +46,7 @@ jobs:
       EXPECTED_SOURCE: f4837f054a4222a2195c7edcb4f59058459807f4
       EXPECTED_TREE: e43f8469c82d60db43f9238b21d62421b4e6dede
       EXPECTED_MERGE: 414c338f8ba506b6dc9ee35fcd67153e2a3d3a37
-      EXPECTED_SHA256: 2c8108ba28db4f44089063ed30dedc5d7ab5b745d01d138b5a6a027a72a3978e
+      EXPECTED_SHA256: 3072f67fa7ad19cc93240eff7b1b3003c12d07882ea9aa85710167273852bf7d
       CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
       READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
       CANONICAL_SOURCE: /home/developer/projects/FS.GG.Coordination.CallableCli011
@@ -99,6 +99,7 @@ jobs:
           git -C "$CANONICAL_SOURCE" fetch origin "$EXPECTED_SOURCE"
           git -C "$CANONICAL_SOURCE" checkout --detach FETCH_HEAD
           git -C "$CANONICAL_SOURCE" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          test "$(git -C "$CANONICAL_SOURCE" remote get-url origin)" = "https://github.com/${GITHUB_REPOSITORY}.git"
           git -C "$CANONICAL_SOURCE" tag -d v0.1.1 2>/dev/null || true
           dotnet restore "$CANONICAL_SOURCE/FS.GG.Coordination.sln" --locked-mode
           mkdir "$CANDIDATE_OUTPUT"

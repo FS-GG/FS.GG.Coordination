@@ -197,6 +197,14 @@ retained a `setup-intent` checkpoint and the installed 0.1.0 command refused pla
 `UnauthorizedObservation`. GitHub returned `permissions.push=false` for both scoped App tokens while the target
 repository and PR remained readable. Producer version 0.1.1 repairs this App-token observation; protected
 publication, explicit receiver repin, installed execution, native acceptance, and cleanup remain pending.
+The 0.1.1 release preflight at protected run `35433965498` retained candidate artifact `10581917023`.
+Two independent hosted preparations and a local preparation with the same canonical source root and GitHub
+`origin` produced byte-identical package SHA-256
+`3072f67fa7ad19cc93240eff7b1b3003c12d07882ea9aa85710167273852bf7d` and identical manifests.
+The earlier local proposal used a filesystem `origin`, omitted GitHub SourceLink metadata from six assemblies,
+and therefore had different bytes; it is superseded, not published. Protected preparation and publication
+now assert the exact remote before packing. The retained manifest still denies publication and tag authority;
+the exact protected publisher remains a separate gate.
 
 Completion evidence for `.1` and `.2`: the exact candidate runs a warning-free Release solution build; all 417
 unit tests and all 651 architecture tests pass; the focused ordinary suite contributes five unit and two
