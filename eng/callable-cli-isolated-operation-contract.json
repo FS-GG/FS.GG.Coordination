@@ -6,7 +6,7 @@
   "source": {
     "prerequisiteHead": "0028b9efb8481084343aa243aef979de06c9f3b9",
     "operationSource": "eng/callable-cli-isolated-operation.py",
-    "operationSourceSha256": "b1ccf5bb1a68d577ccab833f3752484c9fb74239d2bfd2e5d592791c85a3c070"
+    "operationSourceSha256": "2dca8907815c720086c761eff9283aaf682d5786b1c97668351679d452f5591d"
   },
   "target": {
     "owner": "FS-GG",
@@ -88,7 +88,7 @@
       "execution": {
         "kind": "github-app-installation",
         "account": "FS-GG",
-        "permissions": {"checks": "read", "contents": "write", "metadata": "read", "pull_requests": "write"}
+        "permissions": {"administration": "read", "checks": "read", "contents": "write", "metadata": "read", "pull_requests": "write"}
       },
       "cleanup": {
         "kind": "github-app-installation",
@@ -122,5 +122,5 @@
     "production-writer-enable",
     "effect-before-protected-grant-and-fresh-capability-readback"
   ],
-  "contractSha256": "b0c311aca5481ee21652d428f40c33330d3a03a07636f763b306775387b7d069"
+  "contractSha256": "ccd57e74293b2fb1443614fea6add54525f9f11c8d1126908180479ab5bc18a6"
 }

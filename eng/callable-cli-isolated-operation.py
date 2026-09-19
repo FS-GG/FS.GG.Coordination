@@ -1270,8 +1270,7 @@ def main(argv: list[str] | None = None, client_factory=GitHub, now_provider=utc_
                     raise Refused("installed-command-required")
                 receipt = execute_identity_bound(
                     clients["setup"], contract, plan, args.tool_command,
-                    token_environments["execution"], args.receipt, clients["cleanup"], grant, now_provider,
-                    token_environments["setup"])
+                    token_environments["execution"], args.receipt, clients["cleanup"], grant, now_provider)
             write_private(args.receipt, receipt)
             print(canonical({"outcome": "settled", "receiptSha256": receipt["receiptSha256"]}).decode())
         return 0
