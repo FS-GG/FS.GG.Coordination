@@ -132,6 +132,7 @@ if [ "$1" = login ]; then printf '%%s\n' '{behavior.Login}'; exit {behavior.Logi
 printf '%%s\n' "$PWD" > '{root}/cwd'
 printf '%%s\n' "$@" > '{root}/argv'
 printenv GH_TOKEN > '{root}/secret' 2>/dev/null || true
+printenv FSGG_TELEMETRY_CREDENTIAL_ORCHESTRATION > '{root}/telemetry-secret' 2>/dev/null || true
 final=''
 while [ "$#" -gt 0 ]; do
   if [ "$1" = --output-last-message ]; then final="$2"; shift 2; else shift; fi
@@ -197,7 +198,16 @@ type CodexExecutionProviderTests() =
             let! readiness = provider.ObserveReadiness CancellationToken.None
             Assert.Equal(Authenticated "codex-login-status:chatgpt-subscription", readiness.Authentication)
             let intent = Fixture.intent workspace (TimeSpan.FromSeconds 5.)
-            let! launched = provider.Launch(intent, CancellationToken.None)
+            let! launched =
+                task {
+                    let prior = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_CREDENTIAL_ORCHESTRATION"
+
+                    try
+                        Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CREDENTIAL_ORCHESTRATION", "fixture-secret")
+                        return! provider.Launch(intent, CancellationToken.None)
+                    finally
+                        Environment.SetEnvironmentVariable("FSGG_TELEMETRY_CREDENTIAL_ORCHESTRATION", prior)
+                }
 
             let reference =
                 match launched with
@@ -227,6 +237,7 @@ type CodexExecutionProviderTests() =
             Assert.Contains("-", argv)
             Assert.False(File.Exists(Path.Combine(workspace, "never")))
             Assert.Equal("", File.ReadAllText(Path.Combine(root, "secret")))
+            Assert.Equal("", File.ReadAllText(Path.Combine(root, "telemetry-secret")))
 
             let schema =
                 File.ReadAllText(
