@@ -627,7 +627,11 @@ type GitHubRouteClient
                         && repositoryNode = WorkItemIdentity.repositoryNodeId route.WorkItemId
                         && databaseId = WorkItemIdentity.repositoryDatabaseId route.WorkItemId
                         && issueNode = WorkItemIdentity.issueNodeId route.WorkItemId
-                        && int64 issueNumber = WorkItemIdentity.issueNumber route.WorkItemId
+                        // The installed pilot persisted GitHub's issue database ID in the
+                        // legacy WorkItemId issue-number slot. Keep that journal key stable
+                        // during recovery and bind the fresh readback to the configured
+                        // repository-local issue number plus the immutable issue node ID.
+                        && issueNumber = target.IssueNumber
                         ->
                         let evidence =
                             sha256Text
