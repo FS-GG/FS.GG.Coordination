@@ -238,23 +238,28 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
 
     member _.Publish(name: string, payload: byte array, cancellation: CancellationToken) =
         task {
-            match save name payload with
-            | Error reason -> return PublicationUnknown reason
-            | Ok None -> return Applied
-            | Ok(Some path) ->
-                let! outcome = runCli path cancellation
+            do! flushLock.WaitAsync cancellation
 
-                let settled =
-                    if outcome = Applied then
-                        if markApplied path then
-                            try File.Delete path with _ -> ()
-                            Applied
+            try
+                match save name payload with
+                | Error reason -> return PublicationUnknown reason
+                | Ok None -> return Applied
+                | Ok(Some path) ->
+                    let! outcome = runCli path cancellation
+
+                    let settled =
+                        if outcome = Applied then
+                            if markApplied path then
+                                try File.Delete path with _ -> ()
+                                Applied
+                            else
+                                PublicationUnknown "telemetry-applied-marker-unavailable"
                         else
-                            PublicationUnknown "telemetry-applied-marker-unavailable"
-                    else
-                        outcome
+                            outcome
 
-                return settled
+                    return settled
+            finally
+                flushLock.Release() |> ignore
         }
 
     member _.Queue(name: string, payload: byte array) = save name payload

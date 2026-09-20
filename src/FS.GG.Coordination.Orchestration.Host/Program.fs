@@ -10,6 +10,7 @@ open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Host
 open FS.GG.Coordination.Orchestration.PostgreSql
 open FS.GG.Coordination.Orchestration.Execution
+open FS.GG.Coordination.Orchestration.Runner.Client
 
 let private usage () =
     eprintfn "usage: fsgg-coord-orchestration-host init --connection-file <absolute-private-path>"
@@ -215,6 +216,29 @@ let main arguments =
                             TimeProvider.System
                         )
 
+                    let outcomeBridge =
+                        localConfiguration.Telemetry
+                        |> Option.map (fun telemetry ->
+                            let outbox =
+                                Path.Combine(Path.GetDirectoryName telemetry.Outbox, "host-outcome-outbox")
+
+                            let publisher =
+                                TelemetryCliPublisher
+                                    {
+                                        Executable = telemetry.Executable
+                                        Config = telemetry.Config
+                                        CredentialFile = telemetry.CredentialFile
+                                        CertificateAuthorityFile = telemetry.CertificateAuthorityFile
+                                        Outbox = outbox
+                                        Repository = telemetry.Repository
+                                        BindingDigest = telemetry.BindingDigest
+                                    }
+
+                            TelemetryOutcomeBridge(telemetry.Repository, github, publisher))
+
+                    let outcomeDrain =
+                        outcomeBridge |> Option.map (fun bridge -> bridge.DrainUntilCancelled shutdown.Token)
+
                     let admission =
                         MainProductionAdmission(
                             actorSystem,
@@ -226,12 +250,17 @@ let main arguments =
                             configuration.PilotPrincipalId,
                             github,
                             transport,
-                            shutdown.Token
+                            shutdown.Token,
+                            ?outcomeBridge = outcomeBridge
                         )
                         :> IMainRouteAdmissionHandler
 
-                    HostRuntime.serveMainLocal TimeProvider.System configuration store admission shutdown.Token
-                    |> _.GetAwaiter().GetResult()
+                    try
+                        HostRuntime.serveMainLocal TimeProvider.System configuration store admission shutdown.Token
+                        |> _.GetAwaiter().GetResult()
+                    finally
+                        shutdown.Cancel()
+                        outcomeDrain |> Option.iter (fun pending -> pending.GetAwaiter().GetResult())
 
                     actorSystem.Terminate() |> ignore
 
