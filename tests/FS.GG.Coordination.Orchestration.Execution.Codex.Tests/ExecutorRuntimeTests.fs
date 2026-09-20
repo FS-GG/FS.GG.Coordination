@@ -1841,3 +1841,58 @@ type ExecutorRuntimeTests() =
         Assert.Single(Directory.GetFiles(directory, "turn-*.json")) |> ignore
         Assert.Throws<InvalidOperationException>(fun () -> observer.TurnCompleted { turn with Output = 4L; Total = 14L })
         |> ignore
+
+    [<Fact>]
+    member _.``publisher keeps unresolved batches and isolates the CLI child``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("telemetry-cli-publisher-").FullName
+            let executable = Path.Combine(root, "client")
+            let config = Path.Combine(root, "workspace.json")
+            let credential = Path.Combine(root, "credential")
+            let ca = Path.Combine(root, "ca.crt")
+            let outbox = Path.Combine(root, "outbox")
+            File.WriteAllText(config, "{}")
+            File.WriteAllText(credential, "private-test")
+            File.WriteAllText(ca, "test-ca")
+
+            File.WriteAllText(
+                executable,
+                "#!/bin/sh\n[ \"$FSGG_TELEMETRY_CREDENTIAL_ORCHESTRATION\" = private-test ] || exit 4\n[ -r \"$SSL_CERT_FILE\" ] || exit 5\n[ -z \"$GITHUB_TOKEN\" ] || exit 6\nprintf 'durably-received'\n"
+            )
+
+            for path in [ executable; config; credential; ca ] do
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+            let options =
+                {
+                    Executable = executable
+                    Config = config
+                    CredentialFile = credential
+                    CertificateAuthorityFile = ca
+                    Outbox = outbox
+                    Repository = "FS-GG/.github"
+                    BindingDigest = String.replicate 64 "a"
+                }
+
+            let publisher = TelemetryCliPublisher options
+            let payload = Encoding.UTF8.GetBytes "{}"
+            let! outcome = publisher.Publish("batch-1", payload, CancellationToken.None)
+            Assert.Equal(AwaitingApplication, outcome)
+            Assert.True(File.Exists(Path.Combine(outbox, "batch-1.json")))
+
+            let! repeated = publisher.Publish("batch-1", payload, CancellationToken.None)
+            Assert.Equal(AwaitingApplication, repeated)
+            Assert.Single(Directory.GetFiles(outbox, "*.json")) |> ignore
+
+            let! conflict = publisher.Publish("batch-1", Encoding.UTF8.GetBytes "{\"different\":true}", CancellationToken.None)
+            Assert.Equal(PublicationUnknown "telemetry-batch-identity-conflict", conflict)
+
+            let! traversal = publisher.Publish("../outside", payload, CancellationToken.None)
+            Assert.Equal(PublicationUnknown "telemetry-batch-name-refused", traversal)
+
+            for index in 2 .. 128 do
+                File.WriteAllText(Path.Combine(outbox, $"batch-{index}.json"), "x")
+
+            let! overloaded = publisher.Publish("batch-129", payload, CancellationToken.None)
+            Assert.Equal(PublicationUnknown "telemetry-outbox-overload", overloaded)
+        }
