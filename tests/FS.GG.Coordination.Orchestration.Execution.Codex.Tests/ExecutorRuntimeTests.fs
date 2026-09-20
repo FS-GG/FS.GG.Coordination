@@ -2001,6 +2001,10 @@ type ExecutorRuntimeTests() =
         Assert.Equal(Ok original, TelemetryRootGuard.claim root child (at.AddMinutes 2.))
         Assert.Equal(Ok(Some original), TelemetryRootGuard.replay root child)
         let _, bytes = TelemetryFactBatches.prospectiveRoot child original.ActivatedAt original.AttemptId original.Generation
+        let replayedMarker = TelemetryRootGuard.replay root child |> Result.defaultWith failwith |> Option.defaultWith (fun () -> failwith "root missing")
+        let _, replayedBytes =
+            TelemetryFactBatches.prospectiveRoot child replayedMarker.ActivatedAt replayedMarker.AttemptId replayedMarker.Generation
+        Assert.True(ReadOnlySpan<byte>(bytes).SequenceEqual(ReadOnlySpan<byte>(replayedBytes)))
         use batch = JsonDocument.Parse bytes
         Assert.Equal(4, batch.RootElement.GetProperty("eventCount").GetInt32())
         let events = batch.RootElement.GetProperty("events").EnumerateArray() |> Seq.toList
