@@ -72,6 +72,8 @@ type RecordingTurnObserver() =
         member _.Gap code = gaps.Add code
         member _.ProcessStarted(_, _) = ()
         member _.ProcessTerminal(_, _, _) = ()
+        member _.ThreadStarted(_, _, _) = ()
+        member _.NativeTurnStarted(_, _, _, _, _) = ()
 
 module Fixture =
     let prompt =

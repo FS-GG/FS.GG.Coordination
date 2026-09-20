@@ -89,7 +89,10 @@ module TelemetryJournalRecovery =
                     let filename = Path.GetFileName path
 
                     let batch =
-                        if filename.StartsWith("turn-", StringComparison.Ordinal) then
+                        if
+                            filename.StartsWith("turn-", StringComparison.Ordinal)
+                            && not (filename.StartsWith("turn-start-", StringComparison.Ordinal))
+                        then
                             TelemetryFactBatches.completedTurn
                                 context
                                 (Option.ofObj command.RequestedModel)
@@ -105,6 +108,18 @@ module TelemetryJournalRecovery =
                                 context
                                 (evidence.GetProperty("ProcessId").GetInt32())
                                 (evidence.GetProperty("ObservedAt").GetDateTimeOffset())
+                        elif filename.StartsWith("thread-start-", StringComparison.Ordinal) then
+                            TelemetryFactBatches.threadStart
+                                context
+                                (evidence.GetProperty("ProcessId").GetInt32())
+                                (requiredString evidence "ThreadId")
+                        elif filename.StartsWith("turn-start-", StringComparison.Ordinal) then
+                            TelemetryFactBatches.turnStart
+                                context
+                                (evidence.GetProperty("ProcessId").GetInt32())
+                                (requiredString evidence "ThreadId")
+                                (optionalString evidence "TurnId")
+                                (evidence.GetProperty("TurnSequence").GetInt64())
                         elif filename.StartsWith("process-terminal-", StringComparison.Ordinal) then
                             TelemetryFactBatches.processTerminal
                                 context

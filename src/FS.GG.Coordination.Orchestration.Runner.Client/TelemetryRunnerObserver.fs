@@ -48,3 +48,11 @@ type TelemetryRunnerObserver(
                 (this :> ICodexTurnObserver).Gap "exit-zero-without-usage"
 
             TelemetryFactBatches.processTerminal context exitCode threadId at |> queue
+
+        member _.ThreadStarted(processId, threadId, at) =
+            journal.ThreadStarted(processId, threadId, at)
+            TelemetryFactBatches.threadStart context processId threadId |> queue
+
+        member _.NativeTurnStarted(processId, threadId, turnId, sequence, at) =
+            journal.NativeTurnStarted(processId, threadId, turnId, sequence, at)
+            TelemetryFactBatches.turnStart context processId threadId turnId sequence |> queue

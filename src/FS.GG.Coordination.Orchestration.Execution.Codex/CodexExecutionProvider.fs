@@ -26,6 +26,8 @@ type ICodexTurnObserver =
     abstract member Gap: string -> unit
     abstract member ProcessStarted: int * DateTimeOffset -> unit
     abstract member ProcessTerminal: int * string option * DateTimeOffset -> unit
+    abstract member ThreadStarted: int * string * DateTimeOffset -> unit
+    abstract member NativeTurnStarted: int * string * string option * int64 * DateTimeOffset -> unit
 
 type CodexExecutionProviderOptions =
     {
@@ -537,6 +539,35 @@ type CodexExecutionProvider
                             let nativeThread = document.RootElement.GetProperty("thread_id").GetString()
                             telemetryThread <- Some nativeThread
                             threadStarted.TrySetResult nativeThread |> ignore
+                            options.TurnObserver
+                            |> Option.iter (fun observer ->
+                                try observer.ThreadStarted(proc.Id, nativeThread, DateTimeOffset.UtcNow)
+                                with _ -> telemetryGap "thread-start-observer-failed")
+                        elif eventType = "turn.started" then
+                            let nativeThread =
+                                match document.RootElement.TryGetProperty "thread_id" with
+                                | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                                | _ -> telemetryThread
+
+                            let nativeTurn =
+                                match document.RootElement.TryGetProperty "turn_id" with
+                                | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                                | _ -> None
+
+                            match nativeThread with
+                            | Some thread ->
+                                options.TurnObserver
+                                |> Option.iter (fun observer ->
+                                    try
+                                        observer.NativeTurnStarted(
+                                            proc.Id,
+                                            thread,
+                                            nativeTurn,
+                                            telemetryTurnSequence + 1L,
+                                            DateTimeOffset.UtcNow
+                                        )
+                                    with _ -> telemetryGap "turn-start-observer-failed")
+                            | None -> telemetryGap "missing-turn-thread"
                         elif eventType = "turn.completed" then
                             turnCompleted <- true
                     with _ ->

@@ -81,3 +81,17 @@ type TelemetryTurnJournal(stateRoot: string, command: ExecutorCommandV2) =
 
         member _.ProcessTerminal(exitCode, threadId, at) =
             save "process-terminal" "terminal" {| ExitCode = exitCode; ThreadId = threadId; ObservedAt = at |}
+
+        member _.ThreadStarted(processId, threadId, at) =
+            save "thread-start" threadId {| ProcessId = processId; ThreadId = threadId; ObservedAt = at |}
+
+        member _.NativeTurnStarted(processId, threadId, turnId, sequence, at) =
+            let nativeKey = turnId |> Option.defaultValue (string sequence)
+            save
+                "turn-start"
+                (threadId + "\u001f" + nativeKey)
+                {| ProcessId = processId
+                   ThreadId = threadId
+                   TurnId = turnId
+                   TurnSequence = sequence
+                   ObservedAt = at |}

@@ -188,3 +188,25 @@ module TelemetryFactBatches =
         timing["observedAt"] <- timestamp
         timing["observedClockProvenance"] <- "host-wall"
         batch context [ terminal; timing ]
+
+    let threadStart (context: TelemetryInvocation) (processId: int) (threadId: string) =
+        let started = event "runtime-start" ("runtime-thread-" + context.InvocationId) context
+        started["invocationId"] <- context.InvocationId
+        started["threadId"] <- threadId
+        started["turnId"] <- null
+        started["turnSequence"] <- null
+        started["processId"] <- processId
+        started["phase"] <- "thread"
+        batch context [ started ]
+
+    let turnStart (context: TelemetryInvocation) (processId: int) (threadId: string) (turnId: string option) (sequence: int64) =
+        let nativeKey = turnId |> Option.defaultValue (string sequence)
+        let identity = "runtime-turn-start-" + hash (context.InvocationId + "\u001f" + threadId + "\u001f" + nativeKey)
+        let started = event "runtime-start" identity context
+        started["invocationId"] <- context.InvocationId
+        started["threadId"] <- threadId
+        optional started "turnId" turnId
+        started["turnSequence"] <- sequence
+        started["processId"] <- processId
+        started["phase"] <- "turn"
+        batch context [ started ]

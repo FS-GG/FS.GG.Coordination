@@ -1980,6 +1980,8 @@ type ExecutorRuntimeTests() =
         let observer = TelemetryRunnerObserver(root, command, Some publisher) :> ICodexTurnObserver
         let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
         observer.ProcessStarted(1234, at)
+        observer.ThreadStarted(1234, "thread", at)
+        observer.NativeTurnStarted(1234, "thread", Some "turn", 1L, at)
         observer.TurnCompleted
             {
                 ThreadId = "thread"
@@ -1994,7 +1996,7 @@ type ExecutorRuntimeTests() =
         observer.ProcessTerminal(0, Some "thread", at.AddMinutes 1.)
 
         let batches = Directory.GetFiles(outbox, "*.json")
-        Assert.Equal(3, batches.Length)
+        Assert.Equal(5, batches.Length)
         let kinds =
             batches
             |> Array.map (fun path ->
@@ -2065,6 +2067,8 @@ type ExecutorRuntimeTests() =
         let journal = TelemetryTurnJournal(root, command) :> ICodexTurnObserver
         let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
         journal.ProcessStarted(1234, at)
+        journal.ThreadStarted(1234, "thread", at)
+        journal.NativeTurnStarted(1234, "thread", Some "turn", 1L, at)
         journal.TurnCompleted
             {
                 ThreadId = "thread"
@@ -2093,6 +2097,6 @@ type ExecutorRuntimeTests() =
                 }
 
         Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
-        Assert.Equal(4, publisher.PendingCount)
+        Assert.Equal(6, publisher.PendingCount)
         Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
-        Assert.Equal(4, publisher.PendingCount)
+        Assert.Equal(6, publisher.PendingCount)
