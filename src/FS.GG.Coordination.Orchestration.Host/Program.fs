@@ -236,6 +236,9 @@ let main arguments =
 
                             TelemetryOutcomeBridge(telemetry.Repository, github, publisher))
 
+                    let outcomeDrain =
+                        outcomeBridge |> Option.map (fun bridge -> bridge.DrainUntilCancelled shutdown.Token)
+
                     let admission =
                         MainProductionAdmission(
                             actorSystem,
@@ -252,8 +255,12 @@ let main arguments =
                         )
                         :> IMainRouteAdmissionHandler
 
-                    HostRuntime.serveMainLocal TimeProvider.System configuration store admission shutdown.Token
-                    |> _.GetAwaiter().GetResult()
+                    try
+                        HostRuntime.serveMainLocal TimeProvider.System configuration store admission shutdown.Token
+                        |> _.GetAwaiter().GetResult()
+                    finally
+                        shutdown.Cancel()
+                        outcomeDrain |> Option.iter (fun pending -> pending.GetAwaiter().GetResult())
 
                     actorSystem.Terminate() |> ignore
 

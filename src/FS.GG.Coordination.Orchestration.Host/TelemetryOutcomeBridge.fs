@@ -94,3 +94,21 @@ type TelemetryOutcomeBridge
         }
 
     member _.Flush(token: CancellationToken) = publisher.Flush token
+
+    /// Starts at Host process startup, independent of route admission. A queued
+    /// batch therefore drains after restart without replaying a claim or runner.
+    member this.DrainUntilCancelled(token: CancellationToken) =
+        task {
+            try
+                while not token.IsCancellationRequested do
+                    try
+                        let! _ = this.Flush token
+                        ()
+                    with
+                    | :? OperationCanceledException when token.IsCancellationRequested -> ()
+                    | _ -> ()
+
+                    do! Task.Delay(TimeSpan.FromSeconds 5., token)
+            with :? OperationCanceledException when token.IsCancellationRequested ->
+                ()
+        }

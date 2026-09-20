@@ -1912,6 +1912,67 @@ let ``native delivery batch has stable item identity and authoritative merge fie
     Assert.Equal(outcome.GetProperty("itemId").GetString(), population.GetProperty("originalItemId").GetString())
 
 [<Fact>]
+let ``Host startup drain applies a pending outcome without route admission`` () =
+    task {
+        let root = Path.Combine(Path.GetTempPath(), "fsgg-outcome-drain-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory root |> ignore
+
+        try
+            let file name (contents: string) mode =
+                let path = Path.Combine(root, name)
+                File.WriteAllText(path, contents)
+                File.SetUnixFileMode(path, mode)
+                path
+
+            let privateMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+            let executable = file "cli" "#!/bin/sh\nprintf 'applied\\n'\n" (privateMode ||| UnixFileMode.UserExecute)
+            let config = file "workspace.json" "{}" privateMode
+            let _ = file "workspace.json.lock" "" privateMode
+            let credential = file "credential" "fixture-secret" privateMode
+            let ca = file "ca.crt" "fixture" privateMode
+            let outbox = Path.Combine(root, "outbox")
+
+            let publisher =
+                FS.GG.Coordination.Orchestration.Runner.Client.TelemetryCliPublisher
+                    {
+                        Executable = executable
+                        Config = config
+                        CredentialFile = credential
+                        CertificateAuthorityFile = ca
+                        Outbox = outbox
+                        Repository = "FS-GG/.github"
+                        BindingDigest = String.replicate 64 "a"
+                    }
+
+            let queued = publisher.Queue("batch-pending-outcome", Encoding.UTF8.GetBytes "fixture-batch")
+            Assert.True(Result.isOk queued)
+            let github =
+                GitHubRouteClient(
+                    QueuedGitHub[],
+                    FixedPublisher(Error "publisher-must-not-run"),
+                    githubTarget,
+                    FixedClock Fixture.now
+                )
+
+            let bridge = TelemetryOutcomeBridge("FS-GG/.github", github, publisher)
+            use stopping = new CancellationTokenSource()
+            let drain = bridge.DrainUntilCancelled stopping.Token
+            let marker = Path.Combine(outbox, "applied", "batch-pending-outcome.sha256")
+            let mutable attempts = 0
+
+            while not (File.Exists marker) && attempts < 100 do
+                attempts <- attempts + 1
+                do! Task.Delay 50
+
+            stopping.Cancel()
+            do! drain
+            Assert.True(File.Exists marker)
+            Assert.Equal(0, publisher.PendingCount)
+        finally
+            Directory.Delete(root, true)
+    }
+
+[<Fact>]
 let ``GitHub merge refuses incomplete required checks before mutation`` () =
     task {
         let head = String.replicate 40 "a"

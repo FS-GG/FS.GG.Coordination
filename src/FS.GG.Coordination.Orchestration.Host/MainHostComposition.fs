@@ -239,10 +239,6 @@ module MainHostComposition =
                                 | _ -> ()
                             | _ -> ()
 
-                            match outcomeBridge with
-                            | Some bridge -> let! _ = bridge.Flush cancellationToken in ()
-                            | None -> ()
-
                         let! _ = workflow.RecoverContinuation(preparation, cancellationToken)
                         do! Task.Delay(pacing results, cancellationToken)
             }
