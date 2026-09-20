@@ -48,31 +48,22 @@ module TelemetryRootGuard =
 
                 if isNull (box existing) then
                     Error "telemetry-root-marker-unreadable"
+                elif existing.AttemptId = command.AttemptId.ToString("N") && existing.Generation = command.Generation then
+                    Ok(Some existing)
                 elif
-                    existing.AttemptId <> command.AttemptId.ToString("N")
-                    || existing.Generation <> command.Generation
+                    command.Schema = ExecutorWire.commandSchemaV3
+                    && command.ParentAttemptId.HasValue
+                    && command.ParentGeneration.HasValue
+                    && command.Generation > existing.Generation
+                    && command.ParentGeneration.Value >= existing.Generation
                 then
-                    Error "telemetry-retry-lineage-unavailable"
+                    Ok(Some existing)
                 else
-                    Ok(Some existing.ActivatedAt)
+                    Error "telemetry-retry-lineage-unavailable"
         with _ ->
             Error "telemetry-root-marker-unreadable"
 
-    /// An item gets one prospective root. A later attempt requires controller-provided parent lineage.
-    let claim stateRoot (command: ExecutorCommandV2) now =
-        let directory, path = markerPath stateRoot command
-        Directory.CreateDirectory directory |> ignore
-
-        if OperatingSystem.IsLinux() then
-            File.SetUnixFileMode(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
-
-        let marker =
-            {
-                AttemptId = command.AttemptId.ToString("N")
-                Generation = command.Generation
-                ActivatedAt = now
-            }
-
+    let private claimRoot path (marker: TelemetryRootMarker) =
         let streamOptions =
             FileStreamOptions(
                 Mode = FileMode.CreateNew,
@@ -89,23 +80,45 @@ module TelemetryRootGuard =
             use stream = new FileStream(path, streamOptions)
             JsonSerializer.Serialize(stream, marker)
             stream.Flush true
-            Ok now
+            Ok marker
         with :? IOException ->
             try
                 let info = FileInfo path
-
-                if not info.Exists || not (isNull info.LinkTarget) || info.Length < 2L || info.Length > 512L then
+                if
+                    not info.Exists
+                    || not (isNull info.LinkTarget)
+                    || info.Length < 2L
+                    || info.Length > 512L
+                    || (OperatingSystem.IsLinux()
+                        && File.GetUnixFileMode(path) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite))
+                then
                     Error "telemetry-root-marker-unsafe"
                 else
                     let existing = JsonSerializer.Deserialize<TelemetryRootMarker>(File.ReadAllBytes path)
+                    if isNull (box existing) then Error "telemetry-root-marker-unreadable"
+                    elif existing.AttemptId = marker.AttemptId && existing.Generation = marker.Generation then Ok existing
+                    else Error "telemetry-retry-lineage-unavailable"
+            with _ -> Error "telemetry-root-marker-unreadable"
 
-                    if
-                        isNull (box existing)
-                        || existing.AttemptId <> marker.AttemptId
-                        || existing.Generation <> marker.Generation
-                    then
-                        Error "telemetry-retry-lineage-unavailable"
-                    else
-                        Ok existing.ActivatedAt
-            with _ ->
-                Error "telemetry-root-marker-unreadable"
+    /// An item gets one prospective root. A later attempt requires controller-provided parent lineage.
+    let claim stateRoot (command: ExecutorCommandV2) now =
+        let directory, path = markerPath stateRoot command
+        Directory.CreateDirectory directory |> ignore
+
+        if OperatingSystem.IsLinux() then
+            File.SetUnixFileMode(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+        let marker =
+            {
+                AttemptId = command.AttemptId.ToString("N")
+                Generation = command.Generation
+                ActivatedAt = now
+            }
+
+        if command.Schema = ExecutorWire.commandSchemaV3 then
+            match replay stateRoot command with
+            | Ok(Some existing) -> Ok existing
+            | Ok None -> Error "telemetry-parent-root-unavailable"
+            | Error code -> Error code
+        else
+            claimRoot path marker

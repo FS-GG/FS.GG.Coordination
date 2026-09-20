@@ -135,6 +135,9 @@ module private Fixture =
                 ArtifactDigest = null
                 ContentOffset = 0L
                 ContentLength = 0
+                ParentAttemptId = Nullable()
+                ParentGeneration = Nullable()
+                TelemetryRelation = null
             }
 
         { unsigned with

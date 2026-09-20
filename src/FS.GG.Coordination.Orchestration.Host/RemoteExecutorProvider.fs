@@ -20,6 +20,9 @@ type ResolvedExecutorRouteBinding =
         WorkspaceManifest: ExecutorWorkspaceManifest
         InputManifest: ExecutorInputManifest
         InputBytes: byte array
+        ParentAttemptId: Nullable<Guid>
+        ParentGeneration: Nullable<int64>
+        TelemetryRelation: string
     }
 
 type ExecutorTransportReadback = { Frames: byte array list }
@@ -90,6 +93,9 @@ type PostgreSqlExecutorBindingResolver
                                         WorkspaceManifest = workspaceManifest
                                         InputManifest = inputManifest
                                         InputBytes = inputBytes
+                                        ParentAttemptId = route.ParentAttemptId
+                                        ParentGeneration = route.ParentGeneration
+                                        TelemetryRelation = route.TelemetryRelation
                                     }
                                 )
                         | _ -> return Error "execution-route-workspace-binding-refused"
@@ -342,7 +348,11 @@ type RemoteExecutorProvider
 
         let value =
             {
-                Schema = ExecutorWire.commandSchemaV2
+                Schema =
+                    if binding.ParentAttemptId.HasValue then
+                        ExecutorWire.commandSchemaV3
+                    else
+                        ExecutorWire.commandSchemaV2
                 CommandId = Guid(ReadOnlySpan(identity, 0, 16))
                 BodySha256 = ""
                 Kind = kind
@@ -367,6 +377,9 @@ type RemoteExecutorProvider
                 ArtifactDigest = artifactDigest
                 ContentOffset = offset
                 ContentLength = length
+                ParentAttemptId = binding.ParentAttemptId
+                ParentGeneration = binding.ParentGeneration
+                TelemetryRelation = binding.TelemetryRelation
             }
 
         { value with

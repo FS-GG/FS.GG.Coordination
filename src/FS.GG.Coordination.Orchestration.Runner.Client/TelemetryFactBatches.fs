@@ -26,21 +26,24 @@ module TelemetryFactBatches =
         |> Convert.ToHexString
         |> fun value -> value.ToLowerInvariant()
 
-    let rootInvocation (command: ExecutorCommandV2) =
+    let private invocation itemId attemptId generation =
         let key =
-            command.WorkItemPersistenceId
+            itemId
             + "\u001f"
-            + command.AttemptId.ToString("N")
+            + attemptId
             + "\u001f"
-            + string command.Generation
+            + string generation
 
         {
-            ItemId = command.WorkItemPersistenceId
-            AttemptId = command.AttemptId.ToString("N") + "-g" + string command.Generation
-            ActivationId = "activation-" + hash (command.WorkItemPersistenceId + "\u001factivation")
+            ItemId = itemId
+            AttemptId = attemptId + "-g" + string generation
+            ActivationId = "activation-" + hash (itemId + "\u001factivation")
             DispatchId = "dispatch-" + hash (key + "\u001fdispatch")
             InvocationId = "invocation-" + hash (key + "\u001finvocation")
         }
+
+    let rootInvocation (command: ExecutorCommandV2) =
+        invocation command.WorkItemPersistenceId (command.AttemptId.ToString("N")) command.Generation
 
     let private optional (event: JsonObject) (key: string) (value: string option) =
         event[key] <-
@@ -71,9 +74,16 @@ module TelemetryFactBatches =
         root["events"] <- payload
         "batch-" + digest, Encoding.UTF8.GetBytes(root.ToJsonString(JsonSerializerOptions(WriteIndented = false)))
 
-    let prospectiveRoot (command: ExecutorCommandV2) observedAt =
+    let prospectiveRoot (command: ExecutorCommandV2) observedAt rootAttemptId rootGeneration =
         let context = rootInvocation command
         let timestamp = (observedAt: DateTimeOffset).ToString("O")
+        let parent =
+            if command.ParentAttemptId.HasValue && command.ParentGeneration.HasValue then
+                Some(invocation command.WorkItemPersistenceId (command.ParentAttemptId.Value.ToString("N")) command.ParentGeneration.Value)
+            else
+                None
+        let root = invocation command.WorkItemPersistenceId rootAttemptId rootGeneration
+        let relation = if parent.IsSome then command.TelemetryRelation else "root"
 
         let activation = event "operational-activation" ("operational-activation-" + context.ActivationId) context
         activation["activationId"] <- context.ActivationId
@@ -86,8 +96,8 @@ module TelemetryFactBatches =
         let expected = event "expected-dispatch" ("expected-dispatch-" + context.DispatchId) context
         expected["dispatchId"] <- context.DispatchId
         expected["activationId"] <- context.ActivationId
-        expected["relation"] <- "root"
-        expected["parentDispatchId"] <- null
+        expected["relation"] <- relation
+        optional expected "parentDispatchId" (parent |> Option.map _.DispatchId)
         expected["runtime"] <- "codex-exec"
         expected["expectedAt"] <- timestamp
         expected["clockProvenance"] <- "host-wall"
@@ -95,16 +105,16 @@ module TelemetryFactBatches =
         let lineage = event "invocation-lineage" ("invocation-lineage-" + context.InvocationId) context
         lineage["dispatchId"] <- context.DispatchId
         lineage["invocationId"] <- context.InvocationId
-        lineage["relation"] <- "root"
-        lineage["parentInvocationId"] <- null
-        lineage["rootInvocationId"] <- context.InvocationId
+        lineage["relation"] <- relation
+        optional lineage "parentInvocationId" (parent |> Option.map _.InvocationId)
+        lineage["rootInvocationId"] <- root.InvocationId
         lineage["runtime"] <- "codex-exec"
 
         let admission = event "runtime-admission" ("runtime-admission-" + context.InvocationId) context
         admission["invocationId"] <- context.InvocationId
         admission["featureId"] <- "coordination-orchestration"
         admission["attemptId"] <- context.AttemptId
-        admission["parentAttemptId"] <- null
+        optional admission "parentAttemptId" (parent |> Option.map _.AttemptId)
         admission["producerStream"] <- "coordination"
         optional admission "requestedModel" (Option.ofObj command.RequestedModel)
         optional admission "requestedEffort" (Option.ofObj command.RequestedEffort)
@@ -118,7 +128,7 @@ module TelemetryFactBatches =
         admissionTime["observedAt"] <- timestamp
         admissionTime["observedClockProvenance"] <- "host-wall"
 
-        batch context [ activation; expected; lineage; admission; admissionTime ]
+        batch context (if parent.IsSome then [ expected; lineage; admission; admissionTime ] else [ activation; expected; lineage; admission; admissionTime ])
 
     let completedTurn (context: TelemetryInvocation) requestedModel requestedEffort (turn: CodexTurnUsage) =
         let nativeKey = turn.TurnId |> Option.defaultValue (string turn.TurnSequence)

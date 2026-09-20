@@ -99,6 +99,20 @@ module Fixture =
         let mutable events: SerializedEvent list = []
         let accepted = Dictionary<CommandId, string * int64>()
 
+        member _.Seed(eventValue: Event) =
+            let payload = EventEnvelope.encode eventValue
+            events <- events @ [
+                { PersistenceId = WorkItemIdentity.persistenceId permit.SubjectId
+                  Sequence = int64 events.Length + 1L
+                  EventId = Guid.NewGuid()
+                  SchemaVersion = 2
+                  SerializerVersion = EventEnvelope.serializerVersion
+                  Payload = payload
+                  PayloadSha256 = RunnerWire.sha256 payload
+                  EffectChange = NoEffect
+                  RecordedAt = now }
+            ]
+
         member _.State =
             events
             |> List.map (fun stored -> EventEnvelope.tryDecode stored.Payload |> Result.defaultWith failwith)
@@ -544,6 +558,57 @@ let ``main admission preparation is ordered retry stable and required by workflo
         Assert.Empty(journal.State.Operations)
         Assert.False(journal.State.ReadbackCurrent)
 
+        let priorRoute = journal.State.HostedRoute |> Option.defaultWith (fun () -> failwith "route missing")
+        let priorAttempt =
+            { AttemptId = priorRoute.AttemptId
+              SessionId = Id.session decodedRequest.SessionId
+              Runner =
+                { RunnerId = Id.runner decodedRequest.RunnerId
+                  PrincipalId = "pilot-route"
+                  FingerprintSha256 = decodedRequest.RunnerFingerprintSha256
+                  Generation = priorRoute.Generation
+                  ExpiresAt = Fixture.now.AddMinutes 5. }
+              Generation = priorRoute.Generation
+              StartedAt = Fixture.now
+              Status = Completed }
+        let priorState =
+            { journal.State with Attempts = Map.ofList [ priorAttempt.AttemptId, priorAttempt ] }
+        let nextAttemptId = Guid.NewGuid()
+        let nextGeneration = Id.generation (Id.generationValue priorRoute.Generation + 1L)
+        let selected =
+            MainAdmissionPreparer.selectTelemetryParentCandidate priorState nextAttemptId nextGeneration
+            |> Result.defaultWith failwith
+            |> Option.defaultWith (fun () -> failwith "parent missing")
+        Assert.Equal(Id.attemptValue priorAttempt.AttemptId, selected.AttemptId)
+        Assert.Equal("follow-up", selected.Relation)
+        Assert.Equal(
+            Error "telemetry-parent-attempt-ambiguous",
+            MainAdmissionPreparer.selectTelemetryParentCandidate priorState nextAttemptId priorRoute.Generation
+        )
+        Assert.Equal(
+            Error "telemetry-parent-attempt-not-terminal",
+            MainAdmissionPreparer.selectTelemetryParentCandidate
+                { priorState with Attempts = Map.ofList [ priorAttempt.AttemptId, { priorAttempt with Status = Active } ] }
+                nextAttemptId
+                nextGeneration
+        )
+        Assert.Equal(
+            "child",
+            (MainAdmissionPreparer.selectTelemetryParentCandidate
+                { priorState with Attempts = Map.ofList [ priorAttempt.AttemptId, { priorAttempt with Status = CancelledByRunner } ] }
+                nextAttemptId
+                nextGeneration
+             |> Result.defaultWith failwith
+             |> Option.defaultWith (fun () -> failwith "parent missing")).Relation
+        )
+        let competingAttempt = { priorAttempt with AttemptId = Id.attempt (Guid.NewGuid()) }
+        let ambiguousState =
+            { priorState with Attempts = priorState.Attempts.Add(competingAttempt.AttemptId, competingAttempt) }
+        Assert.Equal(
+            Error "telemetry-parent-attempt-ambiguous",
+            MainAdmissionPreparer.selectTelemetryParentCandidate ambiguousState nextAttemptId nextGeneration
+        )
+
         let! retry =
             MainAdmissionPreparer.prepare
                 (Fixture.FixedClock())
@@ -681,9 +746,102 @@ let ``main admission preparation is ordered retry stable and required by workflo
                 | _ -> false
         )
 
+        let distinctReadmission =
+            { decodedRequest with
+                PreparationId = Guid.NewGuid()
+                AttemptId = Guid.NewGuid()
+                RouteId = Guid.NewGuid() }
+        let! missingParent =
+            MainAdmissionPreparer.prepare
+                (Fixture.FixedClock())
+                terminalWorkItems
+                terminalExecutor
+                terminalExecutor
+                Fixture.permit.SubjectId
+                "pilot-route"
+                distinctReadmission
+                input
+                CancellationToken.None
+        Assert.Equal(Error "telemetry-parent-attempt-missing", missingParent)
+        Assert.Equal(writesBeforeTerminalRetry, terminalExecutor.Writes)
+
+        let parentJournal = Fixture.MemoryJournal()
+        let parentExecutor = Fixture.MemoryExecutor(fun () -> parentJournal.State)
+        let parentWorkItems = parentJournal :> IJournalStore
+        let! parentFirst =
+            MainAdmissionPreparer.prepare
+                (Fixture.FixedClock())
+                parentWorkItems
+                parentExecutor
+                parentExecutor
+                Fixture.permit.SubjectId
+                "pilot-route"
+                decodedRequest
+                input
+                CancellationToken.None
+        Assert.True(Result.isOk parentFirst)
+        parentJournal.Seed(AttemptStarted priorAttempt)
+        parentJournal.Seed(AttemptObserved(priorAttempt.AttemptId, Completed))
+        parentJournal.Seed(CancelRequestedEvent "terminal-follow-up")
+        parentJournal.Seed(CancelledEvent "terminal-follow-up")
+        parentJournal.Seed(GenerationAdvanced(Id.generation 2L))
+        let parentedRequest =
+            { distinctReadmission with
+                ReservationId = Guid.NewGuid()
+                ExecutionReservationId = Guid.NewGuid()
+                SessionId = Guid.NewGuid() }
+        let! parentedReadmission =
+            MainAdmissionPreparer.prepare
+                (Fixture.FixedClock())
+                parentWorkItems
+                parentExecutor
+                parentExecutor
+                Fixture.permit.SubjectId
+                "pilot-route"
+                parentedRequest
+                input
+                CancellationToken.None
+        let parentedBytes = parentedReadmission |> Result.defaultWith failwith
+        let parentedPreparation =
+            MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" parentedBytes
+            |> Result.defaultWith failwith
+        Assert.Equal(ExecutorWire.routeBindingSchemaV2, parentedPreparation.Binding.Schema)
+        Assert.Equal(Nullable(Id.attemptValue priorAttempt.AttemptId), parentedPreparation.Binding.ParentAttemptId)
+        Assert.Equal(Nullable(Id.generationValue priorAttempt.Generation), parentedPreparation.Binding.ParentGeneration)
+        Assert.Equal("follow-up", parentedPreparation.Binding.TelemetryRelation)
+        let! parentedReplay =
+            MainAdmissionPreparer.prepare
+                (Fixture.FixedClock())
+                parentWorkItems
+                parentExecutor
+                parentExecutor
+                Fixture.permit.SubjectId
+                "pilot-route"
+                parentedRequest
+                input
+                CancellationToken.None
+        Assert.True(ReadOnlySpan<byte>(parentedBytes).SequenceEqual(ReadOnlySpan<byte>(parentedReplay |> Result.defaultWith failwith)))
+
         let preparation =
             MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" firstBytes
             |> Result.defaultWith failwith
+
+        let legacyBinding = ExecutorWire.encodeRouteBinding preparation.Binding
+        use legacyBindingJson = JsonDocument.Parse legacyBinding
+        let mutable ignoredParent = Unchecked.defaultof<JsonElement>
+        Assert.False(legacyBindingJson.RootElement.TryGetProperty("parentAttemptId", &ignoredParent))
+        Assert.Equal(Ok preparation.Binding, ExecutorWire.parseRouteBinding legacyBinding)
+
+        let parentBinding0 =
+            { preparation.Binding with
+                Schema = ExecutorWire.routeBindingSchemaV2
+                BindingSha256 = ""
+                ParentAttemptId = Nullable(Guid.NewGuid())
+                ParentGeneration = Nullable(0L)
+                TelemetryRelation = "child" }
+        let parentBinding =
+            { parentBinding0 with BindingSha256 = ExecutorWire.routeBindingDigest parentBinding0 }
+        Assert.Equal(Ok parentBinding, ExecutorWire.parseRouteBinding (ExecutorWire.encodeRouteBinding parentBinding))
 
         let guessedJournal = Fixture.MemoryJournal()
         let guessedExecutor = Fixture.MemoryExecutor(fun () -> guessedJournal.State)

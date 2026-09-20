@@ -1556,6 +1556,9 @@ type PostgreSqlStoreTests() =
                     PromptDigest = inputDigest
                     WorkspaceManifestSha256 = workspaceDigest |> Result.defaultWith failwith
                     ExecutorBinding = "runner-1"
+                    ParentAttemptId = Nullable()
+                    ParentGeneration = Nullable()
+                    TelemetryRelation = null
                 }
 
             let routeBinding =
@@ -1772,6 +1775,9 @@ type PostgreSqlStoreTests() =
                     ArtifactDigest = null
                     ContentOffset = 0L
                     ContentLength = 0
+                    ParentAttemptId = Nullable()
+                    ParentGeneration = Nullable()
+                    TelemetryRelation = null
                 }
 
             let v2 =
@@ -2827,6 +2833,9 @@ type PostgreSqlStoreTests() =
                     PromptDigest = inputDigest
                     WorkspaceManifestSha256 = workspaceDigest
                     ExecutorBinding = "fixture-executor"
+                    ParentAttemptId = Nullable()
+                    ParentGeneration = Nullable()
+                    TelemetryRelation = null
                 }
 
             let binding =

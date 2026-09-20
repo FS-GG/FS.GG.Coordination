@@ -115,6 +115,9 @@ module private RuntimeFixture =
                 ArtifactDigest = null
                 ContentOffset = 0L
                 ContentLength = 0
+                ParentAttemptId = Nullable()
+                ParentGeneration = Nullable()
+                TelemetryRelation = null
             }
 
         { unsigned with
@@ -1958,11 +1961,99 @@ type ExecutorRuntimeTests() =
         }
 
     [<Fact>]
+    member _.``parented command wire keeps v2 hashes and closes v3 lineage``() =
+        let legacy = RuntimeFixture.command (String.replicate 64 "a") (String.replicate 64 "b") "baseline" "launch" null
+        let legacyBytes = ExecutorWire.encodeCommandV2 legacy
+        use legacyJson = JsonDocument.Parse legacyBytes
+        let mutable ignored = Unchecked.defaultof<JsonElement>
+        Assert.False(legacyJson.RootElement.TryGetProperty("parentAttemptId", &ignored))
+        Assert.Equal(Ok legacy, ExecutorWire.parseCommandV2 legacyBytes)
+
+        let parented0 =
+            { legacy with
+                Schema = ExecutorWire.commandSchemaV3
+                ParentAttemptId = Nullable(Guid.NewGuid())
+                ParentGeneration = Nullable(legacy.Generation - 1L)
+                TelemetryRelation = "child"
+                BodySha256 = "" }
+        let parented = { parented0 with BodySha256 = ExecutorWire.commandV2Digest parented0 }
+        let bytes = ExecutorWire.encodeCommandV2 parented
+        Assert.Equal(Ok parented, ExecutorWire.parseCommandV2 bytes)
+
+    [<Fact>]
+    member _.``controller-parented retry emits one child under the original root``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-child-guard-").FullName
+        let first = RuntimeFixture.command (String.replicate 64 "a") (String.replicate 64 "b") "baseline" "launch" null
+        let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        let original = TelemetryRootGuard.claim root first at |> Result.defaultWith failwith
+        let child0 =
+            { first with
+                Schema = ExecutorWire.commandSchemaV3
+                CommandId = Guid.NewGuid()
+                AttemptId = Guid.NewGuid()
+                Generation = first.Generation + 2L
+                ParentAttemptId = Nullable(first.AttemptId)
+                ParentGeneration = Nullable(first.Generation)
+                TelemetryRelation = "child"
+                BodySha256 = "" }
+        let child = { child0 with BodySha256 = ExecutorWire.commandV2Digest child0 }
+        Assert.Equal(Ok child, ExecutorWire.parseCommandV2 (ExecutorWire.encodeCommandV2 child))
+        Assert.Equal(Ok original, TelemetryRootGuard.claim root child (at.AddMinutes 2.))
+        Assert.Equal(Ok(Some original), TelemetryRootGuard.replay root child)
+        let _, bytes = TelemetryFactBatches.prospectiveRoot child original.ActivatedAt original.AttemptId original.Generation
+        let replayedMarker = TelemetryRootGuard.replay root child |> Result.defaultWith failwith |> Option.defaultWith (fun () -> failwith "root missing")
+        let _, replayedBytes =
+            TelemetryFactBatches.prospectiveRoot child replayedMarker.ActivatedAt replayedMarker.AttemptId replayedMarker.Generation
+        Assert.True(ReadOnlySpan<byte>(bytes).SequenceEqual(ReadOnlySpan<byte>(replayedBytes)))
+        use batch = JsonDocument.Parse bytes
+        Assert.Equal(4, batch.RootElement.GetProperty("eventCount").GetInt32())
+        let events = batch.RootElement.GetProperty("events").EnumerateArray() |> Seq.toList
+        Assert.DoesNotContain(events, fun event -> event.GetProperty("kind").GetString() = "operational-activation")
+        let expected = events |> List.find (fun event -> event.GetProperty("kind").GetString() = "expected-dispatch")
+        let lineage = events |> List.find (fun event -> event.GetProperty("kind").GetString() = "invocation-lineage")
+        let admission = events |> List.find (fun event -> event.GetProperty("kind").GetString() = "runtime-admission")
+        let parent = TelemetryFactBatches.rootInvocation first
+        Assert.Equal("child", expected.GetProperty("relation").GetString())
+        Assert.Equal(parent.DispatchId, expected.GetProperty("parentDispatchId").GetString())
+        Assert.Equal(parent.InvocationId, lineage.GetProperty("parentInvocationId").GetString())
+        Assert.Equal(parent.InvocationId, lineage.GetProperty("rootInvocationId").GetString())
+        Assert.Equal(parent.AttemptId, admission.GetProperty("parentAttemptId").GetString())
+
+        let followUp0 =
+            { child with
+                CommandId = Guid.NewGuid()
+                AttemptId = Guid.NewGuid()
+                Generation = child.Generation + 2L
+                ParentAttemptId = Nullable(child.AttemptId)
+                ParentGeneration = Nullable(child.Generation)
+                TelemetryRelation = "follow-up"
+                BodySha256 = "" }
+        let followUp = { followUp0 with BodySha256 = ExecutorWire.commandV2Digest followUp0 }
+        Assert.Equal(Ok original, TelemetryRootGuard.claim root followUp (at.AddMinutes 4.))
+        let _, followUpBytes =
+            TelemetryFactBatches.prospectiveRoot followUp original.ActivatedAt original.AttemptId original.Generation
+        use followUpBatch = JsonDocument.Parse followUpBytes
+        let followUpEvents = followUpBatch.RootElement.GetProperty("events").EnumerateArray() |> Seq.toList
+        let followUpExpected = followUpEvents |> List.find (fun event -> event.GetProperty("kind").GetString() = "expected-dispatch")
+        let followUpLineage = followUpEvents |> List.find (fun event -> event.GetProperty("kind").GetString() = "invocation-lineage")
+        let childInvocation = TelemetryFactBatches.rootInvocation child
+        Assert.Equal("follow-up", followUpExpected.GetProperty("relation").GetString())
+        Assert.Equal(childInvocation.DispatchId, followUpExpected.GetProperty("parentDispatchId").GetString())
+        Assert.Equal(childInvocation.InvocationId, followUpLineage.GetProperty("parentInvocationId").GetString())
+        Assert.Equal(parent.InvocationId, followUpLineage.GetProperty("rootInvocationId").GetString())
+
+        let invalidParent = { followUp with ParentGeneration = Nullable(first.Generation - 1L) }
+        Assert.Equal(Error "telemetry-retry-lineage-unavailable", TelemetryRootGuard.replay root invalidParent)
+
+        let absentRoot = Directory.CreateTempSubdirectory("telemetry-child-missing-").FullName
+        Assert.Equal(Error "telemetry-parent-root-unavailable", TelemetryRootGuard.claim absentRoot child at)
+
+    [<Fact>]
     member _.``prospective root and exact turn batches keep stable identities``() =
         let command = RuntimeFixture.command "digest" "input" "baseline" "telemetry" null
         let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
-        let firstName, firstBytes = TelemetryFactBatches.prospectiveRoot command at
-        let replayName, replayBytes = TelemetryFactBatches.prospectiveRoot command at
+        let firstName, firstBytes = TelemetryFactBatches.prospectiveRoot command at (command.AttemptId.ToString("N")) command.Generation
+        let replayName, replayBytes = TelemetryFactBatches.prospectiveRoot command at (command.AttemptId.ToString("N")) command.Generation
         Assert.Equal(firstName, replayName)
         Assert.True((firstBytes = replayBytes))
         use prospective = JsonDocument.Parse firstBytes
@@ -2001,10 +2092,11 @@ type ExecutorRuntimeTests() =
         let command = RuntimeFixture.command "digest" "input" "baseline" "root" null
         let first = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
         Assert.Equal(Ok None, TelemetryRootGuard.replay root command)
-        Assert.Equal(Ok first, TelemetryRootGuard.claim root command first)
-        Assert.Equal(Ok(Some first), TelemetryRootGuard.replay root command)
+        let marker = { AttemptId = command.AttemptId.ToString("N"); Generation = command.Generation; ActivatedAt = first }
+        Assert.Equal(Ok marker, TelemetryRootGuard.claim root command first)
+        Assert.Equal(Ok(Some marker), TelemetryRootGuard.replay root command)
         match TelemetryRootGuard.claim root command (first.AddMinutes 1.) with
-        | Ok replay -> Assert.Equal(first, replay)
+        | Ok replay -> Assert.Equal(marker, replay)
         | Error reason -> failwithf "root replay failed: %s" reason
 
         let retry = { command with AttemptId = Guid.NewGuid() }
