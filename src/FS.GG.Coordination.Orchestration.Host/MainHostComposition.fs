@@ -748,6 +748,10 @@ type MainProductionAdmission
                     || control.Reason <> control.Reason.Trim()
                     || control.IssuedAt = DateTimeOffset.MinValue
                     || control.ExpiresAt <= control.IssuedAt
+                    || (control.Action = "settle-absent-candidate"
+                        && (control.IssuedAt > clock.GetUtcNow()
+                            || control.ExpiresAt <= clock.GetUtcNow()
+                            || control.ExpiresAt - control.IssuedAt > TimeSpan.FromMinutes 5.))
                 then
                     return Error "invalid-main-control-request"
                 elif control.Action = "settle-absent-candidate" then
