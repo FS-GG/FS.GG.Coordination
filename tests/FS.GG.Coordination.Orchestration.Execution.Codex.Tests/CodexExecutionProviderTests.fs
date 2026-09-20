@@ -60,6 +60,17 @@ type Behavior =
         Body: string
     }
 
+type RecordingTurnObserver() =
+    let turns = ResizeArray<CodexTurnUsage>()
+    let gaps = ResizeArray<string>()
+
+    member _.Turns = turns |> Seq.toList
+    member _.Gaps = gaps |> Seq.toList
+
+    interface ICodexTurnObserver with
+        member _.TurnCompleted turn = turns.Add turn
+        member _.Gap code = gaps.Add code
+
 module Fixture =
     let prompt =
         Encoding.UTF8.GetBytes("literal $(touch never) ; ' quoted\nsecond line")
@@ -726,4 +737,74 @@ type CodexExecutionProviderTests() =
 
             let! result = provider.Reconcile(intent, CancellationToken.None)
             Assert.Equal(ReconcileUnknown "codex-spawn-receipt-without-local-supervisor", result)
+        }
+
+type CodexTurnProjectionTests() =
+    [<Fact>]
+    member _.``completed turn preserves native identity and exact counters``() =
+        let raw =
+            """{"type":"turn.completed","turn_id":"turn-2","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":5,"reasoning_output_tokens":2}}"""
+
+        match CodexTurnProjection.project (Some "thread-1") 2L raw with
+        | Some(Ok usage) ->
+            Assert.Equal("thread-1", usage.ThreadId)
+            Assert.Equal(Some "turn-2", usage.TurnId)
+            Assert.Equal(2L, usage.TurnSequence)
+            Assert.Equal(17L, usage.Total)
+            Assert.Equal(4L, usage.CachedInput)
+            Assert.Equal(Some 2L, usage.Reasoning)
+        | result -> failwithf "unexpected projection: %A" result
+
+    [<Fact>]
+    member _.``invalid native counters become a visible gap``() =
+        let raw =
+            """{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":3,"reasoning_output_tokens":4}}"""
+
+        Assert.Equal(Some(Error "invalid-turn-counters"), CodexTurnProjection.project (Some "thread-1") 1L raw)
+
+    [<Fact>]
+    member _.``a completed turn without thread identity cannot be counted``() =
+        let raw =
+            """{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":3,"reasoning_output_tokens":1}}"""
+
+        Assert.Equal(Some(Error "missing-turn-thread"), CodexTurnProjection.project None 1L raw)
+
+    [<Fact>]
+    member _.``observer receives every completed turn beyond bounded private stdout``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("codex-turn-observer-").FullName
+            let workspace = Directory.CreateDirectory(Path.Combine(root, "workspace")).FullName
+            let behavior =
+                {
+                    Version = "codex-cli 0.154.0"
+                    Login = "Logged in using ChatGPT"
+                    LoginExit = 0
+                    Stderr = "diagnostic"
+                    Body =
+                        """head -c 5000 /dev/zero | tr '\000' x; printf '\n'
+printf '%s\n' '{"type":"turn.completed","turn_id":"first","usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":4,"reasoning_output_tokens":1}}'
+printf '%s\n' '{"type":"turn.completed","turn_id":"second","usage":{"input_tokens":20,"cached_input_tokens":3,"output_tokens":5,"reasoning_output_tokens":2}}'
+printf '%s\n' '{"status":"completed","summary":"done"}' > "$final"
+"""
+                }
+            let observer = RecordingTurnObserver()
+            let executable = Fixture.script root behavior
+            let provider =
+                CodexExecutionProvider(
+                    { Fixture.options executable (Path.Combine(root, "state")) with
+                        TurnObserver = Some(observer :> ICodexTurnObserver) },
+                    Input(Fixture.prompt),
+                    CandidateInspector(true),
+                    TimeProvider.System
+                ) :> IExecutionProvider
+            let! launched = provider.Launch(Fixture.intent workspace (TimeSpan.FromSeconds 5.), CancellationToken.None)
+            let reference =
+                match launched with
+                | LaunchStarted value -> value.Session
+                | value -> failwithf "%A" value
+            let! terminal = Fixture.waitTerminal provider reference
+            Assert.Equal(Succeeded, terminal.Lifecycle)
+            Assert.Equal<string list>([ "first"; "second" ], observer.Turns |> List.map (fun turn -> turn.TurnId.Value))
+            Assert.Equal<int64 list>([ 14L; 25L ], observer.Turns |> List.map _.Total)
+            Assert.Contains("oversized-jsonl-line", observer.Gaps)
         }
