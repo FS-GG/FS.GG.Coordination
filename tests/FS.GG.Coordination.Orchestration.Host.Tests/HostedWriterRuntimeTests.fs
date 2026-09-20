@@ -1718,6 +1718,34 @@ let ``GitHub claim covers the immutable delivery window and expired ownership re
     }
 
 [<Fact>]
+let ``failed candidate recovery requires exact external absence`` () =
+    task {
+        let operation = Guid.Parse "80000000-0000-0000-0000-000000000001"
+        let absent =
+            QueuedGitHub[response "[]"; responseStatus 404 "{}"; response "[]"]
+
+        let client =
+            GitHubRouteClient(absent, FixedPublisher(Ok(String.replicate 40 "a")), githubTarget, FixedClock Fixture.now)
+
+        let! claim = client.ReadClaimAbsent("claim-1", operation, CancellationToken.None)
+        let! branch = client.ReadBranchAbsent("refs/heads/pilot", CancellationToken.None)
+        let! pull = client.ReadPullRequestAbsent("refs/heads/pilot", CancellationToken.None)
+        Assert.Equal(Ok(), claim)
+        Assert.Equal(Ok(), branch)
+        Assert.Equal(Ok(), pull)
+
+        let present =
+            QueuedGitHub[response "[]"; response "{}"; response "[]"]
+
+        let presentClient =
+            GitHubRouteClient(present, FixedPublisher(Ok(String.replicate 40 "a")), githubTarget, FixedClock Fixture.now)
+
+        let! _ = presentClient.ReadClaimAbsent("claim-1", operation, CancellationToken.None)
+        let! refused = presentClient.ReadBranchAbsent("refs/heads/pilot", CancellationToken.None)
+        Assert.Equal(Error "github-branch-still-present", refused)
+    }
+
+[<Fact>]
 let ``GitHub route refuses competing canonical claim marker`` () =
     task {
         let operation = Guid.Parse "80000000-0000-0000-0000-000000000001"

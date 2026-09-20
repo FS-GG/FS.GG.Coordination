@@ -1120,6 +1120,17 @@ module Cases =
                 (ObserveEffect(storeIntent.OperationId, Unknown "response-lost"))
             |> fun d -> apply d dispatch
 
+        Assert.Equal(
+            "attempt-absence-evidence-required",
+            (decide
+                now
+                unknown
+                (command "27400000-0000-0000-0000-000000000008")
+                ""
+                (ObserveAttempt(attemptId, ReconciledAbsent "candidate-deliverable-absent")))
+                .Receipt.Detail
+        )
+
         let replacement =
             effect
                 "72000000-0000-0000-0000-000000000003"
@@ -1158,6 +1169,17 @@ module Cases =
                 ""
                 (RecordHostedEffectReadback(storeIntent.OperationId, absence))
             |> fun d -> apply d unknown
+
+        Assert.Equal(
+            Accepted,
+            (decide
+                now
+                absent
+                (command "27400000-0000-0000-0000-000000000009")
+                ""
+                (ObserveAttempt(attemptId, ReconciledAbsent "candidate-deliverable-absent")))
+                .Receipt.Disposition
+        )
 
         let retried =
             decide

@@ -1496,6 +1496,25 @@ module Orchestration =
         | ObserveAttempt(attemptId, status) ->
             match Map.tryFind attemptId state.Attempts, status with
             | Some _, Active -> reject "observation-cannot-create-active-attempt"
+            | Some _, ReconciledAbsent reason when
+                String.IsNullOrWhiteSpace reason
+                || reason <> reason.Trim()
+                || reason.Length > 256
+                || (state.HostedRoute
+                    |> Option.exists (fun route ->
+                        route.AttemptId = attemptId
+                        && not (
+                            state.Operations
+                            |> Map.tryFind route.CandidateOperationId
+                            |> Option.exists (function
+                                | Settled(intent, ProvenAbsent) when intent.Kind = StoreCandidate -> true
+                                | _ -> false)
+                            && not (state.Operations.ContainsKey route.BranchOperationId)
+                            && not (state.Operations.ContainsKey route.PullRequestOperationId)
+                            && not (state.Operations.ContainsKey route.MergeOperationId)
+                        )))
+                ->
+                reject "attempt-absence-evidence-required"
             | Some _, Completed when
                 state.HostedRoute
                 |> Option.exists (fun route ->

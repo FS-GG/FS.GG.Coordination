@@ -751,6 +751,19 @@ type GitHubRouteClient
                 | Error reason -> Error reason
         }
 
+    /// An expired canonical claim is retained as audit history, but is no longer
+    /// an active external lease. Refuse ambiguous or malformed marker readbacks.
+    member _.ReadClaimAbsent(claimId: string, operationId: Guid, ct: CancellationToken) =
+        task {
+            let! observed = readComments ct
+
+            return
+                match observed with
+                | Ok [] -> Ok()
+                | Ok _ -> Error "github-claim-still-active"
+                | Error reason -> Error reason
+        }
+
     member _.PublishBranch
         (
             branchRef: string,
@@ -864,6 +877,29 @@ type GitHubRouteClient
                             Ok(branchRef, defaultArg value.ETag observed)
                         else
                             Error "github-branch-head-not-observed"
+        }
+
+    member _.ReadBranchAbsent(branchRef: string, ct: CancellationToken) =
+        task {
+            let name = branchRef.Replace("refs/heads/", "")
+            let! result = send RestMethod.Get $"git/ref/heads/{Uri.EscapeDataString name}" None None ct
+
+            return
+                match result with
+                | Error "github-status-404" -> Ok()
+                | Ok _ -> Error "github-branch-still-present"
+                | Error reason -> Error reason
+        }
+
+    member _.ReadPullRequestAbsent(branchRef: string, ct: CancellationToken) =
+        task {
+            let! result = readPull branchRef ct
+
+            return
+                match result with
+                | Ok None -> Ok()
+                | Ok(Some _) -> Error "github-pull-request-still-present"
+                | Error reason -> Error reason
         }
 
     member _.ReadPullRequest(branchRef: string, headSha: string, ct: CancellationToken) =
