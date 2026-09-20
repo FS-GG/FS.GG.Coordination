@@ -9,9 +9,9 @@ type TelemetryRunnerObserver(
     command: ExecutorCommandV2,
     publisher: TelemetryCliPublisher option
 ) =
-    let journal = TelemetryTurnJournal(stateRoot, command) :> ICodexTurnObserver
+    let concreteJournal = TelemetryTurnJournal(stateRoot, command)
+    let journal = concreteJournal :> ICodexTurnObserver
     let context = TelemetryFactBatches.rootInvocation command
-    let mutable gapSequence = 0L
     let mutable turnCount = 0L
 
     let queue (name, payload) =
@@ -34,9 +34,8 @@ type TelemetryRunnerObserver(
             |> queue
 
         member _.Gap code =
-            journal.Gap code
-            gapSequence <- gapSequence + 1L
-            TelemetryFactBatches.gap context gapSequence code |> queue
+            let gapId = concreteJournal.RecordGap code
+            TelemetryFactBatches.gap context gapId code |> queue
 
         member _.ProcessStarted(processId, at) =
             journal.ProcessStarted(processId, at)

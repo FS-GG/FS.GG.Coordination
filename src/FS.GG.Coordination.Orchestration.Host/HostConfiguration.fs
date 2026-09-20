@@ -17,6 +17,18 @@ type LocalExecutorConfiguration =
         ArtifactRoot: string
         CodexExecutable: string
         ExecutorBinding: string
+        Telemetry: LocalTelemetryConfiguration option
+    }
+
+and LocalTelemetryConfiguration =
+    {
+        Executable: string
+        Config: string
+        CredentialFile: string
+        CertificateAuthorityFile: string
+        Outbox: string
+        BindingDigest: string
+        Repository: string
     }
 
 type HostConfiguration =
@@ -284,6 +296,13 @@ module HostConfiguration =
                             "--runner-artifact-root"
                             "--codex-executable"
                             "--executor-binding"
+                            "--telemetry-executable"
+                            "--telemetry-config"
+                            "--telemetry-credential-file"
+                            "--telemetry-ca-file"
+                            "--telemetry-outbox"
+                            "--telemetry-binding-digest"
+                            "--telemetry-repository"
                         ])
                     arguments
 
@@ -371,14 +390,60 @@ module HostConfiguration =
                 ]
                 |> List.map (fun name -> name, optionalValue name arguments)
 
+            let telemetryValues =
+                [
+                    "--telemetry-executable"
+                    "--telemetry-config"
+                    "--telemetry-credential-file"
+                    "--telemetry-ca-file"
+                    "--telemetry-outbox"
+                    "--telemetry-binding-digest"
+                    "--telemetry-repository"
+                ]
+                |> List.map (fun name -> name, optionalValue name arguments)
+
+            let! telemetry =
+                if telemetryValues |> List.forall (fun (_, value) -> value.IsNone) then
+                    Ok None
+                elif telemetryValues |> List.forall (fun (_, value) -> value.IsSome) then
+                    let get name = telemetryValues |> List.find (fun (key, _) -> key = name) |> snd |> Option.get
+                    let paths =
+                        [ "--telemetry-executable"; "--telemetry-config"; "--telemetry-credential-file"; "--telemetry-ca-file"; "--telemetry-outbox" ]
+
+                    let digest = get "--telemetry-binding-digest"
+                    let repository = get "--telemetry-repository"
+
+                    if paths |> List.exists (fun name -> not (Path.IsPathFullyQualified(get name))) then
+                        Error "local-telemetry-path-must-be-absolute"
+                    elif digest.Length <> 64 || digest |> Seq.exists (fun value -> not (Char.IsAsciiHexDigitLower value)) then
+                        Error "local-telemetry-binding-digest-refused"
+                    elif String.IsNullOrWhiteSpace repository then
+                        Error "local-telemetry-repository-required"
+                    else
+                        Ok(
+                            Some
+                                {
+                                    Executable = get "--telemetry-executable"
+                                    Config = get "--telemetry-config"
+                                    CredentialFile = get "--telemetry-credential-file"
+                                    CertificateAuthorityFile = get "--telemetry-ca-file"
+                                    Outbox = get "--telemetry-outbox"
+                                    BindingDigest = digest
+                                    Repository = repository
+                                }
+                        )
+                else
+                    Error "incomplete-local-telemetry-configuration"
+
             let! localExecutor =
                 match
                     github,
                     localValues |> List.forall (fun (_, value) -> value.IsNone),
                     localValues |> List.forall (fun (_, value) -> value.IsSome)
                 with
+                | None, true, _ when telemetry.IsSome -> Error "local-telemetry-requires-local-executor"
                 | None, true, _ -> Ok None
-                | Some _, _, true ->
+                | Some github, _, true ->
                     let get name =
                         localValues |> List.find (fun (key, _) -> key = name) |> snd |> Option.get
 
@@ -397,6 +462,8 @@ module HostConfiguration =
                         Error "local-executor-path-must-be-absolute"
                     elif String.IsNullOrWhiteSpace(get "--executor-binding") then
                         Error "local-executor-binding-required"
+                    elif telemetry |> Option.exists (fun selected -> selected.Repository <> github.Repository) then
+                        Error "local-telemetry-repository-binding-mismatch"
                     else
                         Ok(
                             Some
@@ -409,6 +476,7 @@ module HostConfiguration =
                                     ArtifactRoot = get "--runner-artifact-root"
                                     CodexExecutable = get "--codex-executable"
                                     ExecutorBinding = get "--executor-binding"
+                                    Telemetry = telemetry
                                 }
                         )
                 | Some _, _, _ -> Error "incomplete-local-executor-configuration"

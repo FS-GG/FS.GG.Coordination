@@ -143,8 +143,8 @@ module TelemetryFactBatches =
         usage["total"] <- turn.Total
         batch context [ usage ]
 
-    let gap (context: TelemetryInvocation) sequence code =
-        let identity = "runtime-gap-" + hash (context.InvocationId + "\u001f" + string sequence + "\u001f" + code)
+    let gap (context: TelemetryInvocation) gapId code =
+        let identity = "runtime-gap-" + hash (context.InvocationId + "\u001f" + gapId + "\u001f" + code)
         let value = event "runtime-gap" identity context
         value["invocationId"] <- context.InvocationId
         value["code"] <- code

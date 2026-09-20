@@ -57,14 +57,24 @@ type TelemetryTurnJournal(stateRoot: string, command: ExecutorCommandV2) =
             if not (File.Exists path) || File.ReadAllBytes path <> bytes then
                 raise (InvalidOperationException "telemetry-turn-journal-identity-conflict")
 
+    member _.RecordGap code =
+        let identity = Guid.NewGuid().ToString("N")
+        save "gap" identity {| Identity = identity; Code = code; ObservedAt = DateTimeOffset.UtcNow |}
+        identity
+
+    member _.RecordGapOnce code =
+        let identity = "recovery-" + code
+        save "gap" identity {| Identity = identity; Code = code; ObservedAt = command.RecordedAt |}
+        identity
+
     interface ICodexTurnObserver with
         member _.TurnCompleted turn =
             let nativeKey = turn.TurnId |> Option.defaultValue (string turn.TurnSequence)
             let identity = turn.ThreadId + "\u001f" + nativeKey
             save "turn" identity turn
 
-        member _.Gap code =
-            save "gap" (Guid.NewGuid().ToString("N")) {| Code = code; ObservedAt = DateTimeOffset.UtcNow |}
+        member this.Gap code =
+            this.RecordGap code |> ignore
 
         member _.ProcessStarted(processId, at) =
             save "process-start" (string processId) {| ProcessId = processId; ObservedAt = at |}

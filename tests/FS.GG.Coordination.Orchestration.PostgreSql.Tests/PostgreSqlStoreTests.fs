@@ -2827,6 +2827,7 @@ type PostgreSqlStoreTests() =
                     PromptDigest = inputDigest
                     WorkspaceManifestSha256 = workspaceDigest
                     ExecutorBinding = "fixture-executor"
+                    Telemetry = None
                 }
 
             let binding =

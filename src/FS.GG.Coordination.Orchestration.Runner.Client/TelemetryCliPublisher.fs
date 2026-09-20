@@ -26,18 +26,19 @@ type TelemetryRunnerOptions =
         CertificateAuthorityFile: string
         Outbox: string
         BindingDigest: string
+        Repository: string
     }
 
 [<RequireQualifiedAccess>]
 module TelemetryRunnerOptions =
-    let forRepository repository (options: TelemetryRunnerOptions) : TelemetryCliPublisherOptions =
+    let toPublisher (options: TelemetryRunnerOptions) : TelemetryCliPublisherOptions =
         {
             Executable = options.Executable
             Config = options.Config
             CredentialFile = options.CredentialFile
             CertificateAuthorityFile = options.CertificateAuthorityFile
             Outbox = options.Outbox
-            Repository = repository
+            Repository = options.Repository
             BindingDigest = options.BindingDigest
         }
 
@@ -48,6 +49,8 @@ type TelemetryPublishOutcome =
 
 /// Replays immutable batches through the released workspace client. A non-applied batch remains in the outbox.
 type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
+    let flushLock = new SemaphoreSlim(1, 1)
+    let mutable flushCursor = 0
     let validPrivateFile minimum maximum (path: string) =
         if not (Path.IsPathFullyQualified path) then
             false
@@ -76,6 +79,7 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
                 File.SetUnixFileMode(options.Outbox, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
 
             let path = Path.Combine(options.Outbox, name + ".json")
+            let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
             let pending = Directory.GetFiles(options.Outbox, "*.json")
             let total = pending |> Array.sumBy (fun path -> FileInfo(path).Length)
 
@@ -95,11 +99,15 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
                     streamOptions.UnixCreateMode <- UnixFileMode.UserRead ||| UnixFileMode.UserWrite
 
                 try
-                    use stream = new FileStream(path, streamOptions)
+                    use stream = new FileStream(temporary, streamOptions)
                     stream.Write payload
                     stream.Flush true
+                    stream.Close()
+                    File.Move(temporary, path, false)
                     Ok path
                 with :? IOException ->
+                    try File.Delete temporary with _ -> ()
+
                     if File.Exists path && isNull (FileInfo(path).LinkTarget) && File.ReadAllBytes path = payload then
                         Ok path
                     else
@@ -185,27 +193,44 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
 
     member _.Queue(name: string, payload: byte array) = save name payload
 
+    member _.PendingCount =
+        if Directory.Exists options.Outbox then
+            Directory.GetFiles(options.Outbox, "*.json").Length
+        else
+            0
+
     member _.Flush(cancellation: CancellationToken) =
         task {
-            if not (Directory.Exists options.Outbox) then
-                return []
-            else
-                let pending =
-                    Directory.GetFiles(options.Outbox, "*.json")
-                    |> Array.sort
-                    |> Array.truncate 16
+            do! flushLock.WaitAsync cancellation
 
-                let outcomes = ResizeArray<TelemetryPublishOutcome>()
+            try
+                if not (Directory.Exists options.Outbox) then
+                    return []
+                else
+                    let pending = Directory.GetFiles(options.Outbox, "*.json") |> Array.sort
 
-                for path in pending do
-                    if isNull (FileInfo(path).LinkTarget) then
-                        let! outcome = runCli path cancellation
-                        outcomes.Add outcome
-
-                        if outcome = Applied then
-                            try File.Delete path with _ -> ()
+                    if pending.Length = 0 then
+                        return []
                     else
-                        outcomes.Add(PublicationUnknown "telemetry-outbox-unsafe")
+                        let start = flushCursor % pending.Length
 
-                return outcomes |> Seq.toList
+                        let selected =
+                            [| for offset in 0 .. min 15 (pending.Length - 1) -> pending[(start + offset) % pending.Length] |]
+
+                        flushCursor <- (start + selected.Length) % pending.Length
+                        let outcomes = ResizeArray<TelemetryPublishOutcome>()
+
+                        for path in selected do
+                            if isNull (FileInfo(path).LinkTarget) then
+                                let! outcome = runCli path cancellation
+                                outcomes.Add outcome
+
+                                if outcome = Applied then
+                                    try File.Delete path with _ -> ()
+                            else
+                                outcomes.Add(PublicationUnknown "telemetry-outbox-unsafe")
+
+                        return outcomes |> Seq.toList
+            finally
+                flushLock.Release() |> ignore
         }

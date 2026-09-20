@@ -48,7 +48,7 @@ let private usage () =
         "usage: fsgg-coord-orchestration-runner post --endpoint https://orchestration.main.internal:18080/ --client-cert-file <owner-only-pem> --client-key-file <owner-only-pem> --ca-file <owner-only-pem> --path </v1/runner/...> --request-file <closed-json>"
 
     eprintfn
-        "   or: fsgg-coord-orchestration-runner executor-stdio --repository-root <git-repository> --workspace-root <fixed-root> --input-root <fixed-root> --state-root <fixed-root> --artifact-root <fixed-root> --codex-executable <path> --executor-binding <identity>"
+        "   or: fsgg-coord-orchestration-runner executor-stdio --repository-root <git-repository> --workspace-root <fixed-root> --input-root <fixed-root> --state-root <fixed-root> --artifact-root <fixed-root> --codex-executable <path> --executor-binding <identity> [--telemetry-executable <path> --telemetry-config <path> --telemetry-credential-file <path> --telemetry-ca-file <path> --telemetry-outbox <path> --telemetry-binding-digest <sha256> --telemetry-repository <owner/repo>]"
 
     2
 
@@ -250,7 +250,8 @@ let main arguments =
                     "--telemetry-credential-file"
                     "--telemetry-ca-file"
                     "--telemetry-outbox"
-                    "--telemetry-binding-digest"]
+                    "--telemetry-binding-digest"
+                    "--telemetry-repository"]
 
             let providedTelemetry =
                 telemetry |> Set.filter (fun key -> Map.containsKey key values)
@@ -269,7 +270,9 @@ let main arguments =
                 || providedTelemetry
                    |> Seq.exists (fun key ->
                        String.IsNullOrWhiteSpace values[key]
-                       || (key <> "--telemetry-binding-digest" && not (Path.IsPathFullyQualified values[key])))
+                       || (key <> "--telemetry-binding-digest"
+                           && key <> "--telemetry-repository"
+                           && not (Path.IsPathFullyQualified values[key])))
                 || (providedTelemetry.Count > 0
                     && (values["--telemetry-binding-digest"].Length <> 64
                         || values["--telemetry-binding-digest"]
@@ -305,6 +308,7 @@ let main arguments =
                                             CertificateAuthorityFile = values["--telemetry-ca-file"]
                                             Outbox = values["--telemetry-outbox"]
                                             BindingDigest = values["--telemetry-binding-digest"]
+                                            Repository = values["--telemetry-repository"]
                                         }
                         }
 

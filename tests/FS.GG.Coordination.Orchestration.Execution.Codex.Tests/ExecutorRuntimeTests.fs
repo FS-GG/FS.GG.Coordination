@@ -8,6 +8,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Threading
+open System.Threading.Tasks
 open FS.GG.Coordination.Orchestration.Execution
 open FS.GG.Coordination.Orchestration.Execution.Codex
 open FS.GG.Coordination.Orchestration.Runner.Client
@@ -1874,7 +1875,7 @@ type ExecutorRuntimeTests() =
             for path in [ config; config + ".lock"; credential ] do
                 File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
 
-            let options =
+            let options: TelemetryCliPublisherOptions =
                 {
                     Executable = executable
                     Config = config
@@ -2002,3 +2003,96 @@ type ExecutorRuntimeTests() =
                 first.GetProperty("kind").GetString())
             |> Set.ofArray
         Assert.True((kinds = set [ "runtime-start"; "runtime-turn-usage"; "runtime-terminal" ]))
+
+    [<Fact>]
+    member _.``publisher pump drains more than sixteen batches after restart``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("telemetry-pump-").FullName
+            let executable = Path.Combine(root, "client")
+            let config = Path.Combine(root, "workspace.json")
+            let credential = Path.Combine(root, "credential")
+            let ca = Path.Combine(root, "ca.crt")
+            let outbox = Path.Combine(root, "outbox")
+            File.WriteAllText(executable, "#!/bin/sh\nif [ -f \"$0.applied\" ]; then printf applied; else printf durably-received; fi\n")
+            File.WriteAllText(config, "{}")
+            File.WriteAllText(config + ".lock", "")
+            File.WriteAllText(credential, "private-test")
+            File.WriteAllText(ca, "test-ca")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+            for path in [ config; config + ".lock"; credential ] do
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+
+            let options: TelemetryCliPublisherOptions =
+                {
+                    Executable = executable
+                    Config = config
+                    CredentialFile = credential
+                    CertificateAuthorityFile = ca
+                    Outbox = outbox
+                    Repository = "FS-GG/.github"
+                    BindingDigest = String.replicate 64 "a"
+                }
+
+            let first = TelemetryCliPublisher options
+
+            for index in 1 .. 20 do
+                let payload = Encoding.UTF8.GetBytes($"{{\"index\":{index}}}")
+                Assert.True((first.Queue($"batch-{index}", payload) |> Result.isOk))
+
+            let! initial = first.Flush CancellationToken.None
+            Assert.Equal(16, initial.Length)
+            Assert.True((initial |> List.forall ((=) AwaitingApplication)))
+            Assert.Equal(20, first.PendingCount)
+
+            File.WriteAllText(executable + ".applied", "")
+            let recovered = TelemetryCliPublisher options
+            use pump = new TelemetryPublisherPump(recovered, root, TimeSpan.FromMilliseconds 50.)
+            let deadline = DateTimeOffset.UtcNow.AddSeconds 10.
+
+            while recovered.PendingCount > 0 && DateTimeOffset.UtcNow < deadline do
+                do! Task.Delay 50
+
+            Assert.Equal(0, recovered.PendingCount)
+            let status = File.ReadAllText(Path.Combine(root, "telemetry-publisher-status.json"))
+            Assert.Contains("\"PendingBatches\":0", status)
+        }
+
+    [<Fact>]
+    member _.``journal replay recovers facts written before an outbox crash``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-journal-replay-").FullName
+        let command = RuntimeFixture.command "digest" "input" "baseline" "replay" null
+        let journal = TelemetryTurnJournal(root, command) :> ICodexTurnObserver
+        let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        journal.ProcessStarted(1234, at)
+        journal.TurnCompleted
+            {
+                ThreadId = "thread"
+                TurnId = Some "turn"
+                TurnSequence = 1L
+                Input = 10L
+                CachedInput = 2L
+                Output = 4L
+                Reasoning = Some 1L
+                Total = 14L
+            }
+        journal.Gap "fixture-gap"
+        journal.ProcessTerminal(0, Some "thread", at.AddMinutes 1.)
+
+        let outbox = Path.Combine(root, "outbox")
+        let publisher =
+            TelemetryCliPublisher
+                {
+                    Executable = "/missing/client"
+                    Config = "/missing/config"
+                    CredentialFile = "/missing/credential"
+                    CertificateAuthorityFile = "/missing/ca"
+                    Outbox = outbox
+                    Repository = "FS-GG/.github"
+                    BindingDigest = String.replicate 64 "a"
+                }
+
+        Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
+        Assert.Equal(4, publisher.PendingCount)
+        Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
+        Assert.Equal(4, publisher.PendingCount)

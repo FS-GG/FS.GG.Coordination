@@ -7,6 +7,7 @@ open System.Diagnostics
 open System.Net
 open System.Net.Http
 open System.Text
+open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 open Xunit
@@ -1043,6 +1044,7 @@ let private localRunnerFixture (mode: string) =
             "import json, os, struct, sys, time"
             "args=dict(zip(sys.argv[2::2],sys.argv[3::2]))"
             "state=args['--state-root']; count_path=os.path.join(state,'starts')"
+            "open(os.path.join(state,'args.json'),'w').write(json.dumps(args,sort_keys=True))"
             "count=(int(open(count_path).read()) if os.path.exists(count_path) else 0)+1"
             "open(count_path,'w').write(str(count)); mode=open(os.path.join(state,'mode')).read().strip()"
             "if mode=='exit-once' and count==1: sys.exit(17)"
@@ -1082,6 +1084,7 @@ let private localRunnerFixture (mode: string) =
         ArtifactRoot = Path.Combine(root, "artifacts")
         CodexExecutable = "/bin/false"
         ExecutorBinding = "fixture-executor"
+        Telemetry = None
     }
 
 [<Fact>]
@@ -1105,6 +1108,39 @@ let ``local executor child exchanges bounded frames and survives sequential comm
         Assert.True(Result.isOk secondResult)
         Assert.Equal("1", File.ReadAllText(Path.Combine(root, "state/starts")))
         Assert.True(transport.IsRunning)
+    }
+
+[<Fact>]
+let ``local executor forwards exact telemetry binding arguments`` () =
+    task {
+        let root, _, baseConfiguration = localRunnerFixture "ok"
+        let telemetry =
+            {
+                Executable = "/usr/local/bin/fsgg-coord-engine"
+                Config = "/etc/fs-gg/telemetry/workspace.json"
+                CredentialFile = "/run/secrets/telemetry-orchestration-credential"
+                CertificateAuthorityFile = "/etc/fs-gg/telemetry/ca.crt"
+                Outbox = "/srv/runner-state/telemetry-outbox"
+                BindingDigest = String.replicate 64 "a"
+                Repository = "FS-GG/.github"
+            }
+
+        use transport = new LocalExecutorTransport({ baseConfiguration with Telemetry = Some telemetry })
+        let command = Fixture.executorCommand (Guid.NewGuid())
+        let! result =
+            (transport :> IAuthenticatedExecutorTransport)
+                .Exchange([ ExecutorWire.encodeCommandV2 command ], CancellationToken.None)
+        Assert.True(Result.isOk result)
+
+        use document = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "state/args.json")))
+        let args = document.RootElement
+        Assert.Equal(telemetry.Executable, args.GetProperty("--telemetry-executable").GetString())
+        Assert.Equal(telemetry.Config, args.GetProperty("--telemetry-config").GetString())
+        Assert.Equal(telemetry.CredentialFile, args.GetProperty("--telemetry-credential-file").GetString())
+        Assert.Equal(telemetry.CertificateAuthorityFile, args.GetProperty("--telemetry-ca-file").GetString())
+        Assert.Equal(telemetry.Outbox, args.GetProperty("--telemetry-outbox").GetString())
+        Assert.Equal(telemetry.BindingDigest, args.GetProperty("--telemetry-binding-digest").GetString())
+        Assert.Equal(telemetry.Repository, args.GetProperty("--telemetry-repository").GetString())
     }
 
 [<Fact>]

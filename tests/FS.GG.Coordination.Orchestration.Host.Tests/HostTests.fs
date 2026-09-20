@@ -1155,6 +1155,38 @@ let ``serve configuration requires private files loopback and explicit identitie
         let workspaceIndex = Array.findIndex ((=) "--runner-workspace-root") relative
         relative[workspaceIndex + 1] <- "relative"
         Assert.Equal(Error "local-executor-path-must-be-absolute", HostConfiguration.parseServe relative)
+
+        let telemetryOptions =
+            [|
+                "--telemetry-executable"; "/usr/local/bin/fsgg-coord-engine"
+                "--telemetry-config"; "/etc/fs-gg/telemetry/workspace.json"
+                "--telemetry-credential-file"; "/run/secrets/telemetry-orchestration-credential"
+                "--telemetry-ca-file"; "/etc/fs-gg/telemetry/ca.crt"
+                "--telemetry-outbox"; "/srv/runner-state/telemetry-outbox"
+                "--telemetry-binding-digest"; String.replicate 64 "a"
+                "--telemetry-repository"; "FS-GG/.github"
+            |]
+
+        let withTelemetry = HostConfiguration.parseServe (Array.append localArguments telemetryOptions)
+        Assert.True((withTelemetry |> Result.toOption |> Option.bind _.LocalExecutor |> Option.bind _.Telemetry).IsSome)
+        Assert.Equal(
+            Error "incomplete-local-telemetry-configuration",
+            HostConfiguration.parseServe (Array.append localArguments telemetryOptions[.. telemetryOptions.Length - 3])
+        )
+
+        let staleDigest = telemetryOptions |> Array.copy
+        staleDigest[Array.findIndex ((=) "--telemetry-binding-digest") staleDigest + 1] <- "stale"
+        Assert.Equal(
+            Error "local-telemetry-binding-digest-refused",
+            HostConfiguration.parseServe (Array.append localArguments staleDigest)
+        )
+
+        let wrongRepository = telemetryOptions |> Array.copy
+        wrongRepository[Array.findIndex ((=) "--telemetry-repository") wrongRepository + 1] <- "FS-GG/another"
+        Assert.Equal(
+            Error "local-telemetry-repository-binding-mismatch",
+            HostConfiguration.parseServe (Array.append localArguments wrongRepository)
+        )
     finally
         Directory.Delete(root, true)
 
@@ -1182,6 +1214,7 @@ let ``linux wildcard prefix starts accepts loopback request and stops`` () =
                     ArtifactRoot = "/srv/artifacts"
                     CodexExecutable = "/usr/bin/codex"
                     ExecutorBinding = "codex-main"
+                    Telemetry = None
                 }
 
             let configuration =
@@ -1350,6 +1383,7 @@ let ``local child mode exposes no legacy runner HTTP route`` () =
                 ArtifactRoot = "/srv/artifacts"
                 CodexExecutable = "/usr/bin/codex"
                 ExecutorBinding = "codex-main"
+                Telemetry = None
             }
 
         let configuration =

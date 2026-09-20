@@ -49,12 +49,14 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
     let artifacts = ConcurrentDictionary<Guid, CandidateArtifact>()
     let outputLock = new SemaphoreSlim(1, 1)
 
-    let telemetryPublisher (manifest: ExecutorWorkspaceManifest) =
+    let telemetryClient =
         options.Telemetry
-        |> Option.map (fun selected ->
-            selected
-            |> TelemetryRunnerOptions.forRepository manifest.RepositoryBinding
-            |> TelemetryCliPublisher)
+        |> Option.map (TelemetryRunnerOptions.toPublisher >> TelemetryCliPublisher)
+
+    let telemetryPublisher (manifest: ExecutorWorkspaceManifest) =
+        match options.Telemetry with
+        | Some selected when selected.Repository = manifest.RepositoryBinding -> telemetryClient
+        | _ -> None
 
     let key (command: ExecutorCommandV2) =
         command.AssignmentId.ToString("N")
@@ -406,11 +408,24 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                     )
 
                 let providerOptions =
+                    let publisher = telemetryPublisher manifest
+
+                    publisher
+                    |> Option.iter (fun target ->
+                        let journal = TelemetryTurnJournal(options.StateRoot, command)
+                        let context = TelemetryFactBatches.rootInvocation command
+
+                        TelemetryJournalRecovery.requeue options.StateRoot command target
+                        |> List.distinct
+                        |> List.iter (fun code ->
+                            let gapId = journal.RecordGapOnce code
+                            TelemetryFactBatches.gap context gapId code |> target.Queue |> ignore))
+
                     { CodexExecutionProviderOptions.create options.CodexExecutable options.StateRoot with
                         MaximumStreamBytes = 1024 * 1024
                         TurnObserver =
                             Some(
-                                TelemetryRunnerObserver(options.StateRoot, command, telemetryPublisher manifest)
+                                TelemetryRunnerObserver(options.StateRoot, command, publisher)
                                 :> ICodexTurnObserver
                             )
                     }
@@ -875,6 +890,9 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                                             | Applied
                                             | AwaitingApplication -> ()
                                         | Error code -> journal.Gap code
+                                    | None when options.Telemetry.IsSome ->
+                                        (TelemetryTurnJournal(options.StateRoot, command) :> ICodexTurnObserver)
+                                            .Gap "telemetry-repository-binding-mismatch"
                                     | None -> ()
 
                                     let! launched = selected.Provider.Launch(intent, CancellationToken.None)
@@ -987,10 +1005,6 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                                                     operation command "reconcile" "unknown" (Some session) reason
                                                 ))
                                     | Ok observation ->
-                                        telemetryPublisher selected.Manifest
-                                        |> Option.iter (fun publisher ->
-                                            publisher.Flush(CancellationToken.None) |> ignore)
-
                                         match observation.Lifecycle, observation.Candidate with
                                         | Succeeded, Some candidate ->
                                             match
@@ -1162,6 +1176,12 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
 
     member _.Run(input: Stream, output: Stream, cancellationToken: CancellationToken) =
         task {
+            use telemetryPump =
+                telemetryClient
+                |> Option.map (fun publisher ->
+                    new TelemetryPublisherPump(publisher, options.StateRoot, TimeSpan.FromSeconds 15.))
+                |> Option.toObj
+
             let running = ResizeArray<Task>()
             let header = Array.zeroCreate<byte> 4
             let mutable finished = false
