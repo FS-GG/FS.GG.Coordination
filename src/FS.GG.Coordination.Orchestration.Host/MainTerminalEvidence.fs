@@ -96,7 +96,11 @@ module MainTerminalEvidence =
                         && text item "stdoutSha256" = Some(digest stdoutBytes)
                         && number item "finalBytes" = Some(int64 finalBytes.Length)
                         && number item "stdoutBytes" = Some(int64 stdoutBytes.Length)
-                        && (captured |> Option.exists (fun value -> value >= intent.RecordedAt && value <= now))
+                        && (captured
+                            |> Option.exists (fun value ->
+                                value.Offset = TimeSpan.Zero
+                                && value >= intent.RecordedAt
+                                && value <= now))
                         && terminal
 
                     if not bound then

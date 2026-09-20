@@ -1802,6 +1802,16 @@ let ``terminal snapshot binds old attempt and refuses altered or nonterminal byt
 
         Assert.True(MainTerminalEvidence.verify directory intent Fixture.now |> Result.isOk)
 
+        let wrongIntent =
+            { intent with
+                Key = { intent.Key with AttemptId = Guid.NewGuid() }
+            }
+
+        Assert.Equal(
+            Error "terminal-evidence-manifest-refused",
+            MainTerminalEvidence.verify directory wrongIntent Fixture.now
+        )
+
         File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest false stdout)
         Assert.Equal(
             Error "terminal-evidence-manifest-refused",
