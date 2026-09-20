@@ -44,7 +44,6 @@ module MainHostComposition =
             results
             |> Seq.exists (function
                 | EffectNeedsExternalReconciliation _ -> true
-                | EffectNeedsReconciliation _ -> true
                 | EffectDriveRefused reason when reason.StartsWith("github-", StringComparison.Ordinal) -> true
                 | _ -> false)
         then
