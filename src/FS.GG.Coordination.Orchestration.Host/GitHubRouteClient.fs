@@ -392,6 +392,19 @@ type private PullRequestFacts =
         BaseRepository: string
         Body: string
         MergeCommitSha: string option
+        MergedAt: DateTimeOffset option
+        Revision: string
+    }
+
+type NativeDeliveryFacts =
+    {
+        Number: int
+        NodeId: string
+        BaseRef: string
+        BaseSha: string
+        HeadSha: string
+        MergeCommitSha: string
+        MergedAt: DateTimeOffset
         Revision: string
     }
 
@@ -590,6 +603,12 @@ type GitHubRouteClient
                                             baseValue.GetProperty("repo").GetProperty("full_name").GetString()
                                         Body = defaultArg (property "body" item) ""
                                         MergeCommitSha = property "merge_commit_sha" item
+                                        MergedAt =
+                                            property "merged_at" item
+                                            |> Option.bind (fun text ->
+                                                match DateTimeOffset.TryParse text with
+                                                | true, timestamp -> Some timestamp
+                                                | _ -> None)
                                         Revision = defaultArg value.ETag "github-pr-observed"
                                     })
                                 |> Ok
@@ -1097,7 +1116,7 @@ type GitHubRouteClient
             | Error reason -> return Error reason
         }
 
-    member _.ReadDelivery(branchRef: string, expectedHead: string, ct: CancellationToken) =
+    member _.ReadDeliveryFacts(branchRef: string, expectedHead: string, ct: CancellationToken) =
         task {
             let! found = readPull branchRef ct
 
@@ -1109,8 +1128,26 @@ type GitHubRouteClient
                 && value.BaseRef = target.BaseRef
                 && value.BaseRepository = target.Repository
                 && (value.MergeCommitSha |> Option.exists gitId)
+                && gitId value.BaseSha
+                && value.MergedAt.IsSome
                 ->
-                return Ok(value.NodeId, value.MergeCommitSha.Value, value.Revision)
+                return Ok
+                    {
+                        Number = value.Number
+                        NodeId = value.NodeId
+                        BaseRef = value.BaseRef
+                        BaseSha = value.BaseSha
+                        HeadSha = value.HeadSha
+                        MergeCommitSha = value.MergeCommitSha.Value
+                        MergedAt = value.MergedAt.Value
+                        Revision = value.Revision
+                    }
             | Ok _ -> return Error "github-native-delivery-not-observed"
             | Error reason -> return Error reason
+        }
+
+    member this.ReadDelivery(branchRef: string, expectedHead: string, ct: CancellationToken) =
+        task {
+            let! result = this.ReadDeliveryFacts(branchRef, expectedHead, ct)
+            return result |> Result.map (fun value -> value.NodeId, value.MergeCommitSha, value.Revision)
         }

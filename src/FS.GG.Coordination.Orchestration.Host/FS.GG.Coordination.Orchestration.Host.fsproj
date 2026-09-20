@@ -14,6 +14,7 @@
     <AssemblyMetadata Include="FsggSourceRevision" Value="$(FsggSourceRevision)" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\FS.GG.Coordination.Orchestration.Runner.Client\TelemetryCliPublisher.fs" Link="TelemetryCliPublisher.fs" />
     <Compile Include="HostConfiguration.fs" />
     <Compile Include="HostInitialization.fs" />
     <Compile Include="HostedWriterRuntime.fs" />
@@ -21,6 +22,7 @@
     <Compile Include="LocalExecutorTransport.fs" />
     <Compile Include="HostExecutorRelay.fs" />
     <Compile Include="GitHubRouteClient.fs" />
+    <Compile Include="TelemetryOutcomeBridge.fs" />
     <Compile Include="MainEffectDriver.fs" />
     <Compile Include="MainRouteAdmission.fs" />
     <Compile Include="MainAdmissionPreparer.fs" />

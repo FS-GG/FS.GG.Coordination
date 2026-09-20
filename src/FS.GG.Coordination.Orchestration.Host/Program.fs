@@ -10,6 +10,7 @@ open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Host
 open FS.GG.Coordination.Orchestration.PostgreSql
 open FS.GG.Coordination.Orchestration.Execution
+open FS.GG.Coordination.Orchestration.Runner.Client
 
 let private usage () =
     eprintfn "usage: fsgg-coord-orchestration-host init --connection-file <absolute-private-path>"
@@ -215,6 +216,26 @@ let main arguments =
                             TimeProvider.System
                         )
 
+                    let outcomeBridge =
+                        localConfiguration.Telemetry
+                        |> Option.map (fun telemetry ->
+                            let outbox =
+                                Path.Combine(Path.GetDirectoryName telemetry.Outbox, "host-outcome-outbox")
+
+                            let publisher =
+                                TelemetryCliPublisher
+                                    {
+                                        Executable = telemetry.Executable
+                                        Config = telemetry.Config
+                                        CredentialFile = telemetry.CredentialFile
+                                        CertificateAuthorityFile = telemetry.CertificateAuthorityFile
+                                        Outbox = outbox
+                                        Repository = telemetry.Repository
+                                        BindingDigest = telemetry.BindingDigest
+                                    }
+
+                            TelemetryOutcomeBridge(telemetry.Repository, github, publisher))
+
                     let admission =
                         MainProductionAdmission(
                             actorSystem,
@@ -226,7 +247,8 @@ let main arguments =
                             configuration.PilotPrincipalId,
                             github,
                             transport,
-                            shutdown.Token
+                            shutdown.Token,
+                            ?outcomeBridge = outcomeBridge
                         )
                         :> IMainRouteAdmissionHandler
 

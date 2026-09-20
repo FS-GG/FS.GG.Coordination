@@ -1823,6 +1823,95 @@ let ``GitHub route adopts one exact closed pull request without reopening or dup
     }
 
 [<Fact>]
+let ``GitHub native delivery facts retain exact PR base head merge and occurrence`` () =
+    task {
+        let head = String.replicate 40 "a"
+        let merge = String.replicate 40 "c"
+        let occurred = "2026-09-20T10:15:00Z"
+        let executor = QueuedGitHub[response (pr "closed" (Some occurred) head (Some merge))]
+
+        let client =
+            GitHubRouteClient(
+                executor,
+                FixedPublisher(Error "publisher-must-not-run"),
+                githubTarget,
+                FixedClock Fixture.now
+            )
+
+        let! result = client.ReadDeliveryFacts("refs/heads/pilot", head, CancellationToken.None)
+
+        match result with
+        | Error reason -> failwith reason
+        | Ok facts ->
+            Assert.Equal(42, facts.Number)
+            Assert.Equal("PR_node", facts.NodeId)
+            Assert.Equal("main", facts.BaseRef)
+            Assert.Equal(String.replicate 40 "b", facts.BaseSha)
+            Assert.Equal(head, facts.HeadSha)
+            Assert.Equal(merge, facts.MergeCommitSha)
+            Assert.Equal(DateTimeOffset.Parse occurred, facts.MergedAt)
+    }
+
+[<Fact>]
+let ``native delivery batch has stable item identity and authoritative merge fields`` () =
+    let client =
+        GitHubRouteClient(
+            QueuedGitHub[],
+            FixedPublisher(Error "publisher-must-not-run"),
+            githubTarget,
+            FixedClock Fixture.now
+        )
+
+    let publisher =
+        FS.GG.Coordination.Orchestration.Runner.Client.TelemetryCliPublisher
+            {
+                Executable = "/unused/cli"
+                Config = "/unused/config"
+                CredentialFile = "/unused/credential"
+                CertificateAuthorityFile = "/unused/ca"
+                Outbox = "/unused/outbox"
+                Repository = "FS-GG/.github"
+                BindingDigest = String.replicate 64 "a"
+            }
+
+    let bridge = TelemetryOutcomeBridge("FS-GG/.github", client, publisher)
+    let readback = Fixture.native (Fixture.intent ReadNativeDelivery Fixture.route.ReadbackOperationId)
+    let facts =
+        {
+            Number = 42
+            NodeId = readback.PullRequestNodeId
+            BaseRef = "main"
+            BaseSha = String.replicate 40 "d"
+            HeadSha = readback.CandidateHeadSha
+            MergeCommitSha = readback.MergeCommitSha
+            MergedAt = Fixture.now.AddMinutes -2.
+            Revision = "fixture-etag"
+        }
+
+    let name, bytes = bridge.CreateBatch(Fixture.route, readback, facts)
+    let repeatedName, repeatedBytes = bridge.CreateBatch(Fixture.route, readback, facts)
+    Assert.Equal(name, repeatedName)
+    Assert.Equal<byte>(bytes, repeatedBytes)
+    use document = JsonDocument.Parse bytes
+    let root = document.RootElement
+    Assert.Equal("fsgg.telemetry.ingest/1", root.GetProperty("schema").GetString())
+    Assert.Equal(2, root.GetProperty("eventCount").GetInt32())
+    let outcome = root.GetProperty("events")[0]
+    Assert.Equal("native-item-outcome", outcome.GetProperty("kind").GetString())
+    Assert.Equal(WorkItemIdentity.persistenceId Fixture.route.WorkItemId, outcome.GetProperty("itemId").GetString())
+    Assert.Equal("orchestration-delivery", outcome.GetProperty("sourceKind").GetString())
+    Assert.Equal("delivered", outcome.GetProperty("codeDelivery").GetString())
+    Assert.Equal(42, outcome.GetProperty("prNumber").GetInt32())
+    Assert.Equal(facts.BaseSha, outcome.GetProperty("baseSha").GetString())
+    Assert.Equal(facts.MergeCommitSha, outcome.GetProperty("mergeCommit").GetString())
+    Assert.Equal(facts.MergedAt, outcome.GetProperty("occurredAt").GetDateTimeOffset())
+    let population = root.GetProperty("events")[1]
+    Assert.Equal("budget-population", population.GetProperty("kind").GetString())
+    Assert.Equal("completed", population.GetProperty("state").GetString())
+    Assert.Equal("native-item", population.GetProperty("sourceKind").GetString())
+    Assert.Equal(outcome.GetProperty("itemId").GetString(), population.GetProperty("originalItemId").GetString())
+
+[<Fact>]
 let ``GitHub merge refuses incomplete required checks before mutation`` () =
     task {
         let head = String.replicate 40 "a"

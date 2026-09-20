@@ -136,6 +136,7 @@ module MainHostComposition =
         (transport: IAuthenticatedExecutorTransport)
         (preparation: MainRoutePreparation)
         (cancellationToken: CancellationToken)
+        (outcomeBridge: TelemetryOutcomeBridge option)
         =
         let remote =
             RemoteExecutorProvider(executions :> IExecutorCommandStore, resolver, transport)
@@ -201,6 +202,9 @@ module MainHostComposition =
 
         let loop =
             task {
+                let mutable publishedOutcomes = Set.empty<OperationId>
+                let mutable nextOutcomeCheck = DateTimeOffset.MinValue
+
                 while not cancellationToken.IsCancellationRequested do
                     let! recovered = HostedWriterJournal.recover workItems workItemId cancellationToken
 
@@ -212,6 +216,32 @@ module MainHostComposition =
                         for intent in current.UnsettledEffects do
                             let! result = driver.Drive(intent.OperationId, cancellationToken)
                             results.Add result
+
+                        if clock.GetUtcNow() >= nextOutcomeCheck then
+                            nextOutcomeCheck <- clock.GetUtcNow().AddSeconds 5.
+
+                            match outcomeBridge, current.State.HostedRoute with
+                            | Some bridge, Some route when not (Set.contains route.ReadbackOperationId publishedOutcomes) ->
+                                match
+                                    Map.tryFind route.ReadbackOperationId current.State.NativeDeliveryReadbacks,
+                                    Map.tryFind route.ReadbackOperationId current.State.Operations,
+                                    Map.tryFind route.AttemptId current.State.Attempts
+                                with
+                                | Some readback, Some(OperationState.Settled(intent, EffectOutcome.Applied revision)), Some attempt when
+                                    intent.Kind = ReadNativeDelivery
+                                    && revision = readback.ProviderRevision
+                                    && attempt.Status = AttemptStatus.Completed
+                                    ->
+                                    let! result = bridge.Publish(route, readback, true, cancellationToken)
+
+                                    if result = FS.GG.Coordination.Orchestration.Runner.Client.Applied then
+                                        publishedOutcomes <- Set.add route.ReadbackOperationId publishedOutcomes
+                                | _ -> ()
+                            | _ -> ()
+
+                            match outcomeBridge with
+                            | Some bridge -> let! _ = bridge.Flush cancellationToken in ()
+                            | None -> ()
 
                         let! _ = workflow.RecoverContinuation(preparation, cancellationToken)
                         do! Task.Delay(pacing results, cancellationToken)
@@ -240,7 +270,8 @@ type MainProductionAdmission
         principal: string,
         github: GitHubRouteClient,
         transport: IAuthenticatedExecutorTransport,
-        cancellationToken: CancellationToken
+        cancellationToken: CancellationToken,
+        ?outcomeBridge: TelemetryOutcomeBridge
     ) =
     let gate = obj ()
     let mutable running: RunningProductionMainHost option = None
@@ -287,6 +318,7 @@ type MainProductionAdmission
                         transport
                         preparation
                         cancellationToken
+                        outcomeBridge
 
                 running <- Some value
                 boundDigest <- Some admissionDigest
