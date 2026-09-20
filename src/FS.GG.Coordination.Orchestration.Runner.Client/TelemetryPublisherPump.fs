@@ -8,7 +8,7 @@ open System.Threading.Tasks
 
 /// Retries pending batches for the lifetime of the runner, including batches left by a prior process.
 /// The owner-only status file makes an unresolved receipt visible without affecting executor delivery.
-type TelemetryPublisherPump(publisher: TelemetryCliPublisher, stateRoot: string, interval: TimeSpan) =
+type TelemetryPublisherPump(publisher: TelemetryCliPublisher, stateRoot: string, interval: TimeSpan, requeue: unit -> unit) =
     let stopping = new CancellationTokenSource()
     let statusPath = Path.Combine(stateRoot, "telemetry-publisher-status.json")
 
@@ -54,6 +54,13 @@ type TelemetryPublisherPump(publisher: TelemetryCliPublisher, stateRoot: string,
         task {
             try
                 while not stopping.IsCancellationRequested do
+                    let replayFailure =
+                        try
+                            requeue ()
+                            []
+                        with _ ->
+                            [ PublicationUnknown "telemetry-journal-replay-failed" ]
+
                     let! outcomes =
                         task {
                             try
@@ -62,7 +69,7 @@ type TelemetryPublisherPump(publisher: TelemetryCliPublisher, stateRoot: string,
                             | :? OperationCanceledException -> return raise (OperationCanceledException())
                             | _ -> return [ PublicationUnknown "publisher-pump-failed" ]
                         }
-                    writeStatus publisher.PendingCount outcomes
+                    writeStatus publisher.PendingCount (replayFailure @ outcomes)
                     do! Task.Delay(interval, stopping.Token)
             with :? OperationCanceledException ->
                 ()

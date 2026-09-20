@@ -2000,12 +2000,15 @@ type ExecutorRuntimeTests() =
         let root = Directory.CreateTempSubdirectory("telemetry-root-guard-").FullName
         let command = RuntimeFixture.command "digest" "input" "baseline" "root" null
         let first = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        Assert.Equal(Ok None, TelemetryRootGuard.replay root command)
         Assert.Equal(Ok first, TelemetryRootGuard.claim root command first)
+        Assert.Equal(Ok(Some first), TelemetryRootGuard.replay root command)
         match TelemetryRootGuard.claim root command (first.AddMinutes 1.) with
         | Ok replay -> Assert.Equal(first, replay)
         | Error reason -> failwithf "root replay failed: %s" reason
 
         let retry = { command with AttemptId = Guid.NewGuid() }
+        Assert.Equal(Error "telemetry-retry-lineage-unavailable", TelemetryRootGuard.replay root retry)
         Assert.Equal(Error "telemetry-retry-lineage-unavailable", TelemetryRootGuard.claim root retry (first.AddMinutes 2.))
 
     [<Fact>]
@@ -2101,7 +2104,7 @@ type ExecutorRuntimeTests() =
 
             File.WriteAllText(executable + ".applied", "")
             let recovered = TelemetryCliPublisher options
-            use pump = new TelemetryPublisherPump(recovered, root, TimeSpan.FromMilliseconds 50.)
+            use pump = new TelemetryPublisherPump(recovered, root, TimeSpan.FromMilliseconds 50., ignore)
             let deadline = DateTimeOffset.UtcNow.AddSeconds 10.
 
             while recovered.PendingCount > 0 && DateTimeOffset.UtcNow < deadline do
@@ -2158,7 +2161,7 @@ type ExecutorRuntimeTests() =
         Assert.Equal(6, publisher.PendingCount)
 
     [<Fact>]
-    member _.``journal replay eventually delivers a 129-turn outage without double counting``() =
+    member _.``active pump replays a 129-turn journal backlog without double counting``() =
         task {
             let root = Directory.CreateTempSubdirectory("telemetry-overload-replay-").FullName
             let command = RuntimeFixture.command "digest" "input" "baseline" "overload" null
@@ -2211,14 +2214,28 @@ type ExecutorRuntimeTests() =
             Assert.Contains("telemetry-outbox-overload", first)
             Assert.Equal(128, publisher.PendingCount)
 
-            while publisher.PendingCount > 0 do
-                let! outcomes = publisher.Flush CancellationToken.None
-                Assert.True((outcomes |> List.forall ((=) Applied)))
+            use pump =
+                new TelemetryPublisherPump(
+                    publisher,
+                    root,
+                    TimeSpan.FromMilliseconds 50.,
+                    fun () -> TelemetryJournalRecovery.requeue root command publisher |> ignore
+                )
 
-            Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
-            Assert.Equal(1, publisher.PendingCount)
-            let! last = publisher.Flush CancellationToken.None
-            Assert.True((last = [ Applied ]))
+            let appliedDirectory = Path.Combine(root, "outbox", "applied")
+            let deadline = DateTimeOffset.UtcNow.AddSeconds 20.
+
+            let appliedCount () =
+                if Directory.Exists appliedDirectory then
+                    Directory.GetFiles(appliedDirectory, "*.sha256").Length
+                else
+                    0
+
+            while appliedCount () < 129 && DateTimeOffset.UtcNow < deadline do
+                do! Task.Delay 50
+
+            Assert.Equal(129, appliedCount ())
+            Assert.Equal(0, publisher.PendingCount)
             Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
             Assert.Equal(0, publisher.PendingCount)
         }
