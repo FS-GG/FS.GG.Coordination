@@ -302,6 +302,46 @@ type ExecutorRuntimeTests() =
         )
 
     [<Fact>]
+    member _.``bound workspace with a missing reachable blob is refused on reuse``() =
+        let repository, baseline = RuntimeFixture.repo ()
+        let workspaceRoot = Directory.CreateTempSubdirectory("executor-object-check-").FullName
+        let manifest = RuntimeFixture.manifest baseline (String.replicate 64 "a")
+        let assignment = Guid.NewGuid()
+        let attempt = Guid.NewGuid()
+        let workspace =
+            ExecutorWorkspace.materialize repository workspaceRoot assignment attempt 1L manifest
+            |> Result.defaultWith failwith
+
+        let blob = RuntimeFixture.git workspace [ "rev-parse"; "HEAD:docs/item.md" ]
+        let loose = Path.Combine(workspace, ".git", "objects", blob[..1], blob[2..])
+        Assert.True(File.Exists loose)
+        File.Delete loose
+
+        Assert.Equal(
+            Error "workspace-objects-incomplete",
+            ExecutorWorkspace.materialize repository workspaceRoot assignment attempt 1L manifest
+        )
+
+    [<Fact>]
+    member _.``partial clone source cannot supply an incomplete attempt workspace``() =
+        let repository, baseline = RuntimeFixture.repo ()
+        RuntimeFixture.git repository [ "config"; "uploadpack.allowFilter"; "true" ] |> ignore
+        let roots = Directory.CreateTempSubdirectory("executor-partial-source-").FullName
+        let partial = Path.Combine(roots, "partial")
+        RuntimeFixture.git
+            roots
+            [ "clone"; "--filter=blob:none"; "--no-checkout"; "file://" + repository; partial ]
+        |> ignore
+
+        Assert.Equal("true", RuntimeFixture.git partial [ "config"; "--bool"; "--get"; "remote.origin.promisor" ])
+        let workspaceRoot = Directory.CreateDirectory(Path.Combine(roots, "workspaces")).FullName
+        let manifest = RuntimeFixture.manifest baseline (String.replicate 64 "a")
+        Assert.Equal(
+            Error "workspace-objects-incomplete",
+            ExecutorWorkspace.materialize partial workspaceRoot (Guid.NewGuid()) (Guid.NewGuid()) 1L manifest
+        )
+
+    [<Fact>]
     member _.``version two command binds closed workspace manifest without changing version one``() =
         let _, baseline = RuntimeFixture.repo ()
         let digest = String.replicate 64 "a"

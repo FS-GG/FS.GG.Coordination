@@ -225,6 +225,33 @@ module Fixture =
         | other -> failwithf "expected session state, got %A" other
 
 type ExecutionTests() =
+    [<Fact>]
+    member _.``repeated terminal observation with a new timestamp does not grow journal``() =
+        task {
+            let journal = MemoryJournal()
+            let provider = FakeProvider("stream", true, true)
+            let coordinator = ExecutionSessionCoordinator(provider, journal, MutableClock(Fixture.now))
+            let intent = Fixture.intent 1L
+            let! launched = coordinator.Launch(intent, CancellationToken.None)
+            let starting = (Fixture.state launched).Observation.Value
+            let terminal =
+                { starting with
+                    Lifecycle = OutcomeUnknown
+                    ObservedAt = starting.ObservedAt.AddSeconds 1.
+                }
+
+            provider.Seed(intent, terminal)
+            let! first = coordinator.Observe(intent.Key, CancellationToken.None)
+            let revision = (Fixture.state first).Revision
+            let count = journal.Events(intent.Key).Length
+            provider.Seed(intent, { terminal with ObservedAt = terminal.ObservedAt.AddSeconds 1. })
+            let! repeated = coordinator.Observe(intent.Key, CancellationToken.None)
+            match repeated with
+            | SessionDuplicate state -> Assert.Equal(revision, state.Revision)
+            | other -> failwithf "expected unchanged observation, got %A" other
+            Assert.Equal(count, journal.Events(intent.Key).Length)
+        }
+
     [<Theory>]
     [<InlineData("Codex", true, "subscription-session")>]
     [<InlineData("Claude", true, "session-capability-observed")>]
