@@ -48,24 +48,17 @@ type TelemetryPublishOutcome =
 
 /// Replays immutable batches through the released workspace client. A non-applied batch remains in the outbox.
 type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
-    let validPrivateFile maximum (path: string) =
+    let validPrivateFile minimum maximum (path: string) =
         if not (Path.IsPathFullyQualified path) then
             false
         else
             let info = FileInfo path
             info.Exists
             && isNull info.LinkTarget
-            && info.Length > 0L
+            && info.Length >= minimum
             && info.Length <= maximum
             && (not (OperatingSystem.IsLinux())
-                || File.GetUnixFileMode(path)
-                   &&& (UnixFileMode.GroupRead
-                        ||| UnixFileMode.GroupWrite
-                        ||| UnixFileMode.GroupExecute
-                        ||| UnixFileMode.OtherRead
-                        ||| UnixFileMode.OtherWrite
-                        ||| UnixFileMode.OtherExecute)
-                   = enum 0)
+                || File.GetUnixFileMode(path) = (UnixFileMode.UserRead ||| UnixFileMode.UserWrite))
 
     let save (name: string) (payload: byte array) =
         if
@@ -117,8 +110,9 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
             if
                 not (Path.IsPathFullyQualified options.Executable)
                 || not (File.Exists options.Executable)
-                || not (validPrivateFile 65536L options.Config)
-                || not (validPrivateFile 4096L options.CredentialFile)
+                || not (validPrivateFile 1L 65536L options.Config)
+                || not (validPrivateFile 0L 4096L (options.Config + ".lock"))
+                || not (validPrivateFile 1L 4096L options.CredentialFile)
                 || not (File.Exists options.CertificateAuthorityFile)
             then
                 return PublicationUnknown "telemetry-client-unavailable"

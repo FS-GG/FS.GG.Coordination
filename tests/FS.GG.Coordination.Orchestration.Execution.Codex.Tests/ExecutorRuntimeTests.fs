@@ -1859,6 +1859,7 @@ type ExecutorRuntimeTests() =
             let ca = Path.Combine(root, "ca.crt")
             let outbox = Path.Combine(root, "outbox")
             File.WriteAllText(config, "{}")
+            File.WriteAllText(config + ".lock", "")
             File.WriteAllText(credential, "private-test")
             File.WriteAllText(ca, "test-ca")
 
@@ -1867,8 +1868,11 @@ type ExecutorRuntimeTests() =
                 "#!/bin/sh\n[ \"$FSGG_TELEMETRY_CREDENTIAL_ORCHESTRATION\" = private-test ] || exit 4\n[ -r \"$SSL_CERT_FILE\" ] || exit 5\n[ -z \"$GITHUB_TOKEN\" ] || exit 6\nprintf 'durably-received'\n"
             )
 
-            for path in [ executable; config; credential; ca ] do
-                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            File.SetUnixFileMode(ca, UnixFileMode.UserRead)
+
+            for path in [ config; config + ".lock"; credential ] do
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
 
             let options =
                 {
@@ -1902,6 +1906,10 @@ type ExecutorRuntimeTests() =
 
             let! overloaded = publisher.Publish("batch-129", payload, CancellationToken.None)
             Assert.Equal(PublicationUnknown "telemetry-outbox-overload", overloaded)
+
+            File.Delete(config + ".lock")
+            let! missingLock = publisher.Publish("batch-1", payload, CancellationToken.None)
+            Assert.Equal(PublicationUnknown "telemetry-client-unavailable", missingLock)
         }
 
     [<Fact>]
