@@ -235,7 +235,7 @@ let main arguments =
             eprintfn "%s" reason
             2
         | Ok values ->
-            let allowed =
+            let required =
                 set["--repository-root"
                     "--workspace-root"
                     "--input-root"
@@ -244,16 +244,37 @@ let main arguments =
                     "--codex-executable"
                     "--executor-binding"]
 
+            let telemetry =
+                set["--telemetry-executable"
+                    "--telemetry-config"
+                    "--telemetry-credential-file"
+                    "--telemetry-ca-file"
+                    "--telemetry-outbox"
+                    "--telemetry-binding-digest"]
+
+            let providedTelemetry =
+                telemetry |> Set.filter (fun key -> Map.containsKey key values)
+
             if
-                values.Count <> allowed.Count
-                || values |> Map.exists (fun key _ -> not (allowed.Contains key))
+                required |> Set.exists (fun key -> not (Map.containsKey key values))
+                || values |> Map.exists (fun key _ -> not (required.Contains key || telemetry.Contains key))
+                || (providedTelemetry.Count <> 0 && providedTelemetry <> telemetry)
             then
                 usage ()
             elif
-                allowed
+                required
                 |> Seq.exists (fun key ->
                     String.IsNullOrWhiteSpace values[key]
                     || (key <> "--executor-binding" && not (Path.IsPathFullyQualified values[key])))
+                || providedTelemetry
+                   |> Seq.exists (fun key ->
+                       String.IsNullOrWhiteSpace values[key]
+                       || (key <> "--telemetry-binding-digest" && not (Path.IsPathFullyQualified values[key])))
+                || (providedTelemetry.Count > 0
+                    && (values["--telemetry-binding-digest"].Length <> 64
+                        || values["--telemetry-binding-digest"]
+                           |> Seq.exists (fun character ->
+                               not (Char.IsAsciiDigit character || character >= 'a' && character <= 'f'))))
             then
                 eprintfn "executor-option-refused"
                 2
@@ -272,6 +293,19 @@ let main arguments =
                             CodexExecutable = values["--codex-executable"]
                             ExecutorBinding = values["--executor-binding"]
                             MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                            Telemetry =
+                                if providedTelemetry.Count = 0 then
+                                    None
+                                else
+                                    Some
+                                        {
+                                            Executable = values["--telemetry-executable"]
+                                            Config = values["--telemetry-config"]
+                                            CredentialFile = values["--telemetry-credential-file"]
+                                            CertificateAuthorityFile = values["--telemetry-ca-file"]
+                                            Outbox = values["--telemetry-outbox"]
+                                            BindingDigest = values["--telemetry-binding-digest"]
+                                        }
                         }
 
                     ExecutorRuntime(options, TimeProvider.System)

@@ -6,6 +6,7 @@ open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open System.Threading
 open FS.GG.Coordination.Orchestration.Execution
 open FS.GG.Coordination.Orchestration.Execution.Codex
@@ -765,6 +766,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = RuntimeFixture.fakeCodex roots
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             do! ExecutorRuntime(options, TimeProvider.System).Run(input, output, CancellationToken.None)
@@ -1220,6 +1222,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = executable
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             let runtime = ExecutorRuntime(options, TimeProvider.System)
@@ -1454,6 +1457,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = executable
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             let inputManifest =
@@ -1562,6 +1566,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = RuntimeFixture.hangingCodex roots
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             let runtime = ExecutorRuntime(options, TimeProvider.System)
@@ -1683,6 +1688,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = "/does/not/run"
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 1024
+                    Telemetry = None
                 }
 
             let header = Array.zeroCreate<byte> 4
@@ -1766,6 +1772,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = "/does/not/run"
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             let admitted =
@@ -1896,3 +1903,35 @@ type ExecutorRuntimeTests() =
             let! overloaded = publisher.Publish("batch-129", payload, CancellationToken.None)
             Assert.Equal(PublicationUnknown "telemetry-outbox-overload", overloaded)
         }
+
+    [<Fact>]
+    member _.``prospective root and exact turn batches keep stable identities``() =
+        let command = RuntimeFixture.command "digest" "input" "baseline" "telemetry" null
+        let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        let first = TelemetryFactBatches.prospectiveRoot command at
+        let replay = TelemetryFactBatches.prospectiveRoot command at
+        Assert.Equal(first |> List.map fst, replay |> List.map fst)
+        Assert.Equal(5, first.Length)
+
+        let context = TelemetryFactBatches.rootInvocation command
+        let turn =
+            {
+                ThreadId = "native-thread"
+                TurnId = Some "native-turn"
+                TurnSequence = 1L
+                Input = 17L
+                CachedInput = 4L
+                Output = 9L
+                Reasoning = Some 3L
+                Total = 26L
+            }
+
+        let name, bytes = TelemetryFactBatches.completedTurn context (Some "gpt-5") (Some "medium") turn
+        Assert.StartsWith("batch-", name)
+        use document = JsonDocument.Parse bytes
+        let root = document.RootElement
+        let usage = root.GetProperty("events")[0]
+        Assert.Equal("fsgg.telemetry.ingest/1", root.GetProperty("schema").GetString())
+        Assert.Equal(context.ItemId, usage.GetProperty("itemId").GetString())
+        Assert.Equal(26L, usage.GetProperty("total").GetInt64())
+        Assert.Equal(3L, usage.GetProperty("reasoning").GetInt64())

@@ -18,6 +18,29 @@ type TelemetryCliPublisherOptions =
         BindingDigest: string
     }
 
+type TelemetryRunnerOptions =
+    {
+        Executable: string
+        Config: string
+        CredentialFile: string
+        CertificateAuthorityFile: string
+        Outbox: string
+        BindingDigest: string
+    }
+
+[<RequireQualifiedAccess>]
+module TelemetryRunnerOptions =
+    let forRepository repository (options: TelemetryRunnerOptions) : TelemetryCliPublisherOptions =
+        {
+            Executable = options.Executable
+            Config = options.Config
+            CredentialFile = options.CredentialFile
+            CertificateAuthorityFile = options.CertificateAuthorityFile
+            Outbox = options.Outbox
+            Repository = repository
+            BindingDigest = options.BindingDigest
+        }
+
 type TelemetryPublishOutcome =
     | Applied
     | AwaitingApplication

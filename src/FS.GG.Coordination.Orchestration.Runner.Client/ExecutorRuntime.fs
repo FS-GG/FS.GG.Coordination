@@ -23,6 +23,7 @@ type ExecutorRuntimeOptions =
         CodexExecutable: string
         ExecutorBinding: string
         MaximumFrameBytes: int
+        Telemetry: TelemetryRunnerOptions option
     }
 
 type private Supervised =
