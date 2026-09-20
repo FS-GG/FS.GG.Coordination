@@ -4060,6 +4060,7 @@ finally:
         task {
             let! dataSource, identity = Fixture.reset ()
             use dataSource = dataSource
+            do! PostgreSqlExecutionSchema.migrate dataSource CancellationToken.None
             let options =
                 { Fixture.options dataSource identity 0L with RuntimeSchemaVersion = 2 }
 
