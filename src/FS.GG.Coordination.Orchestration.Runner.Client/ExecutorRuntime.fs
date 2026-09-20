@@ -400,6 +400,7 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                 let providerOptions =
                     { CodexExecutionProviderOptions.create options.CodexExecutable options.StateRoot with
                         MaximumStreamBytes = 1024 * 1024
+                        TurnObserver = Some(TelemetryTurnJournal(options.StateRoot, command) :> ICodexTurnObserver)
                     }
 
                 let provider =

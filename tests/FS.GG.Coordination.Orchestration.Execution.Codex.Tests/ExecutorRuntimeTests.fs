@@ -8,6 +8,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Threading
 open FS.GG.Coordination.Orchestration.Execution
+open FS.GG.Coordination.Orchestration.Execution.Codex
 open FS.GG.Coordination.Orchestration.Runner.Client
 open FS.GG.Coordination.Orchestration.Runner.Protocol
 open Xunit
@@ -1804,3 +1805,39 @@ type ExecutorRuntimeTests() =
             Assert.Equal("executor-input-chunk-bounds-refused", error.Message)
             Assert.False(File.Exists(Path.Combine(options.InputRoot, admitted.InputDigest + ".partial")))
         }
+
+    [<Fact>]
+    member _.``native turn journal is durable and idempotent by native identity``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-turn-journal-").FullName
+        let command = RuntimeFixture.command "digest" "input" "baseline" "journal" null
+        let observer = TelemetryTurnJournal(root, command) :> ICodexTurnObserver
+        let turn =
+            {
+                ThreadId = "thread-1"
+                TurnId = Some "turn-1"
+                TurnSequence = 1L
+                Input = 10L
+                CachedInput = 2L
+                Output = 3L
+                Reasoning = Some 1L
+                Total = 13L
+            }
+
+        observer.TurnCompleted turn
+        observer.TurnCompleted turn
+        observer.Gap "invalid-turn-counters"
+
+        let directory =
+            Path.Combine(
+                root,
+                "telemetry-turns",
+                command.AssignmentId.ToString("N"),
+                command.AttemptId.ToString("N"),
+                string command.Generation
+            )
+
+        let files = Directory.GetFiles(directory, "*.json")
+        Assert.Equal(2, files.Length)
+        Assert.Single(Directory.GetFiles(directory, "turn-*.json")) |> ignore
+        Assert.Throws<InvalidOperationException>(fun () -> observer.TurnCompleted { turn with Output = 4L; Total = 14L })
+        |> ignore
