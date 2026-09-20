@@ -63,17 +63,21 @@ type Behavior =
 type RecordingTurnObserver() =
     let turns = ResizeArray<CodexTurnUsage>()
     let gaps = ResizeArray<string>()
+    let threads = ResizeArray<string>()
+    let starts = ResizeArray<int64>()
 
     member _.Turns = turns |> Seq.toList
     member _.Gaps = gaps |> Seq.toList
+    member _.Threads = threads |> Seq.toList
+    member _.Starts = starts |> Seq.toList
 
     interface ICodexTurnObserver with
         member _.TurnCompleted turn = turns.Add turn
         member _.Gap code = gaps.Add code
         member _.ProcessStarted(_, _) = ()
         member _.ProcessTerminal(_, _, _) = ()
-        member _.ThreadStarted(_, _, _) = ()
-        member _.NativeTurnStarted(_, _, _, _, _) = ()
+        member _.ThreadStarted(_, threadId, _) = threads.Add threadId
+        member _.NativeTurnStarted(_, _, _, sequence, _) = starts.Add sequence
 
 module Fixture =
     let prompt =
@@ -798,6 +802,7 @@ type CodexTurnProjectionTests() =
                     Body =
                         """head -c 5000 /dev/zero | tr '\000' x; printf '\n'
 printf '%s\n' '{"type":"turn.completed","turn_id":"first","usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":4,"reasoning_output_tokens":1}}'
+printf '%s\n' '{"type":"turn.started","turn_id":"second"}'
 printf '%s\n' '{"type":"turn.completed","turn_id":"second","usage":{"input_tokens":20,"cached_input_tokens":3,"output_tokens":5,"reasoning_output_tokens":2}}'
 printf '%s\n' '{"status":"completed","summary":"done"}' > "$final"
 """
@@ -821,5 +826,7 @@ printf '%s\n' '{"status":"completed","summary":"done"}' > "$final"
             Assert.Equal(Succeeded, terminal.Lifecycle)
             Assert.Equal<string list>([ "first"; "second" ], observer.Turns |> List.map (fun turn -> turn.TurnId.Value))
             Assert.Equal<int64 list>([ 14L; 25L ], observer.Turns |> List.map _.Total)
+            Assert.Equal<string list>([ "thread-fixture-1" ], observer.Threads)
+            Assert.Equal<int64 list>([ 1L; 2L ], observer.Starts)
             Assert.Contains("oversized-jsonl-line", observer.Gaps)
         }

@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.Orchestration.Runner.Client
 open System
 open System.Diagnostics
 open System.IO
+open System.Security.Cryptography
 open System.Text
 open System.Threading
 open System.Threading.Tasks
@@ -51,6 +52,53 @@ type TelemetryPublishOutcome =
 type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
     let flushLock = new SemaphoreSlim(1, 1)
     let mutable flushCursor = 0
+    let appliedDirectory = Path.Combine(options.Outbox, "applied")
+
+    let digest (payload: byte array) =
+        SHA256.HashData payload |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
+
+    let markApplied (path: string) =
+        try
+            Directory.CreateDirectory appliedDirectory |> ignore
+
+            if OperatingSystem.IsLinux() then
+                File.SetUnixFileMode(
+                    appliedDirectory,
+                    UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                )
+
+            let name = Path.GetFileNameWithoutExtension path
+            let marker = Path.Combine(appliedDirectory, name + ".sha256")
+            let expected = digest (File.ReadAllBytes path)
+            let temporary = marker + "." + Guid.NewGuid().ToString("N") + ".tmp"
+            let options =
+                FileStreamOptions(
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Share = FileShare.None,
+                    BufferSize = 4096,
+                    Options = FileOptions.WriteThrough
+                )
+
+            if OperatingSystem.IsLinux() then
+                options.UnixCreateMode <- UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+
+            try
+                use stream = new FileStream(temporary, options)
+                let bytes = Encoding.ASCII.GetBytes expected
+                stream.Write bytes
+                stream.Flush true
+                stream.Close()
+                File.Move(temporary, marker, false)
+                true
+            with :? IOException ->
+                try File.Delete temporary with _ -> ()
+                File.Exists marker
+                && isNull (FileInfo(marker).LinkTarget)
+                && FileInfo(marker).Length = 64L
+                && File.ReadAllText marker = expected
+        with _ ->
+            false
     let validPrivateFile minimum maximum (path: string) =
         if not (Path.IsPathFullyQualified path) then
             false
@@ -80,10 +128,20 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
 
             let path = Path.Combine(options.Outbox, name + ".json")
             let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+            let marker = Path.Combine(appliedDirectory, name + ".sha256")
             let pending = Directory.GetFiles(options.Outbox, "*.json")
             let total = pending |> Array.sumBy (fun path -> FileInfo(path).Length)
 
-            if not (File.Exists path) && (pending.Length >= 128 || total + int64 payload.Length > 8L * 1024L * 1024L) then
+            if File.Exists marker then
+                if
+                    isNull (FileInfo(marker).LinkTarget)
+                    && FileInfo(marker).Length = 64L
+                    && File.ReadAllText marker = digest payload
+                then
+                    Ok None
+                else
+                    Error "telemetry-applied-marker-conflict"
+            elif not (File.Exists path) && (pending.Length >= 128 || total + int64 payload.Length > 8L * 1024L * 1024L) then
                 Error "telemetry-outbox-overload"
             else
                 let streamOptions =
@@ -104,12 +162,12 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
                     stream.Flush true
                     stream.Close()
                     File.Move(temporary, path, false)
-                    Ok path
+                    Ok(Some path)
                 with :? IOException ->
                     try File.Delete temporary with _ -> ()
 
                     if File.Exists path && isNull (FileInfo(path).LinkTarget) && File.ReadAllBytes path = payload then
-                        Ok path
+                        Ok(Some path)
                     else
                         Error "telemetry-batch-identity-conflict"
 
@@ -182,13 +240,21 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
         task {
             match save name payload with
             | Error reason -> return PublicationUnknown reason
-            | Ok path ->
+            | Ok None -> return Applied
+            | Ok(Some path) ->
                 let! outcome = runCli path cancellation
 
-                if outcome = Applied then
-                    try File.Delete path with _ -> ()
+                let settled =
+                    if outcome = Applied then
+                        if markApplied path then
+                            try File.Delete path with _ -> ()
+                            Applied
+                        else
+                            PublicationUnknown "telemetry-applied-marker-unavailable"
+                    else
+                        outcome
 
-                return outcome
+                return settled
         }
 
     member _.Queue(name: string, payload: byte array) = save name payload
@@ -226,7 +292,10 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
                                 outcomes.Add outcome
 
                                 if outcome = Applied then
-                                    try File.Delete path with _ -> ()
+                                    if markApplied path then
+                                        try File.Delete path with _ -> ()
+                                    else
+                                        outcomes.Add(PublicationUnknown "telemetry-applied-marker-unavailable")
                             else
                                 outcomes.Add(PublicationUnknown "telemetry-outbox-unsafe")
 

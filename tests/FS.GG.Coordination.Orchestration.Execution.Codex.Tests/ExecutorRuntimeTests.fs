@@ -2100,3 +2100,65 @@ type ExecutorRuntimeTests() =
         Assert.Equal(6, publisher.PendingCount)
         Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
         Assert.Equal(6, publisher.PendingCount)
+
+    [<Fact>]
+    member _.``journal replay eventually delivers a 129-turn outage without double counting``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("telemetry-overload-replay-").FullName
+            let command = RuntimeFixture.command "digest" "input" "baseline" "overload" null
+            let journal = TelemetryTurnJournal(root, command) :> ICodexTurnObserver
+
+            for sequence in 1L .. 129L do
+                journal.TurnCompleted
+                    {
+                        ThreadId = "thread"
+                        TurnId = Some($"turn-{sequence}")
+                        TurnSequence = sequence
+                        Input = 10L
+                        CachedInput = 2L
+                        Output = 4L
+                        Reasoning = Some 1L
+                        Total = 14L
+                    }
+
+            let executable = Path.Combine(root, "client")
+            let config = Path.Combine(root, "workspace.json")
+            let credential = Path.Combine(root, "credential")
+            let ca = Path.Combine(root, "ca.crt")
+            File.WriteAllText(executable, "#!/bin/sh\nprintf applied\n")
+            File.WriteAllText(config, "{}")
+            File.WriteAllText(config + ".lock", "")
+            File.WriteAllText(credential, "private-test")
+            File.WriteAllText(ca, "test-ca")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+            for path in [ config; config + ".lock"; credential ] do
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+
+            let publisher =
+                TelemetryCliPublisher
+                    {
+                        Executable = executable
+                        Config = config
+                        CredentialFile = credential
+                        CertificateAuthorityFile = ca
+                        Outbox = Path.Combine(root, "outbox")
+                        Repository = "FS-GG/.github"
+                        BindingDigest = String.replicate 64 "a"
+                    }
+
+            let first = TelemetryJournalRecovery.requeue root command publisher
+            Assert.Contains("telemetry-outbox-overload", first)
+            Assert.Equal(128, publisher.PendingCount)
+
+            while publisher.PendingCount > 0 do
+                let! outcomes = publisher.Flush CancellationToken.None
+                Assert.True((outcomes |> List.forall ((=) Applied)))
+
+            Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
+            Assert.Equal(1, publisher.PendingCount)
+            let! last = publisher.Flush CancellationToken.None
+            Assert.True((last = [ Applied ]))
+            Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
+            Assert.Equal(0, publisher.PendingCount)
+        }
