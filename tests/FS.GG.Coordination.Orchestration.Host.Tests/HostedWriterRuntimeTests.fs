@@ -1886,7 +1886,7 @@ let ``absent candidate control allows only same-command partial retry`` () =
         MainAbsentCandidateControl.authorize different route afterFirstStage (Fixture.now.AddMinutes 5.)
     )
 
-let runFailedCandidateRecoveryFixture (storeFactory: Event list -> Task<IJournalStore>) =
+let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event list -> Task<IJournalStore>) =
     task {
         let now = Fixture.now
         let route = { Fixture.route with RepositoryNodeId = "R_writer" }
@@ -2024,7 +2024,33 @@ let runFailedCandidateRecoveryFixture (storeFactory: Event list -> Task<IJournal
                 PausedEvent "old-route-recovery"
             ]
 
-        let! store = storeFactory events
+        let control: MainRouteControl =
+            {
+                CommandId = Guid.NewGuid()
+                ExpectedSequence = Id.revisionValue (replay events).Revision
+                ExpectedGeneration = 1L
+                PrincipalId = "pilot-worker"
+                IssuedAt = now.AddMinutes -1.
+                ExpiresAt = now.AddMinutes 1.
+                Reason = "candidate-touch-set-refused"
+                Action = "settle-absent-candidate"
+            }
+
+        let seededEvents =
+            if partialFirstStage then
+                let firstReadback =
+                    { readback candidateIntent candidateIntent.ResourceId with
+                        ProviderRevision = MainAbsentCandidateControl.digest control
+                        Exists = false
+                    }
+
+                events
+                @ [ HostedEffectReadbackAccepted firstReadback
+                    EffectSettled(candidateIntent.OperationId, ProvenAbsent) ]
+            else
+                events
+
+        let! store = storeFactory seededEvents
         let candidateStore =
             { new ICandidateStore with
                 member _.Put(_, _) = failwith "unexpected candidate mutation"
@@ -2153,20 +2179,6 @@ let runFailedCandidateRecoveryFixture (storeFactory: Event list -> Task<IJournal
                     |}
             )
 
-            let! before = HostedWriterJournal.recover store route.WorkItemId CancellationToken.None
-            let current = before |> Result.defaultWith (fun failures -> failwithf "%A" failures)
-            let control: MainRouteControl =
-                {
-                    CommandId = Guid.NewGuid()
-                    ExpectedSequence = Id.revisionValue current.State.Revision
-                    ExpectedGeneration = 1L
-                    PrincipalId = "pilot-worker"
-                    IssuedAt = now.AddMinutes -1.
-                    ExpiresAt = now.AddMinutes 1.
-                    Reason = "candidate-touch-set-refused"
-                    Action = "settle-absent-candidate"
-                }
-
             let! result =
                 MainProductionAdmission.SettleAbsentCandidateCore(
                     FixedClock now,
@@ -2230,7 +2242,11 @@ let runFailedCandidateRecoveryFixture (storeFactory: Event list -> Task<IJournal
 
 [<Fact>]
 let ``failed candidate recovery settles exact journal state without provider mutation`` () =
-    runFailedCandidateRecoveryFixture (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
+    runFailedCandidateRecoveryFixture false (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
+
+[<Fact>]
+let ``failed candidate recovery resumes after durable stage-one lost response`` () =
+    runFailedCandidateRecoveryFixture true (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
 
 [<Fact>]
 let ``GitHub route refuses competing canonical claim marker`` () =
