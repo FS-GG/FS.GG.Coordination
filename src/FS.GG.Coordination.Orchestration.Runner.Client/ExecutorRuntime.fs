@@ -883,8 +883,8 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                                             :> ICodexTurnObserver
 
                                         match TelemetryRootGuard.claim options.StateRoot command (clock.GetUtcNow()) with
-                                        | Ok activatedAt ->
-                                            let name, payload = TelemetryFactBatches.prospectiveRoot command activatedAt
+                                        | Ok marker ->
+                                            let name, payload = TelemetryFactBatches.prospectiveRoot command marker.ActivatedAt marker.AttemptId marker.Generation
                                             let! outcome = publisher.Publish(name, payload, CancellationToken.None)
 
                                             match outcome with
@@ -1188,8 +1188,8 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                             let journal = TelemetryTurnJournal(options.StateRoot, command)
 
                             match TelemetryRootGuard.replay options.StateRoot command with
-                            | Ok(Some activatedAt) ->
-                                TelemetryFactBatches.prospectiveRoot command activatedAt
+                            | Ok(Some marker) ->
+                                TelemetryFactBatches.prospectiveRoot command marker.ActivatedAt marker.AttemptId marker.Generation
                                 |> publisher.Queue
                                 |> ignore
                             | Ok None -> ()
