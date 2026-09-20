@@ -1613,6 +1613,35 @@ let ``GitHub route recovery reads fresh immutable repository and issue identity`
     }
 
 [<Fact>]
+let ``GitHub route recovery preserves legacy journal identity with database ID in number slot`` () =
+    task {
+        let executor =
+            QueuedGitHub[response "{\"id\":7,\"node_id\":\"R_writer\"}"
+                         response "{\"number\":11,\"node_id\":\"I_writer\"}"]
+
+        let target = { githubTarget with IssueNumber = 11 }
+        let client =
+            GitHubRouteClient(executor, FixedPublisher(Ok(String.replicate 40 "a")), target, FixedClock Fixture.now)
+
+        let legacyId = WorkItemIdentity.create "R_writer" 7L "I_writer" 5518537537L
+        let route = { Fixture.route with RepositoryNodeId = "R_writer"; WorkItemId = legacyId }
+        let! result = client.ReadHostedRoute(route, CancellationToken.None)
+        let readback = result |> Result.defaultWith failwith
+        Assert.Equal(legacyId, readback.WorkItemId)
+        Assert.Equal(WorkItemIdentity.persistenceId legacyId, WorkItemIdentity.persistenceId readback.WorkItemId)
+
+        let wrongIssue =
+            QueuedGitHub[response "{\"id\":7,\"node_id\":\"R_writer\"}"
+                         response "{\"number\":12,\"node_id\":\"I_writer\"}"]
+
+        let wrongClient =
+            GitHubRouteClient(wrongIssue, FixedPublisher(Ok(String.replicate 40 "a")), target, FixedClock Fixture.now)
+
+        let! refused = wrongClient.ReadHostedRoute(route, CancellationToken.None)
+        Assert.Equal(Error "github-route-identity-mismatch", refused)
+    }
+
+[<Fact>]
 let ``GitHub claim covers the immutable delivery window and expired ownership refuses`` () =
     task {
         let operation = Guid.Parse "80000000-0000-0000-0000-000000000001"
