@@ -47,15 +47,20 @@ module CodexTurnProjection =
                 | true, usage when usage.ValueKind <> JsonValueKind.Object ->
                     Some(Error "malformed-turn-usage")
                 | true, usage ->
+                    let reasoning =
+                        match usage.TryGetProperty "reasoning_output_tokens" with
+                        | false, _ -> Some None
+                        | true, _ -> count usage "reasoning_output_tokens" |> Option.map Some
+
                     match
                         text root "thread_id" |> Option.orElse currentThread,
                         count usage "input_tokens",
                         count usage "cached_input_tokens",
                         count usage "output_tokens",
-                        count usage "reasoning_output_tokens"
+                        reasoning
                     with
                     | Some thread, Some input, Some cached, Some output, Some reasoning when
-                        cached <= input && reasoning <= output
+                        cached <= input && (reasoning |> Option.forall (fun value -> value <= output))
                         ->
                         try
                             let total = Checked.(+) input output
@@ -69,7 +74,7 @@ module CodexTurnProjection =
                                         Input = input
                                         CachedInput = cached
                                         Output = output
-                                        Reasoning = Some reasoning
+                                        Reasoning = reasoning
                                         Total = total
                                     }
                             )

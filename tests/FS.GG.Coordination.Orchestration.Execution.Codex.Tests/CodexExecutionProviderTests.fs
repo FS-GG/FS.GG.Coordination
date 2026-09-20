@@ -763,6 +763,17 @@ type CodexTurnProjectionTests() =
         Assert.Equal(Some(Error "invalid-turn-counters"), CodexTurnProjection.project (Some "thread-1") 1L raw)
 
     [<Fact>]
+    member _.``missing optional reasoning remains exact usage``() =
+        let raw =
+            """{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":3}}"""
+
+        match CodexTurnProjection.project (Some "thread-1") 1L raw with
+        | Some(Ok usage) ->
+            Assert.Equal(None, usage.Reasoning)
+            Assert.Equal(15L, usage.Total)
+        | result -> failwithf "unexpected projection: %A" result
+
+    [<Fact>]
     member _.``a completed turn without thread identity cannot be counted``() =
         let raw =
             """{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":3,"reasoning_output_tokens":1}}"""
