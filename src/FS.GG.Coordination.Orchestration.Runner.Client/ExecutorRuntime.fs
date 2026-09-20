@@ -878,7 +878,9 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                                 | Authenticated _ ->
                                     match telemetryPublisher selected.Manifest with
                                     | Some publisher ->
-                                        let journal = TelemetryTurnJournal(options.StateRoot, command) :> ICodexTurnObserver
+                                        let observer =
+                                            TelemetryRunnerObserver(options.StateRoot, command, Some publisher)
+                                            :> ICodexTurnObserver
 
                                         match TelemetryRootGuard.claim options.StateRoot command (clock.GetUtcNow()) with
                                         | Ok activatedAt ->
@@ -886,10 +888,10 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                                             let! outcome = publisher.Publish(name, payload, CancellationToken.None)
 
                                             match outcome with
-                                            | PublicationUnknown code -> journal.Gap code
+                                            | PublicationUnknown code -> observer.Gap code
                                             | Applied
                                             | AwaitingApplication -> ()
-                                        | Error code -> journal.Gap code
+                                        | Error code -> observer.Gap code
                                     | None when options.Telemetry.IsSome ->
                                         (TelemetryTurnJournal(options.StateRoot, command) :> ICodexTurnObserver)
                                             .Gap "telemetry-repository-binding-mismatch"
