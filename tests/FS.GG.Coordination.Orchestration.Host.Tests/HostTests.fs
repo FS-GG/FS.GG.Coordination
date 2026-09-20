@@ -99,6 +99,20 @@ module Fixture =
         let mutable events: SerializedEvent list = []
         let accepted = Dictionary<CommandId, string * int64>()
 
+        member _.Seed(eventValue: Event) =
+            let payload = EventEnvelope.encode eventValue
+            events <- events @ [
+                { PersistenceId = WorkItemIdentity.persistenceId permit.SubjectId
+                  Sequence = int64 events.Length + 1L
+                  EventId = Guid.NewGuid()
+                  SchemaVersion = 2
+                  SerializerVersion = EventEnvelope.serializerVersion
+                  Payload = payload
+                  PayloadSha256 = RunnerWire.sha256 payload
+                  EffectChange = NoEffect
+                  RecordedAt = now }
+            ]
+
         member _.State =
             events
             |> List.map (fun stored -> EventEnvelope.tryDecode stored.Payload |> Result.defaultWith failwith)
@@ -750,6 +764,63 @@ let ``main admission preparation is ordered retry stable and required by workflo
                 CancellationToken.None
         Assert.Equal(Error "telemetry-parent-attempt-missing", missingParent)
         Assert.Equal(writesBeforeTerminalRetry, terminalExecutor.Writes)
+
+        let parentJournal = Fixture.MemoryJournal()
+        let parentExecutor = Fixture.MemoryExecutor(fun () -> parentJournal.State)
+        let parentWorkItems = parentJournal :> IJournalStore
+        let! parentFirst =
+            MainAdmissionPreparer.prepare
+                (Fixture.FixedClock())
+                parentWorkItems
+                parentExecutor
+                parentExecutor
+                Fixture.permit.SubjectId
+                "pilot-route"
+                decodedRequest
+                input
+                CancellationToken.None
+        Assert.True(Result.isOk parentFirst)
+        parentJournal.Seed(AttemptStarted priorAttempt)
+        parentJournal.Seed(AttemptObserved(priorAttempt.AttemptId, Completed))
+        parentJournal.Seed(CancelRequestedEvent "terminal-follow-up")
+        parentJournal.Seed(CancelledEvent "terminal-follow-up")
+        parentJournal.Seed(GenerationAdvanced(Id.generation 2L))
+        let parentedRequest =
+            { distinctReadmission with
+                ReservationId = Guid.NewGuid()
+                ExecutionReservationId = Guid.NewGuid()
+                SessionId = Guid.NewGuid() }
+        let! parentedReadmission =
+            MainAdmissionPreparer.prepare
+                (Fixture.FixedClock())
+                parentWorkItems
+                parentExecutor
+                parentExecutor
+                Fixture.permit.SubjectId
+                "pilot-route"
+                parentedRequest
+                input
+                CancellationToken.None
+        let parentedBytes = parentedReadmission |> Result.defaultWith failwith
+        let parentedPreparation =
+            MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" parentedBytes
+            |> Result.defaultWith failwith
+        Assert.Equal(ExecutorWire.routeBindingSchemaV2, parentedPreparation.Binding.Schema)
+        Assert.Equal(Nullable(Id.attemptValue priorAttempt.AttemptId), parentedPreparation.Binding.ParentAttemptId)
+        Assert.Equal(Nullable(Id.generationValue priorAttempt.Generation), parentedPreparation.Binding.ParentGeneration)
+        Assert.Equal("follow-up", parentedPreparation.Binding.TelemetryRelation)
+        let! parentedReplay =
+            MainAdmissionPreparer.prepare
+                (Fixture.FixedClock())
+                parentWorkItems
+                parentExecutor
+                parentExecutor
+                Fixture.permit.SubjectId
+                "pilot-route"
+                parentedRequest
+                input
+                CancellationToken.None
+        Assert.True(ReadOnlySpan<byte>(parentedBytes).SequenceEqual(ReadOnlySpan<byte>(parentedReplay |> Result.defaultWith failwith)))
 
         let preparation =
             MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" firstBytes
