@@ -24,6 +24,8 @@ type ICodexCandidateInspector =
 type ICodexTurnObserver =
     abstract member TurnCompleted: CodexTurnUsage -> unit
     abstract member Gap: string -> unit
+    abstract member ProcessStarted: int * DateTimeOffset -> unit
+    abstract member ProcessTerminal: int * string option * DateTimeOffset -> unit
 
 type CodexExecutionProviderOptions =
     {
@@ -510,6 +512,13 @@ type CodexExecutionProvider
                     with _ ->
                         ())
 
+            options.TurnObserver
+            |> Option.iter (fun observer ->
+                try
+                    observer.ProcessStarted(proc.Id, startedAt)
+                with _ ->
+                    telemetryGap "process-start-observer-failed")
+
             let stdoutPump =
                 pumpBounded proc.StandardOutput.BaseStream stdoutPath options.MaximumStreamBytes (fun line ->
                     let usage = parseUsage [ line ]
@@ -584,6 +593,13 @@ type CodexExecutionProvider
                     do! inputWrite
                     do! stdoutPump
                     do! stderrPump
+                    options.TurnObserver
+                    |> Option.iter (fun observer ->
+                        try
+                            observer.ProcessTerminal(proc.ExitCode, telemetryThread, DateTimeOffset.UtcNow)
+                        with _ ->
+                            telemetryGap "process-terminal-observer-failed")
+
                     let usage, fatal = completedUsage, fatalEvent
 
                     let! lifecycle, candidate =

@@ -182,3 +182,30 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
 
                 return outcome
         }
+
+    member _.Queue(name: string, payload: byte array) = save name payload
+
+    member _.Flush(cancellation: CancellationToken) =
+        task {
+            if not (Directory.Exists options.Outbox) then
+                return []
+            else
+                let pending =
+                    Directory.GetFiles(options.Outbox, "*.json")
+                    |> Array.sort
+                    |> Array.truncate 16
+
+                let outcomes = ResizeArray<TelemetryPublishOutcome>()
+
+                for path in pending do
+                    if isNull (FileInfo(path).LinkTarget) then
+                        let! outcome = runCli path cancellation
+                        outcomes.Add outcome
+
+                        if outcome = Applied then
+                            try File.Delete path with _ -> ()
+                    else
+                        outcomes.Add(PublicationUnknown "telemetry-outbox-unsafe")
+
+                return outcomes |> Seq.toList
+        }

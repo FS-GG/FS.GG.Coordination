@@ -56,19 +56,19 @@ module TelemetryFactBatches =
         value["revision"] <- 0
         value
 
-    let private batch (context: TelemetryInvocation) (event: JsonObject) =
-        let identity = event["identity"].GetValue<string>()
-        let digest = hash identity
+    let private batch (context: TelemetryInvocation) (events: JsonObject list) =
+        let identities = events |> List.map (fun event -> event["identity"].GetValue<string>())
+        let digest = hash (String.concat "\u001f" identities)
         let root = JsonObject()
         root["schema"] <- "fsgg.telemetry.ingest/1"
         root["ingestId"] <- "batch-" + digest
         root["sourceIdentity"] <- "coordination"
         root["generation"] <- context.InvocationId
         root["cursor"] <- digest
-        root["eventCount"] <- 1
-        let events = JsonArray()
-        events.Add event
-        root["events"] <- events
+        root["eventCount"] <- events.Length
+        let payload = JsonArray()
+        events |> List.iter payload.Add
+        root["events"] <- payload
         "batch-" + digest, Encoding.UTF8.GetBytes(root.ToJsonString(JsonSerializerOptions(WriteIndented = false)))
 
     let prospectiveRoot (command: ExecutorCommandV2) observedAt =
@@ -118,7 +118,7 @@ module TelemetryFactBatches =
         admissionTime["observedAt"] <- timestamp
         admissionTime["observedClockProvenance"] <- "host-wall"
 
-        [ activation; expected; lineage; admission; admissionTime ] |> List.map (batch context)
+        batch context [ activation; expected; lineage; admission; admissionTime ]
 
     let completedTurn (context: TelemetryInvocation) requestedModel requestedEffort (turn: CodexTurnUsage) =
         let nativeKey = turn.TurnId |> Option.defaultValue (string turn.TurnSequence)
@@ -141,4 +141,50 @@ module TelemetryFactBatches =
         usage["output"] <- turn.Output
         usage["reasoning"] <- turn.Reasoning |> Option.map JsonValue.Create |> Option.defaultValue null
         usage["total"] <- turn.Total
-        batch context usage
+        batch context [ usage ]
+
+    let gap (context: TelemetryInvocation) sequence code =
+        let identity = "runtime-gap-" + hash (context.InvocationId + "\u001f" + string sequence + "\u001f" + code)
+        let value = event "runtime-gap" identity context
+        value["invocationId"] <- context.InvocationId
+        value["code"] <- code
+        batch context [ value ]
+
+    let processStart (context: TelemetryInvocation) (processId: int) (at: DateTimeOffset) =
+        let started = event "runtime-start" ("runtime-process-" + context.InvocationId) context
+        started["invocationId"] <- context.InvocationId
+        started["threadId"] <- null
+        started["turnId"] <- null
+        started["turnSequence"] <- null
+        started["processId"] <- processId
+        started["phase"] <- "process"
+
+        let timestamp = at.ToString("O")
+        let timing = event "event-time" ("event-time-" + context.InvocationId + "-start") context
+        timing["invocationId"] <- context.InvocationId
+        timing["event"] <- "start"
+        timing["occurredAt"] <- timestamp
+        timing["occurredClockProvenance"] <- "host-wall"
+        timing["observedAt"] <- timestamp
+        timing["observedClockProvenance"] <- "host-wall"
+        batch context [ started; timing ]
+
+    let processTerminal (context: TelemetryInvocation) exitCode threadId (at: DateTimeOffset) =
+        let terminal = event "runtime-terminal" ("runtime-terminal-" + context.InvocationId) context
+        terminal["invocationId"] <- context.InvocationId
+        optional terminal "threadId" threadId
+        terminal["outcome"] <-
+            if exitCode = 0 then "completed"
+            elif List.contains exitCode [ 130; 137; 143 ] then "cancelled"
+            else "failed"
+        terminal["exitCode"] <- exitCode
+
+        let timestamp = at.ToString("O")
+        let timing = event "event-time" ("event-time-" + context.InvocationId + "-terminal") context
+        timing["invocationId"] <- context.InvocationId
+        timing["event"] <- "terminal"
+        timing["occurredAt"] <- timestamp
+        timing["occurredClockProvenance"] <- "host-wall"
+        timing["observedAt"] <- timestamp
+        timing["observedClockProvenance"] <- "host-wall"
+        batch context [ terminal; timing ]

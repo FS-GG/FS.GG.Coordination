@@ -49,6 +49,13 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
     let artifacts = ConcurrentDictionary<Guid, CandidateArtifact>()
     let outputLock = new SemaphoreSlim(1, 1)
 
+    let telemetryPublisher (manifest: ExecutorWorkspaceManifest) =
+        options.Telemetry
+        |> Option.map (fun selected ->
+            selected
+            |> TelemetryRunnerOptions.forRepository manifest.RepositoryBinding
+            |> TelemetryCliPublisher)
+
     let key (command: ExecutorCommandV2) =
         command.AssignmentId.ToString("N")
         + ":"
@@ -401,7 +408,11 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                 let providerOptions =
                     { CodexExecutionProviderOptions.create options.CodexExecutable options.StateRoot with
                         MaximumStreamBytes = 1024 * 1024
-                        TurnObserver = Some(TelemetryTurnJournal(options.StateRoot, command) :> ICodexTurnObserver)
+                        TurnObserver =
+                            Some(
+                                TelemetryRunnerObserver(options.StateRoot, command, telemetryPublisher manifest)
+                                :> ICodexTurnObserver
+                            )
                     }
 
                 let provider =
@@ -850,6 +861,22 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
 
                                 match readiness.Authentication with
                                 | Authenticated _ ->
+                                    match telemetryPublisher selected.Manifest with
+                                    | Some publisher ->
+                                        let journal = TelemetryTurnJournal(options.StateRoot, command) :> ICodexTurnObserver
+
+                                        match TelemetryRootGuard.claim options.StateRoot command (clock.GetUtcNow()) with
+                                        | Ok activatedAt ->
+                                            let name, payload = TelemetryFactBatches.prospectiveRoot command activatedAt
+                                            let! outcome = publisher.Publish(name, payload, CancellationToken.None)
+
+                                            match outcome with
+                                            | PublicationUnknown code -> journal.Gap code
+                                            | Applied
+                                            | AwaitingApplication -> ()
+                                        | Error code -> journal.Gap code
+                                    | None -> ()
+
                                     let! launched = selected.Provider.Launch(intent, CancellationToken.None)
 
                                     match launched with
@@ -960,6 +987,10 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                                                     operation command "reconcile" "unknown" (Some session) reason
                                                 ))
                                     | Ok observation ->
+                                        telemetryPublisher selected.Manifest
+                                        |> Option.iter (fun publisher ->
+                                            publisher.Flush(CancellationToken.None) |> ignore)
+
                                         match observation.Lifecycle, observation.Candidate with
                                         | Succeeded, Some candidate ->
                                             match

@@ -1916,10 +1916,12 @@ type ExecutorRuntimeTests() =
     member _.``prospective root and exact turn batches keep stable identities``() =
         let command = RuntimeFixture.command "digest" "input" "baseline" "telemetry" null
         let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
-        let first = TelemetryFactBatches.prospectiveRoot command at
-        let replay = TelemetryFactBatches.prospectiveRoot command at
-        Assert.Equal(first |> List.map fst, replay |> List.map fst)
-        Assert.Equal(5, first.Length)
+        let firstName, firstBytes = TelemetryFactBatches.prospectiveRoot command at
+        let replayName, replayBytes = TelemetryFactBatches.prospectiveRoot command at
+        Assert.Equal(firstName, replayName)
+        Assert.True((firstBytes = replayBytes))
+        use prospective = JsonDocument.Parse firstBytes
+        Assert.Equal(5, prospective.RootElement.GetProperty("eventCount").GetInt32())
 
         let context = TelemetryFactBatches.rootInvocation command
         let turn =
@@ -1943,3 +1945,60 @@ type ExecutorRuntimeTests() =
         Assert.Equal(context.ItemId, usage.GetProperty("itemId").GetString())
         Assert.Equal(26L, usage.GetProperty("total").GetInt64())
         Assert.Equal(3L, usage.GetProperty("reasoning").GetInt64())
+
+    [<Fact>]
+    member _.``telemetry root marker refuses a second unparented attempt``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-root-guard-").FullName
+        let command = RuntimeFixture.command "digest" "input" "baseline" "root" null
+        let first = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        Assert.Equal(Ok first, TelemetryRootGuard.claim root command first)
+        match TelemetryRootGuard.claim root command (first.AddMinutes 1.) with
+        | Ok replay -> Assert.Equal(first, replay)
+        | Error reason -> failwithf "root replay failed: %s" reason
+
+        let retry = { command with AttemptId = Guid.NewGuid() }
+        Assert.Equal(Error "telemetry-retry-lineage-unavailable", TelemetryRootGuard.claim root retry (first.AddMinutes 2.))
+
+    [<Fact>]
+    member _.``runner observer durably queues lifecycle and exact native turn facts``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-observer-").FullName
+        let command = RuntimeFixture.command "digest" "input" "baseline" "observer" null
+        let outbox = Path.Combine(root, "telemetry-outbox")
+        let publisher =
+            TelemetryCliPublisher
+                {
+                    Executable = "/missing/client"
+                    Config = "/missing/config"
+                    CredentialFile = "/missing/credential"
+                    CertificateAuthorityFile = "/missing/ca"
+                    Outbox = outbox
+                    Repository = "FS-GG/.github"
+                    BindingDigest = String.replicate 64 "a"
+                }
+
+        let observer = TelemetryRunnerObserver(root, command, Some publisher) :> ICodexTurnObserver
+        let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        observer.ProcessStarted(1234, at)
+        observer.TurnCompleted
+            {
+                ThreadId = "thread"
+                TurnId = Some "turn"
+                TurnSequence = 1L
+                Input = 10L
+                CachedInput = 2L
+                Output = 4L
+                Reasoning = Some 1L
+                Total = 14L
+            }
+        observer.ProcessTerminal(0, Some "thread", at.AddMinutes 1.)
+
+        let batches = Directory.GetFiles(outbox, "*.json")
+        Assert.Equal(3, batches.Length)
+        let kinds =
+            batches
+            |> Array.map (fun path ->
+                use document = JsonDocument.Parse(File.ReadAllBytes path)
+                let first = document.RootElement.GetProperty("events")[0]
+                first.GetProperty("kind").GetString())
+            |> Set.ofArray
+        Assert.True((kinds = set [ "runtime-start"; "runtime-turn-usage"; "runtime-terminal" ]))

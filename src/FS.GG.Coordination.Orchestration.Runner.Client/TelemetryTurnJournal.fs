@@ -65,3 +65,9 @@ type TelemetryTurnJournal(stateRoot: string, command: ExecutorCommandV2) =
 
         member _.Gap code =
             save "gap" (Guid.NewGuid().ToString("N")) {| Code = code; ObservedAt = DateTimeOffset.UtcNow |}
+
+        member _.ProcessStarted(processId, at) =
+            save "process-start" (string processId) {| ProcessId = processId; ObservedAt = at |}
+
+        member _.ProcessTerminal(exitCode, threadId, at) =
+            save "process-terminal" "terminal" {| ExitCode = exitCode; ThreadId = threadId; ObservedAt = at |}

@@ -70,6 +70,8 @@ type RecordingTurnObserver() =
     interface ICodexTurnObserver with
         member _.TurnCompleted turn = turns.Add turn
         member _.Gap code = gaps.Add code
+        member _.ProcessStarted(_, _) = ()
+        member _.ProcessTerminal(_, _, _) = ()
 
 module Fixture =
     let prompt =
