@@ -23,6 +23,7 @@ type ExecutorRuntimeOptions =
         CodexExecutable: string
         ExecutorBinding: string
         MaximumFrameBytes: int
+        Telemetry: TelemetryRunnerOptions option
     }
 
 type private Supervised =
@@ -47,6 +48,15 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
     let attemptGenerations = ConcurrentDictionary<string, int64>()
     let artifacts = ConcurrentDictionary<Guid, CandidateArtifact>()
     let outputLock = new SemaphoreSlim(1, 1)
+
+    let telemetryClient =
+        options.Telemetry
+        |> Option.map (TelemetryRunnerOptions.toPublisher >> TelemetryCliPublisher)
+
+    let telemetryPublisher (manifest: ExecutorWorkspaceManifest) =
+        match options.Telemetry with
+        | Some selected when selected.Repository = manifest.RepositoryBinding -> telemetryClient
+        | _ -> None
 
     let key (command: ExecutorCommandV2) =
         command.AssignmentId.ToString("N")
@@ -398,8 +408,26 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                     )
 
                 let providerOptions =
+                    let publisher = telemetryPublisher manifest
+
+                    publisher
+                    |> Option.iter (fun target ->
+                        let journal = TelemetryTurnJournal(options.StateRoot, command)
+                        let context = TelemetryFactBatches.rootInvocation command
+
+                        TelemetryJournalRecovery.requeue options.StateRoot command target
+                        |> List.distinct
+                        |> List.iter (fun code ->
+                            let gapId = journal.RecordGapOnce code
+                            TelemetryFactBatches.gap context gapId code |> target.Queue |> ignore))
+
                     { CodexExecutionProviderOptions.create options.CodexExecutable options.StateRoot with
                         MaximumStreamBytes = 1024 * 1024
+                        TurnObserver =
+                            Some(
+                                TelemetryRunnerObserver(options.StateRoot, command, publisher)
+                                :> ICodexTurnObserver
+                            )
                     }
 
                 let provider =
@@ -848,6 +876,27 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
 
                                 match readiness.Authentication with
                                 | Authenticated _ ->
+                                    match telemetryPublisher selected.Manifest with
+                                    | Some publisher ->
+                                        let observer =
+                                            TelemetryRunnerObserver(options.StateRoot, command, Some publisher)
+                                            :> ICodexTurnObserver
+
+                                        match TelemetryRootGuard.claim options.StateRoot command (clock.GetUtcNow()) with
+                                        | Ok activatedAt ->
+                                            let name, payload = TelemetryFactBatches.prospectiveRoot command activatedAt
+                                            let! outcome = publisher.Publish(name, payload, CancellationToken.None)
+
+                                            match outcome with
+                                            | PublicationUnknown code -> observer.Gap code
+                                            | Applied
+                                            | AwaitingApplication -> ()
+                                        | Error code -> observer.Gap code
+                                    | None when options.Telemetry.IsSome ->
+                                        (TelemetryTurnJournal(options.StateRoot, command) :> ICodexTurnObserver)
+                                            .Gap "telemetry-repository-binding-mismatch"
+                                    | None -> ()
+
                                     let! launched = selected.Provider.Launch(intent, CancellationToken.None)
 
                                     match launched with
@@ -1129,6 +1178,12 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
 
     member _.Run(input: Stream, output: Stream, cancellationToken: CancellationToken) =
         task {
+            use telemetryPump =
+                telemetryClient
+                |> Option.map (fun publisher ->
+                    new TelemetryPublisherPump(publisher, options.StateRoot, TimeSpan.FromSeconds 15.))
+                |> Option.toObj
+
             let running = ResizeArray<Task>()
             let header = Array.zeroCreate<byte> 4
             let mutable finished = false

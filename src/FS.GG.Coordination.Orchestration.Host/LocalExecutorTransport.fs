@@ -94,6 +94,20 @@ type LocalExecutorTransport
 
         info.WorkingDirectory <- configuration.RepositoryRoot
 
+        let telemetryArguments =
+            match configuration.Telemetry with
+            | None -> []
+            | Some telemetry ->
+                [
+                    "--telemetry-executable"; telemetry.Executable
+                    "--telemetry-config"; telemetry.Config
+                    "--telemetry-credential-file"; telemetry.CredentialFile
+                    "--telemetry-ca-file"; telemetry.CertificateAuthorityFile
+                    "--telemetry-outbox"; telemetry.Outbox
+                    "--telemetry-binding-digest"; telemetry.BindingDigest
+                    "--telemetry-repository"; telemetry.Repository
+                ]
+
         for argument in
             [
                 "executor-stdio"
@@ -111,7 +125,7 @@ type LocalExecutorTransport
                 configuration.CodexExecutable
                 "--executor-binding"
                 configuration.ExecutorBinding
-            ] do
+            ] @ telemetryArguments do
             info.ArgumentList.Add argument
 
         let childProcess = Process.Start info

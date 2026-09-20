@@ -20,6 +20,15 @@ type ICodexCandidateInspector =
     abstract member Verify: workspace: string * CandidateReference * CancellationToken -> Task<Result<unit, string>>
     abstract member CreateCandidate: workspace: string * CancellationToken -> Task<Result<CandidateReference, string>>
 
+/// Receives validated native counters and typed gaps without affecting execution.
+type ICodexTurnObserver =
+    abstract member TurnCompleted: CodexTurnUsage -> unit
+    abstract member Gap: string -> unit
+    abstract member ProcessStarted: int * DateTimeOffset -> unit
+    abstract member ProcessTerminal: int * string option * DateTimeOffset -> unit
+    abstract member ThreadStarted: int * string * DateTimeOffset -> unit
+    abstract member NativeTurnStarted: int * string * string option * int64 * DateTimeOffset -> unit
+
 type CodexExecutionProviderOptions =
     {
         Executable: string
@@ -28,6 +37,7 @@ type CodexExecutionProviderOptions =
         MaximumStreamBytes: int
         StartupTimeout: TimeSpan
         EnvironmentAllowList: Set<string>
+        TurnObserver: ICodexTurnObserver option
     }
 
 [<RequireQualifiedAccess>]
@@ -53,6 +63,7 @@ module CodexExecutionProviderOptions =
                         "XDG_DATA_HOME"
                         "XDG_CACHE_HOME"
                     ]
+            TurnObserver = None
         }
 
 type CodexCommand =
@@ -197,7 +208,7 @@ type CodexExecutionProvider
             return Encoding.UTF8.GetString(captured.ToArray())
         }
 
-    let pumpBounded (stream: Stream) path maximumBytes (onLine: string -> unit) =
+    let pumpBounded (stream: Stream) path maximumBytes (onLine: string -> unit) (onOverflow: unit -> unit) =
         task {
             let buffer = Array.zeroCreate<byte> 4096
             let line = Array.zeroCreate<byte> maximumBytes
@@ -207,7 +218,9 @@ type CodexExecutionProvider
             use output = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read)
 
             let emit () =
-                if not lineOverflow && lineLength > 0 then
+                if lineOverflow then
+                    onOverflow ()
+                elif lineLength > 0 then
                     let length =
                         if line[lineLength - 1] = 13uy then
                             lineLength - 1
@@ -490,6 +503,23 @@ type CodexExecutionProvider
             let mutable completedUsage: NormalizedUsage option = None
             let mutable fatalEvent: string option = None
             let mutable turnCompleted = false
+            let mutable telemetryThread: string option = None
+            let mutable telemetryTurnSequence = 0L
+
+            let telemetryGap code =
+                options.TurnObserver
+                |> Option.iter (fun observer ->
+                    try
+                        observer.Gap code
+                    with _ ->
+                        ())
+
+            options.TurnObserver
+            |> Option.iter (fun observer ->
+                try
+                    observer.ProcessStarted(proc.Id, startedAt)
+                with _ ->
+                    telemetryGap "process-start-observer-failed")
 
             let stdoutPump =
                 pumpBounded proc.StandardOutput.BaseStream stdoutPath options.MaximumStreamBytes (fun line ->
@@ -506,15 +536,61 @@ type CodexExecutionProvider
                         let eventType = document.RootElement.GetProperty("type").GetString()
 
                         if eventType = "thread.started" then
-                            threadStarted.TrySetResult(document.RootElement.GetProperty("thread_id").GetString())
-                            |> ignore
+                            let nativeThread = document.RootElement.GetProperty("thread_id").GetString()
+                            telemetryThread <- Some nativeThread
+                            threadStarted.TrySetResult nativeThread |> ignore
+                            options.TurnObserver
+                            |> Option.iter (fun observer ->
+                                try observer.ThreadStarted(proc.Id, nativeThread, DateTimeOffset.UtcNow)
+                                with _ -> telemetryGap "thread-start-observer-failed")
+                        elif eventType = "turn.started" then
+                            let nativeThread =
+                                match document.RootElement.TryGetProperty "thread_id" with
+                                | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                                | _ -> telemetryThread
+
+                            let nativeTurn =
+                                match document.RootElement.TryGetProperty "turn_id" with
+                                | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                                | _ -> None
+
+                            match nativeThread with
+                            | Some thread ->
+                                options.TurnObserver
+                                |> Option.iter (fun observer ->
+                                    try
+                                        observer.NativeTurnStarted(
+                                            proc.Id,
+                                            thread,
+                                            nativeTurn,
+                                            telemetryTurnSequence + 1L,
+                                            DateTimeOffset.UtcNow
+                                        )
+                                    with _ -> telemetryGap "turn-start-observer-failed")
+                            | None -> telemetryGap "missing-turn-thread"
                         elif eventType = "turn.completed" then
                             turnCompleted <- true
                     with _ ->
-                        ())
+                        ()
+
+                    match CodexTurnProjection.project telemetryThread (telemetryTurnSequence + 1L) line with
+                    | Some(Ok turn) ->
+                        telemetryTurnSequence <- telemetryTurnSequence + 1L
+
+                        options.TurnObserver
+                        |> Option.iter (fun observer ->
+                            try
+                                observer.TurnCompleted turn
+                            with _ ->
+                                telemetryGap "turn-observer-failed")
+                    | Some(Error code) ->
+                        telemetryTurnSequence <- telemetryTurnSequence + 1L
+                        telemetryGap code
+                    | None -> ())
+                    (fun () -> telemetryGap "oversized-jsonl-line")
 
             let stderrPump =
-                pumpBounded proc.StandardError.BaseStream stderrPath options.MaximumStreamBytes ignore
+                pumpBounded proc.StandardError.BaseStream stderrPath options.MaximumStreamBytes ignore ignore
 
             let inputWrite =
                 task {
@@ -548,6 +624,13 @@ type CodexExecutionProvider
                     do! inputWrite
                     do! stdoutPump
                     do! stderrPump
+                    options.TurnObserver
+                    |> Option.iter (fun observer ->
+                        try
+                            observer.ProcessTerminal(proc.ExitCode, telemetryThread, DateTimeOffset.UtcNow)
+                        with _ ->
+                            telemetryGap "process-terminal-observer-failed")
+
                     let usage, fatal = completedUsage, fatalEvent
 
                     let! lifecycle, candidate =

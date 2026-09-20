@@ -3317,6 +3317,7 @@ finally:
                     ArtifactRoot = artifactRoot
                     CodexExecutable = codex
                     ExecutorBinding = "fixture-executor"
+                    Telemetry = None
                 }
 
             use localTransport = new LocalExecutorTransport(localConfiguration)

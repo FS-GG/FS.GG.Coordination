@@ -6,8 +6,11 @@ open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open System.Threading
+open System.Threading.Tasks
 open FS.GG.Coordination.Orchestration.Execution
+open FS.GG.Coordination.Orchestration.Execution.Codex
 open FS.GG.Coordination.Orchestration.Runner.Client
 open FS.GG.Coordination.Orchestration.Runner.Protocol
 open Xunit
@@ -764,6 +767,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = RuntimeFixture.fakeCodex roots
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             do! ExecutorRuntime(options, TimeProvider.System).Run(input, output, CancellationToken.None)
@@ -1219,6 +1223,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = executable
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             let runtime = ExecutorRuntime(options, TimeProvider.System)
@@ -1453,6 +1458,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = executable
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             let inputManifest =
@@ -1561,6 +1567,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = RuntimeFixture.hangingCodex roots
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             let runtime = ExecutorRuntime(options, TimeProvider.System)
@@ -1682,6 +1689,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = "/does/not/run"
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 1024
+                    Telemetry = None
                 }
 
             let header = Array.zeroCreate<byte> 4
@@ -1765,6 +1773,7 @@ type ExecutorRuntimeTests() =
                     CodexExecutable = "/does/not/run"
                     ExecutorBinding = "fixture-executor"
                     MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
                 }
 
             let admitted =
@@ -1803,4 +1812,373 @@ type ExecutorRuntimeTests() =
 
             Assert.Equal("executor-input-chunk-bounds-refused", error.Message)
             Assert.False(File.Exists(Path.Combine(options.InputRoot, admitted.InputDigest + ".partial")))
+        }
+
+    [<Fact>]
+    member _.``native turn journal is durable and idempotent by native identity``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-turn-journal-").FullName
+        let command = RuntimeFixture.command "digest" "input" "baseline" "journal" null
+        let observer = TelemetryTurnJournal(root, command) :> ICodexTurnObserver
+        let turn =
+            {
+                ThreadId = "thread-1"
+                TurnId = Some "turn-1"
+                TurnSequence = 1L
+                Provider = None
+                ObservedModel = None
+                ObservedEffort = None
+                Backend = None
+                Input = 10L
+                CachedInput = 2L
+                Output = 3L
+                Reasoning = Some 1L
+                Total = 13L
+            }
+
+        observer.TurnCompleted turn
+        observer.TurnCompleted turn
+        observer.Gap "invalid-turn-counters"
+
+        let directory =
+            Path.Combine(
+                root,
+                "telemetry-turns",
+                command.AssignmentId.ToString("N"),
+                command.AttemptId.ToString("N"),
+                string command.Generation
+            )
+
+        let files = Directory.GetFiles(directory, "*.json")
+        Assert.Equal(2, files.Length)
+        Assert.Single(Directory.GetFiles(directory, "turn-*.json")) |> ignore
+        Assert.Throws<InvalidOperationException>(fun () -> observer.TurnCompleted { turn with Output = 4L; Total = 14L })
+        |> ignore
+
+    [<Fact>]
+    member _.``publisher keeps unresolved batches and isolates the CLI child``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("telemetry-cli-publisher-").FullName
+            let executable = Path.Combine(root, "client")
+            let config = Path.Combine(root, "workspace.json")
+            let credential = Path.Combine(root, "credential")
+            let ca = Path.Combine(root, "ca.crt")
+            let outbox = Path.Combine(root, "outbox")
+            File.WriteAllText(config, "{}")
+            File.WriteAllText(config + ".lock", "")
+            File.WriteAllText(credential, "private-test")
+            File.WriteAllText(ca, "test-ca")
+
+            File.WriteAllText(
+                executable,
+                "#!/bin/sh\n[ \"$FSGG_TELEMETRY_CREDENTIAL_ORCHESTRATION\" = private-test ] || exit 4\n[ -r \"$SSL_CERT_FILE\" ] || exit 5\n[ -z \"$GITHUB_TOKEN\" ] || exit 6\nprintf 'durably-received'\n"
+            )
+
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            File.SetUnixFileMode(ca, UnixFileMode.UserRead)
+
+            for path in [ config; config + ".lock"; credential ] do
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+
+            let options: TelemetryCliPublisherOptions =
+                {
+                    Executable = executable
+                    Config = config
+                    CredentialFile = credential
+                    CertificateAuthorityFile = ca
+                    Outbox = outbox
+                    Repository = "FS-GG/.github"
+                    BindingDigest = String.replicate 64 "a"
+                }
+
+            let publisher = TelemetryCliPublisher options
+            let payload = Encoding.UTF8.GetBytes "{}"
+            let! outcome = publisher.Publish("batch-1", payload, CancellationToken.None)
+            Assert.Equal(AwaitingApplication, outcome)
+            Assert.True(File.Exists(Path.Combine(outbox, "batch-1.json")))
+
+            let! repeated = publisher.Publish("batch-1", payload, CancellationToken.None)
+            Assert.Equal(AwaitingApplication, repeated)
+            Assert.Single(Directory.GetFiles(outbox, "*.json")) |> ignore
+
+            let! conflict = publisher.Publish("batch-1", Encoding.UTF8.GetBytes "{\"different\":true}", CancellationToken.None)
+            Assert.Equal(PublicationUnknown "telemetry-batch-identity-conflict", conflict)
+
+            let! traversal = publisher.Publish("../outside", payload, CancellationToken.None)
+            Assert.Equal(PublicationUnknown "telemetry-batch-name-refused", traversal)
+
+            for index in 2 .. 128 do
+                File.WriteAllText(Path.Combine(outbox, $"batch-{index}.json"), "x")
+
+            let! overloaded = publisher.Publish("batch-129", payload, CancellationToken.None)
+            Assert.Equal(PublicationUnknown "telemetry-outbox-overload", overloaded)
+
+            File.Delete(config + ".lock")
+            let! missingLock = publisher.Publish("batch-1", payload, CancellationToken.None)
+            Assert.Equal(PublicationUnknown "telemetry-client-unavailable", missingLock)
+        }
+
+    [<Fact>]
+    member _.``prospective root and exact turn batches keep stable identities``() =
+        let command = RuntimeFixture.command "digest" "input" "baseline" "telemetry" null
+        let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        let firstName, firstBytes = TelemetryFactBatches.prospectiveRoot command at
+        let replayName, replayBytes = TelemetryFactBatches.prospectiveRoot command at
+        Assert.Equal(firstName, replayName)
+        Assert.True((firstBytes = replayBytes))
+        use prospective = JsonDocument.Parse firstBytes
+        Assert.Equal(5, prospective.RootElement.GetProperty("eventCount").GetInt32())
+
+        let context = TelemetryFactBatches.rootInvocation command
+        let turn =
+            {
+                ThreadId = "native-thread"
+                TurnId = Some "native-turn"
+                TurnSequence = 1L
+                Provider = None
+                ObservedModel = None
+                ObservedEffort = None
+                Backend = None
+                Input = 17L
+                CachedInput = 4L
+                Output = 9L
+                Reasoning = Some 3L
+                Total = 26L
+            }
+
+        let name, bytes = TelemetryFactBatches.completedTurn context (Some "gpt-5") (Some "medium") turn
+        Assert.StartsWith("batch-", name)
+        use document = JsonDocument.Parse bytes
+        let root = document.RootElement
+        let usage = root.GetProperty("events")[0]
+        Assert.Equal("fsgg.telemetry.ingest/1", root.GetProperty("schema").GetString())
+        Assert.Equal(context.ItemId, usage.GetProperty("itemId").GetString())
+        Assert.Equal(26L, usage.GetProperty("total").GetInt64())
+        Assert.Equal(3L, usage.GetProperty("reasoning").GetInt64())
+
+    [<Fact>]
+    member _.``telemetry root marker refuses a second unparented attempt``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-root-guard-").FullName
+        let command = RuntimeFixture.command "digest" "input" "baseline" "root" null
+        let first = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        Assert.Equal(Ok first, TelemetryRootGuard.claim root command first)
+        match TelemetryRootGuard.claim root command (first.AddMinutes 1.) with
+        | Ok replay -> Assert.Equal(first, replay)
+        | Error reason -> failwithf "root replay failed: %s" reason
+
+        let retry = { command with AttemptId = Guid.NewGuid() }
+        Assert.Equal(Error "telemetry-retry-lineage-unavailable", TelemetryRootGuard.claim root retry (first.AddMinutes 2.))
+
+    [<Fact>]
+    member _.``runner observer durably queues lifecycle and exact native turn facts``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-observer-").FullName
+        let command = RuntimeFixture.command "digest" "input" "baseline" "observer" null
+        let outbox = Path.Combine(root, "telemetry-outbox")
+        let publisher =
+            TelemetryCliPublisher
+                {
+                    Executable = "/missing/client"
+                    Config = "/missing/config"
+                    CredentialFile = "/missing/credential"
+                    CertificateAuthorityFile = "/missing/ca"
+                    Outbox = outbox
+                    Repository = "FS-GG/.github"
+                    BindingDigest = String.replicate 64 "a"
+                }
+
+        let observer = TelemetryRunnerObserver(root, command, Some publisher) :> ICodexTurnObserver
+        let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        observer.ProcessStarted(1234, at)
+        observer.ThreadStarted(1234, "thread", at)
+        observer.NativeTurnStarted(1234, "thread", Some "turn", 1L, at)
+        observer.TurnCompleted
+            {
+                ThreadId = "thread"
+                TurnId = Some "turn"
+                TurnSequence = 1L
+                Provider = None
+                ObservedModel = None
+                ObservedEffort = None
+                Backend = None
+                Input = 10L
+                CachedInput = 2L
+                Output = 4L
+                Reasoning = Some 1L
+                Total = 14L
+            }
+        observer.ProcessTerminal(0, Some "thread", at.AddMinutes 1.)
+
+        let batches = Directory.GetFiles(outbox, "*.json")
+        Assert.Equal(5, batches.Length)
+        let kinds =
+            batches
+            |> Array.map (fun path ->
+                use document = JsonDocument.Parse(File.ReadAllBytes path)
+                let first = document.RootElement.GetProperty("events")[0]
+                first.GetProperty("kind").GetString())
+            |> Set.ofArray
+        Assert.True((kinds = set [ "runtime-start"; "runtime-turn-usage"; "runtime-terminal" ]))
+
+    [<Fact>]
+    member _.``publisher pump drains more than sixteen batches after restart``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("telemetry-pump-").FullName
+            let executable = Path.Combine(root, "client")
+            let config = Path.Combine(root, "workspace.json")
+            let credential = Path.Combine(root, "credential")
+            let ca = Path.Combine(root, "ca.crt")
+            let outbox = Path.Combine(root, "outbox")
+            File.WriteAllText(executable, "#!/bin/sh\nif [ -f \"$0.applied\" ]; then printf applied; else printf durably-received; fi\n")
+            File.WriteAllText(config, "{}")
+            File.WriteAllText(config + ".lock", "")
+            File.WriteAllText(credential, "private-test")
+            File.WriteAllText(ca, "test-ca")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+            for path in [ config; config + ".lock"; credential ] do
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+
+            let options: TelemetryCliPublisherOptions =
+                {
+                    Executable = executable
+                    Config = config
+                    CredentialFile = credential
+                    CertificateAuthorityFile = ca
+                    Outbox = outbox
+                    Repository = "FS-GG/.github"
+                    BindingDigest = String.replicate 64 "a"
+                }
+
+            let first = TelemetryCliPublisher options
+
+            for index in 1 .. 20 do
+                let payload = Encoding.UTF8.GetBytes($"{{\"index\":{index}}}")
+                Assert.True((first.Queue($"batch-{index}", payload) |> Result.isOk))
+
+            let! initial = first.Flush CancellationToken.None
+            Assert.Equal(16, initial.Length)
+            Assert.True((initial |> List.forall ((=) AwaitingApplication)))
+            Assert.Equal(20, first.PendingCount)
+
+            File.WriteAllText(executable + ".applied", "")
+            let recovered = TelemetryCliPublisher options
+            use pump = new TelemetryPublisherPump(recovered, root, TimeSpan.FromMilliseconds 50.)
+            let deadline = DateTimeOffset.UtcNow.AddSeconds 10.
+
+            while recovered.PendingCount > 0 && DateTimeOffset.UtcNow < deadline do
+                do! Task.Delay 50
+
+            Assert.Equal(0, recovered.PendingCount)
+            let status = File.ReadAllText(Path.Combine(root, "telemetry-publisher-status.json"))
+            Assert.Contains("\"PendingBatches\":0", status)
+        }
+
+    [<Fact>]
+    member _.``journal replay recovers facts written before an outbox crash``() =
+        let root = Directory.CreateTempSubdirectory("telemetry-journal-replay-").FullName
+        let command = RuntimeFixture.command "digest" "input" "baseline" "replay" null
+        let journal = TelemetryTurnJournal(root, command) :> ICodexTurnObserver
+        let at = DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.Zero)
+        journal.ProcessStarted(1234, at)
+        journal.ThreadStarted(1234, "thread", at)
+        journal.NativeTurnStarted(1234, "thread", Some "turn", 1L, at)
+        journal.TurnCompleted
+            {
+                ThreadId = "thread"
+                TurnId = Some "turn"
+                TurnSequence = 1L
+                Provider = None
+                ObservedModel = None
+                ObservedEffort = None
+                Backend = None
+                Input = 10L
+                CachedInput = 2L
+                Output = 4L
+                Reasoning = Some 1L
+                Total = 14L
+            }
+        journal.Gap "fixture-gap"
+        journal.ProcessTerminal(0, Some "thread", at.AddMinutes 1.)
+
+        let outbox = Path.Combine(root, "outbox")
+        let publisher =
+            TelemetryCliPublisher
+                {
+                    Executable = "/missing/client"
+                    Config = "/missing/config"
+                    CredentialFile = "/missing/credential"
+                    CertificateAuthorityFile = "/missing/ca"
+                    Outbox = outbox
+                    Repository = "FS-GG/.github"
+                    BindingDigest = String.replicate 64 "a"
+                }
+
+        Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
+        Assert.Equal(6, publisher.PendingCount)
+        Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
+        Assert.Equal(6, publisher.PendingCount)
+
+    [<Fact>]
+    member _.``journal replay eventually delivers a 129-turn outage without double counting``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("telemetry-overload-replay-").FullName
+            let command = RuntimeFixture.command "digest" "input" "baseline" "overload" null
+            let journal = TelemetryTurnJournal(root, command) :> ICodexTurnObserver
+
+            for sequence in 1L .. 129L do
+                journal.TurnCompleted
+                    {
+                        ThreadId = "thread"
+                        TurnId = Some($"turn-{sequence}")
+                        TurnSequence = sequence
+                        Provider = None
+                        ObservedModel = None
+                        ObservedEffort = None
+                        Backend = None
+                        Input = 10L
+                        CachedInput = 2L
+                        Output = 4L
+                        Reasoning = Some 1L
+                        Total = 14L
+                    }
+
+            let executable = Path.Combine(root, "client")
+            let config = Path.Combine(root, "workspace.json")
+            let credential = Path.Combine(root, "credential")
+            let ca = Path.Combine(root, "ca.crt")
+            File.WriteAllText(executable, "#!/bin/sh\nprintf applied\n")
+            File.WriteAllText(config, "{}")
+            File.WriteAllText(config + ".lock", "")
+            File.WriteAllText(credential, "private-test")
+            File.WriteAllText(ca, "test-ca")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+            for path in [ config; config + ".lock"; credential ] do
+                File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+
+            let publisher =
+                TelemetryCliPublisher
+                    {
+                        Executable = executable
+                        Config = config
+                        CredentialFile = credential
+                        CertificateAuthorityFile = ca
+                        Outbox = Path.Combine(root, "outbox")
+                        Repository = "FS-GG/.github"
+                        BindingDigest = String.replicate 64 "a"
+                    }
+
+            let first = TelemetryJournalRecovery.requeue root command publisher
+            Assert.Contains("telemetry-outbox-overload", first)
+            Assert.Equal(128, publisher.PendingCount)
+
+            while publisher.PendingCount > 0 do
+                let! outcomes = publisher.Flush CancellationToken.None
+                Assert.True((outcomes |> List.forall ((=) Applied)))
+
+            Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
+            Assert.Equal(1, publisher.PendingCount)
+            let! last = publisher.Flush CancellationToken.None
+            Assert.True((last = [ Applied ]))
+            Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
+            Assert.Equal(0, publisher.PendingCount)
         }

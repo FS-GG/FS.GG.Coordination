@@ -21,7 +21,7 @@ let private usage () =
         "   or: fsgg-coord-orchestration-host verify-installed-adoption --connection-file <absolute-private-path> --request-file <absolute-private-path>"
 
     eprintfn
-        "   or: fsgg-coord-orchestration-host serve ... [--github-token-file <path> --github-repository <owner/repo> --github-issue-number <n> --github-base-ref <ref> --runner-executable <absolute-path> --runner-repository-root <absolute-path> --runner-workspace-root <absolute-path> --runner-input-root <absolute-path> --runner-state-root <absolute-path> --runner-artifact-root <absolute-path> --codex-executable <absolute-path> --executor-binding <identity>]"
+        "   or: fsgg-coord-orchestration-host serve ... [--github-token-file <path> --github-repository <owner/repo> --github-issue-number <n> --github-base-ref <ref> --runner-executable <absolute-path> --runner-repository-root <absolute-path> --runner-workspace-root <absolute-path> --runner-input-root <absolute-path> --runner-state-root <absolute-path> --runner-artifact-root <absolute-path> --codex-executable <absolute-path> --executor-binding <identity> [--telemetry-executable <absolute-path> --telemetry-config <absolute-path> --telemetry-credential-file <absolute-path> --telemetry-ca-file <absolute-path> --telemetry-outbox <absolute-path> --telemetry-binding-digest <sha256> --telemetry-repository <owner/repo>]]"
 
     2
 
