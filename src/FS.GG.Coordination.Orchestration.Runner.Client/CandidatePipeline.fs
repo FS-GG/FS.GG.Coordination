@@ -586,7 +586,9 @@ module ExecutorWorkspace =
                     then
                         Error "workspace-binding-conflict"
                     else
-                        Ok target
+                        Git.run target [ "fsck"; "--connectivity-only" ]
+                        |> Result.mapError (fun _ -> "workspace-objects-incomplete")
+                        |> Result.map (fun _ -> target)
                 else
                     let parent = Path.GetDirectoryName target
 
@@ -604,6 +606,10 @@ module ExecutorWorkspace =
                             |> Result.map ignore)
                         |> Result.bind (fun () ->
                             Git.run target [ "checkout"; "--detach"; manifest.BaselineObjectId ]
+                            |> Result.map ignore)
+                        |> Result.bind (fun () ->
+                            Git.run target [ "fsck"; "--connectivity-only" ]
+                            |> Result.mapError (fun _ -> "workspace-objects-incomplete")
                             |> Result.map ignore)
                         |> Result.bind (fun () ->
                             if not (SafePath.noLinks workspaceRoot target) then
