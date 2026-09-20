@@ -35,13 +35,19 @@ use the current `/v1/status` sequence and generation. The original admission
 must first be rebound with `/v1/main/recover`. The Host refuses settlement unless
 the delivery deadline has passed, the Core route has no downstream effect intents,
 the exact candidate row is absent, the execution journal's bound observation has
-no candidate and is outcome-unknown, GitHub confirms the repository and issue
-identity, and the route branch, pull request and active claim are absent. It then
+no candidate and is outcome-unknown with a durable cancel request, a root-owned
+read-only snapshot at `/srv/recovery/old-attempt` has exact bound
+`manifest.json`, `final.json`, and `stdout.jsonl` hashes plus terminal process
+attestation, GitHub confirms the repository and issue identity, and the route
+branch, pull request across every base, and active claim are absent. It then
 records candidate absence, terminalizes the absent deliverable, releases the
 execution reservation, revokes the old generation, and clears the expired claim
 obligation through Core events. A refusal or partial result requires a fresh
 status/readback before retry; never edit the journal or delete the historical
 claim comment. This route does not admit or launch replacement work.
+The first accepted absence readback records a digest of the original control
+identity and validity window. A byte-identical retry can finish later stages
+after a lost response; a different command or stale first use is refused.
 
 Main owns the PostgreSQL journals, effect intents, candidate object, GitHub delivery
 identity, and native delivery readback. A launcher authenticates to the Host-owned

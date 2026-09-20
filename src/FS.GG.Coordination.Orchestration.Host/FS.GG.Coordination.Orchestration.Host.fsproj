@@ -25,6 +25,7 @@
     <Compile Include="TelemetryOutcomeBridge.fs" />
     <Compile Include="MainEffectDriver.fs" />
     <Compile Include="MainRouteAdmission.fs" />
+    <Compile Include="MainTerminalEvidence.fs" />
     <Compile Include="MainAdmissionPreparer.fs" />
     <Compile Include="InstalledAdoptionVerification.fs" />
     <Compile Include="MainRouteWorkflow.fs" />

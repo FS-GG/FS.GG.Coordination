@@ -893,12 +893,28 @@ type GitHubRouteClient
 
     member _.ReadPullRequestAbsent(branchRef: string, ct: CancellationToken) =
         task {
-            let! result = readPull branchRef ct
+            // Recovery must census every base. A PR created from this head to a
+            // different base still proves that the external effect is present.
+            let branch = branchRef.Replace("refs/heads/", "")
+            let query = Uri.EscapeDataString(owner + ":" + branch)
+            let! result =
+                send RestMethod.Get $"pulls?state=all&head={query}&per_page=100" None None ct
 
             return
                 match result with
-                | Ok None -> Ok()
-                | Ok(Some _) -> Error "github-pull-request-still-present"
+                | Ok value when paginated value.Headers -> Error "github-pull-request-census-incomplete"
+                | Ok value ->
+                    match parse value.Body with
+                    | Error reason -> Error reason
+                    | Ok document ->
+                        use document = document
+
+                        if document.RootElement.ValueKind <> JsonValueKind.Array then
+                            Error "github-pull-request-census-refused"
+                        elif document.RootElement.GetArrayLength() = 0 then
+                            Ok()
+                        else
+                            Error "github-pull-request-still-present"
                 | Error reason -> Error reason
         }
 

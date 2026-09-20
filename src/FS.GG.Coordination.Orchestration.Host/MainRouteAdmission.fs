@@ -62,6 +62,43 @@ type MainRouteControlReceipt =
         Detail: string
     }
 
+[<RequireQualifiedAccess>]
+module MainAbsentCandidateControl =
+    let digest (control: MainRouteControl) =
+        SHA256.HashData(
+            Encoding.UTF8.GetBytes(
+                $"{control.CommandId:D}\n{control.ExpectedSequence}\n{control.ExpectedGeneration}\n{control.PrincipalId}\n{control.IssuedAt.UtcTicks}\n{control.ExpiresAt.UtcTicks}\n{control.Reason}"
+            )
+        )
+        |> Convert.ToHexString
+        |> fun value -> "absent-recovery:" + value.ToLowerInvariant()
+
+    let authorize (control: MainRouteControl) (route: HostedRoutePlan) (state: State) (now: DateTimeOffset) =
+        let marker = digest control
+
+        match Map.tryFind route.CandidateOperationId state.Operations with
+        | Some(NeedsObservation(intent, _)) when intent.Kind = StoreCandidate ->
+            if
+                Id.revisionValue state.Revision = control.ExpectedSequence
+                && Id.generationValue state.Generation = control.ExpectedGeneration
+                && control.IssuedAt <= now
+                && now < control.ExpiresAt
+            then
+                Ok marker
+            else
+                Error "absent-candidate-control-stale"
+        | Some(OperationState.Settled(intent, ProvenAbsent)) when intent.Kind = StoreCandidate ->
+            match Map.tryFind route.CandidateOperationId state.HostedEffectReadbacks with
+            | Some readback when
+                not readback.Exists
+                && readback.ProviderRevision = marker
+                && control.IssuedAt <= readback.ObservedAt
+                && readback.ObservedAt < control.ExpiresAt
+                ->
+                Ok marker
+            | _ -> Error "absent-candidate-retry-identity-refused"
+        | _ -> Error "absent-candidate-operation-refused"
+
 type IMainRouteAdmissionHandler =
     abstract Admit: byte array * CancellationToken -> Task<Result<unit, string>>
     abstract RecoverPaused: byte array * CancellationToken -> Task<Result<unit, string>>

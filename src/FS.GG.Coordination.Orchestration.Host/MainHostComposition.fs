@@ -267,12 +267,14 @@ type MainProductionAdmission
         github: GitHubRouteClient,
         transport: IAuthenticatedExecutorTransport,
         cancellationToken: CancellationToken,
-        ?outcomeBridge: TelemetryOutcomeBridge
+        ?outcomeBridge: TelemetryOutcomeBridge,
+        ?terminalEvidenceDirectory: string
     ) =
     let gate = obj ()
     let mutable running: RunningProductionMainHost option = None
     let mutable boundDigest: string option = None
     let mutable boundPreparation: MainRoutePreparation option = None
+    let terminalEvidenceDirectory = defaultArg terminalEvidenceDirectory MainTerminalEvidence.defaultDirectory
 
     let decode bytes =
         match MainRouteAdmission.decode workItemId principal bytes with
@@ -336,6 +338,9 @@ type MainProductionAdmission
 
                 let operation = Map.tryFind route.CandidateOperationId current.State.Operations
 
+                let controlAuthorization =
+                    MainAbsentCandidateControl.authorize control route current.State now
+
                 let candidatePending =
                     match operation with
                     | Some(NeedsObservation(intent, _)) when intent.Kind = StoreCandidate -> true
@@ -363,8 +368,7 @@ type MainProductionAdmission
                         | _ -> false)
 
                 if
-                    Id.revisionValue current.State.Revision <> control.ExpectedSequence
-                    || Id.generationValue current.State.Generation <> control.ExpectedGeneration
+                    Result.isError controlAuthorization
                     || not generationCurrent
                     || current.State.HostedRoute <> Some route
                     || now < preparation.Budget.DeliveryDeadline
@@ -383,6 +387,8 @@ type MainProductionAdmission
                     let! branch = github.ReadBranchAbsent(route.BranchRef, token)
                     let! pull = github.ReadPullRequestAbsent(route.BranchRef, token)
                     let! claim = github.ReadClaimAbsent(route.ClaimResourceId, Id.operationValue route.ClaimOperationId, token)
+                    let terminalEvidence =
+                        MainTerminalEvidence.verify terminalEvidenceDirectory preparation.LaunchIntent (clock.GetUtcNow())
                     let! execution =
                         (executions :> IExecutionSessionJournal)
                             .ReadAttempt(
@@ -400,8 +406,8 @@ type MainProductionAdmission
                                 |> Option.exists (fun value ->
                                     value.Lifecycle = SessionLifecycle.OutcomeUnknown && value.Candidate.IsNone)))
 
-                    match candidate, liveRoute, branch, pull, claim, executionCandidateAbsent with
-                    | Error "candidate-not-found", Ok _, Ok(), Ok(), Ok(), true ->
+                    match candidate, liveRoute, branch, pull, claim, executionCandidateAbsent, terminalEvidence with
+                    | Error "candidate-not-found", Ok _, Ok(), Ok(), Ok(), true, Ok _ ->
                         let stageId stage =
                             let bytes =
                                 SHA256.HashData(
@@ -446,6 +452,7 @@ type MainProductionAdmission
                             match operation with
                             | Some(OperationState.Settled(_, ProvenAbsent)) -> Task.FromResult(Ok())
                             | Some(NeedsObservation(intent, _)) ->
+                                let observedAt = clock.GetUtcNow()
                                 let readback =
                                     {
                                         OperationId = intent.OperationId
@@ -456,14 +463,17 @@ type MainProductionAdmission
                                         ProviderResourceId = intent.ResourceId
                                         CandidateHeadSha = None
                                         ResultSha = None
-                                        ProviderRevision = "candidate-not-found"
+                                        ProviderRevision = Result.defaultValue "" controlAuthorization
                                         Generation = route.Generation
                                         WorkflowRevision = route.WorkflowRevision
-                                        ObservedAt = clock.GetUtcNow()
+                                        ObservedAt = observedAt
                                         Exists = false
                                     }
 
-                                append "candidate-absent" (RecordHostedEffectReadback(intent.OperationId, readback))
+                                if observedAt >= control.ExpiresAt then
+                                    Task.FromResult(Error "absent-candidate-control-expired-before-first-write")
+                                else
+                                    append "candidate-absent" (RecordHostedEffectReadback(intent.OperationId, readback))
                             | _ -> Task.FromResult(Error "absent-candidate-operation-refused")
 
                         match settled with
@@ -553,13 +563,14 @@ type MainProductionAdmission
                                                                     }
                                                         | Ok _ -> return Error "absent-candidate-compensation-incomplete"
                                     | _ -> return Error "absent-candidate-execution-reservation-release-refused"
-                    | Ok _, _, _, _, _, _ -> return Error "absent-candidate-store-still-present"
-                    | Error reason, _, _, _, _, _ when reason <> "candidate-not-found" -> return Error reason
-                    | _, Error reason, _, _, _, _
-                    | _, _, Error reason, _, _, _
-                    | _, _, _, Error reason, _, _
-                    | _, _, _, _, Error reason, _ -> return Error reason
-                    | _, _, _, _, _, false -> return Error "absent-candidate-execution-not-proven"
+                    | Ok _, _, _, _, _, _, _ -> return Error "absent-candidate-store-still-present"
+                    | Error reason, _, _, _, _, _, _ when reason <> "candidate-not-found" -> return Error reason
+                    | _, Error reason, _, _, _, _, _
+                    | _, _, Error reason, _, _, _, _
+                    | _, _, _, Error reason, _, _, _
+                    | _, _, _, _, Error reason, _, _ -> return Error reason
+                    | _, _, _, _, _, false, _ -> return Error "absent-candidate-execution-not-proven"
+                    | _, _, _, _, _, _, Error reason -> return Error reason
                     | _ -> return Error "absent-candidate-readback-refused"
         }
 
@@ -749,9 +760,7 @@ type MainProductionAdmission
                     || control.IssuedAt = DateTimeOffset.MinValue
                     || control.ExpiresAt <= control.IssuedAt
                     || (control.Action = "settle-absent-candidate"
-                        && (control.IssuedAt > clock.GetUtcNow()
-                            || control.ExpiresAt <= clock.GetUtcNow()
-                            || control.ExpiresAt - control.IssuedAt > TimeSpan.FromMinutes 5.))
+                        && control.ExpiresAt - control.IssuedAt > TimeSpan.FromMinutes 5.)
                 then
                     return Error "invalid-main-control-request"
                 elif control.Action = "settle-absent-candidate" then

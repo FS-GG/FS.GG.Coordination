@@ -1743,7 +1743,138 @@ let ``failed candidate recovery requires exact external absence`` () =
         let! _ = presentClient.ReadClaimAbsent("claim-1", operation, CancellationToken.None)
         let! refused = presentClient.ReadBranchAbsent("refs/heads/pilot", CancellationToken.None)
         Assert.Equal(Error "github-branch-still-present", refused)
+
+        let crossBase = QueuedGitHub[response "[{\"base\":{\"ref\":\"other\"}}]"]
+        let crossBaseClient =
+            GitHubRouteClient(crossBase, FixedPublisher(Ok(String.replicate 40 "a")), githubTarget, FixedClock Fixture.now)
+
+        let! crossBaseRefusal = crossBaseClient.ReadPullRequestAbsent("refs/heads/pilot", CancellationToken.None)
+        Assert.Equal(Error "github-pull-request-still-present", crossBaseRefusal)
+
+        match crossBase.Requests with
+        | [ Rest request ] -> Assert.DoesNotContain("base=", request.Uri.Query)
+        | _ -> failwith "expected one all-base PR census"
     }
+
+[<Fact>]
+let ``terminal snapshot binds old attempt and refuses altered or nonterminal bytes`` () =
+    let directory = Directory.CreateTempSubdirectory("terminal-evidence-").FullName
+
+    try
+        let assignment = Guid.NewGuid()
+        let attempt = Guid.NewGuid()
+        let intent: FS.GG.Coordination.Orchestration.Execution.LaunchIntent =
+            {
+                Schema = "fsgg.orchestration.execution-launch/2"
+                Key = { AssignmentId = assignment; AttemptId = attempt; Generation = 1L }
+                InputDigest = String.replicate 64 "a"
+                Workspace = "pilot"
+                Requested = { Model = None; Effort = None }
+                Limits = { Deadline = Fixture.now; MaximumRuntime = TimeSpan.FromMinutes 30.; MaximumAttempts = 1 }
+                RecordedAt = Fixture.now.AddMinutes -30.
+            }
+
+        let final = Encoding.UTF8.GetBytes "{\"status\":\"completed\",\"summary\":\"done\"}"
+        let stdout = Encoding.UTF8.GetBytes "{\"type\":\"turn.started\"}\n{\"type\":\"turn.completed\"}\n"
+        let sha (bytes: byte array) =
+            System.Security.Cryptography.SHA256.HashData bytes
+            |> Convert.ToHexString
+            |> fun value -> value.ToLowerInvariant()
+
+        let manifest terminal (stdoutBytes: byte array) =
+            JsonSerializer.Serialize
+                {|
+                    schema = "fsgg.orchestration.terminal-evidence/1"
+                    assignmentId = string assignment
+                    attemptId = string attempt
+                    generation = 1L
+                    finalSha256 = sha final
+                    stdoutSha256 = sha stdoutBytes
+                    finalBytes = final.LongLength
+                    stdoutBytes = stdoutBytes.LongLength
+                    capturedAt = Fixture.now
+                    processTerminationObserved = terminal
+                |}
+
+        File.WriteAllBytes(Path.Combine(directory, "final.json"), final)
+        File.WriteAllBytes(Path.Combine(directory, "stdout.jsonl"), stdout)
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest true stdout)
+
+        Assert.True(MainTerminalEvidence.verify directory intent Fixture.now |> Result.isOk)
+
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest false stdout)
+        Assert.Equal(
+            Error "terminal-evidence-manifest-refused",
+            MainTerminalEvidence.verify directory intent Fixture.now
+        )
+
+        let ambiguous = Encoding.UTF8.GetBytes "{\"type\":\"turn.started\"}\n{\"type\":\"turn.failed\"}\n"
+        File.WriteAllBytes(Path.Combine(directory, "stdout.jsonl"), ambiguous)
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest true ambiguous)
+        Assert.Equal(
+            Error "terminal-evidence-turn-ambiguous",
+            MainTerminalEvidence.verify directory intent Fixture.now
+        )
+    finally
+        Directory.Delete(directory, true)
+
+[<Fact>]
+let ``absent candidate control allows only same-command partial retry`` () =
+    let route = Fixture.route
+    let intent = Fixture.intent StoreCandidate route.CandidateOperationId
+    let control: MainRouteControl =
+        {
+            CommandId = Guid.NewGuid()
+            ExpectedSequence = 23L
+            ExpectedGeneration = Id.generationValue route.Generation
+            PrincipalId = "pilot-worker"
+            IssuedAt = Fixture.now.AddMinutes -1.
+            ExpiresAt = Fixture.now.AddMinutes 1.
+            Reason = "candidate-touch-set-refused"
+            Action = "settle-absent-candidate"
+        }
+
+    let pending =
+        { initial with
+            Revision = Id.revision 23L
+            Generation = route.Generation
+            Operations = Map.ofList [ route.CandidateOperationId, NeedsObservation(intent, "candidate-unknown") ]
+        }
+
+    let marker = MainAbsentCandidateControl.digest control
+    Assert.Equal(Ok marker, MainAbsentCandidateControl.authorize control route pending Fixture.now)
+
+    let expired = { control with ExpiresAt = Fixture.now }
+    Assert.Equal(
+        Error "absent-candidate-control-stale",
+        MainAbsentCandidateControl.authorize expired route pending Fixture.now
+    )
+
+    let readback =
+        { Fixture.hosted intent with
+            ProviderRevision = marker
+            ObservedAt = Fixture.now
+            Exists = false
+        }
+
+    let afterFirstStage =
+        { pending with
+            Revision = Id.revision 24L
+            Generation = Id.generation 2L
+            Operations = Map.ofList [ route.CandidateOperationId, OperationState.Settled(intent, ProvenAbsent) ]
+            HostedEffectReadbacks = Map.ofList [ route.CandidateOperationId, readback ]
+        }
+
+    Assert.Equal(
+        Ok marker,
+        MainAbsentCandidateControl.authorize control route afterFirstStage (Fixture.now.AddMinutes 5.)
+    )
+
+    let different = { control with CommandId = Guid.NewGuid() }
+    Assert.Equal(
+        Error "absent-candidate-retry-identity-refused",
+        MainAbsentCandidateControl.authorize different route afterFirstStage (Fixture.now.AddMinutes 5.)
+    )
 
 [<Fact>]
 let ``GitHub route refuses competing canonical claim marker`` () =
