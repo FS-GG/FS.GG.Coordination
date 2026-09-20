@@ -685,6 +685,23 @@ let ``main admission preparation is ordered retry stable and required by workflo
             MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" firstBytes
             |> Result.defaultWith failwith
 
+        let legacyBinding = ExecutorWire.encodeRouteBinding preparation.Binding
+        use legacyBindingJson = JsonDocument.Parse legacyBinding
+        let mutable ignoredParent = Unchecked.defaultof<JsonElement>
+        Assert.False(legacyBindingJson.RootElement.TryGetProperty("parentAttemptId", &ignoredParent))
+        Assert.Equal(Ok preparation.Binding, ExecutorWire.parseRouteBinding legacyBinding)
+
+        let parentBinding0 =
+            { preparation.Binding with
+                Schema = ExecutorWire.routeBindingSchemaV2
+                BindingSha256 = ""
+                ParentAttemptId = Nullable(Guid.NewGuid())
+                ParentGeneration = Nullable(0L)
+                TelemetryRelation = "child" }
+        let parentBinding =
+            { parentBinding0 with BindingSha256 = ExecutorWire.routeBindingDigest parentBinding0 }
+        Assert.Equal(Ok parentBinding, ExecutorWire.parseRouteBinding (ExecutorWire.encodeRouteBinding parentBinding))
+
         let guessedJournal = Fixture.MemoryJournal()
         let guessedExecutor = Fixture.MemoryExecutor(fun () -> guessedJournal.State)
 

@@ -115,6 +115,9 @@ module private RuntimeFixture =
                 ArtifactDigest = null
                 ContentOffset = 0L
                 ContentLength = 0
+                ParentAttemptId = Nullable()
+                ParentGeneration = Nullable()
+                TelemetryRelation = null
             }
 
         { unsigned with
@@ -1956,6 +1959,26 @@ type ExecutorRuntimeTests() =
             let! missingLock = publisher.Publish("batch-1", payload, CancellationToken.None)
             Assert.Equal(PublicationUnknown "telemetry-client-unavailable", missingLock)
         }
+
+    [<Fact>]
+    member _.``parented command wire keeps v2 hashes and closes v3 lineage``() =
+        let legacy = RuntimeFixture.command (String.replicate 64 "a") (String.replicate 64 "b") "baseline" "launch" null
+        let legacyBytes = ExecutorWire.encodeCommandV2 legacy
+        use legacyJson = JsonDocument.Parse legacyBytes
+        let mutable ignored = Unchecked.defaultof<JsonElement>
+        Assert.False(legacyJson.RootElement.TryGetProperty("parentAttemptId", &ignored))
+        Assert.Equal(Ok legacy, ExecutorWire.parseCommandV2 legacyBytes)
+
+        let parented0 =
+            { legacy with
+                Schema = ExecutorWire.commandSchemaV3
+                ParentAttemptId = Nullable(Guid.NewGuid())
+                ParentGeneration = Nullable(legacy.Generation - 1L)
+                TelemetryRelation = "child"
+                BodySha256 = "" }
+        let parented = { parented0 with BodySha256 = ExecutorWire.commandV2Digest parented0 }
+        let bytes = ExecutorWire.encodeCommandV2 parented
+        Assert.Equal(Ok parented, ExecutorWire.parseCommandV2 bytes)
 
     [<Fact>]
     member _.``prospective root and exact turn batches keep stable identities``() =

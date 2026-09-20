@@ -57,6 +57,85 @@ type MainAdmissionPreparationRequest =
 module MainAdmissionPreparer =
     let schema = "fsgg.orchestration.main-route-preparation-request/1"
 
+    exception private TelemetryParentRefused of string
+
+    type private TelemetryParent =
+        { AttemptId: Guid
+          Generation: int64
+          Relation: string }
+
+    // Reconstruct the state immediately before the latest subscription admission.
+    // A readmission clears active Attempts, so the current state cannot choose its
+    // parent. The journal is authoritative across retries and process restarts.
+    let private selectTelemetryParent (store: IJournalStore) workItemId attemptId generation token =
+        task {
+            let persistenceId = WorkItemIdentity.persistenceId workItemId
+            let! recovered = store.Recover(persistenceId, token)
+
+            match recovered with
+            | Error failures -> return Error(sprintf "telemetry-parent-journal-unavailable:%A" failures)
+            | Ok value when value.Snapshot.IsSome -> return Error "telemetry-parent-snapshot-unavailable"
+            | Ok value ->
+                let mutable state = initial
+                let mutable prior = None
+                let mutable corrupt = false
+
+                for stored in value.Events do
+                    match EventEnvelope.tryDecode stored.Payload with
+                    | Error _ -> corrupt <- true
+                    | Ok eventValue when not corrupt ->
+                        match eventValue with
+                        | SubscriptionWorkAdmitted _ -> prior <- Some state
+                        | _ -> ()
+
+                        state <- evolve state eventValue
+                    | Ok _ -> ()
+
+                if corrupt then
+                    return Error "telemetry-parent-history-corrupt"
+                elif state.Generation <> generation || state.WorkItemId <> Some workItemId then
+                    return Error "telemetry-parent-history-stale"
+                else
+                    match prior with
+                    | None -> return Error "telemetry-parent-admission-missing"
+                    | Some before when before.WorkItemId.IsNone -> return Ok None
+                    | Some before ->
+                        let candidates = before.Attempts |> Map.toList |> List.map snd
+
+                        match candidates with
+                        | [] -> return Error "telemetry-parent-attempt-missing"
+                        | _ ->
+                            let latestGeneration =
+                                candidates |> List.map (fun attempt -> Id.generationValue attempt.Generation) |> List.max
+
+                            match candidates |> List.filter (fun attempt -> Id.generationValue attempt.Generation = latestGeneration) with
+                            | [ attempt ] when
+                                latestGeneration < Id.generationValue generation
+                                && Id.attemptValue attempt.AttemptId <> attemptId
+                                ->
+                                match before.HostedRoute, attempt.Status with
+                                | Some route, status when route.AttemptId = attempt.AttemptId && route.Generation = attempt.Generation ->
+                                    let relation =
+                                        match status with
+                                        | Completed -> Some "follow-up"
+                                        | CancelledByRunner
+                                        | ReconciledAbsent _ -> Some "child"
+                                        | _ -> None
+
+                                    match relation with
+                                    | Some relation ->
+                                        return
+                                            Ok(
+                                                Some
+                                                    { AttemptId = Id.attemptValue attempt.AttemptId
+                                                      Generation = latestGeneration
+                                                      Relation = relation }
+                                            )
+                                    | None -> return Error "telemetry-parent-attempt-not-terminal"
+                                | _ -> return Error "telemetry-parent-route-ambiguous"
+                            | _ -> return Error "telemetry-parent-attempt-ambiguous"
+        }
+
     let private options =
         JsonSerializerOptions(
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -337,6 +416,8 @@ module MainAdmissionPreparer =
                     return Error "main-admission-preparation-admission-conflict"
                 | Ok admittedState ->
                     let generation = admittedState.State.Generation
+                    let! parentResult = selectTelemetryParent workItems workItemId request.AttemptId generation token
+                    let parent = parentResult |> Result.defaultWith (fun reason -> raise (TelemetryParentRefused reason))
                     let repositoryNodeId = WorkItemIdentity.repositoryNodeId workItemId
 
                     let route =
@@ -450,7 +531,11 @@ module MainAdmissionPreparer =
 
                             let binding0 =
                                 {
-                                    Schema = ExecutorWire.routeBindingSchema
+                                    Schema =
+                                        if parent.IsSome then
+                                            ExecutorWire.routeBindingSchemaV2
+                                        else
+                                            ExecutorWire.routeBindingSchema
                                     BindingSha256 = ""
                                     WorkItemPersistenceId = WorkItemIdentity.persistenceId workItemId
                                     RouteId = request.RouteId
@@ -465,6 +550,9 @@ module MainAdmissionPreparer =
                                     PromptDigest = inputDigest
                                     WorkspaceManifestSha256 = workspaceDigest
                                     ExecutorBinding = request.ExecutorBinding
+                                    ParentAttemptId = parent |> Option.map _.AttemptId |> Option.toNullable
+                                    ParentGeneration = parent |> Option.map _.Generation |> Option.toNullable
+                                    TelemetryRelation = parent |> Option.map _.Relation |> Option.toObj
                                 }
 
                             let binding =
@@ -662,7 +750,12 @@ module MainAdmissionPreparer =
                 |> ExecutorWire.parseWorkspaceManifest
             with
             | Ok _, Ok _ ->
-                prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes token
+                task {
+                    try
+                        return! prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes token
+                    with TelemetryParentRefused reason ->
+                        return Error reason
+                }
             | Error reason, _
             | _, Error reason -> Task.FromResult(Error reason)
 

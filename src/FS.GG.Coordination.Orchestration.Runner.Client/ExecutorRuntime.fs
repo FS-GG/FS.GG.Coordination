@@ -1326,7 +1326,7 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
 
                                         stream.Close()
                                         File.Move(temporary, completed, false)
-                    | value when value = ExecutorWire.commandSchemaV2 ->
+                    | value when value = ExecutorWire.commandSchemaV2 || value = ExecutorWire.commandSchemaV3 ->
                         match ExecutorWire.parseCommandV2 bytes with
                         | Error reason -> raise (InvalidDataException reason)
                         | Ok command ->

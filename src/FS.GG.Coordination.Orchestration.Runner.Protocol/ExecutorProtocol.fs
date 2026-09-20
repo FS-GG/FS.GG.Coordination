@@ -1,6 +1,7 @@
 namespace FS.GG.Coordination.Orchestration.Runner.Protocol
 
 open System
+open System.Text.Json.Serialization
 
 [<CLIMutable>]
 type ExecutorCommand =
@@ -57,6 +58,12 @@ type ExecutorCommandV2 =
         ArtifactDigest: string
         ContentOffset: int64
         ContentLength: int
+        [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
+        ParentAttemptId: Nullable<Guid>
+        [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
+        ParentGeneration: Nullable<int64>
+        [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
+        TelemetryRelation: string
     }
 
 [<CLIMutable>]
@@ -122,6 +129,12 @@ type ExecutorRouteBinding =
         PromptDigest: string
         WorkspaceManifestSha256: string
         ExecutorBinding: string
+        [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
+        ParentAttemptId: Nullable<Guid>
+        [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
+        ParentGeneration: Nullable<int64>
+        [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
+        TelemetryRelation: string
     }
 
 [<CLIMutable>]
@@ -222,11 +235,13 @@ type ExecutorResponse =
 module ExecutorWire =
     let commandSchema = "fsgg.orchestration.executor-command/1"
     let commandSchemaV2 = "fsgg.orchestration.executor-command/2"
+    let commandSchemaV3 = "fsgg.orchestration.executor-command/3"
     let receiptSchema = "fsgg.orchestration.executor-receipt/1"
     let contentSchema = "fsgg.orchestration.executor-content/1"
     let inputManifestSchema = "fsgg.orchestration.executor-input-manifest/1"
     let workspaceManifestSchema = "fsgg.orchestration.executor-workspace-manifest/1"
     let routeBindingSchema = "fsgg.orchestration.executor-route-binding/1"
+    let routeBindingSchemaV2 = "fsgg.orchestration.executor-route-binding/2"
     let artifactManifestSchema = "fsgg.orchestration.executor-artifact-manifest/1"
     let artifactContentSchema = "fsgg.orchestration.executor-artifact-content/1"
     let operationOutcomeSchema = "fsgg.orchestration.executor-operation-outcome/1"
@@ -272,6 +287,12 @@ module ExecutorWire =
         |> Set.add "workspaceManifestSha256"
         |> Set.add "providerSessionReference"
         |> Set.add "artifactDigest"
+
+    let private commandV3Properties =
+        commandV2Properties
+        |> Set.add "parentAttemptId"
+        |> Set.add "parentGeneration"
+        |> Set.add "telemetryRelation"
 
     let private receiptProperties =
         set
@@ -322,6 +343,12 @@ module ExecutorWire =
                 "workspaceManifestSha256"
                 "executorBinding"
             ]
+
+    let private routeBindingV2Properties =
+        routeBindingProperties
+        |> Set.add "parentAttemptId"
+        |> Set.add "parentGeneration"
+        |> Set.add "telemetryRelation"
 
     let private artifactManifestProperties =
         set
@@ -479,10 +506,27 @@ module ExecutorWire =
     let encodeCommandV2 (value: ExecutorCommandV2) = RunnerWire.serialize value
 
     let parseCommandV2 bytes =
-        closed<ExecutorCommandV2> commandV2Properties maximumControlBytes bytes
+        let decoded =
+            match closed<ExecutorCommandV2> commandV2Properties maximumControlBytes bytes with
+            | Ok value -> Ok value
+            | Error _ -> closed<ExecutorCommandV2> commandV3Properties maximumControlBytes bytes
+
+        decoded
         |> Result.bind (fun value ->
-            if value.Schema <> commandSchemaV2 then
+            if value.Schema <> commandSchemaV2 && value.Schema <> commandSchemaV3 then
                 Error "executor-command-schema-refused"
+            elif
+                (value.Schema = commandSchemaV2
+                 && (value.ParentAttemptId.HasValue || value.ParentGeneration.HasValue || not (isNull value.TelemetryRelation)))
+                || (value.Schema = commandSchemaV3
+                    && (not value.ParentAttemptId.HasValue
+                        || not value.ParentGeneration.HasValue
+                        || value.ParentAttemptId.Value = Guid.Empty
+                        || value.ParentGeneration.Value < 0L
+                        || value.ParentGeneration.Value >= value.Generation
+                        || not ((set [ "child"; "follow-up" ]).Contains value.TelemetryRelation)))
+            then
+                Error "executor-command-parent-lineage-refused"
             elif
                 not (
                     validGuid value.CommandId
@@ -654,10 +698,26 @@ module ExecutorWire =
     let encodeRouteBinding (value: ExecutorRouteBinding) = RunnerWire.serialize value
 
     let parseRouteBinding bytes =
-        closed<ExecutorRouteBinding> routeBindingProperties maximumControlBytes bytes
+        let decoded =
+            match closed<ExecutorRouteBinding> routeBindingProperties maximumControlBytes bytes with
+            | Ok value -> Ok value
+            | Error _ -> closed<ExecutorRouteBinding> routeBindingV2Properties maximumControlBytes bytes
+
+        decoded
         |> Result.bind (fun value ->
             if
-                value.Schema = routeBindingSchema
+                (value.Schema = routeBindingSchema || value.Schema = routeBindingSchemaV2)
+                && (if value.Schema = routeBindingSchema then
+                        not value.ParentAttemptId.HasValue
+                        && not value.ParentGeneration.HasValue
+                        && isNull value.TelemetryRelation
+                    else
+                        value.ParentAttemptId.HasValue
+                        && value.ParentAttemptId.Value <> Guid.Empty
+                        && value.ParentGeneration.HasValue
+                        && value.ParentGeneration.Value >= 0L
+                        && value.ParentGeneration.Value < value.Generation
+                        && (set [ "child"; "follow-up" ]).Contains value.TelemetryRelation)
                 && RunnerWire.validSha256 value.BindingSha256
                 && routeBindingDigest value = value.BindingSha256
                 && validText 512 value.WorkItemPersistenceId
