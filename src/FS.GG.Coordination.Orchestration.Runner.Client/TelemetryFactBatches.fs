@@ -128,12 +128,12 @@ module TelemetryFactBatches =
         usage["threadId"] <- turn.ThreadId
         optional usage "turnId" turn.TurnId
         usage["turnSequence"] <- turn.TurnSequence
-        usage["provider"] <- null
+        optional usage "provider" turn.Provider
         optional usage "requestedModel" requestedModel
-        usage["observedModel"] <- null
+        optional usage "observedModel" turn.ObservedModel
         optional usage "requestedEffort" requestedEffort
-        usage["observedEffort"] <- null
-        usage["backend"] <- null
+        optional usage "observedEffort" turn.ObservedEffort
+        optional usage "backend" turn.Backend
         usage["scope"] <- "completed-turn"
         usage["provenance"] <- "codex-exec-jsonl"
         usage["input"] <- turn.Input

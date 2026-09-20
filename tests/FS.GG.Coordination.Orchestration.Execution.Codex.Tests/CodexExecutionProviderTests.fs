@@ -762,7 +762,7 @@ type CodexTurnProjectionTests() =
     [<Fact>]
     member _.``completed turn preserves native identity and exact counters``() =
         let raw =
-            """{"type":"turn.completed","turn_id":"turn-2","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":5,"reasoning_output_tokens":2}}"""
+            """{"type":"turn.completed","turn_id":"turn-2","provider":"OpenAI","model":"gpt-5","effort":"medium","backend":"chatgpt","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":5,"reasoning_output_tokens":2}}"""
 
         match CodexTurnProjection.project (Some "thread-1") 2L raw with
         | Some(Ok usage) ->
@@ -772,6 +772,10 @@ type CodexTurnProjectionTests() =
             Assert.Equal(17L, usage.Total)
             Assert.Equal(4L, usage.CachedInput)
             Assert.Equal(Some 2L, usage.Reasoning)
+            Assert.Equal(Some "OpenAI", usage.Provider)
+            Assert.Equal(Some "gpt-5", usage.ObservedModel)
+            Assert.Equal(Some "medium", usage.ObservedEffort)
+            Assert.Equal(Some "chatgpt", usage.Backend)
         | result -> failwithf "unexpected projection: %A" result
 
     [<Fact>]

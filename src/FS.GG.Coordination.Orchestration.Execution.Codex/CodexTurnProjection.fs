@@ -9,6 +9,10 @@ type CodexTurnUsage =
         ThreadId: string
         TurnId: string option
         TurnSequence: int64
+        Provider: string option
+        ObservedModel: string option
+        ObservedEffort: string option
+        Backend: string option
         Input: int64
         CachedInput: int64
         Output: int64
@@ -71,6 +75,10 @@ module CodexTurnProjection =
                                         ThreadId = thread
                                         TurnId = text root "turn_id"
                                         TurnSequence = turnSequence
+                                        Provider = text root "provider"
+                                        ObservedModel = text root "model"
+                                        ObservedEffort = text root "effort"
+                                        Backend = text root "backend"
                                         Input = input
                                         CachedInput = cached
                                         Output = output
