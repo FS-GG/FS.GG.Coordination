@@ -544,6 +544,57 @@ let ``main admission preparation is ordered retry stable and required by workflo
         Assert.Empty(journal.State.Operations)
         Assert.False(journal.State.ReadbackCurrent)
 
+        let priorRoute = journal.State.HostedRoute |> Option.defaultWith (fun () -> failwith "route missing")
+        let priorAttempt =
+            { AttemptId = priorRoute.AttemptId
+              SessionId = Id.session decodedRequest.SessionId
+              Runner =
+                { RunnerId = Id.runner decodedRequest.RunnerId
+                  PrincipalId = "pilot-route"
+                  FingerprintSha256 = decodedRequest.RunnerFingerprintSha256
+                  Generation = priorRoute.Generation
+                  ExpiresAt = Fixture.now.AddMinutes 5. }
+              Generation = priorRoute.Generation
+              StartedAt = Fixture.now
+              Status = Completed }
+        let priorState =
+            { journal.State with Attempts = Map.ofList [ priorAttempt.AttemptId, priorAttempt ] }
+        let nextAttemptId = Guid.NewGuid()
+        let nextGeneration = Id.generation (Id.generationValue priorRoute.Generation + 1L)
+        let selected =
+            MainAdmissionPreparer.selectTelemetryParentCandidate priorState nextAttemptId nextGeneration
+            |> Result.defaultWith failwith
+            |> Option.defaultWith (fun () -> failwith "parent missing")
+        Assert.Equal(Id.attemptValue priorAttempt.AttemptId, selected.AttemptId)
+        Assert.Equal("follow-up", selected.Relation)
+        Assert.Equal(
+            Error "telemetry-parent-attempt-ambiguous",
+            MainAdmissionPreparer.selectTelemetryParentCandidate priorState nextAttemptId priorRoute.Generation
+        )
+        Assert.Equal(
+            Error "telemetry-parent-attempt-not-terminal",
+            MainAdmissionPreparer.selectTelemetryParentCandidate
+                { priorState with Attempts = Map.ofList [ priorAttempt.AttemptId, { priorAttempt with Status = Active } ] }
+                nextAttemptId
+                nextGeneration
+        )
+        Assert.Equal(
+            "child",
+            (MainAdmissionPreparer.selectTelemetryParentCandidate
+                { priorState with Attempts = Map.ofList [ priorAttempt.AttemptId, { priorAttempt with Status = CancelledByRunner } ] }
+                nextAttemptId
+                nextGeneration
+             |> Result.defaultWith failwith
+             |> Option.defaultWith (fun () -> failwith "parent missing")).Relation
+        )
+        let competingAttempt = { priorAttempt with AttemptId = Id.attempt (Guid.NewGuid()) }
+        let ambiguousState =
+            { priorState with Attempts = priorState.Attempts.Add(competingAttempt.AttemptId, competingAttempt) }
+        Assert.Equal(
+            Error "telemetry-parent-attempt-ambiguous",
+            MainAdmissionPreparer.selectTelemetryParentCandidate ambiguousState nextAttemptId nextGeneration
+        )
+
         let! retry =
             MainAdmissionPreparer.prepare
                 (Fixture.FixedClock())

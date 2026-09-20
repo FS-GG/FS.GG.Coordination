@@ -59,10 +59,46 @@ module MainAdmissionPreparer =
 
     exception private TelemetryParentRefused of string
 
-    type private TelemetryParent =
+    type TelemetryParent =
         { AttemptId: Guid
           Generation: int64
           Relation: string }
+
+    /// Decide from the durable state immediately before the latest admission.
+    let selectTelemetryParentCandidate (before: State) attemptId generation =
+        if before.WorkItemId.IsNone then
+            Ok None
+        else
+            let candidates = before.Attempts |> Map.toList |> List.map snd
+
+            match candidates with
+            | [] -> Error "telemetry-parent-attempt-missing"
+            | _ ->
+                let latestGeneration =
+                    candidates |> List.map (fun attempt -> Id.generationValue attempt.Generation) |> List.max
+
+                match candidates |> List.filter (fun attempt -> Id.generationValue attempt.Generation = latestGeneration) with
+                | [ attempt ] when
+                    latestGeneration < Id.generationValue generation
+                    && Id.attemptValue attempt.AttemptId <> attemptId
+                    ->
+                    match before.HostedRoute, attempt.Status with
+                    | Some route, status when route.AttemptId = attempt.AttemptId && route.Generation = attempt.Generation ->
+                        let relation =
+                            match status with
+                            | Completed -> Some "follow-up"
+                            | CancelledByRunner
+                            | ReconciledAbsent _ -> Some "child"
+                            | _ -> None
+
+                        match relation with
+                        | Some relation ->
+                            Ok(Some { AttemptId = Id.attemptValue attempt.AttemptId
+                                      Generation = latestGeneration
+                                      Relation = relation })
+                        | None -> Error "telemetry-parent-attempt-not-terminal"
+                    | _ -> Error "telemetry-parent-route-ambiguous"
+                | _ -> Error "telemetry-parent-attempt-ambiguous"
 
     // Reconstruct the state immediately before the latest subscription admission.
     // A readmission clears active Attempts, so the current state cannot choose its
@@ -98,42 +134,7 @@ module MainAdmissionPreparer =
                 else
                     match prior with
                     | None -> return Error "telemetry-parent-admission-missing"
-                    | Some before when before.WorkItemId.IsNone -> return Ok None
-                    | Some before ->
-                        let candidates = before.Attempts |> Map.toList |> List.map snd
-
-                        match candidates with
-                        | [] -> return Error "telemetry-parent-attempt-missing"
-                        | _ ->
-                            let latestGeneration =
-                                candidates |> List.map (fun attempt -> Id.generationValue attempt.Generation) |> List.max
-
-                            match candidates |> List.filter (fun attempt -> Id.generationValue attempt.Generation = latestGeneration) with
-                            | [ attempt ] when
-                                latestGeneration < Id.generationValue generation
-                                && Id.attemptValue attempt.AttemptId <> attemptId
-                                ->
-                                match before.HostedRoute, attempt.Status with
-                                | Some route, status when route.AttemptId = attempt.AttemptId && route.Generation = attempt.Generation ->
-                                    let relation =
-                                        match status with
-                                        | Completed -> Some "follow-up"
-                                        | CancelledByRunner
-                                        | ReconciledAbsent _ -> Some "child"
-                                        | _ -> None
-
-                                    match relation with
-                                    | Some relation ->
-                                        return
-                                            Ok(
-                                                Some
-                                                    { AttemptId = Id.attemptValue attempt.AttemptId
-                                                      Generation = latestGeneration
-                                                      Relation = relation }
-                                            )
-                                    | None -> return Error "telemetry-parent-attempt-not-terminal"
-                                | _ -> return Error "telemetry-parent-route-ambiguous"
-                            | _ -> return Error "telemetry-parent-attempt-ambiguous"
+                    | Some before -> return selectTelemetryParentCandidate before attemptId generation
         }
 
     let private options =
