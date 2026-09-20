@@ -681,6 +681,25 @@ let ``main admission preparation is ordered retry stable and required by workflo
                 | _ -> false
         )
 
+        let distinctReadmission =
+            { decodedRequest with
+                PreparationId = Guid.NewGuid()
+                AttemptId = Guid.NewGuid()
+                RouteId = Guid.NewGuid() }
+        let! missingParent =
+            MainAdmissionPreparer.prepare
+                (Fixture.FixedClock())
+                terminalWorkItems
+                terminalExecutor
+                terminalExecutor
+                Fixture.permit.SubjectId
+                "pilot-route"
+                distinctReadmission
+                input
+                CancellationToken.None
+        Assert.Equal(Error "telemetry-parent-attempt-missing", missingParent)
+        Assert.Equal(writesBeforeTerminalRetry, terminalExecutor.Writes)
+
         let preparation =
             MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" firstBytes
             |> Result.defaultWith failwith
