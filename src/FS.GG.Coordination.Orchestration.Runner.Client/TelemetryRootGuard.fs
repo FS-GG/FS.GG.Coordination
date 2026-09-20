@@ -17,20 +17,55 @@ type TelemetryRootMarker =
 
 [<RequireQualifiedAccess>]
 module TelemetryRootGuard =
-    /// An item gets one prospective root. A later attempt requires controller-provided parent lineage.
-    let claim stateRoot (command: ExecutorCommandV2) now =
+    let private markerPath stateRoot (command: ExecutorCommandV2) =
         let digest =
             SHA256.HashData(Encoding.UTF8.GetBytes command.WorkItemPersistenceId)
             |> Convert.ToHexString
             |> fun value -> value.ToLowerInvariant()
 
         let directory = Path.Combine(stateRoot, "telemetry-roots")
+        directory, Path.Combine(directory, digest + ".json")
+
+    /// Read only an already-claimed root for this exact controller command.
+    let replay stateRoot (command: ExecutorCommandV2) =
+        let _, path = markerPath stateRoot command
+
+        try
+            let info = FileInfo path
+
+            if not info.Exists then
+                Ok None
+            elif
+                not (isNull info.LinkTarget)
+                || info.Length < 2L
+                || info.Length > 512L
+                || (OperatingSystem.IsLinux()
+                    && File.GetUnixFileMode(path) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite))
+            then
+                Error "telemetry-root-marker-unsafe"
+            else
+                let existing = JsonSerializer.Deserialize<TelemetryRootMarker>(File.ReadAllBytes path)
+
+                if isNull (box existing) then
+                    Error "telemetry-root-marker-unreadable"
+                elif
+                    existing.AttemptId <> command.AttemptId.ToString("N")
+                    || existing.Generation <> command.Generation
+                then
+                    Error "telemetry-retry-lineage-unavailable"
+                else
+                    Ok(Some existing.ActivatedAt)
+        with _ ->
+            Error "telemetry-root-marker-unreadable"
+
+    /// An item gets one prospective root. A later attempt requires controller-provided parent lineage.
+    let claim stateRoot (command: ExecutorCommandV2) now =
+        let directory, path = markerPath stateRoot command
         Directory.CreateDirectory directory |> ignore
 
         if OperatingSystem.IsLinux() then
             File.SetUnixFileMode(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
 
-        let path = Path.Combine(directory, digest + ".json")
         let marker =
             {
                 AttemptId = command.AttemptId.ToString("N")

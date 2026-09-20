@@ -1181,7 +1181,29 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
             use telemetryPump =
                 telemetryClient
                 |> Option.map (fun publisher ->
-                    new TelemetryPublisherPump(publisher, options.StateRoot, TimeSpan.FromSeconds 15.))
+                    let requeue () =
+                        for session in sessions.Values do
+                            let command = session.Command
+                            let context = TelemetryFactBatches.rootInvocation command
+                            let journal = TelemetryTurnJournal(options.StateRoot, command)
+
+                            match TelemetryRootGuard.replay options.StateRoot command with
+                            | Ok(Some activatedAt) ->
+                                TelemetryFactBatches.prospectiveRoot command activatedAt
+                                |> publisher.Queue
+                                |> ignore
+                            | Ok None -> ()
+                            | Error code ->
+                                let gapId = journal.RecordGapOnce code
+                                TelemetryFactBatches.gap context gapId code |> publisher.Queue |> ignore
+
+                            TelemetryJournalRecovery.requeue options.StateRoot command publisher
+                            |> List.distinct
+                            |> List.iter (fun code ->
+                                let gapId = journal.RecordGapOnce code
+                                TelemetryFactBatches.gap context gapId code |> publisher.Queue |> ignore)
+
+                    new TelemetryPublisherPump(publisher, options.StateRoot, TimeSpan.FromSeconds 15., requeue))
                 |> Option.toObj
 
             let running = ResizeArray<Task>()
