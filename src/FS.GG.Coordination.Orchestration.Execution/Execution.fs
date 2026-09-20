@@ -400,6 +400,14 @@ type ExecutionSessionCoordinator(provider: IExecutionProvider, journal: IExecuti
         task {
             if not (boundedReferences observation) then
                 return SessionRefused "provider-observation-bounds-refused"
+            elif
+                state.Observation
+                |> Option.exists (fun previous ->
+                    { observation with ObservedAt = previous.ObservedAt } = previous)
+            then
+                // Polling a terminal provider can produce a fresh timestamp for
+                // the same outcome. Do not grow the journal for that readback.
+                return SessionDuplicate state
             else
                 let! appended = append state.Intent.Key state.Revision eventValue cancellationToken
 
