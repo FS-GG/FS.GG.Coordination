@@ -325,14 +325,27 @@ type MainProductionAdmission
 
     member _.Running = lock gate (fun () -> running)
 
-    member private _.SettleAbsentCandidate (control: MainRouteControl) (token: CancellationToken) =
+    static member SettleAbsentCandidateCore
+        (
+            clock: TimeProvider,
+            workItems: IJournalStore,
+            candidates: ICandidateStore,
+            executionCommands: IExecutorCommandStore,
+            executionJournal: IExecutionSessionJournal,
+            workItemId: WorkItemId,
+            principal: string,
+            github: GitHubRouteClient,
+            terminalEvidenceDirectory: string,
+            preparation: MainRoutePreparation,
+            control: MainRouteControl,
+            token: CancellationToken
+        ) =
         task {
             let! initial = HostedWriterJournal.recover workItems workItemId token
 
-            match initial, lock gate (fun () -> boundPreparation) with
-            | Error failures, _ -> return Error(sprintf "%A" failures)
-            | _, None -> return Error "absent-candidate-route-not-bound"
-            | Ok current, Some preparation ->
+            match initial with
+            | Error failures -> return Error(sprintf "%A" failures)
+            | Ok current ->
                 let route = preparation.Route
                 let now = clock.GetUtcNow()
 
@@ -390,7 +403,7 @@ type MainProductionAdmission
                     let terminalEvidence =
                         MainTerminalEvidence.verify terminalEvidenceDirectory preparation.LaunchIntent (clock.GetUtcNow())
                     let! execution =
-                        (executions :> IExecutionSessionJournal)
+                        executionJournal
                             .ReadAttempt(
                                 preparation.LaunchIntent.Key.AssignmentId,
                                 preparation.LaunchIntent.Key.AttemptId,
@@ -503,7 +516,7 @@ type MainProductionAdmission
                                 | Error reason -> return Error reason
                                 | Ok() ->
                                     let! released =
-                                        (executions :> IExecutorCommandStore)
+                                        executionCommands
                                             .ReleaseSubscription(
                                                 preparation.ExecutionReservation.ReservationId,
                                                 preparation.ExecutionReservation.AttemptId,
@@ -573,6 +586,25 @@ type MainProductionAdmission
                     | _, _, _, _, _, _, Error reason -> return Error reason
                     | _ -> return Error "absent-candidate-readback-refused"
         }
+
+    member private _.SettleAbsentCandidate (control: MainRouteControl) (token: CancellationToken) =
+        match lock gate (fun () -> boundPreparation) with
+        | None -> Task.FromResult(Error "absent-candidate-route-not-bound")
+        | Some preparation ->
+            MainProductionAdmission.SettleAbsentCandidateCore(
+                clock,
+                workItems,
+                candidates,
+                executions :> IExecutorCommandStore,
+                executions :> IExecutionSessionJournal,
+                workItemId,
+                principal,
+                github,
+                terminalEvidenceDirectory,
+                preparation,
+                control,
+                token
+            )
 
     interface IMainRouteAdmissionHandler with
         member _.Admit(bytes, token) =
