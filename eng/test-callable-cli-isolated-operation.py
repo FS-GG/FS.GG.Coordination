@@ -358,6 +358,55 @@ class IsolatedOperationTests(unittest.TestCase):
             self.assertEqual(plan["seal"], migrated["planSeal"])
             self.assertNotEqual(operation.LEGACY_SETUP_PROGRESS_SEAL, migrated["seal"])
 
+    def test_released_011_command_identity_and_exact_retained_setup_migration(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            command = root / "fsgg-coordination"
+            command.write_bytes(b"launcher")
+            managed = root / ".store/fs.gg.coordination.cli/0.1.1/tools/net10.0/any/FS.GG.Coordination.Cli.dll"
+            managed.parent.mkdir(parents=True)
+            managed.write_bytes(b"reviewed-managed-command")
+            package = copy.deepcopy(self.contract["package"])
+            package["installedManagedCommandSha256"] = operation.digest(managed.read_bytes())
+            self.assertEqual(command, operation.installed_command(str(command), package))
+            package["version"] = "0.1.0"
+            with self.assertRaisesRegex(operation.Refused, "installed-command-package"):
+                operation.installed_command(str(command), package)
+            package["version"] = "0.1.1"
+            package["installedManagedCommandSha256"] = "0" * 64
+            with self.assertRaisesRegex(operation.Refused, "installed-command-digest"):
+                operation.installed_command(str(command), package)
+
+        receipt = {
+            "authoritativeReadback": True,
+            "contractSha256": operation.LEGACY_CREATION_CONTRACT_SHA256,
+            "creationPlanSeal": "0de72b8825a2f11e106e8767f20e3587f1c65e649efdbc9b57e9dea628c80fbf",
+            "receiptSha256": operation.LEGACY_CREATION_RECEIPT_SHA256,
+            "schema": "fsgg.coordination.callable-isolated-creation-receipt/1",
+            "target": {"defaultBranch": "main", "fullName": self.contract["target"]["fullName"],
+                       "nodeId": "R_kgDOUgzhnA", "owner": "FS-GG", "repositoryId": 1376575900,
+                       "syntheticOnly": True, "visibility": "public"},
+        }
+        plan = operation.prepare_operation(self.contract, receipt)
+        progress = operation.sealed({
+            "checkpoints": [], "contractSha256": operation.RETAINED_011_CONTRACT_SHA256,
+            "operationIdentity": self.contract["identity"],
+            "planSeal": operation.RETAINED_011_OPERATION_PLAN_SEAL,
+            "schema": "fsgg.coordination.callable-isolated-operation-progress/1",
+            "stage": "setup-intent",
+            "target": {"fullName": self.contract["target"]["fullName"], "repositoryId": 1376575900},
+        })
+        self.assertEqual(operation.RETAINED_011_SETUP_PROGRESS_SEAL, progress["seal"])
+        with tempfile.TemporaryDirectory() as scratch:
+            state = pathlib.Path(scratch) / "checkpoint.json"
+            operation.write_private(state, progress)
+            with self.assertRaisesRegex(operation.Refused, "cleanup-readback-without-bound-intent"):
+                operation.execute_identity_bound(FakeGitHub([(404, {})]), self.contract, plan, "/unused", "TOKEN", state)
+            migrated = operation.read_json(state)
+            self.assertEqual(self.contract["contractSha256"], migrated["contractSha256"])
+            self.assertEqual(plan["seal"], migrated["planSeal"])
+            self.assertEqual([], migrated["checkpoints"])
+
     def test_identity_bound_interpreter_persists_before_cleanup_and_replay_is_noop(self):
         plan = operation.prepare_operation(self.contract, self.creation_receipt())
         client = FullOperationGitHub(self.contract, plan)

@@ -61,6 +61,9 @@ LEGACY_CREATION_CONTRACT_SHA256 = "828855bd5ba0455a1c5bb3d2e1fdad6ccef710fbf2c62
 LEGACY_CREATION_RECEIPT_SHA256 = "9b7bc9d5c49ba245410bac52c88ab8e23cd5f02c359b1c7d486dc89652f4698b"
 LEGACY_SETUP_PROGRESS_SEAL = "4befec5c2a1523966386320f3e1b33825c49bc4e70ff493308ff501aaa41d1ee"
 LEGACY_OPERATION_PLAN_SEAL = "364b59f95a8ae0ac7958d580d3d1c63d13fbdcae378310393161894081525aaa"
+RETAINED_011_CONTRACT_SHA256 = "ccd57e74293b2fb1443614fea6add54525f9f11c8d1126908180479ab5bc18a6"
+RETAINED_011_OPERATION_PLAN_SEAL = "3d26c9ba1bf45f5996493710b1874846c62eadd2c3b59859d089398208b1eb97"
+RETAINED_011_SETUP_PROGRESS_SEAL = "4c8017f0f73506d3965a63426c7b8a608ae88078a375ec59168312dedb1eb5cc"
 
 
 class Refused(RuntimeError):
@@ -762,12 +765,14 @@ def ensure_journal_protection(client: GitHub, full_name: str, journal_ref: str) 
     raise Refused("journal-protection-pending-requires-readback")
 
 
-def installed_command(command: str, expected_sha: str) -> pathlib.Path:
+def installed_command(command: str, package: dict[str, object]) -> pathlib.Path:
     executable = pathlib.Path(command).resolve()
     if executable.is_symlink() or not executable.is_file():
         raise Refused("installed-command-missing")
-    roots = list((executable.parent / ".store" / "fs.gg.coordination.cli" / "0.1.0").rglob("FS.GG.Coordination.Cli.dll"))
-    if len(roots) != 1 or digest(read_regular(roots[0])) != expected_sha:
+    if package.get("id") != "FS.GG.Coordination.Cli" or package.get("version") != "0.1.1":
+        raise Refused("installed-command-package")
+    roots = list((executable.parent / ".store" / "fs.gg.coordination.cli" / "0.1.1").rglob("FS.GG.Coordination.Cli.dll"))
+    if len(roots) != 1 or digest(read_regular(roots[0])) != package["installedManagedCommandSha256"]:
         raise Refused("installed-command-digest")
     return executable
 
@@ -867,7 +872,7 @@ def live_observation(clients: dict[str, GitHub], contract: dict[str, object], pl
             "checks": True,
             "contents": True,
             "deleteRepository": True,
-            "installedCli": tool_command is not None and bool(installed_command(tool_command, contract["package"]["installedManagedCommandSha256"])),
+            "installedCli": tool_command is not None and bool(installed_command(tool_command, contract["package"])),
             "journalRefs": True,
             "pullRequests": True,
             "workflows": True,
@@ -1001,12 +1006,19 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     retained = read_json(receipt_path) if pathlib.Path(receipt_path).is_file() else None
     if retained is not None:
         verify_digest(retained, "receiptSha256" if retained.get("schema", "").endswith("receipt/1") else "seal", "operation-progress")
+        retained_011_progress = (
+            retained.get("contractSha256") == RETAINED_011_CONTRACT_SHA256
+            and retained.get("planSeal") == RETAINED_011_OPERATION_PLAN_SEAL
+            and retained.get("seal") == RETAINED_011_SETUP_PROGRESS_SEAL
+        )
         legacy_progress = (
             retained.get("schema") == "fsgg.coordination.callable-isolated-operation-progress/1"
             and retained.get("stage") == "setup-intent"
-            and retained.get("contractSha256") == LEGACY_CREATION_CONTRACT_SHA256
-            and retained.get("planSeal") == LEGACY_OPERATION_PLAN_SEAL
-            and retained.get("seal") == LEGACY_SETUP_PROGRESS_SEAL
+            and (retained_011_progress or (
+                retained.get("contractSha256") == LEGACY_CREATION_CONTRACT_SHA256
+                and retained.get("planSeal") == LEGACY_OPERATION_PLAN_SEAL
+                and retained.get("seal") == LEGACY_SETUP_PROGRESS_SEAL
+            ))
             and retained.get("operationIdentity") == contract["identity"]
             and retained.get("target") == {"repositoryId": plan["target"]["repositoryId"], "fullName": plan["target"]["fullName"]}
         )
@@ -1077,7 +1089,7 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     journal_ref, journal_digest = journal_address(target["repositoryId"], node_id)
     ensure_ref(client, target["fullName"], journal_ref, source_sha)
     ensure_journal_protection(client, target["fullName"], journal_ref)
-    executable = installed_command(command, contract["package"]["installedManagedCommandSha256"])
+    executable = installed_command(command, contract["package"])
     def common(environment: str) -> list[str]:
         return ["delivery", "--provider", "github", "--repository", target["fullName"], "--pr", str(number),
                 "--token-env", environment, "--policy-ref", POLICY_REF,
