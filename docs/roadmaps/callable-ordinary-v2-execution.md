@@ -189,17 +189,18 @@ are never acceptance evidence.
   identities to GS2-09 discovery/migration work while preserving separate manifest, transform, archive, rollback,
   omission and representative-rehearsal acceptance.
 
-Workspace and telemetry disposition: `.4a` adds qualification source and an installed harness but changes no
-provider or lifecycle default. Freeze 0.1.0 through `.4`; a demonstrated package/runtime defect requires a new
-version, protected publication and explicit receiver adoption rather than substituting bytes under the existing
-identity. Private roadmap telemetry for `.4a` is associated through the `.github` workspace; native collaboration
+Workspace and telemetry disposition: `.4a` added qualification source and an installed harness but changed no
+provider or lifecycle default. Its original 0.1.0 freeze ended when the observed App-token defect required
+version 0.1.1, protected publication and explicit receiver adoption; no bytes were substituted under 0.1.0.
+Private roadmap telemetry for `.4a` is associated through the `.github` workspace; native collaboration
 interception remains unsupported and usage remains unknown, not zero, and neither becomes acceptance evidence.
 
 During `.4b` identity-bound execution, [run `35418940289`](https://github.com/FS-GG/.github/actions/runs/35418940289)
 retained a `setup-intent` checkpoint and the installed 0.1.0 command refused planning with
 `UnauthorizedObservation`. GitHub returned `permissions.push=false` for both scoped App tokens while the target
-repository and PR remained readable. Producer version 0.1.1 repairs this App-token observation; protected
-publication, explicit receiver repin, installed execution, native acceptance, and cleanup remain pending.
+repository and PR remained readable. Producer version 0.1.1 repaired this App-token observation. At that
+checkpoint, protected publication, explicit receiver repin, installed execution, native acceptance and cleanup
+were pending; the later protected run and distinct `.4c` evidence below close those gates for one synthetic target.
 The 0.1.1 release preflight at protected run `35433965498` retained candidate artifact `10581917023`.
 Two independent hosted preparations and a local preparation with the same canonical source root and GitHub
 `origin` produced byte-identical package SHA-256
@@ -236,8 +237,8 @@ lost journal acknowledgements, a lost dispatch response, native-completion recon
 no-op replay; nine independent negatives cover pre-open refusal, stale policy/source/base/check/epoch, wrong
 subject, incomplete pagination and observer outage. Exact request sequence
 `c30cd043a8a3a30bc9daffbb59bb0f6d9bfef997695da3d6d823d9a94597b317` and journal set
-`520b08adbea6ee20b21b396f3200eeff7e970a6beaf81947942fd9f9af3cf968` are retained. Every provider mutation
-is loopback-only, and `.4b`, `.4c`, live acceptance, Q4, `OpenV2` and migration remain pending.
+`520b08adbea6ee20b21b396f3200eeff7e970a6beaf81947942fd9f9af3cf968` are retained. In that `.4a` harness
+every provider mutation was loopback-only; `.4b`, `.4c`, live acceptance, Q4, `OpenV2` and migration were pending.
 
 Completion evidence for `.4b` source preparation and its live-readiness/artifact-envelope repairs: proposal
 `6af4760f429379d6e4a20f3424ee70b33e21cce220930ac53c177755049bd78a` binds contract
@@ -279,9 +280,13 @@ artifact `10654184892` and receipt artifact `10653844968` have archive SHA-256
 with canonical receipt seal `542dd22b24fd86b2216bcde443ba318826a9a37a122c82ea5890b11bf9081a41`.
 The final sealed receipt binds original base `dffd58342bcbe4e2dcbd55f30afe624b316a5f80`, native plan
 `617a0a5f4cf90145be0012a786d5ec79727da6fe56d982c601096910f1162f4a`, PR #1 merge
-`00869036c9bf96f5cb4c783cfa91ac15504b673b`, settled sharded journal generation 3, independent PR
-and journal readback, and fresh-process `AdvanceAlreadySettled` after the retained interruption. The source
-skipped a second installed advance after readback found the PR merged; the replay reported no further effect.
+`00869036c9bf96f5cb4c783cfa91ac15504b673b`, settled sharded journal generation 3, operator PR and
+journal API readback independent of the installed CLI, and fresh-process `AdvanceAlreadySettled` after the
+retained interruption. [Main's immutable pre-cleanup readback](https://github.com/FS-GG/.github/blob/e71fb799b4780e53fbedffaa6c5815a9d7fc92d0/MAILBOX.md#L5511-L5513)
+separately reports the merged PR and bound settled journal before the disposable target was deleted. The
+operator source skipped a second installed advance after readback found the PR merged; the replay reported no
+further effect. The offline validator checks retained and final sealed artifact identities; it does not refetch
+the deleted target's PR or journal.
 Cleanup settled for synthetic repository ID `1376575900` with HTTP 404 and a separate live 404 readback.
 This single-operation evidence does not accept `OpenV2`, Q4, GS2-09 migration or a production default.
 
@@ -312,11 +317,10 @@ GS2-09.1–.8 migration scope unchanged. The eventual Unified index row points t
 `https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/callable-ordinary-v2-execution.md`.
 Projection into `.github` is asynchronous after authoritative merge/readback.
 
-Remaining gaps are deliberate: `FS.GG.Coordination.Cli` `0.1.0` is published and read back from both designated
-feeds and the canonical `.github` receiver selects it opt-in, but no isolated external or production provider
-effect ran, no Q4/native external acceptance exists, no continuous webhook host exists, and native collaboration
-usage interception remains unsupported even though private roadmap telemetry is now workspace-associated. Those
-gaps block `.4b` and `.4c`, not the completed producer preparation, publication, opt-in adoption or `.4a`
-source-qualification windows. GS2-09 discovery, migration
+Remaining gaps are deliberate: `FS.GG.Coordination.Cli` 0.1.1 is published and the canonical `.github` receiver
+selects it for the admitted singleton. One synthetic isolated external provider effect and native acceptance
+completed under `.4b` and `.4c`; no production default, Q4 acceptance or continuous webhook host exists.
+Native collaboration usage interception remains unsupported even though private roadmap telemetry is
+workspace-associated. GS2-09 discovery, migration
 manifests/transforms/archive/rollback/rehearsal remain a separate pending feature, and OpenV2 and Q4 remain
 unclaimed.

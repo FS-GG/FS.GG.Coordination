@@ -8,6 +8,14 @@
     "headSha": "803556ff1e877d40af2dddbaff7e80f3241d8286",
     "conclusion": "success"
   },
+  "coordinateProvenance": "GitHub Actions API readback; archive coordinates and run conclusion are metadata checked separately from offline payload validation",
+  "readbackProvenance": {
+    "operatorSourceCommit": "bcb8453c3b92a9ea6097e66e326bd1ec3350b667",
+    "operatorSourceSha256": "e35f525b3c17c5c870d08d5d8d2fc3caa661fe98374c38463c6e2018575d6046",
+    "independentPreCleanupMailboxCommit": "e71fb799b4780e53fbedffaa6c5815a9d7fc92d0",
+    "independentPreCleanupMailboxLines": "5511-5513",
+    "independentPreCleanupReadback": "Public PR #1 merged; bound sharded journal settled at generation 3 with matching merge commit, installed plan digest and native operation ID"
+  },
   "retainedInterruption": {
     "runId": 35619835923,
     "attempt": 1,

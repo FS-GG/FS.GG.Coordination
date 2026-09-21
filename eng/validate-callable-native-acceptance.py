@@ -43,9 +43,25 @@ def sealed(value, field):
 
 def validate(evidence, prior_archive, checkpoint_archive, receipt_archive):
     require(evidence.get("schema") == "fsgg.coordination.callable-native-acceptance/1", "evidence schema")
+    require(evidence.get("protectedRun") == {
+        "repository": "FS-GG/.github", "runId": 35631364282, "attempt": 1,
+        "headSha": "803556ff1e877d40af2dddbaff7e80f3241d8286", "conclusion": "success"},
+        "protected run coordinate metadata")
     prior_ref = evidence["retainedInterruption"]
     artifacts = evidence["settledArtifacts"]
     expected = evidence["acceptedIdentity"]
+    require(prior_ref["runId"] == 35619835923 and prior_ref["attempt"] == 1
+            and prior_ref["checkpointArtifactId"] == 10647264981, "retained checkpoint coordinate metadata")
+    require(artifacts["checkpointArtifactId"] == 10654184892
+            and artifacts["receiptArtifactId"] == 10653844968, "settled artifact coordinate metadata")
+    provenance = evidence["readbackProvenance"]
+    require(provenance["operatorSourceCommit"] == "bcb8453c3b92a9ea6097e66e326bd1ec3350b667"
+            and provenance["operatorSourceSha256"] == sha256(
+                pathlib.Path(__file__).with_name("callable-cli-isolated-operation.py").read_bytes()),
+            "operator source identity")
+    require(provenance["independentPreCleanupMailboxCommit"] == "e71fb799b4780e53fbedffaa6c5815a9d7fc92d0"
+            and provenance["independentPreCleanupMailboxLines"] == "5511-5513",
+            "independent readback provenance")
     prior = json.loads(artifact(prior_archive, prior_ref["checkpointArchiveSha256"],
                                 "callable-isolated-operation-checkpoint.json"))
     checkpoint_bytes = artifact(checkpoint_archive, artifacts["checkpointArchiveSha256"],
