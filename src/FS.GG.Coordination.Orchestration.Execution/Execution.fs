@@ -398,15 +398,28 @@ type ExecutionSessionCoordinator(provider: IExecutionProvider, journal: IExecuti
 
     let recordObservation state eventValue observation cancellationToken =
         task {
+            let terminal =
+                match observation.Lifecycle with
+                | Succeeded
+                | Failed
+                | Cancelled
+                | DeadlineExceeded
+                | OutcomeUnknown -> true
+                | Starting
+                | Running
+                | Cancelling -> false
+
             if not (boundedReferences observation) then
                 return SessionRefused "provider-observation-bounds-refused"
             elif
-                state.Observation
-                |> Option.exists (fun previous ->
-                    { observation with ObservedAt = previous.ObservedAt } = previous)
+                terminal
+                && (state.Observation
+                    |> Option.exists (fun previous ->
+                        { observation with ObservedAt = previous.ObservedAt } = previous))
             then
-                // Polling a terminal provider can produce a fresh timestamp for
-                // the same outcome. Do not grow the journal for that readback.
+                // Identical terminal readbacks need no new durable revision. A
+                // nonterminal poll does: the next read-only executor command must
+                // have a new revision-derived identity after its receipt settles.
                 return SessionDuplicate state
             else
                 let! appended = append state.Intent.Key state.Revision eventValue cancellationToken
