@@ -120,6 +120,14 @@ module OrchestrationPersistence =
         abstract Quarantine: CandidateId * reason: string * CancellationToken -> Task<Result<unit, string>>
         abstract CleanupUnreferenced: olderThan: DateTimeOffset * maximum: int * CancellationToken -> Task<int>
 
+    /// A narrowly scoped repair before a candidate has been accepted by Core.
+    /// The caller must prove that the old storage receipt belongs to the exact
+    /// stored bytes and that the continuation is authorized by the work-item journal.
+    type ICandidateRetentionExtension =
+        abstract ExtendRetention:
+            existing: CandidatePut * receipt: CandidateStorageReceipt * retainUntil: DateTimeOffset * CancellationToken
+                -> Task<Result<CandidateStorageReceipt, string>>
+
     type IBackupReconciler =
         abstract BackupIdentity: string
 

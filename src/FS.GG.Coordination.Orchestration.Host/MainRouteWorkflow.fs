@@ -674,7 +674,86 @@ type MainRouteWorkflow
 
                         match replay with
                         | Ok receipt
-                        | Error(Existing receipt) -> return! this.Advance(value, intent, Some receipt, token)
+                        | Error(Existing receipt) ->
+                            let now = clock.GetUtcNow()
+                            let originalCommand = commandId value "record-candidate"
+
+                            let originalExpiredRejection =
+                                state.CommandReceipts
+                                |> Map.tryFind originalCommand
+                                |> Option.exists (fun result ->
+                                    result.Disposition = ReceiptDisposition.Rejected
+                                    && result.Detail = "candidate-not-recoverable-or-invalid")
+
+                            let appliedReadback =
+                                state.HostedEffectReadbacks
+                                |> Map.tryFind intent.OperationId
+                                |> Option.exists (fun readback ->
+                                    readback.Exists
+                                    && readback.CandidateHeadSha = Some bytes.Candidate.HeadSha
+                                    && readback.ResultSha = Some bytes.Candidate.ContentSha256)
+
+                            let retention = value.Budget.DeliveryDeadline.AddDays 30.
+
+                            if state.Candidates.ContainsKey value.Route.CandidateId then
+                                match Map.tryFind value.Route.CandidateId state.Candidates with
+                                | Some accepted when accepted = bytes.Candidate ->
+                                    match nextIntent value.Route value.Binding.BindingSha256 intent.Kind with
+                                    | Some next -> return! append value "intent-publish" (RecordEffectIntent next) token
+                                    | None -> return Error "main-route-transition-refused"
+                                | _ -> return Error "main-route-candidate-identity-conflict"
+                            elif originalExpiredRejection
+                                 && appliedReadback
+                                 && now < value.Budget.DeliveryDeadline
+                                 && bytes.Candidate.RetainUntil = value.LaunchIntent.Limits.Deadline
+                                 && retention > now
+                                 && retention <= now.AddDays 90. then
+                                match candidates with
+                                | :? ICandidateRetentionExtension as extension ->
+                                    let! extended =
+                                        extension.ExtendRetention(bytes, receipt, retention, token)
+
+                                    match extended with
+                                    | Error reason -> return Error reason
+                                    | Ok renewedReceipt ->
+                                        let! renewed = candidates.Read(value.Route.CandidateId, token)
+
+                                        match renewed with
+                                        | Ok stored when
+                                            stored.Candidate =
+                                                { bytes.Candidate with RetainUntil = retention }
+                                            && stored.Bytes = bytes.Bytes ->
+                                            let! recorded =
+                                                append
+                                                    value
+                                                    "record-candidate-retention-recovery"
+                                                    (RecordCandidate(stored.Candidate, renewedReceipt))
+                                                    token
+
+                                            match recorded, nextIntent value.Route value.Binding.BindingSha256 intent.Kind with
+                                            | Ok(), Some next ->
+                                                return! append value "intent-publish" (RecordEffectIntent next) token
+                                            | Error reason, _ -> return Error reason
+                                            | _ -> return Error "main-route-transition-refused"
+                                        | _ -> return Error "main-route-retained-candidate-readback-refused"
+                                | _ -> return Error "main-route-candidate-retention-extension-unavailable"
+                            elif originalExpiredRejection
+                                 && appliedReadback
+                                 && now < value.Budget.DeliveryDeadline
+                                 && bytes.Candidate.RetainUntil = retention then
+                                let! recorded =
+                                    append
+                                        value
+                                        "record-candidate-retention-recovery"
+                                        (RecordCandidate(bytes.Candidate, receipt))
+                                        token
+
+                                match recorded, nextIntent value.Route value.Binding.BindingSha256 intent.Kind with
+                                | Ok(), Some next -> return! append value "intent-publish" (RecordEffectIntent next) token
+                                | Error reason, _ -> return Error reason
+                                | _ -> return Error "main-route-transition-refused"
+                            else
+                                return! this.Advance(value, intent, Some receipt, token)
                         | other -> return Error($"main-route-candidate-receipt-recovery-refused:{other}")
                 | Some intent -> return! this.Advance(value, intent, None, token)
         }

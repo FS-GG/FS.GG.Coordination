@@ -116,7 +116,7 @@ type MainProductionCallbacks
                                 candidates
                                 candidate.CandidateId
                                 preparation.WorkspaceManifest.BaselineObjectId
-                                preparation.LaunchIntent.Limits.Deadline
+                                (preparation.Budget.DeliveryDeadline.AddDays 30.)
                                 readback
                                 token
 

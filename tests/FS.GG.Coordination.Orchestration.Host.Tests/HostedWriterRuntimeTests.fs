@@ -1828,6 +1828,183 @@ let ``terminal snapshot binds old attempt and refuses altered or nonterminal byt
     finally
         Directory.Delete(directory, true)
 
+[<Theory>]
+[<InlineData(false)>]
+[<InlineData(true)>]
+let ``expired stored candidate resumes once after exact rejected continuation`` preExtended =
+    task {
+        let now = Fixture.now
+        let route = Fixture.route
+        let work = route.WorkItemId
+        let deadline = now.AddMinutes -1.
+        let deliveryDeadline = now.AddHours 1.
+        let retention = deliveryDeadline.AddDays 30.
+        let bytes = Encoding.UTF8.GetBytes "exact-candidate"
+        let contentSha = RunnerWire.sha256 bytes
+        let candidate =
+            { CandidateId = route.CandidateId
+              BaselineSha = String.replicate 40 "a"
+              HeadSha = String.replicate 40 "b"
+              TreeSha = String.replicate 40 "c"
+              ManifestSha256 = String.replicate 64 "d"
+              ContentSha256 = contentSha
+              MediaType = "application/vnd.fsgg.runner-candidate+zip"
+              SizeBytes = int64 bytes.Length
+              RetainUntil = deadline
+              Location = ContentAddressedObject($"sha256/{contentSha}") }
+        let oldReceipt =
+            { CandidateId = candidate.CandidateId
+              ContentSha256 = candidate.ContentSha256
+              ManifestSha256 = candidate.ManifestSha256
+              SizeBytes = candidate.SizeBytes
+              Location = candidate.Location
+              StoreId = "fixture"
+              StoreSchemaVersion = 1
+              StorageReceiptSha256 = String.replicate 64 "e"
+              VerifiedAt = deadline }
+        let intent = Fixture.intent StoreCandidate route.CandidateOperationId
+        let readback =
+            { Fixture.hosted intent with
+                ProviderResourceId = string (Id.candidateValue route.CandidateId)
+                CandidateHeadSha = Some candidate.HeadSha
+                ResultSha = Some candidate.ContentSha256 }
+        let budget =
+            { Schema = "fsgg.coordination.subscription-execution-budget/2"
+              AttemptLimit = 1
+              MaximumRuntime = TimeSpan.FromMinutes 30.
+              ExecutionDeadline = deadline
+              DeliveryDeadline = deliveryDeadline
+              Usage = TokensUnknown "fixture"
+              Cost =
+                { InvocationState = "not-applicable"
+                  InvocationProvenance = "fixture"
+                  BroaderAttributionState = "unknown"
+                  BroaderAttributionProvenance = "fixture" } }
+        let snapshot =
+            { ProjectId = Id.project (Guid.NewGuid())
+              WorkItemId = work
+              WorkflowRevision = route.WorkflowRevision
+              CanonicalSha256 = String.replicate 64 "f"
+              BoardMembershipIds = []
+              CapturedAt = route.SelectedAt }
+        let rejectedId =
+            MainRouteWorkflowIdentity.commandId work route.RouteId route.AttemptId route.Generation "record-candidate"
+        let rejected =
+            { CommandId = rejectedId
+              BodySha256 = String.replicate 64 "0"
+              Disposition = ReceiptDisposition.Rejected
+              Revision = Id.revision 1L
+              ProtocolVersion = Id.protocolVersion 1 0
+              Detail = "candidate-not-recoverable-or-invalid" }
+        let events =
+            [ SubscriptionWorkAdmitted(snapshot, budget)
+              GenerationAdvanced route.Generation
+              HostedRouteSelected route
+              EffectIntentRecorded intent
+              HostedEffectReadbackAccepted readback
+              EffectSettled(intent.OperationId, Applied readback.ProviderRevision)
+              CommandRecorded rejected ]
+        let store = MemoryStore(events) :> IJournalStore
+        let mutable current =
+            { Candidate =
+                (if preExtended then { candidate with RetainUntil = retention } else candidate)
+              Bytes = bytes }
+        let mutable currentReceipt =
+            if preExtended then
+                { oldReceipt with
+                    StorageReceiptSha256 = String.replicate 64 "1"
+                    VerifiedAt = now }
+            else
+                oldReceipt
+        let mutable extensions = 0
+        let candidateStore =
+            { new ICandidateStore with
+                member _.Put(value, _) =
+                    Assert.Equal(current.Candidate, value.Candidate)
+                    Assert.Equal<byte array>(current.Bytes, value.Bytes)
+                    Task.FromResult(Error(Existing currentReceipt))
+                member _.Read(_, _) = Task.FromResult(Ok current)
+                member _.Quarantine(_, _, _) = failwith "unexpected quarantine"
+                member _.CleanupUnreferenced(_, _, _) = failwith "unexpected cleanup"
+              interface ICandidateRetentionExtension with
+                member _.ExtendRetention(value, receipt, requested, _) =
+                    Assert.Equal(current, value)
+                    Assert.Equal(currentReceipt, receipt)
+                    Assert.Equal(retention, requested)
+                    extensions <- extensions + 1
+                    current <- { current with Candidate = { candidate with RetainUntil = requested } }
+                    currentReceipt <-
+                        { receipt with
+                            StorageReceiptSha256 = String.replicate 64 "1"
+                            VerifiedAt = now }
+                    Task.FromResult(Ok currentReceipt) }
+        let binding: ExecutorRouteBinding =
+            { Schema = "fixture"
+              BindingSha256 = intent.PayloadSha256
+              WorkItemPersistenceId = WorkItemIdentity.persistenceId work
+              RouteId = route.RouteId
+              RouteOperationId = Guid.Empty
+              ProcessOperationId = Guid.Empty
+              AssignmentId = Guid.Empty
+              AttemptId = Id.attemptValue route.AttemptId
+              CandidateId = Id.candidateValue route.CandidateId
+              Generation = Id.generationValue route.Generation
+              RepositoryBinding = "fixture"
+              BaselineObjectId = candidate.BaselineSha
+              PromptDigest = String.replicate 64 "2"
+              WorkspaceManifestSha256 = String.replicate 64 "3"
+              ExecutorBinding = "fixture"
+              ParentAttemptId = Nullable()
+              ParentGeneration = Nullable()
+              TelemetryRelation = "" }
+        let launch: FS.GG.Coordination.Orchestration.Execution.LaunchIntent =
+            { Schema = "fsgg.orchestration.execution-launch/2"
+              Key =
+                { AssignmentId = Guid.NewGuid()
+                  AttemptId = Id.attemptValue route.AttemptId
+                  Generation = Id.generationValue route.Generation }
+              InputDigest = String.replicate 64 "4"
+              Workspace = "fixture"
+              Requested = { Model = None; Effort = None }
+              Limits =
+                { Deadline = deadline
+                  MaximumRuntime = TimeSpan.FromMinutes 30.
+                  MaximumAttempts = 1 }
+              RecordedAt = now.AddMinutes -30. }
+        let preparation: MainRoutePreparation =
+            { Snapshot = snapshot
+              Budget = budget
+              Reservation = Unchecked.defaultof<_>
+              Route = route
+              Readback = Unchecked.defaultof<_>
+              Runner = Unchecked.defaultof<_>
+              SessionId = Unchecked.defaultof<_>
+              LaunchIntent = launch
+              Binding = binding
+              InputManifest = Unchecked.defaultof<_>
+              InputBytes = [||]
+              WorkspaceManifest = Unchecked.defaultof<_>
+              ExecutionReservation = Unchecked.defaultof<_> }
+        let clock =
+            { new TimeProvider() with
+                override _.GetUtcNow() = now }
+        let workflow =
+            MainRouteWorkflow(clock, store, candidateStore, Unchecked.defaultof<_>, Unchecked.defaultof<_>, work, "pilot-worker")
+        let! recovered = workflow.RecoverContinuation(preparation, CancellationToken.None)
+        Assert.Equal(Ok(), recovered)
+        let! state = HostedWriterJournal.recover store work CancellationToken.None
+        let state = state |> Result.defaultWith (sprintf "%A" >> failwith) |> _.State
+        Assert.Equal(Some current.Candidate, Map.tryFind route.CandidateId state.Candidates)
+        Assert.True(state.Operations.ContainsKey route.BranchOperationId)
+        Assert.Equal((if preExtended then 0 else 1), extensions)
+        let beforeRetry = state.Revision
+        let! retry = workflow.RecoverContinuation(preparation, CancellationToken.None)
+        Assert.Equal(Ok(), retry)
+        let! afterRetry = HostedWriterJournal.recover store work CancellationToken.None
+        Assert.Equal(beforeRetry, (afterRetry |> Result.defaultWith (sprintf "%A" >> failwith) |> _.State).Revision)
+        Assert.Equal((if preExtended then 0 else 1), extensions)
+    }
+
 [<Fact>]
 let ``absent candidate control allows only same-command partial retry`` () =
     let route = Fixture.route
@@ -2425,7 +2602,7 @@ let ``native delivery batch has stable item identity and authoritative merge fie
     let name, bytes = bridge.CreateBatch(Fixture.route, readback, facts)
     let repeatedName, repeatedBytes = bridge.CreateBatch(Fixture.route, readback, facts)
     Assert.Equal(name, repeatedName)
-    Assert.Equal<byte>(bytes, repeatedBytes)
+    Assert.Equal<byte array>(bytes, repeatedBytes)
     use document = JsonDocument.Parse bytes
     let root = document.RootElement
     Assert.Equal("fsgg.telemetry.ingest/1", root.GetProperty("schema").GetString())
