@@ -6,7 +6,7 @@
   "source": {
     "prerequisiteHead": "0028b9efb8481084343aa243aef979de06c9f3b9",
     "operationSource": "eng/callable-cli-isolated-operation.py",
-    "operationSourceSha256": "2dca8907815c720086c761eff9283aaf682d5786b1c97668351679d452f5591d"
+    "operationSourceSha256": "c82cf8e0e1f0d794a1d13a4b9ed6612c76cc86c0c230d81fac5248ec2bbbe5c5"
   },
   "target": {
     "owner": "FS-GG",
@@ -18,16 +18,16 @@
   },
   "package": {
     "id": "FS.GG.Coordination.Cli",
-    "version": "0.1.0",
-    "candidateSha256": "ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf",
-    "nugetOrgServedSha256": "e7f440a2a1f94d51dbcdd7146494c97e6386f9dcc8034a028e3e851d364390e3",
-    "installedManagedCommandSha256": "21d36ec3cdbb153453833ed57f2320f9f256a26f35aea52bb75c52a68efada04"
+    "version": "0.1.1",
+    "candidateSha256": "3072f67fa7ad19cc93240eff7b1b3003c12d07882ea9aa85710167273852bf7d",
+    "nugetOrgServedSha256": "af53e6868492e12e00522811ef42c4bedb087d190625230fe3fdeb53e515aaec",
+    "installedManagedCommandSha256": "971dab56a82738e0b9a79114ae009a1ae0c18b8b26ad5906ec449f6aac00fef5"
   },
   "receiver": {
     "repository": "FS-GG/.github",
-    "merge": "587f46e15e1404dbe0dc1e9e6b47cf2861d7b502",
+    "merge": "2a61d2f2cad204bb77c5a490d840bbc3e5af2479",
     "manifest": "dist/dotnet/.config/dotnet-tools.json",
-    "manifestSha256": "4f4b8ef9c53f87d32ba108ef00c1e1a352c8eac1e01cf0d151953473ac7c5c2d"
+    "manifestSha256": "0eb4e44022533a476ea38ac9df46c08d7595b38b0c032abe058f0df7e92dbfa9"
   },
   "creation": {
     "attemptIdentity": "v2-call-01-4b-isolated-native-v1-creation-a1",
@@ -122,5 +122,5 @@
     "production-writer-enable",
     "effect-before-protected-grant-and-fresh-capability-readback"
   ],
-  "contractSha256": "ccd57e74293b2fb1443614fea6add54525f9f11c8d1126908180479ab5bc18a6"
+  "contractSha256": "971ed9a9db9ff01b0abb982163ed311fabebc827fabc79472602f3c08b7d3854"
 }

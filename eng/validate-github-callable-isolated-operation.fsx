@@ -36,8 +36,8 @@ requireContains
         "prepared-not-authorized"
         "effect-before-protected-grant-and-fresh-capability-readback"
         "FS.GG.Coordination.Cli"
-        "ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf"
-        "587f46e15e1404dbe0dc1e9e6b47cf2861d7b502"
+        "3072f67fa7ad19cc93240eff7b1b3003c12d07882ea9aa85710167273852bf7d"
+        "2a61d2f2cad204bb77c5a490d840bbc3e5af2479"
         "setup"
         "installed-execution"
         "independent-readback"
@@ -48,9 +48,9 @@ requireContains
     "eng/callable-cli-isolated-operation-proposal.json"
     [
         "prepared-not-authorized"
-        "ccd57e74293b2fb1443614fea6add54525f9f11c8d1126908180479ab5bc18a6"
-        "2dca8907815c720086c761eff9283aaf682d5786b1c97668351679d452f5591d"
-        "8eb05b36647a5bafbf1053e01105c34bc86feb79e3a41e00e976041fbcbe296b"
+        "971ed9a9db9ff01b0abb982163ed311fabebc827fabc79472602f3c08b7d3854"
+        "c82cf8e0e1f0d794a1d13a4b9ed6612c76cc86c0c230d81fac5248ec2bbbe5c5"
+        "9c7e4765c6654589f579859ebf8915bfc4212c2fbecb8dc114b5b774a470a369"
         "canonical-json-without-artifact-coordinates"
         "--grant-artifact-envelope"
         "identity-bound-operation"
@@ -124,7 +124,7 @@ if inspection.GetProperty("disposition").GetString() <> "refused-no-compatible-a
 
 let testOutput, testError = run "python3" [ "eng/test-callable-cli-isolated-operation.py" ]
 let combined = testOutput + testError
-if not (combined.Contains("Ran 25 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
+if not (combined.Contains("Ran 26 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
     failwith $"isolated operation controls did not report the expected bounded suite: {combined}"
 
 printfn "callable isolated operation source qualification passed; prepared-not-authorized; zero provider effects"
