@@ -6,7 +6,7 @@
   "source": {
     "prerequisiteHead": "0028b9efb8481084343aa243aef979de06c9f3b9",
     "operationSource": "eng/callable-cli-isolated-operation.py",
-    "operationSourceSha256": "4469424b6ec21465ed42f1c8548e33d75603e4027f2e9aff6b7bd158d008fc7b"
+    "operationSourceSha256": "e35f525b3c17c5c870d08d5d8d2fc3caa661fe98374c38463c6e2018575d6046"
   },
   "target": {
     "owner": "FS-GG",
@@ -122,5 +122,5 @@
     "production-writer-enable",
     "effect-before-protected-grant-and-fresh-capability-readback"
   ],
-  "contractSha256": "748a09ea8fd07ff8e2f278c8bf70f8500048d68d0a8db91aa801a793dbb65e37"
+  "contractSha256": "ac44c8b20dec09975f5cd17f134c4b17115ba3051ceb95e13e2a3ccdd0a050ff"
 }

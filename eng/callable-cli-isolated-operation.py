@@ -1216,7 +1216,7 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     receipt = {"schema": "fsgg.coordination.callable-isolated-operation-receipt/1",
         "operationIdentity": contract["identity"], "contractSha256": contract["contractSha256"], "planSeal": plan["seal"],
         "target": {"repositoryId": target["repositoryId"], "fullName": target["fullName"], "visibility": "public"},
-        "source": {"baseSha": base_sha, "headSha": source_sha, "pullRequestNumber": number, "pullRequestNodeId": node_id,
+        "source": {"baseSha": expected_base_sha, "headSha": source_sha, "pullRequestNumber": number, "pullRequestNodeId": node_id,
                    "requiredCheck": check_name, "requiredCheckAppId": app_id, "policyRevision": source_sha,
                    "epochCommit": source_sha, "epochGeneration": 1, "journalRef": journal_ref},
         "installed": {"package": contract["package"], "planSha256": retained["installedPlanSha256"],
