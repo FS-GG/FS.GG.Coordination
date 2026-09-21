@@ -119,9 +119,9 @@ are never acceptance evidence.
   retained installation, idempotency, conflicting-pin refusal before write, peer/lifecycle/operation
   preservation, scoped uninstall, isolated nuget.org resolution, installed invocation and pre-`OpenV2`
   refusal. All 43 current-head checks passed with two expected skips; production effects remain disabled.
-- [ ] **V2-CALL-01.4 — Qualify installed isolated-provider and native execution.** Version 0.1.0 remains the
-  selected candidate; no defect requiring a replacement version is currently proved. Execute the three windows
-  below in order. Only `.4a` is admitted after this plan lands.
+- [x] **V2-CALL-01.4 — Qualify installed isolated-provider and native execution.** The three windows below
+  completed in order. The live operation used released CLI 0.1.1 after the observed 0.1.0 App-token
+  observation defect and explicit receiver adoption; the result is scoped to one synthetic operation.
   - [x] **V2-CALL-01.4a — Close recovery coverage and build the installed harness (routine).** Extend the Q3/Q6
     validator so its registered evidence includes production-runtime tests, not only the current domain tests.
     Cover unknown, proven-absent and applied effects; lost dispatch responses and journal acknowledgements;
@@ -134,7 +134,7 @@ are never acceptance evidence.
     public-feed installed-harness result, and still-unauthorized `.4b` operation proposal under
     `evidence/github-substrate-v2/gs2-09-9/` and `eng/`. The installed 0.1.0 bytes passed; no replacement version
     or product repair was required.
-  - [ ] **V2-CALL-01.4b — Admit one compatible isolated operation (separate protected authority).** GS2-09.9's
+  - [x] **V2-CALL-01.4b — Admit one compatible isolated operation (separate protected authority).** GS2-09.9's
     current permission ceiling excludes provider mutation and external acceptance, so a later operation packet
     must bind the exact target, actor/credential authority, package and receiver revisions, source/base/check,
     epoch/policy/journal identities, allowed mutation, recovery and cleanup. Prefer a fresh intentionally public,
@@ -174,11 +174,14 @@ are never acceptance evidence.
       strips authorization and proxy-authorization on cross-origin redirects while refusing HTTPS downgrade;
       same-origin authentication, exact archive digest and canonical-payload validation remain intact. Fresh
       `.github` source must repin this repair and obtain new plans and grants; `.4b` and `.4c` remain incomplete.
-  - [ ] **V2-CALL-01.4c — Qualify installed native execution and acceptance.** Run the installed command under
+  - [x] **V2-CALL-01.4c — Qualify installed native execution and acceptance.** Run the installed command under
     the admitted operation, obtain independent PR and sharded-journal readback, prove fresh-process no-op replay
     and interruption recovery without duplicate effect, clean up the disposable subject, and bind exact native
     acceptance to the observed identities. This evidence does not imply `OpenV2`, Q4, migration acceptance or a
-    production default.
+    production default. The distinct `.4c` acceptance is bound by
+    [`native-acceptance.json`](../../evidence/github-substrate-v2/gs2-09-9/native-acceptance.json) and its
+    offline validator, which compare the interrupted `cli-intent` checkpoint with the final sealed receipt,
+    exact installed plan, PR identity, settled sharded journal, fresh-process no-op replay and cleanup readback.
 - [ ] **V2-CALL-01.5 — Hand off exact callable readiness to GS2-09 migration.** Add durable evidence under
   `evidence/github-substrate-v2/gs2-09-9/` binding source/release and package/feed hashes, the adopting receiver
   revision, installed commands and schemas, interpreter identity and permission ceiling, preconditions,
@@ -262,8 +265,25 @@ proposal, contract, operation-source and coverage digests are
 `ccd57e74293b2fb1443614fea6add54525f9f11c8d1126908180479ab5bc18a6`,
 `2dca8907815c720086c761eff9283aaf682d5786b1c97668351679d452f5591d`, and
 `ceae0963352ae3527cdfb23c1e5a80325ba938d5efc64f408e8a47c9cc732593`; the focused suite now runs twenty-five
-offline tests. The target remains synthetic and pending protected recovery; `.4c`, Q4 and migration acceptance
-remain outside this evidence.
+offline tests. At that source checkpoint the target remained synthetic and pending protected recovery; `.4c`,
+Q4 and migration acceptance remained outside that evidence.
+
+Completion evidence for `.4b` and the separately assigned `.4c`: protected `.github` executor
+[run `35631364282`](https://github.com/FS-GG/.github/actions/runs/35631364282), attempt 1 at receiver
+`803556ff1e877d40af2dddbaff7e80f3241d8286`, completed successfully using installed CLI 0.1.1.
+The retained prior `cli-intent` checkpoint is run `35619835923` artifact `10647264981`, archive SHA-256
+`f98b32505b081a4c051d253f36e3a7d51e2fd1271a26596c18a7902b345a4318`. Final checkpoint
+artifact `10654184892` and receipt artifact `10653844968` have archive SHA-256
+`0f42981167fcfaa775c6257dfe421181b367f35f942c3d1a7f6621cfbde87529` and
+`acd68a59dc8e7c7d4451d749184d80358b15f4f59ede47546f9c43b0d90150db`; their payloads are identical,
+with canonical receipt seal `542dd22b24fd86b2216bcde443ba318826a9a37a122c82ea5890b11bf9081a41`.
+The final sealed receipt binds original base `dffd58342bcbe4e2dcbd55f30afe624b316a5f80`, native plan
+`617a0a5f4cf90145be0012a786d5ec79727da6fe56d982c601096910f1162f4a`, PR #1 merge
+`00869036c9bf96f5cb4c783cfa91ac15504b673b`, settled sharded journal generation 3, independent PR
+and journal readback, and fresh-process `AdvanceAlreadySettled` after the retained interruption. The source
+skipped a second installed advance after readback found the PR merged; the replay reported no further effect.
+Cleanup settled for synthetic repository ID `1376575900` with HTTP 404 and a separate live 404 readback.
+This single-operation evidence does not accept `OpenV2`, Q4, GS2-09 migration or a production default.
 
 ## Dependencies, invalidators, and completion examples
 
