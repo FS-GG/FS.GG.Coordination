@@ -4119,9 +4119,11 @@ finally:
         }
 
     [<Theory>]
-    [<InlineData(false)>]
-    [<InlineData(true)>]
-    member _.``failed candidate recovery converges through disposable PostgreSQL journal``(partialFirstStage: bool) =
+    [<InlineData(false, false)>]
+    [<InlineData(false, true)>]
+    [<InlineData(true, false)>]
+    [<InlineData(true, true)>]
+    member _.``candidate settlement converges through disposable PostgreSQL journal``(applied: bool, partialFirstStage: bool) =
         task {
             let! dataSource, identity = Fixture.reset ()
             use dataSource = dataSource
@@ -4169,6 +4171,7 @@ finally:
 
             do!
                 FS.GG.Coordination.Orchestration.Host.Tests.HostedWriterRuntimeTests.runFailedCandidateRecoveryFixture
+                    applied
                     partialFirstStage
                     factory
         }
