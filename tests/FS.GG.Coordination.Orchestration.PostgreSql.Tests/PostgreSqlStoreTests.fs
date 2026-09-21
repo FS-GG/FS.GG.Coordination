@@ -1110,6 +1110,71 @@ type PostgreSqlStoreTests() =
         }
 
     [<Fact>]
+    member _.``expired pre-Core candidate retention extension requires exact bytes and receipt``() =
+        task {
+            let! dataSource, identity = Fixture.reset ()
+            use dataSource = dataSource
+            let store = PostgreSqlStore(Fixture.options dataSource identity 0L)
+            let candidateStore = store :> ICandidateStore
+            let extension = store :> ICandidateRetentionExtension
+            let original = Fixture.candidate "retention-repair"
+            let expired =
+                { original with
+                    Candidate =
+                        { original.Candidate with
+                            RetainUntil = DateTimeOffset.UtcNow.AddMinutes(-1.0) } }
+
+            let! first = candidateStore.Put(expired, cancellationToken)
+            let receipt = first |> Result.defaultWith (fun error -> failwithf "put failed: %A" error)
+            let deadline = DateTimeOffset.UtcNow.AddDays 30.0
+            let retainedUntil = DateTimeOffset(deadline.Ticks - deadline.Ticks % 10L, TimeSpan.Zero)
+
+            let! tampered =
+                extension.ExtendRetention(
+                    { expired with Bytes = Encoding.UTF8.GetBytes "different" },
+                    receipt,
+                    retainedUntil,
+                    cancellationToken
+                )
+
+            Assert.Equal<Result<CandidateStorageReceipt, string>>(
+                Error "candidate-retention-extension-identity-refused",
+                tampered
+            )
+
+            let! renewed = extension.ExtendRetention(expired, receipt, retainedUntil, cancellationToken)
+            let renewedReceipt =
+                renewed |> Result.defaultWith (fun error -> failwithf "extension failed: %s" error)
+
+            Assert.NotEqual<string>(receipt.StorageReceiptSha256, renewedReceipt.StorageReceiptSha256)
+            let! readBack = candidateStore.Read(expired.Candidate.CandidateId, cancellationToken)
+
+            match readBack with
+            | Ok value ->
+                Assert.Equal(retainedUntil, value.Candidate.RetainUntil)
+                Assert.Equal<byte array>(expired.Bytes, value.Bytes)
+            | Error reason -> failwith reason
+
+            let! stale = extension.ExtendRetention(expired, receipt, retainedUntil, cancellationToken)
+            Assert.Equal<Result<CandidateStorageReceipt, string>>(
+                Error "candidate-retention-extension-identity-refused",
+                stale
+            )
+
+            let! replay =
+                candidateStore.Put(
+                    { expired with
+                        Candidate = { expired.Candidate with RetainUntil = retainedUntil } },
+                    cancellationToken
+                )
+
+            Assert.Equal<Result<CandidateStorageReceipt, CandidatePutOutcome>>(
+                Error(Existing renewedReceipt),
+                replay
+            )
+        }
+
+    [<Fact>]
     member _.``bounded cleanup deletes staging but retains acknowledged object``() =
         task {
             let! dataSource, identity = Fixture.reset ()

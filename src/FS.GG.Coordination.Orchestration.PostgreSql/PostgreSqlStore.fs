@@ -980,6 +980,121 @@ WHERE fsgg_orchestration.projection_checkpoint.sequence_number <= excluded.seque
                     return Error(Sql.classifyReadiness exceptionValue)
             }
 
+    interface ICandidateRetentionExtension with
+        member _.ExtendRetention(existing, receipt, retainUntil, cancellationToken) =
+            task {
+                let candidate = existing.Candidate
+                let now = DateTimeOffset.UtcNow
+
+                if candidate.RetainUntil >= now
+                   || retainUntil <= now
+                   || retainUntil <= candidate.RetainUntil
+                   || retainUntil > now.AddDays 90.
+                   || receipt.CandidateId <> candidate.CandidateId
+                   || receipt.ContentSha256 <> candidate.ContentSha256
+                   || receipt.ManifestSha256 <> candidate.ManifestSha256
+                   || receipt.SizeBytes <> candidate.SizeBytes
+                   || receipt.Location <> candidate.Location
+                   || receipt.StoreId <> options.StoreId
+                   || receipt.StoreSchemaVersion <> options.RuntimeSchemaVersion
+                   || not (Hash.valid receipt.StorageReceiptSha256) then
+                    return Error "candidate-retention-extension-invalid"
+                else
+                    match locationKey candidate.Location with
+                    | None -> return Error "candidate-retention-extension-location-refused"
+                    | Some objectKey ->
+                        let! stored = readCandidate candidate.CandidateId cancellationToken
+
+                        match stored with
+                        | Error reason -> return Error reason
+                        | Ok value when not (candidateEquivalent value.Candidate candidate)
+                                        || value.Bytes <> existing.Bytes ->
+                            return Error "candidate-retention-extension-identity-refused"
+                        | Ok _ when
+                            receiptHash candidate objectKey receipt.VerifiedAt <> receipt.StorageReceiptSha256
+                            ->
+                            return Error "candidate-retention-extension-receipt-refused"
+                        | Ok _ ->
+                            try
+                                use! connection = options.DataSource.OpenConnectionAsync cancellationToken
+                                use! transaction =
+                                    connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+
+                                let! failures = checkTransactionalGate connection transaction cancellationToken
+
+                                if not failures.IsEmpty then
+                                    return Error "candidate-retention-extension-store-not-ready"
+                                else
+                                    let verifiedAt =
+                                        DateTimeOffset(now.Ticks - now.Ticks % 10L, TimeSpan.Zero)
+
+                                    let renewed = { candidate with RetainUntil = retainUntil }
+                                    let newSha = receiptHash renewed objectKey verifiedAt
+
+                                    use updateCandidate =
+                                        new NpgsqlCommand(
+                                            """
+UPDATE fsgg_orchestration.candidate
+SET retain_until=$1,receipt_sha256=$2,verified_at=$3
+WHERE candidate_id=$4 AND content_sha256=$5 AND manifest_sha256=$6
+  AND baseline_sha=$7 AND head_sha=$8 AND tree_sha=$9
+  AND media_type=$10 AND size_bytes=$11 AND object_key=$12
+  AND retain_until=$13 AND receipt_sha256=$14 AND verified_at=$15
+  AND quarantined_reason IS NULL
+                                            """,
+                                            connection,
+                                            transaction
+                                        )
+
+                                    for value in
+                                        [ retainUntil.ToUniversalTime() :> obj
+                                          newSha :> obj
+                                          verifiedAt :> obj
+                                          Id.candidateValue candidate.CandidateId :> obj
+                                          candidate.ContentSha256.ToLowerInvariant() :> obj
+                                          candidate.ManifestSha256.ToLowerInvariant() :> obj
+                                          candidate.BaselineSha :> obj
+                                          candidate.HeadSha :> obj
+                                          candidate.TreeSha :> obj
+                                          candidate.MediaType :> obj
+                                          candidate.SizeBytes :> obj
+                                          objectKey :> obj
+                                          candidate.RetainUntil.ToUniversalTime() :> obj
+                                          receipt.StorageReceiptSha256 :> obj
+                                          receipt.VerifiedAt.ToUniversalTime() :> obj ] do
+                                        Sql.add updateCandidate value
+
+                                    let! changed = updateCandidate.ExecuteNonQueryAsync cancellationToken
+
+                                    if changed <> 1 then
+                                        do! transaction.RollbackAsync cancellationToken
+                                        return Error "candidate-retention-extension-conflict"
+                                    else
+                                        use updateObject =
+                                            new NpgsqlCommand(
+                                                "UPDATE fsgg_orchestration.candidate_object SET retain_until=GREATEST(retain_until,$1) WHERE content_sha256=$2",
+                                                connection,
+                                                transaction
+                                            )
+
+                                        Sql.add updateObject (retainUntil.ToUniversalTime())
+                                        Sql.add updateObject candidate.ContentSha256
+                                        let! objectChanged = updateObject.ExecuteNonQueryAsync cancellationToken
+
+                                        if objectChanged <> 1 then
+                                            do! transaction.RollbackAsync cancellationToken
+                                            return Error "candidate-retention-extension-object-missing"
+                                        else
+                                            do! transaction.CommitAsync cancellationToken
+                                            return
+                                                Ok
+                                                    { receipt with
+                                                        StorageReceiptSha256 = newSha
+                                                        VerifiedAt = verifiedAt }
+                            with _ ->
+                                return Error "candidate-retention-extension-store-refused"
+            }
+
     interface ICandidateStore with
         member _.Put(request, cancellationToken) =
             task {

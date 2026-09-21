@@ -35,6 +35,7 @@ type PostgreSqlStore =
     new: StoreOptions -> PostgreSqlStore
     interface IJournalStore
     interface ICandidateStore
+    interface ICandidateRetentionExtension
     interface IBackupReconciler
 
 type AkkaStoredEvent = { Envelope: byte array }
